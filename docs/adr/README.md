@@ -1,0 +1,12 @@
+# Architecture Decision Records
+
+Format: context → decision → consequences. A new decision is a new file `NNNN-name.md`. Existing ADRs are not rewritten: if a decision changes, write a new ADR with status "supersedes NNNN".
+
+| # | Decision | Status |
+|---|---|---|
+| 0001 | Modular monolith on Spring Boot + Spring Modulith | accepted |
+| 0002 | Multi-tenancy: shared schema + tenant_id + Row Level Security | accepted |
+| 0003 | Keycloak for sign-in and roles | accepted |
+| 0004 | Contract-first API with OpenAPI | accepted |
+| 0005 | TypeScript on all clients: React (web) and Expo (mobile) | accepted |
+| 0006 | Append-only money ledger | accepted |

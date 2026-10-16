@@ -1,0 +1,14 @@
+{
+  "name": "nadel-platform",
+  "private": true,
+  "packageManager": "pnpm@10.18.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "gen:api": "pnpm --filter @nadel/api-client gen",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "pnpm -r lint",
+    "build": "pnpm -r build"
+  }
+}

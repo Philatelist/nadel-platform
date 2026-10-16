@@ -1,0 +1,48 @@
+spring:
+  application:
+    name: nadel
+  profiles:
+    default: dev
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    # The application runs as a role without BYPASSRLS
+    url: ${NADEL_DB_URL:jdbc:postgresql://localhost:5432/nadel}
+    username: ${NADEL_DB_APP_USER:nadel_app}
+    password: ${NADEL_DB_APP_PASSWORD:nadel_app}
+  flyway:
+    # Migrations run as the schema owner
+    user: ${NADEL_DB_OWNER_USER:nadel_owner}
+    password: ${NADEL_DB_OWNER_PASSWORD:nadel_owner}
+    locations: classpath:db/migration
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${NADEL_OIDC_ISSUER:http://localhost:8180/realms/nadel}
+  mvc:
+    problemdetails:
+      enabled: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+---
+spring:
+  config:
+    activate:
+      on-profile: dev
+  flyway:
+    locations: classpath:db/migration,classpath:db/demo

@@ -1,0 +1,293 @@
+{
+  "realm": "nadel",
+  "enabled": true,
+  "displayName": "Nadel",
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "resetPasswordAllowed": true,
+  "rememberMe": true,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "internationalizationEnabled": true,
+  "supportedLocales": [
+    "uk",
+    "en"
+  ],
+  "defaultLocale": "uk",
+  "accessTokenLifespan": 300,
+  "roles": {
+    "realm": [
+      {
+        "name": "CHAIRMAN",
+        "description": "Chairman"
+      },
+      {
+        "name": "TREASURER",
+        "description": "Treasurer"
+      },
+      {
+        "name": "ELECTRICIAN",
+        "description": "Electrician"
+      },
+      {
+        "name": "MEMBER",
+        "description": "Cooperative member"
+      },
+      {
+        "name": "PLATFORM_OPERATOR",
+        "description": "Platform operator"
+      }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "nadel-web",
+      "name": "Nadel Web",
+      "enabled": true,
+      "publicClient": true,
+      "protocol": "openid-connect",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "redirectUris": [
+        "http://localhost:5173/*"
+      ],
+      "webOrigins": [
+        "http://localhost:5173"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "+"
+      },
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "tenant_id",
+            "claim.name": "tenant_id",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "roles",
+        "profile",
+        "basic",
+        "email"
+      ],
+      "optionalClientScopes": [
+        "address",
+        "phone",
+        "offline_access"
+      ]
+    },
+    {
+      "clientId": "nadel-mobile",
+      "name": "Nadel Mobile",
+      "enabled": true,
+      "publicClient": true,
+      "protocol": "openid-connect",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "redirectUris": [
+        "nadel://*",
+        "exp://*"
+      ],
+      "webOrigins": [
+        "+"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "+"
+      },
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "tenant_id",
+            "claim.name": "tenant_id",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "roles",
+        "profile",
+        "basic",
+        "email"
+      ],
+      "optionalClientScopes": [
+        "address",
+        "phone",
+        "offline_access"
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "chairman@demo.local",
+      "email": "chairman@demo.local",
+      "emailVerified": true,
+      "enabled": true,
+      "firstName": "Demo",
+      "lastName": "Chairman",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "nadel",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "CHAIRMAN"
+      ],
+      "attributes": {
+        "tenant_id": [
+          "11111111-1111-1111-1111-111111111111"
+        ]
+      }
+    },
+    {
+      "username": "treasurer@demo.local",
+      "email": "treasurer@demo.local",
+      "emailVerified": true,
+      "enabled": true,
+      "firstName": "Demo",
+      "lastName": "Treasurer",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "nadel",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "TREASURER"
+      ],
+      "attributes": {
+        "tenant_id": [
+          "11111111-1111-1111-1111-111111111111"
+        ]
+      }
+    },
+    {
+      "username": "electrician@demo.local",
+      "email": "electrician@demo.local",
+      "emailVerified": true,
+      "enabled": true,
+      "firstName": "Demo",
+      "lastName": "Electrician",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "nadel",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "ELECTRICIAN"
+      ],
+      "attributes": {
+        "tenant_id": [
+          "11111111-1111-1111-1111-111111111111"
+        ]
+      }
+    },
+    {
+      "username": "member@demo.local",
+      "email": "member@demo.local",
+      "emailVerified": true,
+      "enabled": true,
+      "firstName": "Demo",
+      "lastName": "Member",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "nadel",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "MEMBER"
+      ],
+      "attributes": {
+        "tenant_id": [
+          "11111111-1111-1111-1111-111111111111"
+        ]
+      }
+    },
+    {
+      "username": "member@other.local",
+      "email": "member@other.local",
+      "emailVerified": true,
+      "enabled": true,
+      "firstName": "Other",
+      "lastName": "Member",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "nadel",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "MEMBER"
+      ],
+      "attributes": {
+        "tenant_id": [
+          "22222222-2222-2222-2222-222222222222"
+        ]
+      }
+    },
+    {
+      "username": "operator@nadel.local",
+      "email": "operator@nadel.local",
+      "emailVerified": true,
+      "enabled": true,
+      "firstName": "Platform",
+      "lastName": "Operator",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "nadel",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "PLATFORM_OPERATOR"
+      ]
+    }
+  ],
+  "components": {
+    "org.keycloak.userprofile.UserProfileProvider": [
+      {
+        "providerId": "declarative-user-profile",
+        "subComponents": {},
+        "config": {
+          "kc.user.profile.config": [
+            "{\"attributes\": [{\"name\": \"username\", \"displayName\": \"${username}\", \"validations\": {\"length\": {\"min\": 3, \"max\": 255}, \"username-prohibited-characters\": {}, \"up-username-not-idn-homograph\": {}}, \"permissions\": {\"view\": [\"admin\", \"user\"], \"edit\": [\"admin\", \"user\"]}, \"multivalued\": false}, {\"name\": \"email\", \"displayName\": \"${email}\", \"validations\": {\"email\": {}, \"length\": {\"max\": 255}}, \"required\": {\"roles\": [\"user\"]}, \"permissions\": {\"view\": [\"admin\", \"user\"], \"edit\": [\"admin\", \"user\"]}, \"multivalued\": false}, {\"name\": \"firstName\", \"displayName\": \"${firstName}\", \"validations\": {\"length\": {\"max\": 255}, \"person-name-prohibited-characters\": {}}, \"required\": {\"roles\": [\"user\"]}, \"permissions\": {\"view\": [\"admin\", \"user\"], \"edit\": [\"admin\", \"user\"]}, \"multivalued\": false}, {\"name\": \"lastName\", \"displayName\": \"${lastName}\", \"validations\": {\"length\": {\"max\": 255}, \"person-name-prohibited-characters\": {}}, \"required\": {\"roles\": [\"user\"]}, \"permissions\": {\"view\": [\"admin\", \"user\"], \"edit\": [\"admin\", \"user\"]}, \"multivalued\": false}, {\"name\": \"tenant_id\", \"displayName\": \"Cooperative (tenant_id)\", \"validations\": {}, \"permissions\": {\"view\": [\"admin\"], \"edit\": [\"admin\"]}, \"multivalued\": false}], \"groups\": [{\"name\": \"user-metadata\", \"displayHeader\": \"User metadata\", \"displayDescription\": \"Attributes, which refer to user metadata\"}]}"
+          ]
+        }
+      }
+    ]
+  }
+}

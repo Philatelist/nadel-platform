@@ -1,0 +1,192 @@
+openapi: 3.1.0
+info:
+  title: Nadel API
+  version: 0.1.0
+  description: |
+    API of the payment accounting platform for dacha cooperatives.
+    Every endpoint requires a Keycloak bearer token. The cooperative is taken from the `tenant_id` claim
+    in the token and is never passed in a request.
+    Money amounts are strings with two decimal places, for example "1250.50".
+servers:
+  - url: /api/v1
+security:
+  - bearerAuth: []
+tags:
+  - name: me
+    description: Current user
+  - name: plots
+    description: Plots and map
+
+paths:
+  /me:
+    get:
+      tags: [me]
+      operationId: getMe
+      summary: Current user, roles and cooperative
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Me'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /plots:
+    get:
+      tags: [plots]
+      operationId: getPlots
+      summary: Cooperative plots as GeoJSON for the map
+      description: |
+        Returns all plots and common land of the current cooperative with polygons and debt status.
+        Members see the number and status of every plot, but the debt amount only for their own plots (from phase 1).
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlotFeatureCollection'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid token
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+
+  schemas:
+    Money:
+      type: string
+      pattern: '^-?\d+\.\d{2}$'
+      description: Amount in UAH as a string with two decimal places
+      examples: ['1250.50']
+
+    Role:
+      type: string
+      enum: [CHAIRMAN, TREASURER, ELECTRICIAN, MEMBER, PLATFORM_OPERATOR]
+
+    TenantSummary:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+
+    Me:
+      type: object
+      required: [userId, email, fullName, roles]
+      properties:
+        userId:
+          type: string
+          description: Keycloak user id (sub)
+        email:
+          type: string
+        fullName:
+          type: string
+        roles:
+          type: array
+          items:
+            $ref: '#/components/schemas/Role'
+        tenant:
+          $ref: '#/components/schemas/TenantSummary'
+
+    PlotKind:
+      type: string
+      enum: [PLOT, COMMON]
+      description: PLOT is a land plot, COMMON is common land (roads, shared areas)
+
+    PlotStatus:
+      type: string
+      enum: [RED, YELLOW, GREEN, GREY]
+      description: Map color, see docs/domain/money-rules.md, section 9
+
+    PolygonGeometry:
+      type: object
+      required: [type, coordinates]
+      properties:
+        type:
+          type: string
+          enum: [Polygon]
+        coordinates:
+          description: Polygon rings, points as [longitude, latitude] in WGS84
+          type: array
+          items:
+            type: array
+            items:
+              type: array
+              items:
+                type: number
+                format: double
+
+    PlotProperties:
+      type: object
+      required: [number, kind, areaM2, status]
+      properties:
+        number:
+          type: string
+        street:
+          type: string
+        kind:
+          $ref: '#/components/schemas/PlotKind'
+        areaM2:
+          type: number
+          format: double
+        status:
+          $ref: '#/components/schemas/PlotStatus'
+        debt:
+          $ref: '#/components/schemas/Money'
+
+    PlotFeature:
+      type: object
+      required: [type, id, geometry, properties]
+      properties:
+        type:
+          type: string
+          enum: [Feature]
+        id:
+          type: string
+          format: uuid
+        geometry:
+          $ref: '#/components/schemas/PolygonGeometry'
+        properties:
+          $ref: '#/components/schemas/PlotProperties'
+
+    PlotFeatureCollection:
+      type: object
+      required: [type, features]
+      properties:
+        type:
+          type: string
+          enum: [FeatureCollection]
+        features:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlotFeature'
+
+    Problem:
+      type: object
+      description: RFC 9457 Problem Details
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
