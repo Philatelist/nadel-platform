@@ -1,0 +1,24 @@
+# /feature-pipeline settings — copy to .claude/feature-pipeline.yml in the project to use them.
+# Every key is optional. Without the file, the pipeline runs with `autonomy: minimal`.
+# A value given after the skill name (e.g. `/feature-pipeline --autonomy none ABC-123`) wins over this file.
+
+# How much the pipeline asks you:
+#   interactive — asks the full question batch and at every stop
+#   minimal     — asks only when it is blocked; everything else follows the rules below (default)
+#   none        — never asks; every decision follows the rules below and is listed in the final report
+autonomy: minimal
+
+# Branch the spec branch is cut from. `auto` = the repository's default branch.
+baseBranch: auto
+
+# Optional: override what the chosen autonomy level does at one point.
+# Leave a key out to keep the level's default (see the table in SKILL.md, "Autonomy").
+# questions:           all | blocking | none   # the Phase 1 question batch
+# stops:
+#   reviewerEscalation: ask | auto             # auto = take the reviewer's recommended option
+#   notGreen:           ask | park             # park = mark the item failed, go on with independent slices
+#   gitUnsafe:          ask | end              # end = end the run with a report; never guessed
+#   notTestableLocally: ask | auto             # auto = build it, mark its criteria [?] for a manual check
+
+# Send a notification when the run finishes or stops, if the session has a notification tool.
+notify: true
