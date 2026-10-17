@@ -120,3 +120,5 @@ new tables; module cycle identity↔members; Playwright CI job is new infrastruc
 - Phase 3: Slice 2 started.
 - Slice 1 review round 1: MAJOR_ISSUES (M1 401-vs-500 on lookup failure). Fix deferred until Slice 2 is committed (Slice 2 backend agent active in backend/; avoid concurrent Maven builds and mixed changes), then sent to spring-backend as `001: Slice 1 — review fixes (round 1)`.
 - Slice 2 Verify (orchestrator): 41 tests green, no generated-client drift, client checks green.
+- Slice 2 committed: 7ad1272 — review round 1 running (worktree review-001-s2-r1). Slice 1 M1 fix sent to spring-backend (test-first). Slice 3 held until the M1 fix is committed (its contract change would break the backend build the fix is testing in the same tree).
+- Slice 2 review round 1: PASS (6 minor notes in review-log.md).
