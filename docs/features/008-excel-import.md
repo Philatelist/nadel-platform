@@ -1,11 +1,11 @@
-# 007. Excel import of plots, members and ownership
+# 008. Excel import of plots, members and ownership
 
-Roadmap phase 1, feature 4 of 4. Input for `/feature-pipeline`. Requires 002, 005 and 006.
+Roadmap phase 1, feature 4 of 4. Input for `/feature-pipeline`. Requires 002, 006 and 007.
 
 ## 1. Goal
 
 Load a whole cooperative in one go: hundreds of plots and members with ownership, from one Excel file, safely and
-repeatably. Reuses the validation of features 002–006; adds no new domain rules.
+repeatably. Reuses the validation of features 002–007; adds no new domain rules.
 
 ## Context for the pipeline
 
@@ -13,7 +13,7 @@ Read together with `CLAUDE.md`, `context/product/product-definition.md`, `contex
 `docs/domain/glossary.md`, `docs/domain/money-rules.md` and ADRs 0002, 0003, 0004, 0007, 0008, 0009.
 
 Feature sequence in roadmap phase 1 (each one builds on the previous and leaves `main` working):
-`002 Members and access control` → `003 UI design system` → `004 Role names` → `005 Plots registry` → `006 Ownership` → `007 Excel import` → `008 Deployment`.
+`002 Members and access control` → `003 UI design system` → `004 Role names` → `005 UI preferences` → `006 Plots registry` → `007 Ownership` → `008 Excel import` → `009 Deployment`.
 The map is not part of phase 1 (roadmap phase 6): plots are records without polygons.
 
 General rules for every feature in this sequence:

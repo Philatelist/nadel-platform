@@ -1,6 +1,6 @@
-# 008. Deployment: staging and production
+# 009. Deployment: staging and production
 
-Infrastructure feature. Input for `/feature-pipeline`. Runs after 007 (Excel import), so staging can be loaded with the
+Infrastructure feature. Input for `/feature-pipeline`. Runs after 008 (Excel import), so staging can be loaded with the
 real data of the first cooperative. Requires ADR 0010 (read it first).
 
 ## 1. Goal
@@ -14,7 +14,7 @@ owner can follow alone. No product feature changes.
 Read together with `CLAUDE.md`, `context/product/architecture.md`, ADRs 0001, 0002, 0003 and 0010, `infra/README.md`,
 `infra/docker-compose.yml`, `.github/workflows/`, and `backend/src/main/resources/application.yml`.
 
-Feature sequence: … → `007 Excel import` → `008 Deployment`.
+Feature sequence: … → `008 Excel import` → `009 Deployment`.
 
 Changes to `.github/` and `.claude/` are proposed by agents and committed by the owner (CLAUDE.md); the PR description
 lists them. Agents never connect to real servers and never hold real secrets: everything is verified locally with a

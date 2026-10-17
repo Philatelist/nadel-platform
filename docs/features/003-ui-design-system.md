@@ -22,8 +22,8 @@ follow; this feature does not build them.
 Read together with `CLAUDE.md`, `context/product/product-definition.md`, `context/product/architecture.md` and
 ADR 0005. Look at every screenshot in `docs/design/screens/` before planning.
 
-Feature sequence: `002 Members and access control` → `003 UI design system` → `004 Role names` → `005 Plots registry` →
-`006 Ownership` → `007 Excel import`.
+Feature sequence: `002 Members and access control` → `003 UI design system` → `004 Role names` → `005 UI preferences` → `006 Plots registry` →
+`007 Ownership` → `008 Excel import`.
 
 ## 2. Design tokens (`packages/ui-tokens`)
 
@@ -136,7 +136,7 @@ fonts. No screens are built (member screens come in phase 5; reference `mobile-h
 
 ## 7. Out of scope
 
-New screens or features; plot status in lists (005 and later); a component catalog tool such as Storybook; any change
+New screens or features; plot status in lists (006 and later); a component catalog tool such as Storybook; any change
 to the API, backend or database.
 
 ## 8. Tests and quality

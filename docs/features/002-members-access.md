@@ -7,7 +7,7 @@ Implemented by spec 002: functional spec, technical design and tasks in `context
 
 Give a cooperative its people and decide who may do what. After this feature a chairman can add members, define admin
 roles, assign them, and every admin action is recorded. A signed-in user is linked to their member record and gets
-permissions from the database. Plots and ownership come in features 005 and 006.
+permissions from the database. Plots and ownership come in features 006 and 007.
 
 ## Context for the pipeline
 
@@ -15,7 +15,7 @@ Read together with `CLAUDE.md`, `context/product/product-definition.md`, `contex
 `docs/domain/glossary.md`, `docs/domain/money-rules.md` and ADRs 0002, 0003, 0004, 0007, 0008, 0009.
 
 Feature sequence in roadmap phase 1 (each one builds on the previous and leaves `main` working):
-`002 Members and access control` → `003 UI design system` → `004 Role names` → `005 Plots registry` → `006 Ownership` → `007 Excel import`.
+`002 Members and access control` → `003 UI design system` → `004 Role names` → `005 UI preferences` → `006 Plots registry` → `007 Ownership` → `008 Excel import`.
 The map is not part of phase 1 (roadmap phase 6): plots are records without polygons.
 
 General rules for every feature in this sequence:
@@ -43,10 +43,10 @@ General rules for every feature in this sequence:
 | `MEMBERS_EDIT` | Create, edit, archive members | 002 |
 | `ROLES_MANAGE` | Create, edit, delete custom roles; assign roles to members | 002 |
 | `AUDIT_VIEW` | Read the audit log | 002 |
-| `PLOTS_VIEW` | See all plots with details | 005 |
-| `PLOTS_EDIT` | Create, edit, archive plots | 005 |
-| `OWNERSHIP_EDIT` | Add, change and correct ownership | 006 |
-| `IMPORT_RUN` | Run the Excel import | 007 |
+| `PLOTS_VIEW` | See all plots with details | 006 |
+| `PLOTS_EDIT` | Create, edit, archive plots | 006 |
+| `OWNERSHIP_EDIT` | Add, change and correct ownership | 007 |
+| `IMPORT_RUN` | Run the Excel import | 008 |
 
 Create all eight now so roles can be configured once. Design the enum and seeding so that a later permission
 (`TARIFFS_EDIT`, `PAYMENTS_ALLOCATE`, ...) is an enum value plus a migration that grants it to base roles where needed.
@@ -118,7 +118,7 @@ Every create, update and archive of members, roles and role assignments writes a
 `sub`), timestamp, action, entity type and id, changed fields with old and new values. Modules publish domain events;
 `audit` listens through the outbox (`@ApplicationModuleListener`, `spring-modulith-starter-jpa`). The audit table is
 append-only for `nadel_app` (no UPDATE/DELETE grants). Personal data may appear in audit values (protected by RLS and
-`AUDIT_VIEW`) but never in application logs. Features 005–007 reuse this mechanism.
+`AUDIT_VIEW`) but never in application logs. Features 006–008 reuse this mechanism.
 
 ## 4. API
 
@@ -149,7 +149,7 @@ append-only for `nadel_app` (no UPDATE/DELETE grants). Personal data may appear 
 
 ## 7. Out of scope
 
-Plots and ownership (005, 006), Excel import (007), member self-service editing, Keycloak account creation and
+Plots and ownership (006, 007), Excel import (008), member self-service editing, Keycloak account creation and
 invitations, people in several cooperatives, notifications delivery.
 
 ## 8. Decisions already made (do not ask)
