@@ -1,7 +1,7 @@
 # Pipeline log — 003 UI design system
 
 - Status: running
-- Phase: 2 — branch and specs
+- Phase: 5 — publish
 - Branch: 003-ui-design-system · Base: main @ e85f746
 - Requirement: docs/features/003-ui-design-system.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
@@ -81,3 +81,11 @@
 - Slice 3 committed 4657f49 (web 37 tests, make e2e 17 passed); review r1 PASS.
 - Slice 4 committed 792b4f7 (make check green: backend 239, ui-tokens 56, shared 5, web 37; make e2e 20 passed x2); review r1 PASS. All slice reviews PASS — Slice 5 gate open.
 - Slice 5 (testing-expert): 8 unit + 9 e2e acceptance tests; found GAP (locale switch buttons 24 px < 44 px); fixed by react-frontend in LocaleSwitch.tsx; make e2e 29 passed, web 45 tests.
+- Slice 5 committed 05a3791; review r1 MAJOR_ISSUES (LocaleSwitch radius 6 px) → fix bb08049; review r2 PASS. All slice reviews PASS.
+
+## Phase 4 — verify
+
+- UI checked with the project's Playwright (headless Chromium) against the local stack (`make infra` + backend dev profile + web dev); the Chrome extension was not used because choosing between two connected browsers would have required a question. Screenshots in `docs/screenshots/003-ui-design-system-*.png` (taken before the radius fix bb08049; the only difference is 10 px vs 6 px corners on the UK/EN buttons). No external font requests observed.
+- Acceptance criteria: 17 of 22 verified `[x]`; 5 `[?]`: mobile fonts on a device (2), visual match to the reference pictures (owner judgement), keyboard walk-through beyond the Members screen, PR description rule (done in Phase 5). Spec status: Implemented — pending manual check.
+- Full suite `make check` on bb08049: green (backend 239/0 failures, ui-tokens 56, shared 5, web 45). Baseline had 0 failures → no regressions. `make e2e` on bb08049: 29 passed.
+- Product docs: suggest `/awos:architecture` to record vitest unit tests for the TS packages and self-hosted IBM Plex fonts (not run).

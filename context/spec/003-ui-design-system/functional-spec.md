@@ -1,7 +1,7 @@
 # Functional Specification: UI Design System
 
 - **Topic:** One consistent look for the Nadel web app (colors, fonts, spacing, a shared set of building blocks and a new page frame), applied to the screens that already exist, plus the same colors and fonts in the mobile app.
-- **Status:** Draft
+- **Status:** Implemented — pending manual check
 - **Author:** Alex Usov
 - **Source:** `docs/features/003-ui-design-system.md`; visual reference `docs/design/screens/*.png`
 
@@ -36,8 +36,8 @@ next feature builds its screens from the same building blocks without new stylin
   (green, yellow, red, grey) keep their meaning and are never used as the app accent. The exact values are the
   ones in section 2.1 of the source document.
   - **Acceptance Criteria:**
-    - [ ] When a signed-in board member opens the Members screen, then the page ground is light green-grey, the content sits on a white panel with a thin border, and the "Add member" button is filled deep green with white text, as in `board-members.png`.
-    - [ ] When any existing screen is opened, then every color on it comes from the shared palette, and the same palette is used by the mobile app.
+    - [x] When a signed-in board member opens the Members screen, then the page ground is light green-grey, the content sits on a white panel with a thin border, and the "Add member" button is filled deep green with white text, as in `board-members.png`. _Evidence: e2e `design-system.spec.ts` light palette; see docs/screenshots/003-ui-design-system-members.png._
+    - [x] When any existing screen is opened, then every color on it comes from the shared palette, and the same palette is used by the mobile app. _Evidence: ESLint hex rule in `web/eslint.config.js`, `web/src/theme.test.ts` (CSS = tokens, no undeclared variables), mobile unit check in `designSystem.acceptance.test.ts`._
 
 ### 2.2 Dark theme
 
@@ -45,8 +45,8 @@ next feature builds its screens from the same building blocks without new stylin
   green accent. Every text stays readable: ordinary text has at least a 4.5 : 1 contrast with its background
   (3 : 1 for text of 24 px and larger), in both themes.
   - **Acceptance Criteria:**
-    - [ ] When the device switches to dark appearance and the user opens the Members screen, then the page shows the dark palette and all text, buttons and badges remain readable.
-    - [ ] When the automated contrast check runs over every text and background pair of the palette, then every pair meets the ratio above in both the light and the dark theme.
+    - [x] When the device switches to dark appearance and the user opens the Members screen, then the page shows the dark palette and all text, buttons and badges remain readable. _Evidence: e2e dark appearance test; see docs/screenshots/003-ui-design-system-members-dark.png._
+    - [x] When the automated contrast check runs over every text and background pair of the palette, then every pair meets the ratio above in both the light and the dark theme. _Evidence: `packages/ui-tokens/src/contrast.test.ts` (both themes, green)._
 
 ### 2.3 Fonts and text sizes
 
@@ -55,16 +55,16 @@ next feature builds its screens from the same building blocks without new stylin
   right-aligned in tables. All three fonts show Ukrainian (Cyrillic) letters. The fonts are served by Nadel
   itself: opening the app makes no request to an outside font service.
   - **Acceptance Criteria:**
-    - [ ] When the user opens any screen in Ukrainian, then the page title is in a serif font and the rest of the text in a sans-serif font, with all Cyrillic letters drawn by those fonts.
-    - [ ] When the app is loaded in a browser with its network log open, then no request goes to Google Fonts or any other outside font service.
-    - [ ] When the mobile app starts, then its text uses the same IBM Plex fonts.
+    - [x] When the user opens any screen in Ukrainian, then the page title is in a serif font and the rest of the text in a sans-serif font, with all Cyrillic letters drawn by those fonts. _Evidence: e2e fonts test (computed families, `document.fonts.check` with Cyrillic); see docs/screenshots/003-ui-design-system-members.png._
+    - [x] When the app is loaded in a browser with its network log open, then no request goes to Google Fonts or any other outside font service. _Evidence: e2e fonts test (no non-localhost font requests) and Playwright resource listing during verification: none._
+    - [?] When the mobile app starts, then its text uses the same IBM Plex fonts. _Evidence: fonts load via `useFonts` and `expo export --platform android` bundled the six Plex TTFs; not run on a device or simulator._
 
 ### 2.4 Spacing and shape
 
 - Spacing follows one 4 px step scale. Controls have 10 px rounded corners, panels 12 px, badges and pills are
   fully rounded. Panels have no shadows or gradients. Every button, link-button and field is at least 44 px high.
   - **Acceptance Criteria:**
-    - [ ] When the user looks at any button or input on an existing screen, then it is at least 44 px high and has rounded corners as above.
+    - [x] When the user looks at any button or input on an existing screen, then it is at least 44 px high and has rounded corners as above. _Evidence: e2e target-size tests: main controls on Members and Member form, header buttons incl. language switch, ≥ 44 px and 10 px corners._
 
 ### 2.5 Building blocks
 
@@ -83,10 +83,10 @@ next feature builds its screens from the same building blocks without new stylin
     alone.
   - **Notices** for attention, success and errors; and the same **loading, empty and error states** on every screen.
   - **Acceptance Criteria:**
-    - [ ] When the amount `1250.50` is displayed, then the user sees `1 250,50 ₴`; when `0.00`, `-350.00` or `1000000.00` is displayed, then the user sees `0,00 ₴`, `−350,00 ₴` and `1 000 000,00 ₴`.
-    - [ ] When a list has no entries, then the user sees the shared empty state; when it is loading, then they see the shared loading state; when loading fails, then they see the shared error state with a "Try again" button.
-    - [ ] When a form field has an error, then the error text appears in red directly under that field and a screen reader announces it with the field.
-    - [ ] When a plot status mark is shown, then a text label is present next to or with the colored dot.
+    - [x] When the amount `1250.50` is displayed, then the user sees `1 250,50 ₴`; when `0.00`, `-350.00` or `1000000.00` is displayed, then the user sees `0,00 ₴`, `−350,00 ₴` and `1 000 000,00 ₴`. _Evidence: `Money.test.tsx`, `packages/shared/src/money.test.ts`._
+    - [x] When a list has no entries, then the user sees the shared empty state; when it is loading, then they see the shared loading state; when loading fails, then they see the shared error state with a "Try again" button. _Evidence: `states.test.tsx`, `QueryBoundary`, e2e acceptance "Try again" flow._
+    - [x] When a form field has an error, then the error text appears in red directly under that field and a screen reader announces it with the field. _Evidence: `Field.test.tsx`, `TextField.test.tsx` (aria-describedby, role=alert)._
+    - [x] When a plot status mark is shown, then a text label is present next to or with the colored dot. _Evidence: `StatusDot.test.tsx`._
 
 ### 2.6 Page frame and menu
 
@@ -100,10 +100,10 @@ next feature builds its screens from the same building blocks without new stylin
 - A person who may open no sections (an ordinary member) sees no side menu and no "Menu" button.
 - The content column is at most about 1060 px wide.
   - **Acceptance Criteria:**
-    - [ ] When the chairman signs in on a wide screen, then the header shows the product name "Наділ" as a link to the home page, the cooperative's name, the chairman's name and role, the language switch and "Sign out", and a side menu shows Members, Roles and Audit log with the current item highlighted.
-    - [ ] When an ordinary member signs in, then they see the header and their account page, and no side menu and no "Menu" button.
-    - [ ] Given a 390 px wide screen, when the chairman presses "Menu", then the menu opens and the button reports it as expanded; when they press it again, then the menu closes and the button reports it as collapsed.
-    - [ ] Given a 390 px wide screen, when the chairman opens the Members screen, then the members table scrolls sideways inside its panel and the page has no sideways scroll.
+    - [x] When the chairman signs in on a wide screen, then the header shows the product name "Наділ" as a link to the home page, the cooperative's name, the chairman's name and role, the language switch and "Sign out", and a side menu shows Members, Roles and Audit log with the current item highlighted. _Evidence: e2e "chairman: header shows…"; see docs/screenshots/003-ui-design-system-members.png._
+    - [x] When an ordinary member signs in, then they see the header and their account page, and no side menu and no "Menu" button. _Evidence: e2e plain member test, `responsive.spec.ts`, `Layout.test.tsx`; see docs/screenshots/003-ui-design-system-account-member.png._
+    - [x] Given a 390 px wide screen, when the chairman presses "Menu", then the menu opens and the button reports it as expanded; when they press it again, then the menu closes and the button reports it as collapsed. _Evidence: e2e "pressing Menu twice"; see docs/screenshots/003-ui-design-system-menu-open-390.png._
+    - [x] Given a 390 px wide screen, when the chairman opens the Members screen, then the members table scrolls sideways inside its panel and the page has no sideways scroll. _Evidence: `responsive.spec.ts` (page scrollWidth ≤ clientWidth, table wrapper scrolls); see docs/screenshots/003-ui-design-system-members-390.png._
 
 ### 2.7 Restyled screens
 
@@ -114,22 +114,22 @@ next feature builds its screens from the same building blocks without new stylin
   Only the look changes: what each screen does, its address, who may open it and what data it shows stay the same.
   The hidden map screen is not restyled.
   - **Acceptance Criteria:**
-    - [ ] When the chairman opens each screen above, then its layout, colors and type match its reference picture (a serif page title, white panels, tables with header rows, green primary buttons).
-    - [ ] When the Members list is opened, then members are shown as rows of a table with column headers, and search and paging work as before.
-    - [ ] When any existing user flow (sign-in, member search, add and edit member, roles, audit log, account) is run, then it behaves exactly as before this feature.
+    - [?] When the chairman opens each screen above, then its layout, colors and type match its reference picture (a serif page title, white panels, tables with header rows, green primary buttons). _Evidence: visual match is an owner judgement; screenshots docs/screenshots/003-ui-design-system-members.png, member.png, member-form.png, roles.png, audit.png, account-chairman.png, account-member.png, not-found.png._
+    - [x] When the Members list is opened, then members are shown as rows of a table with column headers, and search and paging work as before. _Evidence: e2e acceptance and members specs (table rows, search, paging)._
+    - [x] When any existing user flow (sign-in, member search, add and edit member, roles, audit log, account) is run, then it behaves exactly as before this feature. _Evidence: `make e2e` 29 passed (acceptance, members, responsive, design-system specs)._
 
 ### 2.8 Keyboard and screen reader use
 
 - Every action can be reached with the Tab key, the focused element always has a visible outline, and the menu
   toggle announces whether it is open.
   - **Acceptance Criteria:**
-    - [ ] When the user moves through any restyled screen with Tab, then every link, button and field receives focus in reading order and shows a visible focus outline.
+    - [?] When the user moves through any restyled screen with Tab, then every link, button and field receives focus in reading order and shows a visible focus outline. _Evidence: automated on the Members screen (menu links, search, Add member, visible outline); other screens rely on the same global focus ring and were not tabbed through._
 
 ### 2.9 Mobile app
 
 - The mobile app uses the same colors, spacing, corner rounding and IBM Plex fonts. No mobile screens are built.
   - **Acceptance Criteria:**
-    - [ ] When the mobile app's start screen opens, then it uses the shared palette and IBM Plex fonts.
+    - [?] When the mobile app's start screen opens, then it uses the shared palette and IBM Plex fonts. _Evidence: same as the mobile font criterion: code uses tokens and Plex fonts, bundle export verified; not rendered on a device._
 
 ### 2.10 Guidance for future screens
 
@@ -137,7 +137,7 @@ next feature builds its screens from the same building blocks without new stylin
   new web screens are built from the shared building blocks and follow the reference pictures; no colors are
   written directly into screens.
   - **Acceptance Criteria:**
-    - [ ] When the owner opens the pull request, then its description contains this proposed rule.
+    - [?] When the owner opens the pull request, then its description contains this proposed rule. _Evidence: satisfied in the PR description at publish time (Phase 5)._
 
 ---
 

@@ -36,3 +36,4 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `792b4f7..05a3791` | MAJOR_ISSUES | M1 `LocaleSwitch.tsx:15` uses `rounded-md` (6 px), spec 2.4 requires 10 px control radius | minor: registry row still says FAILING; active language text now `text-accent`; dark "light text" check is loose |
+| 2 | + `bb08049` | PASS | M1 resolved | minor: header test title does not mention the radius; round 1 minors open |
