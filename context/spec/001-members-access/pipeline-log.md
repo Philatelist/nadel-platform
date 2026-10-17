@@ -1,7 +1,7 @@
 # Pipeline log — 002 Members and access control
 
-- Status: running
-- Phase: 3 — implement, Slice 7
+- Status: finished
+- Phase: done
 - Branch: 001-members-access · Base: main @ 39380d2
 - Requirement: document `docs/features/002-members-access.md`
 - Autonomy: minimal (default; no argument, no `.claude/feature-pipeline.yml`)
@@ -160,3 +160,36 @@ new tables; module cycle identity↔members; Playwright CI job is new infrastruc
 - Slice 7 task 2 (testing-expert): verify 238 tests green incl. MembersAccessAcceptanceTests, coverage floor met; client green; make e2e 17 passed on a fresh volume. Slice 7 ticked — all tasks done.
 - Slice 7 committed: ab1fce4 (acceptance tests + 406 contract fix) — review round 1 running. Phase 4 waits for it.
 - Slice 7 review round 1: MAJOR_ISSUES (M1 acceptance test clears the Treasurer description in the shared DB). Fix sent to testing-expert (builder of the test).
+- Slice 7 review round 2: PASS. ALL slice reviews PASS (S1 2 rounds, S2 1, S3 2, S4 1, S5 2, S6 1, S7 2).
+- Phase 4 start: /awos:verify.
+- /awos:verify: 60/60 criteria [x] with evidence (24 screenshots in docs/screenshots/001-members-access-*.png from a Playwright walk-through against the local stack; committed integration and E2E tests); 4 criteria verified at API level only (listed in functional-spec §5). Status Completed in functional-spec.md and technical-considerations.md. Verify stack stopped by PID, compose down -v, ports free. Product docs already updated by the Slice 6 docs task → no /awos:product or /awos:architecture suggestion.
+- Phase 4 step 3: full suite (`make check`) started.
+- Phase 4 step 3: `make check` (JDK 25) exit 0 — no generated-client drift, format/lint/typecheck green, `./mvnw verify` 238 tests, 0 failures, coverage floor 0.93 met. Baseline (main @ 39380d2): 7 tests, 0 failures → no regressions, no baseline failures to report.
+- Clean-up: `git worktree list` shows only the main checkout; no stack, ports or processes left running.
+
+## Final report
+
+**Branch:** `001-members-access` (cut from `main` @ 39380d2). Not pushed, not merged.
+
+**Commits:** caf2a12 specs · f76322d Slice 1 · 7ad1272 Slice 2 · 5ae986c Slice 1 review fixes · ca5ea40 Slice 3 · 81e5be8 Slice 3 review fixes · eb74fb7 Slice 4 · f03fd4c Slice 5 · 92eb53a Slice 5 review fixes · f04af75 Slice 6 · ab1fce4 Slice 7 (incl. the DELETE /roles 406 gap fix) · 8445e2a Slice 7 review fixes · final docs/evidence commit.
+
+**Acceptance criteria:** 60/60 verified (`[x]`), 0 `[?]`. Four are verified at API level only (§2.4 #2, §2.4 #1 mixed case, §2.11 #4, §2.12 #1 — no browser path with the demo realm). Evidence: functional-spec §5, 24 screenshots in docs/screenshots/.
+
+**Reviews:** S1 2 rounds (M1 401-vs-500 on lookup failure → fixed), S2 1, S3 2 (M1 phone error row mapping → fixed), S4 1, S5 2 (M1 test left shared DB changed → fixed), S6 1, S7 2 (M1 test cleared Treasurer description → fixed). All PASS. Minor notes per slice in review-log.md (not fixed).
+
+**Full suite vs baseline:** 238 tests green vs baseline 7 green; no regressions.
+
+**Assumptions after Phase 1:** technical-considerations §5 (13), functional-spec §4 (12), plus: Electrician demo user = Member + custom role; `event_publication` without RLS (ADR 0007 note); listener option A; orval `useQuery: true` override removed so writes generate mutations; shared error responses also offer `application/json`; `docs/screenshots/` committed as evidence (not git-ignored).
+
+**Decided automatically (AUTO):** brief decisions 3–13 at recommended answers; Electrician demo mapping; docs task under general-purpose (no docs specialist); `<!-- not-user-reviewed -->` marker removed; openjdk@25 Homebrew formula instead of the Temurin cask (cask needed sudo); no reviewer escalations needed.
+
+**For the owner:**
+- Proposed CLAUDE.md edits (listed above in this log, 4 items): base roles without ELECTRICIAN; `make e2e`/`make e2e-install`; test users get permissions from DB roles; DoD E2E note.
+- Commit subjects use the pipeline format `001: …`, not Conventional Commits (CLAUDE.md) — squash with a Conventional Commits subject (e.g. `feat(members): members and access control`) when opening the PR.
+- docs/features/003–005 are still untracked; 001-foundation.md now links to them.
+- OSV-Scanner not available locally — CI runs it for the new dev deps (`@playwright/test` 1.63.0, `@types/node` 22.20.5).
+- New backend dependencies for the PR note: `spring-modulith-starter-jpa` 2.1.1 (outbox), `spring-boot-starter-webmvc-test` (test). New CI action: `actions/cache@v6`.
+- JDK 25 installed via Homebrew `openjdk@25` (keg-only; not on PATH by default).
+- Worth a product decision (review minors): custom role named like a localized base role ("Скарбник") is allowed; Chairman description not editable in the UI; audit table shows raw channel codes; "1 members" pluralisation.
+
+**Suggested follow-ups:** none for /awos:product or /awos:architecture (docs updated in Slice 6). `/awos:hire` for a documentation/Playwright specialist is optional.

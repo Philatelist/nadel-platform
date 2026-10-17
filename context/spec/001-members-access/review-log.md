@@ -49,3 +49,4 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `f04af75..ab1fce4` | MAJOR_ISSUES | M1 `MembersAccessAcceptanceTests#untickingAuditViewForTreasurer…` PUTs the Treasurer role without its description (also in the restore), clearing the seeded description in the shared DB | minor: `expectProblem` ignores `code`; no Content-Type assertion for `deleteRole` errors without Accept; `list-of-tests.md` still shows two FAILING/GAP rows; forbidden-word regex `\binn\w*` too broad; audit-mutation test may hit a random id; duplicate `toBeChecked` and archived helper members accumulate in E2E runs |
+| 2 | + `8445e2a` | PASS | M1 resolved (restore in `finally` with seeded constants; end-state assertion after it) | minor: mixed `get`/`path` accessors for name/description |

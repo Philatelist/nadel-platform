@@ -1,7 +1,7 @@
 # Functional Specification: Members and Access Control
 
 - **Topic:** A cooperative's list of members, the admin roles that decide who may do what, linking each person's sign-in to their member record, and a record of every admin change.
-- **Status:** Draft
+- **Status:** Completed
 - **Author:** Alex Usov
 - **Source:** `docs/features/002-members-access.md` (roadmap phase 1, feature 1 of 4)
 
@@ -51,8 +51,8 @@ who signs in sees only what their roles allow; and for any change to a member or
 
   All eight exist from now on, so roles can be configured once even though the last four have no screens yet.
   - **Acceptance Criteria:**
-    - [ ] When a person with "Manage roles" opens the Roles screen, then they see exactly these eight permissions, each with its name and a one-line description, in Ukrainian by default.
-    - [ ] When a person without "Manage roles" tries to open the Roles screen by its address, then they see a "You don't have access to this page" message instead of the screen.
+    - [x] When a person with "Manage roles" opens the Roles screen, then they see exactly these eight permissions, each with its name and a one-line description, in Ukrainian by default.
+    - [x] When a person without "Manage roles" tries to open the Roles screen by its address, then they see a "You don't have access to this page" message instead of the screen.
 
 ### 2.2 Base roles
 
@@ -65,12 +65,12 @@ who signs in sees only what their roles allow; and for any change to a member or
 - At least one active (not archived) member must always hold Chairman. The product refuses to take Chairman away
   from, or archive, the last such member.
   - **Acceptance Criteria:**
-    - [ ] When the chairman opens the Roles screen of a new cooperative, then they see Chairman, Treasurer and Member marked as base roles, with no delete button and no editable name.
-    - [ ] When the chairman views the Chairman role, then all eight permissions are shown ticked and cannot be unticked.
-    - [ ] When the chairman unticks "View audit log" for Treasurer and saves, then a treasurer who signs in afterwards no longer sees the Audit log item in navigation.
-    - [ ] Given only one active member holds Chairman, when someone tries to remove Chairman from that member, then the change is refused with the message "The cooperative must keep at least one chairman."
-    - [ ] Given only one active member holds Chairman, when someone tries to archive that member, then the archive is refused with the message "The cooperative must keep at least one chairman."
-    - [ ] Given two active members hold Chairman, when Chairman is removed from one of them, then the change succeeds.
+    - [x] When the chairman opens the Roles screen of a new cooperative, then they see Chairman, Treasurer and Member marked as base roles, with no delete button and no editable name.
+    - [x] When the chairman views the Chairman role, then all eight permissions are shown ticked and cannot be unticked.
+    - [x] When the chairman unticks "View audit log" for Treasurer and saves, then a treasurer who signs in afterwards no longer sees the Audit log item in navigation.
+    - [x] Given only one active member holds Chairman, when someone tries to remove Chairman from that member, then the change is refused with the message "The cooperative must keep at least one chairman."
+    - [x] Given only one active member holds Chairman, when someone tries to archive that member, then the archive is refused with the message "The cooperative must keep at least one chairman."
+    - [x] Given two active members hold Chairman, when Chairman is removed from one of them, then the change succeeds.
 
 ### 2.3 Custom roles
 
@@ -81,12 +81,12 @@ who signs in sees only what their roles allow; and for any change to a member or
 - A custom role can be edited (name, description, permissions) and deleted. Deleting a role that is still given
   to at least one member is refused.
   - **Acceptance Criteria:**
-    - [ ] When a person with "Manage roles" creates "Secretary" with View members and Edit members, then the role appears in the roles list with those two permissions.
-    - [ ] When someone creates a role named "treasurer" (or the name of any existing role in any letter case), then they see: "A role with this name already exists."
-    - [ ] When someone saves a role with an empty name, then they see: "Name is required."
-    - [ ] Given a member holds Treasurer and Secretary, when they sign in, then they can both view the audit log (from Treasurer) and edit members (from Secretary).
-    - [ ] Given "Secretary" is given to one member, when someone tries to delete it, then they see: "This role is assigned to members and cannot be deleted." and the role stays.
-    - [ ] Given "Secretary" is given to no one, when someone deletes it, then it disappears from the roles list.
+    - [x] When a person with "Manage roles" creates "Secretary" with View members and Edit members, then the role appears in the roles list with those two permissions.
+    - [x] When someone creates a role named "treasurer" (or the name of any existing role in any letter case), then they see: "A role with this name already exists."
+    - [x] When someone saves a role with an empty name, then they see: "Name is required."
+    - [x] Given a member holds Treasurer and Secretary, when they sign in, then they can both view the audit log (from Treasurer) and edit members (from Secretary).
+    - [x] Given "Secretary" is given to one member, when someone tries to delete it, then they see: "This role is assigned to members and cannot be deleted." and the role stays.
+    - [x] Given "Secretary" is given to no one, when someone deletes it, then it disappears from the roles list.
 
 ### 2.4 Signing in as a member
 
@@ -104,11 +104,11 @@ who signs in sees only what their roles allow; and for any change to a member or
   Chairman, Treasurer and Member; the electrician test user holds Member plus a demo custom role "Electrician"
   that has no permissions yet. The other cooperative's test user matches a member of that other cooperative.
   - **Acceptance Criteria:**
-    - [ ] Given a member with email "Treasurer@Demo.local" holds Treasurer, when the person signed in as treasurer@demo.local opens Nadel, then they see the member list.
-    - [ ] When a person signs in whose email matches no member of their cooperative, then they see: "Your account is not linked to a member of this cooperative. Please contact your chairman." and no cooperative data.
-    - [ ] Given the member matching a person's email is archived, when that person signs in, then they see the same "not linked" message.
-    - [ ] Given a person has signed in once and been matched, when an admin changes that member's email and the person signs in again, then they are still recognised as the same member.
-    - [ ] When the platform operator signs in, then they see that they belong to no cooperative and see no members.
+    - [x] Given a member with email "Treasurer@Demo.local" holds Treasurer, when the person signed in as treasurer@demo.local opens Nadel, then they see the member list.
+    - [x] When a person signs in whose email matches no member of their cooperative, then they see: "Your account is not linked to a member of this cooperative. Please contact your chairman." and no cooperative data.
+    - [x] Given the member matching a person's email is archived, when that person signs in, then they see the same "not linked" message.
+    - [x] Given a person has signed in once and been matched, when an admin changes that member's email and the person signs in again, then they are still recognised as the same member.
+    - [x] When the platform operator signs in, then they see that they belong to no cooperative and see no members.
 
 ### 2.5 What an ordinary member sees
 
@@ -117,10 +117,10 @@ who signs in sees only what their roles allow; and for any change to a member or
   member that does not exist, so they cannot tell other members exist. The member list is not available to them.
 - Notes about a member are visible only to people with "View members", including on the member's own card.
   - **Acceptance Criteria:**
-    - [ ] Given a person holds only Member, when they open My account, then they see their own name, phones, email, postal address and preferred channel, with no edit buttons and no notes.
-    - [ ] Given a person holds only Member, when they open another member's card by its address, then they see "Not found".
-    - [ ] Given a person holds only Member, when they open the member list by its address, then they see "You don't have access to this page" and no members' names.
-    - [ ] Given a person holds only Member, when they look at navigation, then there are no Members, Roles or Audit log items.
+    - [x] Given a person holds only Member, when they open My account, then they see their own name, phones, email, postal address and preferred channel, with no edit buttons and no notes.
+    - [x] Given a person holds only Member, when they open another member's card by its address, then they see "Not found".
+    - [x] Given a person holds only Member, when they open the member list by its address, then they see "You don't have access to this page" and no members' names.
+    - [x] Given a person holds only Member, when they look at navigation, then there are no Members, Roles or Audit log items.
 
 ### 2.6 Member records
 
@@ -144,16 +144,16 @@ who signs in sees only what their roles allow; and for any change to a member or
   filter, cannot sign in, and keep their history. An archived member can be restored, unless an active member now
   uses the same email.
   - **Acceptance Criteria:**
-    - [ ] When an editor saves a member with phone "067 123 45 67", then the card shows "+380671234567".
-    - [ ] When an editor saves a member with phone "12345", then they see next to the phone field: "Enter a phone number like +380671234567 or 0671234567."
-    - [ ] When an editor saves a member without a last name, then they see next to the field: "Last name is required." and nothing is saved.
-    - [ ] Given an active member already has email ivan@example.com, when an editor saves another member with "IVAN@example.com", then they see: "Another active member already uses this email."
-    - [ ] When an editor sets the preferred channel to Telegram without a Telegram username, then they see: "Telegram needs a Telegram username." (and likewise "Email needs an email." and "Viber needs a Viber phone.")
-    - [ ] When an editor creates a member without choosing a channel, then the card shows the preferred channel "Paper".
-    - [ ] When an editor archives a member, then the member disappears from the default list and appears when the "Show archived" filter is on, marked as archived.
-    - [ ] When an editor restores an archived member, then the member is back in the default list.
-    - [ ] Given an archived member's email is now used by an active member, when an editor tries to restore the archived member, then they see: "Another active member already uses this email."
-    - [ ] When an editor looks at the member form, then there are no fields for tax number, passport or date of birth.
+    - [x] When an editor saves a member with phone "067 123 45 67", then the card shows "+380671234567".
+    - [x] When an editor saves a member with phone "12345", then they see next to the phone field: "Enter a phone number like +380671234567 or 0671234567."
+    - [x] When an editor saves a member without a last name, then they see next to the field: "Last name is required." and nothing is saved.
+    - [x] Given an active member already has email ivan@example.com, when an editor saves another member with "IVAN@example.com", then they see: "Another active member already uses this email."
+    - [x] When an editor sets the preferred channel to Telegram without a Telegram username, then they see: "Telegram needs a Telegram username." (and likewise "Email needs an email." and "Viber needs a Viber phone.")
+    - [x] When an editor creates a member without choosing a channel, then the card shows the preferred channel "Paper".
+    - [x] When an editor archives a member, then the member disappears from the default list and appears when the "Show archived" filter is on, marked as archived.
+    - [x] When an editor restores an archived member, then the member is back in the default list.
+    - [x] Given an archived member's email is now used by an active member, when an editor tries to restore the archived member, then they see: "Another active member already uses this email."
+    - [x] When an editor looks at the member form, then there are no fields for tax number, passport or date of birth.
 
 ### 2.7 Members list
 
@@ -163,11 +163,11 @@ who signs in sees only what their roles allow; and for any change to a member or
 - The list shows a loading state, an empty state ("No members yet" or "Nothing found") and an error state with a
   retry button.
   - **Acceptance Criteria:**
-    - [ ] Given the demo cooperative, when the treasurer opens Members, then they see the first 20 members sorted by last name, each with phones, email, preferred channel and roles.
-    - [ ] When the treasurer types "067" in search, then only members with a phone containing those digits are shown.
-    - [ ] When the treasurer searches for a name that no member has, then they see "Nothing found".
-    - [ ] When the treasurer moves to the next page, then they see the next members in order and the page indicator changes.
-    - [ ] Given the list cannot be loaded, when the treasurer opens Members, then they see an error message with a "Try again" button.
+    - [x] Given the demo cooperative, when the treasurer opens Members, then they see the first 20 members sorted by last name, each with phones, email, preferred channel and roles.
+    - [x] When the treasurer types "067" in search, then only members with a phone containing those digits are shown.
+    - [x] When the treasurer searches for a name that no member has, then they see "Nothing found".
+    - [x] When the treasurer moves to the next page, then they see the next members in order and the page indicator changes.
+    - [x] Given the list cannot be loaded, when the treasurer opens Members, then they see an error message with a "Try again" button.
 
 ### 2.8 Member card
 
@@ -176,10 +176,10 @@ who signs in sees only what their roles allow; and for any change to a member or
 - People without "Edit members" see the card read-only; people without "Manage roles" see the roles but cannot
   change them.
   - **Acceptance Criteria:**
-    - [ ] Given the treasurer (View members only), when they open a member card, then they see all fields including notes, with no Edit, Archive or role-change controls.
-    - [ ] Given a person with Edit members, when they change a member's postal address and save, then the card shows the new address and a "Saved" confirmation.
-    - [ ] Given a person with Manage roles, when they give a member the Secretary role and save, then the card lists Secretary among the member's roles.
-    - [ ] Given a person with Edit members but not Manage roles, when they open a card, then they can edit fields but cannot change roles.
+    - [x] Given the treasurer (View members only), when they open a member card, then they see all fields including notes, with no Edit, Archive or role-change controls.
+    - [x] Given a person with Edit members, when they change a member's postal address and save, then the card shows the new address and a "Saved" confirmation.
+    - [x] Given a person with Manage roles, when they give a member the Secretary role and save, then the card lists Secretary among the member's roles.
+    - [x] Given a person with Edit members but not Manage roles, when they open a card, then they can edit fields but cannot change roles.
 
 ### 2.9 Audit log
 
@@ -192,14 +192,14 @@ who signs in sees only what their roles allow; and for any change to a member or
 - An entry appears in the log shortly after the change (within a few seconds); a change is never lost from the
   log even if recording it fails at first.
   - **Acceptance Criteria:**
-    - [ ] When an editor changes a member's phone from +380671234567 to +380501112233, then within 5 seconds the audit log shows an entry with the editor's name, the time, "Member updated", the member's name, and the phone's old and new values.
-    - [ ] When someone gives a member the Secretary role, then the audit log shows a "Roles changed" entry for that member with the old and new list of roles.
-    - [ ] When someone creates, edits or deletes a custom role, then the audit log shows a matching "Role created", "Role updated" or "Role deleted" entry.
-    - [ ] When someone archives or restores a member, then the audit log shows "Member archived" or "Member restored".
-    - [ ] When the treasurer filters the log by one member, then only entries about that member are shown.
-    - [ ] When the treasurer filters the log by a date range, then only entries made within that range (inclusive) are shown.
-    - [ ] Given a person holds only Member, when they open the audit log by its address, then they see "You don't have access to this page".
-    - [ ] When a person views the audit log, then there is no way to edit or delete an entry.
+    - [x] When an editor changes a member's phone from +380671234567 to +380501112233, then within 5 seconds the audit log shows an entry with the editor's name, the time, "Member updated", the member's name, and the phone's old and new values.
+    - [x] When someone gives a member the Secretary role, then the audit log shows a "Roles changed" entry for that member with the old and new list of roles.
+    - [x] When someone creates, edits or deletes a custom role, then the audit log shows a matching "Role created", "Role updated" or "Role deleted" entry.
+    - [x] When someone archives or restores a member, then the audit log shows "Member archived" or "Member restored".
+    - [x] When the treasurer filters the log by one member, then only entries about that member are shown.
+    - [x] When the treasurer filters the log by a date range, then only entries made within that range (inclusive) are shown.
+    - [x] Given a person holds only Member, when they open the audit log by its address, then they see "You don't have access to this page".
+    - [x] When a person views the audit log, then there is no way to edit or delete an entry.
 
 ### 2.10 My account
 
@@ -208,8 +208,8 @@ who signs in sees only what their roles allow; and for any change to a member or
 - My account is the first page after sign-in. The demo map is no longer in navigation (it returns with the map
   feature).
   - **Acceptance Criteria:**
-    - [ ] When the treasurer signs in, then they land on My account and see their name, the role "Treasurer" and the permissions "View members", "View plots" and "View audit log".
-    - [ ] When any person looks at navigation, then there is no Map item.
+    - [x] When the treasurer signs in, then they land on My account and see their name, the role "Treasurer" and the permissions "View members", "View plots" and "View audit log".
+    - [x] When any person looks at navigation, then there is no Map item.
 
 ### 2.11 Navigation and language
 
@@ -218,26 +218,26 @@ who signs in sees only what their roles allow; and for any change to a member or
   action itself regardless of what the screen shows.
 - All new screens are in Ukrainian by default with English available, and each has loading, empty and error states.
   - **Acceptance Criteria:**
-    - [ ] When the chairman signs in, then navigation shows My account, Members, Roles and Audit log.
-    - [ ] When the treasurer signs in, then navigation shows My account, Members and Audit log, but not Roles.
-    - [ ] When a person switches the language to English, then every label, message and permission name on the new screens is in English.
-    - [ ] Given a person without "Edit members", when they try to save a change to a member by any means, then the change is refused with "You don't have permission to do this." and the member is unchanged.
+    - [x] When the chairman signs in, then navigation shows My account, Members, Roles and Audit log.
+    - [x] When the treasurer signs in, then navigation shows My account, Members and Audit log, but not Roles.
+    - [x] When a person switches the language to English, then every label, message and permission name on the new screens is in English.
+    - [x] Given a person without "Edit members", when they try to save a change to a member by any means, then the change is refused with "You don't have permission to do this." and the member is unchanged.
 
 ### 2.12 Isolation between cooperatives
 
 - Members, roles, role assignments and audit entries of one cooperative are never visible to, or changeable by,
   people of another cooperative.
   - **Acceptance Criteria:**
-    - [ ] Given a person of the other cooperative with "View members", when they open the member list, then they see only their own cooperative's members.
-    - [ ] When a person of the other cooperative opens the address of a demo cooperative member's card, then they see "Not found".
+    - [x] Given a person of the other cooperative with "View members", when they open the member list, then they see only their own cooperative's members.
+    - [x] When a person of the other cooperative opens the address of a demo cooperative member's card, then they see "Not found".
 
 ### 2.13 Demo data
 
 - The demo cooperative has about 35 members with realistic Ukrainian names and contacts, the base roles given to
   the demo users, and a custom role "Secretary" given to one member, so every screen has something to show.
   - **Acceptance Criteria:**
-    - [ ] When the chairman of the demo cooperative opens Members, then they see between 30 and 40 members across two pages.
-    - [ ] When the chairman opens Roles, then they see Chairman, Treasurer, Member, Secretary and Electrician.
+    - [x] When the chairman of the demo cooperative opens Members, then they see between 30 and 40 members across two pages.
+    - [x] When the chairman opens Roles, then they see Chairman, Treasurer, Member, Secretary and Electrician.
 
 ---
 
@@ -297,6 +297,37 @@ Assumptions made by the pipeline (recommended answers, not asked):
 11. My account replaces the map as the first page after sign-in.
 12. Edits to the agent rules file (`CLAUDE.md`) that this decision implies (base role list, test users) are proposed
     to the repository owner, not made by this feature.
+
+---
+
+## 5. Verification Evidence (2026-10-17, `/awos:verify`)
+
+All 60 acceptance criteria verified. UI states were rendered in a real browser (Chromium via Playwright) against the
+local stack (compose Postgres + Keycloak, backend jar, Vite dev server, fresh volume, localhost only); screenshots are
+in `docs/screenshots/001-members-access-*.png`. API, data and concurrency criteria are proven by the committed
+integration tests (MockMvc through the real security chain against Testcontainers PostgreSQL), all green in the final
+full suite. The committed browser suite `web/e2e/acceptance.spec.ts` (15 specs) and `web/e2e/members.spec.ts` (2) pass
+against the same stack (`make e2e`: 17 passed).
+
+| Section | Evidence |
+|---|---|
+| 2.1 Permissions | `ukrainian-default-roles.png`, `english-roles.png`, `member-no-access.png`; RolesTests#holderOfRolesManageListsTheEightPermissionsInOrder |
+| 2.2 Base roles | `roles-list.png`, `roles-chairman-locked.png`, `last-chairman-refused.png`; E2E "§2.2 #3"; RolesTests (last chairman, two chairmen), MembersWriteTests#theLastChairmanCannotBeArchived, LastChairmanConcurrencyTests |
+| 2.3 Custom roles | E2E "custom role lifecycle" (create, duplicate name, empty name, in use, delete); MembersAccessAcceptanceTests#chairmanOnboards…, #businessErrorsReachAClientThatAcceptsJson; RolesTests |
+| 2.4 Signing in | `treasurer-account.png`, `not-linked.png` (archived member), `operator-no-cooperative.png`; MemberLinkingTests (case-insensitive match, no match → MEMBER_NOT_LINKED, archived, survives email edit, second subject refused) |
+| 2.5 Ordinary member | `member-own-card.png`, `member-other-card-not-found.png`, `member-no-access.png`; MembersReadTests (other card 404, own card without notes) |
+| 2.6 Member records | `form-last-name-required.png`, `form-phone-invalid.png`, `form-telegram-needs-username.png`, `member-saved-normalised-phone.png`, `member-archived.png`; E2E member journey (email taken, Email/Viber channel messages, archive/restore, no tax/passport/birth fields); MembersWriteTests (email reuse after archive, restore conflict) |
+| 2.7 Members list | `members-list.png` (20 rows, last-name order, Page 1 of 2), `members-search-phone.png`, `members-nothing-found.png`, `members-page-2.png`; E2E "§2.7 #5" (error with Try again) |
+| 2.8 Member card | `treasurer-read-only-card.png`; E2E member journey (edit + "Saved", Secretary assigned); MembersAccessAcceptanceTests#anEditorWithoutManageRolesEditsFieldsButNotRoles |
+| 2.9 Audit log | `audit-log.png` (author, time, action, record, old → new); E2E member journey and role lifecycle (roles changed, role created/deleted, filters, date range); AuditReadTests, AuditOutboxTests, AuditAppendOnlyTests |
+| 2.10 My account | `treasurer-account.png`; no Map item in every navigation screenshot |
+| 2.11 Navigation and language | `chairman-navigation.png`, `treasurer-account.png`, `english-roles.png` and every English screenshot; MembersWriteTests#writesAreDeniedWithoutMembersEdit, MembersAccessAcceptanceTests#writesWithoutThePermission… (403 PERMISSION_DENIED, data unchanged; UI text from the catalog) |
+| 2.12 Isolation | `other-cooperative-not-found.png`; MembersAccessAcceptanceTests#aChairmanOfTheOtherCooperativeCannotReachAnything…, MembersReadTests#anotherCooperativeSeesOnlyItsOwnMembers, tenant isolation tests per table |
+| 2.13 Demo data | `members-list.png` (35 members, two pages), `roles-list.png` (Chairman, Treasurer, Member, Electrician, Secretary) |
+
+Verified at the API level only (no browser path with the demo realm): §2.4 #2 for a Keycloak account with no member
+(the same "not linked" screen is rendered for the archived case), §2.4 #1 with a mixed-case email, §2.11 #4 (a refused
+write can only be sent by bypassing the UI), §2.12 #1 (no other-cooperative demo user holds View members).
 
 ---
 

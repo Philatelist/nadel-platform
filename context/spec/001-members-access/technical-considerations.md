@@ -1,7 +1,7 @@
 # Technical Specification: Members and Access Control
 
 - **Functional Specification:** [functional-spec.md](functional-spec.md) (source: `docs/features/002-members-access.md`)
-- **Status:** Draft
+- **Status:** Completed
 - **Author(s):** Alex Usov (drafted by the feature pipeline from spring-backend, postgres-database, react-frontend and devops-infra design input)
 
 ---
