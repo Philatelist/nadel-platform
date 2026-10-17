@@ -49,7 +49,7 @@ paths:
       description: |
         Returns a page of members of the current cooperative. Requires the `MEMBERS_VIEW` permission.
         `q` is a case-insensitive substring match against the last, first and middle name and the email, or,
-        when it contains digits, against the digits of the phone numbers. Archived members are excluded unless
+        when it looks like a phone number (only digits, spaces and + ( ) - ., with at least three digits), against the digits of the phone numbers. Archived members are excluded unless
         `includeArchived` is true. The result is sorted by last name, then first name.
       parameters:
         - name: q

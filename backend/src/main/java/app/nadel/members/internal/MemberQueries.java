@@ -34,14 +34,17 @@ class MemberQueries {
     /**
      * One page of the members of the viewer's cooperative, sorted by last name then first name.
      * <p>
-     * {@code query} is a case-insensitive substring of the names or the e-mail; when it contains digits it also
-     * matches the digits of any phone number. The caller must hold {@code MEMBERS_VIEW}.
+     * {@code query} is a case-insensitive substring of the names or the e-mail. When the query looks like a phone
+     * number (only digits, spaces and {@code + ( ) - .}, with at least three digits) it also matches the digits of any
+     * phone number; a mixed query such as {@code "Petrenko2"} never matches by phone. The caller must hold
+     * {@code MEMBERS_VIEW}.
      */
     @Transactional(readOnly = true)
     MemberPage list(AccessProfile viewer, String query, boolean includeArchived, int page, int size) {
         String text = query == null ? "" : query.strip();
         String digits = text.replaceAll("[^0-9]", "");
-        Page<Member> result = members.search(viewer.tenantId(), includeArchived, likeContains(text), !digits.isEmpty(),
+        boolean phoneSearch = PHONE_LIKE_QUERY.matcher(text).matches() && digits.length() >= MIN_PHONE_SEARCH_DIGITS;
+        Page<Member> result = members.search(viewer.tenantId(), includeArchived, likeContains(text), phoneSearch,
                 likeContains(digits), PageRequest.of(page, size));
         Map<UUID, List<RoleRef>> roles = grants.readRefs(viewer.tenantId(),
                 result.getContent().stream().map(Member::getId).toList());
@@ -50,6 +53,9 @@ class MemberQueries {
                 .toList();
         return new MemberPage(items, page, size, result.getTotalElements(), result.getTotalPages());
     }
+
+    private static final java.util.regex.Pattern PHONE_LIKE_QUERY = java.util.regex.Pattern.compile("[0-9+()\\-.\\s]+");
+    private static final int MIN_PHONE_SEARCH_DIGITS = 3;
 
     /** {@code %text%} for a LIKE with escape character {@code !}; user input never changes the pattern's shape. */
     private static String likeContains(String text) {

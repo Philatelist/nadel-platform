@@ -189,6 +189,23 @@ class MembersReadTests extends IntegrationTest {
     }
 
     @Test
+    void mixedTextAndDigitsQueryNeverMatchesByPhone() throws Exception {
+        String token = viewer(DEMO_TENANT);
+        // no digits in the name, so any match below can only come from the phone
+        String lettersOnly = tag().replaceAll("[0-9]", "x");
+        UUID phoneOnly = newMember(DEMO_TENANT, "Digits" + lettersOnly, "Test", null, null, "+380671234004");
+
+        assertThat(idsOf(getJson(token, "/api/v1/members?size=100&q=" + "Name4")))
+                .as("mixed text and digits never searches phones").doesNotContain(phoneOnly);
+        assertThat(idsOf(getJson(token, "/api/v1/members?size=100&q=" + "Name004")))
+                .as("mixed text and digits never searches phones").doesNotContain(phoneOnly);
+        assertThat(idsOf(getJson(token, "/api/v1/members?size=100&q=" + "04")))
+                .as("fewer than three digits never searches phones").doesNotContain(phoneOnly);
+        assertThat(idsOf(getJson(token, "/api/v1/members?size=100&q=" + "123 40")))
+                .as("phone-like query still matches").contains(phoneOnly);
+    }
+
+    @Test
     void blankQueryMeansNoFilter() throws Exception {
         String token = viewer(DEMO_TENANT);
         long all = getJson(token, "/api/v1/members").path("totalItems").asLong();
