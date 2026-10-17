@@ -1,6 +1,6 @@
-# 004. Ownership
+# 005. Ownership
 
-Roadmap phase 1, feature 3 of 4. Input for `/feature-pipeline`. Requires 002 (members, permissions, audit) and 003
+Roadmap phase 1, feature 3 of 4. Input for `/feature-pipeline`. Requires 002 (members, permissions, audit) and 004
 (plots).
 
 ## 1. Goal
@@ -15,7 +15,7 @@ Read together with `CLAUDE.md`, `context/product/product-definition.md`, `contex
 `docs/domain/glossary.md`, `docs/domain/money-rules.md` and ADRs 0002, 0003, 0004, 0007, 0008, 0009.
 
 Feature sequence in roadmap phase 1 (each one builds on the previous and leaves `main` working):
-`002 Members and access control` → `003 Plots registry` → `004 Ownership` → `005 Excel import`.
+`002 Members and access control` → `003 UI design system` → `004 Plots registry` → `005 Ownership` → `006 Excel import`.
 The map is not part of phase 1 (roadmap phase 6): plots are records without polygons.
 
 General rules for every feature in this sequence:
@@ -59,7 +59,7 @@ General rules for every feature in this sequence:
 - Archiving a member who currently owns a plot is refused until ownership is changed.
 - Hard deleting a plot that has ever had an owner is refused.
 
-## 4. Visibility (completes the rules from 003)
+## 4. Visibility (completes the rules from 004)
 
 - With `PLOTS_VIEW`: owners and history of every plot.
 - A member sees owners (names and shares) and history only for plots they currently own; for other plots, number, street
@@ -96,7 +96,7 @@ General rules for every feature in this sequence:
 
 ## 8. Out of scope
 
-Excel import (005), debt certificate before sale (phase 4), money and ledger (phases 2–3), notifications to new owners.
+Excel import (006), debt certificate before sale (phase 4), money and ledger (phases 2–3), notifications to new owners.
 
 ## 9. Decisions already made (do not ask)
 
