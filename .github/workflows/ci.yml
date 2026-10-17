@@ -61,6 +61,9 @@ jobs:
   security:
     name: Security (secrets, dependency vulnerabilities)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read # gitleaks-action lists the PR's commits to scan only those
     steps:
       - uses: actions/checkout@v5
         with:
