@@ -10,6 +10,7 @@ description: >-
   management.
 model: sonnet
 skills: []
+disallowedTools: Agent
 ---
 
 # ROLE
