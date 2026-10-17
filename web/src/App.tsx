@@ -1,18 +1,62 @@
 import { createBrowserRouter, Navigate, RouterProvider } from 'react-router';
 import { useAuth } from 'react-oidc-context';
+import { RequirePermission } from './components/RequirePermission';
 import { Layout } from './components/Layout';
 import { SignIn } from './components/SignIn';
-import { CabinetPage } from './pages/CabinetPage';
+import { MeProvider } from './me';
+import { NotFoundPage } from './pages/NotFoundPage';
 import { useT } from './i18n';
 
 const router = createBrowserRouter([
   {
     element: <Layout />,
     children: [
-      { index: true, element: <Navigate to="/map" replace /> },
-      // the map is heavy (MapLibre), so it loads as a separate chunk
-      { path: 'map', lazy: () => import('./pages/MapPage').then((m) => ({ Component: m.MapPage })) },
-      { path: 'cabinet', element: <CabinetPage /> },
+      { index: true, element: <Navigate to="/account" replace /> },
+      {
+        path: 'account',
+        lazy: () => import('./pages/AccountPage').then((m) => ({ Component: m.AccountPage })),
+      },
+      {
+        element: <RequirePermission permission="MEMBERS_VIEW" />,
+        children: [
+          {
+            path: 'members',
+            lazy: () => import('./pages/MembersPage').then((m) => ({ Component: m.MembersPage })),
+          },
+        ],
+      },
+      {
+        element: <RequirePermission permission="MEMBERS_EDIT" />,
+        children: [
+          {
+            path: 'members/new',
+            lazy: () => import('./pages/MemberFormPage').then((m) => ({ Component: m.MemberFormPage })),
+          },
+        ],
+      },
+      {
+        element: <RequirePermission permission="AUDIT_VIEW" />,
+        children: [
+          {
+            path: 'audit',
+            lazy: () => import('./pages/AuditPage').then((m) => ({ Component: m.AuditPage })),
+          },
+        ],
+      },
+      {
+        element: <RequirePermission permission="ROLES_MANAGE" />,
+        children: [
+          {
+            path: 'roles',
+            lazy: () => import('./pages/RolesPage').then((m) => ({ Component: m.RolesPage })),
+          },
+        ],
+      },
+      {
+        path: 'members/:id',
+        lazy: () => import('./pages/MemberPage').then((m) => ({ Component: m.MemberPage })),
+      },
+      { path: '*', element: <NotFoundPage /> },
     ],
   },
 ]);
@@ -27,5 +71,9 @@ export function App() {
   if (!auth.isAuthenticated) {
     return <SignIn error={auth.error?.message} />;
   }
-  return <RouterProvider router={router} />;
+  return (
+    <MeProvider>
+      <RouterProvider router={router} />
+    </MeProvider>
+  );
 }

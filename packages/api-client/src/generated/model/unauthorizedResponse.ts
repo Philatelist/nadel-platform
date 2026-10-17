@@ -12,6 +12,6 @@
 import type { Problem } from './problem';
 
 /**
- * Missing or invalid token
+ * Missing or invalid token (code `UNAUTHENTICATED`)
  */
 export type UnauthorizedResponse = Problem;

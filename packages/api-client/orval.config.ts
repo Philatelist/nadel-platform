@@ -14,7 +14,7 @@ export default defineConfig({
       baseUrl: '/api/v1',
       override: {
         mutator: { path: './src/http.ts', name: 'nadelFetch' },
-        query: { useQuery: true, useSuspenseQuery: false },
+        query: { useSuspenseQuery: false },
         // responses are plain bodies (Me, PlotFeatureCollection); errors are thrown as ApiError
         fetch: { includeHttpResponseReturnType: false },
       },

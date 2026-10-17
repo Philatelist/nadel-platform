@@ -1,6 +1,6 @@
 # Product Definition: Nadel
 
-- **Version:** 1.2
+- **Version:** 1.3
 - **Status:** Proposed
 
 > Business rules in this document follow `README.md`, `docs/domain/glossary.md` and
@@ -52,7 +52,8 @@ cooperative's data is fully isolated from every other cooperative's.
   - **Frustration:** He has no reliable total. The figure he reports to the meeting is assembled by hand and he cannot defend it line by line.
 
 - **Persona 4: "Ivan the Electrician"**
-  - **Role:** Admin with meter-only permissions.
+  - **Role:** Admin with meter-only permissions. Electrician is not a base role: Ivan holds Member plus a custom
+    "Electrician" role that the cooperative creates and that gets meter permissions when meters arrive (phase 2).
   - **Goal:** Walk the plots once a month, enter readings on his phone, and approve the readings members submitted themselves.
   - **Frustration:** Readings on paper get transcribed twice and arrive too late to close the month on time.
 
@@ -114,11 +115,13 @@ cooperative's data is fully isolated from every other cooperative's.
   certificate as of a chosen date, broken down by charge type, or a full-payoff invoice. Ownership
   history is kept permanently.
 
-- **Roles and permissions.** Every cooperative starts with Chairman, Treasurer, Electrician and
-  Member. The chairman can create additional admin roles from a fixed list of permissions (for
-  example, "Secretary: manage members and ownership, no access to payments") and assign them to
-  people. Each person sees and changes only what their roles permit, and every admin change is
-  recorded with who made it and when.
+- **Roles and permissions.** Every cooperative starts with three base roles: Chairman (always every
+  permission), Treasurer and Member. The chairman, or anyone they give "Manage roles", can create
+  additional roles from a fixed list of permissions (for example, "Secretary: manage members and
+  ownership, no access to payments" or "Electrician: meters only") and give one person several roles.
+  A person signs in with their own account and is recognised as their member record in the
+  cooperative. Each person sees and changes only what their roles permit, and every admin change is
+  recorded in an audit log with who made it, when, and the old and new values.
 
 - **Web account and mobile apps.** Members and admins use a web account and iOS and Android apps.
   Members see balances, charges, payments and invoices for their plots and can submit meter readings

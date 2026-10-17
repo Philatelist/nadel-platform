@@ -10,8 +10,28 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './auditAction';
+export * from './auditEntityType';
+export * from './auditEntry';
+export * from './auditFieldChange';
+export * from './auditPage';
+export * from './badRequestResponse';
+export * from './baseRole';
+export * from './conflictResponse';
+export * from './deliveryChannel';
+export * from './forbiddenResponse';
+export * from './listAuditEntriesParams';
+export * from './listMembersParams';
 export * from './me';
+export * from './member';
+export * from './memberInput';
+export * from './memberPage';
+export * from './memberRolesInput';
+export * from './memberSummary';
 export * from './money';
+export * from './notFoundResponse';
+export * from './permission';
+export * from './permissionInfo';
 export * from './plotFeature';
 export * from './plotFeatureCollection';
 export * from './plotFeatureCollectionType';
@@ -22,6 +42,9 @@ export * from './plotStatus';
 export * from './polygonGeometry';
 export * from './polygonGeometryType';
 export * from './problem';
-export * from './role';
+export * from './problemFieldError';
+export * from './roleDetails';
+export * from './roleInput';
+export * from './roleRef';
 export * from './tenantSummary';
 export * from './unauthorizedResponse';

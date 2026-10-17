@@ -34,7 +34,19 @@ make up                 # Postgres + PostGIS, Keycloak, API on :8080, web on :51
 
 `make help` lists all targets; `make check` runs everything CI runs.
 
-Sign in as `treasurer@demo.local` / `nadel`. Other test users are listed in [CLAUDE.md](CLAUDE.md).
+Browser end-to-end specs (Playwright, chromium) run against the real local stack and are not part of `make check`:
+
+```bash
+make e2e-install        # once: download the chromium browser for Playwright
+make e2e                # starts infra, the backend jar and web, runs web/e2e, then stops backend and web
+```
+
+`make e2e` needs JDK 25 and free ports 8080 and 5173; logs go to `backend/target/e2e-*.log`. CI runs the same specs in the `e2e` job.
+
+Sign in as `treasurer@demo.local` / `nadel`. Other test users are listed in [CLAUDE.md](CLAUDE.md). Each test user is
+linked to a demo member by email; what they may do comes from that member's roles in the database (Chairman,
+Treasurer, Member and custom roles), not from Keycloak. After a change to the Keycloak realm, recreate the local stack
+with `docker compose -f infra/docker-compose.yml down -v` (see [infra/README.md](infra/README.md)).
 
 | Service | Address |
 |---|---|

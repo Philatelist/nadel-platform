@@ -1,0 +1,195 @@
+# Pipeline log — 002 Members and access control
+
+- Status: finished
+- Phase: done
+- Branch: 002-members-access · Base: main @ 39380d2
+- Requirement: document `docs/features/002-members-access.md`
+- Autonomy: minimal (default; no argument, no `.claude/feature-pipeline.yml`)
+
+## Project facts
+
+- Base branch: `main` (origin/HEAD not symbolic; `main` exists, equal to `origin/main` @ 39380d2, 0 ahead / 0 behind).
+- Pipeline tooling on base: all present (feature-pipeline skill + review loop, slice-reviewer agent, awos wrappers and core for spec/tech/tasks/implement/verify).
+- Working tree: `docs/features/002-members-access.md` staged (A); `docs/features/003..005` untracked. No conflict switching to a new branch cut from `main` (same commit).
+- Build: `cd backend && ./mvnw -B -DskipTests compile` (backend), `pnpm -r typecheck` (clients).
+- One test class: `cd backend && ./mvnw -B test -Dtest=<Class>` (integration tests: `-Dit.test=<Class> verify` if failsafe is used — to confirm in tech phase).
+- Full suite: `make test` (`./mvnw -B verify` incl. Testcontainers, ModularityTests, JaCoCo floor `coverage.minimum`=0.40; then `pnpm -r typecheck`). CI-equivalent: `make check`.
+- Docker: **not running at pre-flight** — Testcontainers tests cannot run until Docker is started.
+- Specialist agents: spring-backend, postgres-database, react-frontend, devops-infra, expo-mobile (not needed), testing-expert (testing agent), slice-reviewer.
+- UI: yes (`web/`, React + Vite). Browser tool: Claude in Chrome available.
+- Safe local run mode: `make up` (local docker-compose Postgres + Keycloak, backend :8080, web :5173); no external services in phase 1.
+- Git/commit rules: Conventional Commits per CLAUDE.md; pipeline commit format `{N}: ...`; feature branch only; never push/merge; **no AI attribution** (CLAUDE.md + pipeline rule override the harness reminder).
+- Next spec number: 002 (`context/spec/` is empty).
+
+## Effective autonomy settings
+
+- questions: blocking
+- stops.reviewerEscalation: auto
+- stops.notGreen: ask
+- stops.gitUnsafe: ask
+- stops.notTestableLocally: auto
+
+## Events
+
+- Phase 0 done.
+- Phase 1 start: analysis agents A (git history) and B (code/spec search) launched in parallel.
+- Agent A (git history): no prior work on any branch, stash, worktree or dangling commit. Only related material: ADRs 0003/0007/0008/0009 and phase 0 identity/tenancy code on main. Verdict: new.
+- Agent B (code/spec): not implemented; builds on phase 0 identity/tenancy. Verified: ELECTRICIAN listed as base role in ADR 0009:10, glossary:27, CLAUDE.md, product docs, realm, Roles.java — but missing from feature §2.2. Glossary maps Member to code `Person` (glossary:8); ADR 0009 table `person_role`. `spring-modulith-starter-jpa` absent (pom:65-68).
+
+## Requirements brief
+
+**Requirement:** `docs/features/002-members-access.md` — give a cooperative its people (member records) and DB-stored,
+permission-based roles (ADR 0009); link Keycloak sign-in to a member by email; audit every admin change through a new
+`audit` module over the Modulith outbox; web screens for members, roles, audit and My account. Users: chairman,
+treasurer, custom-role admins (secretary), members.
+
+**Prior work:** none on other branches (Agent A). Code: phase 0 only — JWT resource server (`identity/internal/SecurityConfiguration`),
+`/me` from claims, `TenantContext`/`TenantAwareTransactionManager`, RLS pattern in `V1__foundation.sql`, repeatable
+`R__demo_data.sql`, `IntegrationTest` base with PostGIS Testcontainer. Verdict: **new** (extends feature 001 foundation).
+
+**Scope in:** everything in sections 2–6 of the feature doc. **Out:** section 7 (plots/ownership/import, self-service
+edits, Keycloak account creation/invitations, multi-cooperative people, notification delivery), mobile.
+
+**Draft acceptance criteria:** see feature doc §2–§6; the functional spec turns each into a testable criterion.
+
+**Approach sketch:**
+- Backend: new modules `members` (member, role, role_permission, member_role, Permission enum, current-member resolution)
+  and `audit` (append-only audit_entry, `@ApplicationModuleListener`); `identity` resolves `PERM_*` authorities from
+  `members` public API inside `TenantContext.runAs` + a transaction; Problem Details with `code` + field errors via
+  `@RestControllerAdvice` and custom entry point / access-denied handler.
+- DB: Flyway V2+ (members, roles, audit, `event_publication`), RLS + `tenant_isolation`, indexes on `(tenant_id, lower(email))`,
+  `(tenant_id, keycloak_subject)`; REVOKE UPDATE/DELETE on audit from `nadel_app`; SQL function `seed_base_roles(tenant)`;
+  demo data ~35 members + Secretary.
+- Contract: openapi `/me`, `/members*`, `/permissions`, `/roles*`, `/audit`; Problem gains `code`, `errors[]`; paging schema.
+- Web: Members list, Member card, Roles, Audit, My account, permission-driven nav, map removed from nav, i18n uk/en.
+- Infra: realm users stop carrying cooperative realm roles; Playwright + CI job against compose stack (devops-infra).
+- Dependency: `spring-modulith-starter-jpa` (anticipated by ADR 0007), `@playwright/test` (pinned), possibly `spring-boot-webmvc-test` for MockMvc.
+
+**Verification:** per-slice `./mvnw -B test -Dtest=<Class>` (Testcontainers ⇒ Docker), `pnpm -r typecheck`/`lint`,
+full `make check`; UI criteria via Claude in Chrome against `make up` (local compose only) + the Playwright E2E.
+
+**Risks:** Docker not running; async listeners lose tenant context (events must carry tenantId + actor, listener uses
+`TenantContext.runAs`); permission lookup before security context exists; V1 default privileges grant UPDATE/DELETE on
+new tables; module cycle identity↔members; Playwright CI job is new infrastructure; `Me.roles` enum is a breaking change.
+
+**Open questions (recommended answers):**
+1. Docker not running — start it before Phase 2 (recommended) / proceed without (integration tests `[?]`) / stop. **Blocking.**
+2. ELECTRICIAN base role — keep as a seeded base role with no permissions yet (meter permissions come later), matching
+   ADR 0009, CLAUDE.md, glossary, realm and test users; treat §2.2 as an omission. (non-blocking → AUTO)
+3. Naming Member vs Person — use `Member` in code/API/tables (`member`, `member_role`), update glossary and ADR 0009 text. (AUTO)
+4. CLAUDE.md lines naming realm roles — propose the edits in the final report, do not commit them (CLAUDE.md rule). (AUTO)
+5. Members list without `MEMBERS_VIEW` → 403 `PERMISSION_DENIED`; another member's card → 404; own card readable via
+   `GET /members/{id}` without `notes`. (AUTO)
+6. Base-role seeding: SQL function used by migration (existing tenants) and demo data; Java tenant-creation code does not
+   exist yet, so new-tenant seeding is the function to call from it later (documented). (AUTO)
+7. Phone normalization by hand: accept E.164 `+[1-9]\d{7,14}`, `0XXXXXXXXX` and `380XXXXXXXXX` → `+380XXXXXXXXX`; no libphonenumber. (AUTO)
+8. Email unique case-insensitive among active members (partial unique index). (AUTO)
+9. Editing base role permissions (TREASURER, ELECTRICIAN, MEMBER) needs `ROLES_MANAGE`; CHAIRMAN's set is fixed to all. (AUTO)
+10. Paging `page`/`size` (default 20, max 100). (AUTO)
+11. E2E CI job: compose infra + backend `./mvnw spring-boot:run` (dev profile) + Vite dev server, Playwright drives the
+    Keycloak login form; owned by devops-infra. (AUTO)
+12. Index route → My account once map leaves navigation. (AUTO)
+13. Commit the staged `docs/features/002-members-access.md` with the Phase 2 commit (it is this spec's source); leave 003–005 untracked. (AUTO)
+
+## User answers (Phase 1 batch)
+
+- Docker: "I'll start Docker" — verified running (server 24.0.5) before Phase 2.
+- Scope: "Drop ELECTRICIAN" — base roles are CHAIRMAN, TREASURER, MEMBER only (as §2.2). ADR 0009, glossary, product definition and architecture docs are updated to match; `Roles.ELECTRICIAN` and the realm role are removed; CLAUDE.md edits are proposed in the final report only. All other brief decisions (2–13, with 2 replaced by this answer) apply as AUTO.
+- AUTO: electrician@demo.local maps to a demo member holding a demo custom role "Electrician" with no permissions yet (meter permissions come in a later phase) plus MEMBER. Rule: the user's option allowed "custom role or MEMBER"; a custom role keeps the persona and shows custom roles in the demo. 
+- AUTO: brief decisions 3–13 taken at their recommended answers (rule: `questions: blocking`; user accepted the brief's scope apart from ELECTRICIAN).
+
+- Phase 1 done.
+- Phase 2 start: spec folder `context/spec/002-members-access`, branch `002-members-access` cut from main @ 39380d2. Baseline `./mvnw -B verify` running in detached worktree.
+- Functional spec written (`functional-spec.md`), 0 NEEDS CLARIFICATION markers; Assumptions & Decisions section lists 12 pipeline assumptions.
+- Phase 2 step 4: /awos:tech started.
+- Baseline: could not run (no JDK 25 on the machine; default java 17). Homebrew offers openjdk@25 25.0.4.1 and cask temurin@25. Recorded in review-log.md.
+- Tech step 2: Agent B findings reused as the codebase exploration; specialists spring-backend, postgres-database, react-frontend, devops-infra plus one Explore (Modulith/Boot/CI plumbing) ran in parallel.
+- technical-considerations.md written; 13 assumptions listed in its section 5 (pipeline mode).
+- Phase 2 step 5: /awos:tasks started.
+- tasks.md written: 7 slices (1 linking + My account, 2 members read, 3 member writes + audit outbox, 4 audit screen, 5 roles, 6 E2E/CI/docs/coverage, 7 Feature Testing & Regression → testing-expert).
+- AUTO: docs task in Slice 6 assigned to general-purpose (no documentation specialist); no `## Open Questions` section kept (pipeline rule: accept general-purpose assignments). Noted for the final report.
+- `<!-- not-user-reviewed -->` marker removed from tasks.md (pipeline rule: Phase 1 answers stand in for plan review).
+- User message mid-run: "I started Docker, go ahead" (Docker already verified).
+- Phase 2 commit: caf2a12 `001: functional spec, technical considerations and tasks` (includes docs/features/002-members-access.md and review-log.md).
+- STOP (stop point 4, environment): backend requires `--release 25`; installed JDKs are 8, 17, 19, 20, 21, 23 (Homebrew openjdk 23.0.2). The `notTestableLocally: auto` fallback (compile/build check) is impossible too, and installing a JDK changes the user's machine, so the user is asked. Tried: `java -version`, `/usr/libexec/java_home -V`, Homebrew/SDKMAN/JetBrains locations. Homebrew offers `openjdk@25` 25.0.4.1 and cask `temurin@25`.
+- User answer: "Install Temurin 25". The cask needs sudo (no terminal for the password), so installed the Homebrew formula `openjdk@25` 25.0.4.1 instead (no sudo, same JDK version, not linked into the shell profile). All backend commands in this run use `JAVA_HOME=/opt/homebrew/opt/openjdk@25/libexec/openjdk.jdk/Contents/Home`.
+- Resumed: status running. Baseline re-run in a fresh detached worktree with JDK 25.
+- Baseline (JDK 25): 0 failing, 7 tests, BUILD SUCCESS. review-log.md updated; baseline worktree removed.
+- Slice 1: contract, infra and web tasks ticked (web: one fix round for a hard-coded aria-label; client checks re-run by the orchestrator, EXIT 0). DB task waits for its Java tests in the backend task.
+- Slice 1 committed: f76322d — Verify: 60 backend tests green (orchestrator run), client typecheck/lint/format/build green, no generated-client drift — review round 1 running (worktree review-001-s1-r1).
+- Phase 3: Slice 2 started.
+- Slice 1 review round 1: MAJOR_ISSUES (M1 401-vs-500 on lookup failure). Fix deferred until Slice 2 is committed (Slice 2 backend agent active in backend/; avoid concurrent Maven builds and mixed changes), then sent to spring-backend as `001: Slice 1 — review fixes (round 1)`.
+- Slice 2 Verify (orchestrator): 41 tests green, no generated-client drift, client checks green.
+- Slice 2 committed: 7ad1272 — review round 1 running (worktree review-001-s2-r1). Slice 1 M1 fix sent to spring-backend (test-first). Slice 3 held until the M1 fix is committed (its contract change would break the backend build the fix is testing in the same tree).
+- Slice 2 review round 1: PASS (6 minor notes in review-log.md).
+- Slice 1 review fix committed: 5ae986c (bearer filter failure handler no longer rethrows; MemberLookupFailureTests RED→GREEN; verify 87 tests green). Round 2 review running (worktree review-001-s1-r2).
+- Phase 3: Slice 3 started (gate: Slice 3 commit waits for Slice 1 PASS).
+- Slice 1 review round 2: PASS (M1 resolved). All slice reviews so far PASS; no review outstanding.
+- Slice 3: contract (1 fix round: wrong permission name MEMBERS_MANAGE, Viber rule) and web (1 fix round: orval `useQuery: true` generated query hooks for POST/PUT; removed, mutations regenerated) ticked. DB task waits for its Java tests in the backend task.
+- Slice 3 Verify (orchestrator): 81 tests green, no generated-client drift, client checks green.
+- Slice 3 committed: ca5ea40 — review round 1 running (worktree review-001-s3-r1).
+- Phase 3: Slice 4 started.
+- Slice 3 review round 1: MAJOR_ISSUES (M1 phone error row mapping in MemberForm.tsx). No overlap with Slice 4 uncommitted files, so the fix goes to react-frontend now (MemberForm.tsx only) and is committed alone as `001: Slice 3 — review fixes (round 1)`.
+- Note for final report: reviewer points out pipeline commit subjects (`{N}: Slice …`) do not follow the Conventional Commits rule in CLAUDE.md; history is not rewritten by the pipeline — owner decides (e.g. squash with a Conventional Commits subject).
+- Slice 3 review round 2: PASS (M1 resolved). Slices 1–3 all PASS; no review outstanding.
+- Slice 4 Verify (orchestrator): 29 tests green, no generated-client drift, client checks green.
+- Slice 4 committed: eb74fb7 — review round 1 running. Phase 3: Slice 5 started.
+- Slice 4 review round 1: PASS (5 minor notes). Slices 1–4 all PASS.
+- Slice 5 Verify (orchestrator): 57 tests green, no generated-client drift, client checks green.
+- Slice 5 committed: f03fd4c — review round 1 running. Phase 3: Slice 6 started.
+- Slice 6 infra: Makefile e2e/e2e-install + CI e2e job done (1 fix: actions/cache v4 → v6 after checking the latest release). Supply-chain check pending on the Playwright deps (orchestrator runs it); task not yet ticked.
+- Slice 5 review round 1: MAJOR_ISSUES (M1 test leaves shared DB state changed). Fix sent to spring-backend (RolesTests only; no overlap with Slice 6 uncommitted files).
+- Slice 6 docs task ticked (15 docs files; CLAUDE.md untouched). Proposed CLAUDE.md edits for the owner (from the docs and infra agents):
+  1. Security and data: base roles `CHAIRMAN`, `TREASURER`, `MEMBER` (Chairman always has every permission) plus the global `PLATFORM_OPERATOR`, the only Keycloak realm role (drop `ELECTRICIAN`).
+  2. Commands: `make e2e-install` (once: install Playwright chromium) and `make e2e` (infra + backend jar + web, runs web/e2e; not part of make check; needs JDK 25 on PATH).
+  3. Keycloak test users: permissions come from the linked demo member's DB roles (chairman → Chairman, treasurer → Treasurer, member → Member, electrician → Member + demo custom role "Electrician" without permissions); after a realm change run `docker compose -f infra/docker-compose.yml down -v`.
+  4. Definition of Done item 6: add "`make e2e` is green when the feature changes a user flow covered by web/e2e (CI `e2e` job)".
+- Slice 5 M1 fix ready (RolesTests restores and asserts all base-role fields). Builder notes `SeedBaseRolesTests` (Slice 1) restores its changes at the end of the test body, not in @AfterEach — left as is (outside the reported issue).
+- Slice 5 review round 2: PASS. Slices 1–5 all PASS; no review outstanding.
+- Slice 6: web E2E (2 specs passed against the real stack by the builder; @playwright/test 1.63.0 published 2026-09-04, @types/node 22.20.5 published 2026-10-01) and infra ticked. Supply chain (orchestrator): pnpm audit --prod and full audit both report only the 3 pre-existing accepted advisories (uuid via mobile/expo moderate; 2 high already ignored); none from the new dev deps. osv-scanner not installed locally — CI runs it.
+- Slice 6 Verify attempt 1: make e2e 2 passed, client green, verify 225 tests green (coverage floor 0.93 met) — but the e2e trap left Vite orphaned on :5173 (pnpm child processes reparented to PID 1). Orchestrator stopped the stray process (it was started by this run). Fix attempt 1 sent to devops-infra (Makefile process-tree cleanup).
+- Slice 6 Verify: make e2e 2 passed (after the cleanup fix, builder run; orchestrator confirmed ports 5432/8180/8080/5173 free and no stray processes), client green, verify 225 tests green with coverage floor 0.93.
+- Slice 6 committed: f04af75 — review round 1 running. Slice 7 waits for every slice review to PASS (gate).
+- Coverage floor evidence: JaCoCo LINE COVEREDRATIO measured 1031/1104 = 0.9339 (225 tests) → coverage.minimum 0.93.
+- Slice 6 review round 1: PASS (5 minor notes). ALL slice reviews (1–6) PASS → gate open for Slice 7.
+- Phase 3: Slice 7 (Feature Testing & Regression) started — testing-expert.
+- Slice 7 task 1 (testing-expert): MembersAccessAcceptanceTests (13) + web/e2e/acceptance.spec.ts (17) + context/qa/list-of-tests.md; every §2 criterion mapped to a test or a manual check. RED shown (phone prefix, @PreAuthorize on setMemberRoles, audit nav permission). GAP found: `DELETE /api/v1/roles/{id}` answers 406 for every outcome when the client sends `Accept: application/json` (the web always does) → role deletion fails in the browser (§2.3 #5, #6; §2.9 #3 via UI). Failing tests kept. Task not ticked.
+- Gap fix attempt 1 sent to spring-backend (root cause, minimal fix, scan other operations, RolesTests regression with Accept header, E2E run).
+- Manual checks listed by testing-expert: §2.4 #2 in the browser (no Keycloak user without a member), §2.11 #3 remaining screens in English, §2.11 #4 browser text, §2.12 #1 in the browser, §2.4 #1 mixed-case email in the browser.
+- Gap fixed (attempt 1): shared error responses offer application/json besides application/problem+json, so `deleteRole` produces both; RED/GREEN on RolesTests#deleteWorksForAClientThatOnlyAcceptsJson and the acceptance test; make e2e 17 passed. Scan: deleteRole was the only problem-only operation. GAP marker removed; Slice 7 task 1 ticked. Stray `MembersAccessAcceptanceTests.java-E` (BSD sed backup created by the testing agent in this run, never committed) deleted.
+- Slice 7 task 2 (testing-expert): verify 238 tests green incl. MembersAccessAcceptanceTests, coverage floor met; client green; make e2e 17 passed on a fresh volume. Slice 7 ticked — all tasks done.
+- Slice 7 committed: ab1fce4 (acceptance tests + 406 contract fix) — review round 1 running. Phase 4 waits for it.
+- Slice 7 review round 1: MAJOR_ISSUES (M1 acceptance test clears the Treasurer description in the shared DB). Fix sent to testing-expert (builder of the test).
+- Slice 7 review round 2: PASS. ALL slice reviews PASS (S1 2 rounds, S2 1, S3 2, S4 1, S5 2, S6 1, S7 2).
+- Phase 4 start: /awos:verify.
+- /awos:verify: 60/60 criteria [x] with evidence (24 screenshots in docs/screenshots/002-members-access-*.png from a Playwright walk-through against the local stack; committed integration and E2E tests); 4 criteria verified at API level only (listed in functional-spec §5). Status Completed in functional-spec.md and technical-considerations.md. Verify stack stopped by PID, compose down -v, ports free. Product docs already updated by the Slice 6 docs task → no /awos:product or /awos:architecture suggestion.
+- Phase 4 step 3: full suite (`make check`) started.
+- Phase 4 step 3: `make check` (JDK 25) exit 0 — no generated-client drift, format/lint/typecheck green, `./mvnw verify` 238 tests, 0 failures, coverage floor 0.93 met. Baseline (main @ 39380d2): 7 tests, 0 failures → no regressions, no baseline failures to report.
+- Clean-up: `git worktree list` shows only the main checkout; no stack, ports or processes left running.
+
+## Final report
+
+**Branch:** `002-members-access` (cut from `main` @ 39380d2). Not pushed, not merged.
+
+**Commits:** caf2a12 specs · f76322d Slice 1 · 7ad1272 Slice 2 · 5ae986c Slice 1 review fixes · ca5ea40 Slice 3 · 81e5be8 Slice 3 review fixes · eb74fb7 Slice 4 · f03fd4c Slice 5 · 92eb53a Slice 5 review fixes · f04af75 Slice 6 · ab1fce4 Slice 7 (incl. the DELETE /roles 406 gap fix) · 8445e2a Slice 7 review fixes · final docs/evidence commit.
+
+**Acceptance criteria:** 60/60 verified (`[x]`), 0 `[?]`. Four are verified at API level only (§2.4 #2, §2.4 #1 mixed case, §2.11 #4, §2.12 #1 — no browser path with the demo realm). Evidence: functional-spec §5, 24 screenshots in docs/screenshots/.
+
+**Reviews:** S1 2 rounds (M1 401-vs-500 on lookup failure → fixed), S2 1, S3 2 (M1 phone error row mapping → fixed), S4 1, S5 2 (M1 test left shared DB changed → fixed), S6 1, S7 2 (M1 test cleared Treasurer description → fixed). All PASS. Minor notes per slice in review-log.md (not fixed).
+
+**Full suite vs baseline:** 238 tests green vs baseline 7 green; no regressions.
+
+**Assumptions after Phase 1:** technical-considerations §5 (13), functional-spec §4 (12), plus: Electrician demo user = Member + custom role; `event_publication` without RLS (ADR 0007 note); listener option A; orval `useQuery: true` override removed so writes generate mutations; shared error responses also offer `application/json`; `docs/screenshots/` committed as evidence (not git-ignored).
+
+**Decided automatically (AUTO):** brief decisions 3–13 at recommended answers; Electrician demo mapping; docs task under general-purpose (no docs specialist); `<!-- not-user-reviewed -->` marker removed; openjdk@25 Homebrew formula instead of the Temurin cask (cask needed sudo); no reviewer escalations needed.
+
+**For the owner:**
+- Proposed CLAUDE.md edits (listed above in this log, 4 items): base roles without ELECTRICIAN; `make e2e`/`make e2e-install`; test users get permissions from DB roles; DoD E2E note.
+- Commit subjects use the pipeline format `001: …`, not Conventional Commits (CLAUDE.md) — squash with a Conventional Commits subject (e.g. `feat(members): members and access control`) when opening the PR.
+- docs/features/003–005 are still untracked; 001-foundation.md now links to them.
+- OSV-Scanner not available locally — CI runs it for the new dev deps (`@playwright/test` 1.63.0, `@types/node` 22.20.5).
+- New backend dependencies for the PR note: `spring-modulith-starter-jpa` 2.1.1 (outbox), `spring-boot-starter-webmvc-test` (test). New CI action: `actions/cache@v6`.
+- JDK 25 installed via Homebrew `openjdk@25` (keg-only; not on PATH by default).
+- Worth a product decision (review minors): custom role named like a localized base role ("Скарбник") is allowed; Chairman description not editable in the UI; audit table shows raw channel codes; "1 members" pluralisation.
+
+**Suggested follow-ups:** none for /awos:product or /awos:architecture (docs updated in Slice 6). `/awos:hire` for a documentation/Playwright specialist is optional.

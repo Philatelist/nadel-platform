@@ -25,9 +25,15 @@ spring:
       resourceserver:
         jwt:
           issuer-uri: ${NADEL_OIDC_ISSUER:http://localhost:8180/realms/nadel}
-  mvc:
-    problemdetails:
-      enabled: true
+  modulith:
+    events:
+      # Outstanding publications (a listener failed or the application stopped) are resubmitted at startup
+      republish-outstanding-events-on-restart: true
+      # Completed publications are deleted: event payloads can contain personal data and the table has no RLS
+      completion-mode: delete
+  jackson:
+    # The contract has no nullable properties: an unset optional property is absent, never null
+    default-property-inclusion: non_null
 
 management:
   endpoints:

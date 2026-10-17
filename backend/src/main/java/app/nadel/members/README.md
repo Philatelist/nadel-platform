@@ -1,0 +1,76 @@
+# members
+
+The people of a cooperative, their roles and the permissions of those roles (ADR 0009). Tables: `member`, `role`,
+`role_permission`, `member_role` (all under RLS, composite foreign keys keep links inside one cooperative).
+
+## Public API
+
+None yet. Features 004 (ownership) and 005 (import) will add a lookup API in the module root.
+
+## What is here
+
+- `MemberAccessProfileSource` implements `identity`'s `AccessProfileSource`: finds the active member for a token and
+  links the Keycloak subject on the first sign-in. Order: the active member with this subject; otherwise, only when the
+  token's e-mail is verified, the active member with this e-mail (case-insensitive) if it has no subject yet, linked by
+  a conditional update. A member already linked to another subject is refused (never relinked). Each step runs in its
+  own short transaction; a unique-index violation (a concurrent first sign-in won the race, or an archived member still
+  holds the subject) is answered by a fresh lookup by subject, so it ends as the linked member or "not linked", never
+  as a 500. Logs tenant id, subject and member id only.
+- `PermissionUnion`: the union of the permissions of all roles of a member. The Chairman base role always yields every
+  `Permission` in code, so a permission added later needs no migration for the chairman. Unknown stored names grant
+  nothing.
+- `GET /members` (`MembersController`, `@PreAuthorize("hasAuthority('PERM_MEMBERS_VIEW')")`): a page of members sorted by
+  last name, then first name. `q` (trimmed) is a case-insensitive substring of last, first or middle name or e-mail;
+  when it contains digits it also matches the digits of any phone. Archived members only with `includeArchived=true`.
+  One native, parameterised query (LIKE wildcards in `q` are escaped) plus one query for the roles of the whole page.
+  Rows are `MemberSummary`: no notes, no postal address.
+- `GET /members/{id}`: a caller always opens their own card; another card needs `MEMBERS_VIEW`, otherwise the answer is
+  404 `NOT_FOUND` before any lookup, exactly like a missing id. With `MEMBERS_VIEW` the lookup runs under RLS, so a member
+  of another cooperative is 404 too. `MemberDtoMapper` is the only place that shapes a member for output: `notes` is
+  present only for a viewer with `MEMBERS_VIEW`, otherwise the key is absent.
+
+- Writes (`MemberCommands`, one transaction each, `@PreAuthorize("hasAuthority('PERM_MEMBERS_EDIT')")` on the controller):
+  `POST /members` (201 with `Location`), `PUT /members/{id}`, `POST /members/{id}/archive`, `POST /members/{id}/restore`.
+  The cooperative comes from the caller's profile, never from the request. Archiving an archived member and restoring an
+  active one are no-ops (the card is returned, no audit event); a `PUT` that changes nothing writes no event either.
+  - `MemberData.from` validates and normalises: names trimmed and required (`REQUIRED`), phones through `PhoneNumber`
+    (`PHONE_INVALID` on `phones[i]` / `viberPhone`, duplicates removed), e-mail trimmed and lower-case, blank optional
+    fields become null, `DeliveryChannel.check` (`CHANNEL_CONTACT_MISSING` on `email` / `telegramUsername` / `viberPhone`).
+  - E-mail is unique among active members: a pre-check plus a mapping of the unique index `member_tenant_email_uq` give
+    409 `EMAIL_TAKEN` with `errors[{field: "email"}]`. Archived members free their e-mail; restore re-checks.
+  - `LastChairmanGuard.ensureNotLast(tenant, member)` takes `pg_advisory_xact_lock(hashtextextended(tenant, 0))` in the
+    transaction and refuses (409 `LAST_CHAIRMAN`) to take the only active chairman away. Archive and `setMemberRoles` use
+    it.
+  - `notes` need `MEMBERS_VIEW`: a `PUT` by an editor without it keeps the stored notes, a `POST` stores none.
+  - Each change publishes an `audit.AuditEvent` (`MEMBER_CREATED`, `MEMBER_UPDATED`, `MEMBER_ARCHIVED`, `MEMBER_RESTORED`)
+    built from `MemberSnapshot.diff(before, after)`; see the `audit` README.
+
+- Roles, all `@PreAuthorize("hasAuthority('PERM_ROLES_MANAGE')")` on the controllers, one transaction each:
+  `GET /permissions` (`PermissionCatalog`: the eight permissions in enum order with English text), `GET /roles`
+  (base roles first, then custom by name; `memberCount` counts active members only; Chairman always lists all eight),
+  `POST /roles`, `PUT /roles/{id}` (full replacement), `DELETE /roles/{id}`, and `PUT /members/{id}/roles` (replaces the
+  member's whole role set). Permission changes apply on the next request: `AccessProfile` is resolved from the database on
+  every request, nothing is cached.
+  - Name: trimmed; empty is 400 `REQUIRED`, over 60 is 400 `TOO_LONG` (field `name`). Unique per cooperative ignoring case
+    (`lower(name)` on both sides in the database, so Cyrillic works): a pre-check plus a mapping of the unique index
+    `role_tenant_name_uq` give 409 `ROLE_NAME_TAKEN`.
+  - Base roles: rename and delete are 409 `BASE_ROLE_IMMUTABLE` (a case change is a rename); Chairman's permission set must
+    stay all eight (a PUT with the full set is accepted and changes nothing); Treasurer and Member permissions and every
+    description are editable. A PUT omits `description` = clears it.
+  - Deleting a role that any member row references (active or archived) is 409 `ROLE_IN_USE` (the foreign key is the guard
+    against a concurrent assignment).
+  - `setMemberRoles`: unknown or other-cooperative role or member is 404. Archived members may be given or lose roles. When the
+    new set lacks Chairman, `LastChairmanGuard` runs first (lock, then count), so two concurrent removals leave one chairman
+    (`LastChairmanConcurrencyTests`).
+  - Audit events: `ROLE_CREATED`, `ROLE_UPDATED` (changed fields only), `ROLE_DELETED` (entity type `ROLE`, label = role
+    name; fields `name`, `description`, `permissions` as sorted names joined by ", ") and `MEMBER_ROLES_CHANGED` (field
+    `roles`, old and new sorted role names joined by ", "). A change that changes nothing writes no event.
+  - `BaseRoles` is the Java copy of the base-role matrix; `BaseRolesMatrixTests` compares it with `seed_base_roles`.
+
+Base roles are `CHAIRMAN`, `TREASURER`, `MEMBER` (seeded per cooperative by the SQL function `seed_base_roles`); custom
+roles have no base code. Electrician is no longer a base role.
+
+- `MemberActorNames` implements `audit`'s `ActorNames` SPI: current display names of the acting members shown in the
+  audit log (`GET /audit`).
+
+Depends on `identity`, `problem` and `audit`.

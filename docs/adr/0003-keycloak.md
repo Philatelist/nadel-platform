@@ -12,3 +12,6 @@ Roles are realm roles. Cooperative membership is the user attribute `tenant_id`,
 ## Consequences
 - Standard OIDC: the provider can be replaced without rewriting clients.
 - A person who belongs to several cooperatives currently needs a separate account per cooperative. Later we move to Keycloak Organizations with cooperative selection at sign-in (separate ADR).
+
+## Implementation notes (2026-10)
+Since spec 002 the only realm role is `PLATFORM_OPERATOR`. Cooperative roles (Chairman, Treasurer, Member and custom roles) are permission sets stored in the database per cooperative, see ADR 0009. Keycloak keeps identity (subject, email, `email_verified`) and the `tenant_id` attribute.

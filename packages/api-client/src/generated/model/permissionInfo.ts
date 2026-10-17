@@ -9,14 +9,13 @@
  *
  * OpenAPI spec version: 0.1.0
  */
+import type { Permission } from './permission';
 
-export type Role = typeof Role[keyof typeof Role];
-
-
-export const Role = {
-  CHAIRMAN: 'CHAIRMAN',
-  TREASURER: 'TREASURER',
-  ELECTRICIAN: 'ELECTRICIAN',
-  MEMBER: 'MEMBER',
-  PLATFORM_OPERATOR: 'PLATFORM_OPERATOR',
-} as const;
+/**
+ * A permission with its English name and one-line description; clients localise by `code`
+ */
+export interface PermissionInfo {
+  code: Permission;
+  name: string;
+  description: string;
+}

@@ -14,6 +14,14 @@ security:
 tags:
   - name: me
     description: Current user
+  - name: members
+    description: Cooperative members (people), their contacts and roles
+  - name: permissions
+    description: The fixed list of permissions
+  - name: roles
+    description: Roles of the cooperative and their permissions
+  - name: audit
+    description: Audit log of administrative changes
   - name: plots
     description: Plots and map
 
@@ -32,6 +40,499 @@ paths:
                 $ref: '#/components/schemas/Me'
         '401':
           $ref: '#/components/responses/Unauthorized'
+
+  /members:
+    get:
+      tags: [members]
+      operationId: listMembers
+      summary: List members
+      description: |
+        Returns a page of members of the current cooperative. Requires the `MEMBERS_VIEW` permission.
+        `q` is a case-insensitive substring match against the last, first and middle name and the email, or,
+        when it looks like a phone number (only digits, spaces and + ( ) - ., with at least three digits), against the digits of the phone numbers. Archived members are excluded unless
+        `includeArchived` is true. The result is sorted by last name, then first name.
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 100
+        - name: includeArchived
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+        - name: page
+          in: query
+          required: false
+          description: Zero-based page index
+          schema:
+            type: integer
+            format: int32
+            minimum: 0
+            default: 0
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      tags: [members]
+      operationId: createMember
+      summary: Create a member
+      description: |
+        Creates a member in the current cooperative. Requires the `MEMBERS_EDIT` permission.
+        A caller without `MEMBERS_VIEW` cannot set `notes`; the field is ignored.
+        A new member has no roles. The email must be unique within the cooperative (409 `EMAIL_TAKEN`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemberInput'
+      responses:
+        '201':
+          description: Created
+          headers:
+            Location:
+              description: URL of the created member
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Member'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /members/{id}:
+    get:
+      tags: [members]
+      operationId: getMember
+      summary: Member card
+      description: |
+        Returns one member of the current cooperative.
+        A caller without the `MEMBERS_VIEW` permission can read only their own card; for any other id the
+        answer is 404, exactly as for an id that does not exist. The `notes` field is present only when the
+        caller has `MEMBERS_VIEW`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Member'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags: [members]
+      operationId: updateMember
+      summary: Update a member
+      description: |
+        Replaces all editable fields of the member (full replacement; fields absent from the body are cleared).
+        Roles are not part of `MemberInput`; they change through the role assignment endpoint.
+        Requires the `MEMBERS_EDIT` permission. A caller without `MEMBERS_VIEW` cannot change `notes`;
+        the field is ignored and the stored value is kept.
+        The email must be unique within the cooperative (409 `EMAIL_TAKEN`).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemberInput'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Member'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /members/{id}/archive:
+    post:
+      tags: [members]
+      operationId: archiveMember
+      summary: Archive a member
+      description: |
+        Moves the member to the archive; the member keeps their history but is hidden from the default list and
+        can no longer sign in. Archiving an already archived member is a no-op. Requires `MEMBERS_EDIT`.
+        The last active chairman cannot be archived (409 `LAST_CHAIRMAN`).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Member'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /members/{id}/restore:
+    post:
+      tags: [members]
+      operationId: restoreMember
+      summary: Restore a member from the archive
+      description: |
+        Returns an archived member to the active list. Restoring an active member is a no-op.
+        Requires `MEMBERS_EDIT`. The member's email must still be unique among members (409 `EMAIL_TAKEN`).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Member'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /members/{id}/roles:
+    put:
+      tags: [members]
+      operationId: setMemberRoles
+      summary: Set the roles of a member
+      description: |
+        Replaces the whole set of roles of the member with `roleIds` (an empty list leaves the member with no
+        roles). Every id must be a role of the current cooperative (otherwise 404). Requires `ROLES_MANAGE`.
+        The change is written to the audit log. A change that would leave the cooperative without an active
+        chairman is refused (409 `LAST_CHAIRMAN`).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemberRolesInput'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Member'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /permissions:
+    get:
+      tags: [permissions]
+      operationId: listPermissions
+      summary: List the permissions
+      description: |
+        Returns the fixed list of permissions a role can contain, each with an English name and description.
+        The web client localises the text by `code`. Requires `ROLES_MANAGE`.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PermissionInfo'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /roles:
+    get:
+      tags: [roles]
+      operationId: listRoles
+      summary: List the roles of the cooperative
+      description: |
+        Returns every role of the current cooperative with its permissions and the number of active members who
+        hold it. Base roles come first (Chairman, Treasurer, Member), then custom roles sorted by name.
+        Requires `ROLES_MANAGE`.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RoleDetails'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      tags: [roles]
+      operationId: createRole
+      summary: Create a custom role
+      description: |
+        Creates a custom role (no `baseCode`). The name must be unique within the cooperative, ignoring upper and
+        lower case (409 `ROLE_NAME_TAKEN`). Requires `ROLES_MANAGE`. The change is written to the audit log.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleInput'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleDetails'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /roles/{id}:
+    put:
+      tags: [roles]
+      operationId: updateRole
+      summary: Update a role
+      description: |
+        Replaces the name, description and permissions of the role. Requires `ROLES_MANAGE`; the change is
+        written to the audit log. The name must stay unique within the cooperative (409 `ROLE_NAME_TAKEN`).
+        Base roles cannot be renamed (409 `BASE_ROLE_IMMUTABLE`) and the permissions of the Chairman role cannot be
+        changed (409 `BASE_ROLE_IMMUTABLE`); the permissions of the Treasurer and Member roles can be edited.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleInput'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleDetails'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+    delete:
+      tags: [roles]
+      operationId: deleteRole
+      summary: Delete a custom role
+      description: |
+        Deletes a custom role. Requires `ROLES_MANAGE`; the deletion is written to the audit log. Base roles cannot
+        be deleted (409 `BASE_ROLE_IMMUTABLE`). A role that is still given to a member cannot be deleted
+        (409 `ROLE_IN_USE`).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Deleted
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /audit:
+    get:
+      tags: [audit]
+      operationId: listAuditEntries
+      summary: List audit log entries
+      description: |
+        Returns a page of audit log entries of the current cooperative, newest first. Requires the `AUDIT_VIEW`
+        permission (403 `PERMISSION_DENIED` otherwise). All filters are optional and combine with AND.
+        `from` and `to` are calendar dates in the Europe/Kyiv time zone and both are inclusive: an entry is
+        included when its local date is on or after `from` and on or before `to`. When both are given and
+        `from` is after `to`, the answer is 400 `VALIDATION_FAILED`.
+      parameters:
+        - name: entityType
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/AuditEntityType'
+        - name: entityId
+          in: query
+          required: false
+          description: Only entries about this entity (a member or a role)
+          schema:
+            type: string
+            format: uuid
+        - name: actorMemberId
+          in: query
+          required: false
+          description: Only entries made by this member
+          schema:
+            type: string
+            format: uuid
+        - name: from
+          in: query
+          required: false
+          description: First day to include, in the Europe/Kyiv time zone
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: false
+          description: Last day to include, in the Europe/Kyiv time zone
+          schema:
+            type: string
+            format: date
+        - name: page
+          in: query
+          required: false
+          description: Zero-based page index
+          schema:
+            type: integer
+            format: int32
+            minimum: 0
+            default: 0
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
   /plots:
     get:
@@ -59,10 +560,56 @@ components:
       bearerFormat: JWT
 
   responses:
-    Unauthorized:
-      description: Missing or invalid token
+    BadRequest:
+      description: Malformed request or failed validation (code `VALIDATION_FAILED` or `MALFORMED_REQUEST`)
       content:
         application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unauthorized:
+      description: Missing or invalid token (code `UNAUTHENTICATED`)
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Forbidden:
+      description: >-
+        The token is valid but not linked to a member (code `MEMBER_NOT_LINKED`) or the caller lacks the
+        required permission (code `PERMISSION_DENIED`)
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotFound:
+      description: The resource does not exist or is not visible to the caller (code `NOT_FOUND`)
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Conflict:
+      description: >-
+        The request conflicts with the current state: the email is already used by another member of the
+        cooperative (code `EMAIL_TAKEN`, with `errors[{field: email}]`), the action would leave the cooperative
+        without an active chairman (code `LAST_CHAIRMAN`), the role name is already used (code `ROLE_NAME_TAKEN`),
+        the role is still given to members (code `ROLE_IN_USE`), or a base role cannot be changed that way
+        (code `BASE_ROLE_IMMUTABLE`)
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+        application/json:
           schema:
             $ref: '#/components/schemas/Problem'
 
@@ -73,9 +620,343 @@ components:
       description: Amount in UAH as a string with two decimal places
       examples: ['1250.50']
 
-    Role:
+    Permission:
       type: string
-      enum: [CHAIRMAN, TREASURER, ELECTRICIAN, MEMBER, PLATFORM_OPERATOR]
+      description: Fixed list of permissions a role can contain (ADR 0009). Authorities are `PERM_<value>`.
+      enum:
+        - MEMBERS_VIEW
+        - MEMBERS_EDIT
+        - ROLES_MANAGE
+        - AUDIT_VIEW
+        - PLOTS_VIEW
+        - PLOTS_EDIT
+        - OWNERSHIP_EDIT
+        - IMPORT_RUN
+
+    BaseRole:
+      type: string
+      description: Code of a base role that every cooperative gets; custom roles have no code
+      enum: [CHAIRMAN, TREASURER, MEMBER]
+
+    RoleRef:
+      type: object
+      description: Reference to a role of the cooperative
+      required: [id, name]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        baseCode:
+          $ref: '#/components/schemas/BaseRole'
+
+    PermissionInfo:
+      type: object
+      description: A permission with its English name and one-line description; clients localise by `code`
+      required: [code, name, description]
+      properties:
+        code:
+          $ref: '#/components/schemas/Permission'
+        name:
+          type: string
+        description:
+          type: string
+
+    RoleInput:
+      type: object
+      description: |
+        Editable fields of a role (full replacement). For base roles the server refuses renames and changes of the
+        Chairman role's permissions (409 `BASE_ROLE_IMMUTABLE`); Treasurer and Member permissions are editable.
+      required: [name, permissions]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 60
+          description: Role name; surrounding whitespace is trimmed; unique within the cooperative, ignoring case
+        description:
+          type: string
+          maxLength: 500
+        permissions:
+          type: array
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/Permission'
+
+    RoleDetails:
+      type: object
+      description: A role with its permissions and the number of active members who hold it
+      required: [id, name, permissions, memberCount]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        baseCode:
+          $ref: '#/components/schemas/BaseRole'
+        permissions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Permission'
+        memberCount:
+          type: integer
+          format: int32
+          description: Number of active (not archived) members who hold the role
+
+    MemberRolesInput:
+      type: object
+      description: The complete new set of roles of a member
+      required: [roleIds]
+      properties:
+        roleIds:
+          type: array
+          uniqueItems: true
+          maxItems: 50
+          items:
+            type: string
+            format: uuid
+
+    DeliveryChannel:
+      type: string
+      description: How a member prefers to receive invoices
+      enum: [EMAIL, TELEGRAM, VIBER, PAPER]
+
+    Member:
+      type: object
+      description: |
+        A person of the cooperative. `notes` is present only when the caller has the `MEMBERS_VIEW` permission.
+      required: [id, lastName, firstName, phones, deliveryChannel, roles, archived]
+      properties:
+        id:
+          type: string
+          format: uuid
+        lastName:
+          type: string
+        firstName:
+          type: string
+        middleName:
+          type: string
+        phones:
+          type: array
+          items:
+            type: string
+          description: Phone numbers in E.164 format
+        email:
+          type: string
+        postalAddress:
+          type: string
+        deliveryChannel:
+          $ref: '#/components/schemas/DeliveryChannel'
+        telegramUsername:
+          type: string
+        viberPhone:
+          type: string
+        notes:
+          type: string
+          description: Internal notes; only for callers with `MEMBERS_VIEW`, the key is absent otherwise
+        roles:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoleRef'
+        archived:
+          type: boolean
+        archivedAt:
+          type: string
+          format: date-time
+
+    MemberInput:
+      type: object
+      description: |
+        Editable fields of a member. Names are required; everything else is optional.
+        Phone numbers may be written in local form (for example `067 123 45 67`); the server validates and
+        normalises them to E.164 (error code `PHONE_INVALID`). A caller without the `MEMBERS_VIEW` permission
+        cannot change `notes`: the field is ignored.
+      required: [lastName, firstName]
+      properties:
+        lastName:
+          type: string
+          minLength: 1
+          maxLength: 100
+        firstName:
+          type: string
+          minLength: 1
+          maxLength: 100
+        middleName:
+          type: string
+          maxLength: 100
+        phones:
+          type: array
+          maxItems: 10
+          items:
+            type: string
+            maxLength: 32
+          description: Phone numbers; the format is checked by the server, not by the schema
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        postalAddress:
+          type: string
+          maxLength: 500
+        deliveryChannel:
+          allOf:
+            - $ref: '#/components/schemas/DeliveryChannel'
+          default: PAPER
+          description: >-
+            Preferred invoice channel, `PAPER` when omitted. `EMAIL` requires `email`, `TELEGRAM` requires
+            `telegramUsername`, `VIBER` requires `viberPhone` (otherwise `CHANNEL_CONTACT_MISSING`).
+        telegramUsername:
+          type: string
+          maxLength: 64
+        viberPhone:
+          type: string
+          maxLength: 32
+        notes:
+          type: string
+          maxLength: 2000
+          description: Internal notes; ignored when the caller lacks `MEMBERS_VIEW`
+
+    MemberSummary:
+      type: object
+      description: A member as shown in the list; contains no postal address, messenger contacts or notes
+      required: [id, lastName, firstName, phones, deliveryChannel, roles, archived]
+      properties:
+        id:
+          type: string
+          format: uuid
+        lastName:
+          type: string
+        firstName:
+          type: string
+        middleName:
+          type: string
+        phones:
+          type: array
+          items:
+            type: string
+          description: Phone numbers in E.164 format
+        email:
+          type: string
+        deliveryChannel:
+          $ref: '#/components/schemas/DeliveryChannel'
+        roles:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoleRef'
+        archived:
+          type: boolean
+
+    MemberPage:
+      type: object
+      required: [items, page, size, totalItems, totalPages]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MemberSummary'
+        page:
+          type: integer
+          format: int32
+          description: Zero-based page index
+        size:
+          type: integer
+          format: int32
+        totalItems:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+
+    AuditAction:
+      type: string
+      description: What was done
+      enum:
+        - MEMBER_CREATED
+        - MEMBER_UPDATED
+        - MEMBER_ARCHIVED
+        - MEMBER_RESTORED
+        - MEMBER_ROLES_CHANGED
+        - ROLE_CREATED
+        - ROLE_UPDATED
+        - ROLE_DELETED
+
+    AuditEntityType:
+      type: string
+      description: Kind of the entity an audit entry is about
+      enum: [MEMBER, ROLE]
+
+    AuditFieldChange:
+      type: object
+      description: One changed field. A missing `oldValue` means the field was empty (or the entity was just created).
+      required: [field]
+      properties:
+        field:
+          type: string
+        oldValue:
+          type: string
+        newValue:
+          type: string
+
+    AuditEntry:
+      type: object
+      required: [id, occurredAt, action, entityType, entityId, changes]
+      properties:
+        id:
+          type: string
+          format: uuid
+        occurredAt:
+          type: string
+          format: date-time
+        actorMemberId:
+          type: string
+          format: uuid
+          description: The member who made the change; absent when the change was made by a system process
+        actorName:
+          type: string
+          description: >-
+            Current name of the acting member, resolved by the server; absent when the entry has no acting
+            member or that member no longer exists
+        action:
+          $ref: '#/components/schemas/AuditAction'
+        entityType:
+          $ref: '#/components/schemas/AuditEntityType'
+        entityId:
+          type: string
+          format: uuid
+        entityLabel:
+          type: string
+          description: Human-readable name of the entity at the time of the change (member name or role name)
+        changes:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditFieldChange'
+
+    AuditPage:
+      type: object
+      required: [items, page, size, totalItems, totalPages]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditEntry'
+        page:
+          type: integer
+          format: int32
+          description: Zero-based page index
+        size:
+          type: integer
+          format: int32
+        totalItems:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
 
     TenantSummary:
       type: object
@@ -89,7 +970,7 @@ components:
 
     Me:
       type: object
-      required: [userId, email, fullName, roles]
+      required: [userId, email, fullName, platformOperator, roles, permissions]
       properties:
         userId:
           type: string
@@ -98,10 +979,22 @@ components:
           type: string
         fullName:
           type: string
+        memberId:
+          type: string
+          format: uuid
+          description: The member this user is linked to; absent for the platform operator
+        platformOperator:
+          type: boolean
+          description: True for the platform operator, who has no roles, permissions or cooperative data
         roles:
           type: array
           items:
-            $ref: '#/components/schemas/Role'
+            $ref: '#/components/schemas/RoleRef'
+        permissions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Permission'
+          description: Union of the permissions of all the member's roles
         tenant:
           $ref: '#/components/schemas/TenantSummary'
 
@@ -180,7 +1073,11 @@ components:
 
     Problem:
       type: object
-      description: RFC 9457 Problem Details
+      description: >-
+        RFC 9457 Problem Details, served as `application/problem+json`. Error responses also declare
+        `application/json` so that a client sending `Accept: application/json` (the web client does) is never
+        answered with 406; the body is the same. `detail` is English and never contains personal data.
+      required: [title, status, code]
       properties:
         type:
           type: string
@@ -189,4 +1086,27 @@ components:
         status:
           type: integer
         detail:
+          type: string
+        code:
+          type: string
+          description: Stable machine-readable error code, for example `VALIDATION_FAILED` or `NOT_FOUND`
+        errors:
+          type: array
+          description: Field-level validation errors
+          items:
+            $ref: '#/components/schemas/ProblemFieldError'
+
+    ProblemFieldError:
+      type: object
+      required: [field, code]
+      properties:
+        field:
+          type: string
+        code:
+          type: string
+          description: >-
+            Field error code: `REQUIRED` (missing or blank), `TOO_LONG` (over the maximum length or item count),
+            `INVALID` (wrong format, for example an email), `PHONE_INVALID` (not a valid phone number),
+            `CHANNEL_CONTACT_MISSING` (the chosen delivery channel has no contact to deliver to)
+        message:
           type: string

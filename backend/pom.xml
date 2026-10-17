@@ -22,7 +22,7 @@
         <spring-modulith.version>2.1.1</spring-modulith.version>
         <openapi-generator.version>7.26.0</openapi-generator.version>
         <!-- Minimum line coverage enforced by `verify`. Raise it as features land; never lower it. -->
-        <coverage.minimum>0.40</coverage.minimum>
+        <coverage.minimum>0.90</coverage.minimum>
     </properties>
 
     <dependencyManagement>
@@ -66,6 +66,11 @@
             <groupId>org.springframework.modulith</groupId>
             <artifactId>spring-modulith-starter-core</artifactId>
         </dependency>
+        <!-- Event publication registry (outbox) on JPA; the table is created by Flyway V3 -->
+        <dependency>
+            <groupId>org.springframework.modulith</groupId>
+            <artifactId>spring-modulith-starter-jpa</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-database-postgresql</artifactId>
@@ -87,6 +92,11 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webmvc-test</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
