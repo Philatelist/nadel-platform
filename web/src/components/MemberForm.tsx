@@ -9,7 +9,7 @@ import {
 } from '@nadel/api-client';
 import { format } from '@nadel/shared';
 import { useQueryClient } from '@tanstack/react-query';
-import { useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
 import { useT } from '../i18n';
 import { useCan } from '../me';
 import { problemFieldErrors, problemMessage, type FieldErrors } from '../problem';
@@ -34,6 +34,20 @@ const buttonClass = 'rounded-md border border-line px-3 py-1.5 text-sm';
 function optional(value: string): string | undefined {
   const trimmed = value.trim();
   return trimmed === '' ? undefined : trimmed;
+}
+
+/**
+ * Blank phone rows are dropped before sending, so the server's `phones[i]` refers to the i-th sent
+ * phone. `sentRowIndexes[i]` is the form row that became sent phone i; errors are moved back to it.
+ */
+export function remapPhoneErrors(errors: FieldErrors, sentRowIndexes: readonly number[]): FieldErrors {
+  return Object.fromEntries(
+    Object.entries(errors).map(([key, message]) => {
+      const match = /^phones\[(\d+)\]$/.exec(key);
+      const row = match ? sentRowIndexes[Number(match[1])] : undefined;
+      return [row === undefined ? key : `phones[${row}]`, message];
+    }),
+  );
 }
 
 /**
@@ -70,6 +84,7 @@ export function MemberForm({
   const [notes, setNotes] = useState(member?.notes ?? '');
   const [errors, setErrors] = useState<FieldErrors>({});
   const [bannerError, setBannerError] = useState<string>();
+  const sentPhoneRows = useRef<number[]>([]);
 
   async function handleSaved(saved: Member) {
     queryClient.setQueryData(getGetMemberQueryKey(saved.id), saved);
@@ -81,7 +96,7 @@ export function MemberForm({
   }
 
   function handleError(error: unknown) {
-    const fieldErrors = problemFieldErrors(t, error);
+    const fieldErrors = remapPhoneErrors(problemFieldErrors(t, error), sentPhoneRows.current);
     setErrors(fieldErrors);
     setBannerError(Object.keys(fieldErrors).length === 0 ? problemMessage(t, error) : undefined);
   }
@@ -110,6 +125,7 @@ export function MemberForm({
     setErrors(clientErrors);
     if (Object.keys(clientErrors).length > 0) return;
 
+    sentPhoneRows.current = phones.flatMap((p, index) => (p.value.trim() === '' ? [] : [index]));
     const data: MemberInput = {
       lastName: lastName.trim(),
       firstName: firstName.trim(),

@@ -1,7 +1,7 @@
 # Pipeline log — 002 Members and access control
 
 - Status: running
-- Phase: 3 — implement, Slice 3
+- Phase: 3 — implement, Slice 4
 - Branch: 001-members-access · Base: main @ 39380d2
 - Requirement: document `docs/features/002-members-access.md`
 - Autonomy: minimal (default; no argument, no `.claude/feature-pipeline.yml`)
@@ -127,3 +127,7 @@ new tables; module cycle identity↔members; Playwright CI job is new infrastruc
 - Slice 1 review round 2: PASS (M1 resolved). All slice reviews so far PASS; no review outstanding.
 - Slice 3: contract (1 fix round: wrong permission name MEMBERS_MANAGE, Viber rule) and web (1 fix round: orval `useQuery: true` generated query hooks for POST/PUT; removed, mutations regenerated) ticked. DB task waits for its Java tests in the backend task.
 - Slice 3 Verify (orchestrator): 81 tests green, no generated-client drift, client checks green.
+- Slice 3 committed: ca5ea40 — review round 1 running (worktree review-001-s3-r1).
+- Phase 3: Slice 4 started.
+- Slice 3 review round 1: MAJOR_ISSUES (M1 phone error row mapping in MemberForm.tsx). No overlap with Slice 4 uncommitted files, so the fix goes to react-frontend now (MemberForm.tsx only) and is committed alone as `001: Slice 3 — review fixes (round 1)`.
+- Note for final report: reviewer points out pipeline commit subjects (`{N}: Slice …`) do not follow the Conventional Commits rule in CLAUDE.md; history is not rewritten by the pipeline — owner decides (e.g. squash with a Conventional Commits subject).

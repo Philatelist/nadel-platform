@@ -17,3 +17,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `f76322d..7ad1272` | PASS | — | minor: phone match triggers on any digit in `q` (e.g. `ivan2@example`); demo-data comment claims Secretary permissions reset each run (they are only inserted); MEMBER grant `id > …04` would re-grant to UI-created members on re-run; search box not re-synced when URL changes externally; page past the end shows "No members yet" without pagination; "Back to members" link shown to plain members |
+
+## Slice 3 — Add, edit, archive and restore members, with every change recorded in the audit log
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `5ae986c..ca5ea40` | MAJOR_ISSUES | M1 phone field errors land on the wrong row when blank rows are filtered before submit (`MemberForm.tsx`) | minor: concurrent archive/restore of the same member can write two audit entries (read before lock); record `toString()` of `AuditEvent`/`Actor` would print personal data if ever logged; failed audit listener retried only at restart; form shows nothing when field errors match no rendered field; "Saved" reappears on reload (location.state); duplicate react-router imports; pipeline commit subjects are not Conventional Commits (owner decision) |
