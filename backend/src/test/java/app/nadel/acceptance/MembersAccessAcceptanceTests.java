@@ -62,6 +62,9 @@ class MembersAccessAcceptanceTests extends IntegrationTest {
     @Autowired
     JsonMapper json;
 
+    private static final String SEEDED_TREASURER_NAME = "Treasurer";
+    private static final String SEEDED_TREASURER_DESCRIPTION = "Read access to members, plots and audit";
+
     private final List<String> problems = new ArrayList<>();
     private final List<UUID> createdMembers = new ArrayList<>();
     private final List<UUID> createdRoles = new ArrayList<>();
@@ -278,9 +281,15 @@ class MembersAccessAcceptanceTests extends IntegrationTest {
     void untickingAuditViewForTreasurerRemovesTheAuditLogFromTheTreasurer() throws Exception {
         UUID treasurerRole = baseRoleId("TREASURER");
         String treasurer = demo("treasurer@demo.local");
+        // a role PUT is a full replacement: send the stored name and description back so only permissions change
+        JsonNode seeded = treasurerRoleBody();
+        String name = seeded.get("name").asString();
+        assertThat(name).isEqualTo(SEEDED_TREASURER_NAME);
+        assertThat(seeded.get("description").asString()).isEqualTo(SEEDED_TREASURER_DESCRIPTION);
         mvc.perform(get("/api/v1/audit").header(HttpHeaders.AUTHORIZATION, treasurer)).andExpect(status().isOk());
         try {
-            doPut(chairman(), "/api/v1/roles/" + treasurerRole, Map.of("name", "Treasurer",
+            doPut(chairman(), "/api/v1/roles/" + treasurerRole, Map.of("name", SEEDED_TREASURER_NAME,
+                    "description", SEEDED_TREASURER_DESCRIPTION,
                     "permissions", List.of("MEMBERS_VIEW", "PLOTS_VIEW"))).andExpect(status().isOk());
 
             mvc.perform(get("/api/v1/me").header(HttpHeaders.AUTHORIZATION, treasurer))
@@ -289,10 +298,29 @@ class MembersAccessAcceptanceTests extends IntegrationTest {
                     .andExpect(status().isForbidden())
                     .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
         } finally {
-            doPut(chairman(), "/api/v1/roles/" + treasurerRole, Map.of("name", "Treasurer",
+            doPut(chairman(), "/api/v1/roles/" + treasurerRole, Map.of("name", SEEDED_TREASURER_NAME,
+                    "description", SEEDED_TREASURER_DESCRIPTION,
                     "permissions", List.of("MEMBERS_VIEW", "PLOTS_VIEW", "AUDIT_VIEW"))).andExpect(status().isOk());
         }
         mvc.perform(get("/api/v1/audit").header(HttpHeaders.AUTHORIZATION, treasurer)).andExpect(status().isOk());
+
+        // the shared demo role is back to its seeded state, so no later test class sees a leftover
+        JsonNode restored = treasurerRoleBody();
+        assertThat(restored.get("name").asString()).isEqualTo(SEEDED_TREASURER_NAME);
+        assertThat(restored.path("description").asString()).isEqualTo(SEEDED_TREASURER_DESCRIPTION);
+        List<String> permissions = new ArrayList<>();
+        restored.get("permissions").forEach(node -> permissions.add(node.asString()));
+        assertThat(permissions).containsExactlyInAnyOrder("MEMBERS_VIEW", "PLOTS_VIEW", "AUDIT_VIEW");
+    }
+
+    private JsonNode treasurerRoleBody() throws Exception {
+        for (JsonNode role : readJson(doGet(chairman(), "/api/v1/roles"))) {
+            JsonNode baseCode = role.get("baseCode");
+            if (baseCode != null && "TREASURER".equals(baseCode.asString())) {
+                return role;
+            }
+        }
+        throw new AssertionError("the Treasurer base role is missing");
     }
 
     // ---- §2.9 audit log immutability ------------------------------------------------------------------------------

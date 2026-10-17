@@ -43,3 +43,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `92eb53a..f04af75` | PASS | — | minor: "Next" links in 001-foundation point to 003–005 docs that are still untracked (owner commits them); e2e trap continues after Ctrl-C (exit after cleanup on INT/TERM); unscoped `getByRole('navigation')` in e2e would also match Pagination's nav; jar glob `*-SNAPSHOT.jar`; record measured coverage (done in pipeline log) |
+
+## Slice 7 — Feature Testing & Regression
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `f04af75..ab1fce4` | MAJOR_ISSUES | M1 `MembersAccessAcceptanceTests#untickingAuditViewForTreasurer…` PUTs the Treasurer role without its description (also in the restore), clearing the seeded description in the shared DB | minor: `expectProblem` ignores `code`; no Content-Type assertion for `deleteRole` errors without Accept; `list-of-tests.md` still shows two FAILING/GAP rows; forbidden-word regex `\binn\w*` too broad; audit-mutation test may hit a random id; duplicate `toBeChecked` and archived helper members accumulate in E2E runs |
