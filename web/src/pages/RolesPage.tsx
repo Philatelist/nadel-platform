@@ -18,6 +18,7 @@ import { useLocale, useT } from '../i18n';
 import { problemCode, problemFieldErrors, problemMessage, type FieldErrors } from '../problem';
 import { useRoleName } from '../roleName';
 import { findNameClash } from '../roleNameClash';
+import { nameToSubmit } from '../roleNameSubmit';
 
 export function RolesPage() {
   const t = useT();
@@ -176,7 +177,6 @@ function RoleEditor({
   const t = useT();
   const c = t.rolesPage;
   const queryClient = useQueryClient();
-  const isBase = role?.baseCode !== undefined;
   const isChairman = role?.baseCode === 'CHAIRMAN';
   const roleName = useRoleName();
   const { locale } = useLocale();
@@ -223,11 +223,8 @@ function RoleEditor({
     event.preventDefault();
     setErrors({});
     setFormError(undefined);
-    const trimmed = name.trim();
-    // A permission-only save of an untouched standard name must not rename the role.
-    const untouched = role && isBase && !role.nameCustomized && trimmed === roleName(role).trim();
     const data = {
-      name: untouched ? role.name : trimmed,
+      name: nameToSubmit(role, name, role ? roleName(role) : ''),
       description: description.trim() === '' ? undefined : description.trim(),
       permissions: available.filter((code) => selected.has(code)),
     };
