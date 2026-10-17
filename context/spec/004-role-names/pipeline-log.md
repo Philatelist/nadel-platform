@@ -63,3 +63,4 @@
 
 ## Phase 3 — implement
 
+- Slice 1 committed 54971bf (backend 71 targeted tests, web 49 unit; typecheck/lint/format/gen clean). Review r1 started.

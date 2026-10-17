@@ -14,9 +14,10 @@ import { useState, type FormEvent } from 'react';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { QueryBoundary } from '../components/QueryBoundary';
 import { Badge, Button, Notice, PageHeader, TextArea, TextField } from '../components/ui';
-import { useT } from '../i18n';
+import { useLocale, useT } from '../i18n';
 import { problemCode, problemFieldErrors, problemMessage, type FieldErrors } from '../problem';
 import { useRoleName } from '../roleName';
+import { findNameClash } from '../roleNameClash';
 
 export function RolesPage() {
   const t = useT();
@@ -70,6 +71,7 @@ export function RolesPage() {
         <RoleEditor
           key="new"
           permissions={permissions.data.map((p) => p.code)}
+          others={roles.data ?? []}
           onDone={() => {
             setEditing(undefined);
             setSaved(c.saved);
@@ -90,6 +92,7 @@ export function RolesPage() {
                       key={role.id}
                       role={role}
                       permissions={permissions.data.map((p) => p.code)}
+                      others={data.filter((r) => r.id !== role.id)}
                       onDone={() => {
                         setEditing(undefined);
                         setSaved(c.saved);
@@ -160,11 +163,13 @@ export function RolesPage() {
 function RoleEditor({
   role,
   permissions: available,
+  others,
   onDone,
   onCancel,
 }: {
   role?: RoleDetails;
   permissions: readonly Permission[];
+  others: readonly RoleDetails[];
   onDone: () => void;
   onCancel: () => void;
 }) {
@@ -174,6 +179,7 @@ function RoleEditor({
   const isBase = role?.baseCode !== undefined;
   const isChairman = role?.baseCode === 'CHAIRMAN';
   const roleName = useRoleName();
+  const { locale } = useLocale();
 
   const [name, setName] = useState(role ? roleName(role) : '');
   const [description, setDescription] = useState(role?.description ?? '');
@@ -217,14 +223,34 @@ function RoleEditor({
     event.preventDefault();
     setErrors({});
     setFormError(undefined);
+    const trimmed = name.trim();
+    // A permission-only save of an untouched standard name must not rename the role.
+    const untouched = role && isBase && !role.nameCustomized && trimmed === roleName(role).trim();
     const data = {
-      name: isBase ? role.name : name.trim(),
+      name: untouched ? role.name : trimmed,
       description: description.trim() === '' ? undefined : description.trim(),
       permissions: available.filter((code) => selected.has(code)),
     };
     if (role) update.mutate({ id: role.id, data });
     else create.mutate({ data });
   };
+
+  const restoreName = () => {
+    if (!role) return;
+    setErrors({});
+    setFormError(undefined);
+    update.mutate({
+      id: role.id,
+      data: {
+        name: role.name,
+        description: description.trim() === '' ? undefined : description.trim(),
+        permissions: available.filter((code) => selected.has(code)),
+        useDefaultName: true,
+      },
+    });
+  };
+
+  const clash = findNameClash(name, others, roleName, locale);
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-3" noValidate>
@@ -234,10 +260,18 @@ function RoleEditor({
         label={c.name}
         error={errors.name}
         value={name}
-        disabled={isBase}
+        hint={role?.baseCode ? format(c.baseHint, { name: t.roles[role.baseCode] }) : undefined}
         maxLength={60}
         onChange={(e) => setName(e.target.value)}
       />
+      {clash && <Notice tone="warning">{c.nameClash}</Notice>}
+      {role?.baseCode && role.nameCustomized && (
+        <div>
+          <Button variant="secondary" onClick={restoreName} disabled={busy}>
+            {c.restoreName}
+          </Button>
+        </div>
+      )}
       <TextArea
         label={c.description}
         error={errors.description}
@@ -258,7 +292,7 @@ function RoleEditor({
         <Button variant="secondary" onClick={onCancel}>
           {c.cancel}
         </Button>
-        <Button type="submit" variant="primary" disabled={busy || isChairman}>
+        <Button type="submit" variant="primary" disabled={busy}>
           {busy ? c.saving : c.save}
         </Button>
       </div>

@@ -96,6 +96,9 @@ export const en = {
     deleted: 'Role deleted',
     empty: 'No roles yet.',
     memberRoles: 'Edit roles',
+    baseHint: 'Base role: {name}',
+    restoreName: 'Restore standard name',
+    nameClash: 'Another role is already shown under this name.',
   },
   members: {
     title: 'Members',
@@ -186,7 +189,7 @@ export const en = {
     ROLE_NAME_TAKEN: 'A role with this name already exists.',
     ROLE_IN_USE: 'This role is assigned to members and cannot be deleted.',
     LAST_CHAIRMAN: 'The cooperative must keep at least one chairman.',
-    BASE_ROLE_IMMUTABLE: 'Base roles cannot be renamed or deleted.',
+    BASE_ROLE_IMMUTABLE: "Base roles cannot be deleted, and the chairman's permissions cannot be changed.",
     UNKNOWN: 'Something went wrong. Please try again.',
   },
   map: {

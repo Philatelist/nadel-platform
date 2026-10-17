@@ -87,8 +87,11 @@ class MemberRoleCommands {
                     member.getId(),
                     member.getLastName() + " " + member.getFirstName(),
                     List.of(new FieldChange("roles",
-                            names(current.stream().map(RoleGrant::name).toList()),
-                            names(wanted.values().stream().map(Role::getName).toList())))));
+                            names(current.stream()
+                                    .map(g -> RoleSnapshot.auditName(g.name(), g.baseCode(), g.nameCustomized())).toList()),
+                            names(wanted.values().stream()
+                                    .map(r -> RoleSnapshot.auditName(r.getName(), r.getBaseCode(), r.isNameCustomized()))
+                                    .toList())))));
         }
         return MemberDtoMapper.toDto(member, grants.read(member), actor);
     }

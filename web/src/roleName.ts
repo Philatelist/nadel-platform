@@ -17,3 +17,18 @@ export function useRoleName(): (role: RoleRef) => string {
   const t = useT();
   return (role) => roleDisplayName(role, t);
 }
+
+/**
+ * Audit values for a non-customised base-role name arrive as `base:<CODE>`; the `roles` field is a
+ * ", "-joined list that may contain such tokens. Known codes are shown from the catalog.
+ */
+export function auditRoleValue(value: string, t: Messages): string {
+  return value
+    .split(', ')
+    .map((part) => {
+      if (!part.startsWith('base:')) return part;
+      const code = part.slice('base:'.length);
+      return Object.hasOwn(t.roles, code) ? t.roles[code as keyof Messages['roles']] : part;
+    })
+    .join(', ');
+}

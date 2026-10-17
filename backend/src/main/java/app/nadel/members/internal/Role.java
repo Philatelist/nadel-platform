@@ -53,8 +53,10 @@ class Role {
         return role;
     }
 
-    void edit(String name, String description, Instant now) {
+    /** Changes name, flag and description. For a custom role the stored flag stays true. */
+    void edit(String name, boolean nameCustomized, String description, Instant now) {
         this.name = name;
+        this.nameCustomized = baseCode == null || nameCustomized;
         this.description = description;
         this.updatedAt = now;
     }

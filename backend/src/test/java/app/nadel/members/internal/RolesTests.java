@@ -406,18 +406,248 @@ class RolesTests extends IntegrationTest {
     // ---- base roles ------------------------------------------------------------------------------------------------
 
     @Test
-    void baseRolesCannotBeRenamed() throws Exception {
+    void renamingTheTreasurerRoleShowsTheStoredNameAndAuditsTheStandardNameToken() throws Exception {
         UUID treasurer = baseRoleId("TREASURER");
-        UUID chairman = baseRoleId("CHAIRMAN");
+        long before = auditCountForRole(treasurer);
 
-        send(chairman(), put("/api/v1/roles/" + treasurer), roleBody("Cashier", "MEMBERS_VIEW", "PLOTS_VIEW", "AUDIT_VIEW"))
-                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("BASE_ROLE_IMMUTABLE"));
-        send(chairman(), put("/api/v1/roles/" + chairman), roleBody("Boss", allPermissions()))
-                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("BASE_ROLE_IMMUTABLE"));
-        // a case change is a rename too
-        send(chairman(), put("/api/v1/roles/" + treasurer), roleBody("TREASURER", "MEMBERS_VIEW", "PLOTS_VIEW", "AUDIT_VIEW"))
-                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("BASE_ROLE_IMMUTABLE"));
+        send(chairman(), put("/api/v1/roles/" + treasurer), seedBody("TREASURER", "Бухгалтер"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Бухгалтер"))
+                .andExpect(jsonPath("$.baseCode").value("TREASURER"))
+                .andExpect(jsonPath("$.nameCustomized").value(true));
+
+        assertThat(roleName(treasurer)).isEqualTo("Бухгалтер");
+        assertThat(nameCustomized(treasurer)).isTrue();
+        send(chairman(), get("/api/v1/roles"), null)
+                .andExpect(jsonPath("$[?(@.id == '" + treasurer + "')].name").value("Бухгалтер"))
+                .andExpect(jsonPath("$[?(@.id == '" + treasurer + "')].nameCustomized").value(true));
+        List<Map<String, Object>> entries = awaitNewAudit(treasurer, before, 1);
+        assertThat(entries.get(0).get("action")).isEqualTo("ROLE_UPDATED");
+        assertThat(entries.get(0).get("entity_label")).isEqualTo("Бухгалтер");
+        JsonNode changes = json.readTree((String) entries.get(0).get("changes"));
+        assertThat(changes).hasSize(1);
+        assertThat(change(changes, "name").get("old").asString()).isEqualTo("base:TREASURER");
+        assertThat(change(changes, "name").get("new").asString()).isEqualTo("Бухгалтер");
+    }
+
+    @Test
+    void renamingTheMemberRoleToAnotherRolesNameIgnoringCaseIsRefused() throws Exception {
+        UUID member = baseRoleId("MEMBER");
+        createRole("садівник");
+        long before = auditCountForRole(member);
+
+        send(chairman(), put("/api/v1/roles/" + member), seedBody("MEMBER", "Садівник"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("ROLE_NAME_TAKEN"))
+                .andExpect(jsonPath("$.errors[0].field").value("name"));
+
+        assertThat(roleName(member)).isEqualTo("Member");
+        assertThat(nameCustomized(member)).isFalse();
+        assertThat(auditCountForRole(member)).isEqualTo(before);
+    }
+
+    @Test
+    void aBaseRoleCannotTakeTheNameOfAnotherBaseRole() throws Exception {
+        send(chairman(), put("/api/v1/roles/" + baseRoleId("MEMBER")), seedBody("MEMBER", "TREASURER"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("ROLE_NAME_TAKEN"));
+        assertThat(roleName(baseRoleId("MEMBER"))).isEqualTo("Member");
+    }
+
+    @Test
+    void aTrailingSpaceInTheNameOfACustomRoleIsNotARename() throws Exception {
+        String name = "Електрик " + tag();
+        UUID id = createRole(name, "MEMBERS_VIEW");
+        awaitAudit(id, 1);
+
+        send(chairman(), put("/api/v1/roles/" + id), roleBody(name + " ", "MEMBERS_VIEW"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value(name))
+                .andExpect(jsonPath("$.nameCustomized").value(true));
+
+        Thread.sleep(500); // an event, if one were published, would be written within this time
+        assertThat(auditEntries(id)).extracting(e -> e.get("action")).containsExactly("ROLE_CREATED");
+        assertThat(roleName(id)).isEqualTo(name);
+    }
+
+    @Test
+    void restoringTheStandardNameBringsBackTheSeedNameAndIgnoresTheSubmittedName() throws Exception {
+        UUID treasurer = baseRoleId("TREASURER");
+        long start = auditCountForRole(treasurer);
+        send(chairman(), put("/api/v1/roles/" + treasurer), seedBody("TREASURER", "Бухгалтер")).andExpect(status().isOk());
+        awaitNewAudit(treasurer, start, 1); // the rename's entry is written asynchronously
+        long before = start + 1;
+
+        Map<String, Object> restore = seedBody("TREASURER", "Any other name");
+        restore.put("useDefaultName", true);
+        send(chairman(), put("/api/v1/roles/" + treasurer), restore)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Treasurer"))
+                .andExpect(jsonPath("$.nameCustomized").value(false));
+
         assertThat(roleName(treasurer)).isEqualTo("Treasurer");
+        assertThat(nameCustomized(treasurer)).isFalse();
+        List<Map<String, Object>> entries = awaitNewAudit(treasurer, before, 1);
+        assertThat(entries.get(0).get("entity_label")).isEqualTo("base:TREASURER");
+        JsonNode changes = json.readTree((String) entries.get(0).get("changes"));
+        assertThat(changes).hasSize(1);
+        assertThat(change(changes, "name").get("old").asString()).isEqualTo("Бухгалтер");
+        assertThat(change(changes, "name").get("new").asString()).isEqualTo("base:TREASURER");
+    }
+
+    @Test
+    void restoringTheStandardNameOfARoleThatWasNeverRenamedChangesNothing() throws Exception {
+        UUID treasurer = baseRoleId("TREASURER");
+        long before = auditCountForRole(treasurer);
+
+        Map<String, Object> restore = seedBody("TREASURER", "Ignored");
+        restore.put("useDefaultName", true);
+        send(chairman(), put("/api/v1/roles/" + treasurer), restore)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Treasurer"))
+                .andExpect(jsonPath("$.nameCustomized").value(false));
+
+        Thread.sleep(500);
+        assertThat(auditCountForRole(treasurer)).isEqualTo(before);
+        assertThat(roleName(treasurer)).isEqualTo("Treasurer");
+        assertThat(nameCustomized(treasurer)).isFalse();
+    }
+
+    @Test
+    void restoringTheStandardNameIsRefusedWhileAnotherRoleHoldsTheSeedName() throws Exception {
+        UUID treasurer = baseRoleId("TREASURER");
+        send(chairman(), put("/api/v1/roles/" + treasurer), seedBody("TREASURER", "Бухгалтер")).andExpect(status().isOk());
+        createRole("Treasurer"); // the seed name is free now
+
+        Map<String, Object> restore = seedBody("TREASURER", "Бухгалтер");
+        restore.put("useDefaultName", true);
+        send(chairman(), put("/api/v1/roles/" + treasurer), restore)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("ROLE_NAME_TAKEN"))
+                .andExpect(jsonPath("$.errors[0].field").value("name"));
+
+        assertThat(roleName(treasurer)).isEqualTo("Бухгалтер");
+        assertThat(nameCustomized(treasurer)).isTrue();
+    }
+
+    @Test
+    void useDefaultNameOnACustomRoleIsAValidationError() throws Exception {
+        String name = "Custom " + tag();
+        UUID id = createRole(name, "MEMBERS_VIEW");
+
+        Map<String, Object> body = roleBody("Another " + tag(), "MEMBERS_VIEW");
+        body.put("useDefaultName", true);
+        send(chairman(), put("/api/v1/roles/" + id), body)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.errors[0].field").value("useDefaultName"))
+                .andExpect(jsonPath("$.errors[0].code").value("INVALID"));
+
+        assertThat(roleName(id)).isEqualTo(name);
+        // an explicit false is the default and fine
+        body.put("useDefaultName", false);
+        send(chairman(), put("/api/v1/roles/" + id), body).andExpect(status().isOk());
+    }
+
+    @Test
+    void aCaseOnlyChangeOfABaseRoleNameIsARenameAndIsAudited() throws Exception {
+        UUID treasurer = baseRoleId("TREASURER");
+        long before = auditCountForRole(treasurer);
+
+        send(chairman(), put("/api/v1/roles/" + treasurer), seedBody("TREASURER", "TREASURER"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("TREASURER"))
+                .andExpect(jsonPath("$.nameCustomized").value(true));
+
+        JsonNode changes = json.readTree((String) awaitNewAudit(treasurer, before, 1).get(0).get("changes"));
+        assertThat(change(changes, "name").get("old").asString()).isEqualTo("base:TREASURER");
+        assertThat(change(changes, "name").get("new").asString()).isEqualTo("TREASURER");
+    }
+
+    @Test
+    void aCaseOnlyChangeOfACustomRoleNameIsAudited() throws Exception {
+        String name = "Warden " + tag();
+        UUID id = createRole(name);
+        awaitAudit(id, 1);
+
+        send(chairman(), put("/api/v1/roles/" + id), roleBody(name.toUpperCase()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.name").value(name.toUpperCase()));
+
+        JsonNode changes = json.readTree((String) awaitAudit(id, 2).get(1).get("changes"));
+        assertThat(change(changes, "name").get("old").asString()).isEqualTo(name);
+        assertThat(change(changes, "name").get("new").asString()).isEqualTo(name.toUpperCase());
+    }
+
+    @Test
+    void aPermissionOnlyChangeKeepsTheCustomNameAndTheFlagOfARenamedBaseRole() throws Exception {
+        UUID treasurer = baseRoleId("TREASURER");
+        long start = auditCountForRole(treasurer);
+        send(chairman(), put("/api/v1/roles/" + treasurer), seedBody("TREASURER", "Бухгалтер")).andExpect(status().isOk());
+        awaitNewAudit(treasurer, start, 1); // the rename's entry is written asynchronously
+        long before = start + 1;
+
+        Map<String, Object> body = seedBody("TREASURER", "Бухгалтер");
+        body.put("permissions", List.of("MEMBERS_VIEW"));
+        send(chairman(), put("/api/v1/roles/" + treasurer), body)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Бухгалтер"))
+                .andExpect(jsonPath("$.nameCustomized").value(true));
+
+        assertThat(roleName(treasurer)).isEqualTo("Бухгалтер");
+        assertThat(nameCustomized(treasurer)).isTrue();
+        JsonNode changes = json.readTree((String) awaitNewAudit(treasurer, before, 1).get(0).get("changes"));
+        assertThat(changes).hasSize(1);
+        assertThat(change(changes, "permissions").get("new").asString()).isEqualTo("MEMBERS_VIEW");
+    }
+
+    @Test
+    void savingANeverRenamedBaseRoleWithItsStoredNameKeepsItNonCustomized() throws Exception {
+        UUID treasurer = baseRoleId("TREASURER");
+        long before = auditCountForRole(treasurer);
+
+        Map<String, Object> body = seedBody("TREASURER", "Treasurer");
+        body.put("permissions", List.of("MEMBERS_VIEW"));
+        send(chairman(), put("/api/v1/roles/" + treasurer), body)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Treasurer"))
+                .andExpect(jsonPath("$.nameCustomized").value(false));
+
+        assertThat(nameCustomized(treasurer)).isFalse();
+        JsonNode changes = json.readTree((String) awaitNewAudit(treasurer, before, 1).get(0).get("changes"));
+        assertThat(changes).hasSize(1); // the name is not part of the entry
+        assertThat(change(changes, "permissions")).isNotNull();
+    }
+
+    @Test
+    void aTreasurerWithoutRolesManageCannotRenameARole() throws Exception {
+        UUID treasurer = baseRoleId("TREASURER");
+
+        send(demo("treasurer@demo.local"), put("/api/v1/roles/" + treasurer), seedBody("TREASURER", "Бухгалтер"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
+
+        assertThat(roleName(treasurer)).isEqualTo("Treasurer");
+        assertThat(nameCustomized(treasurer)).isFalse();
+    }
+
+    @Test
+    void twoConcurrentRenamesToTheSameNameEndAsOneRenamedAndOneNameTaken() throws Exception {
+        // Both requests may pass the friendly pre-check; the unique index decides and must surface as 409, never 500.
+        send(chairman(), get("/api/v1/me"), null).andExpect(status().isOk()); // first sign-in links the member
+        UUID treasurer = baseRoleId("TREASURER");
+        UUID member = baseRoleId("MEMBER");
+        String name = "Race " + tag();
+
+        List<ResultActions> results = ConcurrentRequests.run(
+                () -> send(chairman(), put("/api/v1/roles/" + treasurer), seedBody("TREASURER", name)),
+                () -> send(chairman(), put("/api/v1/roles/" + member), seedBody("MEMBER", name.toUpperCase())));
+
+        List<Integer> statuses = results.stream().map(r -> r.andReturn().getResponse().getStatus()).sorted().toList();
+        assertThat(statuses).containsExactly(200, 409);
+        for (ResultActions r : results) {
+            if (r.andReturn().getResponse().getStatus() == 409) {
+                assertThat(r.andReturn().getResponse().getContentAsString()).contains("ROLE_NAME_TAKEN");
+            }
+        }
     }
 
     @Test
@@ -430,14 +660,29 @@ class RolesTests extends IntegrationTest {
     }
 
     @Test
-    void theChairmanRoleKeepsEveryPermission() throws Exception {
+    void theChairmanRoleCanBeRenamedButKeepsEveryPermission() throws Exception {
         UUID chairman = baseRoleId("CHAIRMAN");
 
         send(chairman(), put("/api/v1/roles/" + chairman), roleBody("Chairman", "MEMBERS_VIEW"))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("BASE_ROLE_IMMUTABLE"));
         send(chairman(), put("/api/v1/roles/" + chairman), roleBody("Chairman"))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("BASE_ROLE_IMMUTABLE"));
+        // a rename together with fewer permissions is refused as a whole
+        send(chairman(), put("/api/v1/roles/" + chairman), roleBody("Голова", "MEMBERS_VIEW"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("BASE_ROLE_IMMUTABLE"));
+        assertThat(roleName(chairman)).isEqualTo("Chairman");
         assertThat(storedPermissions(chairman)).hasSize(8);
+
+        send(chairman(), put("/api/v1/roles/" + chairman), seedBody("CHAIRMAN", "Голова"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Голова"))
+                .andExpect(jsonPath("$.nameCustomized").value(true))
+                .andExpect(jsonPath("$.permissions", hasSize(8)));
+
+        assertThat(roleName(chairman)).isEqualTo("Голова");
+        assertThat(storedPermissions(chairman)).hasSize(8);
+        send(chairman(), get("/api/v1/me"), null)
+                .andExpect(jsonPath("$.permissions", hasSize(8))); // the system logic keeps using baseCode
     }
 
     @Test
@@ -593,10 +838,10 @@ class RolesTests extends IntegrationTest {
         assertThat(entries.get(0).get("entity_type")).isEqualTo("MEMBER");
         JsonNode first = json.readTree((String) entries.get(0).get("changes"));
         assertThat(first).hasSize(1);
-        assertThat(change(first, "roles").get("old").asString()).isEqualTo("Member");
-        assertThat(change(first, "roles").get("new").asString()).isEqualTo(join("Member", secretaryName));
+        assertThat(change(first, "roles").get("old").asString()).isEqualTo("base:MEMBER");
+        assertThat(change(first, "roles").get("new").asString()).isEqualTo(join("base:MEMBER", secretaryName));
         JsonNode second = json.readTree((String) entries.get(1).get("changes"));
-        assertThat(change(second, "roles").get("old").asString()).isEqualTo(join("Member", secretaryName));
+        assertThat(change(second, "roles").get("old").asString()).isEqualTo(join("base:MEMBER", secretaryName));
         assertThat(change(second, "roles").get("new").asString()).isEqualTo(join(electricianName, secretaryName));
     }
 
@@ -608,7 +853,7 @@ class RolesTests extends IntegrationTest {
         setRoles(chairman(), target, List.of()).andExpect(status().isOk()).andExpect(jsonPath("$.roles", empty()));
 
         JsonNode changes = json.readTree((String) awaitAudit(target, 1).get(0).get("changes"));
-        assertThat(change(changes, "roles").get("old").asString()).isEqualTo("Treasurer");
+        assertThat(change(changes, "roles").get("old").asString()).isEqualTo("base:TREASURER");
         JsonNode newValue = change(changes, "roles").get("new");
         assertThat(newValue == null || newValue.isNull()).isTrue();
     }
@@ -716,6 +961,14 @@ class RolesTests extends IntegrationTest {
         return body;
     }
 
+    /** A full-replacement body with the seeded description and permissions of a base role, under the given name. */
+    private static Map<String, Object> seedBody(String code, String name) {
+        BaseRoleSeed seed = SEEDED_BASE_ROLES.stream().filter(b -> b.code().equals(code)).findFirst().orElseThrow();
+        Map<String, Object> body = roleBody(name, seed.permissions().toArray(String[]::new));
+        body.put("description", seed.description());
+        return body;
+    }
+
     private ResultActions send(String bearer, MockHttpServletRequestBuilder request, Object body) throws Exception {
         request.header(HttpHeaders.AUTHORIZATION, bearer);
         if (body != null) {
@@ -759,6 +1012,11 @@ class RolesTests extends IntegrationTest {
         return inTenant(DEMO_TENANT, sql -> sql.queryForObject("select name from role where id = ?", String.class, id));
     }
 
+    private boolean nameCustomized(UUID id) {
+        return inTenant(DEMO_TENANT, sql -> sql.queryForObject(
+                "select name_customized from role where id = ?", Boolean.class, id));
+    }
+
     private boolean roleExists(UUID id) {
         return inTenant(DEMO_TENANT, sql -> sql.queryForObject(
                 "select count(*) from role where id = ?", Integer.class, id)) == 1;
@@ -791,6 +1049,13 @@ class RolesTests extends IntegrationTest {
     private List<Map<String, Object>> awaitAudit(UUID entityId, int count) {
         await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> assertThat(auditEntries(entityId)).hasSize(count));
         return auditEntries(entityId);
+    }
+
+    /** Waits for {@code added} entries beyond the {@code before} that existed (base roles keep entries across tests). */
+    private List<Map<String, Object>> awaitNewAudit(UUID entityId, long before, int added) {
+        await().atMost(Duration.ofSeconds(10))
+                .untilAsserted(() -> assertThat(auditEntries(entityId)).hasSize((int) before + added));
+        return auditEntries(entityId).subList((int) before, (int) before + added);
     }
 
     private List<Map<String, Object>> auditEntries(UUID entityId) {

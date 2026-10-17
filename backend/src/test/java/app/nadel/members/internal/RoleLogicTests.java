@@ -40,6 +40,15 @@ class RoleLogicTests {
     }
 
     @Test
+    void auditNameUsesBaseTokenOnlyForNonCustomizedBaseRoles() {
+        assertThat(RoleSnapshot.auditName("Treasurer", "TREASURER", false)).isEqualTo("base:TREASURER");
+        assertThat(RoleSnapshot.auditName("Member", "MEMBER", false)).isEqualTo("base:MEMBER");
+        assertThat(RoleSnapshot.auditName("Бухгалтер", "TREASURER", true)).isEqualTo("Бухгалтер");
+        assertThat(RoleSnapshot.auditName("Secretary", null, true)).isEqualTo("Secretary");
+        assertThat(RoleSnapshot.auditName("Secretary", null, false)).isEqualTo("Secretary");
+    }
+
+    @Test
     void anIndexViolationIsRecognisedThroughItsCauseChain() {
         var violation = new ConstraintViolationException("duplicate", new SQLException("x"), "role_tenant_name_uq");
         var other = new ConstraintViolationException("duplicate", new SQLException("x"), "member_tenant_email_uq");

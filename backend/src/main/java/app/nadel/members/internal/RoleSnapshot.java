@@ -20,6 +20,15 @@ record RoleSnapshot(String name, @Nullable String description, @Nullable String 
         return new RoleSnapshot(name, description, joined);
     }
 
+    /**
+     * The name as written to the audit log. A base role that still has its standard name is written as the token
+     * {@code base:<BASE_CODE>}, because the standard name is shown in the reader's language by the client; every other
+     * role is written under its stored name.
+     */
+    static String auditName(String name, @Nullable String baseCode, boolean nameCustomized) {
+        return baseCode != null && !nameCustomized ? "base:" + baseCode : name;
+    }
+
     /** The state before a role exists (or after it is gone): every field empty. */
     static final RoleSnapshot NONE = new RoleSnapshot(null, null, null);
 
