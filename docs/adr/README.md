@@ -13,3 +13,4 @@ Format: context → decision → consequences. A new decision is a new file `NNN
 | 0007 | Domain events through the Spring Modulith outbox; JobRunr for scheduled work | accepted |
 | 0008 | Platform operator sees aggregates only; support access is granted and logged | accepted |
 | 0009 | Configurable roles as permission sets per cooperative | accepted, implemented (spec 002) |
+| 0010 | Hosting: one EU virtual server with Docker Compose, deployed from GitHub Actions | accepted |

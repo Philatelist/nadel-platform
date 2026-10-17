@@ -54,6 +54,33 @@ charge               = (consumption + share of losses) × kWh tariff
 - A reading submitted by a member is used only after an admin approves it.
 - If a reading is missing, no electricity charge is created for the period and the plot appears in the "missing readings" list when the period is closed.
 
+### 6.1 Plots without a meter
+
+- Not every plot has an electricity meter (not connected, or common land). A plot has zero or one active meter at a time.
+- A plot without an active meter gets no electricity charge, is not in the "missing readings" list, is not shown to the
+  electrician for readings and takes no share of transformer losses.
+- A meter can be installed on a plot later; its installation date and initial reading start the plot's metering.
+
+### 6.2 Meter replacement
+
+- Each meter is its own record: serial number, plot, installed on, removed on, initial reading. Readings belong to a
+  meter, not to a plot, and are never edited in place (corrections follow section 5).
+- Within one meter a reading lower than the previous one is rejected. A lower value is valid only as the initial
+  reading of a new meter.
+- A replacement is entered as one operation: date, final reading of the removed meter, serial number and initial reading
+  of the new meter. Both meters keep their history.
+- Consumption of a period that contains a replacement is the sum over the meters active in the period:
+
+```
+consumption = (final reading of old meter − old meter reading at period start)
+            + (new meter reading at period end − initial reading of new meter)
+```
+
+- Example: old meter 8 140 at period start, removed at 8 205; new meter installed at 3, reads 69 at period end →
+  (8 205 − 8 140) + (69 − 3) = 65 + 66 = 131 kWh.
+- A counter that wraps around (for example 99 999 → 00 012) is entered as a replacement of the meter by itself
+  (same serial, final 99 999, initial 0), so the rule above still applies.
+
 ## 7. Allocation
 
 - A payment is first saved as unallocated.

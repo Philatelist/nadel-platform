@@ -10,7 +10,7 @@
 | Charge type | `ChargeType` | Kind of payment: membership fee, special-purpose fee, electricity, land tax |
 | Tariff | `Tariff` | Calculation rule for a charge type |
 | Tariff version | `TariffVersion` | Rate and calculation basis effective from a given date |
-| Meter | `Meter` | Electricity meter of a plot, or the common transformer meter |
+| Meter | `Meter` | Electricity meter of a plot, or the common transformer meter. A plot has zero or one active meter; a replaced meter keeps its history (money-rules 6.1–6.2) |
 | Meter reading | `MeterReading` | Meter value on a date. Source: admin, member, photo. Status: pending / approved / rejected |
 | Transformer losses | — | Common meter minus the sum of plot meters for the period |
 | Billing period | `BillingPeriod` | A billing month. Open or closed |
