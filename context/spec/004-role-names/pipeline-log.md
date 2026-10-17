@@ -1,7 +1,7 @@
 # Pipeline log — 004 Role names
 
 - Status: running
-- Phase: 2 — branch and specs
+- Phase: 5 — publish
 - Branch: 004-role-names · Base: main @ 23451fb
 - Requirement: docs/features/004-role-names.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
@@ -69,3 +69,11 @@
 - Slice 3 committed 02a9b37 (make check green: backend 257, web 65, shared 5, ui-tokens 56; coverage 0.9392 → floor 0.90→0.93; make e2e 30 passed). Review r1 started.
 - Slice 3 review r1 PASS. All slice reviews PASS — Slice 4 gate open.
 - Slice 4 (testing-expert): RoleNamesAcceptanceTests (2) + e2e role-names.spec.ts (3, Ukrainian UI); no GAP; make check green (backend 259, floor 0.93 met), make e2e 33 passed. Note: a 60-char name with a trailing space is refused by the contract's maxLength on the raw input (pre-existing 002 behaviour; web input caps at 60).
+- Slice 4 committed aa853d6; review r1 PASS. All slice reviews PASS.
+
+## Phase 4 — verify
+
+- UI checked in Ukrainian with the project's Playwright against the local stack; screenshots `docs/screenshots/004-role-names-*.png`; the audit page shows no `base:` text; the Treasurer name was restored afterwards.
+- Acceptance criteria: 15 of 15 verified. Status: Completed.
+- Full suite on aa853d6 (final code): `make check` green (backend 259, ui-tokens 56, shared 5, web 65; JaCoCo floor 0.93 met), `make e2e` 33 passed. Baseline 0 failures → no regressions.
+- Product docs: no `/awos:architecture` or `/awos:product` change needed (extends 002 within the existing architecture).

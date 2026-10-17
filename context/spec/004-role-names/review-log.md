@@ -24,3 +24,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `f40a963..02a9b37` | PASS | — | minor: e2e second context not closed on failure; e2e finally assumes no open dialog; `restoreSeededBaseRoles` does not restore descriptions |
+
+## Slice 4 — Feature Testing & Regression
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `02a9b37..aa853d6` | PASS | — | minor: e2e context not closed if sign-in fails before `try`; cleanup error may hide the original failure; one test title cites §2.2 #2 for a never-renamed Chairman; 61-character case does not assert `$.code` |

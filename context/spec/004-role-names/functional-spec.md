@@ -1,7 +1,7 @@
 # Functional Specification: Role Names
 
 - **Topic:** The chairman can rename every role of the cooperative, the three base roles included, and return a renamed base role to its standard name.
-- **Status:** Draft
+- **Status:** Completed
 - **Author:** Alex Usov
 - **Source:** `docs/features/004-role-names.md` (follow-up to 002 Members and access control)
 
@@ -30,18 +30,18 @@ shows "Бухгалтер" from then on; the audit log records the rename; and n
   name is trimmed of spaces at the ends, must have 1 to 60 characters, and must differ from every other role's name in
   the cooperative regardless of letter case.
   - **Acceptance Criteria:**
-    - [ ] Given the chairman opens the Roles page, when they edit the Treasurer role, then the name field can be changed and saved, and when they save "Бухгалтер", then the role is shown as "Бухгалтер" in Ukrainian and in English.
-    - [ ] When the chairman renames the Member role to "Садівник" while the cooperative already has its own role "садівник", then the save is refused and they see the "a role with this name already exists" message under the name field.
-    - [ ] When the chairman saves the cooperative's role "Електрик" as "Електрик " (with a trailing space), then it is saved as "Електрик" and no change is recorded in the audit log.
-    - [ ] When the chairman saves an empty name or a name longer than 60 characters, then the save is refused and they see the matching message under the name field.
+    - [x] Given the chairman opens the Roles page, when they edit the Treasurer role, then the name field can be changed and saved, and when they save "Бухгалтер", then the role is shown as "Бухгалтер" in Ukrainian and in English. _Evidence: `RolesTests` Treasurer→"Бухгалтер"; e2e `role-names.spec.ts` (uk then en) and `acceptance.spec.ts`; see docs/screenshots/004-role-names-roles-renamed.png._
+    - [x] When the chairman renames the Member role to "Садівник" while the cooperative already has its own role "садівник", then the save is refused and they see the "a role with this name already exists" message under the name field. _Evidence: `RolesTests.renamingTheMemberRoleToAnotherRolesNameIgnoringCaseIsRefused` (409 ROLE_NAME_TAKEN, field `name`)._
+    - [x] When the chairman saves the cooperative's role "Електрик" as "Електрик " (with a trailing space), then it is saved as "Електрик" and no change is recorded in the audit log. _Evidence: `RolesTests.aTrailingSpaceInTheNameOfACustomRoleIsNotARename` (no audit entry)._
+    - [x] When the chairman saves an empty name or a name longer than 60 characters, then the save is refused and they see the matching message under the name field. _Evidence: `RoleNamesAcceptanceTests.aBaseRoleNameIsRefusedWhenEmptyBlankOrLongerThanSixty…`; e2e uk empty-name message. Note: 60 characters plus a trailing space is refused by the contract length limit on the raw input (pre-existing 002 behaviour; the field caps input at 60)._
 
 ### 2.2 Base roles keep their rules
 
 - Renaming changes only the name. Base roles still cannot be deleted, the Chairman role always has every permission,
   and what each role allows stays exactly as before.
   - **Acceptance Criteria:**
-    - [ ] Given all three base roles have been renamed, when each demo user signs in, then each sees exactly the same screens and actions as before the renames.
-    - [ ] When the chairman edits the renamed Chairman role, then the name can be saved but the permissions remain all ticked and cannot be changed, and no Delete button is offered for any base role.
+    - [x] Given all three base roles have been renamed, when each demo user signs in, then each sees exactly the same screens and actions as before the renames. _Evidence: `MembersAccessAcceptanceTests.renamingEveryBaseRoleDoesNotChangeWhoCanDoWhat` (checks before, after rename, after restore)._
+    - [x] When the chairman edits the renamed Chairman role, then the name can be saved but the permissions remain all ticked and cannot be changed, and no Delete button is offered for any base role. _Evidence: `RolesTests.theChairmanRoleCanBeRenamedButKeepsEveryPermission`, `baseRolesCannotBeDeleted`; e2e (8 checkboxes ticked and disabled, no Delete on base roles)._
 
 ### 2.3 Standard names and restoring them
 
@@ -50,9 +50,9 @@ shows "Бухгалтер" from then on; the audit log records the rename; and n
 - Under the name field of a base role, a hint shows "Base role: <standard name>". When the role has been renamed, a
   "Restore standard name" button appears; pressing it returns the role to its standard name.
   - **Acceptance Criteria:**
-    - [ ] Given the Treasurer role was never renamed, when a person views it in Ukrainian, then it is called "Казначей", and when they switch to English, then it is called "Treasurer".
-    - [ ] Given the Treasurer role was renamed to "Бухгалтер", when the chairman presses "Restore standard name", then the role is shown as "Казначей" in Ukrainian and "Treasurer" in English, and the button disappears.
-    - [ ] When the chairman edits a base role that was never renamed, then the hint under the name shows its standard name and no restore button is shown.
+    - [x] Given the Treasurer role was never renamed, when a person views it in Ukrainian, then it is called "Казначей", and when they switch to English, then it is called "Treasurer". _Evidence: e2e `role-names.spec.ts` (uk "Казначей", en "Treasurer"); `roleName.test.ts`; see docs/screenshots/004-role-names-roles-standard.png._
+    - [x] Given the Treasurer role was renamed to "Бухгалтер", when the chairman presses "Restore standard name", then the role is shown as "Казначей" in Ukrainian and "Treasurer" in English, and the button disappears. _Evidence: e2e `role-names.spec.ts` and `acceptance.spec.ts` restore flow; `RolesTests` restore; see docs/screenshots/004-role-names-editor-restore.png._
+    - [x] When the chairman edits a base role that was never renamed, then the hint under the name shows its standard name and no restore button is shown. _Evidence: e2e hint "Базова роль: Казначей"/"Base role: Treasurer" and no restore button; see docs/screenshots/004-role-names-editor-hint.png._
 
 ### 2.4 Warning about names shown on screen
 
@@ -60,13 +60,13 @@ shows "Бухгалтер" from then on; the audit log records the rename; and n
   another role is currently shown under in the person's language (for example renaming a custom role to "Казначей"
   while the Treasurer role still has its standard name).
   - **Acceptance Criteria:**
-    - [ ] Given the Treasurer role has its standard name, when the chairman, using Ukrainian, types "Казначей" as the new name of another role, then a warning under the name field says another role is already shown under this name, before they save.
+    - [x] Given the Treasurer role has its standard name, when the chairman, using Ukrainian, types "Казначей" as the new name of another role, then a warning under the name field says another role is already shown under this name, before they save. _Evidence: e2e `role-names.spec.ts` (warning for "Казначей", absent for "Скарбник"); `roleNameClash.test.ts`; see docs/screenshots/004-role-names-clash-warning.png._
 
 ### 2.5 Who may rename
 
 - Only people allowed to manage roles (the chairman by default) can rename roles or restore standard names.
   - **Acceptance Criteria:**
-    - [ ] When the treasurer, who may not manage roles, tries to rename a role, then the change is refused with the "You don't have access" message and the name stays the same.
+    - [x] When the treasurer, who may not manage roles, tries to rename a role, then the change is refused with the "You don't have access" message and the name stays the same. _Evidence: `RolesTests.aTreasurerWithoutRolesManageCannotRenameARole` (403, name unchanged); e2e: no Roles menu and no-access page for the treasurer._
 
 ### 2.6 New names everywhere and in the audit log
 
@@ -75,15 +75,15 @@ shows "Бухгалтер" from then on; the audit log records the rename; and n
 - Every rename and every restore is recorded in the audit log with the old and the new name as the person reading the
   log would see them.
   - **Acceptance Criteria:**
-    - [ ] Given the Treasurer role was renamed to "Бухгалтер", when the chairman opens the members list, the treasurer's member page, the treasurer's account page and the header after the treasurer signs in, then each shows "Бухгалтер".
-    - [ ] When the chairman, reading the audit log in Ukrainian, opens the entry for renaming the Treasurer role to "Бухгалтер", then it shows the name changing from "Казначей" to "Бухгалтер"; in English it shows "Treasurer" to "Бухгалтер".
-    - [ ] When the chairman restores the standard name, then the audit log shows a new entry with the name changing from "Бухгалтер" back to the standard name.
+    - [x] Given the Treasurer role was renamed to "Бухгалтер", when the chairman opens the members list, the treasurer's member page, the treasurer's account page and the header after the treasurer signs in, then each shows "Бухгалтер". _Evidence: e2e `role-names.spec.ts` (members list, member page, treasurer header and account); `RoleNamesAcceptanceTests` (`/me`, member card, list)._
+    - [x] When the chairman, reading the audit log in Ukrainian, opens the entry for renaming the Treasurer role to "Бухгалтер", then it shows the name changing from "Казначей" to "Бухгалтер"; in English it shows "Treasurer" to "Бухгалтер". _Evidence: e2e uk "Казначей → Бухгалтер", en "Treasurer → Бухгалтер", no `base:` text; see docs/screenshots/004-role-names-audit.png._
+    - [x] When the chairman restores the standard name, then the audit log shows a new entry with the name changing from "Бухгалтер" back to the standard name. _Evidence: e2e restore entry "Бухгалтер → Казначей"; `RolesTests` restore audit; see docs/screenshots/004-role-names-audit.png._
 
 ### 2.7 New standard Ukrainian name
 
 - The standard Ukrainian name of the Treasurer role is "Казначей" (English stays "Treasurer").
   - **Acceptance Criteria:**
-    - [ ] When any person using Ukrainian sees the Treasurer role that was never renamed, then it is called "Казначей".
+    - [x] When any person using Ukrainian sees the Treasurer role that was never renamed, then it is called "Казначей". _Evidence: e2e `role-names.spec.ts`; `roleName.test.ts`; see docs/screenshots/004-role-names-roles-standard.png._
 
 ---
 
