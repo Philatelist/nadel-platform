@@ -44,4 +44,7 @@ None yet. Features 004 (ownership) and 005 (import) will add a lookup API in the
 Base roles are `CHAIRMAN`, `TREASURER`, `MEMBER` (seeded per cooperative by the SQL function `seed_base_roles`); custom
 roles have no base code. Electrician is no longer a base role.
 
+- `MemberActorNames` implements `audit`'s `ActorNames` SPI: current display names of the acting members shown in the
+  audit log (`GET /audit`).
+
 Depends on `identity`, `problem` and `audit`.

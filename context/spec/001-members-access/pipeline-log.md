@@ -131,3 +131,5 @@ new tables; module cycle identity↔members; Playwright CI job is new infrastruc
 - Phase 3: Slice 4 started.
 - Slice 3 review round 1: MAJOR_ISSUES (M1 phone error row mapping in MemberForm.tsx). No overlap with Slice 4 uncommitted files, so the fix goes to react-frontend now (MemberForm.tsx only) and is committed alone as `001: Slice 3 — review fixes (round 1)`.
 - Note for final report: reviewer points out pipeline commit subjects (`{N}: Slice …`) do not follow the Conventional Commits rule in CLAUDE.md; history is not rewritten by the pipeline — owner decides (e.g. squash with a Conventional Commits subject).
+- Slice 3 review round 2: PASS (M1 resolved). Slices 1–3 all PASS; no review outstanding.
+- Slice 4 Verify (orchestrator): 29 tests green, no generated-client drift, client checks green.

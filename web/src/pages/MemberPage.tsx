@@ -40,6 +40,7 @@ export function MemberPage() {
 function MemberView({ member }: { member: Member }) {
   const t = useT();
   const canEdit = useCan('MEMBERS_EDIT');
+  const canAudit = useCan('AUDIT_VIEW');
   const queryClient = useQueryClient();
   const location = useLocation();
   const [editing, setEditing] = useState(false);
@@ -117,6 +118,14 @@ function MemberView({ member }: { member: Member }) {
                 {member.archived ? c.restore : c.archive}
               </button>
             </div>
+          )}
+          {canAudit && (
+            <Link
+              to={`/audit?entityType=MEMBER&entityId=${member.id}`}
+              className="text-sm text-muted underline hover:text-ink"
+            >
+              {t.members.history}
+            </Link>
           )}
           <MemberDetails member={member} />
         </>

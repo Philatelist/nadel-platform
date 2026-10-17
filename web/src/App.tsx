@@ -35,6 +35,15 @@ const router = createBrowserRouter([
         ],
       },
       {
+        element: <RequirePermission permission="AUDIT_VIEW" />,
+        children: [
+          {
+            path: 'audit',
+            lazy: () => import('./pages/AuditPage').then((m) => ({ Component: m.AuditPage })),
+          },
+        ],
+      },
+      {
         path: 'members/:id',
         lazy: () => import('./pages/MemberPage').then((m) => ({ Component: m.MemberPage })),
       },

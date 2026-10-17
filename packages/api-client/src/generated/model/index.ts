@@ -10,11 +10,17 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './auditAction';
+export * from './auditEntityType';
+export * from './auditEntry';
+export * from './auditFieldChange';
+export * from './auditPage';
 export * from './badRequestResponse';
 export * from './baseRole';
 export * from './conflictResponse';
 export * from './deliveryChannel';
 export * from './forbiddenResponse';
+export * from './listAuditEntriesParams';
 export * from './listMembersParams';
 export * from './me';
 export * from './member';

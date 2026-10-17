@@ -15,6 +15,7 @@ public final class ProblemCodes {
 
     /** Codes of single fields in {@code errors[]}. */
     public static final String REQUIRED = "REQUIRED";
+    public static final String INVALID = "INVALID";
     public static final String PHONE_INVALID = "PHONE_INVALID";
     public static final String CHANNEL_CONTACT_MISSING = "CHANNEL_CONTACT_MISSING";
 
