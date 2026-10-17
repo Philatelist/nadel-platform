@@ -49,6 +49,17 @@ class RolesTests extends IntegrationTest {
     @Autowired
     JsonMapper json;
 
+    private record BaseRoleSeed(String code, String name, String description, List<String> permissions) {
+    }
+
+    /** What {@code seed_base_roles} (V2) writes for the demo cooperative. */
+    private static final List<BaseRoleSeed> SEEDED_BASE_ROLES = List.of(
+            new BaseRoleSeed("CHAIRMAN", "Chairman", "Full access", List.of("MEMBERS_VIEW", "MEMBERS_EDIT",
+                    "ROLES_MANAGE", "AUDIT_VIEW", "PLOTS_VIEW", "PLOTS_EDIT", "OWNERSHIP_EDIT", "IMPORT_RUN")),
+            new BaseRoleSeed("TREASURER", "Treasurer", "Read access to members, plots and audit",
+                    List.of("MEMBERS_VIEW", "PLOTS_VIEW", "AUDIT_VIEW")),
+            new BaseRoleSeed("MEMBER", "Member", "Own data only", List.of()));
+
     private final List<UUID> createdRoles = new ArrayList<>();
 
     @AfterEach
@@ -56,15 +67,6 @@ class RolesTests extends IntegrationTest {
         // first sign-in links the demo members; some tests change base roles
         inTenant(DEMO_TENANT, sql -> sql.update("update member set keycloak_subject = null "
                 + "where email in ('chairman@demo.local', 'treasurer@demo.local', 'member@demo.local')"));
-        inTenant(DEMO_TENANT, sql -> {
-            sql.update("delete from role_permission where role_id = (select id from role where base_code = 'TREASURER')");
-            sql.update("insert into role_permission (tenant_id, role_id, permission) "
-                    + "select tenant_id, id, p from role, unnest(array['MEMBERS_VIEW','PLOTS_VIEW','AUDIT_VIEW']) p "
-                    + "where base_code = 'TREASURER'");
-            sql.update("update role set description = 'Read access to members, plots and audit' "
-                    + "where base_code = 'TREASURER'");
-            return sql.update("delete from role_permission where role_id = (select id from role where base_code = 'MEMBER')");
-        });
         for (UUID role : createdRoles) {
             inTenant(DEMO_TENANT, sql -> {
                 sql.update("delete from member_role where role_id = ?", role);
@@ -72,6 +74,38 @@ class RolesTests extends IntegrationTest {
                 return sql.update("delete from role where id = ?", role);
             });
         }
+        restoreBaseRoles(); // last: its check must not leave custom roles behind
+    }
+
+    /**
+     * Puts the three base roles of the demo cooperative back to what {@code seed_base_roles} writes (name,
+     * description, permissions) - the database is shared by every test class - and checks that it worked.
+     */
+    private void restoreBaseRoles() {
+        inTenant(DEMO_TENANT, sql -> {
+            for (BaseRoleSeed seed : SEEDED_BASE_ROLES) {
+                sql.update("update role set name = ?, description = ? where base_code = ?",
+                        seed.name(), seed.description(), seed.code());
+                sql.update("delete from role_permission where role_id = (select id from role where base_code = ?)",
+                        seed.code());
+                for (String permission : seed.permissions()) {
+                    sql.update("insert into role_permission (tenant_id, role_id, permission) "
+                            + "select tenant_id, id, ? from role where base_code = ?", permission, seed.code());
+                }
+            }
+            return null;
+        });
+        List<BaseRoleSeed> actual = inTenant(DEMO_TENANT, sql -> sql.query(
+                "select r.base_code, r.name, r.description, "
+                        + "coalesce(array_to_string(array(select permission from role_permission "
+                        + "where role_id = r.id order by permission), ','), '') as permissions "
+                        + "from role r where r.base_code is not null order by r.base_code",
+                (rs, i) -> new BaseRoleSeed(rs.getString("base_code"), rs.getString("name"),
+                        rs.getString("description"), rs.getString("permissions").isEmpty() ? List.of()
+                                : List.of(rs.getString("permissions").split(",")))));
+        assertThat(actual).as("base roles restored to the seeded state").containsExactlyInAnyOrderElementsOf(
+                SEEDED_BASE_ROLES.stream().map(s -> new BaseRoleSeed(s.code(), s.name(), s.description(),
+                        s.permissions().stream().sorted().toList())).toList());
     }
 
     // ---- permission: allowed, denied, 401 -----------------------------------------------------------------------

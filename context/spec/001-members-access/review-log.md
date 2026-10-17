@@ -30,3 +30,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `81e5be8..eb74fb7` | PASS | — | minor: `deliveryChannel` change values shown as raw codes (TELEGRAM/PAPER) instead of localized labels; empty URL params (`?entityId=`) sent as '' and break the filtered/empty-state logic; page past the end shows the empty message; `Intl.DateTimeFormat` built per row; append-only fixtures accumulate in the test DB |
+
+## Slice 5 — Roles — permissions list, base and custom roles, assigning roles to members
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `eb74fb7..f03fd4c` | MAJOR_ISSUES | M1 `RolesTests` leaves the shared demo Member role description changed (no restore in `@AfterEach`) | minor: custom role named like a localized base role ("Скарбник") is not refused, so two same-looking names appear; Chairman description not editable from the UI (Save disabled) though the backend allows it; role deleted concurrently with assignment → 500 instead of 404 (unmapped FK race); `RoleInput.name` maxLength checked before trim |

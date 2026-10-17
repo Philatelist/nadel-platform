@@ -1,7 +1,7 @@
 # Pipeline log — 002 Members and access control
 
 - Status: running
-- Phase: 3 — implement, Slice 5
+- Phase: 3 — implement, Slice 6
 - Branch: 001-members-access · Base: main @ 39380d2
 - Requirement: document `docs/features/002-members-access.md`
 - Autonomy: minimal (default; no argument, no `.claude/feature-pipeline.yml`)
@@ -136,3 +136,12 @@ new tables; module cycle identity↔members; Playwright CI job is new infrastruc
 - Slice 4 committed: eb74fb7 — review round 1 running. Phase 3: Slice 5 started.
 - Slice 4 review round 1: PASS (5 minor notes). Slices 1–4 all PASS.
 - Slice 5 Verify (orchestrator): 57 tests green, no generated-client drift, client checks green.
+- Slice 5 committed: f03fd4c — review round 1 running. Phase 3: Slice 6 started.
+- Slice 6 infra: Makefile e2e/e2e-install + CI e2e job done (1 fix: actions/cache v4 → v6 after checking the latest release). Supply-chain check pending on the Playwright deps (orchestrator runs it); task not yet ticked.
+- Slice 5 review round 1: MAJOR_ISSUES (M1 test leaves shared DB state changed). Fix sent to spring-backend (RolesTests only; no overlap with Slice 6 uncommitted files).
+- Slice 6 docs task ticked (15 docs files; CLAUDE.md untouched). Proposed CLAUDE.md edits for the owner (from the docs and infra agents):
+  1. Security and data: base roles `CHAIRMAN`, `TREASURER`, `MEMBER` (Chairman always has every permission) plus the global `PLATFORM_OPERATOR`, the only Keycloak realm role (drop `ELECTRICIAN`).
+  2. Commands: `make e2e-install` (once: install Playwright chromium) and `make e2e` (infra + backend jar + web, runs web/e2e; not part of make check; needs JDK 25 on PATH).
+  3. Keycloak test users: permissions come from the linked demo member's DB roles (chairman → Chairman, treasurer → Treasurer, member → Member, electrician → Member + demo custom role "Electrician" without permissions); after a realm change run `docker compose -f infra/docker-compose.yml down -v`.
+  4. Definition of Done item 6: add "`make e2e` is green when the feature changes a user flow covered by web/e2e (CI `e2e` job)".
+- Slice 5 M1 fix ready (RolesTests restores and asserts all base-role fields). Builder notes `SeedBaseRolesTests` (Slice 1) restores its changes at the end of the test body, not in @AfterEach — left as is (outside the reported issue).
