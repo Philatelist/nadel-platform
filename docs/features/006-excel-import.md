@@ -1,11 +1,11 @@
-# 005. Excel import of plots, members and ownership
+# 006. Excel import of plots, members and ownership
 
-Roadmap phase 1, feature 4 of 4. Input for `/feature-pipeline`. Requires 002, 003 and 004.
+Roadmap phase 1, feature 4 of 4. Input for `/feature-pipeline`. Requires 002, 004 and 005.
 
 ## 1. Goal
 
 Load a whole cooperative in one go: hundreds of plots and members with ownership, from one Excel file, safely and
-repeatably. Reuses the validation of features 002–004; adds no new domain rules.
+repeatably. Reuses the validation of features 002–005; adds no new domain rules.
 
 ## Context for the pipeline
 
@@ -13,7 +13,7 @@ Read together with `CLAUDE.md`, `context/product/product-definition.md`, `contex
 `docs/domain/glossary.md`, `docs/domain/money-rules.md` and ADRs 0002, 0003, 0004, 0007, 0008, 0009.
 
 Feature sequence in roadmap phase 1 (each one builds on the previous and leaves `main` working):
-`002 Members and access control` → `003 Plots registry` → `004 Ownership` → `005 Excel import`.
+`002 Members and access control` → `003 UI design system` → `004 Plots registry` → `005 Ownership` → `006 Excel import`.
 The map is not part of phase 1 (roadmap phase 6): plots are records without polygons.
 
 General rules for every feature in this sequence:
@@ -38,29 +38,7 @@ example row per sheet.
 
 | Sheet | Columns |
 |---|---|
-| `Plots` | number, street, kind (`PLOT`/`## Context for the pipeline
-
-Read together with `CLAUDE.md`, `context/product/product-definition.md`, `context/product/architecture.md`,
-`docs/domain/glossary.md`, `docs/domain/money-rules.md` and ADRs 0002, 0003, 0004, 0007, 0008, 0009.
-
-Feature sequence in roadmap phase 1 (each one builds on the previous and leaves `main` working):
-`002 Members and access control` → `003 Plots registry` → `004 Ownership` → `005 Excel import`.
-The map is not part of phase 1 (roadmap phase 6): plots are records without polygons.
-
-General rules for every feature in this sequence:
-- All new tables are tenant-scoped: `tenant_id uuid not null`, RLS with a `tenant_isolation` policy, index on
-  `tenant_id`, and an isolation test. Schema changes only through a new Flyway migration (never edit existing ones).
-- Contract-first: change `api/openapi.yaml`, run `make gen`, implement the generated interfaces.
-- Authorization through permissions (`PERM_*`), never role names (ADR 0009). The server is the authority; the UI only
-  hides actions.
-- Errors use Problem Details (RFC 9457) with a machine-readable `code` and field errors for validation.
-- Web UI: Ukrainian by default, English available; all text through `@nadel/shared` i18n; empty, loading and error
-  states on every screen.
-- Admin changes are audited through domain events and the Modulith outbox (ADR 0007).
-- Tests: unit tests for domain rules, Testcontainers integration tests, isolation test per new table, allowed and denied
-  permission tests per endpoint, `ModularityTests` green, raise `coverage.minimum` to the new measured level.
-- No mobile changes in phase 1.
-- Do not store tax numbers (РНОКПП), passport data or dates of birth.`), area_m2 or area_sotky (exactly one), cadastral_number, notes |
+| `Plots` | number, street, kind (`PLOT`/`COMMON`), area_m2 or area_sotky (exactly one), cadastral_number, notes |
 | `Members` | external_id (any key unique within the file), last_name, first_name, middle_name, phones (comma-separated), email, postal_address, delivery_channel |
 | `Ownership` | plot_number, member_external_id, share (`1/2`), valid_from |
 
