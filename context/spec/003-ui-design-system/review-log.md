@@ -11,3 +11,10 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `f9e5866..0b35db5` | MAJOR_ISSUES | M1 `MapPage.tsx:58` reads removed `--color-bg` | minor: serif headings keep `font-bold` (only 600 loaded); no `--text-*` size variables; mobile deps order; theme test resolves path from cwd |
+| 2 | + `8e8bf1a` | PASS | M1 resolved | minor: theme guard regex lacks digits; round 1 minors still open (font-bold on serif headings, no `--text-*` vars, mobile deps order) |
+
+## Slice 2 — Component kit
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `8e8bf1a..bfba724` | PASS | — | minor: some tests grouped per file; hint sits between input and error; MapPage still uses QueryError (slice 4); PageHeader uses `<header>` (mind e2e `header` locators) |

@@ -1,4 +1,5 @@
 import { useT } from '../i18n';
+import { Button } from './ui';
 
 /** Modal confirmation on a native `<dialog>`; mount it only while it should be open. */
 export function ConfirmDialog({
@@ -27,28 +28,19 @@ export function ConfirmDialog({
         onCancel();
       }}
       aria-labelledby="confirm-title"
-      className="m-auto w-full max-w-sm rounded-xl border border-line bg-surface p-5 text-ink backdrop:bg-black/40"
+      className="m-auto w-full max-w-sm rounded-panel border border-line bg-surface p-5 text-ink backdrop:bg-ink/40"
     >
-      <h2 id="confirm-title" className="font-serif text-lg font-bold">
+      <h2 id="confirm-title" className="font-serif text-xl font-semibold">
         {title}
       </h2>
-      <p className="mt-2 text-sm text-ink-muted">{message}</p>
+      <p className="mt-2 text-[15px] text-ink-muted">{message}</p>
       <div className="mt-4 flex justify-end gap-2">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="rounded-md border border-line px-3 py-1.5 text-sm"
-        >
+        <Button variant="secondary" onClick={onCancel}>
           {t.memberForm.cancel}
-        </button>
-        <button
-          type="button"
-          onClick={onConfirm}
-          disabled={busy}
-          className="rounded-md bg-accent px-3 py-1.5 text-sm font-semibold text-on-accent disabled:opacity-60"
-        >
+        </Button>
+        <Button onClick={onConfirm} disabled={busy}>
           {confirmLabel}
-        </button>
+        </Button>
       </div>
     </dialog>
   );

@@ -15,6 +15,8 @@ export const uk: Messages = {
     roles: 'Ролі',
     audit: 'Журнал змін',
     language: 'Мова',
+    menu: 'Меню',
+    main: 'Головне меню',
   },
   state: {
     loading: 'Завантаження…',
@@ -117,6 +119,8 @@ export const uk: Messages = {
     add: 'Додати члена',
     addTitle: 'Новий член кооперативу',
     history: 'Історія змін',
+    columnStatus: 'Статус',
+    active: 'Активний',
   },
   memberForm: {
     edit: 'Редагувати',

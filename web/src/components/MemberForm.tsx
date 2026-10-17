@@ -13,9 +13,7 @@ import { useRef, useState, type FormEvent } from 'react';
 import { useT } from '../i18n';
 import { useCan } from '../me';
 import { problemFieldErrors, problemMessage, type FieldErrors } from '../problem';
-import { Banner } from './Banner';
-import { Field } from './ui/Field';
-import { SelectInput, TextArea, TextInput } from './inputs';
+import { Button, Notice, Panel, Select, TextArea, TextField } from './ui';
 
 interface PhoneRow {
   id: string;
@@ -28,8 +26,6 @@ const CHANNELS = [
   DeliveryChannel.TELEGRAM,
   DeliveryChannel.VIBER,
 ] as const;
-
-const buttonClass = 'rounded-md border border-line px-3 py-1.5 text-sm';
 
 function optional(value: string): string | undefined {
   const trimmed = value.trim();
@@ -143,18 +139,14 @@ export function MemberForm({
   }
 
   return (
-    <form
-      onSubmit={submit}
-      noValidate
-      className="flex flex-col gap-4 rounded-xl border border-line bg-surface p-5"
-    >
-      {bannerError && <Banner variant="error">{bannerError}</Banner>}
+    <Panel>
+      <form onSubmit={submit} noValidate className="flex flex-col gap-4">
+        {bannerError && <Notice tone="danger">{bannerError}</Notice>}
 
-      <Field label={f.lastName} error={errors.lastName}>
-        {({ invalid, ...control }) => (
-          <TextInput
-            {...control}
-            invalid={invalid}
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <TextField
+            label={f.lastName}
+            error={errors.lastName}
             value={lastName}
             maxLength={100}
             autoComplete="family-name"
@@ -163,13 +155,9 @@ export function MemberForm({
               clearError('lastName');
             }}
           />
-        )}
-      </Field>
-      <Field label={f.firstName} error={errors.firstName}>
-        {({ invalid, ...control }) => (
-          <TextInput
-            {...control}
-            invalid={invalid}
+          <TextField
+            label={f.firstName}
+            error={errors.firstName}
             value={firstName}
             maxLength={100}
             autoComplete="given-name"
@@ -178,13 +166,9 @@ export function MemberForm({
               clearError('firstName');
             }}
           />
-        )}
-      </Field>
-      <Field label={f.middleName} error={errors.middleName}>
-        {({ invalid, ...control }) => (
-          <TextInput
-            {...control}
-            invalid={invalid}
+          <TextField
+            label={f.middleName}
+            error={errors.middleName}
             value={middleName}
             maxLength={100}
             onChange={(e) => {
@@ -192,64 +176,9 @@ export function MemberForm({
               clearError('middleName');
             }}
           />
-        )}
-      </Field>
-
-      <fieldset className="flex flex-col gap-3">
-        <legend className="mb-1 text-sm text-ink-muted">{f.phones}</legend>
-        {phones.map((row, index) => (
-          <div key={row.id} className="flex items-start gap-2">
-            <div className="flex-1">
-              <Field label={format(t.memberForm.phone, { n: index + 1 })} error={errors[`phones[${index}]`]}>
-                {({ invalid, ...control }) => (
-                  <TextInput
-                    {...control}
-                    invalid={invalid}
-                    type="tel"
-                    value={row.value}
-                    maxLength={32}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      setPhones((prev) => prev.map((p) => (p.id === row.id ? { ...p, value } : p)));
-                      clearError(`phones[${index}]`);
-                    }}
-                  />
-                )}
-              </Field>
-            </div>
-            <button
-              type="button"
-              className={`${buttonClass} mt-6`}
-              aria-label={format(t.memberForm.removePhone, { n: index + 1 })}
-              onClick={() => {
-                setPhones((prev) => prev.filter((p) => p.id !== row.id));
-                clearPhoneErrors();
-              }}
-            >
-              ×
-            </button>
-          </div>
-        ))}
-        {errors.phones && (
-          <p role="alert" className="text-sm text-danger">
-            {errors.phones}
-          </p>
-        )}
-        <button
-          type="button"
-          className={`${buttonClass} self-start`}
-          disabled={phones.length >= 10}
-          onClick={() => setPhones((prev) => [...prev, { id: crypto.randomUUID(), value: '' }])}
-        >
-          {t.memberForm.addPhone}
-        </button>
-      </fieldset>
-
-      <Field label={f.email} error={errors.email}>
-        {({ invalid, ...control }) => (
-          <TextInput
-            {...control}
-            invalid={invalid}
+          <TextField
+            label={f.email}
+            error={errors.email}
             type="email"
             value={email}
             maxLength={254}
@@ -259,28 +188,69 @@ export function MemberForm({
               clearError('email');
             }}
           />
-        )}
-      </Field>
-      <Field label={f.postalAddress} error={errors.postalAddress}>
-        {({ invalid, ...control }) => (
-          <TextArea
-            {...control}
-            invalid={invalid}
-            rows={2}
-            value={postalAddress}
-            maxLength={500}
-            onChange={(e) => {
-              setPostalAddress(e.target.value);
-              clearError('postalAddress');
-            }}
-          />
-        )}
-      </Field>
-      <Field label={f.deliveryChannel} error={errors.deliveryChannel}>
-        {({ invalid, ...control }) => (
-          <SelectInput
-            {...control}
-            invalid={invalid}
+
+          <fieldset className="flex flex-col gap-3 md:col-span-2">
+            <legend className="mb-1 text-sm font-medium text-ink-muted">{f.phones}</legend>
+            {phones.map((row, index) => (
+              <div key={row.id} className="flex items-start gap-2">
+                <div className="flex-1">
+                  <TextField
+                    label={format(t.memberForm.phone, { n: index + 1 })}
+                    error={errors[`phones[${index}]`]}
+                    type="tel"
+                    value={row.value}
+                    maxLength={32}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setPhones((prev) => prev.map((p) => (p.id === row.id ? { ...p, value } : p)));
+                      clearError(`phones[${index}]`);
+                    }}
+                  />
+                </div>
+                <Button
+                  variant="secondary"
+                  className="mt-6"
+                  aria-label={format(t.memberForm.removePhone, { n: index + 1 })}
+                  onClick={() => {
+                    setPhones((prev) => prev.filter((p) => p.id !== row.id));
+                    clearPhoneErrors();
+                  }}
+                >
+                  ×
+                </Button>
+              </div>
+            ))}
+            {errors.phones && (
+              <p role="alert" className="text-sm text-danger">
+                {errors.phones}
+              </p>
+            )}
+            <Button
+              variant="secondary"
+              className="self-start"
+              disabled={phones.length >= 10}
+              onClick={() => setPhones((prev) => [...prev, { id: crypto.randomUUID(), value: '' }])}
+            >
+              {t.memberForm.addPhone}
+            </Button>
+          </fieldset>
+
+          <div className="md:col-span-2">
+            <TextArea
+              label={f.postalAddress}
+              error={errors.postalAddress}
+              rows={2}
+              value={postalAddress}
+              maxLength={500}
+              onChange={(e) => {
+                setPostalAddress(e.target.value);
+                clearError('postalAddress');
+              }}
+            />
+          </div>
+          <Select
+            label={f.deliveryChannel}
+            error={errors.deliveryChannel}
             value={deliveryChannel}
             onChange={(e) => {
               setDeliveryChannel(e.target.value as MemberInput['deliveryChannel']);
@@ -292,14 +262,10 @@ export function MemberForm({
                 {t.channel[c]}
               </option>
             ))}
-          </SelectInput>
-        )}
-      </Field>
-      <Field label={f.telegramUsername} error={errors.telegramUsername}>
-        {({ invalid, ...control }) => (
-          <TextInput
-            {...control}
-            invalid={invalid}
+          </Select>
+          <TextField
+            label={f.telegramUsername}
+            error={errors.telegramUsername}
             value={telegramUsername}
             maxLength={64}
             onChange={(e) => {
@@ -307,13 +273,9 @@ export function MemberForm({
               clearError('telegramUsername');
             }}
           />
-        )}
-      </Field>
-      <Field label={f.viberPhone} error={errors.viberPhone}>
-        {({ invalid, ...control }) => (
-          <TextInput
-            {...control}
-            invalid={invalid}
+          <TextField
+            label={f.viberPhone}
+            error={errors.viberPhone}
             type="tel"
             value={viberPhone}
             maxLength={32}
@@ -322,38 +284,32 @@ export function MemberForm({
               clearError('viberPhone');
             }}
           />
-        )}
-      </Field>
-      {canViewNotes && (
-        <Field label={f.notes} error={errors.notes}>
-          {({ invalid, ...control }) => (
-            <TextArea
-              {...control}
-              invalid={invalid}
-              rows={3}
-              value={notes}
-              maxLength={2000}
-              onChange={(e) => {
-                setNotes(e.target.value);
-                clearError('notes');
-              }}
-            />
+          {canViewNotes && (
+            <div className="md:col-span-2">
+              <TextArea
+                label={f.notes}
+                error={errors.notes}
+                rows={3}
+                value={notes}
+                maxLength={2000}
+                onChange={(e) => {
+                  setNotes(e.target.value);
+                  clearError('notes');
+                }}
+              />
+            </div>
           )}
-        </Field>
-      )}
+        </div>
 
-      <div className="flex gap-2">
-        <button
-          type="submit"
-          disabled={isPending}
-          className="rounded-md bg-accent px-4 py-1.5 text-sm font-semibold text-on-accent disabled:opacity-60"
-        >
-          {isPending ? t.memberForm.saving : t.memberForm.save}
-        </button>
-        <button type="button" className={buttonClass} onClick={onCancel}>
-          {t.memberForm.cancel}
-        </button>
-      </div>
-    </form>
+        <div className="flex gap-2">
+          <Button type="submit" disabled={isPending}>
+            {isPending ? t.memberForm.saving : t.memberForm.save}
+          </Button>
+          <Button variant="secondary" onClick={onCancel}>
+            {t.memberForm.cancel}
+          </Button>
+        </div>
+      </form>
+    </Panel>
   );
 }

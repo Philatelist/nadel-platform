@@ -10,12 +10,12 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router';
-import { Banner } from '../components/Banner';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { MemberDetails } from '../components/MemberDetails';
 import { MemberForm } from '../components/MemberForm';
 import { MemberRolesForm } from '../components/MemberRolesForm';
 import { QueryBoundary } from '../components/QueryBoundary';
+import { Badge, Button, buttonClass, Notice, PageHeader } from '../components/ui';
 import { useT } from '../i18n';
 import { useCan } from '../me';
 import { problemMessage } from '../problem';
@@ -29,8 +29,8 @@ export function MemberPage() {
   if (member.error instanceof ApiError && member.error.status === 404) return <NotFoundPage />;
 
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-4 px-4 py-8">
-      <Link to="/members" className="text-sm text-ink-muted hover:text-ink">
+    <div className="mx-auto flex max-w-3xl flex-col gap-4 px-4 py-8 text-[15px]">
+      <Link to="/members" className="text-ink-muted hover:text-ink">
         {t.members.back}
       </Link>
       <QueryBoundary query={member}>{(data) => <MemberView key={data.id} member={data} />}</QueryBoundary>
@@ -73,18 +73,60 @@ function MemberView({ member }: { member: Member }) {
   const fullName = [member.lastName, member.firstName, member.middleName].filter(Boolean).join(' ');
   const c = t.memberForm;
 
+  const actions = !editing && (
+    <>
+      {canAudit && (
+        <Link to={`/audit?entityType=MEMBER&entityId=${member.id}`} className={buttonClass('secondary')}>
+          {t.members.history}
+        </Link>
+      )}
+      {canManageRoles && !editingRoles && (
+        <Button
+          variant="secondary"
+          onClick={() => {
+            setSaved(false);
+            setActionError(undefined);
+            setEditingRoles(true);
+          }}
+        >
+          {t.rolesPage.memberRoles}
+        </Button>
+      )}
+      {canEdit && (
+        <>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              setSaved(false);
+              setActionError(undefined);
+              setEditing(true);
+            }}
+          >
+            {c.edit}
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              setActionError(undefined);
+              setConfirming(true);
+            }}
+          >
+            {member.archived ? c.restore : c.archive}
+          </Button>
+        </>
+      )}
+    </>
+  );
+
   return (
     <>
-      <div className="flex flex-wrap items-center gap-3">
-        <h1 className="font-serif text-2xl font-bold">{fullName}</h1>
-        {member.archived && (
-          <span className="rounded-full border border-line px-2 py-0.5 text-xs text-ink-muted">
-            {t.members.archived}
-          </span>
-        )}
-      </div>
-      {saved && <Banner variant="success">{c.saved}</Banner>}
-      {actionError && <Banner variant="error">{actionError}</Banner>}
+      <PageHeader
+        title={fullName}
+        badge={member.archived && <Badge tone="neutral">{t.members.archived}</Badge>}
+        actions={actions}
+      />
+      {saved && <Notice tone="success">{c.saved}</Notice>}
+      {actionError && <Notice tone="danger">{actionError}</Notice>}
 
       {editing ? (
         <MemberForm
@@ -97,54 +139,6 @@ function MemberView({ member }: { member: Member }) {
         />
       ) : (
         <>
-          {canEdit && (
-            <div className="flex gap-2">
-              <button
-                type="button"
-                className="rounded-md border border-line px-3 py-1.5 text-sm"
-                onClick={() => {
-                  setSaved(false);
-                  setActionError(undefined);
-                  setEditing(true);
-                }}
-              >
-                {c.edit}
-              </button>
-              <button
-                type="button"
-                className="rounded-md border border-line px-3 py-1.5 text-sm"
-                onClick={() => {
-                  setActionError(undefined);
-                  setConfirming(true);
-                }}
-              >
-                {member.archived ? c.restore : c.archive}
-              </button>
-            </div>
-          )}
-          {canManageRoles && !editingRoles && (
-            <div>
-              <button
-                type="button"
-                className="rounded-md border border-line px-3 py-1.5 text-sm"
-                onClick={() => {
-                  setSaved(false);
-                  setActionError(undefined);
-                  setEditingRoles(true);
-                }}
-              >
-                {t.rolesPage.memberRoles}
-              </button>
-            </div>
-          )}
-          {canAudit && (
-            <Link
-              to={`/audit?entityType=MEMBER&entityId=${member.id}`}
-              className="text-sm text-ink-muted underline hover:text-ink"
-            >
-              {t.members.history}
-            </Link>
-          )}
           {editingRoles ? (
             <MemberRolesForm
               member={member}

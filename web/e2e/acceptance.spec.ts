@@ -22,11 +22,18 @@ const ALL_PERMISSIONS = [
   'Run import',
 ];
 
-const nav = (page: Page) => page.locator('header nav');
+const nav = (page: Page) => page.locator('#app-menu nav');
 const navLink = (page: Page, name: string) => nav(page).getByRole('link', { name, exact: true });
+// "My account" is no longer a menu item: the user's name in the page header bar links to /account.
+const accountLink = (page: Page) => page.getByRole('banner').locator('a[href="/account"]');
+/** Rows of the first table in the main area, without the header row. */
+const tableRows = (page: Page) => page.getByRole('main').locator('tbody tr');
 
 async function expectNavigation(page: Page, present: string[], absent: string[]) {
-  for (const name of present) await expect(navLink(page, name)).toBeVisible();
+  for (const name of present) {
+    if (name === 'My account') await expect(accountLink(page)).toBeVisible();
+    else await expect(navLink(page, name)).toBeVisible();
+  }
   for (const name of [...absent, 'Map']) await expect(navLink(page, name)).toHaveCount(0);
 }
 
@@ -53,7 +60,7 @@ test.describe('§2.10 / §2.11 landing page and navigation', () => {
 
     await expect(page).toHaveURL(/\/account$/);
     await expect(page.getByRole('heading', { level: 1, name: 'My account' })).toBeVisible();
-    await expect(page.getByText('Shevchenko Iryna Volodymyrivna')).toBeVisible();
+    await expect(page.getByRole('main').getByText('Shevchenko Iryna Volodymyrivna')).toBeVisible();
     await expect(page.getByRole('listitem').filter({ hasText: /^Treasurer$/ })).toBeVisible();
     for (const permission of ['View members', 'View plots', 'View audit log']) {
       await expect(page.getByText(permission, { exact: true })).toBeVisible();
@@ -82,7 +89,7 @@ test.describe('§2.5 what an ordinary member sees', () => {
     await loginAs(page, 'member@demo.local');
 
     // own card: name, phones, email, postal address, channel; no edit buttons, no notes
-    await expect(page.getByText('Bondarenko Andrii Mykolaiovych')).toBeVisible();
+    await expect(page.getByRole('main').getByText('Bondarenko Andrii Mykolaiovych')).toBeVisible();
     await expect(page.getByText('+380501110003')).toBeVisible();
     await expect(page.getByText('member@demo.local')).toBeVisible();
     await expect(page.getByText('Postal address', { exact: true })).toBeVisible();
@@ -114,7 +121,7 @@ test.describe('§2.7 / §2.8 members list and read-only card', () => {
     await loginAs(page, 'treasurer@demo.local');
     await navLink(page, 'Members').click();
 
-    const rows = page.getByRole('main').getByRole('listitem');
+    const rows = tableRows(page);
     await expect(rows).toHaveCount(20);
     await expect(page.getByText('Page 1 of 2')).toBeVisible();
     const firstRow = rows.first();
@@ -123,7 +130,7 @@ test.describe('§2.7 / §2.8 members list and read-only card', () => {
     await expect(firstRow).toContainText(/Member|Chairman|Treasurer/); // roles
 
     const lastNames = async () =>
-      (await rows.locator('a > span:first-child').allInnerTexts()).map((t) =>
+      (await rows.locator('td:first-child a').allInnerTexts()).map((t) =>
         (t.split(' ')[0] ?? '').toLowerCase(),
       );
     const firstPage = await lastNames();
@@ -168,7 +175,7 @@ test.describe('§2.7 / §2.8 members list and read-only card', () => {
 
     await page.unroute(listCall);
     await page.getByRole('button', { name: 'Try again' }).click();
-    await expect(page.getByRole('main').getByRole('listitem')).toHaveCount(20);
+    await expect(tableRows(page)).toHaveCount(20);
   });
 
   test('§2.8 #1: the treasurer sees every field including notes and no Edit, Archive or role controls', async ({
@@ -238,10 +245,10 @@ test.describe('§2.2 / §2.13 roles screen', () => {
     const page = await context.newPage();
     await loginAs(page, 'chairman@demo.local', { keepLocale: true });
 
-    await expect(page.locator('header nav').getByRole('link', { name: 'Мій кабінет' })).toBeVisible();
-    await expect(page.locator('header nav').getByRole('link', { name: 'Члени кооперативу' })).toBeVisible();
-    await expect(page.locator('header nav').getByRole('link', { name: 'Журнал змін' })).toBeVisible();
-    await page.locator('header nav').getByRole('link', { name: 'Ролі' }).click();
+    await expect(accountLink(page)).toBeVisible();
+    await expect(nav(page).getByRole('link', { name: 'Члени кооперативу' })).toBeVisible();
+    await expect(nav(page).getByRole('link', { name: 'Журнал змін' })).toBeVisible();
+    await nav(page).getByRole('link', { name: 'Ролі' }).click();
     await expect(page.getByRole('heading', { level: 1, name: 'Ролі' })).toBeVisible();
     await page.getByRole('button', { name: 'Додати роль' }).click();
 
@@ -453,7 +460,7 @@ test.describe('chairman journeys that change data', () => {
     await expect(page.getByLabel('Show archived')).toBeChecked();
     await expect(page).toHaveURL(/archived=true/);
     await page.getByRole('searchbox').fill(lastName);
-    const row = page.getByRole('main').getByRole('listitem').filter({ hasText: lastName });
+    const row = tableRows(page).filter({ hasText: lastName });
     await expect(row).toBeVisible();
     await expect(row.getByText('Archived', { exact: true })).toBeVisible();
 
@@ -464,7 +471,7 @@ test.describe('chairman journeys that change data', () => {
     await expect(page.getByRole('button', { name: 'Archive' })).toBeVisible();
     await page.goto('/members');
     await page.getByRole('searchbox').fill(lastName);
-    await expect(page.getByRole('main').getByRole('listitem').filter({ hasText: lastName })).toBeVisible();
+    await expect(tableRows(page).filter({ hasText: lastName })).toBeVisible();
 
     // audit trail from the card: only this member, each step with author, old and new values
     await page.goto(cardUrl);
@@ -566,7 +573,7 @@ test.describe('chairman journeys that change data', () => {
         ),
       ).toBeVisible();
       await expect(archived.getByText('Tkachenko')).toHaveCount(0);
-      await expect(archived.locator('header nav')).toHaveCount(0);
+      await expect(archived.getByRole('navigation')).toHaveCount(0);
       await context.close();
     } finally {
       await page.getByRole('button', { name: 'Restore' }).click();
@@ -592,7 +599,7 @@ test.describe('§2.4 / §2.12 other people', () => {
     await loginAs(page, 'member@other.local');
 
     await expect(page.getByText('Melnyk Olena Stepanivna')).toBeVisible();
-    await expect(page.getByText('Other Cooperative')).toBeVisible();
+    await expect(page.getByRole('main').getByText('Other Cooperative')).toBeVisible();
     await page.goto(`/members/${CHAIRMAN_ID}`);
     await expect(page.getByRole('heading', { level: 1, name: 'Not found' })).toBeVisible();
     await expect(page.getByText('Kovalenko')).toHaveCount(0);
@@ -611,6 +618,6 @@ test.describe('§2.7 #2 filters together', () => {
     await expect(page.getByLabel('Show archived')).toBeChecked();
     await expect(page.getByLabel('Show archived')).toBeChecked();
     await expect(page).toHaveURL(/archived=true/);
-    await expect(page.getByRole('main').getByRole('listitem').filter({ hasText: 'Kovalenko' })).toBeVisible();
+    await expect(tableRows(page).filter({ hasText: 'Kovalenko' })).toBeVisible();
   });
 });

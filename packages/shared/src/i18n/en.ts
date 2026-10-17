@@ -13,6 +13,8 @@ export const en = {
     roles: 'Roles',
     audit: 'Audit log',
     language: 'Language',
+    menu: 'Menu',
+    main: 'Main menu',
   },
   state: { loading: 'Loading…', empty: 'Nothing here yet.', error: 'Could not load data. Please try again.' },
   access: {
@@ -105,6 +107,8 @@ export const en = {
     add: 'Add member',
     addTitle: 'New member',
     history: 'Change history',
+    columnStatus: 'Status',
+    active: 'Active',
   },
   memberForm: {
     edit: 'Edit',

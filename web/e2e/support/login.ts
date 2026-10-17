@@ -5,11 +5,11 @@ const PASSWORD = process.env.E2E_PASSWORD ?? 'nadel';
 export interface LoginOptions {
   /** Leave the stored/browser language alone (the default is to force English). */
   keepLocale?: boolean;
-  /** Do not wait for the navigation (for people who belong to no cooperative or are not linked). */
+  /** Do not wait for the signed-in header (for people who belong to no cooperative or are not linked). */
   skipNavigationWait?: boolean;
 }
 
-/** Signs in through the Keycloak form and waits until the app navigation is visible. */
+/** Signs in through the Keycloak form and waits until the signed-in header (Sign out) is visible. */
 export async function loginAs(page: Page, email: string, options: LoginOptions = {}): Promise<void> {
   if (!options.keepLocale) {
     // English UI regardless of the stored choice; set before the app loads.
@@ -33,5 +33,6 @@ export async function loginAs(page: Page, email: string, options: LoginOptions =
   await page.locator('#kc-login').click();
 
   await page.waitForURL('http://localhost:5173/**');
-  if (!options.skipNavigationWait) await expect(page.getByRole('navigation')).toBeVisible();
+  if (!options.skipNavigationWait)
+    await expect(page.getByRole('banner').getByRole('button', { name: /^(Sign out|Вийти)$/ })).toBeVisible();
 }

@@ -13,8 +13,8 @@ import { useT } from '../i18n';
 import { useMe } from '../me';
 import { problemMessage } from '../problem';
 import { useRoleName } from '../roleName';
-import { Banner } from './Banner';
 import { QueryBoundary } from './QueryBoundary';
+import { Button, Notice, Panel } from './ui';
 
 /** Role checkbox list for one member. Initial selection is read once, so mount it with a `key`. */
 export function MemberRolesForm({
@@ -60,14 +60,14 @@ export function MemberRolesForm({
     });
 
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-5">
-      {error && <Banner variant="error">{error}</Banner>}
+    <Panel>
+      {error && <Notice tone="danger">{error}</Notice>}
       <QueryBoundary query={roles}>
         {(data) => (
           <fieldset className="flex flex-col gap-2">
-            <legend className="mb-1 text-sm text-ink-muted">{t.member.fields.roles}</legend>
+            <legend className="mb-1 text-sm font-medium text-ink-muted">{t.member.fields.roles}</legend>
             {data.map((role) => (
-              <label key={role.id} className="flex items-center gap-2 text-sm">
+              <label key={role.id} className="flex items-center gap-2 text-[15px]">
                 <input type="checkbox" checked={selected.has(role.id)} onChange={() => toggle(role.id)} />
                 {roleName(role)}
               </label>
@@ -76,25 +76,19 @@ export function MemberRolesForm({
         )}
       </QueryBoundary>
       <div className="flex justify-end gap-2">
-        <button
-          type="button"
-          className="rounded-md border border-line px-3 py-1.5 text-sm"
-          onClick={onCancel}
-        >
+        <Button variant="secondary" onClick={onCancel}>
           {c.cancel}
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
           disabled={save.isPending || !roles.data}
           onClick={() => {
             setError(undefined);
             save.mutate({ id: member.id, data: { roleIds: [...selected] } });
           }}
-          className="rounded-md bg-accent px-3 py-1.5 text-sm font-semibold text-on-accent disabled:opacity-60"
         >
           {save.isPending ? c.saving : c.save}
-        </button>
+        </Button>
       </div>
-    </div>
+    </Panel>
   );
 }
