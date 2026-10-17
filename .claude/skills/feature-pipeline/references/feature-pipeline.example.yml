@@ -24,5 +24,9 @@ baseBranch: auto
 # pr+checks = also wait for the PR's CI checks and fix the branch until they are green. Never merges.
 # publish: none
 
+# After green PR checks: start the app from the PR branch in the safe local run mode and leave it
+# running for the owner to try (URLs, demo users and stop commands are in the final report).
+# reviewRun: off
+
 # Send a notification when the run finishes or stops, if the session has a notification tool.
 notify: true

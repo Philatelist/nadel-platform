@@ -3,4 +3,6 @@ autonomy: minimal
 baseBranch: auto
 # Push the spec branch, open a PR and fix the branch until CI is green. The owner reviews and merges.
 publish: pr+checks
+# After green checks, start the app from the PR branch (make up) and leave it running for review.
+reviewRun: on
 notify: true

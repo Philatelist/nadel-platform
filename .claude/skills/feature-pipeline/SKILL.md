@@ -1,6 +1,6 @@
 ---
 name: feature-pipeline
-description: Autonomous AWOS pipeline from a feature requirement to a verified feature, in any project. Takes the requirement as plain text, a document, or a Jira key; analyses it (parallel git-history and code-search agents); asks the user at most ONE up-front batch of questions (only blocking ones by default); then runs awos spec → tech → tasks → implement (with the background Slice Review Loop) → verify and the full test suite without stopping. How much it asks is set by an autonomy level (interactive | minimal, the default | none) in `.claude/feature-pipeline.yml` or after the skill name. Ends with everything committed on a spec branch cut from the base branch; with the `publish` setting it also pushes that branch, opens a pull request and fixes the branch until the PR's CI checks are green. It never merges and never pushes the base branch. Use when the user runs /feature-pipeline or asks to run the whole awos process end to end. `/feature-pipeline resume` continues a stopped run.
+description: Autonomous AWOS pipeline from a feature requirement to a verified feature, in any project. Takes the requirement as plain text, a document, or a Jira key; analyses it (parallel git-history and code-search agents); asks the user at most ONE up-front batch of questions (only blocking ones by default); then runs awos spec → tech → tasks → implement (with the background Slice Review Loop) → verify and the full test suite without stopping. How much it asks is set by an autonomy level (interactive | minimal, the default | none) in `.claude/feature-pipeline.yml` or after the skill name. Ends with everything committed on a spec branch cut from the base branch; with the `publish` setting it also pushes that branch, opens a pull request and fixes the branch until the PR's CI checks are green, and with `reviewRun` it starts the app from the PR branch so the owner can try the feature before merging. It never merges and never pushes the base branch. Use when the user runs /feature-pipeline or asks to run the whole awos process end to end. `/feature-pipeline resume` continues a stopped run.
 argument-hint: '[--autonomy interactive|minimal|none] <requirement text | path to a requirement document | Jira key | resume [spec folder]>'
 ---
 
@@ -27,6 +27,7 @@ The log starts with a status block, which you update at every phase change and s
 - Requirement: <source: text | document path | Jira key>
 - Autonomy: <level> (<source: argument | .claude/feature-pipeline.yml | default>)
 - Publish: none | pr | pr+checks · PR: <url or —> · Checks: <pending | green | red: jobs | —>
+- Review run: off | running at <URLs> (PIDs in <file>) | not started: <reason>
 ```
 
 Then log, in order:
@@ -70,6 +71,8 @@ How much the pipeline asks you is set once, before Phase 0 ends, and logged in t
 | `pr+checks` | as `pr`, then wait for the PR's CI checks and fix the branch until they are green (Phase 5) |
 
 It comes from `--publish <value>` after the skill name, else `publish:` in `.claude/feature-pipeline.yml`, else `none`.
+
+**Review run** is another separate setting, `reviewRun: off | on` (default `off`; `--review-run on|off` after the skill name). With `on`, the pipeline ends by starting the application from the spec branch in the safe local run mode and leaves it running for the owner (Phase 6). It runs only after the PR checks are green, or after Phase 4 when `publish` is `none`.
 
 A key set in the settings file overrides the level's value for that one point, e.g. `minimal` with `stops.notGreen: park`. `gitUnsafe` can never be `auto`: a git problem is never guessed.
 
@@ -279,7 +282,7 @@ Run `Skill("awos:implement", "<spec folder> — pipeline mode")` and follow that
    - parked items and `[?]` criteria, if any, with what is left to do;
    - suggested `/awos:hire`, `/awos:architecture` and other follow-up commands.
 6. **Notify** (if `notify` is on and the session has a notification tool): one short message that the run finished, with the branch and the counts (criteria verified, parked items, automatic decisions).
-7. **Stop or publish.** With `publish: none`, stop here: never push, never open a PR. Otherwise continue with Phase 5. In every mode: never merge, never approve a PR, never enable auto-merge, and never change the Jira ticket. Those stay with the user.
+7. **Stop or publish.** With `publish: none`, never push and never open a PR: go to Phase 6 if `reviewRun` is `on` and the full suite is green, otherwise stop here. Otherwise continue with Phase 5. In every mode: never merge, never approve a PR, never enable auto-merge, and never change the Jira ticket. Those stay with the user.
 
 ## Phase 5: Publish and green the PR (only when `publish` is `pr` or `pr+checks`)
 
@@ -319,7 +322,29 @@ Runs only after Phase 4 finished with the full suite green (or with parked items
    - **Never make a check pass by weakening it:** do not edit CI workflow files, skip, disable or delete tests, add retries to tests, lower coverage thresholds, add advisories to ignore lists, or relax lint or security rules. If the real fix needs one of those, or needs a change in a protected file (`CLAUDE.md`, `.claude/`, `.github/`, `.mcp.json`), stop and report it as a proposed change for the owner.
 7. **All checks green:** log `checks: green` with the run id.
 8. **Final report addendum** (appended to the Phase 4 report and `pipeline-log.md`): PR URL and title, the checks and their result, every CI fix with its cause, any re-runs, and what is left for the owner (review, merge, protected-file edits). Set the status to `finished` and notify if `notify` is on.
-9. **Stop.** The owner reviews and merges.
+9. **Stop,** or continue with Phase 6 when `reviewRun` is `on` and the checks are green (or `publish` is `pr` and Phase 4 was green). With red checks, timed-out checks or parked items, skip Phase 6 and say why in the report.
+
+## Phase 6: Review run (only when `reviewRun` is `on`)
+
+The goal: when the owner reads the final report, the feature is already running locally and they can open it in the browser.
+
+1. **Preconditions,** each failing one ends Phase 6 with `Review run: not started: <reason>` in the log and the report (never a stop point):
+   - the project facts contain a documented **safe local run mode** (Phase 0); without one, don't improvise;
+   - the working tree is clean and the spec branch is checked out (the owner reviews the PR's code, not the base branch);
+   - the ports the run needs are free. If a port is taken, do not kill processes you did not start; report which port and stop Phase 6.
+2. **Prepare local data** only as the project docs describe. If the docs say that a change to seed data, identity realm or similar requires resetting local infrastructure (for example `docker compose ... down -v`) and this branch changed those files, do that reset, because it only touches the local development environment. Never touch a non-local environment, never edit the project's real configuration files.
+3. **Start the app** with the project's documented command for the whole local stack (for example `make up`), **detached** so it survives the end of the pipeline's turn:
+   - run it in its own session so it is not killed with the pipeline's shell (`setsid nohup <command> &` on Linux, `nohup <command> &` with `disown` on macOS), output to a log file under the scratchpad or `target/`/`build/` output folder, never into the repository's tracked files;
+   - write every started process id and the stop commands to a small file next to the log (for example `review-run.pids`);
+   - wait for readiness by polling the documented health or page URLs, up to 10 minutes. If it doesn't become ready, collect the last lines of the logs, stop what you started, and report `not started: <reason>`.
+4. **Smoke check:** open the main page once (with the browser tool if available, otherwise an HTTP request) and confirm it answers. No further testing here; Phase 4 already did it.
+5. **Hand-off** in the final report and the log, as the last section, written for the owner:
+   - the URLs to open (web, API, identity provider console if any);
+   - the demo users and passwords from the project docs, and what each one should show for **this feature** (taken from the functional spec's scenarios), as a short "try this" checklist;
+   - where the logs are;
+   - the exact commands to stop everything (the documented stop command, plus `kill <pids>` from the pids file);
+   - a reminder that the app runs the PR branch, not the base branch.
+6. **Leave it running and stop the pipeline.** This is the only case where the pipeline leaves processes running after it ends; the pids file and the stop commands make them easy to remove. A later `/feature-pipeline` run or `resume` first stops a previous review run listed in a pids file, if those processes still exist, before starting anything.
 
 ## Attempts
 
@@ -375,7 +400,8 @@ Use this when the answer comes in a later session, after context compaction, or 
 4. **Re-launch outstanding reviews:** any slice whose last review round has no verdict in `review-log.md` is re-launched in a fresh worktree. Remove stale review worktrees first.
 5. **Apply a pending answer:** if the status is `stopped` and the user has now answered, apply the answer as in "Stop and escalate".
 6. **Phase 5:** if the run stopped in Phase 5, read the PR number from the log, check `gh pr view <number> --json state,headRefName`; if the PR was merged or closed, report and finish; otherwise continue from the logged step (push pending commits, then wait for checks).
-7. **Continue** from the logged phase and step. Don't repeat Phase 1, and don't ask the question batch again.
+7. **Phase 6:** if a review run was started, check whether its processes are alive; report its state, don't restart it unless the run stopped inside Phase 6.
+8. **Continue** from the logged phase and step. Don't repeat Phase 1, and don't ask the question batch again.
 
 ## Rules
 
