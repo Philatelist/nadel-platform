@@ -1,11 +1,11 @@
 # Pipeline log — 003 UI design system
 
 - Status: running
-- Phase: 5 — publish
+- Phase: 6 — review run
 - Branch: 003-ui-design-system · Base: main @ e85f746
 - Requirement: docs/features/003-ui-design-system.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
-- Publish: pr+checks · PR: — · Checks: —
+- Publish: pr+checks · PR: https://github.com/Philatelist/nadel-platform/pull/18 · Checks: green (run 39073218619)
 - Review run: on (pending)
 
 ## Project facts
@@ -89,3 +89,17 @@
 - Acceptance criteria: 17 of 22 verified `[x]`; 5 `[?]`: mobile fonts on a device (2), visual match to the reference pictures (owner judgement), keyboard walk-through beyond the Members screen, PR description rule (done in Phase 5). Spec status: Implemented — pending manual check.
 - Full suite `make check` on bb08049: green (backend 239/0 failures, ui-tokens 56, shared 5, web 45). Baseline had 0 failures → no regressions. `make e2e` on bb08049: 29 passed.
 - Product docs: suggest `/awos:architecture` to record vitest unit tests for the TS packages and self-hosted IBM Plex fonts (not run).
+
+## Phase 5 — publish
+
+- AUTO: the working tree carries the user's own uncommitted edits under `docs/` (present before the run, never staged); the push contains only the branch's commits, so this is not treated as a git blocker (rule: Phase 5 safety check is about unpublished pipeline work).
+- Pushed `003-ui-design-system`; PR https://github.com/Philatelist/nadel-platform/pull/18 — "feat(web): UI design system — tokens, IBM Plex fonts, component kit and app shell".
+- Checks on 98b05cd: Backend, Clients, End-to-end, SAST, Security — all green (run 39073218619). No CI fixes, no re-runs.
+
+## Final report
+
+- Commits: f9e5866 specs · 0b35db5 S1 · 8e8bf1a S1 fix · bfba724 S2 · 4657f49 S3 · 792b4f7 S4 · 05a3791 S5 · bb08049 S5 fix · 98b05cd verification · (this log commit).
+- Acceptance criteria: 17/22 verified; 5 `[?]` (visual match, mobile on device ×2, keyboard beyond Members, PR rule — the last is now satisfied by the PR description).
+- Reviews: S1 2 rounds (M1 stale CSS var) PASS; S2 1 round PASS; S3 1 round PASS; S4 1 round PASS; S5 2 rounds (M1 control radius) PASS.
+- Full suite vs baseline: baseline 0 failures; branch 0 failures (backend 239, ui-tokens 56, shared 5, web 45; e2e 29).
+- Follow-ups for the owner: CLAUDE.md rule and `make test` wording (in the PR), mobile device check, optional `/awos:architecture`.
