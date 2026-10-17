@@ -1,49 +1,56 @@
-@import "tailwindcss";
-@import "maplibre-gl/dist/maplibre-gl.css";
+@import 'tailwindcss';
+@import 'maplibre-gl/dist/maplibre-gl.css';
 
 /* Tokens match packages/ui-tokens. Dark theme follows the system setting. */
 @theme {
-  --color-bg: #F2F5F1;
-  --color-surface: #FFFFFF;
-  --color-ink: #16211B;
-  --color-muted: #5A6A60;
-  --color-line: #D3DCD5;
-  --color-accent: #2347B5;
-  --color-accent-soft: #E2E8FA;
-  --color-on-accent: #FFFFFF;
-  --color-status-red: #CF4339;
-  --color-status-yellow: #D49B12;
-  --color-status-green: #2E8B57;
-  --color-status-grey: #B9C3BD;
+  --color-bg: #f2f5f1;
+  --color-surface: #ffffff;
+  --color-ink: #16211b;
+  --color-muted: #5a6a60;
+  --color-line: #d3dcd5;
+  --color-accent: #2347b5;
+  --color-accent-soft: #e2e8fa;
+  --color-on-accent: #ffffff;
+  --color-status-red: #cf4339;
+  --color-status-yellow: #d49b12;
+  --color-status-green: #2e8b57;
+  --color-status-grey: #b9c3bd;
 
-  --font-display: "Unbounded", "Golos Text", system-ui, sans-serif;
-  --font-sans: "Golos Text", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  --font-display: 'Unbounded', 'Golos Text', system-ui, sans-serif;
+  --font-sans: 'Golos Text', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --color-bg: #0F1512;
-    --color-surface: #161F1A;
-    --color-ink: #E5ECE7;
-    --color-muted: #93A39A;
-    --color-line: #2B3731;
-    --color-accent: #86A0FF;
-    --color-accent-soft: #1C2645;
-    --color-on-accent: #0F1512;
-    --color-status-red: #EE6B60;
-    --color-status-yellow: #E6B83C;
-    --color-status-green: #4DBA7C;
-    --color-status-grey: #46524C;
+    --color-bg: #0f1512;
+    --color-surface: #161f1a;
+    --color-ink: #e5ece7;
+    --color-muted: #93a39a;
+    --color-line: #2b3731;
+    --color-accent: #86a0ff;
+    --color-accent-soft: #1c2645;
+    --color-on-accent: #0f1512;
+    --color-status-red: #ee6b60;
+    --color-status-yellow: #e6b83c;
+    --color-status-green: #4dba7c;
+    --color-status-grey: #46524c;
     color-scheme: dark;
   }
 }
 
-html, body, #root { height: 100%; }
+html,
+body,
+#root {
+  height: 100%;
+}
 body {
   background: var(--color-bg);
   color: var(--color-ink);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
-:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}

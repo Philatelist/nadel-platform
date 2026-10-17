@@ -2,3 +2,11 @@ packages:
   - web
   - mobile
   - packages/*
+
+# Advisories accepted after review. Each entry: why it is safe, and when to revisit.
+auditConfig:
+  ignoreGhsas:
+    # node-forge via @expo/cli: used only by the local Expo dev server for HTTPS certs, never shipped in the app. No patched version yet.
+    - GHSA-86w9-cpqp-85rv
+    # braces via metro-file-map (Expo bundler): build-time only, input is our own source tree. No patched version yet.
+    - GHSA-vfj7-8cjw-p6xm

@@ -1,0 +1,13 @@
+# Secret scanning rules: defaults plus allowlisted local-only dev values.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Local development credentials used only by infra/docker-compose.yml and tests"
+paths = [
+  '''infra/keycloak/nadel-realm\.json''',
+  '''infra/postgres/init/.*\.sql''',
+  '''backend/src/test/resources/.*''',
+  '''\.env\.example''',
+  '''web/\.env\.example''',
+]

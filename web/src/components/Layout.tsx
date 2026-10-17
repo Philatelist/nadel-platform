@@ -13,8 +13,12 @@ export function Layout() {
       <header className="flex flex-wrap items-center gap-3 border-b border-line bg-surface px-4 py-3">
         <span className="font-display text-lg font-bold">{t.app.name}</span>
         <nav className="flex gap-1">
-          <NavLink to="/map" className={link}>{t.nav.map}</NavLink>
-          <NavLink to="/cabinet" className={link}>{t.nav.cabinet}</NavLink>
+          <NavLink to="/map" className={link}>
+            {t.nav.map}
+          </NavLink>
+          <NavLink to="/cabinet" className={link}>
+            {t.nav.cabinet}
+          </NavLink>
         </nav>
         <button
           type="button"

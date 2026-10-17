@@ -1,0 +1,14 @@
+# Vulnerabilities accepted after review (same list as auditConfig in pnpm-workspace.yaml).
+# Revisit on every Expo SDK upgrade and remove entries once a patched version is in the lockfile.
+
+[[IgnoredVulns]]
+id = "GHSA-86w9-cpqp-85rv"
+reason = "node-forge via @expo/cli: local Expo dev server only, not shipped in the app; no patched version yet"
+
+[[IgnoredVulns]]
+id = "GHSA-vfj7-8cjw-p6xm"
+reason = "braces via metro-file-map: build-time only, input is our own source tree; no patched version yet"
+
+[[IgnoredVulns]]
+id = "GHSA-w5hq-g745-h8pq"
+reason = "uuid via @expo/config-plugins (xcode project tooling): build-time only, buffer argument never used"

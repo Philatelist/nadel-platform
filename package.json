@@ -9,6 +9,11 @@
     "gen:api": "pnpm --filter @nadel/api-client gen",
     "typecheck": "pnpm -r typecheck",
     "lint": "pnpm -r lint",
-    "build": "pnpm -r build"
+    "build": "pnpm -r build",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "prettier": "3.9.9"
   }
 }

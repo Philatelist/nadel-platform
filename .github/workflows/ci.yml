@@ -9,9 +9,12 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   backend:
-    name: Backend (build, tests, modules)
+    name: Backend (build, tests, modules, coverage)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -23,17 +26,20 @@ jobs:
           distribution: temurin
           java-version: '25'
           cache: maven
-      - name: Build and test (Testcontainers + PostGIS)
+      - name: Build and test (Testcontainers + PostGIS), coverage floor
         run: ./mvnw --batch-mode --no-transfer-progress verify
-      - name: Test reports
-        if: failure()
+      - name: Test and coverage reports
+        if: always()
         uses: actions/upload-artifact@v5
         with:
-          name: backend-test-reports
-          path: backend/target/surefire-reports
+          name: backend-reports
+          path: |
+            backend/target/surefire-reports
+            backend/target/site/jacoco
+          if-no-files-found: ignore
 
   clients:
-    name: Clients (contract, typecheck, lint, build)
+    name: Clients (contract, format, typecheck, lint, build)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -47,6 +53,35 @@ jobs:
         run: |
           pnpm gen:api
           git diff --exit-code packages/api-client/src/generated
+      - run: pnpm format:check
       - run: pnpm -r typecheck
       - run: pnpm -r lint
       - run: pnpm --filter web build
+
+  security:
+    name: Security (secrets, dependency vulnerabilities)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read # gitleaks-action lists the PR's commits to scan only those
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Secret scan (gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22' # no pnpm cache here: this job never installs packages
+      - name: npm advisories (high and critical)
+        run: pnpm audit --prod --audit-level high
+      - name: Install OSV-Scanner
+        run: |
+          curl -sSfL -o /usr/local/bin/osv-scanner \
+            https://github.com/google/osv-scanner/releases/latest/download/osv-scanner_linux_amd64
+          chmod +x /usr/local/bin/osv-scanner
+      - name: Known vulnerabilities in Maven and pnpm dependencies (OSV)
+        run: osv-scanner scan source --recursive .

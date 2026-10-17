@@ -23,21 +23,20 @@ the feature spec in `docs/features/`, and the ADRs in `docs/adr/` if you are cha
 
 ## Commands
 
+Use the root `Makefile` (`make help` lists everything):
+
 ```bash
-# infrastructure (Postgres + PostGIS, Keycloak)
-docker compose -f infra/docker-compose.yml up -d
-
-# backend
-cd backend && ./mvnw spring-boot:run     # http://localhost:8080
-cd backend && ./mvnw verify              # tests, including Testcontainers and module verification
-
-# clients (from the repo root)
-pnpm install
-pnpm gen:api                             # regenerate packages/api-client from openapi.yaml
-pnpm --filter web dev                    # http://localhost:5173
-pnpm --filter mobile start               # Expo
-pnpm -r typecheck && pnpm -r lint
+make install        # pnpm install
+make infra          # Postgres + PostGIS and Keycloak (docker compose), waits until healthy
+make up             # infra + backend (:8080) + web (:5173) in one terminal
+make backend        # backend only: ./mvnw spring-boot:run
+make web            # web only
+make gen            # regenerate packages/api-client from api/openapi.yaml
+make test           # backend ./mvnw verify (Testcontainers, coverage floor) + client typecheck
+make check          # everything CI runs: contract, format, lint, tests
 ```
+
+Before finishing any task, run `make check` and fix what it reports.
 
 Keycloak test users (realm `nadel`, password `nadel` for all):
 `chairman@demo.local`, `treasurer@demo.local`, `electrician@demo.local`, `member@demo.local` belong to the Demo cooperative;
@@ -49,7 +48,7 @@ Keycloak test users (realm `nadel`, password `nadel` for all):
 2. Change `api/openapi.yaml` first, then run `pnpm gen:api`. The server implements the generated interfaces.
 3. The DB schema changes only through a new Flyway migration `backend/src/main/resources/db/migration/V{N}__name.sql`. Existing migrations are never edited.
 4. Every new table with cooperative data has `tenant_id uuid not null`, RLS enabled, a `tenant_isolation` policy and an index on `tenant_id`. An isolation test is mandatory.
-5. Backend: unit tests for domain logic plus an integration test on Testcontainers. `./mvnw verify` is green, including `ModularityTests`.
+5. Backend: unit tests for domain logic plus an integration test on Testcontainers. `./mvnw verify` is green, including `ModularityTests` and the JaCoCo coverage floor (`coverage.minimum` in `pom.xml`; raise it as coverage grows, never lower it).
 6. Clients: `pnpm -r typecheck` and `pnpm -r lint` are green. UI text goes only through i18n catalogs (`packages/shared/src/i18n`); Ukrainian is the default UI language.
 7. Demo data is updated if the feature displays something.
 
@@ -81,6 +80,10 @@ Keycloak test users (realm `nadel`, password `nadel` for all):
 - Admin actions that change data are written to the audit log.
 - Personal data is never logged (names, phone numbers, emails, addresses).
 - Secrets come only from environment variables. The repository contains only dev values for the local docker-compose.
+
+**Supply chain**
+- CI runs gitleaks, `pnpm audit` and OSV-Scanner. An accepted advisory goes into both `pnpm-workspace.yaml` (`auditConfig.ignoreGhsas`) and `osv-scanner.toml`, with a reason.
+- Pin exact dependency versions (no `^` or `~`), except `peerDependencies`.
 
 **General**
 - Do not add a dependency without a reason. A new backend library gets a short note in the PR; an architectural one gets an ADR.

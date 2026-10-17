@@ -27,11 +27,12 @@ Payment accounting platform for dacha (garden) cooperatives.
 Requirements: Docker, JDK 25, Node 22+, pnpm 10.
 
 ```bash
-docker compose -f infra/docker-compose.yml up -d   # Postgres + PostGIS, Keycloak
-cd backend && ./mvnw spring-boot:run                # API on :8080
-pnpm install && pnpm gen:api
-pnpm --filter web dev                               # web on :5173
+cp .env.example .env    # optional: defaults already match local docker-compose
+make install            # client dependencies
+make up                 # Postgres + PostGIS, Keycloak, API on :8080, web on :5173
 ```
+
+`make help` lists all targets; `make check` runs everything CI runs.
 
 Sign in as `treasurer@demo.local` / `nadel`. Other test users are listed in [CLAUDE.md](CLAUDE.md).
 
