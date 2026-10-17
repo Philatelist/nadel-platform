@@ -98,14 +98,24 @@ class AuditOutboxTests extends IntegrationTest {
         });
     }
 
+    /**
+     * A redelivery arrives after the first delivery has finished. The second publication waits for the first to
+     * complete: the registry tracks in-progress publications by event and listener, so two publications of an equal
+     * event that complete at the same moment can resolve to the same publication and leave the other one incomplete.
+     */
     @Test
     void sameEventIdDeliveredTwiceCreatesOneEntry() {
         AuditEvent event = event();
 
         publish(event);
-        publish(event);
+        await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
+            assertThat(entryCount(event.eventId())).isEqualTo(1);
+            assertThat(publications(event.eventId())).isZero();
+        });
 
+        publish(event);
         await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> assertThat(publications(event.eventId())).isZero());
+
         assertThat(entryCount(event.eventId())).isEqualTo(1);
     }
 
