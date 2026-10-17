@@ -1,41 +1,9 @@
-import { useGetMember, type Member, type Permission, type RoleRef } from '@nadel/api-client';
+import { useGetMember, type Permission } from '@nadel/api-client';
 import { useLocale, useT } from '../i18n';
 import { QueryBoundary } from '../components/QueryBoundary';
+import { MemberDetails } from '../components/MemberDetails';
 import { useMe } from '../me';
-
-function useRoleName(): (role: RoleRef) => string {
-  const t = useT();
-  return (role) => (role.baseCode ? t.roles[role.baseCode] : role.name);
-}
-
-function MemberCard({ member }: { member: Member }) {
-  const t = useT();
-  const f = t.member.fields;
-  const roleName = useRoleName();
-  const fullName = [member.lastName, member.firstName, member.middleName].filter(Boolean).join(' ');
-  const rows: [string, string][] = [
-    [f.name, fullName],
-    [f.phones, member.phones.join(', ') || f.none],
-    [f.email, member.email ?? f.none],
-    [f.postalAddress, member.postalAddress ?? f.none],
-    [f.deliveryChannel, t.channel[member.deliveryChannel]],
-  ];
-  if (member.telegramUsername) rows.push([f.telegramUsername, member.telegramUsername]);
-  if (member.viberPhone) rows.push([f.viberPhone, member.viberPhone]);
-  if (member.notes) rows.push([f.notes, member.notes]);
-  rows.push([f.roles, member.roles.map(roleName).join(', ') || f.none]);
-
-  return (
-    <dl className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-3 rounded-xl border border-line bg-surface p-5">
-      {rows.map(([label, value]) => (
-        <div key={label} className="contents">
-          <dt className="text-muted">{label}</dt>
-          <dd className="break-words whitespace-pre-line">{value}</dd>
-        </div>
-      ))}
-    </dl>
-  );
-}
+import { useRoleName } from '../roleName';
 
 export function AccountPage() {
   const t = useT();
@@ -52,7 +20,7 @@ export function AccountPage() {
 
       <section className="flex flex-col gap-3">
         <h2 className="font-semibold">{t.account.details}</h2>
-        <QueryBoundary query={member}>{(data) => <MemberCard member={data} />}</QueryBoundary>
+        <QueryBoundary query={member}>{(data) => <MemberDetails member={data} />}</QueryBoundary>
       </section>
 
       <section className="flex flex-col gap-3">

@@ -27,7 +27,9 @@ import type {
 import type {
   BadRequestResponse,
   ForbiddenResponse,
+  ListMembersParams,
   Member,
+  MemberPage,
   NotFoundResponse,
   UnauthorizedResponse
 } from '../model';
@@ -53,6 +55,117 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getListMembersUrl = (params?: ListMembersParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/v1/members?${stringifiedParams}` : `/api/v1/members`
+}
+
+/**
+ * Returns a page of members of the current cooperative. Requires the `MEMBERS_VIEW` permission.
+ * `q` is a case-insensitive substring match against the last, first and middle name and the email, or,
+ * when it contains digits, against the digits of the phone numbers. Archived members are excluded unless
+ * `includeArchived` is true. The result is sorted by last name, then first name.
+ * @summary List members
+ */
+export const listMembers = async (params?: ListMembersParams, options?: Parameters<typeof nadelFetch>[1]): Promise<MemberPage> => {
+
+  return nadelFetch<MemberPage>(getListMembersUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListMembersQueryKey = (params?: ListMembersParams,) => {
+    return [
+    `/api/v1/members`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListMembersQueryOptions = <TData = Awaited<ReturnType<typeof listMembers>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>(params?: ListMembersParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listMembers>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListMembersQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listMembers>>> = ({ signal }) => listMembers(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listMembers>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListMembersQueryResult = NonNullable<Awaited<ReturnType<typeof listMembers>>>
+export type ListMembersQueryError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse
+
+
+export function useListMembers<TData = Awaited<ReturnType<typeof listMembers>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>(
+ params: undefined |  ListMembersParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listMembers>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listMembers>>,
+          TError,
+          Awaited<ReturnType<typeof listMembers>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListMembers<TData = Awaited<ReturnType<typeof listMembers>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>(
+ params?: ListMembersParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listMembers>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listMembers>>,
+          TError,
+          Awaited<ReturnType<typeof listMembers>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListMembers<TData = Awaited<ReturnType<typeof listMembers>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>(
+ params?: ListMembersParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listMembers>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List members
+ */
+
+export function useListMembers<TData = Awaited<ReturnType<typeof listMembers>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>(
+ params?: ListMembersParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listMembers>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListMembersQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
 
 export const getGetMemberUrl = (id: string,) => {
 

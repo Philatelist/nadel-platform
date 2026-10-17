@@ -1,7 +1,7 @@
 # Pipeline log — 002 Members and access control
 
 - Status: running
-- Phase: 3 — implement, before Slice 1
+- Phase: 3 — implement, Slice 2
 - Branch: 001-members-access · Base: main @ 39380d2
 - Requirement: document `docs/features/002-members-access.md`
 - Autonomy: minimal (default; no argument, no `.claude/feature-pipeline.yml`)
@@ -116,3 +116,7 @@ new tables; module cycle identity↔members; Playwright CI job is new infrastruc
 - Resumed: status running. Baseline re-run in a fresh detached worktree with JDK 25.
 - Baseline (JDK 25): 0 failing, 7 tests, BUILD SUCCESS. review-log.md updated; baseline worktree removed.
 - Slice 1: contract, infra and web tasks ticked (web: one fix round for a hard-coded aria-label; client checks re-run by the orchestrator, EXIT 0). DB task waits for its Java tests in the backend task.
+- Slice 1 committed: f76322d — Verify: 60 backend tests green (orchestrator run), client typecheck/lint/format/build green, no generated-client drift — review round 1 running (worktree review-001-s1-r1).
+- Phase 3: Slice 2 started.
+- Slice 1 review round 1: MAJOR_ISSUES (M1 401-vs-500 on lookup failure). Fix deferred until Slice 2 is committed (Slice 2 backend agent active in backend/; avoid concurrent Maven builds and mixed changes), then sent to spring-backend as `001: Slice 1 — review fixes (round 1)`.
+- Slice 2 Verify (orchestrator): 41 tests green, no generated-client drift, client checks green.

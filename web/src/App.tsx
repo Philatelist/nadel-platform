@@ -1,5 +1,6 @@
 import { createBrowserRouter, Navigate, RouterProvider } from 'react-router';
 import { useAuth } from 'react-oidc-context';
+import { RequirePermission } from './components/RequirePermission';
 import { Layout } from './components/Layout';
 import { SignIn } from './components/SignIn';
 import { MeProvider } from './me';
@@ -14,6 +15,19 @@ const router = createBrowserRouter([
       {
         path: 'account',
         lazy: () => import('./pages/AccountPage').then((m) => ({ Component: m.AccountPage })),
+      },
+      {
+        element: <RequirePermission permission="MEMBERS_VIEW" />,
+        children: [
+          {
+            path: 'members',
+            lazy: () => import('./pages/MembersPage').then((m) => ({ Component: m.MembersPage })),
+          },
+        ],
+      },
+      {
+        path: 'members/:id',
+        lazy: () => import('./pages/MemberPage').then((m) => ({ Component: m.MemberPage })),
       },
       { path: '*', element: <NotFoundPage /> },
     ],

@@ -1,12 +1,15 @@
 package app.nadel.members.internal;
 
+import app.nadel.identity.RoleRef;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeSet;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
 
 /** Reads the roles of a member with their permission names in one query. Call inside a transaction. */
@@ -34,5 +37,20 @@ class RoleGrantReader {
         heads.forEach((id, head) -> grants.add(new RoleGrant(id, head.roleName(), head.baseCode(), permissions.get(id))));
         grants.sort(Comparator.comparing(RoleGrant::name, String.CASE_INSENSITIVE_ORDER));
         return grants;
+    }
+
+    /**
+     * The roles of several members of one cooperative in a single query, each list ordered by role name. Members
+     * without roles are absent from the map.
+     */
+    Map<UUID, List<RoleRef>> readRefs(UUID tenantId, Collection<UUID> memberIds) {
+        if (memberIds.isEmpty()) {
+            return Map.of();
+        }
+        return members.findRolesOfMembers(tenantId, memberIds).stream()
+                .sorted(Comparator.comparing(MemberRoleRow::roleName, String.CASE_INSENSITIVE_ORDER))
+                .collect(Collectors.groupingBy(MemberRoleRow::memberId, LinkedHashMap::new,
+                        Collectors.mapping(r -> new RoleRef(r.roleId(), r.roleName(), r.baseCode()),
+                                Collectors.toList())));
     }
 }

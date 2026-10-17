@@ -4,6 +4,9 @@ import app.nadel.problem.ApiProblemException;
 import app.nadel.problem.FieldProblem;
 import app.nadel.problem.ProblemCodes;
 import app.nadel.problem.ProblemWriter;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.ConstraintViolationException;
+import jakarta.validation.Path;
 import java.util.List;
 import nadel.contract.model.Problem;
 import org.jspecify.annotations.Nullable;
@@ -44,6 +47,20 @@ class ProblemExceptionHandler extends ResponseEntityExceptionHandler {
     ResponseEntity<Object> handleAccessDenied(AccessDeniedException ex) {
         return problem(HttpStatus.FORBIDDEN, ProblemCodes.PERMISSION_DENIED,
                 "You do not have permission to perform this action.", List.of(), null);
+    }
+
+    /**
+     * Constraints on controller parameters (generated {@code @Min}, {@code @Max}, {@code @Size}) are enforced by method
+     * validation on the {@code @Validated} API interfaces, which throws this exception instead of Spring MVC's own.
+     */
+    @ExceptionHandler(ConstraintViolationException.class)
+    ResponseEntity<Object> handleConstraintViolation(ConstraintViolationException ex) {
+        List<FieldProblem> errors = ex.getConstraintViolations().stream()
+                .map(v -> new FieldProblem(parameterName(v), "INVALID"))
+                .distinct()
+                .toList();
+        return problem(HttpStatus.BAD_REQUEST, ProblemCodes.VALIDATION_FAILED, "The request is not valid.", errors,
+                null);
     }
 
     @ExceptionHandler(Exception.class)
@@ -105,6 +122,17 @@ class ProblemExceptionHandler extends ResponseEntityExceptionHandler {
             default -> "INVALID";
         };
         return new FieldProblem(error.getField(), code);
+    }
+
+    /** The last element of the property path, for example {@code size} of {@code listMembers.size}. */
+    private static String parameterName(ConstraintViolation<?> violation) {
+        String name = "request";
+        for (Path.Node node : violation.getPropertyPath()) {
+            if (node.getName() != null) {
+                name = node.getName();
+            }
+        }
+        return name;
     }
 
     private static String codeFor(HttpStatusCode status) {

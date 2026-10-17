@@ -103,12 +103,12 @@ class MeEndpointTests extends IntegrationTest {
         String treasurer = demo("treasurer@demo.local");
         String member = demo("member@demo.local");
 
-        getAs(treasurer, "/api/v1/_probe/members-view").andExpect(status().isOk());
+        getAs(treasurer, "/api/v1/members").andExpect(status().isOk());
         getAs(treasurer, "/api/v1/_probe/members-edit")
                 .andExpect(status().isForbidden())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
-        getAs(member, "/api/v1/_probe/members-view")
+        getAs(member, "/api/v1/members")
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
         getAs(demo("chairman@demo.local"), "/api/v1/_probe/members-edit").andExpect(status().isOk());
@@ -119,11 +119,11 @@ class MeEndpointTests extends IntegrationTest {
         UUID member = newMember(DEMO_TENANT, "promoted@demo.local");
         giveBaseRole(DEMO_TENANT, member, "MEMBER");
         String bearer = TestTokens.bearer(DEMO_TENANT, UUID.randomUUID().toString(), "promoted@demo.local");
-        getAs(bearer, "/api/v1/_probe/members-view").andExpect(status().isForbidden());
+        getAs(bearer, "/api/v1/members").andExpect(status().isForbidden());
 
         giveBaseRole(DEMO_TENANT, member, "TREASURER");
 
-        getAs(bearer, "/api/v1/_probe/members-view").andExpect(status().isOk());
+        getAs(bearer, "/api/v1/members").andExpect(status().isOk());
     }
 
     @Test
@@ -192,7 +192,7 @@ class MeEndpointTests extends IntegrationTest {
                 "/api/v1/members/" + MEMBER)
                 .andExpect(status().isNotFound());
         getAs(TestTokens.token().email("operator@nadel.local").realmRoles("PLATFORM_OPERATOR").bearer(),
-                "/api/v1/_probe/members-view")
+                "/api/v1/members")
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
     }

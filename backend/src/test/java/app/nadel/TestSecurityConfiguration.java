@@ -19,17 +19,13 @@ public class TestSecurityConfiguration {
     }
 
     /**
-     * Endpoints guarded exactly like real ones (ADR 0009), to test the authority mapping and the 403 answer.
+     * An endpoint guarded exactly like a real one (ADR 0009), to test the authority mapping and the 403 answer for a
+     * permission that has no real endpoint yet (MEMBERS_EDIT; remove this probe when the first write endpoint of
+     * members exists). Real guarded endpoints are tested through their own API, for example {@code GET /members}.
      * Picked up by component scanning of the test classpath.
      */
     @RestController
     public static class PermissionProbe {
-
-        @GetMapping("/api/v1/_probe/members-view")
-        @PreAuthorize("hasAuthority('PERM_MEMBERS_VIEW')")
-        public String membersView() {
-            return "ok";
-        }
 
         @GetMapping("/api/v1/_probe/members-edit")
         @PreAuthorize("hasAuthority('PERM_MEMBERS_EDIT')")

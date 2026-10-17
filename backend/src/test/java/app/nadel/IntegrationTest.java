@@ -66,12 +66,27 @@ public abstract class IntegrationTest {
 
     /** Creates an active, unlinked member with the given e-mail; removed after the test. */
     protected UUID newMember(UUID tenant, String email) {
+        return newMember(tenant, "Test", "Member", null, email);
+    }
+
+    /**
+     * Creates an active, unlinked member with the given name parts, e-mail and phones (all optional except the
+     * names); removed after the test. Delivery channel is PAPER.
+     */
+    protected UUID newMember(UUID tenant, String lastName, String firstName, String middleName, String email,
+            String... phones) {
         UUID id = UUID.randomUUID();
         inTenant(tenant, sql -> sql.update(
-                "insert into member (id, tenant_id, last_name, first_name, email) values (?, ?, 'Test', 'Member', ?)",
-                id, tenant, email));
+                "insert into member (id, tenant_id, last_name, first_name, middle_name, email, phones) "
+                        + "values (?, ?, ?, ?, ?, ?, string_to_array(?, ','))",
+                id, tenant, lastName, firstName, middleName, email, String.join(",", phones)));
         createdMembers.add(new Fixture(tenant, id));
         return id;
+    }
+
+    /** Archives a member (sets archived_at). */
+    protected void archiveMember(UUID tenant, UUID member) {
+        inTenant(tenant, sql -> sql.update("update member set archived_at = now() where id = ?", member));
     }
 
     /** Gives a member one of the three base roles of its cooperative. */

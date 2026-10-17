@@ -1,8 +1,11 @@
 package app.nadel.members.internal;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -33,4 +36,46 @@ interface MemberRepository extends JpaRepository<Member, UUID> {
             + "left join RolePermission rp on rp.roleId = r.id "
             + "where mr.tenantId = :tenantId and mr.memberId = :memberId")
     List<RoleGrantRow> findRoleGrants(@Param("tenantId") UUID tenantId, @Param("memberId") UUID memberId);
+
+    /**
+     * One page of the member list. {@code textPattern} is a LIKE pattern over lower-cased text ({@code %token%}, with
+     * {@code !} as the escape character); {@code phonePattern} is a LIKE pattern over digits and only used when
+     * {@code phoneSearch} is true. Order is fixed here, so the {@code Pageable} must be unsorted.
+     */
+    @Query(value = """
+            select m.* from member m
+            where m.tenant_id = :tenantId
+              and (:includeArchived = true or m.archived_at is null)
+              and (lower(m.last_name) like :textPattern escape '!'
+                   or lower(m.first_name) like :textPattern escape '!'
+                   or lower(m.middle_name) like :textPattern escape '!'
+                   or lower(m.email) like :textPattern escape '!'
+                   or (:phoneSearch = true and exists (
+                         select 1 from unnest(m.phones) as phone(value)
+                         where regexp_replace(phone.value, '[^0-9]', '', 'g') like :phonePattern escape '!')))
+            order by lower(m.last_name), lower(m.first_name), m.id
+            """,
+            countQuery = """
+            select count(*) from member m
+            where m.tenant_id = :tenantId
+              and (:includeArchived = true or m.archived_at is null)
+              and (lower(m.last_name) like :textPattern escape '!'
+                   or lower(m.first_name) like :textPattern escape '!'
+                   or lower(m.middle_name) like :textPattern escape '!'
+                   or lower(m.email) like :textPattern escape '!'
+                   or (:phoneSearch = true and exists (
+                         select 1 from unnest(m.phones) as phone(value)
+                         where regexp_replace(phone.value, '[^0-9]', '', 'g') like :phonePattern escape '!')))
+            """,
+            nativeQuery = true)
+    Page<Member> search(@Param("tenantId") UUID tenantId, @Param("includeArchived") boolean includeArchived,
+            @Param("textPattern") String textPattern, @Param("phoneSearch") boolean phoneSearch,
+            @Param("phonePattern") String phonePattern, Pageable pageable);
+
+    /** Roles of several members in one query (no permissions), for the list. */
+    @Query("select new app.nadel.members.internal.MemberRoleRow(mr.memberId, r.id, r.name, r.baseCode) "
+            + "from MemberRole mr join Role r on r.id = mr.roleId "
+            + "where mr.tenantId = :tenantId and mr.memberId in :memberIds")
+    List<MemberRoleRow> findRolesOfMembers(@Param("tenantId") UUID tenantId,
+            @Param("memberIds") Collection<UUID> memberIds);
 }

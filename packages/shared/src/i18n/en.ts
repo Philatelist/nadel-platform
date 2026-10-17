@@ -69,6 +69,16 @@ export const en = {
     MEMBER: 'Member',
     PLATFORM_OPERATOR: 'Platform operator',
   },
+  members: {
+    title: 'Members',
+    searchPlaceholder: 'Search by name, phone or email',
+    showArchived: 'Show archived',
+    archived: 'Archived',
+    empty: 'No members yet',
+    nothingFound: 'Nothing found',
+    back: 'Back to members',
+  },
+  pagination: { label: 'Pages', previous: 'Previous', next: 'Next', pageOf: 'Page {page} of {total}' },
   problem: {
     VALIDATION_FAILED: 'Some fields are not valid. Please check them and try again.',
     MALFORMED_REQUEST: 'The request could not be understood.',
@@ -101,7 +111,7 @@ export const en = {
   },
   errors: {
     generic: 'Could not load data. Please try again.',
-    retry: 'Retry',
+    retry: 'Try again',
   },
 } as const;
 

@@ -81,6 +81,16 @@ export const uk: Messages = {
     MEMBER: 'Член кооперативу',
     PLATFORM_OPERATOR: 'Оператор платформи',
   },
+  members: {
+    title: 'Члени кооперативу',
+    searchPlaceholder: 'Пошук за іменем, телефоном або поштою',
+    showArchived: 'Показати архівних',
+    archived: 'В архіві',
+    empty: 'Членів кооперативу ще немає',
+    nothingFound: 'Нічого не знайдено',
+    back: 'До списку членів',
+  },
+  pagination: { label: 'Сторінки', previous: 'Назад', next: 'Далі', pageOf: 'Сторінка {page} з {total}' },
   problem: {
     VALIDATION_FAILED: 'Деякі поля заповнено неправильно. Перевірте їх і спробуйте ще раз.',
     MALFORMED_REQUEST: 'Не вдалося розібрати запит.',
@@ -113,6 +123,6 @@ export const uk: Messages = {
   },
   errors: {
     generic: 'Не вдалося завантажити дані. Спробуйте ще раз.',
-    retry: 'Повторити',
+    retry: 'Спробувати ще раз',
   },
 };
