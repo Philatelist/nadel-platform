@@ -194,7 +194,7 @@ test.describe('§2.7 / §2.8 members list and read-only card', () => {
 });
 
 test.describe('§2.2 / §2.13 roles screen', () => {
-  test('§2.2 #1, #2 and §2.13 #2: five roles, base roles are fixed, Chairman has all eight permissions locked', async ({
+  test('§2.2 #1, #2 and §2.13 #2: five roles, base role names are editable, Chairman has all eight permissions locked', async ({
     page,
   }) => {
     await loginAs(page, 'chairman@demo.local');
@@ -213,28 +213,100 @@ test.describe('§2.2 / §2.13 roles screen', () => {
       items.filter({ hasText: /^Secretary/ }).getByRole('button', { name: 'Delete' }),
     ).toBeVisible();
 
-    // Chairman: name not editable, every permission ticked and locked
+    // Chairman: name editable (since 004), every permission ticked and locked, Save enabled
     await items
       .filter({ hasText: /^Chairman/ })
       .getByRole('button', { name: 'Edit' })
       .click();
-    await expect(page.getByLabel('Name', { exact: true })).toBeDisabled();
+    await expect(page.getByLabel('Name', { exact: true })).toBeEnabled();
     const boxes = page.getByRole('checkbox');
     await expect(boxes).toHaveCount(8);
     for (let i = 0; i < 8; i++) {
       await expect(boxes.nth(i)).toBeChecked();
       await expect(boxes.nth(i)).toBeDisabled();
     }
-    await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Save' })).toBeEnabled();
     await page.getByRole('button', { name: 'Cancel' }).click();
 
-    // Treasurer: name locked, permissions editable
+    // Treasurer: name and permissions editable
     await items
       .filter({ hasText: /^Treasurer/ })
       .getByRole('button', { name: 'Edit' })
       .click();
-    await expect(page.getByLabel('Name', { exact: true })).toBeDisabled();
+    await expect(page.getByLabel('Name', { exact: true })).toBeEnabled();
     await expect(page.getByRole('checkbox', { name: /^View members/ })).toBeEnabled();
+  });
+
+  // @spec: 004-role-names
+  test('004 §2.1-§2.3: a base role is renamed, shown under the new name everywhere, restored, and audited readably', async ({
+    page,
+    browser,
+  }) => {
+    await loginAs(page, 'chairman@demo.local');
+    await navLink(page, 'Roles').click();
+    const items = page.getByRole('main').getByRole('listitem');
+    const treasurer = items.filter({ hasText: /^Treasurer/ });
+    const bookkeeper = items.filter({ hasText: /^Bookkeeper/ });
+    const name = page.getByLabel('Name', { exact: true });
+
+    try {
+      await treasurer.getByRole('button', { name: 'Edit' }).click();
+      await expect(page.getByText('Base role: Treasurer')).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Restore standard name' })).toHaveCount(0);
+      await name.fill('Bookkeeper');
+      await page.getByRole('button', { name: 'Save' }).click();
+      await expect(page.getByRole('status')).toHaveText('Saved');
+      await expect(bookkeeper).toBeVisible();
+      await expect(treasurer).toHaveCount(0);
+
+      // the treasurer's own account and the members list show the new name
+      const treasurerPage = await signedInPage(browser, 'treasurer@demo.local');
+      await expect(treasurerPage.getByRole('listitem').filter({ hasText: /^Bookkeeper$/ })).toBeVisible();
+      await treasurerPage.goto('/members');
+      await treasurerPage.getByRole('searchbox').fill('Shevchenko');
+      await expect(
+        treasurerPage.getByRole('row').filter({ hasText: 'Shevchenko' }).filter({ hasText: 'Bookkeeper' }),
+      ).toBeVisible();
+      await treasurerPage.context().close();
+
+      // restore through the UI
+      await bookkeeper.getByRole('button', { name: 'Edit' }).click();
+      await expect(page.getByText('Base role: Treasurer')).toBeVisible();
+      await page.getByRole('button', { name: 'Restore standard name' }).click();
+      await expect(page.getByRole('status')).toHaveText('Saved');
+      await expect(treasurer).toBeVisible();
+      await expect(bookkeeper).toHaveCount(0);
+      await treasurer.getByRole('button', { name: 'Edit' }).click();
+      await expect(page.getByRole('button', { name: 'Restore standard name' })).toHaveCount(0);
+      await page.getByRole('button', { name: 'Cancel' }).click();
+    } finally {
+      // leave English base names for the other specs, whatever happened above
+      await navLink(page, 'Roles').click();
+      if ((await bookkeeper.count()) > 0) {
+        await bookkeeper.getByRole('button', { name: 'Edit' }).click();
+        await page.getByRole('button', { name: 'Restore standard name' }).click();
+        await expect(page.getByRole('status')).toHaveText('Saved');
+      }
+    }
+
+    // audit: Treasurer → Bookkeeper and back, never the raw token
+    await navLink(page, 'Audit log').click();
+    await page.getByLabel('Kind of record').selectOption({ label: 'Role' });
+    await expectAuditRow(page, /Treasurer → Bookkeeper/);
+    await expectAuditRow(page, /Bookkeeper → Treasurer/);
+    await expect(
+      page
+        .getByRole('row')
+        .filter({ hasText: /Treasurer → Bookkeeper/ })
+        .first(),
+    ).toContainText('Role updated');
+    await expect(
+      page
+        .getByRole('row')
+        .filter({ hasText: /Bookkeeper → Treasurer/ })
+        .first(),
+    ).toContainText('Role updated');
+    expect(await page.getByRole('main').innerText()).not.toContain('base:');
   });
 
   test('§2.1 #1 and §2.11 #3: eight permissions with descriptions in Ukrainian by default, English on switch', async ({

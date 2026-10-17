@@ -20,13 +20,13 @@ Do not commit; report every file created or changed.
   - [x] Web: RolesPage editor per tech spec 2.4 (editable name, hint, restore button, Chairman Save, submit stored name when the catalog name is untouched, clash warning via `web/src/roleNameClash.ts` + `roleNameClash.test.ts`), AuditPage token rendering via `auditRoleValue` (+ tests in `roleName.test.ts`), i18n keys `rolesPage.baseHint`, `rolesPage.restoreName`, `rolesPage.nameClash`, updated `problem.BASE_ROLE_IMMUTABLE` (en + uk). **[Agent: react-frontend]**
   - [x] Verify: `cd backend && ./mvnw -B test -Dtest='RolesTests,RoleLogicTests,AuditReadTests'` green; `pnpm -r test && pnpm -r typecheck && pnpm -r lint && pnpm format:check` green. **[Agent: spring-backend]**
 
-- [ ] **Slice 3: Permissions unchanged by renames, e2e and docs**
+- [x] **Slice 3: Permissions unchanged by renames, e2e and docs**
 
   > Proves renames never change who can do what, updates the end-to-end flows and the documentation, and raises the coverage floor.
-  - [ ] `MembersAccessAcceptanceTests.renamingEveryBaseRoleDoesNotChangeWhoCanDoWhat`: rename all three base roles, rerun the existing permission checks unchanged (extract shared helpers if needed), restore names and flags in cleanup. **[Agent: spring-backend]**
-  - [ ] Docs: note in `docs/features/002-members-access.md` §2.2 that renaming base roles is allowed since 004; `members`/`identity` module READMEs (flag, audit token, the accepted `base:` naming risk); `docs/domain/glossary.md` if it lists base role names. Do not edit CLAUDE.md. **[Agent: spring-backend]**
-  - [ ] E2E (`web/e2e/acceptance.spec.ts`): base-role name fields are enabled and Chairman Save is enabled (permissions stay locked); new rename → hint → restore flow for the Treasurer role with restore in `finally`; audit log shows "Treasurer → Bookkeeper" (no raw token). **[Agent: testing-expert]**
-  - [ ] Verify: `make check` green, then raise `coverage.minimum` in `backend/pom.xml` to the measured line coverage rounded down to two decimals and re-run `cd backend && ./mvnw -B verify`; then `make e2e` green. **[Agent: testing-expert]**
+  - [x] `MembersAccessAcceptanceTests.renamingEveryBaseRoleDoesNotChangeWhoCanDoWhat`: rename all three base roles, rerun the existing permission checks unchanged (extract shared helpers if needed), restore names and flags in cleanup. **[Agent: spring-backend]**
+  - [x] Docs: note in `docs/features/002-members-access.md` §2.2 that renaming base roles is allowed since 004; `members`/`identity` module READMEs (flag, audit token, the accepted `base:` naming risk); `docs/domain/glossary.md` if it lists base role names. Do not edit CLAUDE.md. **[Agent: spring-backend]**
+  - [x] E2E (`web/e2e/acceptance.spec.ts`): base-role name fields are enabled and Chairman Save is enabled (permissions stay locked); new rename → hint → restore flow for the Treasurer role with restore in `finally`; audit log shows "Treasurer → Bookkeeper" (no raw token). **[Agent: testing-expert]**
+  - [x] Verify: `make check` green, then raise `coverage.minimum` in `backend/pom.xml` to the measured line coverage rounded down to two decimals and re-run `cd backend && ./mvnw -B verify`; then `make e2e` green. **[Agent: testing-expert]**
 
 - [ ] **Slice 4: Feature Testing & Regression**
 

@@ -103,6 +103,9 @@ class RolesTests extends IntegrationTest {
                 (rs, i) -> new BaseRoleSeed(rs.getString("base_code"), rs.getString("name"),
                         rs.getString("description"), rs.getString("permissions").isEmpty() ? List.of()
                                 : List.of(rs.getString("permissions").split(",")))));
+        List<String> stillFlagged = inTenant(DEMO_TENANT, sql -> sql.queryForList(
+                "select base_code from role where base_code is not null and name_customized", String.class));
+        assertThat(stillFlagged).as("no base role is left flagged as renamed").isEmpty();
         assertThat(actual).as("base roles restored to the seeded state").containsExactlyInAnyOrderElementsOf(
                 SEEDED_BASE_ROLES.stream().map(s -> new BaseRoleSeed(s.code(), s.name(), s.description(),
                         s.permissions().stream().sorted().toList())).toList());

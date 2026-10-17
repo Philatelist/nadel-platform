@@ -1,15 +1,14 @@
 package app.nadel.identity.internal;
 
-import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import app.nadel.DemoAccessChecks;
 import app.nadel.IntegrationTest;
 import app.nadel.TestTokens;
 import java.util.UUID;
@@ -56,27 +55,24 @@ class MeEndpointTests extends IntegrationTest {
                 .andExpect(jsonPath("$.tenant.name").value("Demo Garden Cooperative"))
                 .andExpect(jsonPath("$.roles", hasSize(1)))
                 .andExpect(jsonPath("$.roles[0].name").value("Chairman"))
-                .andExpect(jsonPath("$.roles[0].baseCode").value("CHAIRMAN"))
-                .andExpect(jsonPath("$.permissions", containsInAnyOrder("MEMBERS_VIEW", "MEMBERS_EDIT",
-                        "ROLES_MANAGE", "AUDIT_VIEW", "PLOTS_VIEW", "PLOTS_EDIT", "OWNERSHIP_EDIT", "IMPORT_RUN")));
+                .andExpect(jsonPath("$.roles[0].nameCustomized").value(false));
+        DemoAccessChecks.chairmanHasEveryPermission(mvc);
     }
 
     @Test
     void treasurerHasReadPermissions() throws Exception {
         getAs(demo("treasurer@demo.local"), "/api/v1/me")
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.roles[0].baseCode").value("TREASURER"))
-                .andExpect(jsonPath("$.permissions",
-                        containsInAnyOrder("MEMBERS_VIEW", "PLOTS_VIEW", "AUDIT_VIEW")));
+                .andExpect(jsonPath("$.roles[0].nameCustomized").value(false));
+        DemoAccessChecks.treasurerHasReadPermissions(mvc);
     }
 
     @Test
     void memberHasNoPermissions() throws Exception {
         getAs(demo("member@demo.local"), "/api/v1/me")
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.memberId").value(MEMBER.toString()))
-                .andExpect(jsonPath("$.roles[0].baseCode").value("MEMBER"))
-                .andExpect(jsonPath("$.permissions").isEmpty());
+                .andExpect(jsonPath("$.memberId").value(MEMBER.toString()));
+        DemoAccessChecks.memberHasNoPermissions(mvc);
     }
 
     @Test
@@ -85,8 +81,10 @@ class MeEndpointTests extends IntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.roles", hasSize(2)))
                 .andExpect(jsonPath("$.roles[?(@.name == 'Electrician')].baseCode").isEmpty())
+                .andExpect(jsonPath("$.roles[?(@.name == 'Electrician')].nameCustomized").value(true))
                 .andExpect(jsonPath("$.roles[?(@.name == 'Member')].baseCode").value("MEMBER"))
-                .andExpect(jsonPath("$.permissions").isEmpty());
+                .andExpect(jsonPath("$.roles[?(@.name == 'Member')].nameCustomized").value(false));
+        DemoAccessChecks.electricianHasNoPermissions(mvc);
     }
 
     @Test
@@ -101,20 +99,7 @@ class MeEndpointTests extends IntegrationTest {
 
     @Test
     void permissionsAreEnforcedFromTheMembersRoles() throws Exception {
-        String treasurer = demo("treasurer@demo.local");
-        String member = demo("member@demo.local");
-
-        getAs(treasurer, "/api/v1/members").andExpect(status().isOk());
-        // MEMBERS_EDIT guards the write endpoints; an unknown id shows whether the guard let the call through (404)
-        postAs(treasurer, "/api/v1/members/" + UUID.randomUUID() + "/archive")
-                .andExpect(status().isForbidden())
-                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
-                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
-        getAs(member, "/api/v1/members")
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
-        postAs(demo("chairman@demo.local"), "/api/v1/members/" + UUID.randomUUID() + "/archive")
-                .andExpect(status().isNotFound());
+        DemoAccessChecks.permissionsAreEnforcedFromTheMembersRoles(mvc);
     }
 
     @Test
@@ -223,9 +208,5 @@ class MeEndpointTests extends IntegrationTest {
     private ResultActions getAs(String bearer, String path) throws Exception {
         return mvc.perform(get(path)
                 .header(HttpHeaders.AUTHORIZATION, bearer));
-    }
-
-    private ResultActions postAs(String bearer, String path) throws Exception {
-        return mvc.perform(post(path).header(HttpHeaders.AUTHORIZATION, bearer));
     }
 }

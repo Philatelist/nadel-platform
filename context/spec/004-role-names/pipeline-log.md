@@ -64,3 +64,5 @@
 ## Phase 3 — implement
 
 - Slice 1 committed 54971bf (backend 71 targeted tests, web 49 unit; typecheck/lint/format/gen clean). Review r1 started.
+- Slice 1 review r1 PASS. Slice 2 committed 138490e (backend RolesTests/RoleLogicTests/AuditReadTests 72, web 59 unit; typecheck/lint/format clean). Review r1 started.
+- Slice 2 review r1 MAJOR_ISSUES (M1 untested submit-name guard) → fix f40a963 → r2 PASS.
