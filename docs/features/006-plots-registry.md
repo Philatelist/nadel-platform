@@ -1,4 +1,4 @@
-# 005. Plots registry
+# 006. Plots registry
 
 Roadmap phase 1, feature 2 of 4. Input for `/feature-pipeline`. Requires 002 (permissions, audit) and 003 (UI kit: build screens from `web/src/components/ui`).
 
@@ -13,7 +13,7 @@ Read together with `CLAUDE.md`, `context/product/product-definition.md`, `contex
 `docs/domain/glossary.md`, `docs/domain/money-rules.md` and ADRs 0002, 0003, 0004, 0007, 0008, 0009.
 
 Feature sequence in roadmap phase 1 (each one builds on the previous and leaves `main` working):
-`002 Members and access control` → `003 UI design system` → `004 Role names` → `005 Plots registry` → `006 Ownership` → `007 Excel import`.
+`002 Members and access control` → `003 UI design system` → `004 Role names` → `005 UI preferences` → `006 Plots registry` → `007 Ownership` → `008 Excel import`.
 The map is not part of phase 1 (roadmap phase 6): plots are records without polygons.
 
 General rules for every feature in this sequence:
@@ -45,10 +45,10 @@ General rules for every feature in this sequence:
 | `archived_at` | soft archive; archived plots hidden by default |
 | `boundary` | stays nullable and unused |
 
-Hard delete only for a plot created by mistake that has never had an owner (feature 006 adds the ownership check; until
+Hard delete only for a plot created by mistake that has never had an owner (feature 007 adds the ownership check; until
 then any non-archived plot without references can be deleted).
 
-Status: a plot without an owner shows `GREY` (money-rules section 9). Until feature 006, every `PLOT` is `GREY`;
+Status: a plot without an owner shows `GREY` (money-rules section 9). Until feature 007, every `PLOT` is `GREY`;
 `COMMON` is always `GREY`. Keep `plot_status` consistent.
 
 Audit every create, update, archive, restore and delete through the 002 audit mechanism.
@@ -57,7 +57,7 @@ Audit every create, update, archive, restore and delete through the 002 audit me
 
 - With `PLOTS_VIEW`: all fields.
 - A member without `PLOTS_VIEW`: list of plots with **number, street, kind and status only**. Full details only for plots
-  they own (that part becomes active with 006; design the response for it now). Enforced in API responses.
+  they own (that part becomes active with 007; design the response for it now). Enforced in API responses.
 
 ## 4. API
 
@@ -71,7 +71,7 @@ Audit every create, update, archive, restore and delete through the 002 audit me
 1. **Plots list** (default screen for users with `PLOTS_VIEW`): number, street, area in sotkas, kind, status color chip;
    search, filters, natural sorting, paging. A member sees number, street and status only.
 2. **Plot card**: all fields, edit, archive/restore, delete (each by permission). An "Owners" section placeholder that
-   feature 006 fills.
+   feature 007 fills.
 3. **Create / edit plot form** with validation messages per field.
 
 ## 6. Tests (in addition to the general rules)
@@ -84,7 +84,7 @@ Audit every create, update, archive, restore and delete through the 002 audit me
 
 ## 7. Out of scope
 
-Owners and ownership (006), import (007), polygons and map (phase 6), merging and splitting plots.
+Owners and ownership (007), import (008), polygons and map (phase 6), merging and splitting plots.
 
 ## 8. Decisions already made (do not ask)
 

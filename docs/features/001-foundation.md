@@ -15,5 +15,5 @@ The base every feature builds on: monorepo, sign-in, roles, cooperative isolatio
 - CI: backend build and tests, client typecheck, lint and build.
 
 ## Next
-Phase 1, in order: [`002-members-access.md`](002-members-access.md), [`003-ui-design-system.md`](003-ui-design-system.md), [`004-role-names.md`](004-role-names.md), [`005-plots-registry.md`](005-plots-registry.md),
-[`006-ownership.md`](006-ownership.md), [`007-excel-import.md`](007-excel-import.md).
+Phase 1, in order: [`002-members-access.md`](002-members-access.md), [`003-ui-design-system.md`](003-ui-design-system.md), [`004-role-names.md`](004-role-names.md), [`005-ui-preferences.md`](005-ui-preferences.md), [`006-plots-registry.md`](006-plots-registry.md),
+[`007-ownership.md`](007-ownership.md), [`008-excel-import.md`](008-excel-import.md).

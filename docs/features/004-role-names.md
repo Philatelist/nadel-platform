@@ -14,8 +14,8 @@ Read together with `CLAUDE.md`, `context/product/product-definition.md`, `contex
 `docs/domain/glossary.md`, ADRs 0004 and 0009, and `docs/features/002-members-access.md` sections 2.2–2.3 (this feature
 changes the "cannot be renamed" rule of 2.2).
 
-Feature sequence: `002 Members and access control` → `003 UI design system` → `004 Role names` → `005 Plots registry` →
-`006 Ownership` → `007 Excel import`.
+Feature sequence: `002 Members and access control` → `003 UI design system` → `004 Role names` → `005 UI preferences` → `006 Plots registry` →
+`007 Ownership` → `008 Excel import`.
 
 General rules from 002 apply: contract-first, Flyway migration only, permissions not role names, Problem Details with
 a `code`, Ukrainian by default with English available, admin changes audited through the outbox, tests per rule.
