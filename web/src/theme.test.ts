@@ -1,9 +1,9 @@
+// @vitest-environment node
 import { palette, plotStatusColors, plotStatusOnColor } from '@nadel/ui-tokens';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
-const css = readFileSync(resolve(process.cwd(), 'src/index.css'), 'utf8');
+const css = readFileSync(new URL('./index.css', import.meta.url), 'utf8');
 
 function kebab(key: string): string {
   return key.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
@@ -49,5 +49,28 @@ describe('index.css matches @nadel/ui-tokens', () => {
 
   it('does not use var() inside @theme values', () => {
     expect(blockAfter('@theme {')).not.toContain('var(');
+  });
+});
+
+function sourceFiles(dir: URL): URL[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+    const url = new URL(e.name + (e.isDirectory() ? '/' : ''), dir);
+    if (e.isDirectory()) return sourceFiles(url);
+    return /\.(ts|tsx|css)$/.test(e.name) && !/\.test\.tsx?$/.test(e.name) ? [url] : [];
+  });
+}
+
+describe('color variable references', () => {
+  it('every --color-* reference in web/src is declared in index.css', () => {
+    const declared = new Set(Object.keys(colorVars(css)));
+    const stale: string[] = [];
+    for (const file of sourceFiles(new URL('./', import.meta.url))) {
+      for (const m of readFileSync(file, 'utf8').matchAll(/--color-[a-z-]+/g)) {
+        // Dynamic names such as `--color-status-${s}` leave a trailing dash; skip those.
+        if (m[0].endsWith('-')) continue;
+        if (!declared.has(m[0])) stale.push(`${m[0]} in ${file.pathname.split('/src/')[1]}`);
+      }
+    }
+    expect(stale).toEqual([]);
   });
 });

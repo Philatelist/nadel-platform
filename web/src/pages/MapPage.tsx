@@ -55,7 +55,11 @@ export function MapPage() {
         version: 8,
         sources: {},
         layers: [
-          { id: 'background', type: 'background', paint: { 'background-color': cssVar('--color-bg') } },
+          {
+            id: 'background',
+            type: 'background',
+            paint: { 'background-color': cssVar('--color-background') },
+          },
         ],
       },
       center: [30.7, 46.6],
