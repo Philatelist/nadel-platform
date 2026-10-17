@@ -13,7 +13,11 @@
   "permissions": {
     "deny": [
       "Bash(git push*)",
-      "Bash(gh pr merge*)"
+      "Bash(gh pr merge*)",
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Edit(./.claude/settings.json)",
+      "Edit(./.mcp.json)"
     ]
   }
 }

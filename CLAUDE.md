@@ -82,6 +82,21 @@ Keycloak test users (realm `nadel`, password `nadel` for all):
 - Personal data is never logged (names, phone numbers, emails, addresses).
 - Secrets come only from environment variables. The repository contains only dev values for the local docker-compose.
 
+**Application security**
+- Validate every request at the boundary with Bean Validation (constraints in `api/openapi.yaml` become `@Valid` annotations on generated models); reject invalid input with a 400 Problem Details response.
+- Database access only through JPA, Spring Data or parameterised native queries. Never build SQL, JPQL or shell commands by string concatenation with user input.
+- Never return stack traces, SQL errors or internal identifiers of other cooperatives in error responses.
+
+**Code style**
+- TypeScript, JSON, CSS and YAML are formatted by Prettier (`.prettierrc.json`); run `make format` before committing. ESLint must pass (`make lint`).
+- TypeScript: components in PascalCase files (`MapPage.tsx`), hooks and utilities in camelCase (`useT`, `formatMoney`), named exports, no default exports except where a framework requires them (Expo entry points).
+- Java: standard Java conventions, 4-space indent, one public type per file, package-private by default; classes under `internal` stay package-private unless Spring needs otherwise.
+- Imports: no wildcard imports in Java; in TypeScript import from package entry points (`@nadel/shared`), never from another package's `src/` internals.
+
+**Documentation**
+- Update documentation in the same change as the code: README, `make` targets, CLAUDE.md, `docs/domain/*`, ADRs and `context/product/*` when behaviour, commands or decisions change.
+- Changes to `CLAUDE.md`, anything under `.claude/`, and `.mcp.json` are security-sensitive: they change what agents may do. Agents propose them; the repository owner reviews and commits them.
+
 **Supply chain**
 - CI runs gitleaks, `pnpm audit` (fails on high and critical) and OSV-Scanner (fails on any severity). An accepted advisory always goes into `osv-scanner.toml` with a reason; if it is high or critical it also goes into `pnpm-workspace.yaml` (`auditConfig.ignoreGhsas`).
 - Pin exact dependency versions (no `^` or `~`), except `peerDependencies`.

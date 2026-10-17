@@ -87,3 +87,16 @@ jobs:
           chmod +x /usr/local/bin/osv-scanner
       - name: Known vulnerabilities in Maven and pnpm dependencies (OSV)
         run: osv-scanner scan source --recursive .
+
+  sast:
+    name: SAST (Semgrep)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Install Semgrep
+        run: pip install semgrep==1.178.0
+      - name: Scan Java and TypeScript
+        run: semgrep scan --config p/java --config p/typescript --config p/react --error --metrics=off

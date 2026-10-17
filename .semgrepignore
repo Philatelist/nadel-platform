@@ -1,0 +1,8 @@
+# Generated code and build output are not scanned
+packages/api-client/src/generated/
+backend/target/
+node_modules/
+dist/
+mobile/.expo/
+context/
+.awos/
