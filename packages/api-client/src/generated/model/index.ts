@@ -10,8 +10,15 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './badRequestResponse';
+export * from './baseRole';
+export * from './deliveryChannel';
+export * from './forbiddenResponse';
 export * from './me';
+export * from './member';
 export * from './money';
+export * from './notFoundResponse';
+export * from './permission';
 export * from './plotFeature';
 export * from './plotFeatureCollection';
 export * from './plotFeatureCollectionType';
@@ -22,6 +29,7 @@ export * from './plotStatus';
 export * from './polygonGeometry';
 export * from './polygonGeometryType';
 export * from './problem';
-export * from './role';
+export * from './problemFieldError';
+export * from './roleRef';
 export * from './tenantSummary';
 export * from './unauthorizedResponse';

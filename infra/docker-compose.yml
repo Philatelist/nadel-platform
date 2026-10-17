@@ -31,10 +31,23 @@ services:
       KC_DB_PASSWORD: keycloak
       KC_HOSTNAME: http://localhost:8180
       KC_HTTP_PORT: 8080
+      KC_HEALTH_ENABLED: 'true'
     ports:
       - '8180:8080'
     volumes:
       - ./keycloak:/opt/keycloak/data/import:ro
+    # The image has no curl; probe the management port (9000) with bash /dev/tcp.
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/9000 &&
+          echo -e 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 &&
+          grep -q '"status": "UP"' <&3
+      interval: 5s
+      timeout: 5s
+      retries: 40
+      start_period: 30s
     depends_on:
       postgres:
         condition: service_healthy

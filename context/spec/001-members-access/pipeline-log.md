@@ -1,7 +1,7 @@
 # Pipeline log — 002 Members and access control
 
 - Status: running
-- Phase: 2 — specs (tasks)
+- Phase: 3 — implement, before Slice 1
 - Branch: 001-members-access · Base: main @ 39380d2
 - Requirement: document `docs/features/002-members-access.md`
 - Autonomy: minimal (default; no argument, no `.claude/feature-pipeline.yml`)
@@ -110,3 +110,9 @@ new tables; module cycle identity↔members; Playwright CI job is new infrastruc
 - AUTO: docs task in Slice 6 assigned to general-purpose (no documentation specialist); no `## Open Questions` section kept (pipeline rule: accept general-purpose assignments). Noted for the final report.
 - `<!-- not-user-reviewed -->` marker removed from tasks.md (pipeline rule: Phase 1 answers stand in for plan review).
 - User message mid-run: "I started Docker, go ahead" (Docker already verified).
+- Phase 2 commit: caf2a12 `001: functional spec, technical considerations and tasks` (includes docs/features/002-members-access.md and review-log.md).
+- STOP (stop point 4, environment): backend requires `--release 25`; installed JDKs are 8, 17, 19, 20, 21, 23 (Homebrew openjdk 23.0.2). The `notTestableLocally: auto` fallback (compile/build check) is impossible too, and installing a JDK changes the user's machine, so the user is asked. Tried: `java -version`, `/usr/libexec/java_home -V`, Homebrew/SDKMAN/JetBrains locations. Homebrew offers `openjdk@25` 25.0.4.1 and cask `temurin@25`.
+- User answer: "Install Temurin 25". The cask needs sudo (no terminal for the password), so installed the Homebrew formula `openjdk@25` 25.0.4.1 instead (no sudo, same JDK version, not linked into the shell profile). All backend commands in this run use `JAVA_HOME=/opt/homebrew/opt/openjdk@25/libexec/openjdk.jdk/Contents/Home`.
+- Resumed: status running. Baseline re-run in a fresh detached worktree with JDK 25.
+- Baseline (JDK 25): 0 failing, 7 tests, BUILD SUCCESS. review-log.md updated; baseline worktree removed.
+- Slice 1: contract, infra and web tasks ticked (web: one fix round for a hard-coded aria-label; client checks re-run by the orchestrator, EXIT 0). DB task waits for its Java tests in the backend task.

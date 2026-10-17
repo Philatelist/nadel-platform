@@ -9,14 +9,9 @@
  *
  * OpenAPI spec version: 0.1.0
  */
+import type { Problem } from './problem';
 
-export type Role = typeof Role[keyof typeof Role];
-
-
-export const Role = {
-  CHAIRMAN: 'CHAIRMAN',
-  TREASURER: 'TREASURER',
-  ELECTRICIAN: 'ELECTRICIAN',
-  MEMBER: 'MEMBER',
-  PLATFORM_OPERATOR: 'PLATFORM_OPERATOR',
-} as const;
+/**
+ * The token is valid but not linked to a member (code `MEMBER_NOT_LINKED`) or the caller lacks the required permission (code `PERMISSION_DENIED`)
+ */
+export type ForbiddenResponse = Problem;

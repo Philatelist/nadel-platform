@@ -14,6 +14,8 @@ security:
 tags:
   - name: me
     description: Current user
+  - name: members
+    description: Cooperative members (people), their contacts and roles
   - name: plots
     description: Plots and map
 
@@ -32,6 +34,39 @@ paths:
                 $ref: '#/components/schemas/Me'
         '401':
           $ref: '#/components/responses/Unauthorized'
+
+  /members/{id}:
+    get:
+      tags: [members]
+      operationId: getMember
+      summary: Member card
+      description: |
+        Returns one member of the current cooperative.
+        A caller without the `MEMBERS_VIEW` permission can read only their own card; for any other id the
+        answer is 404, exactly as for an id that does not exist. The `notes` field is present only when the
+        caller has `MEMBERS_VIEW`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Member'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /plots:
     get:
@@ -59,8 +94,28 @@ components:
       bearerFormat: JWT
 
   responses:
+    BadRequest:
+      description: Malformed request or failed validation (code `VALIDATION_FAILED` or `MALFORMED_REQUEST`)
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
     Unauthorized:
-      description: Missing or invalid token
+      description: Missing or invalid token (code `UNAUTHENTICATED`)
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Forbidden:
+      description: >-
+        The token is valid but not linked to a member (code `MEMBER_NOT_LINKED`) or the caller lacks the
+        required permission (code `PERMISSION_DENIED`)
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotFound:
+      description: The resource does not exist or is not visible to the caller (code `NOT_FOUND`)
       content:
         application/problem+json:
           schema:
@@ -73,9 +128,84 @@ components:
       description: Amount in UAH as a string with two decimal places
       examples: ['1250.50']
 
-    Role:
+    Permission:
       type: string
-      enum: [CHAIRMAN, TREASURER, ELECTRICIAN, MEMBER, PLATFORM_OPERATOR]
+      description: Fixed list of permissions a role can contain (ADR 0009). Authorities are `PERM_<value>`.
+      enum:
+        - MEMBERS_VIEW
+        - MEMBERS_EDIT
+        - ROLES_MANAGE
+        - AUDIT_VIEW
+        - PLOTS_VIEW
+        - PLOTS_EDIT
+        - OWNERSHIP_EDIT
+        - IMPORT_RUN
+
+    BaseRole:
+      type: string
+      description: Code of a base role that every cooperative gets; custom roles have no code
+      enum: [CHAIRMAN, TREASURER, MEMBER]
+
+    RoleRef:
+      type: object
+      description: Reference to a role of the cooperative
+      required: [id, name]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        baseCode:
+          $ref: '#/components/schemas/BaseRole'
+
+    DeliveryChannel:
+      type: string
+      description: How a member prefers to receive invoices
+      enum: [EMAIL, TELEGRAM, VIBER, PAPER]
+
+    Member:
+      type: object
+      description: |
+        A person of the cooperative. `notes` is present only when the caller has the `MEMBERS_VIEW` permission.
+      required: [id, lastName, firstName, phones, deliveryChannel, roles, archived]
+      properties:
+        id:
+          type: string
+          format: uuid
+        lastName:
+          type: string
+        firstName:
+          type: string
+        middleName:
+          type: string
+        phones:
+          type: array
+          items:
+            type: string
+          description: Phone numbers in E.164 format
+        email:
+          type: string
+        postalAddress:
+          type: string
+        deliveryChannel:
+          $ref: '#/components/schemas/DeliveryChannel'
+        telegramUsername:
+          type: string
+        viberPhone:
+          type: string
+        notes:
+          type: string
+          description: Internal notes; only for callers with `MEMBERS_VIEW`, the key is absent otherwise
+        roles:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoleRef'
+        archived:
+          type: boolean
+        archivedAt:
+          type: string
+          format: date-time
 
     TenantSummary:
       type: object
@@ -89,7 +219,7 @@ components:
 
     Me:
       type: object
-      required: [userId, email, fullName, roles]
+      required: [userId, email, fullName, platformOperator, roles, permissions]
       properties:
         userId:
           type: string
@@ -98,10 +228,22 @@ components:
           type: string
         fullName:
           type: string
+        memberId:
+          type: string
+          format: uuid
+          description: The member this user is linked to; absent for the platform operator
+        platformOperator:
+          type: boolean
+          description: True for the platform operator, who has no roles, permissions or cooperative data
         roles:
           type: array
           items:
-            $ref: '#/components/schemas/Role'
+            $ref: '#/components/schemas/RoleRef'
+        permissions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Permission'
+          description: Union of the permissions of all the member's roles
         tenant:
           $ref: '#/components/schemas/TenantSummary'
 
@@ -180,7 +322,10 @@ components:
 
     Problem:
       type: object
-      description: RFC 9457 Problem Details
+      description: >-
+        RFC 9457 Problem Details, served as `application/problem+json`. `detail` is English and never contains
+        personal data.
+      required: [title, status, code]
       properties:
         type:
           type: string
@@ -189,4 +334,24 @@ components:
         status:
           type: integer
         detail:
+          type: string
+        code:
+          type: string
+          description: Stable machine-readable error code, for example `VALIDATION_FAILED` or `NOT_FOUND`
+        errors:
+          type: array
+          description: Field-level validation errors
+          items:
+            $ref: '#/components/schemas/ProblemFieldError'
+
+    ProblemFieldError:
+      type: object
+      required: [field, code]
+      properties:
+        field:
+          type: string
+        code:
+          type: string
+          description: For example `REQUIRED`, `TOO_LONG`, `INVALID`, `PHONE_INVALID`, `CHANNEL_CONTACT_MISSING`
+        message:
           type: string

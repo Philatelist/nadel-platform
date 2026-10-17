@@ -25,9 +25,9 @@ spring:
       resourceserver:
         jwt:
           issuer-uri: ${NADEL_OIDC_ISSUER:http://localhost:8180/realms/nadel}
-  mvc:
-    problemdetails:
-      enabled: true
+  jackson:
+    # The contract has no nullable properties: an unset optional property is absent, never null
+    default-property-inclusion: non_null
 
 management:
   endpoints:

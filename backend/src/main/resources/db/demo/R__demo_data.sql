@@ -44,3 +44,38 @@ SELECT '22222222-2222-2222-2222-222222222222', n::text, 'Forest St', 'PLOT', 600
        ST_MakeEnvelope(30.8000 + n * 0.0003, 46.7000, 30.8000 + n * 0.0003 + 0.00028, 46.7003, 4326)
 FROM generate_series(1, 2) AS n
 ON CONFLICT (tenant_id, number) DO NOTHING;
+
+-- Members and roles (spec 001). Emails equal the Keycloak demo users; keycloak_subject stays null (linked on first sign-in).
+SELECT seed_base_roles(id) FROM tenant;
+
+INSERT INTO member (id, tenant_id, last_name, first_name, middle_name, phones, email, delivery_channel) VALUES
+    ('aaaaaaaa-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111', 'Kovalenko', 'Oleksandr', 'Petrovych', '{+380501110001}', 'chairman@demo.local', 'EMAIL'),
+    ('aaaaaaaa-0000-0000-0000-000000000002', '11111111-1111-1111-1111-111111111111', 'Shevchenko', 'Iryna', 'Volodymyrivna', '{+380501110002}', 'treasurer@demo.local', 'EMAIL'),
+    ('aaaaaaaa-0000-0000-0000-000000000003', '11111111-1111-1111-1111-111111111111', 'Bondarenko', 'Andrii', 'Mykolaiovych', '{+380501110003}', 'member@demo.local', 'EMAIL'),
+    ('aaaaaaaa-0000-0000-0000-000000000004', '11111111-1111-1111-1111-111111111111', 'Tkachenko', 'Serhii', 'Ivanovych', '{+380501110004}', 'electrician@demo.local', 'EMAIL'),
+    ('bbbbbbbb-0000-0000-0000-000000000001', '22222222-2222-2222-2222-222222222222', 'Melnyk', 'Olena', 'Stepanivna', '{+380502220001}', 'member@other.local', 'EMAIL'),
+    ('bbbbbbbb-0000-0000-0000-000000000002', '22222222-2222-2222-2222-222222222222', 'Lysenko', 'Taras', NULL, '{}', NULL, 'PAPER')
+ON CONFLICT (id) DO UPDATE SET
+    last_name = EXCLUDED.last_name, first_name = EXCLUDED.first_name, middle_name = EXCLUDED.middle_name,
+    phones = EXCLUDED.phones, email = EXCLUDED.email, delivery_channel = EXCLUDED.delivery_channel;
+
+INSERT INTO role (id, tenant_id, base_code, name, description) VALUES
+    ('cccccccc-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111', NULL, 'Electrician', 'Custom role without permissions')
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO member_role (tenant_id, member_id, role_id)
+SELECT m.tenant_id, m.id, md5(m.tenant_id::text || ':' || r.code)::uuid
+FROM (VALUES
+    ('aaaaaaaa-0000-0000-0000-000000000001'::uuid, 'CHAIRMAN'),
+    ('aaaaaaaa-0000-0000-0000-000000000002'::uuid, 'TREASURER'),
+    ('aaaaaaaa-0000-0000-0000-000000000003'::uuid, 'MEMBER'),
+    ('aaaaaaaa-0000-0000-0000-000000000004'::uuid, 'MEMBER'),
+    ('bbbbbbbb-0000-0000-0000-000000000001'::uuid, 'MEMBER'),
+    ('bbbbbbbb-0000-0000-0000-000000000002'::uuid, 'MEMBER')
+) AS r(member_id, code)
+JOIN member m ON m.id = r.member_id
+ON CONFLICT DO NOTHING;
+
+INSERT INTO member_role (tenant_id, member_id, role_id) VALUES
+    ('11111111-1111-1111-1111-111111111111', 'aaaaaaaa-0000-0000-0000-000000000004', 'cccccccc-0000-0000-0000-000000000001')
+ON CONFLICT DO NOTHING;

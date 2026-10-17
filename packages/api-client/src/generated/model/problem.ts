@@ -9,13 +9,18 @@
  *
  * OpenAPI spec version: 0.1.0
  */
+import type { ProblemFieldError } from './problemFieldError';
 
 /**
- * RFC 9457 Problem Details
+ * RFC 9457 Problem Details, served as `application/problem+json`. `detail` is English and never contains personal data.
  */
 export interface Problem {
   type?: string;
-  title?: string;
-  status?: number;
+  title: string;
+  status: number;
   detail?: string;
+  /** Stable machine-readable error code, for example `VALIDATION_FAILED` or `NOT_FOUND` */
+  code: string;
+  /** Field-level validation errors */
+  errors?: ProblemFieldError[];
 }

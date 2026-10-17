@@ -9,7 +9,8 @@
  *
  * OpenAPI spec version: 0.1.0
  */
-import type { Role } from './role';
+import type { Permission } from './permission';
+import type { RoleRef } from './roleRef';
 import type { TenantSummary } from './tenantSummary';
 
 export interface Me {
@@ -17,6 +18,12 @@ export interface Me {
   userId: string;
   email: string;
   fullName: string;
-  roles: Role[];
+  /** The member this user is linked to; absent for the platform operator */
+  memberId?: string;
+  /** True for the platform operator, who has no roles, permissions or cooperative data */
+  platformOperator: boolean;
+  roles: RoleRef[];
+  /** Union of the permissions of all the member's roles */
+  permissions: Permission[];
   tenant?: TenantSummary;
 }

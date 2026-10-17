@@ -2,17 +2,20 @@ import { createBrowserRouter, Navigate, RouterProvider } from 'react-router';
 import { useAuth } from 'react-oidc-context';
 import { Layout } from './components/Layout';
 import { SignIn } from './components/SignIn';
-import { CabinetPage } from './pages/CabinetPage';
+import { MeProvider } from './me';
+import { NotFoundPage } from './pages/NotFoundPage';
 import { useT } from './i18n';
 
 const router = createBrowserRouter([
   {
     element: <Layout />,
     children: [
-      { index: true, element: <Navigate to="/map" replace /> },
-      // the map is heavy (MapLibre), so it loads as a separate chunk
-      { path: 'map', lazy: () => import('./pages/MapPage').then((m) => ({ Component: m.MapPage })) },
-      { path: 'cabinet', element: <CabinetPage /> },
+      { index: true, element: <Navigate to="/account" replace /> },
+      {
+        path: 'account',
+        lazy: () => import('./pages/AccountPage').then((m) => ({ Component: m.AccountPage })),
+      },
+      { path: '*', element: <NotFoundPage /> },
     ],
   },
 ]);
@@ -27,5 +30,9 @@ export function App() {
   if (!auth.isAuthenticated) {
     return <SignIn error={auth.error?.message} />;
   }
-  return <RouterProvider router={router} />;
+  return (
+    <MeProvider>
+      <RouterProvider router={router} />
+    </MeProvider>
+  );
 }

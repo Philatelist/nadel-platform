@@ -1,4 +1,4 @@
-import { configureApi } from '@nadel/api-client';
+import { ApiError, configureApi } from '@nadel/api-client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { User } from 'oidc-client-ts';
 import { StrictMode } from 'react';
@@ -18,7 +18,14 @@ function currentAccessToken(): string | null {
 configureApi({ getToken: currentAccessToken });
 
 const queryClient = new QueryClient({
-  defaultOptions: { queries: { staleTime: 30_000, retry: 1 } },
+  defaultOptions: {
+    queries: {
+      staleTime: 30_000,
+      retry: (failureCount, error) =>
+        // client errors (4xx) will not fix themselves on retry
+        !(error instanceof ApiError && error.status >= 400 && error.status < 500) && failureCount < 1,
+    },
+  },
 });
 
 createRoot(document.getElementById('root')!).render(
