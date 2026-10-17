@@ -21,7 +21,10 @@
       "Bash(gh pr checks*)",
       "Bash(gh run view*)",
       "Bash(gh run list*)",
-      "Bash(gh run rerun*)"
+      "Bash(gh run rerun*)",
+      "Bash(make up*)",
+      "Bash(make infra*)",
+      "Bash(docker compose -f infra/docker-compose.yml*)"
     ],
     "deny": [
       "Bash(git push * main*)",
