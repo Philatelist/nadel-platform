@@ -28,8 +28,8 @@ Do not commit; report every file created or changed.
   - [x] E2E (`web/e2e/acceptance.spec.ts`): base-role name fields are enabled and Chairman Save is enabled (permissions stay locked); new rename → hint → restore flow for the Treasurer role with restore in `finally`; audit log shows "Treasurer → Bookkeeper" (no raw token). **[Agent: testing-expert]**
   - [x] Verify: `make check` green, then raise `coverage.minimum` in `backend/pom.xml` to the measured line coverage rounded down to two decimals and re-run `cd backend && ./mvnw -B verify`; then `make e2e` green. **[Agent: testing-expert]**
 
-- [ ] **Slice 4: Feature Testing & Regression**
+- [x] **Slice 4: Feature Testing & Regression**
 
   > Verifies the whole feature end-to-end against functional-spec.md, run after all implementation slices are complete.
-  - [ ] Read functional-spec.md acceptance criteria in full. Generate acceptance-level tests that verify the entire feature as a whole — not individual slices. Cover applicable layers (unit for pure logic, integration for service interactions, e2e for user flows) based on the project's testing stack. Write tests with RED validation (must fail before implementation is confirmed done). Annotate each test with `@spec: 004-role-names` and `@regression` if suitable for long-term regression. **[Agent: testing-expert]**
-  - [ ] Run all generated tests. All must pass. Fix any failures before proceeding. **[Agent: testing-expert]**
+  - [x] Read functional-spec.md acceptance criteria in full. Generate acceptance-level tests that verify the entire feature as a whole — not individual slices. Cover applicable layers (unit for pure logic, integration for service interactions, e2e for user flows) based on the project's testing stack. Write tests with RED validation (must fail before implementation is confirmed done). Annotate each test with `@spec: 004-role-names` and `@regression` if suitable for long-term regression. **[Agent: testing-expert]**
+  - [x] Run all generated tests. All must pass. Fix any failures before proceeding. **[Agent: testing-expert]**

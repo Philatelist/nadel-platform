@@ -18,3 +18,9 @@
 |---|---|---|---|---|
 | 1 | `54971bf..138490e` | MAJOR_ISSUES | M1 web guard "submit stored name when the standard name is untouched" (RolesPage submit) has no unit test | minor: restore also sends unsaved description/permission edits; restore ROLE_NAME_TAKEN shown under the name field; no-audit checks use a fixed sleep; uk BASE_ROLE_IMMUTABLE wording; audit value mapping applied to every entity type |
 | 2 | + `f40a963` | PASS | M1 resolved (`nameToSubmit` helper + 6 tests) | minor: helper takes the displayed name as an argument; round 1 minors open |
+
+## Slice 3 — Permissions unchanged by renames, e2e and docs
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `f40a963..02a9b37` | PASS | — | minor: e2e second context not closed on failure; e2e finally assumes no open dialog; `restoreSeededBaseRoles` does not restore descriptions |

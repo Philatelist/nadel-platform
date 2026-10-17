@@ -36,3 +36,12 @@
 | web/e2e/design-system.spec.ts | 2.6 Menu pressed twice opens then closes at 390 px | e2e | positive | yes | OK | spec 003 |
 | web/e2e/design-system.spec.ts | 2.6 plain member has header and no menu or Menu button | e2e | negative | yes | OK | spec 003 |
 | web/e2e/design-system.spec.ts | 2.8 Tab reaches menu links, search field and Add member with visible outline | e2e | positive | yes | OK | spec 003 |
+| backend/src/test/java/app/nadel/acceptance/RoleNamesAcceptanceTests.java | aBaseRoleNameIsRefusedWhenEmptyBlankOrLongerThanSixtyAndStaysUnchanged | integration | negative | yes | OK | spec 004-role-names, §2.1 #4 on a base role; 60 characters accepted |
+| backend/src/test/java/app/nadel/acceptance/RoleNamesAcceptanceTests.java | aRenamedTreasurerRoleIsReadUnderTheNewNameEverywhereAndRestoredToItsStandardName | integration | positive | yes | OK | §2.1 #1, §2.3 #2, §2.6 #1 (/me, member card, members list) |
+| backend/src/test/java/app/nadel/members/internal/RolesTests.java | rename, restore, uniqueness, trim no-op, useDefaultName 400, 403 without ROLES_MANAGE, Chairman lock, audit token (004 cases) | integration | positive+negative | yes | OK | spec 004-role-names, §2.1-§2.3, §2.5, §2.6; slice 2 tests, kept as is |
+| backend/src/test/java/app/nadel/acceptance/MembersAccessAcceptanceTests.java | renamingEveryBaseRoleDoesNotChangeWhoCanDoWhat | integration | positive | yes | OK | spec 004-role-names, §2.2 #1 |
+| web/src/roleName.test.ts, web/src/roleNameClash.test.ts, web/src/roleNameSubmit.test.ts | display name, audit token rendering, clash detection, stored-name submit guard | unit | positive+negative | yes | OK | spec 004-role-names, §2.3, §2.4, §2.6, §2.7 |
+| web/e2e/acceptance.spec.ts | 004 §2.1-§2.3: a base role is renamed, shown everywhere, restored, audited readably (English) | e2e | positive | yes | OK | spec 004-role-names |
+| web/e2e/role-names.spec.ts | §2.7 #1, §2.3 #1/#3, §2.4 #1, §2.1 #4, §2.2 #2 (Ukrainian: Казначей, hint, clash warning, empty name, no Delete) | e2e | positive+negative | yes | OK | spec 004-role-names |
+| web/e2e/role-names.spec.ts | §2.5 #1 treasurer gets no access to the Roles page | e2e | negative | yes | OK | spec 004-role-names; API 403 in RolesTests |
+| web/e2e/role-names.spec.ts | §2.1 #1, §2.6 #1-#3, §2.3 #2 rename to Бухгалтер shown in header, account, member page, members list; audit uk/en; restore | e2e | positive | yes | OK | spec 004-role-names; restores in finally |

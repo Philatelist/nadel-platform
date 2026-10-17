@@ -66,3 +66,6 @@
 - Slice 1 committed 54971bf (backend 71 targeted tests, web 49 unit; typecheck/lint/format/gen clean). Review r1 started.
 - Slice 1 review r1 PASS. Slice 2 committed 138490e (backend RolesTests/RoleLogicTests/AuditReadTests 72, web 59 unit; typecheck/lint/format clean). Review r1 started.
 - Slice 2 review r1 MAJOR_ISSUES (M1 untested submit-name guard) → fix f40a963 → r2 PASS.
+- Slice 3 committed 02a9b37 (make check green: backend 257, web 65, shared 5, ui-tokens 56; coverage 0.9392 → floor 0.90→0.93; make e2e 30 passed). Review r1 started.
+- Slice 3 review r1 PASS. All slice reviews PASS — Slice 4 gate open.
+- Slice 4 (testing-expert): RoleNamesAcceptanceTests (2) + e2e role-names.spec.ts (3, Ukrainian UI); no GAP; make check green (backend 259, floor 0.93 met), make e2e 33 passed. Note: a 60-char name with a trailing space is refused by the contract's maxLength on the raw input (pre-existing 002 behaviour; web input caps at 60).
