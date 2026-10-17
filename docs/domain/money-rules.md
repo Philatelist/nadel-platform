@@ -81,6 +81,33 @@ consumption = (final reading of old meter − old meter reading at period start)
 - A counter that wraps around (for example 99 999 → 00 012) is entered as a replacement of the meter by itself
   (same serial, final 99 999, initial 0), so the rule above still applies.
 
+### 6.3 Meter types and the meter tree
+
+Feedback from the first cooperative's chairman (17.10.2026); details marked *open* are to be confirmed with him before
+the meters feature is specified.
+
+- A meter measures one resource: `ELECTRICITY` (kWh) now, `WATER` (m³) later. The meters module is built for both from
+  the start; water charges need their own tariff (`PER_M3`) and are added when the cooperative installs water meters.
+- Electricity meters form a tree:
+
+```
+substation (transformer) meter
+├── quarter meter A ── plot meters of the plots it feeds
+├── quarter meter B ── plot meters …
+└── common consumers: well pumps, street lighting, office
+```
+
+- Each meter except a plot meter has a list of the plots (or child meters) it feeds; the board keeps that list. Readings
+  of substation, quarter and common-consumer meters are entered by the board or the electrician, on the same schedule
+  as plot readings.
+- Losses are computed per node: `node losses = node reading for the period − Σ readings of its children`, and are
+  shared among the plots under that node (mode as in section 6). With no quarter meters the tree is one level and
+  section 6 applies unchanged.
+- The board report per quarter meter shows: consumption, number of plots and members it feeds, sum of their plot
+  readings, losses in kWh and %. *Open:* exact columns the chairman wants.
+- Common consumers (well pumps, lighting): their consumption is a cooperative expense charged to plots. *Open:* split
+  equally per plot, per plot with water access, or included in the membership fee.
+
 ## 7. Allocation
 
 - A payment is first saved as unallocated.

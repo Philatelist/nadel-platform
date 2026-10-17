@@ -47,6 +47,8 @@ General rules for every feature in this sequence:
 
 - On any date the shares of a plot's owners sum to exactly 1, or the plot has no owner. Use exact fraction arithmetic,
   never floating point.
+- A member may own several plots at the same time, each in its own share. Every plot keeps its own balance; the
+  member sees all their plots (account page, `GET /me`) and each plot's debt separately.
 - Periods of the same member on the same plot do not overlap.
 - **Change of owner** is one operation: given date D and the new owners with shares, end all current ownerships with
   `valid_to = D - 1 day` and create the new ones from D. Recorded as one audited action.

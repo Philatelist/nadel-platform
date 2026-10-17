@@ -38,7 +38,7 @@ example row per sheet.
 
 | Sheet | Columns |
 |---|---|
-| `Plots` | number, street, kind (`PLOT`/`COMMON`), area_m2 or area_sotky (exactly one), cadastral_number, notes |
+| `Plots` | number, street, kind (`PLOT`/`COMMON`), area_m2 or area_sotky (exactly one), cadastral_number, has_building (yes/no, optional, default no), notes |
 | `Members` | external_id (any key unique within the file), last_name, first_name, middle_name, phones (comma-separated), email, postal_address, delivery_channel |
 | `Ownership` | plot_number, member_external_id, share (`1/2`), valid_from |
 

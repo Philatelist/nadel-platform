@@ -13,6 +13,10 @@
 | Meter | `Meter` | Electricity meter of a plot, or the common transformer meter. A plot has zero or one active meter; a replaced meter keeps its history (money-rules 6.1–6.2) |
 | Meter reading | `MeterReading` | Meter value on a date. Source: admin, member, photo. Status: pending / approved / rejected |
 | Transformer losses | — | Common meter minus the sum of plot meters for the period |
+| Substation meter | `Meter` (kind `SUBSTATION`) | Meter at the cooperative's transformer; root of the meter tree |
+| Quarter meter | `Meter` (kind `QUARTER`) | Intermediate meter for a group of plots (a street or block); its losses are shared among those plots |
+| Common consumer meter | `Meter` (kind `COMMON_CONSUMER`) | Meter of a shared consumer such as a well pump or street lighting |
+| Water meter | `Meter` (resource `WATER`) | Future: water meter of a plot, readings in m³ |
 | Billing period | `BillingPeriod` | A billing month. Open or closed |
 | Charge | `Charge` | Ledger entry: amount due for a plot, charge type and period |
 | Reversal | `Charge.kind = REVERSAL` | Entry that cancels an earlier charge |
