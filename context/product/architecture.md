@@ -24,6 +24,7 @@
   - A module never reads another module's tables.
   - Modules in code: `tenancy`, `identity`, `plots`.
   - Modules planned, in roadmap order: `members`, `tariffs`, `meters`, `ledger`, `payments`, `documents`, `notifications`, `audit`.
+  - The `plots` module keeps plots as records from phase 1; polygon import, coordinate conversion and the map view arrive in roadmap phase 6. `plot.boundary` is nullable, and every feature before phase 6 must work for plots without a polygon.
 - **Security:** Spring Security as an OAuth2 JWT resource server **[in code]**.
   - Starter: `spring-boot-starter-security-oauth2-resource-server` (the Boot 4 name). The issuer URI is in `application.yml`.
   - Authorization uses `@PreAuthorize` at service or controller level.
@@ -133,7 +134,8 @@
 - **Payments, later:**
   - Bank APIs (PrivatBank, monobank business) for statement retrieval **[later, out of scope for v1]**.
   - Online acquiring **[later]**.
-- **Maps:** MapLibre GL with an OSM-based basemap and no Google keys **[in code for the library; tile source to decide]**.
+- **Maps:** MapLibre GL with an OSM-based basemap and no Google keys **[in code for the library; tile source to decide]**. The map feature is roadmap phase 6.
+- **Cadastral import (phase 6):** DXF, State Land Cadastre XML exchange files, GeoJSON, KML and zipped Shapefile; coordinate conversion from UCS-2000 Gauss-Kruger zones, SK-63 and local systems to WGS84 on the backend (GeoTools or proj4j) **[planned; library to decide in an ADR]**. Data comes from the cooperative's own land documents or a certified land surveyor, never from scraping third-party cadastral sites.
 
 ---
 

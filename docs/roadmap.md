@@ -1,12 +1,15 @@
 # Roadmap
 
+The map comes late on purpose: plots exist as data from phase 1 (number, street, area, cadastral number, owners), while their polygons and the map view arrive in phase 6, once the source of cadastral data is clear. Until then debt status is shown in the plots list.
+
 | Phase | Scope | Status |
 |---|---|---|
-| 0. Foundation | Monorepo, CI, Keycloak, RLS, web and mobile shells, CLAUDE.md, ADRs | in progress |
-| 1. Plots, map, members | Map import (GeoJSON, KML, DXF), polygon editor, members, co-owners, ownership history, Excel import | — |
+| 0. Foundation | Monorepo, CI, Keycloak, RLS, web and mobile shells, CLAUDE.md, ADRs, AWOS product and architecture | done |
+| 1. Plots and members | Plots as data without polygons (number, street, area, cadastral number), members, co-owners with shares, ownership history, configurable admin roles, Excel import of plots and members | — |
 | 2. Tariffs and charges | Charge types, tariff versions, meters, transformer losses, period closing, ledger, recalculation | — |
-| 3. Payments | Manual entry, bank statement import (CSV/XLSX), matching hints, allocation, prepayments, map colors | — |
+| 3. Payments | Manual entry, cash desk receipts, bank statement import (CSV/XLSX), matching hints, allocation, prepayments, debt status in the plots list | — |
 | 4. Invoices and delivery | PDF + NBU QR, debt certificate, email, Telegram, Viber, delivery statuses | — |
 | 5. Member account | Web account, mobile apps, meter reading submission with photo, push | — |
-| 6. SaaS | Cooperative onboarding, subscriptions and billing, backups, monitoring, privacy policy | — |
-| 7. Automation | Bank API and auto-matching, online payment, debtor reminders, Telegram bot, meter photo OCR, smart meters, meeting reports and voting, AI treasurer assistant | — |
+| 6. Map | Import of plot polygons (DXF, State Land Cadastre XML, GeoJSON, KML, Shapefile) with coordinate system conversion (UCS-2000, SK-63, local systems to WGS84), import preview, matching polygons to plots, polygon editor, cooperative boundary, georeferenced image underlay, map colored by debt | — |
+| 7. SaaS | Cooperative onboarding, subscriptions and billing, backups, monitoring, privacy policy | — |
+| 8. Automation | Bank API and auto-matching, online payment, debtor reminders, Telegram bot, meter photo OCR, smart meters, meeting reports and voting, AI treasurer assistant | — |

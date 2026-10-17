@@ -1,6 +1,6 @@
 # Product Definition: Nadel
 
-- **Version:** 1.1
+- **Version:** 1.2
 - **Status:** Proposed
 
 > Business rules in this document follow `README.md`, `docs/domain/glossary.md` and
@@ -70,7 +70,7 @@ cooperative's data is fully isolated from every other cooperative's.
 
 ### 2.1. Core Features
 
-- **Cooperative map.** Every plot and every piece of common land is drawn on a map and colored by debt
+- **Cooperative map** (delivered last, see 3.1; until then debt status is shown in the plots list). Every plot and every piece of common land is drawn on a map and colored by debt
   status: **red** when the debt exceeds the cooperative's amount threshold or is older than its day
   threshold; **yellow** when there is any smaller or newer debt; **green** when nothing is owed,
   including when the plot is in prepayment; **grey** for common land and for plots with no current
@@ -152,16 +152,21 @@ uses the map and the debt totals to see where the cooperative stands before a bo
 
 The first version serves our own cooperative, built in this order:
 
-1. **Plots, map and members** — map import, plot polygons, members, co-owners, ownership history,
-   and configurable admin roles.
+1. **Plots and members** — plots as records (number, street, area, cadastral number) without map
+   polygons, members, co-owners with shares, ownership history, configurable admin roles, and import of
+   plots and members from Excel.
 2. **Tariffs, meters and charges** — charge types, tariff versions with effective dates, meters,
    transformer losses, period closing, the charges ledger and retroactive recalculation.
 3. **Payments** — manual entry, cash desk receipts, bank statement import, matching, allocation across
-   charge types, prepayments, and the resulting map colors.
+   charge types, prepayments, and debt status (red, yellow, green, grey) shown in the plots list.
 4. **Invoices and delivery** — PDF invoice with NBU QR code, debt certificate, and delivery by email,
    Telegram and Viber.
 5. **Member web account and mobile apps** — balances and history, meter readings with a photo, and push
    notifications.
+6. **Cooperative map** — import of plot polygons from the cooperative's land documents (DXF or State Land
+   Cadastre XML files, with coordinate system conversion), matching them to plots, an editor for
+   corrections, the cooperative boundary, and the map colored by debt. It comes last because the source
+   of cadastral data must be secured first; everything before it works without polygons.
 
 Throughout, every cooperative's data is fully isolated from every other cooperative's, admins enter and
 maintain members' personal data, and the platform operator cannot see cooperative data.
