@@ -46,7 +46,7 @@ import tools.jackson.databind.json.JsonMapper;
  * Each test names the functional-spec criteria it covers as {@code §2.x #n}.
  * <pre>
  * @layer: integration
- * @spec: 001-members-access
+ * @spec: 002-members-access
  * @regression
  * </pre>
  */

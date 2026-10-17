@@ -1,6 +1,6 @@
 # 0009. Configurable roles as permission sets per cooperative
 
-**Status:** accepted; implemented in phase 1 by spec 001 (`context/spec/001-members-access/`), see the implementation notes below
+**Status:** accepted; implemented in phase 1 by spec 002 (`context/spec/002-members-access/`), see the implementation notes below
 
 ## Context
 Every cooperative has a chairman, a treasurer, members and often an electrician, but many also have people with partial admin duties (a secretary who maintains the member list, an auditor who only reads). The product must let a chairman create such roles without code changes.
@@ -18,7 +18,7 @@ Every cooperative has a chairman, a treasurer, members and often an electrician,
 - The existing realm roles `CHAIRMAN`, `TREASURER`, `ELECTRICIAN`, `MEMBER` remain in the dev realm for convenience until this ADR is implemented in phase 1; after that the database is the source of truth for them.
 
 ## Implementation notes (2026-10)
-Spec 001 (members and access control) implemented this decision. Where it differs from the text above:
+Spec 002 (members and access control) implemented this decision. Where it differs from the text above:
 
 - **Base roles are `CHAIRMAN`, `TREASURER` and `MEMBER`.** Electrician is no longer a base role: an electrician works through a custom role, which gets meter permissions when meters arrive in a later phase. The demo cooperative has a custom role "Electrician" with no permissions yet, held by `electrician@demo.local` together with Member.
 - **The member–role table is `member_role`**, not `person_role` (the code name of a member is `Member`, see the glossary). Tables `member`, `role`, `role_permission` and `member_role` are created by `V2__members_and_roles.sql`, all with `tenant_id`, RLS `tenant_isolation` and composite foreign keys on `(tenant_id, id)`, so a role of one cooperative can never be linked to a member of another.

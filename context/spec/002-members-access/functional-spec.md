@@ -304,7 +304,7 @@ Assumptions made by the pipeline (recommended answers, not asked):
 
 All 60 acceptance criteria verified. UI states were rendered in a real browser (Chromium via Playwright) against the
 local stack (compose Postgres + Keycloak, backend jar, Vite dev server, fresh volume, localhost only); screenshots are
-in `docs/screenshots/001-members-access-*.png`. API, data and concurrency criteria are proven by the committed
+in `docs/screenshots/002-members-access-*.png`. API, data and concurrency criteria are proven by the committed
 integration tests (MockMvc through the real security chain against Testcontainers PostgreSQL), all green in the final
 full suite. The committed browser suite `web/e2e/acceptance.spec.ts` (15 specs) and `web/e2e/members.spec.ts` (2) pass
 against the same stack (`make e2e`: 17 passed).

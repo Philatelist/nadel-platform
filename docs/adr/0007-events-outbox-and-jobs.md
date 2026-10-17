@@ -18,7 +18,7 @@ CLAUDE.md requires cross-module side effects (notifications, recalculations, sta
 - Both dependencies are added when the first feature needs them (period close or notifications), not before.
 
 ## Implementation notes (2026-10)
-The outbox arrived with spec 001 (members and access control), whose first listener writes the audit log (module `audit`). JobRunr is still not added.
+The outbox arrived with spec 002 (members and access control), whose first listener writes the audit log (module `audit`). JobRunr is still not added.
 
 - **`spring-modulith-starter-jpa` 2.1.1** with `spring.modulith.events.republish-outstanding-events-on-restart: true` and `spring.modulith.events.completion-mode: delete`. The table is created by Flyway (`V3__audit_and_event_publication.sql`, schema copied from the Spring Modulith 2.1.1 jar), not by Spring Modulith.
 - **`event_publication` has no `tenant_id` and no RLS, deliberately.** It is an infrastructure table, not cooperative data: incomplete publications are resubmitted at application startup, where no cooperative is bound, so a `tenant_isolation` policy would hide them and events would be lost. This is the one exception to the rule that every table has `tenant_id` and RLS. Because serialized events can contain personal data (names, contacts in field changes), completed publications are deleted rather than kept, payloads stay small, and they are never logged. `EventPublicationGuardTests` asserts that the table has no RLS and that `nadel_app` can complete a publication with no tenant set.

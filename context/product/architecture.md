@@ -96,7 +96,7 @@
   - The product gets its own ADR. MinIO stopped publishing community images.
   - Candidates: Garage, SeaweedFS, or managed S3 from the hosting provider.
   - The backend should use only the S3 API, so the product can be swapped later.
-- **Event outbox:** the Spring Modulith Event Publication Registry (`spring-modulith-starter-jpa`) **[in code, since spec 001]**. Domain events are stored in the same transaction as the change that raised them and redelivered until their listeners finish; outstanding ones are resubmitted at startup, completed ones are deleted. All cross-module side effects (notifications, recalculations, status cache refresh) go through it. See ADR 0007.
+- **Event outbox:** the Spring Modulith Event Publication Registry (`spring-modulith-starter-jpa`) **[in code, since spec 002]**. Domain events are stored in the same transaction as the change that raised them and redelivered until their listeners finish; outstanding ones are resubmitted at startup, completed ones are deleted. All cross-module side effects (notifications, recalculations, status cache refresh) go through it. See ADR 0007.
   - The table `event_publication` (`V3__audit_and_event_publication.sql`) is the one table without `tenant_id` and RLS: startup resubmission runs without a tenant. Listeners bind the event's `tenantId` with `TenantContext.runAs` before opening their transaction (ADR 0007 implementation notes).
 - **Background jobs:** JobRunr with PostgreSQL storage **[planned, with period closing and notifications]**. It runs scheduled and retryable jobs: period-close runs, invoice generation, delivery retries to external channels. It is not the event outbox. See ADR 0007.
 - **Cash receipts:** a cash payment carries a receipt number from a per-cooperative counter **[planned, phase 3]**. The counter row is locked in the same transaction as the payment insert, so numbers are sequential, never reused and never changed; a reversed cash payment keeps its receipt number in history.
@@ -115,12 +115,12 @@
   - The user attribute `tenant_id` is mapped into the access token by an `oidc-usermodel-attribute-mapper` on both clients.
   - Later: Keycloak Organizations for people in several cooperatives, with cooperative selection at sign-in **[planned, separate ADR]**.
 - **Mobile OIDC library:** not chosen yet **[assumption: `expo-auth-session` with PKCE]**. It is not in `mobile/package.json`.
-- **Authentication flow** **[in code, since spec 001]** (`identity/internal/MemberAuthenticationConverter`, see the `identity` README):
+- **Authentication flow** **[in code, since spec 002]** (`identity/internal/MemberAuthenticationConverter`, see the `identity` README):
   1. A token with the realm role `PLATFORM_OPERATOR` becomes the operator, with no database access and no permissions (ADR 0008).
   2. Otherwise the `tenant_id` claim is bound with `TenantContext.runAs` and the active member of that cooperative is looked up: by Keycloak subject; on first sign-in, by email (case-insensitive) only when `email_verified` is true and the member is not yet linked, and the subject is then stored on the member. A member linked to another subject is never relinked; archived members are never found.
   3. No member: 403 `MEMBER_NOT_LINKED`. A failure of the lookup itself is 500, not 401.
   4. The union of the member's role permissions becomes the `PERM_*` authorities. Nothing is cached, so a role change applies on the next request.
-- **Authorization:** always on the server, with `@PreAuthorize("hasAuthority('PERM_...')")` **[in code, since spec 001]**. Clients hide UI by permission only for convenience (web: `useCan`, `RequirePermission`). See ADR 0009:
+- **Authorization:** always on the server, with `@PreAuthorize("hasAuthority('PERM_...')")` **[in code, since spec 002]**. Clients hide UI by permission only for convenience (web: `useCan`, `RequirePermission`). See ADR 0009:
   - A fixed list of permissions is defined in code (`identity.Permission`: `MEMBERS_VIEW`, `MEMBERS_EDIT`, `ROLES_MANAGE`, `AUDIT_VIEW`, `PLOTS_VIEW`, `PLOTS_EDIT`, `OWNERSHIP_EDIT`, `IMPORT_RUN`; later features add theirs, such as `PAYMENTS_ALLOCATE`).
   - Roles are named permission sets stored per cooperative (`role`, `role_permission`, `member_role`, tenant-scoped with RLS). Base roles `CHAIRMAN`, `TREASURER`, `MEMBER` are seeded by `seed_base_roles` and cannot be renamed or deleted; Chairman always has every permission; at least one active chairman must remain. Custom roles (for example "Secretary", or "Electrician" for meters) are created by anyone with `ROLES_MANAGE`.
   - Code checks permissions, never role names. A caller without `MEMBERS_VIEW` gets 404 for any member card but their own, so other members' existence is not revealed.
@@ -173,7 +173,7 @@
 - **Testing:**
   - Backend **[in code]**: JUnit 5, Spring Security Test, Spring Modulith Test and Testcontainers.
   - Clients: typecheck and lint. There is no client unit test framework yet.
-  - Browser E2E **[in code, since spec 001]**: Playwright (chromium only) in `web/e2e/`, run against `make infra` + backend + web with `make e2e` locally (browser installed once with `make e2e-install`) and by the CI `e2e` job. Not part of `make check`.
+  - Browser E2E **[in code, since spec 002]**: Playwright (chromium only) in `web/e2e/`, run against `make infra` + backend + web with `make e2e` locally (browser installed once with `make e2e-install`) and by the CI `e2e` job. Not part of `make check`.
 
 ---
 
@@ -199,7 +199,7 @@ Resolved:
 4. **Rounding wording:** `money-rules.md` section 1 and `CLAUDE.md` agree: rounding happens in `Money`, applied when a charge is created.
 5. **Ignored advisories:** the lists differ on purpose (OSV fails on every severity, `pnpm audit` only on high); `CLAUDE.md` now says so.
 6. **OSV-Scanner version:** pinned in CI.
-7. **Base roles:** Chairman, Treasurer and Member. Electrician is no longer a base role (spec 001); an electrician gets a custom role with meter permissions when meters arrive. `CLAUDE.md` still lists `ELECTRICIAN` until the owner updates it.
+7. **Base roles:** Chairman, Treasurer and Member. Electrician is no longer a base role (spec 002); an electrician gets a custom role with meter permissions when meters arrive. `CLAUDE.md` still lists `ELECTRICIAN` until the owner updates it.
 
 Open:
 

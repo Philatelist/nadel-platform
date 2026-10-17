@@ -1,5 +1,5 @@
 // @layer: e2e
-// @spec: 001-members-access
+// @spec: 002-members-access
 // @regression
 //
 // Acceptance specs of the whole feature "Members and Access Control" (functional-spec.md §2), driven through the

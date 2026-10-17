@@ -34,23 +34,36 @@ make web            # web only
 make gen            # regenerate packages/api-client from api/openapi.yaml
 make test           # backend ./mvnw verify (Testcontainers, coverage floor) + client typecheck
 make check          # everything CI runs: contract, format, lint, tests
+make e2e-install    # once: install the Playwright browser (chromium)
+make e2e            # end-to-end specs in web/e2e: starts infra, backend jar and web; not part of make check; needs JDK 25 on PATH
 ```
 
 Before finishing any task, run `make check` and fix what it reports.
 
-Keycloak test users (realm `nadel`, password `nadel` for all):
-`chairman@demo.local`, `treasurer@demo.local`, `electrician@demo.local`, `member@demo.local` belong to the Demo cooperative;
-`member@other.local` belongs to another cooperative (for isolation checks); `operator@nadel.local` is the platform operator.
+Keycloak test users (realm `nadel`, password `nadel` for all). Keycloak only signs them in; their permissions come from the
+database roles of the linked demo member:
+- `chairman@demo.local` → Chairman (every permission)
+- `treasurer@demo.local` → Treasurer
+- `member@demo.local` → Member
+- `electrician@demo.local` → Member plus the demo custom role "Electrician" (no permissions until meters arrive)
+- `member@other.local` → Member of another cooperative (for isolation checks)
+- `operator@nadel.local` → platform operator (realm role `PLATFORM_OPERATOR`, no cooperative data)
+
+After a change to `infra/keycloak/nadel-realm.json` run `docker compose -f infra/docker-compose.yml down -v` so the realm is
+re-imported.
 
 ## Feature workflow (Definition of Done)
 
-1. A spec exists in `docs/features/NNN-name.md` (template: `000-template.md`), with worked calculation examples if the feature touches money.
+Numbering: a feature document `docs/features/NNN-name.md` and its AWOS spec folder `context/spec/NNN-name/` share the same number `NNN`, and so does the feature branch (`NNN-name`). `001` is the foundation.
+
+1. A requirements document exists in `docs/features/NNN-name.md` (template: `000-template.md`), with worked calculation examples if the feature touches money.
 2. Change `api/openapi.yaml` first, then run `pnpm gen:api`. The server implements the generated interfaces.
 3. The DB schema changes only through a new Flyway migration `backend/src/main/resources/db/migration/V{N}__name.sql`. Existing migrations are never edited.
 4. Every new table with cooperative data has `tenant_id uuid not null`, RLS enabled, a `tenant_isolation` policy and an index on `tenant_id`. An isolation test is mandatory.
 5. Backend: unit tests for domain logic plus an integration test on Testcontainers. `./mvnw verify` is green, including `ModularityTests` and the JaCoCo coverage floor (`coverage.minimum` in `pom.xml`; raise it as coverage grows, never lower it).
 6. Clients: `pnpm -r typecheck` and `pnpm -r lint` are green. UI text goes only through i18n catalogs (`packages/shared/src/i18n`); Ukrainian is the default UI language.
-7. Demo data is updated if the feature displays something.
+7. `make e2e` is green when the feature changes a user flow covered by `web/e2e` (CI job `e2e`); a new user flow gets an end-to-end spec.
+8. Demo data is updated if the feature displays something.
 
 ## Hard rules (a violation means the review is rejected)
 
@@ -73,10 +86,10 @@ Keycloak test users (realm `nadel`, password `nadel` for all):
 **Modules (Spring Modulith)**
 - Top-level packages under `app.nadel.*` are modules. A module talks to another only through its public API (the module's root package) or through domain events. `internal` subpackages are closed.
 - A module never reads another module's tables directly.
-- Cross-module side effects (notifications, recalculations) go through domain events and the Spring Modulith outbox (`@ApplicationModuleListener`), not direct calls. Scheduled and long-running work uses JobRunr with `TenantContext.runAs`. Listeners and jobs must be idempotent. See ADR 0007.
+- Cross-module side effects (notifications, recalculations) go through domain events and the Spring Modulith outbox, not direct calls. Events that lead to tenant data carry `tenantId`; listeners bind it with `TenantContext.runAs` before opening their transaction (pattern in ADR 0007 implementation notes and `audit/README.md`). Scheduled and long-running work uses JobRunr with `TenantContext.runAs`. Listeners and jobs must be idempotent. See ADR 0007.
 
 **Security and data**
-- Authorization is permission-based (ADR 0009): code checks `@PreAuthorize("hasAuthority('PERM_...')")` at service or controller level, never role names. Roles are permission sets stored per cooperative; base roles are `CHAIRMAN`, `TREASURER`, `ELECTRICIAN`, `MEMBER`, plus the global `PLATFORM_OPERATOR`.
+- Authorization is permission-based (ADR 0009): code checks `@PreAuthorize("hasAuthority('PERM_...')")` at service or controller level, never role names. Roles are permission sets stored per cooperative; base roles are `CHAIRMAN` (always every permission), `TREASURER` and `MEMBER`; other duties (for example an electrician) are custom roles. `PLATFORM_OPERATOR` is global and the only Keycloak realm role.
 - A member sees the number and status color of every plot, but amounts, owners and personal data only for their own plots. Enforce this in the API response, not only in the UI.
 - Admin actions that change data are written to the audit log.
 - Personal data is never logged (names, phone numbers, emails, addresses).

@@ -2,7 +2,7 @@
 
 - Status: finished
 - Phase: done
-- Branch: 001-members-access · Base: main @ 39380d2
+- Branch: 002-members-access · Base: main @ 39380d2
 - Requirement: document `docs/features/002-members-access.md`
 - Autonomy: minimal (default; no argument, no `.claude/feature-pipeline.yml`)
 
@@ -19,7 +19,7 @@
 - UI: yes (`web/`, React + Vite). Browser tool: Claude in Chrome available.
 - Safe local run mode: `make up` (local docker-compose Postgres + Keycloak, backend :8080, web :5173); no external services in phase 1.
 - Git/commit rules: Conventional Commits per CLAUDE.md; pipeline commit format `{N}: ...`; feature branch only; never push/merge; **no AI attribution** (CLAUDE.md + pipeline rule override the harness reminder).
-- Next spec number: 001 (`context/spec/` is empty).
+- Next spec number: 002 (`context/spec/` is empty).
 
 ## Effective autonomy settings
 
@@ -99,7 +99,7 @@ new tables; module cycle identity↔members; Playwright CI job is new infrastruc
 - AUTO: brief decisions 3–13 taken at their recommended answers (rule: `questions: blocking`; user accepted the brief's scope apart from ELECTRICIAN).
 
 - Phase 1 done.
-- Phase 2 start: spec folder `context/spec/001-members-access`, branch `001-members-access` cut from main @ 39380d2. Baseline `./mvnw -B verify` running in detached worktree.
+- Phase 2 start: spec folder `context/spec/002-members-access`, branch `002-members-access` cut from main @ 39380d2. Baseline `./mvnw -B verify` running in detached worktree.
 - Functional spec written (`functional-spec.md`), 0 NEEDS CLARIFICATION markers; Assumptions & Decisions section lists 12 pipeline assumptions.
 - Phase 2 step 4: /awos:tech started.
 - Baseline: could not run (no JDK 25 on the machine; default java 17). Homebrew offers openjdk@25 25.0.4.1 and cask temurin@25. Recorded in review-log.md.
@@ -162,14 +162,14 @@ new tables; module cycle identity↔members; Playwright CI job is new infrastruc
 - Slice 7 review round 1: MAJOR_ISSUES (M1 acceptance test clears the Treasurer description in the shared DB). Fix sent to testing-expert (builder of the test).
 - Slice 7 review round 2: PASS. ALL slice reviews PASS (S1 2 rounds, S2 1, S3 2, S4 1, S5 2, S6 1, S7 2).
 - Phase 4 start: /awos:verify.
-- /awos:verify: 60/60 criteria [x] with evidence (24 screenshots in docs/screenshots/001-members-access-*.png from a Playwright walk-through against the local stack; committed integration and E2E tests); 4 criteria verified at API level only (listed in functional-spec §5). Status Completed in functional-spec.md and technical-considerations.md. Verify stack stopped by PID, compose down -v, ports free. Product docs already updated by the Slice 6 docs task → no /awos:product or /awos:architecture suggestion.
+- /awos:verify: 60/60 criteria [x] with evidence (24 screenshots in docs/screenshots/002-members-access-*.png from a Playwright walk-through against the local stack; committed integration and E2E tests); 4 criteria verified at API level only (listed in functional-spec §5). Status Completed in functional-spec.md and technical-considerations.md. Verify stack stopped by PID, compose down -v, ports free. Product docs already updated by the Slice 6 docs task → no /awos:product or /awos:architecture suggestion.
 - Phase 4 step 3: full suite (`make check`) started.
 - Phase 4 step 3: `make check` (JDK 25) exit 0 — no generated-client drift, format/lint/typecheck green, `./mvnw verify` 238 tests, 0 failures, coverage floor 0.93 met. Baseline (main @ 39380d2): 7 tests, 0 failures → no regressions, no baseline failures to report.
 - Clean-up: `git worktree list` shows only the main checkout; no stack, ports or processes left running.
 
 ## Final report
 
-**Branch:** `001-members-access` (cut from `main` @ 39380d2). Not pushed, not merged.
+**Branch:** `002-members-access` (cut from `main` @ 39380d2). Not pushed, not merged.
 
 **Commits:** caf2a12 specs · f76322d Slice 1 · 7ad1272 Slice 2 · 5ae986c Slice 1 review fixes · ca5ea40 Slice 3 · 81e5be8 Slice 3 review fixes · eb74fb7 Slice 4 · f03fd4c Slice 5 · 92eb53a Slice 5 review fixes · f04af75 Slice 6 · ab1fce4 Slice 7 (incl. the DELETE /roles 406 gap fix) · 8445e2a Slice 7 review fixes · final docs/evidence commit.
 

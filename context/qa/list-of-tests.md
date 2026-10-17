@@ -2,7 +2,7 @@
 
 | File | Test Name | Layer | Positive/Negative | @regression | Status | Notes |
 | ---- | --------- | ----- | ----------------- | ----------- | ------ | ----- |
-| backend/src/test/java/app/nadel/acceptance/MembersAccessAcceptanceTests.java | demoChairmanSeesThirtyToFortyMembersAcrossTwoPages | integration | positive | yes | OK | spec 001-members-access, §2.13 #1 |
+| backend/src/test/java/app/nadel/acceptance/MembersAccessAcceptanceTests.java | demoChairmanSeesThirtyToFortyMembersAcrossTwoPages | integration | positive | yes | OK | spec 002-members-access, §2.13 #1 |
 | backend/src/test/java/app/nadel/acceptance/MembersAccessAcceptanceTests.java | demoChairmanSeesTheFiveRolesAndSecretaryIsGivenToOneMember | integration | positive | yes | OK | §2.13 #2 |
 | backend/src/test/java/app/nadel/acceptance/MembersAccessAcceptanceTests.java | chairmanOnboardsASecretaryAndTheAuditLogTellsTheWholeStory | integration | positive | yes | OK | cross-slice journey: §2.3, §2.4, §2.6, §2.8, §2.9 |
 | backend/src/test/java/app/nadel/acceptance/MembersAccessAcceptanceTests.java | validationMessagesComeBackAsFieldCodesAndNothingIsSaved | integration | negative | yes | OK | §2.3 #2-#3, §2.6 #3-#5 |

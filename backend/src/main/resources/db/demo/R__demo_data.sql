@@ -45,7 +45,7 @@ SELECT '22222222-2222-2222-2222-222222222222', n::text, 'Forest St', 'PLOT', 600
 FROM generate_series(1, 2) AS n
 ON CONFLICT (tenant_id, number) DO NOTHING;
 
--- Members and roles (spec 001). Emails equal the Keycloak demo users; keycloak_subject stays null (linked on first sign-in).
+-- Members and roles (spec 002). Emails equal the Keycloak demo users; keycloak_subject stays null (linked on first sign-in).
 SELECT seed_base_roles(id) FROM tenant;
 
 INSERT INTO member (id, tenant_id, last_name, first_name, middle_name, phones, email, delivery_channel) VALUES
