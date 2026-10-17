@@ -32,3 +32,6 @@ mobile/web-build/
 *.log
 
 .claude/settings.local.json
+
+context/audits/
+context/audits/
