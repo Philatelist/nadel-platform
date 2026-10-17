@@ -26,6 +26,15 @@ const router = createBrowserRouter([
         ],
       },
       {
+        element: <RequirePermission permission="MEMBERS_EDIT" />,
+        children: [
+          {
+            path: 'members/new',
+            lazy: () => import('./pages/MemberFormPage').then((m) => ({ Component: m.MemberFormPage })),
+          },
+        ],
+      },
+      {
         path: 'members/:id',
         lazy: () => import('./pages/MemberPage').then((m) => ({ Component: m.MemberPage })),
       },

@@ -25,7 +25,23 @@ None yet. Features 004 (ownership) and 005 (import) will add a lookup API in the
   of another cooperative is 404 too. `MemberDtoMapper` is the only place that shapes a member for output: `notes` is
   present only for a viewer with `MEMBERS_VIEW`, otherwise the key is absent.
 
+- Writes (`MemberCommands`, one transaction each, `@PreAuthorize("hasAuthority('PERM_MEMBERS_EDIT')")` on the controller):
+  `POST /members` (201 with `Location`), `PUT /members/{id}`, `POST /members/{id}/archive`, `POST /members/{id}/restore`.
+  The cooperative comes from the caller's profile, never from the request. Archiving an archived member and restoring an
+  active one are no-ops (the card is returned, no audit event); a `PUT` that changes nothing writes no event either.
+  - `MemberData.from` validates and normalises: names trimmed and required (`REQUIRED`), phones through `PhoneNumber`
+    (`PHONE_INVALID` on `phones[i]` / `viberPhone`, duplicates removed), e-mail trimmed and lower-case, blank optional
+    fields become null, `DeliveryChannel.check` (`CHANNEL_CONTACT_MISSING` on `email` / `telegramUsername` / `viberPhone`).
+  - E-mail is unique among active members: a pre-check plus a mapping of the unique index `member_tenant_email_uq` give
+    409 `EMAIL_TAKEN` with `errors[{field: "email"}]`. Archived members free their e-mail; restore re-checks.
+  - `LastChairmanGuard.ensureNotLast(tenant, member)` takes `pg_advisory_xact_lock(hashtextextended(tenant, 0))` in the
+    transaction and refuses (409 `LAST_CHAIRMAN`) to take the only active chairman away. Archive uses it; slice 5 reuses it
+    for removing the Chairman role.
+  - `notes` need `MEMBERS_VIEW`: a `PUT` by an editor without it keeps the stored notes, a `POST` stores none.
+  - Each change publishes an `audit.AuditEvent` (`MEMBER_CREATED`, `MEMBER_UPDATED`, `MEMBER_ARCHIVED`, `MEMBER_RESTORED`)
+    built from `MemberSnapshot.diff(before, after)`; see the `audit` README.
+
 Base roles are `CHAIRMAN`, `TREASURER`, `MEMBER` (seeded per cooperative by the SQL function `seed_base_roles`); custom
 roles have no base code. Electrician is no longer a base role.
 
-Depends on `identity` and `problem`.
+Depends on `identity`, `problem` and `audit`.

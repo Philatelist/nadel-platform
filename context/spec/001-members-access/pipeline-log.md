@@ -1,7 +1,7 @@
 # Pipeline log — 002 Members and access control
 
 - Status: running
-- Phase: 3 — implement, Slice 2
+- Phase: 3 — implement, Slice 3
 - Branch: 001-members-access · Base: main @ 39380d2
 - Requirement: document `docs/features/002-members-access.md`
 - Autonomy: minimal (default; no argument, no `.claude/feature-pipeline.yml`)
@@ -122,3 +122,8 @@ new tables; module cycle identity↔members; Playwright CI job is new infrastruc
 - Slice 2 Verify (orchestrator): 41 tests green, no generated-client drift, client checks green.
 - Slice 2 committed: 7ad1272 — review round 1 running (worktree review-001-s2-r1). Slice 1 M1 fix sent to spring-backend (test-first). Slice 3 held until the M1 fix is committed (its contract change would break the backend build the fix is testing in the same tree).
 - Slice 2 review round 1: PASS (6 minor notes in review-log.md).
+- Slice 1 review fix committed: 5ae986c (bearer filter failure handler no longer rethrows; MemberLookupFailureTests RED→GREEN; verify 87 tests green). Round 2 review running (worktree review-001-s1-r2).
+- Phase 3: Slice 3 started (gate: Slice 3 commit waits for Slice 1 PASS).
+- Slice 1 review round 2: PASS (M1 resolved). All slice reviews so far PASS; no review outstanding.
+- Slice 3: contract (1 fix round: wrong permission name MEMBERS_MANAGE, Viber rule) and web (1 fix round: orval `useQuery: true` generated query hooks for POST/PUT; removed, mutations regenerated) ticked. DB task waits for its Java tests in the backend task.
+- Slice 3 Verify (orchestrator): 81 tests green, no generated-client drift, client checks green.

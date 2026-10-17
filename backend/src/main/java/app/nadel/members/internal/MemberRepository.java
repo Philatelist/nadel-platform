@@ -78,4 +78,19 @@ interface MemberRepository extends JpaRepository<Member, UUID> {
             + "where mr.tenantId = :tenantId and mr.memberId in :memberIds")
     List<MemberRoleRow> findRolesOfMembers(@Param("tenantId") UUID tenantId,
             @Param("memberIds") Collection<UUID> memberIds);
+
+    /** Ids of the active members holding the Chairman base role in a cooperative. */
+    @Query("select distinct m.id from Member m join MemberRole mr on mr.memberId = m.id "
+            + "join Role r on r.id = mr.roleId "
+            + "where m.tenantId = :tenantId and m.archivedAt is null and r.baseCode = 'CHAIRMAN'")
+    List<UUID> findActiveChairmanIds(@Param("tenantId") UUID tenantId);
+
+    /**
+     * Takes a transaction-scoped advisory lock for the cooperative (released at commit or rollback). Two requests
+     * that change who the chairmen are serialise here, so both cannot see "another chairman remains".
+     * Returns 1; the select only exists to run the function.
+     */
+    @Query(value = "select count(*) from (select pg_advisory_xact_lock(hashtextextended(cast(:tenantId as text), 0))) l",
+            nativeQuery = true)
+    long lockChairmen(@Param("tenantId") UUID tenantId);
 }

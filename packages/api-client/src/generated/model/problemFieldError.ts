@@ -12,7 +12,7 @@
 
 export interface ProblemFieldError {
   field: string;
-  /** For example `REQUIRED`, `TOO_LONG`, `INVALID`, `PHONE_INVALID`, `CHANNEL_CONTACT_MISSING` */
+  /** Field error code: `REQUIRED` (missing or blank), `TOO_LONG` (over the maximum length or item count), `INVALID` (wrong format, for example an email), `PHONE_INVALID` (not a valid phone number), `CHANNEL_CONTACT_MISSING` (the chosen delivery channel has no contact to deliver to) */
   code: string;
   message?: string;
 }

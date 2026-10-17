@@ -90,6 +90,41 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
 
+    post:
+      tags: [members]
+      operationId: createMember
+      summary: Create a member
+      description: |
+        Creates a member in the current cooperative. Requires the `MEMBERS_EDIT` permission.
+        A caller without `MEMBERS_VIEW` cannot set `notes`; the field is ignored.
+        A new member has no roles. The email must be unique within the cooperative (409 `EMAIL_TAKEN`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemberInput'
+      responses:
+        '201':
+          description: Created
+          headers:
+            Location:
+              description: URL of the created member
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Member'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
   /members/{id}:
     get:
       tags: [members]
@@ -122,6 +157,114 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+
+    put:
+      tags: [members]
+      operationId: updateMember
+      summary: Update a member
+      description: |
+        Replaces all editable fields of the member (full replacement; fields absent from the body are cleared).
+        Roles are not part of `MemberInput`; they change through the role assignment endpoint.
+        Requires the `MEMBERS_EDIT` permission. A caller without `MEMBERS_VIEW` cannot change `notes`;
+        the field is ignored and the stored value is kept.
+        The email must be unique within the cooperative (409 `EMAIL_TAKEN`).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemberInput'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Member'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /members/{id}/archive:
+    post:
+      tags: [members]
+      operationId: archiveMember
+      summary: Archive a member
+      description: |
+        Moves the member to the archive; the member keeps their history but is hidden from the default list and
+        can no longer sign in. Archiving an already archived member is a no-op. Requires `MEMBERS_EDIT`.
+        The last active chairman cannot be archived (409 `LAST_CHAIRMAN`).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Member'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /members/{id}/restore:
+    post:
+      tags: [members]
+      operationId: restoreMember
+      summary: Restore a member from the archive
+      description: |
+        Returns an archived member to the active list. Restoring an active member is a no-op.
+        Requires `MEMBERS_EDIT`. The member's email must still be unique among members (409 `EMAIL_TAKEN`).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Member'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
 
   /plots:
     get:
@@ -171,6 +314,15 @@ components:
             $ref: '#/components/schemas/Problem'
     NotFound:
       description: The resource does not exist or is not visible to the caller (code `NOT_FOUND`)
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Conflict:
+      description: >-
+        The request conflicts with the current state: the email is already used by another member of the
+        cooperative (code `EMAIL_TAKEN`, with `errors[{field: email}]`), or the action would leave the cooperative
+        without an active chairman (code `LAST_CHAIRMAN`)
       content:
         application/problem+json:
           schema:
@@ -261,6 +413,58 @@ components:
         archivedAt:
           type: string
           format: date-time
+
+    MemberInput:
+      type: object
+      description: |
+        Editable fields of a member. Names are required; everything else is optional.
+        Phone numbers may be written in local form (for example `067 123 45 67`); the server validates and
+        normalises them to E.164 (error code `PHONE_INVALID`). A caller without the `MEMBERS_VIEW` permission
+        cannot change `notes`: the field is ignored.
+      required: [lastName, firstName]
+      properties:
+        lastName:
+          type: string
+          minLength: 1
+          maxLength: 100
+        firstName:
+          type: string
+          minLength: 1
+          maxLength: 100
+        middleName:
+          type: string
+          maxLength: 100
+        phones:
+          type: array
+          maxItems: 10
+          items:
+            type: string
+            maxLength: 32
+          description: Phone numbers; the format is checked by the server, not by the schema
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        postalAddress:
+          type: string
+          maxLength: 500
+        deliveryChannel:
+          allOf:
+            - $ref: '#/components/schemas/DeliveryChannel'
+          default: PAPER
+          description: >-
+            Preferred invoice channel, `PAPER` when omitted. `EMAIL` requires `email`, `TELEGRAM` requires
+            `telegramUsername`, `VIBER` requires `viberPhone` (otherwise `CHANNEL_CONTACT_MISSING`).
+        telegramUsername:
+          type: string
+          maxLength: 64
+        viberPhone:
+          type: string
+          maxLength: 32
+        notes:
+          type: string
+          maxLength: 2000
+          description: Internal notes; ignored when the caller lacks `MEMBERS_VIEW`
 
     MemberSummary:
       type: object
@@ -459,6 +663,9 @@ components:
           type: string
         code:
           type: string
-          description: For example `REQUIRED`, `TOO_LONG`, `INVALID`, `PHONE_INVALID`, `CHANNEL_CONTACT_MISSING`
+          description: >-
+            Field error code: `REQUIRED` (missing or blank), `TOO_LONG` (over the maximum length or item count),
+            `INVALID` (wrong format, for example an email), `PHONE_INVALID` (not a valid phone number),
+            `CHANNEL_CONTACT_MISSING` (the chosen delivery channel has no contact to deliver to)
         message:
           type: string

@@ -10,6 +10,7 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `caf2a12..f76322d` | MAJOR_ISSUES | M1 member-lookup failure during sign-in likely answered 401 instead of 500 (default bearer failure handler rethrows `AuthenticationServiceException`); no test | minor: operator gets 404 not 403 on `GET /members/{id}`; operator token keeps a `tenant_id` claim and `/plots` has no `PERM_*` check (pre-existing, ADR 0008); `log.debug(..., ex)` in the catch-all may log row values; `/me` email from claim |
+| 2 | + `5ae986c` | PASS | M1 resolved (failure handler set after configurer; bad tokens still 401 via `MemberLinkingTests.unknownTokenIsUnauthenticated`) | minor: lookup/JWKS outage now answered 500 with no server-side log line (add a PII-free log in the `AuthenticationServiceException` branch); JWKS-outage path untested |
 
 ## Slice 2 — Members list and read-only member card, permission-gated navigation
 

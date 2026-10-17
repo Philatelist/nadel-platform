@@ -10,25 +10,31 @@
  * OpenAPI spec version: 0.1.0
  */
 import {
+  useMutation,
   useQuery
 } from '@tanstack/react-query';
 import type {
   DataTag,
   DefinedInitialDataOptions,
   DefinedUseQueryResult,
+  MutationFunction,
   QueryClient,
   QueryFunction,
   QueryKey,
   UndefinedInitialDataOptions,
+  UseMutationOptions,
+  UseMutationResult,
   UseQueryOptions,
   UseQueryResult
 } from '@tanstack/react-query';
 
 import type {
   BadRequestResponse,
+  ConflictResponse,
   ForbiddenResponse,
   ListMembersParams,
   Member,
+  MemberInput,
   MemberPage,
   NotFoundResponse,
   UnauthorizedResponse
@@ -167,7 +173,97 @@ export function useListMembers<TData = Awaited<ReturnType<typeof listMembers>>, 
 
 
 
-export const getGetMemberUrl = (id: string,) => {
+export const getCreateMemberUrl = () => {
+
+
+
+
+  return `/api/v1/members`
+}
+
+/**
+ * Creates a member in the current cooperative. Requires the `MEMBERS_EDIT` permission.
+ * A caller without `MEMBERS_VIEW` cannot set `notes`; the field is ignored.
+ * A new member has no roles. The email must be unique within the cooperative (409 `EMAIL_TAKEN`).
+ * @summary Create a member
+ */
+export const createMember = async (memberInput: MemberInput, options?: Parameters<typeof nadelFetch>[1]): Promise<Member> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return nadelFetch<Member>(getCreateMemberUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(memberInput)
+  }
+);}
+
+
+
+
+
+export const getCreateMemberMutationKey = () => ['createMember'] as const;
+
+export const getCreateMemberMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createMember>>, TError,CreateMemberMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createMember>>, TError,CreateMemberMutationVariables, TContext> => {
+
+const mutationKey = getCreateMemberMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createMember>>, CreateMemberMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  createMember(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateMemberMutationResult = NonNullable<Awaited<ReturnType<typeof createMember>>>
+    export type CreateMemberMutationBody = MemberInput
+    export type CreateMemberMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse
+    export type CreateMemberMutationVariables = {data: MemberInput}
+
+    /**
+ * @summary Create a member
+ */
+export const useCreateMember = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createMember>>, TError,CreateMemberMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof createMember>>,
+        TError,
+        CreateMemberMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateMemberMutationOptions(options), queryClient);
+    }
+    export const getGetMemberUrl = (id: string,) => {
 
 
 
@@ -271,3 +367,247 @@ export function useGetMember<TData = Awaited<ReturnType<typeof getMember>>, TErr
 
 
 
+export const getUpdateMemberUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/members/${id}`
+}
+
+/**
+ * Replaces all editable fields of the member (full replacement; fields absent from the body are cleared).
+ * Roles are not part of `MemberInput`; they change through the role assignment endpoint.
+ * Requires the `MEMBERS_EDIT` permission. A caller without `MEMBERS_VIEW` cannot change `notes`;
+ * the field is ignored and the stored value is kept.
+ * The email must be unique within the cooperative (409 `EMAIL_TAKEN`).
+ * @summary Update a member
+ */
+export const updateMember = async (id: string,
+    memberInput: MemberInput, options?: Parameters<typeof nadelFetch>[1]): Promise<Member> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return nadelFetch<Member>(getUpdateMemberUrl(id),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(memberInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateMemberMutationKey = () => ['updateMember'] as const;
+
+export const getUpdateMemberMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateMember>>, TError,UpdateMemberMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateMember>>, TError,UpdateMemberMutationVariables, TContext> => {
+
+const mutationKey = getUpdateMemberMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateMember>>, UpdateMemberMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateMember(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateMemberMutationResult = NonNullable<Awaited<ReturnType<typeof updateMember>>>
+    export type UpdateMemberMutationBody = MemberInput
+    export type UpdateMemberMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse
+    export type UpdateMemberMutationVariables = {id: string;data: MemberInput}
+
+    /**
+ * @summary Update a member
+ */
+export const useUpdateMember = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateMember>>, TError,UpdateMemberMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof updateMember>>,
+        TError,
+        UpdateMemberMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateMemberMutationOptions(options), queryClient);
+    }
+    export const getArchiveMemberUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/members/${id}/archive`
+}
+
+/**
+ * Moves the member to the archive; the member keeps their history but is hidden from the default list and
+ * can no longer sign in. Archiving an already archived member is a no-op. Requires `MEMBERS_EDIT`.
+ * The last active chairman cannot be archived (409 `LAST_CHAIRMAN`).
+ * @summary Archive a member
+ */
+export const archiveMember = async (id: string, options?: Parameters<typeof nadelFetch>[1]): Promise<Member> => {
+
+  return nadelFetch<Member>(getArchiveMemberUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getArchiveMemberMutationKey = () => ['archiveMember'] as const;
+
+export const getArchiveMemberMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof archiveMember>>, TError,ArchiveMemberMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof archiveMember>>, TError,ArchiveMemberMutationVariables, TContext> => {
+
+const mutationKey = getArchiveMemberMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof archiveMember>>, ArchiveMemberMutationVariables> = (props) => {
+          const {id} = props ?? {};
+
+          return  archiveMember(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ArchiveMemberMutationResult = NonNullable<Awaited<ReturnType<typeof archiveMember>>>
+
+    export type ArchiveMemberMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse
+    export type ArchiveMemberMutationVariables = {id: string}
+
+    /**
+ * @summary Archive a member
+ */
+export const useArchiveMember = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof archiveMember>>, TError,ArchiveMemberMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof archiveMember>>,
+        TError,
+        ArchiveMemberMutationVariables,
+        TContext
+      > => {
+      return useMutation(getArchiveMemberMutationOptions(options), queryClient);
+    }
+    export const getRestoreMemberUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/members/${id}/restore`
+}
+
+/**
+ * Returns an archived member to the active list. Restoring an active member is a no-op.
+ * Requires `MEMBERS_EDIT`. The member's email must still be unique among members (409 `EMAIL_TAKEN`).
+ * @summary Restore a member from the archive
+ */
+export const restoreMember = async (id: string, options?: Parameters<typeof nadelFetch>[1]): Promise<Member> => {
+
+  return nadelFetch<Member>(getRestoreMemberUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRestoreMemberMutationKey = () => ['restoreMember'] as const;
+
+export const getRestoreMemberMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof restoreMember>>, TError,RestoreMemberMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof restoreMember>>, TError,RestoreMemberMutationVariables, TContext> => {
+
+const mutationKey = getRestoreMemberMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof restoreMember>>, RestoreMemberMutationVariables> = (props) => {
+          const {id} = props ?? {};
+
+          return  restoreMember(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RestoreMemberMutationResult = NonNullable<Awaited<ReturnType<typeof restoreMember>>>
+
+    export type RestoreMemberMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse
+    export type RestoreMemberMutationVariables = {id: string}
+
+    /**
+ * @summary Restore a member from the archive
+ */
+export const useRestoreMember = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof restoreMember>>, TError,RestoreMemberMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof restoreMember>>,
+        TError,
+        RestoreMemberMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRestoreMemberMutationOptions(options), queryClient);
+    }

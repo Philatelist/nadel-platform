@@ -8,7 +8,7 @@ Texts are fixed English sentences and never contain personal data, exception mes
 
 | Type | Use |
 |---|---|
-| `ApiProblemException(status, code, detail, errors)` | Throw from any module for a business failure (409 `EMAIL_TAKEN`, 404 `NOT_FOUND`, ...). `ApiProblemException.notFound()` is the shortcut for 404 |
+| `ApiProblemException(status, code, detail, errors)` | Throw from any module for a business failure (409 `EMAIL_TAKEN` / `LAST_CHAIRMAN`, 404 `NOT_FOUND`, ...). `ApiProblemException.notFound()` is the shortcut for 404 |
 | `FieldProblem(field, code, message)` | One invalid field in `errors` |
 | `ProblemCodes` | Codes that are shared by several modules |
 | `ProblemWriter` | Writes a problem straight to a servlet response. For security handlers and filters, which run before Spring MVC and cannot throw |

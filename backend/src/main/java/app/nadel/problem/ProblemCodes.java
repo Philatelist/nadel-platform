@@ -10,6 +10,13 @@ public final class ProblemCodes {
     public static final String PERMISSION_DENIED = "PERMISSION_DENIED";
     public static final String NOT_FOUND = "NOT_FOUND";
     public static final String INTERNAL_ERROR = "INTERNAL_ERROR";
+    public static final String EMAIL_TAKEN = "EMAIL_TAKEN";
+    public static final String LAST_CHAIRMAN = "LAST_CHAIRMAN";
+
+    /** Codes of single fields in {@code errors[]}. */
+    public static final String REQUIRED = "REQUIRED";
+    public static final String PHONE_INVALID = "PHONE_INVALID";
+    public static final String CHANNEL_CONTACT_MISSING = "CHANNEL_CONTACT_MISSING";
 
     private ProblemCodes() {
     }

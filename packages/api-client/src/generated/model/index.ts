@@ -12,11 +12,13 @@
 
 export * from './badRequestResponse';
 export * from './baseRole';
+export * from './conflictResponse';
 export * from './deliveryChannel';
 export * from './forbiddenResponse';
 export * from './listMembersParams';
 export * from './me';
 export * from './member';
+export * from './memberInput';
 export * from './memberPage';
 export * from './memberSummary';
 export * from './money';

@@ -7,7 +7,9 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
@@ -68,6 +70,52 @@ class Member {
     private Instant updatedAt;
 
     protected Member() {
+    }
+
+    /** A new active member of a cooperative. */
+    static Member create(UUID tenantId, MemberData data, Instant now) {
+        Member member = new Member();
+        member.id = UUID.randomUUID();
+        member.tenantId = tenantId;
+        member.createdAt = now;
+        member.apply(data);
+        member.updatedAt = now;
+        return member;
+    }
+
+    /**
+     * Overwrites every editable field with {@code data}. Does not stamp {@code updatedAt}: the caller calls
+     * {@link #touch} only when the audited fields really changed. The stored phone order is kept when only the order
+     * differs, so such an edit changes nothing.
+     */
+    void apply(MemberData data) {
+        lastName = data.lastName();
+        firstName = data.firstName();
+        middleName = data.middleName();
+        if (phones == null || !Set.copyOf(phones).equals(Set.copyOf(data.phones()))
+                || phones.size() != data.phones().size()) {
+            phones = new ArrayList<>(data.phones());
+        }
+        email = data.email();
+        postalAddress = data.postalAddress();
+        deliveryChannel = data.deliveryChannel();
+        telegramUsername = data.telegramUsername();
+        viberPhone = data.viberPhone();
+        notes = data.notes();
+    }
+
+    void touch(Instant now) {
+        updatedAt = now;
+    }
+
+    void archive(Instant now) {
+        archivedAt = now;
+        updatedAt = now;
+    }
+
+    void restore(Instant now) {
+        archivedAt = null;
+        updatedAt = now;
     }
 
     UUID getId() {

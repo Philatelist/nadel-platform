@@ -5,6 +5,7 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -104,14 +105,16 @@ class MeEndpointTests extends IntegrationTest {
         String member = demo("member@demo.local");
 
         getAs(treasurer, "/api/v1/members").andExpect(status().isOk());
-        getAs(treasurer, "/api/v1/_probe/members-edit")
+        // MEMBERS_EDIT guards the write endpoints; an unknown id shows whether the guard let the call through (404)
+        postAs(treasurer, "/api/v1/members/" + UUID.randomUUID() + "/archive")
                 .andExpect(status().isForbidden())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
         getAs(member, "/api/v1/members")
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
-        getAs(demo("chairman@demo.local"), "/api/v1/_probe/members-edit").andExpect(status().isOk());
+        postAs(demo("chairman@demo.local"), "/api/v1/members/" + UUID.randomUUID() + "/archive")
+                .andExpect(status().isNotFound());
     }
 
     @Test
@@ -220,5 +223,9 @@ class MeEndpointTests extends IntegrationTest {
     private ResultActions getAs(String bearer, String path) throws Exception {
         return mvc.perform(get(path)
                 .header(HttpHeaders.AUTHORIZATION, bearer));
+    }
+
+    private ResultActions postAs(String bearer, String path) throws Exception {
+        return mvc.perform(post(path).header(HttpHeaders.AUTHORIZATION, bearer));
     }
 }

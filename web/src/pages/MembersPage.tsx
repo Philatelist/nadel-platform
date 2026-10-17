@@ -6,6 +6,7 @@ import { Pagination } from '../components/Pagination';
 import { QueryBoundary } from '../components/QueryBoundary';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useT } from '../i18n';
+import { useCan } from '../me';
 import { useRoleName } from '../roleName';
 
 const PAGE_SIZE = 20;
@@ -14,6 +15,7 @@ const SEARCH_DELAY_MS = 300;
 export function MembersPage() {
   const t = useT();
   const roleName = useRoleName();
+  const canEdit = useCan('MEMBERS_EDIT');
   const [params, setParams] = useSearchParams();
   const q = params.get('q') ?? '';
   const includeArchived = params.get('archived') === 'true';
@@ -51,7 +53,17 @@ export function MembersPage() {
 
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-4 px-4 py-8">
-      <h1 className="font-display text-2xl font-bold">{t.members.title}</h1>
+      <div className="flex items-center justify-between gap-4">
+        <h1 className="font-display text-2xl font-bold">{t.members.title}</h1>
+        {canEdit && (
+          <Link
+            to="/members/new"
+            className="rounded-md bg-accent px-3 py-1.5 text-sm font-semibold text-on-accent"
+          >
+            {t.members.add}
+          </Link>
+        )}
+      </div>
       <div className="flex flex-wrap items-center gap-4">
         <input
           type="search"
