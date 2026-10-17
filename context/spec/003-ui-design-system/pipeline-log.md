@@ -79,3 +79,5 @@
 - Slice 1 review r1: MAJOR_ISSUES (M1 stale --color-bg in MapPage); fix committed 8e8bf1a with a guard test.
 - Slice 2 committed bfba724 (web 35 tests); review r1 PASS. Slice 1 review r2 PASS.
 - Slice 3 committed 4657f49 (web 37 tests, make e2e 17 passed); review r1 PASS.
+- Slice 4 committed 792b4f7 (make check green: backend 239, ui-tokens 56, shared 5, web 37; make e2e 20 passed x2); review r1 PASS. All slice reviews PASS — Slice 5 gate open.
+- Slice 5 (testing-expert): 8 unit + 9 e2e acceptance tests; found GAP (locale switch buttons 24 px < 44 px); fixed by react-frontend in LocaleSwitch.tsx; make e2e 29 passed, web 45 tests.

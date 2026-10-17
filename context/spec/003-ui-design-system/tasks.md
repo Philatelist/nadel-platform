@@ -36,8 +36,8 @@ created or changed.
   - [x] Add `web/e2e/responsive.spec.ts` at 390 × 844 (tech spec 2.8): menu toggle with `aria-expanded`, members table scrolls inside its panel, no horizontal page scroll, a plain member sees no Menu button; plus a desktop check of the active menu item (`aria-current="page"`). Fix any other e2e selectors broken by this slice. **[Agent: testing-expert]**
   - [x] Verify: `make check` green, then `make e2e` green. Delete any temporary files produced. **[Agent: testing-expert]**
 
-- [ ] **Slice 5: Feature Testing & Regression**
+- [x] **Slice 5: Feature Testing & Regression**
 
   > Verifies the whole feature end-to-end against functional-spec.md, run after all implementation slices are complete.
-  - [ ] Read functional-spec.md acceptance criteria in full. Generate acceptance-level tests that verify the entire feature as a whole — not individual slices. Cover applicable layers (unit for pure logic, integration for service interactions, e2e for user flows) based on the project's testing stack. Write tests with RED validation (must fail before implementation is confirmed done). Annotate each test with `@spec: 003-ui-design-system` and `@regression` if suitable for long-term regression. **[Agent: testing-expert]**
-  - [ ] Run all generated tests. All must pass. Fix any failures before proceeding. **[Agent: testing-expert]**
+  - [x] Read functional-spec.md acceptance criteria in full. Generate acceptance-level tests that verify the entire feature as a whole — not individual slices. Cover applicable layers (unit for pure logic, integration for service interactions, e2e for user flows) based on the project's testing stack. Write tests with RED validation (must fail before implementation is confirmed done). Annotate each test with `@spec: 003-ui-design-system` and `@regression` if suitable for long-term regression. **[Agent: testing-expert]**
+  - [x] Run all generated tests. All must pass. Fix any failures before proceeding. **[Agent: testing-expert]**

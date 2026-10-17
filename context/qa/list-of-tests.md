@@ -24,3 +24,15 @@
 | web/e2e/acceptance.spec.ts | §2.4 #3 archived member not linked | e2e | negative | yes | OK | |
 | web/e2e/acceptance.spec.ts | §2.4 #5 operator; §2.12 other cooperative (2 specs) | e2e | negative | yes | OK | |
 | web/e2e/acceptance.spec.ts | §2.7 #2 Show archived while searching | e2e | positive | yes | OK | |
+| web/src/designSystem.acceptance.test.ts | 2.3 fonts self-hosted (index.html, latin+cyrillic imports, Plex tokens) | unit | negative+positive | yes | OK | spec 003-ui-design-system, 2.3 |
+| web/src/designSystem.acceptance.test.ts | 2.4 spacing, radius and target-size tokens | unit | positive | yes | OK | spec 003 |
+| web/src/designSystem.acceptance.test.ts | 2.9 mobile uses shared tokens and Plex fonts, no hex literals | unit | negative+positive | yes | OK | spec 003 |
+| web/e2e/design-system.spec.ts | 2.3 no outside font request; serif h1 / sans body; Cyrillic subset loaded | e2e | negative+positive | yes | OK | spec 003 |
+| web/e2e/design-system.spec.ts | 2.1 light palette on Members (page ground, white panel, accent button) | e2e | positive | yes | OK | spec 003 |
+| web/e2e/design-system.spec.ts | 2.2 dark appearance changes Members to the dark palette | e2e | positive | yes | OK | spec 003 |
+| web/e2e/design-system.spec.ts | 2.4 buttons and inputs on Members and Member form are at least 44 px | e2e | positive | yes | OK | spec 003 |
+| web/e2e/design-system.spec.ts | 2.4 header buttons incl. language switch at least 44 px | e2e | negative | yes | FAILING | GAP: LocaleSwitch buttons 24 px; marked test.fail until fixed |
+| web/e2e/design-system.spec.ts | 2.6 chairman header contents and active menu item | e2e | positive | yes | OK | spec 003 |
+| web/e2e/design-system.spec.ts | 2.6 Menu pressed twice opens then closes at 390 px | e2e | positive | yes | OK | spec 003 |
+| web/e2e/design-system.spec.ts | 2.6 plain member has header and no menu or Menu button | e2e | negative | yes | OK | spec 003 |
+| web/e2e/design-system.spec.ts | 2.8 Tab reaches menu links, search field and Add member with visible outline | e2e | positive | yes | OK | spec 003 |

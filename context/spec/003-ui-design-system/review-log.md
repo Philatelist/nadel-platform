@@ -24,3 +24,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `bfba724..4657f49` | PASS | — | minor: page-level padding/max-width doubles the shell padding (picked up in slice 4); redundant `.first()` in members.spec; plain-member "no Menu button" check deferred to responsive spec; slice commit subjects follow the pipeline's `{N}: Slice` format, not Conventional Commits (squash title will be Conventional) |
+
+## Slice 4 — Remaining screens, narrow-screen spec and clean-up
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `4657f49..792b4f7` | PASS | — | minor: `RolesPage` state naming (`banner`/`setFormError`); Audit cells no longer top-aligned; Account "My details" h2 absent while loading, sub-headings inside the Roles panel; permission descriptions 14 px on a member screen; second Menu click not asserted (Slice 5) |
