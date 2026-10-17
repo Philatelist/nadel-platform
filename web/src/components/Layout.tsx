@@ -1,57 +1,106 @@
-import { NavLink, Outlet } from 'react-router';
+import { useEffect, useRef, useState } from 'react';
+import { Link, NavLink, Outlet } from 'react-router';
 import { useAuth } from 'react-oidc-context';
 import type { Permission } from '@nadel/api-client';
 import { useMe } from '../me';
 import { useT } from '../i18n';
+import { useRoleName } from '../roleName';
 import { LocaleSwitch } from './LocaleSwitch';
+import { Button } from './ui';
 
 interface NavItem {
   to: string;
-  label: 'account' | 'members' | 'roles' | 'audit';
-  permission?: Permission;
+  label: 'members' | 'roles' | 'audit';
+  permission: Permission;
 }
 
 const NAV_ITEMS: readonly NavItem[] = [
-  { to: '/account', label: 'account' },
   { to: '/members', label: 'members', permission: 'MEMBERS_VIEW' },
   { to: '/roles', label: 'roles', permission: 'ROLES_MANAGE' },
   { to: '/audit', label: 'audit', permission: 'AUDIT_VIEW' },
 ];
 
+const itemClass = ({ isActive }: { isActive: boolean }) =>
+  `flex min-h-11 items-center rounded-control px-3 text-[15px] no-underline ${
+    isActive ? 'bg-accent-soft font-semibold text-accent' : 'text-ink hover:bg-accent-soft'
+  }`;
+
 export function Layout() {
-  const { permissions } = useMe();
+  const me = useMe();
   const auth = useAuth();
   const t = useT();
-  const link = ({ isActive }: { isActive: boolean }) =>
-    `rounded-md px-3 py-1.5 text-sm ${isActive ? 'bg-accent-soft text-ink' : 'text-muted hover:text-ink'}`;
+  const roleName = useRoleName();
+  const [open, setOpen] = useState(false);
+  const menuButton = useRef<HTMLButtonElement>(null);
+
+  const items = NAV_ITEMS.filter((item) => me.permissions.includes(item.permission));
+  const hasMenu = items.length > 0;
+
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpen(false);
+        menuButton.current?.focus();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [open]);
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex flex-wrap items-center gap-3 border-b border-line bg-surface px-4 py-3">
-        <span className="font-display text-lg font-bold">{t.app.name}</span>
-        <nav className="flex gap-1">
-          {NAV_ITEMS.filter((item) => !item.permission || permissions.includes(item.permission)).map(
-            (item) => (
-              <NavLink key={item.to} to={item.to} className={link}>
-                {t.nav[item.label]}
-              </NavLink>
-            ),
-          )}
-        </nav>
-        <div className="ml-auto flex items-center gap-3">
+      <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line bg-surface px-4 py-3">
+        <Link to="/" className="font-serif text-xl font-semibold text-ink no-underline">
+          {t.app.name}
+        </Link>
+        {me.tenant?.name && <span className="min-w-0 truncate text-sm text-ink-muted">{me.tenant.name}</span>}
+        <div className="ml-auto flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
+          <div className="flex min-w-0 flex-col text-sm leading-tight">
+            <Link to="/account" className="truncate font-medium text-ink">
+              {me.fullName}
+            </Link>
+            <span className="truncate text-xs text-ink-muted">{me.roles.map(roleName).join(', ')}</span>
+          </div>
           <LocaleSwitch />
-          <button
-            type="button"
-            onClick={() => void auth.signoutRedirect()}
-            className="text-sm text-muted hover:text-ink"
-          >
+          <Button variant="secondary" onClick={() => void auth.signoutRedirect()}>
             {t.auth.signOut}
-          </button>
+          </Button>
+          {hasMenu && (
+            <Button
+              ref={menuButton}
+              variant="secondary"
+              className="md:hidden"
+              aria-expanded={open}
+              aria-controls="app-menu"
+              onClick={() => setOpen((value) => !value)}
+            >
+              {t.nav.menu}
+            </Button>
+          )}
         </div>
       </header>
-      <main className="min-h-0 flex-1">
-        <Outlet />
-      </main>
+      <div className="flex min-h-0 flex-1 flex-col md:flex-row">
+        {hasMenu && (
+          <aside
+            id="app-menu"
+            className={`${open ? 'block' : 'hidden'} border-b border-line bg-surface p-3 md:block md:w-60 md:shrink-0 md:border-b-0 md:border-r`}
+          >
+            <nav aria-label={t.nav.main} className="flex flex-col gap-1">
+              {items.map((item) => (
+                <NavLink key={item.to} to={item.to} className={itemClass} onClick={() => setOpen(false)}>
+                  {t.nav[item.label]}
+                </NavLink>
+              ))}
+            </nav>
+          </aside>
+        )}
+        <main className="min-w-0 flex-1 overflow-auto px-4 py-6 md:px-7">
+          <div className="mx-auto max-w-[1060px]">
+            <Outlet />
+          </div>
+        </main>
+      </div>
     </div>
   );
 }

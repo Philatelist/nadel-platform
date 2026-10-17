@@ -2,7 +2,7 @@ import { useGetPlots, type PlotFeatureCollection, type PlotStatus } from '@nadel
 import { formatMoney, formatSotky, isZeroMoney } from '@nadel/shared';
 import { LngLatBounds, Map as MapLibreMap, NavigationControl, type GeoJSONSource } from 'maplibre-gl';
 import { useEffect, useRef, useState } from 'react';
-import { QueryError } from '../components/QueryState';
+import { ErrorState } from '../components/ui';
 import { useT } from '../i18n';
 
 const STATUSES: PlotStatus[] = ['RED', 'YELLOW', 'GREEN', 'GREY'];
@@ -55,7 +55,11 @@ export function MapPage() {
         version: 8,
         sources: {},
         layers: [
-          { id: 'background', type: 'background', paint: { 'background-color': cssVar('--color-bg') } },
+          {
+            id: 'background',
+            type: 'background',
+            paint: { 'background-color': cssVar('--color-background') },
+          },
         ],
       },
       center: [30.7, 46.6],
@@ -131,16 +135,16 @@ export function MapPage() {
 
       {isError && (
         <div className="absolute inset-x-4 top-4 rounded-xl border border-line bg-surface">
-          <QueryError onRetry={() => void refetch()} />
+          <ErrorState message={t.errors.generic} onRetry={() => void refetch()} />
         </div>
       )}
       {!isLoading && collection && collection.features.length === 0 && (
-        <div className="absolute inset-x-4 top-4 max-w-md rounded-xl border border-line bg-surface p-4 text-muted">
+        <div className="absolute inset-x-4 top-4 max-w-md rounded-xl border border-line bg-surface p-4 text-ink-muted">
           {t.map.empty}
         </div>
       )}
 
-      <div className="absolute bottom-4 left-4 flex flex-wrap gap-3 rounded-xl border border-line bg-surface px-3 py-2 text-xs text-muted">
+      <div className="absolute bottom-4 left-4 flex flex-wrap gap-3 rounded-xl border border-line bg-surface px-3 py-2 text-xs text-ink-muted">
         {STATUSES.map((s) => (
           <span key={s} className="flex items-center gap-1.5">
             <i
@@ -155,21 +159,21 @@ export function MapPage() {
       {plot && (
         <aside className="absolute right-4 top-4 w-64 rounded-xl border border-line bg-surface p-4">
           <div className="flex items-start justify-between gap-2">
-            <h2 className="font-display text-lg font-bold">
+            <h2 className="font-serif text-lg font-semibold">
               {plot.kind === 'COMMON' ? t.map.commonLand : `${t.map.plot} ${plot.number}`}
             </h2>
-            <button type="button" onClick={() => setSelected(null)} className="text-muted" aria-label="×">
+            <button type="button" onClick={() => setSelected(null)} className="text-ink-muted" aria-label="×">
               ×
             </button>
           </div>
           <dl className="mt-3 grid grid-cols-2 gap-y-1.5 text-sm">
-            <dt className="text-muted">{t.map.area}</dt>
+            <dt className="text-ink-muted">{t.map.area}</dt>
             <dd className="tabular-nums">
               {formatSotky(plot.areaM2)} {t.map.sotky}
             </dd>
             {plot.debt && !isZeroMoney(plot.debt) && (
               <>
-                <dt className="text-muted">{t.map.debt}</dt>
+                <dt className="text-ink-muted">{t.map.debt}</dt>
                 <dd className="tabular-nums">{formatMoney(plot.debt)}</dd>
               </>
             )}

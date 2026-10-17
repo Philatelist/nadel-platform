@@ -1,10 +1,9 @@
 import { useListAuditEntries, type AuditEntry } from '@nadel/api-client';
 import { keepPreviousData } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router';
-import { Field } from '../components/Field';
-import { SelectInput, TextInput } from '../components/inputs';
 import { Pagination } from '../components/Pagination';
 import { QueryBoundary } from '../components/QueryBoundary';
+import { DataTable, PageHeader, Panel, Select, TextField, type Column } from '../components/ui';
 import { useLocale, useT } from '../i18n';
 import { problemCode, problemFieldErrors } from '../problem';
 
@@ -53,95 +52,97 @@ export function AuditPage() {
       : undefined;
   const a = t.audit;
 
+  const columns: Column<AuditEntry>[] = [
+    { key: 'time', header: a.columns.time, cell: (entry) => <AuditTime entry={entry} locale={locale} /> },
+    {
+      key: 'author',
+      header: a.columns.author,
+      cell: (entry) =>
+        entry.actorMemberId ? (
+          <button
+            type="button"
+            onClick={() => setFilter('actorMemberId', entry.actorMemberId)}
+            className="text-left underline decoration-dotted hover:text-accent"
+          >
+            {entry.actorName ?? a.system}
+          </button>
+        ) : (
+          (entry.actorName ?? a.system)
+        ),
+    },
+    { key: 'action', header: a.columns.action, cell: (entry) => a.action[entry.action] },
+    { key: 'record', header: a.columns.record, cell: (entry) => <AuditRecord entry={entry} /> },
+    { key: 'changes', header: a.columns.changes, cell: (entry) => <AuditChanges entry={entry} /> },
+  ];
+
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-8">
-      <h1 className="font-display text-2xl font-bold">{a.title}</h1>
-      <div className="flex flex-wrap items-start gap-4">
-        <Field label={a.filters.entityType}>
-          {({ id }) => (
-            <SelectInput
-              id={id}
-              invalid={false}
-              value={entityType ?? ''}
-              onChange={(e) => setFilter('entityType', e.target.value)}
-            >
-              <option value="">{a.filters.all}</option>
-              {ENTITY_TYPES.map((type) => (
-                <option key={type} value={type}>
-                  {a.entityType[type]}
-                </option>
-              ))}
-            </SelectInput>
-          )}
-        </Field>
-        <Field label={a.filters.from} error={dateError}>
-          {(c) => (
-            <TextInput
-              {...c}
-              type="date"
-              value={fromParam}
-              onChange={(e) => setFilter('from', e.target.value)}
-            />
-          )}
-        </Field>
-        <Field label={a.filters.to}>
-          {(c) => (
-            <TextInput {...c} type="date" value={toParam} onChange={(e) => setFilter('to', e.target.value)} />
-          )}
-        </Field>
-      </div>
-      {(entityId ?? actorMemberId) && (
-        <div className="flex flex-wrap gap-2">
-          {entityId && (
-            <Chip label={a.filters.onlyRecord} onRemove={() => setFilter('entityId', undefined)} />
-          )}
-          {actorMemberId && (
-            <Chip label={a.filters.onlyAuthor} onRemove={() => setFilter('actorMemberId', undefined)} />
-          )}
+    <div className="flex flex-col gap-4 text-[15px]">
+      <PageHeader title={a.title} />
+      <Panel>
+        <div className="flex flex-wrap items-start gap-4">
+          <Select
+            label={a.filters.entityType}
+            value={entityType ?? ''}
+            onChange={(e) => setFilter('entityType', e.target.value)}
+          >
+            <option value="">{a.filters.all}</option>
+            {ENTITY_TYPES.map((type) => (
+              <option key={type} value={type}>
+                {a.entityType[type]}
+              </option>
+            ))}
+          </Select>
+          <TextField
+            label={a.filters.from}
+            error={dateError}
+            type="date"
+            value={fromParam}
+            onChange={(e) => setFilter('from', e.target.value)}
+          />
+          <TextField
+            label={a.filters.to}
+            type="date"
+            value={toParam}
+            onChange={(e) => setFilter('to', e.target.value)}
+          />
         </div>
-      )}
-      <QueryBoundary
-        query={query}
-        isEmpty={(data) => data.items.length === 0}
-        emptyMessage={filtered ? a.nothingFound : a.empty}
-      >
-        {(data) => (
-          <>
-            <div className="overflow-x-auto rounded-xl border border-line bg-surface">
-              <table className="w-full text-left text-sm">
-                <thead className="border-b border-line text-muted">
-                  <tr>
-                    {(['time', 'author', 'action', 'record', 'changes'] as const).map((col) => (
-                      <th key={col} scope="col" className="px-3 py-2 font-medium">
-                        {a.columns[col]}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-line">
-                  {data.items.map((entry) => (
-                    <AuditRow
-                      key={entry.id}
-                      entry={entry}
-                      locale={locale}
-                      onAuthor={(id) => setFilter('actorMemberId', id)}
-                    />
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <Pagination
-              page={data.page}
-              totalPages={data.totalPages}
-              onPageChange={(p) => {
-                const next = new URLSearchParams(params);
-                next.set('page', String(p));
-                setParams(next);
-              }}
-            />
-          </>
+        {(entityId ?? actorMemberId) && (
+          <div className="flex flex-wrap gap-2">
+            {entityId && (
+              <Chip label={a.filters.onlyRecord} onRemove={() => setFilter('entityId', undefined)} />
+            )}
+            {actorMemberId && (
+              <Chip label={a.filters.onlyAuthor} onRemove={() => setFilter('actorMemberId', undefined)} />
+            )}
+          </div>
         )}
-      </QueryBoundary>
+        <QueryBoundary
+          query={query}
+          isEmpty={(data) => data.items.length === 0}
+          emptyMessage={filtered ? a.nothingFound : a.empty}
+        >
+          {(data) => (
+            <>
+              <DataTable
+                columns={columns}
+                rows={data.items}
+                rowKey={(entry) => entry.id}
+                caption={a.title}
+                emptyMessage={a.empty}
+              />
+              <Pagination
+                page={data.page}
+                totalPages={data.totalPages}
+                onPageChange={(p) => {
+                  const next = new URLSearchParams(params);
+                  next.set('page', String(p));
+                  setParams(next);
+                }}
+              />
+            </>
+          )}
+        </QueryBoundary>
+      </Panel>
     </div>
   );
 }
@@ -149,13 +150,13 @@ export function AuditPage() {
 function Chip({ label, onRemove }: { label: string; onRemove: () => void }) {
   const t = useT();
   return (
-    <span className="flex items-center gap-2 rounded-full border border-line bg-accent-soft px-3 py-1 text-sm">
+    <span className="flex items-center gap-2 rounded-full border border-line bg-accent-soft px-3 py-1 text-sm text-ink">
       {label}
       <button
         type="button"
         onClick={onRemove}
         aria-label={`${t.audit.filters.remove}: ${label}`}
-        className="text-muted hover:text-ink"
+        className="text-ink-muted hover:text-ink"
       >
         ×
       </button>
@@ -163,70 +164,52 @@ function Chip({ label, onRemove }: { label: string; onRemove: () => void }) {
   );
 }
 
-function AuditRow({
-  entry,
-  locale,
-  onAuthor,
-}: {
-  entry: AuditEntry;
-  locale: string;
-  onAuthor: (id: string) => void;
-}) {
+function AuditTime({ entry, locale }: { entry: AuditEntry; locale: string }) {
+  return (
+    <time dateTime={entry.occurredAt} className="whitespace-nowrap">
+      {new Intl.DateTimeFormat(locale, {
+        dateStyle: 'short',
+        timeStyle: 'medium',
+        timeZone: TIME_ZONE,
+      }).format(new Date(entry.occurredAt))}
+    </time>
+  );
+}
+
+function AuditRecord({ entry }: { entry: AuditEntry }) {
+  const a = useT().audit;
+  const label = entry.entityLabel ?? a.unlabelled;
+  return (
+    <>
+      <span className="text-ink-muted">{a.entityType[entry.entityType]}: </span>
+      {entry.entityType === 'MEMBER' ? (
+        <Link to={`/members/${entry.entityId}`} className="text-accent underline">
+          {label}
+        </Link>
+      ) : (
+        label
+      )}
+    </>
+  );
+}
+
+function AuditChanges({ entry }: { entry: AuditEntry }) {
   const t = useT();
   const a = t.audit;
   const fieldNames: Readonly<Record<string, string>> = { ...t.member.fields, ...a.fields };
-  const label = entry.entityLabel ?? a.unlabelled;
   const value = (field: string, raw: string | undefined): string => {
     if (raw === undefined || raw === '') return a.noValue;
     if (field === 'archived') return raw === 'true' ? a.yes : a.no;
     return raw;
   };
-
   return (
-    <tr className="align-top">
-      <td className="whitespace-nowrap px-3 py-2">
-        <time dateTime={entry.occurredAt}>
-          {new Intl.DateTimeFormat(locale, {
-            dateStyle: 'short',
-            timeStyle: 'medium',
-            timeZone: TIME_ZONE,
-          }).format(new Date(entry.occurredAt))}
-        </time>
-      </td>
-      <td className="px-3 py-2">
-        {entry.actorMemberId ? (
-          <button
-            type="button"
-            onClick={() => onAuthor(entry.actorMemberId as string)}
-            className="text-left underline decoration-dotted hover:text-accent"
-          >
-            {entry.actorName ?? a.system}
-          </button>
-        ) : (
-          (entry.actorName ?? a.system)
-        )}
-      </td>
-      <td className="px-3 py-2">{a.action[entry.action]}</td>
-      <td className="px-3 py-2">
-        <span className="text-muted">{a.entityType[entry.entityType]}: </span>
-        {entry.entityType === 'MEMBER' ? (
-          <Link to={`/members/${entry.entityId}`} className="underline hover:text-accent">
-            {label}
-          </Link>
-        ) : (
-          label
-        )}
-      </td>
-      <td className="px-3 py-2">
-        <ul className="flex flex-col gap-1">
-          {entry.changes.map((change) => (
-            <li key={change.field}>
-              <span className="text-muted">{fieldNames[change.field] ?? change.field}: </span>
-              {value(change.field, change.oldValue)} → {value(change.field, change.newValue)}
-            </li>
-          ))}
-        </ul>
-      </td>
-    </tr>
+    <ul className="flex flex-col gap-1">
+      {entry.changes.map((change) => (
+        <li key={change.field}>
+          <span className="text-ink-muted">{fieldNames[change.field] ?? change.field}: </span>
+          {value(change.field, change.oldValue)} → {value(change.field, change.newValue)}
+        </li>
+      ))}
+    </ul>
   );
 }

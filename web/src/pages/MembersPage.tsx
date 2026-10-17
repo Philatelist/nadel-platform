@@ -1,9 +1,10 @@
-import { useListMembers } from '@nadel/api-client';
+import { useListMembers, type Member } from '@nadel/api-client';
 import { keepPreviousData } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { Pagination } from '../components/Pagination';
 import { QueryBoundary } from '../components/QueryBoundary';
+import { Badge, buttonClass, DataTable, PageHeader, Panel, SearchField, type Column } from '../components/ui';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useT } from '../i18n';
 import { useCan } from '../me';
@@ -51,83 +52,93 @@ export function MembersPage() {
   );
   const filtered = q !== '' || includeArchived;
 
+  const fullName = (m: Member) => [m.lastName, m.firstName, m.middleName].filter(Boolean).join(' ');
+  const f = t.member.fields;
+  const columns: Column<Member>[] = [
+    {
+      key: 'name',
+      header: f.name,
+      cell: (m) => (
+        <Link to={`/members/${m.id}`} className="font-medium text-accent underline">
+          {fullName(m)}
+        </Link>
+      ),
+    },
+    { key: 'phones', header: f.phones, cell: (m) => m.phones.join(', ') || f.none },
+    { key: 'email', header: f.email, cell: (m) => m.email ?? f.none },
+    { key: 'channel', header: f.deliveryChannel, cell: (m) => t.channel[m.deliveryChannel] },
+    { key: 'roles', header: f.roles, cell: (m) => m.roles.map(roleName).join(', ') || f.none },
+    {
+      key: 'status',
+      header: t.members.columnStatus,
+      cell: (m) => (
+        <Badge tone={m.archived ? 'neutral' : 'success'}>
+          {m.archived ? t.members.archived : t.members.active}
+        </Badge>
+      ),
+    },
+  ];
+
   return (
-    <div className="mx-auto flex max-w-4xl flex-col gap-4 px-4 py-8">
-      <div className="flex items-center justify-between gap-4">
-        <h1 className="font-display text-2xl font-bold">{t.members.title}</h1>
-        {canEdit && (
-          <Link
-            to="/members/new"
-            className="rounded-md bg-accent px-3 py-1.5 text-sm font-semibold text-on-accent"
-          >
-            {t.members.add}
-          </Link>
-        )}
-      </div>
-      <div className="flex flex-wrap items-center gap-4">
-        <input
-          type="search"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder={t.members.searchPlaceholder}
-          aria-label={t.members.searchPlaceholder}
-          className="min-w-64 rounded-md border border-line bg-surface px-3 py-1.5 text-sm"
-        />
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={includeArchived}
-            onChange={(e) =>
-              update((next) => {
-                if (e.target.checked) next.set('archived', 'true');
-                else next.delete('archived');
-                next.delete('page');
-              })
-            }
-          />
-          {t.members.showArchived}
-        </label>
-      </div>
-      <QueryBoundary
-        query={query}
-        isEmpty={(data) => data.items.length === 0}
-        emptyMessage={filtered ? t.members.nothingFound : t.members.empty}
-      >
-        {(data) => (
-          <>
-            <ul className="flex flex-col divide-y divide-line rounded-xl border border-line bg-surface">
-              {data.items.map((m) => (
-                <li key={m.id}>
-                  <Link
-                    to={`/members/${m.id}`}
-                    className="flex flex-col gap-1 px-4 py-3 hover:bg-accent-soft"
-                  >
-                    <span className="font-medium">
-                      {[m.lastName, m.firstName, m.middleName].filter(Boolean).join(' ')}
-                      {m.archived && (
-                        <span className="ml-2 rounded-full border border-line px-2 py-0.5 text-xs text-muted">
-                          {t.members.archived}
-                        </span>
-                      )}
-                    </span>
-                    <span className="text-sm text-muted">
-                      {[m.phones.join(', '), m.email, t.channel[m.deliveryChannel]]
-                        .filter(Boolean)
-                        .join(' · ')}
-                    </span>
-                    <span className="text-sm">{m.roles.map(roleName).join(', ')}</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-            <Pagination
-              page={data.page}
-              totalPages={data.totalPages}
-              onPageChange={(p) => update((next) => next.set('page', String(p)))}
+    <div className="flex flex-col gap-4 text-[15px]">
+      <PageHeader
+        title={t.members.title}
+        actions={
+          canEdit && (
+            <Link to="/members/new" className={buttonClass('primary')}>
+              {t.members.add}
+            </Link>
+          )
+        }
+      />
+      <Panel>
+        <div className="flex flex-wrap items-end gap-x-6 gap-y-3">
+          <div className="min-w-64 flex-1 sm:max-w-md">
+            <SearchField
+              label={t.members.searchPlaceholder}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder={t.members.searchPlaceholder}
             />
-          </>
-        )}
-      </QueryBoundary>
+          </div>
+          <label className="flex min-h-11 items-center gap-2">
+            <input
+              type="checkbox"
+              checked={includeArchived}
+              onChange={(e) =>
+                update((next) => {
+                  if (e.target.checked) next.set('archived', 'true');
+                  else next.delete('archived');
+                  next.delete('page');
+                })
+              }
+            />
+            {t.members.showArchived}
+          </label>
+        </div>
+        <QueryBoundary
+          query={query}
+          isEmpty={(data) => data.items.length === 0}
+          emptyMessage={filtered ? t.members.nothingFound : t.members.empty}
+        >
+          {(data) => (
+            <>
+              <DataTable
+                columns={columns}
+                rows={data.items}
+                rowKey={(m) => m.id}
+                caption={t.members.title}
+                emptyMessage={t.members.empty}
+              />
+              <Pagination
+                page={data.page}
+                totalPages={data.totalPages}
+                onPageChange={(p) => update((next) => next.set('page', String(p)))}
+              />
+            </>
+          )}
+        </QueryBoundary>
+      </Panel>
     </div>
   );
 }

@@ -38,6 +38,7 @@ follow the permissions in `/me` (`useCan`, `RequirePermission`); hiding is a con
 | `src/App.tsx` | Routes (react-router) |
 | `src/pages/` | Screens |
 | `src/components/` | Shared UI components |
+| `src/components/ui/` | Component kit (Button, Panel, PageHeader, DataTable, fields, Badge, Notice, states); build web screens from it, with token colors only (ESLint forbids hex literals) |
 | `src/index.css` | Tailwind and design tokens (match `packages/ui-tokens`) |
 | `src/me.tsx` | Current user from `GET /me`: `MeProvider`, `useMe()`, `useCan(permission)`; "not linked" and "no cooperative" pages |
 | `e2e/` | Playwright specs and the sign-in helper |

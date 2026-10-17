@@ -11,16 +11,12 @@ import {
 import { format } from '@nadel/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
-import { Banner } from '../components/Banner';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { Field } from '../components/Field';
-import { TextArea, TextInput } from '../components/inputs';
 import { QueryBoundary } from '../components/QueryBoundary';
+import { Badge, Button, Notice, PageHeader, TextArea, TextField } from '../components/ui';
 import { useT } from '../i18n';
 import { problemCode, problemFieldErrors, problemMessage, type FieldErrors } from '../problem';
 import { useRoleName } from '../roleName';
-
-const buttonClass = 'rounded-md border border-line px-3 py-1.5 text-sm';
 
 export function RolesPage() {
   const t = useT();
@@ -51,23 +47,24 @@ export function RolesPage() {
   });
 
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-4 px-4 py-8">
-      <div className="flex items-center gap-3">
-        <h1 className="font-display text-2xl font-bold">{c.title}</h1>
-        <button
-          type="button"
-          className={`${buttonClass} ml-auto`}
-          onClick={() => {
-            setSaved(undefined);
-            setError(undefined);
-            setEditing('new');
-          }}
-        >
-          {c.add}
-        </button>
-      </div>
-      {saved && <Banner variant="success">{saved}</Banner>}
-      {error && <Banner variant="error">{error}</Banner>}
+    <div className="flex flex-col gap-4 text-[15px]">
+      <PageHeader
+        title={c.title}
+        actions={
+          <Button
+            variant="primary"
+            onClick={() => {
+              setSaved(undefined);
+              setError(undefined);
+              setEditing('new');
+            }}
+          >
+            {c.add}
+          </Button>
+        }
+      />
+      {saved && <Notice tone="success">{saved}</Notice>}
+      {error && <Notice tone="danger">{error}</Notice>}
 
       {editing === 'new' && permissions.data && (
         <RoleEditor
@@ -87,7 +84,7 @@ export function RolesPage() {
             {[...data]
               .sort((a, b) => Number(b.baseCode !== undefined) - Number(a.baseCode !== undefined))
               .map((role) => (
-                <li key={role.id} className="rounded-xl border border-line bg-surface p-4">
+                <li key={role.id} className="rounded-panel border border-line bg-surface p-5">
                   {editing === role.id && permissions.data ? (
                     <RoleEditor
                       key={role.id}
@@ -103,20 +100,19 @@ export function RolesPage() {
                     <div className="flex flex-wrap items-center gap-3">
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-semibold">{roleName(role)}</span>
-                          {role.baseCode && (
-                            <span className="rounded-full border border-line px-2 py-0.5 text-xs text-muted">
-                              {c.baseRole}
-                            </span>
-                          )}
+                          <span className="text-[17px] font-semibold">{roleName(role)}</span>
+                          <Badge tone={role.baseCode ? 'info' : 'neutral'}>
+                            {role.baseCode ? c.baseRole : c.customRole}
+                          </Badge>
                         </div>
-                        {role.description && <p className="text-sm text-muted">{role.description}</p>}
-                        <p className="text-sm text-muted">{format(c.memberCount, { n: role.memberCount })}</p>
+                        {role.description && <p className="text-sm text-ink-muted">{role.description}</p>}
+                        <p className="text-sm text-ink-muted">
+                          {format(c.memberCount, { n: role.memberCount })}
+                        </p>
                       </div>
                       <div className="ml-auto flex gap-2">
-                        <button
-                          type="button"
-                          className={buttonClass}
+                        <Button
+                          variant="secondary"
                           onClick={() => {
                             setSaved(undefined);
                             setError(undefined);
@@ -124,11 +120,10 @@ export function RolesPage() {
                           }}
                         >
                           {c.edit}
-                        </button>
+                        </Button>
                         {!role.baseCode && (
-                          <button
-                            type="button"
-                            className={buttonClass}
+                          <Button
+                            variant="danger"
                             onClick={() => {
                               setSaved(undefined);
                               setError(undefined);
@@ -136,7 +131,7 @@ export function RolesPage() {
                             }}
                           >
                             {c.delete}
-                          </button>
+                          </Button>
                         )}
                       </div>
                     </div>
@@ -186,7 +181,7 @@ function RoleEditor({
     new Set(isChairman ? available : (role?.permissions ?? [])),
   );
   const [errors, setErrors] = useState<FieldErrors>({});
-  const [banner, setBanner] = useState<string>();
+  const [banner, setFormError] = useState<string>();
 
   const options = {
     onSuccess: async () => {
@@ -197,13 +192,13 @@ function RoleEditor({
       const fields = problemFieldErrors(t, e);
       if (problemCode(e) === 'ROLE_NAME_TAKEN') {
         setErrors({ name: t.problem.ROLE_NAME_TAKEN });
-        setBanner(undefined);
+        setFormError(undefined);
       } else if (Object.keys(fields).length > 0) {
         setErrors(fields);
-        setBanner(undefined);
+        setFormError(undefined);
       } else {
         setErrors({});
-        setBanner(problemMessage(t, e));
+        setFormError(problemMessage(t, e));
       }
     },
   };
@@ -221,7 +216,7 @@ function RoleEditor({
   const submit = (event: FormEvent) => {
     event.preventDefault();
     setErrors({});
-    setBanner(undefined);
+    setFormError(undefined);
     const data = {
       name: isBase ? role.name : name.trim(),
       description: description.trim() === '' ? undefined : description.trim(),
@@ -233,30 +228,24 @@ function RoleEditor({
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-3" noValidate>
-      <h2 className="font-display text-lg font-bold">{role ? roleName(role) : c.newTitle}</h2>
-      {banner && <Banner variant="error">{banner}</Banner>}
-      <Field label={c.name} error={errors.name}>
-        {(control) => (
-          <TextInput
-            {...control}
-            value={name}
-            disabled={isBase}
-            maxLength={60}
-            onChange={(e) => setName(e.target.value)}
-          />
-        )}
-      </Field>
-      <Field label={c.description} error={errors.description}>
-        {(control) => (
-          <TextArea
-            {...control}
-            rows={2}
-            value={description}
-            maxLength={500}
-            onChange={(e) => setDescription(e.target.value)}
-          />
-        )}
-      </Field>
+      <h2 className="font-serif text-xl font-semibold">{role ? roleName(role) : c.newTitle}</h2>
+      {banner && <Notice tone="danger">{banner}</Notice>}
+      <TextField
+        label={c.name}
+        error={errors.name}
+        value={name}
+        disabled={isBase}
+        maxLength={60}
+        onChange={(e) => setName(e.target.value)}
+      />
+      <TextArea
+        label={c.description}
+        error={errors.description}
+        rows={2}
+        value={description}
+        maxLength={500}
+        onChange={(e) => setDescription(e.target.value)}
+      />
       <PermissionBoxes
         codes={available}
         selected={selected}
@@ -264,18 +253,14 @@ function RoleEditor({
         legend={c.permissions}
         onToggle={toggle}
       />
-      {isChairman && <p className="text-sm text-muted">{c.chairmanNote}</p>}
+      {isChairman && <p className="text-sm text-ink-muted">{c.chairmanNote}</p>}
       <div className="flex justify-end gap-2">
-        <button type="button" className={buttonClass} onClick={onCancel}>
+        <Button variant="secondary" onClick={onCancel}>
           {c.cancel}
-        </button>
-        <button
-          type="submit"
-          disabled={busy || isChairman}
-          className="rounded-md bg-accent px-3 py-1.5 text-sm font-semibold text-on-accent disabled:opacity-60"
-        >
+        </Button>
+        <Button type="submit" variant="primary" disabled={busy || isChairman}>
           {busy ? c.saving : c.save}
-        </button>
+        </Button>
       </div>
     </form>
   );
@@ -297,7 +282,7 @@ function PermissionBoxes({
   const t = useT();
   return (
     <fieldset className="flex flex-col gap-2">
-      <legend className="mb-1 text-sm text-muted">{legend}</legend>
+      <legend className="mb-1 text-sm text-ink-muted">{legend}</legend>
       {codes.map((code) => (
         <label key={code} className="flex items-start gap-2 text-sm">
           <input
@@ -309,7 +294,7 @@ function PermissionBoxes({
           />
           <span>
             <span className="font-medium">{t.permission[code].name}</span>
-            <span className="block text-muted">{t.permission[code].description}</span>
+            <span className="block text-ink-muted">{t.permission[code].description}</span>
           </span>
         </label>
       ))}

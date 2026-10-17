@@ -38,9 +38,10 @@ dev: up ## Alias for `make up`
 gen: ## Regenerate the TS API client from api/openapi.yaml
 	pnpm gen:api
 
-test: ## Backend tests (Testcontainers, needs Docker) and client typecheck
+test: ## Backend tests (Testcontainers, needs Docker), client typecheck and client unit tests
 	cd backend && ./mvnw -B verify
 	pnpm -r typecheck
+	pnpm -r test
 
 lint: ## Lint all client packages
 	pnpm -r lint

@@ -11,7 +11,11 @@
     "@nadel/shared": "workspace:*",
     "@nadel/ui-tokens": "workspace:*",
     "@tanstack/react-query": "5.104.3",
-    "expo-localization": "58.0.4"
+    "expo-localization": "58.0.4",
+    "expo-font": "58.0.8",
+    "@expo-google-fonts/ibm-plex-sans": "0.4.1",
+    "@expo-google-fonts/ibm-plex-serif": "0.4.1",
+    "@expo-google-fonts/ibm-plex-mono": "0.4.1"
   },
   "devDependencies": {
     "@types/react": "19.3.0",

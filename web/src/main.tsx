@@ -1,3 +1,15 @@
+import '@fontsource/ibm-plex-sans/latin-400.css';
+import '@fontsource/ibm-plex-sans/cyrillic-400.css';
+import '@fontsource/ibm-plex-sans/latin-500.css';
+import '@fontsource/ibm-plex-sans/cyrillic-500.css';
+import '@fontsource/ibm-plex-sans/latin-600.css';
+import '@fontsource/ibm-plex-sans/cyrillic-600.css';
+import '@fontsource/ibm-plex-serif/latin-600.css';
+import '@fontsource/ibm-plex-serif/cyrillic-600.css';
+import '@fontsource/ibm-plex-mono/latin-400.css';
+import '@fontsource/ibm-plex-mono/cyrillic-400.css';
+import '@fontsource/ibm-plex-mono/latin-500.css';
+import '@fontsource/ibm-plex-mono/cyrillic-500.css';
 import { ApiError, configureApi } from '@nadel/api-client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { User } from 'oidc-client-ts';

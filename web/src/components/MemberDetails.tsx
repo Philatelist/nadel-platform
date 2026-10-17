@@ -1,9 +1,10 @@
 import type { Member } from '@nadel/api-client';
 import { useT } from '../i18n';
 import { useRoleName } from '../roleName';
+import { Panel } from './ui';
 
 /** Read-only member card. Optional fields (notes, messengers) appear only when the response has them. */
-export function MemberDetails({ member }: { member: Member }) {
+export function MemberDetails({ member, title, large }: { member: Member; title?: string; large?: boolean }) {
   const t = useT();
   const f = t.member.fields;
   const roleName = useRoleName();
@@ -21,13 +22,21 @@ export function MemberDetails({ member }: { member: Member }) {
   rows.push([f.roles, member.roles.map(roleName).join(', ') || f.none]);
 
   return (
-    <dl className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-3 rounded-xl border border-line bg-surface p-5">
-      {rows.map(([label, value]) => (
-        <div key={label} className="contents">
-          <dt className="text-muted">{label}</dt>
-          <dd className="break-words whitespace-pre-line">{value}</dd>
-        </div>
-      ))}
-    </dl>
+    <Panel {...(title ? { title } : {})}>
+      <dl
+        className={`grid grid-cols-1 gap-x-6 gap-y-3 ${large ? 'text-base' : 'text-[15px]'} sm:grid-cols-[minmax(10rem,max-content)_1fr]`}
+      >
+        {rows.map(([label, value]) => (
+          <div key={label} className="contents">
+            <dt
+              className={`font-medium text-ink-muted sm:font-normal ${large ? 'text-base' : 'text-sm sm:text-[15px]'}`}
+            >
+              {label}
+            </dt>
+            <dd className="mb-2 break-words whitespace-pre-line sm:mb-0">{value}</dd>
+          </div>
+        ))}
+      </dl>
+    </Panel>
   );
 }
