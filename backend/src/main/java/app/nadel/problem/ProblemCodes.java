@@ -12,9 +12,13 @@ public final class ProblemCodes {
     public static final String INTERNAL_ERROR = "INTERNAL_ERROR";
     public static final String EMAIL_TAKEN = "EMAIL_TAKEN";
     public static final String LAST_CHAIRMAN = "LAST_CHAIRMAN";
+    public static final String ROLE_NAME_TAKEN = "ROLE_NAME_TAKEN";
+    public static final String ROLE_IN_USE = "ROLE_IN_USE";
+    public static final String BASE_ROLE_IMMUTABLE = "BASE_ROLE_IMMUTABLE";
 
     /** Codes of single fields in {@code errors[]}. */
     public static final String REQUIRED = "REQUIRED";
+    public static final String TOO_LONG = "TOO_LONG";
     public static final String INVALID = "INVALID";
     public static final String PHONE_INVALID = "PHONE_INVALID";
     public static final String CHANNEL_CONTACT_MISSING = "CHANNEL_CONTACT_MISSING";

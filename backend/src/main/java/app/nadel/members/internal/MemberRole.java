@@ -34,6 +34,13 @@ class MemberRole {
     protected MemberRole() {
     }
 
+    MemberRole(UUID tenantId, UUID memberId, UUID roleId, Instant assignedAt) {
+        this.tenantId = tenantId;
+        this.memberId = memberId;
+        this.roleId = roleId;
+        this.assignedAt = assignedAt;
+    }
+
     UUID getMemberId() {
         return memberId;
     }

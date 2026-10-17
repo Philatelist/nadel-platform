@@ -1,7 +1,7 @@
 # Pipeline log — 002 Members and access control
 
 - Status: running
-- Phase: 3 — implement, Slice 4
+- Phase: 3 — implement, Slice 5
 - Branch: 001-members-access · Base: main @ 39380d2
 - Requirement: document `docs/features/002-members-access.md`
 - Autonomy: minimal (default; no argument, no `.claude/feature-pipeline.yml`)
@@ -133,3 +133,6 @@ new tables; module cycle identity↔members; Playwright CI job is new infrastruc
 - Note for final report: reviewer points out pipeline commit subjects (`{N}: Slice …`) do not follow the Conventional Commits rule in CLAUDE.md; history is not rewritten by the pipeline — owner decides (e.g. squash with a Conventional Commits subject).
 - Slice 3 review round 2: PASS (M1 resolved). Slices 1–3 all PASS; no review outstanding.
 - Slice 4 Verify (orchestrator): 29 tests green, no generated-client drift, client checks green.
+- Slice 4 committed: eb74fb7 — review round 1 running. Phase 3: Slice 5 started.
+- Slice 4 review round 1: PASS (5 minor notes). Slices 1–4 all PASS.
+- Slice 5 Verify (orchestrator): 57 tests green, no generated-client drift, client checks green.

@@ -7,14 +7,14 @@ import { LocaleSwitch } from './LocaleSwitch';
 
 interface NavItem {
   to: string;
-  label: 'account' | 'members' | 'audit';
+  label: 'account' | 'members' | 'roles' | 'audit';
   permission?: Permission;
 }
 
-// Roles is added with its route in a later slice.
 const NAV_ITEMS: readonly NavItem[] = [
   { to: '/account', label: 'account' },
   { to: '/members', label: 'members', permission: 'MEMBERS_VIEW' },
+  { to: '/roles', label: 'roles', permission: 'ROLES_MANAGE' },
   { to: '/audit', label: 'audit', permission: 'AUDIT_VIEW' },
 ];
 

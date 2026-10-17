@@ -41,6 +41,28 @@ None yet. Features 004 (ownership) and 005 (import) will add a lookup API in the
   - Each change publishes an `audit.AuditEvent` (`MEMBER_CREATED`, `MEMBER_UPDATED`, `MEMBER_ARCHIVED`, `MEMBER_RESTORED`)
     built from `MemberSnapshot.diff(before, after)`; see the `audit` README.
 
+- Roles (slice 5), all `@PreAuthorize("hasAuthority('PERM_ROLES_MANAGE')")` on the controllers, one transaction each:
+  `GET /permissions` (`PermissionCatalog`: the eight permissions in enum order with English text), `GET /roles`
+  (base roles first, then custom by name; `memberCount` counts active members only; Chairman always lists all eight),
+  `POST /roles`, `PUT /roles/{id}` (full replacement), `DELETE /roles/{id}`, and `PUT /members/{id}/roles` (replaces the
+  member's whole role set). Permission changes apply on the next request: `AccessProfile` is resolved from the database on
+  every request, nothing is cached.
+  - Name: trimmed; empty is 400 `REQUIRED`, over 60 is 400 `TOO_LONG` (field `name`). Unique per cooperative ignoring case
+    (`lower(name)` on both sides in the database, so Cyrillic works): a pre-check plus a mapping of the unique index
+    `role_tenant_name_uq` give 409 `ROLE_NAME_TAKEN`.
+  - Base roles: rename and delete are 409 `BASE_ROLE_IMMUTABLE` (a case change is a rename); Chairman's permission set must
+    stay all eight (a PUT with the full set is accepted and changes nothing); Treasurer and Member permissions and every
+    description are editable. A PUT omits `description` = clears it.
+  - Deleting a role that any member row references (active or archived) is 409 `ROLE_IN_USE` (the foreign key is the guard
+    against a concurrent assignment).
+  - `setMemberRoles`: unknown or other-cooperative role or member is 404. Archived members may be given or lose roles. When the
+    new set lacks Chairman, `LastChairmanGuard` runs first (lock, then count), so two concurrent removals leave one chairman
+    (`LastChairmanConcurrencyTests`).
+  - Audit events: `ROLE_CREATED`, `ROLE_UPDATED` (changed fields only), `ROLE_DELETED` (entity type `ROLE`, label = role
+    name; fields `name`, `description`, `permissions` as sorted names joined by ", ") and `MEMBER_ROLES_CHANGED` (field
+    `roles`, old and new sorted role names joined by ", "). A change that changes nothing writes no event.
+  - `BaseRoles` is the Java copy of the base-role matrix; `BaseRolesMatrixTests` compares it with `seed_base_roles`.
+
 Base roles are `CHAIRMAN`, `TREASURER`, `MEMBER` (seeded per cooperative by the SQL function `seed_base_roles`); custom
 roles have no base code. Electrician is no longer a base role.
 

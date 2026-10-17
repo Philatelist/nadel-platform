@@ -9,6 +9,7 @@ import java.util.UUID;
 import nadel.contract.api.MembersApi;
 import nadel.contract.model.MemberInput;
 import nadel.contract.model.MemberPage;
+import nadel.contract.model.MemberRolesInput;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -21,11 +22,14 @@ class MembersController implements MembersApi {
     private final CurrentUser currentUser;
     private final MemberQueries queries;
     private final MemberCommands commands;
+    private final MemberRoleCommands roleCommands;
 
-    MembersController(CurrentUser currentUser, MemberQueries queries, MemberCommands commands) {
+    MembersController(CurrentUser currentUser, MemberQueries queries, MemberCommands commands,
+            MemberRoleCommands roleCommands) {
         this.currentUser = currentUser;
         this.queries = queries;
         this.commands = commands;
+        this.roleCommands = roleCommands;
     }
 
     @Override
@@ -71,5 +75,11 @@ class MembersController implements MembersApi {
     @PreAuthorize("hasAuthority('PERM_MEMBERS_EDIT')")
     public ResponseEntity<nadel.contract.model.Member> restoreMember(UUID id) {
         return ResponseEntity.ok(commands.restore(id, currentUser.profile()));
+    }
+
+    @Override
+    @PreAuthorize("hasAuthority('PERM_ROLES_MANAGE')")
+    public ResponseEntity<nadel.contract.model.Member> setMemberRoles(UUID id, MemberRolesInput memberRolesInput) {
+        return ResponseEntity.ok(roleCommands.setRoles(id, memberRolesInput.getRoleIds(), currentUser.profile()));
     }
 }

@@ -36,6 +36,7 @@ import type {
   Member,
   MemberInput,
   MemberPage,
+  MemberRolesInput,
   NotFoundResponse,
   UnauthorizedResponse
 } from '../model';
@@ -610,4 +611,96 @@ export const useRestoreMember = <TError = BadRequestResponse | UnauthorizedRespo
         TContext
       > => {
       return useMutation(getRestoreMemberMutationOptions(options), queryClient);
+    }
+    export const getSetMemberRolesUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/members/${id}/roles`
+}
+
+/**
+ * Replaces the whole set of roles of the member with `roleIds` (an empty list leaves the member with no
+ * roles). Every id must be a role of the current cooperative (otherwise 404). Requires `ROLES_MANAGE`.
+ * The change is written to the audit log. A change that would leave the cooperative without an active
+ * chairman is refused (409 `LAST_CHAIRMAN`).
+ * @summary Set the roles of a member
+ */
+export const setMemberRoles = async (id: string,
+    memberRolesInput: MemberRolesInput, options?: Parameters<typeof nadelFetch>[1]): Promise<Member> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return nadelFetch<Member>(getSetMemberRolesUrl(id),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(memberRolesInput)
+  }
+);}
+
+
+
+
+
+export const getSetMemberRolesMutationKey = () => ['setMemberRoles'] as const;
+
+export const getSetMemberRolesMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setMemberRoles>>, TError,SetMemberRolesMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof setMemberRoles>>, TError,SetMemberRolesMutationVariables, TContext> => {
+
+const mutationKey = getSetMemberRolesMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof setMemberRoles>>, SetMemberRolesMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  setMemberRoles(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SetMemberRolesMutationResult = NonNullable<Awaited<ReturnType<typeof setMemberRoles>>>
+    export type SetMemberRolesMutationBody = MemberRolesInput
+    export type SetMemberRolesMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse
+    export type SetMemberRolesMutationVariables = {id: string;data: MemberRolesInput}
+
+    /**
+ * @summary Set the roles of a member
+ */
+export const useSetMemberRoles = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setMemberRoles>>, TError,SetMemberRolesMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof setMemberRoles>>,
+        TError,
+        SetMemberRolesMutationVariables,
+        TContext
+      > => {
+      return useMutation(getSetMemberRolesMutationOptions(options), queryClient);
     }

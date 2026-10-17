@@ -36,6 +36,24 @@ class Role {
     protected Role() {
     }
 
+    /** A new custom role (no base code). */
+    static Role custom(UUID tenantId, String name, String description, Instant now) {
+        Role role = new Role();
+        role.id = UUID.randomUUID();
+        role.tenantId = tenantId;
+        role.name = name;
+        role.description = description;
+        role.createdAt = now;
+        role.updatedAt = now;
+        return role;
+    }
+
+    void edit(String name, String description, Instant now) {
+        this.name = name;
+        this.description = description;
+        this.updatedAt = now;
+    }
+
     UUID getId() {
         return id;
     }

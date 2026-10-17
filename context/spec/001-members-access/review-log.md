@@ -24,3 +24,9 @@
 |---|---|---|---|---|
 | 1 | `5ae986c..ca5ea40` | MAJOR_ISSUES | M1 phone field errors land on the wrong row when blank rows are filtered before submit (`MemberForm.tsx`) | minor: concurrent archive/restore of the same member can write two audit entries (read before lock); record `toString()` of `AuditEvent`/`Actor` would print personal data if ever logged; failed audit listener retried only at restart; form shows nothing when field errors match no rendered field; "Saved" reappears on reload (location.state); duplicate react-router imports; pipeline commit subjects are not Conventional Commits (owner decision) |
 | 2 | + `81e5be8` | PASS | M1 resolved | minor: `remapPhoneErrors` has no unit test (no web test runner); exporting a helper from a component file can weaken Fast Refresh |
+
+## Slice 4 — Audit log screen
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `81e5be8..eb74fb7` | PASS | — | minor: `deliveryChannel` change values shown as raw codes (TELEGRAM/PAPER) instead of localized labels; empty URL params (`?entityId=`) sent as '' and break the filtered/empty-state logic; page past the end shows the empty message; `Intl.DateTimeFormat` built per row; append-only fixtures accumulate in the test DB |

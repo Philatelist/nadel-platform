@@ -30,6 +30,12 @@ class RolePermission {
     protected RolePermission() {
     }
 
+    RolePermission(UUID tenantId, UUID roleId, String permission) {
+        this.tenantId = tenantId;
+        this.roleId = roleId;
+        this.permission = permission;
+    }
+
     UUID getRoleId() {
         return roleId;
     }

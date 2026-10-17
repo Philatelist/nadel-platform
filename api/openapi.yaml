@@ -16,6 +16,10 @@ tags:
     description: Current user
   - name: members
     description: Cooperative members (people), their contacts and roles
+  - name: permissions
+    description: The fixed list of permissions
+  - name: roles
+    description: Roles of the cooperative and their permissions
   - name: audit
     description: Audit log of administrative changes
   - name: plots
@@ -268,6 +272,191 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
 
+  /members/{id}/roles:
+    put:
+      tags: [members]
+      operationId: setMemberRoles
+      summary: Set the roles of a member
+      description: |
+        Replaces the whole set of roles of the member with `roleIds` (an empty list leaves the member with no
+        roles). Every id must be a role of the current cooperative (otherwise 404). Requires `ROLES_MANAGE`.
+        The change is written to the audit log. A change that would leave the cooperative without an active
+        chairman is refused (409 `LAST_CHAIRMAN`).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemberRolesInput'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Member'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /permissions:
+    get:
+      tags: [permissions]
+      operationId: listPermissions
+      summary: List the permissions
+      description: |
+        Returns the fixed list of permissions a role can contain, each with an English name and description.
+        The web client localises the text by `code`. Requires `ROLES_MANAGE`.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PermissionInfo'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /roles:
+    get:
+      tags: [roles]
+      operationId: listRoles
+      summary: List the roles of the cooperative
+      description: |
+        Returns every role of the current cooperative with its permissions and the number of active members who
+        hold it. Base roles come first (Chairman, Treasurer, Member), then custom roles sorted by name.
+        Requires `ROLES_MANAGE`.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RoleDetails'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      tags: [roles]
+      operationId: createRole
+      summary: Create a custom role
+      description: |
+        Creates a custom role (no `baseCode`). The name must be unique within the cooperative, ignoring upper and
+        lower case (409 `ROLE_NAME_TAKEN`). Requires `ROLES_MANAGE`. The change is written to the audit log.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleInput'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleDetails'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /roles/{id}:
+    put:
+      tags: [roles]
+      operationId: updateRole
+      summary: Update a role
+      description: |
+        Replaces the name, description and permissions of the role. Requires `ROLES_MANAGE`; the change is
+        written to the audit log. The name must stay unique within the cooperative (409 `ROLE_NAME_TAKEN`).
+        Base roles cannot be renamed (409 `BASE_ROLE_IMMUTABLE`) and the permissions of the Chairman role cannot be
+        changed (409 `BASE_ROLE_IMMUTABLE`); the permissions of the Treasurer and Member roles can be edited.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleInput'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleDetails'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+    delete:
+      tags: [roles]
+      operationId: deleteRole
+      summary: Delete a custom role
+      description: |
+        Deletes a custom role. Requires `ROLES_MANAGE`; the deletion is written to the audit log. Base roles cannot
+        be deleted (409 `BASE_ROLE_IMMUTABLE`). A role that is still given to a member cannot be deleted
+        (409 `ROLE_IN_USE`).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Deleted
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
   /audit:
     get:
       tags: [audit]
@@ -400,8 +589,10 @@ components:
     Conflict:
       description: >-
         The request conflicts with the current state: the email is already used by another member of the
-        cooperative (code `EMAIL_TAKEN`, with `errors[{field: email}]`), or the action would leave the cooperative
-        without an active chairman (code `LAST_CHAIRMAN`)
+        cooperative (code `EMAIL_TAKEN`, with `errors[{field: email}]`), the action would leave the cooperative
+        without an active chairman (code `LAST_CHAIRMAN`), the role name is already used (code `ROLE_NAME_TAKEN`),
+        the role is still given to members (code `ROLE_IN_USE`), or a base role cannot be changed that way
+        (code `BASE_ROLE_IMMUTABLE`)
       content:
         application/problem+json:
           schema:
@@ -444,6 +635,75 @@ components:
           type: string
         baseCode:
           $ref: '#/components/schemas/BaseRole'
+
+    PermissionInfo:
+      type: object
+      description: A permission with its English name and one-line description; clients localise by `code`
+      required: [code, name, description]
+      properties:
+        code:
+          $ref: '#/components/schemas/Permission'
+        name:
+          type: string
+        description:
+          type: string
+
+    RoleInput:
+      type: object
+      description: |
+        Editable fields of a role (full replacement). For base roles the server refuses renames and changes of the
+        Chairman role's permissions (409 `BASE_ROLE_IMMUTABLE`); Treasurer and Member permissions are editable.
+      required: [name, permissions]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 60
+          description: Role name; surrounding whitespace is trimmed; unique within the cooperative, ignoring case
+        description:
+          type: string
+          maxLength: 500
+        permissions:
+          type: array
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/Permission'
+
+    RoleDetails:
+      type: object
+      description: A role with its permissions and the number of active members who hold it
+      required: [id, name, permissions, memberCount]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        baseCode:
+          $ref: '#/components/schemas/BaseRole'
+        permissions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Permission'
+        memberCount:
+          type: integer
+          format: int32
+          description: Number of active (not archived) members who hold the role
+
+    MemberRolesInput:
+      type: object
+      description: The complete new set of roles of a member
+      required: [roleIds]
+      properties:
+        roleIds:
+          type: array
+          uniqueItems: true
+          maxItems: 50
+          items:
+            type: string
+            format: uuid
 
     DeliveryChannel:
       type: string

@@ -14,6 +14,7 @@ import { Banner } from '../components/Banner';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { MemberDetails } from '../components/MemberDetails';
 import { MemberForm } from '../components/MemberForm';
+import { MemberRolesForm } from '../components/MemberRolesForm';
 import { QueryBoundary } from '../components/QueryBoundary';
 import { useT } from '../i18n';
 import { useCan } from '../me';
@@ -41,9 +42,11 @@ function MemberView({ member }: { member: Member }) {
   const t = useT();
   const canEdit = useCan('MEMBERS_EDIT');
   const canAudit = useCan('AUDIT_VIEW');
+  const canManageRoles = useCan('ROLES_MANAGE');
   const queryClient = useQueryClient();
   const location = useLocation();
   const [editing, setEditing] = useState(false);
+  const [editingRoles, setEditingRoles] = useState(false);
   const [saved, setSaved] = useState(
     typeof location.state === 'object' && location.state !== null && 'saved' in location.state,
   );
@@ -119,6 +122,21 @@ function MemberView({ member }: { member: Member }) {
               </button>
             </div>
           )}
+          {canManageRoles && !editingRoles && (
+            <div>
+              <button
+                type="button"
+                className="rounded-md border border-line px-3 py-1.5 text-sm"
+                onClick={() => {
+                  setSaved(false);
+                  setActionError(undefined);
+                  setEditingRoles(true);
+                }}
+              >
+                {t.rolesPage.memberRoles}
+              </button>
+            </div>
+          )}
           {canAudit && (
             <Link
               to={`/audit?entityType=MEMBER&entityId=${member.id}`}
@@ -127,7 +145,18 @@ function MemberView({ member }: { member: Member }) {
               {t.members.history}
             </Link>
           )}
-          <MemberDetails member={member} />
+          {editingRoles ? (
+            <MemberRolesForm
+              member={member}
+              onSaved={() => {
+                setEditingRoles(false);
+                setSaved(true);
+              }}
+              onCancel={() => setEditingRoles(false)}
+            />
+          ) : (
+            <MemberDetails member={member} />
+          )}
         </>
       )}
 

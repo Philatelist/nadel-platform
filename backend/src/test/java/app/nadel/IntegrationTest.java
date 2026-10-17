@@ -11,6 +11,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -58,6 +59,15 @@ public abstract class IntegrationTest {
     private JdbcTemplate fixtureJdbc;
 
     private final List<Fixture> createdMembers = new ArrayList<>();
+
+    /**
+     * SQL as the container owner (superuser, bypasses RLS): for fixtures the application role cannot create, such as
+     * a whole cooperative. Autocommit; the caller removes what it creates.
+     */
+    protected static JdbcTemplate ownerJdbc() {
+        return new JdbcTemplate(new DriverManagerDataSource(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword()));
+    }
 
     /** Runs SQL as the given cooperative (RLS applies), in one transaction. */
     protected <T> T inTenant(UUID tenant, Function<JdbcTemplate, T> work) {

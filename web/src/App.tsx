@@ -44,6 +44,15 @@ const router = createBrowserRouter([
         ],
       },
       {
+        element: <RequirePermission permission="ROLES_MANAGE" />,
+        children: [
+          {
+            path: 'roles',
+            lazy: () => import('./pages/RolesPage').then((m) => ({ Component: m.RolesPage })),
+          },
+        ],
+      },
+      {
         path: 'members/:id',
         lazy: () => import('./pages/MemberPage').then((m) => ({ Component: m.MemberPage })),
       },

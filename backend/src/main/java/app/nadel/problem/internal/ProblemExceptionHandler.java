@@ -118,10 +118,15 @@ class ProblemExceptionHandler extends ResponseEntityExceptionHandler {
         String constraint = error.getCode() == null ? "" : error.getCode();
         String code = switch (constraint) {
             case "NotNull", "NotBlank", "NotEmpty" -> "REQUIRED";
-            case "Size", "Max", "Length" -> "TOO_LONG";
+            case "Size", "Max", "Length" -> isEmptyText(error.getRejectedValue()) ? "REQUIRED" : "TOO_LONG";
             default -> "INVALID";
         };
         return new FieldProblem(error.getField(), code);
+    }
+
+    /** An empty string that violates a minimum length is a missing value, not a short one. */
+    private static boolean isEmptyText(@Nullable Object value) {
+        return value instanceof CharSequence text && text.isEmpty();
     }
 
     /** The last element of the property path, for example {@code size} of {@code listMembers.size}. */
