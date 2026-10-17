@@ -54,7 +54,9 @@ export function MapPage() {
       style: {
         version: 8,
         sources: {},
-        layers: [{ id: 'background', type: 'background', paint: { 'background-color': cssVar('--color-bg') } }],
+        layers: [
+          { id: 'background', type: 'background', paint: { 'background-color': cssVar('--color-bg') } },
+        ],
       },
       center: [30.7, 46.6],
       zoom: 15,
@@ -87,8 +89,14 @@ export function MapPage() {
           source: 'plots',
           paint: {
             'fill-color': [
-              'match', ['get', 'status'],
-              'RED', colors.RED, 'YELLOW', colors.YELLOW, 'GREEN', colors.GREEN,
+              'match',
+              ['get', 'status'],
+              'RED',
+              colors.RED,
+              'YELLOW',
+              colors.YELLOW,
+              'GREEN',
+              colors.GREEN,
               colors.GREY,
             ],
             'fill-opacity': 0.85,
@@ -135,7 +143,10 @@ export function MapPage() {
       <div className="absolute bottom-4 left-4 flex flex-wrap gap-3 rounded-xl border border-line bg-surface px-3 py-2 text-xs text-muted">
         {STATUSES.map((s) => (
           <span key={s} className="flex items-center gap-1.5">
-            <i className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: `var(--color-status-${s.toLowerCase()})` }} />
+            <i
+              className="inline-block h-2.5 w-2.5 rounded-sm"
+              style={{ background: `var(--color-status-${s.toLowerCase()})` }}
+            />
             {t.status[s]}
           </span>
         ))}
@@ -147,11 +158,15 @@ export function MapPage() {
             <h2 className="font-display text-lg font-bold">
               {plot.kind === 'COMMON' ? t.map.commonLand : `${t.map.plot} ${plot.number}`}
             </h2>
-            <button type="button" onClick={() => setSelected(null)} className="text-muted" aria-label="×">×</button>
+            <button type="button" onClick={() => setSelected(null)} className="text-muted" aria-label="×">
+              ×
+            </button>
           </div>
           <dl className="mt-3 grid grid-cols-2 gap-y-1.5 text-sm">
             <dt className="text-muted">{t.map.area}</dt>
-            <dd className="tabular-nums">{formatSotky(plot.areaM2)} {t.map.sotky}</dd>
+            <dd className="tabular-nums">
+              {formatSotky(plot.areaM2)} {t.map.sotky}
+            </dd>
             {plot.debt && !isZeroMoney(plot.debt) && (
               <>
                 <dt className="text-muted">{t.map.debt}</dt>

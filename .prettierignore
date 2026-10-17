@@ -1,0 +1,18 @@
+# Generated or tool-owned files
+pnpm-lock.yaml
+packages/api-client/src/generated/
+.awos/
+.claude/
+context/
+node_modules/
+dist/
+coverage/
+mobile/.expo/
+mobile/ios/
+mobile/android/
+
+# Java side is formatted by its own tooling
+backend/
+
+# Prose is reviewed by people, not reflowed
+*.md

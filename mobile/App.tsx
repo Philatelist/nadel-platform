@@ -30,7 +30,10 @@ export default function App() {
         {/* Keycloak sign-in (PKCE) arrives in phase 5 */}
         <Pressable
           accessibilityRole="button"
-          style={({ pressed }) => [styles.button, { backgroundColor: colors.accent, opacity: pressed ? 0.85 : 1 }]}
+          style={({ pressed }) => [
+            styles.button,
+            { backgroundColor: colors.accent, opacity: pressed ? 0.85 : 1 },
+          ]}
         >
           <Text style={[styles.buttonText, { color: colors.onAccent }]}>{t.auth.signIn}</Text>
         </Pressable>
