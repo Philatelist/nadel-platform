@@ -9,5 +9,11 @@
   },
   "enabledPlugins": {
     "awos@awos-marketplace": true
+  },
+  "permissions": {
+    "deny": [
+      "Bash(git push*)",
+      "Bash(gh pr merge*)"
+    ]
   }
 }

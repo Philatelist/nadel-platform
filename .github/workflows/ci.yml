@@ -79,9 +79,11 @@ jobs:
       - name: npm advisories (high and critical)
         run: pnpm audit --prod --audit-level high
       - name: Install OSV-Scanner
+        env:
+          OSV_SCANNER_VERSION: v2.7.0 # pinned; bump deliberately
         run: |
           curl -sSfL -o /usr/local/bin/osv-scanner \
-            https://github.com/google/osv-scanner/releases/latest/download/osv-scanner_linux_amd64
+            "https://github.com/google/osv-scanner/releases/download/${OSV_SCANNER_VERSION}/osv-scanner_linux_amd64"
           chmod +x /usr/local/bin/osv-scanner
       - name: Known vulnerabilities in Maven and pnpm dependencies (OSV)
         run: osv-scanner scan source --recursive .

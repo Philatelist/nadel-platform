@@ -1,7 +1,7 @@
 # System Architecture Overview: Nadel
 
 - **Status:** Accepted (documents decisions already made; not a redesign)
-- **Sources of truth:** `CLAUDE.md`, `docs/adr/0001`–`0006`, `docs/domain/money-rules.md`, `api/openapi.yaml`,
+- **Sources of truth:** `CLAUDE.md`, `docs/adr/0001`–`0009`, `docs/domain/money-rules.md`, `api/openapi.yaml`,
   `backend/pom.xml`, `infra/docker-compose.yml`. When this document and those sources disagree, the sources win
   and this document gets fixed.
 - **Legend:** **[in code]** means the repository already has it (cited). **[planned]** means it has been decided but
@@ -95,7 +95,8 @@
   - Candidates: Garage, SeaweedFS, or managed S3 from the hosting provider.
   - The backend should use only the S3 API, so the product can be swapped later.
 - **Event outbox:** the Spring Modulith Event Publication Registry (`spring-modulith-starter-jpa`) **[planned, decided]**. Domain events are stored in the same transaction as the change that raised them and redelivered until their listeners finish. All cross-module side effects (notifications, recalculations, status cache refresh) go through it.
-- **Background jobs:** JobRunr with PostgreSQL storage **[planned, with period closing and notifications]**. It runs scheduled and retryable jobs: period-close runs, invoice generation, delivery retries to external channels. It is not the event outbox. The split still needs an ADR.
+- **Background jobs:** JobRunr with PostgreSQL storage **[planned, with period closing and notifications]**. It runs scheduled and retryable jobs: period-close runs, invoice generation, delivery retries to external channels. It is not the event outbox. See ADR 0007.
+- **Cash receipts:** a cash payment carries a receipt number from a per-cooperative counter **[planned, phase 3]**. The counter row is locked in the same transaction as the payment insert, so numbers are sequential, never reused and never changed; a reversed cash payment keeps its receipt number in history.
 - **Caching:** none beyond `plot_status` **[assumption]**. The load is small (tens to hundreds of cooperatives), so Redis is not justified.
 
 ---
@@ -106,12 +107,16 @@
   - Clients:
     - `nadel-web`: public, standard flow only, PKCE S256.
     - `nadel-mobile`: public, PKCE S256, redirects `nadel://*` and `exp://*`.
-  - Realm roles: `CHAIRMAN`, `TREASURER`, `ELECTRICIAN`, `MEMBER`, `PLATFORM_OPERATOR`. The backend mirrors them in `identity/Roles`.
+  - Realm roles: `CHAIRMAN`, `TREASURER`, `ELECTRICIAN`, `MEMBER`, `PLATFORM_OPERATOR`. The backend mirrors them in `identity/Roles`. From phase 1 only `PLATFORM_OPERATOR` stays meaningful in Keycloak; cooperative roles move to the database (see Authorization).
   - The user attribute `tenant_id` is mapped into the access token by an `oidc-usermodel-attribute-mapper` on both clients.
   - Later: Keycloak Organizations for people in several cooperatives, with cooperative selection at sign-in **[planned, separate ADR]**.
 - **Mobile OIDC library:** not chosen yet **[assumption: `expo-auth-session` with PKCE]**. It is not in `mobile/package.json`.
-- **Authorization:** always on the server, with `@PreAuthorize`. Clients hide UI by role only for convenience.
-- **Platform operator:** cannot see cooperative data (see 7.3).
+- **Authorization:** always on the server, with `@PreAuthorize`. Clients hide UI by permission only for convenience. See ADR 0009 **[planned, phase 1]**:
+  - A fixed list of permissions is defined in code (`PAYMENTS_ALLOCATE`, `MEMBERS_EDIT`, `PERIOD_CLOSE`, ...).
+  - Roles are named permission sets stored per cooperative (`role`, `role_permission`, `person_role`, tenant-scoped with RLS). Base roles are seeded and cannot be deleted; the chairman creates custom admin roles.
+  - The backend resolves the current user's permissions from the database per request and exposes them as `PERM_*` authorities. Code checks permissions, never role names.
+- **Data visibility for members:** a member sees the number and status color of every plot, but debt amounts, owners and personal data only for plots they own. The API enforces this (for example, `GET /plots` omits `debt` on plots the caller does not own), not just the UI **[planned, phase 1]**.
+- **Platform operator:** sees no cooperative rows (no `tenant_id`, so RLS returns nothing). Platform reports use aggregate views without personal or financial detail through a separate read-only role; support access is granted by the chairman for a limited time and audited. See ADR 0008.
 - **Audit:** every admin action that changes data is written to the audit log **[planned, `audit` module]**.
 - **Logging hygiene:** names, phone numbers, emails and addresses never appear in logs.
 - **Secrets:** only from environment variables. The repository contains only dev values for the local docker-compose (`.env.example`, gitleaks allowlist in `.gitleaks.toml`).
@@ -151,7 +156,7 @@
 - **CI:** GitHub Actions **[in code]** (`.github/workflows/ci.yml`), with three jobs:
   - `backend`: `./mvnw verify`, which runs Testcontainers, `ModularityTests` and the JaCoCo floor (`coverage.minimum`, currently 40%, may only go up).
   - `clients`: contract regeneration with a diff check, `format:check`, typecheck, lint and the web build.
-  - `security`: gitleaks, `pnpm audit --prod --audit-level high` and OSV-Scanner. An accepted advisory goes into both `pnpm-workspace.yaml` and `osv-scanner.toml`, with a reason.
+  - `security`: gitleaks, `pnpm audit --prod --audit-level high` and OSV-Scanner (pinned version). OSV-Scanner fails on any severity, `pnpm audit` only on high and critical, so `osv-scanner.toml` lists every accepted advisory and `pnpm-workspace.yaml` lists only the accepted high and critical ones, each with a reason.
 - **Dependency updates:** Dependabot **[in code]** (`.github/dependabot.yml`): Maven, npm and Actions weekly; docker-compose monthly. Versions are pinned exactly.
 - **Testing:**
   - Backend **[in code]**: JUnit 5, Spring Security Test, Spring Modulith Test and Testcontainers.
@@ -171,13 +176,18 @@
 
 ---
 
-## 7. Discrepancies and open points (flagged, not resolved)
+## 7. Discrepancies and open points
 
-1. **Expo Router: decided for phase 5.** `mobile/CLAUDE.md` currently tells agents to use Expo Router, but it is not installed. Decision: it arrives in phase 5. `mobile/CLAUDE.md` now says the same: Expo Router comes in phase 5, and until then the single `App.tsx` screen is intentional.
-2. **The outbox and JobRunr: resolved, ADR still to write.** The brief assigned the outbox to JobRunr. Decision: Spring Modulith's Event Publication Registry is the outbox, and JobRunr runs scheduled and retryable jobs (section 2). An ADR should record this.
-3. **The operator and cooperative data.** ADR 0002 says "platform-wide operator reports go through a separate role". `CLAUDE.md` says "the platform operator cannot see cooperative data". These can both hold if that role sees only aggregates or non-personal data, but no ADR says so.
-4. **Rounding wording.** `CLAUDE.md` says rounding happens only in `Money`. `money-rules.md` says it happens "only when a charge is created". These are compatible (`Money` is applied at charge creation), but `money-rules.md` is the source of truth and could name `Money` explicitly.
-5. **Ignored advisories don't match.** `pnpm-workspace.yaml` ignores 2 GHSAs and `osv-scanner.toml` ignores 3. `CLAUDE.md` requires each accepted advisory to be listed in both files. The extra entry may be OSV-only, so check it.
-6. **OSV-Scanner is unpinned.** CI downloads the "latest" OSV-Scanner binary, which goes against the rule to pin exact versions.
+Resolved:
+
+1. **Expo Router:** arrives in phase 5; `mobile/CLAUDE.md` says the same.
+2. **Outbox and JobRunr:** Modulith Event Publication Registry is the outbox, JobRunr runs scheduled jobs. ADR 0007.
+3. **Operator and cooperative data:** aggregates only, time-boxed audited support access. ADR 0008.
+4. **Rounding wording:** `money-rules.md` section 1 and `CLAUDE.md` agree: rounding happens in `Money`, applied when a charge is created.
+5. **Ignored advisories:** the lists differ on purpose (OSV fails on every severity, `pnpm audit` only on high); `CLAUDE.md` now says so.
+6. **OSV-Scanner version:** pinned in CI.
+
+Open:
+
 7. **Nothing exists for delivery yet.** Dockerfiles, a Caddyfile, a deploy workflow, `eas.json`, release-please and OpenTelemetry/Sentry dependencies are all missing. Everything in sections 5 and 6 marked [planned] is unimplemented.
-8. **Open ADRs to write:** S3-compatible storage product, email provider, outbox and job-runner split (7.2), Keycloak Organizations, basemap tile source, backup tooling, data residency.
+8. **ADRs still to write:** S3-compatible storage product, email provider, Keycloak Organizations, basemap tile source, backup tooling, data residency.

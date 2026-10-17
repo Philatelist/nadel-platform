@@ -73,16 +73,17 @@ Keycloak test users (realm `nadel`, password `nadel` for all):
 **Modules (Spring Modulith)**
 - Top-level packages under `app.nadel.*` are modules. A module talks to another only through its public API (the module's root package) or through domain events. `internal` subpackages are closed.
 - A module never reads another module's tables directly.
-- Cross-module side effects (notifications, recalculations) go through events and the outbox, not direct calls.
+- Cross-module side effects (notifications, recalculations) go through domain events and the Spring Modulith outbox (`@ApplicationModuleListener`), not direct calls. Scheduled and long-running work uses JobRunr with `TenantContext.runAs`. Listeners and jobs must be idempotent. See ADR 0007.
 
 **Security and data**
-- Roles: `CHAIRMAN`, `TREASURER`, `ELECTRICIAN`, `MEMBER`, `PLATFORM_OPERATOR`. Permissions are checked on the server with `@PreAuthorize` at service or controller level.
+- Authorization is permission-based (ADR 0009): code checks `@PreAuthorize("hasAuthority('PERM_...')")` at service or controller level, never role names. Roles are permission sets stored per cooperative; base roles are `CHAIRMAN`, `TREASURER`, `ELECTRICIAN`, `MEMBER`, plus the global `PLATFORM_OPERATOR`.
+- A member sees the number and status color of every plot, but amounts, owners and personal data only for their own plots. Enforce this in the API response, not only in the UI.
 - Admin actions that change data are written to the audit log.
 - Personal data is never logged (names, phone numbers, emails, addresses).
 - Secrets come only from environment variables. The repository contains only dev values for the local docker-compose.
 
 **Supply chain**
-- CI runs gitleaks, `pnpm audit` and OSV-Scanner. An accepted advisory goes into both `pnpm-workspace.yaml` (`auditConfig.ignoreGhsas`) and `osv-scanner.toml`, with a reason.
+- CI runs gitleaks, `pnpm audit` (fails on high and critical) and OSV-Scanner (fails on any severity). An accepted advisory always goes into `osv-scanner.toml` with a reason; if it is high or critical it also goes into `pnpm-workspace.yaml` (`auditConfig.ignoreGhsas`).
 - Pin exact dependency versions (no `^` or `~`), except `peerDependencies`.
 
 **General**
@@ -90,3 +91,4 @@ Keycloak test users (realm `nadel`, password `nadel` for all):
 - Do not edit generated code (`packages/api-client/src/generated`, `backend/target/generated-sources`).
 - Commit messages follow Conventional Commits (`feat(ledger): ...`, `fix(web): ...`).
 - Commits must not mention AI: no `Co-Authored-By` lines for AI assistants, no session links, no "Generated with ..." lines. The commit author is the repository owner.
+- Agents never push and never merge. Work only on a feature branch (`feat/...`, `fix/...`, `chore/...`, `docs/...`); never commit on `main`. The repository owner pushes and opens PRs.

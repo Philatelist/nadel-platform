@@ -7,7 +7,7 @@ Any rule change is made here first.
 
 - Currency is the hryvnia (UAH), 2 decimal places.
 - Java: `BigDecimal` through the `Money` value object. DB: `numeric(14,2)`. JSON: string `"1250.50"`.
-- Rounding is `HALF_UP` to kopecks, applied only when a charge is created (never in intermediate calculations).
+- Rounding is `HALF_UP` to kopecks, done only by the `Money` value object and applied only when a charge is created (never in intermediate calculations).
 
 ## 2. Balance
 
@@ -59,6 +59,7 @@ charge               = (consumption + share of losses) × kWh tariff
 - A payment is first saved as unallocated.
 - The system proposes an allocation: oldest debts first (FIFO by period); within a period, by the cooperative's charge type priority.
 - The treasurer can change the proposal before saving.
+- Cash received at the cooperative's cash desk is a payment with source `CASH` and a receipt number. Receipt numbers are sequential per cooperative, never reused and never changed; a mistaken cash payment is reversed like any other ledger entry, and its receipt stays in history marked as reversed.
 - The remainder of a payment is a prepayment. When a period is closed, prepayments are automatically allocated to new charges (by the same rules) if the cooperative enables it.
 
 ## 8. Ownership and sale
@@ -78,6 +79,8 @@ YELLOW if debt > 0 (and not RED)
 GREEN  if debt = 0 (including when there is a prepayment)
 GREY   common land, or a plot without an owner
 ```
+
+Visibility: a member sees the status color and number of every plot, but debt amounts, owners and personal data only for plots they own. Admins see what their permissions allow. This is enforced by the API, not only hidden in the UI.
 
 The status is recalculated after every allocation, charge and recalculation and is stored as a cache in `plot_status` (the cache can be rebuilt from the ledger at any time).
 

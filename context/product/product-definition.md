@@ -1,6 +1,6 @@
 # Product Definition: Nadel
 
-- **Version:** 1.0
+- **Version:** 1.1
 - **Status:** Proposed
 
 > Business rules in this document follow `README.md`, `docs/domain/glossary.md` and
@@ -74,7 +74,9 @@ cooperative's data is fully isolated from every other cooperative's.
   status: **red** when the debt exceeds the cooperative's amount threshold or is older than its day
   threshold; **yellow** when there is any smaller or newer debt; **green** when nothing is owed,
   including when the plot is in prepayment; **grey** for common land and for plots with no current
-  owner. Both thresholds are configured per cooperative.
+  owner. Both thresholds are configured per cooperative. A member sees the number and color of every
+  plot on the map, but amounts, owners and personal details only for their own plots; admins see
+  everything their role allows.
 
 - **Tariffs and automatic charges.** Admins define tariffs for the four charge types — membership fee,
   special-purpose fee, electricity and land tax. Each tariff has versions with an effective date, and
@@ -94,8 +96,10 @@ cooperative's data is fully isolated from every other cooperative's.
   at a fixed percentage, as the cooperative configures. A plot with a missing reading gets no
   electricity charge and appears in the "missing readings" list when the period is closed.
 
-- **Payments and allocation.** The treasurer imports or enters payments, matches them to plots, and
-  allocates them across charge types. The system proposes an allocation — oldest debts first, then by
+- **Payments and allocation.** The treasurer imports bank statements or enters payments by hand,
+  matches them to plots, and allocates them across charge types. Cash taken at the cooperative's cash
+  desk is recorded by the treasurer with a sequentially numbered receipt that the member can see in
+  their account, so a cash payment is as traceable as a bank transfer. The system proposes an allocation — oldest debts first, then by
   the cooperative's charge type priority — and the treasurer can adjust it before saving. Partial
   payments are normal, and any remainder becomes a prepayment that can be applied automatically to new
   charges when the next period closes. Nothing is ever deleted: a wrong entry is cancelled by a visible
@@ -109,6 +113,12 @@ cooperative's data is fully isolated from every other cooperative's.
   several co-owners, each with a share and a validity period. Before a sale the system issues a debt
   certificate as of a chosen date, broken down by charge type, or a full-payoff invoice. Ownership
   history is kept permanently.
+
+- **Roles and permissions.** Every cooperative starts with Chairman, Treasurer, Electrician and
+  Member. The chairman can create additional admin roles from a fixed list of permissions (for
+  example, "Secretary: manage members and ownership, no access to payments") and assign them to
+  people. Each person sees and changes only what their roles permit, and every admin change is
+  recorded with who made it and when.
 
 - **Web account and mobile apps.** Members and admins use a web account and iOS and Android apps.
   Members see balances, charges, payments and invoices for their plots and can submit meter readings
@@ -142,11 +152,12 @@ uses the map and the debt totals to see where the cooperative stands before a bo
 
 The first version serves our own cooperative, built in this order:
 
-1. **Plots, map and members** — map import, plot polygons, members, co-owners and ownership history.
+1. **Plots, map and members** — map import, plot polygons, members, co-owners, ownership history,
+   and configurable admin roles.
 2. **Tariffs, meters and charges** — charge types, tariff versions with effective dates, meters,
    transformer losses, period closing, the charges ledger and retroactive recalculation.
-3. **Payments** — manual entry, bank statement import, matching, allocation across charge types,
-   prepayments, and the resulting map colors.
+3. **Payments** — manual entry, cash desk receipts, bank statement import, matching, allocation across
+   charge types, prepayments, and the resulting map colors.
 4. **Invoices and delivery** — PDF invoice with NBU QR code, debt certificate, and delivery by email,
    Telegram and Viber.
 5. **Member web account and mobile apps** — balances and history, meter readings with a photo, and push
