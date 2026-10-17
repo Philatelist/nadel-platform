@@ -2,19 +2,28 @@ import { expect, type Page } from '@playwright/test';
 
 const PASSWORD = process.env.E2E_PASSWORD ?? 'nadel';
 
+export interface LoginOptions {
+  /** Leave the stored/browser language alone (the default is to force English). */
+  keepLocale?: boolean;
+  /** Do not wait for the navigation (for people who belong to no cooperative or are not linked). */
+  skipNavigationWait?: boolean;
+}
+
 /** Signs in through the Keycloak form and waits until the app navigation is visible. */
-export async function loginAs(page: Page, email: string): Promise<void> {
-  // English UI regardless of the stored choice; set before the app loads.
-  await page.addInitScript(() => {
-    try {
-      window.localStorage.setItem('nadel.locale', 'en');
-    } catch {
-      // storage unavailable: the browser locale (en-US) is used
-    }
-  });
+export async function loginAs(page: Page, email: string, options: LoginOptions = {}): Promise<void> {
+  if (!options.keepLocale) {
+    // English UI regardless of the stored choice; set before the app loads.
+    await page.addInitScript(() => {
+      try {
+        window.localStorage.setItem('nadel.locale', 'en');
+      } catch {
+        // storage unavailable: the browser locale (en-US) is used
+      }
+    });
+  }
   await page.goto('/');
 
-  const signInButton = page.getByRole('button', { name: 'Sign in' });
+  const signInButton = page.getByRole('button', { name: /^(Sign in|Увійти)$/ });
   const username = page.locator('#username');
   await expect(signInButton.or(username)).toBeVisible();
   if (await signInButton.isVisible()) await signInButton.click();
@@ -24,5 +33,5 @@ export async function loginAs(page: Page, email: string): Promise<void> {
   await page.locator('#kc-login').click();
 
   await page.waitForURL('http://localhost:5173/**');
-  await expect(page.getByRole('navigation')).toBeVisible();
+  if (!options.skipNavigationWait) await expect(page.getByRole('navigation')).toBeVisible();
 }

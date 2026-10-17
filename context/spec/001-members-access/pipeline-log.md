@@ -1,7 +1,7 @@
 # Pipeline log — 002 Members and access control
 
 - Status: running
-- Phase: 3 — implement, Slice 6
+- Phase: 3 — implement, Slice 7
 - Branch: 001-members-access · Base: main @ 39380d2
 - Requirement: document `docs/features/002-members-access.md`
 - Autonomy: minimal (default; no argument, no `.claude/feature-pipeline.yml`)
@@ -149,3 +149,12 @@ new tables; module cycle identity↔members; Playwright CI job is new infrastruc
 - Slice 6: web E2E (2 specs passed against the real stack by the builder; @playwright/test 1.63.0 published 2026-09-04, @types/node 22.20.5 published 2026-10-01) and infra ticked. Supply chain (orchestrator): pnpm audit --prod and full audit both report only the 3 pre-existing accepted advisories (uuid via mobile/expo moderate; 2 high already ignored); none from the new dev deps. osv-scanner not installed locally — CI runs it.
 - Slice 6 Verify attempt 1: make e2e 2 passed, client green, verify 225 tests green (coverage floor 0.93 met) — but the e2e trap left Vite orphaned on :5173 (pnpm child processes reparented to PID 1). Orchestrator stopped the stray process (it was started by this run). Fix attempt 1 sent to devops-infra (Makefile process-tree cleanup).
 - Slice 6 Verify: make e2e 2 passed (after the cleanup fix, builder run; orchestrator confirmed ports 5432/8180/8080/5173 free and no stray processes), client green, verify 225 tests green with coverage floor 0.93.
+- Slice 6 committed: f04af75 — review round 1 running. Slice 7 waits for every slice review to PASS (gate).
+- Coverage floor evidence: JaCoCo LINE COVEREDRATIO measured 1031/1104 = 0.9339 (225 tests) → coverage.minimum 0.93.
+- Slice 6 review round 1: PASS (5 minor notes). ALL slice reviews (1–6) PASS → gate open for Slice 7.
+- Phase 3: Slice 7 (Feature Testing & Regression) started — testing-expert.
+- Slice 7 task 1 (testing-expert): MembersAccessAcceptanceTests (13) + web/e2e/acceptance.spec.ts (17) + context/qa/list-of-tests.md; every §2 criterion mapped to a test or a manual check. RED shown (phone prefix, @PreAuthorize on setMemberRoles, audit nav permission). GAP found: `DELETE /api/v1/roles/{id}` answers 406 for every outcome when the client sends `Accept: application/json` (the web always does) → role deletion fails in the browser (§2.3 #5, #6; §2.9 #3 via UI). Failing tests kept. Task not ticked.
+- Gap fix attempt 1 sent to spring-backend (root cause, minimal fix, scan other operations, RolesTests regression with Accept header, E2E run).
+- Manual checks listed by testing-expert: §2.4 #2 in the browser (no Keycloak user without a member), §2.11 #3 remaining screens in English, §2.11 #4 browser text, §2.12 #1 in the browser, §2.4 #1 mixed-case email in the browser.
+- Gap fixed (attempt 1): shared error responses offer application/json besides application/problem+json, so `deleteRole` produces both; RED/GREEN on RolesTests#deleteWorksForAClientThatOnlyAcceptsJson and the acceptance test; make e2e 17 passed. Scan: deleteRole was the only problem-only operation. GAP marker removed; Slice 7 task 1 ticked. Stray `MembersAccessAcceptanceTests.java-E` (BSD sed backup created by the testing agent in this run, never committed) deleted.
+- Slice 7 task 2 (testing-expert): verify 238 tests green incl. MembersAccessAcceptanceTests, coverage floor met; client green; make e2e 17 passed on a fresh volume. Slice 7 ticked — all tasks done.

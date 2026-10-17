@@ -12,7 +12,7 @@
 import type { ProblemFieldError } from './problemFieldError';
 
 /**
- * RFC 9457 Problem Details, served as `application/problem+json`. `detail` is English and never contains personal data.
+ * RFC 9457 Problem Details, served as `application/problem+json`. Error responses also declare `application/json` so that a client sending `Accept: application/json` (the web client does) is never answered with 406; the body is the same. `detail` is English and never contains personal data.
  */
 export interface Problem {
   type?: string;

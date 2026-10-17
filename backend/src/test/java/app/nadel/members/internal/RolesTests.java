@@ -522,6 +522,30 @@ class RolesTests extends IntegrationTest {
         send(chairman(), delete("/api/v1/roles/" + role), null).andExpect(status().isNoContent());
     }
 
+    /**
+     * The web client sends {@code Accept: application/json} on every call. DELETE has no response body on success, so
+     * the contract must still offer {@code application/json} for it, or content negotiation answers 406 before the
+     * handler runs.
+     */
+    @Test
+    void deleteWorksForAClientThatOnlyAcceptsJson() throws Exception {
+        UUID unused = createRole("JsonDelete " + tag());
+        send(chairman(), delete("/api/v1/roles/" + unused).accept(MediaType.APPLICATION_JSON), null)
+                .andExpect(status().isNoContent());
+        assertThat(roleExists(unused)).isFalse();
+
+        UUID inUse = createRole("JsonInUse " + tag(), "MEMBERS_VIEW");
+        UUID holder = newMember(DEMO_TENANT, "json-inuse-" + tag() + "@example.com");
+        setRoles(chairman(), holder, List.of(inUse)).andExpect(status().isOk());
+        send(chairman(), delete("/api/v1/roles/" + inUse).accept(MediaType.APPLICATION_JSON), null)
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("ROLE_IN_USE"));
+        send(chairman(), delete("/api/v1/roles/" + baseRoleId("MEMBER")).accept(MediaType.APPLICATION_JSON), null)
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("BASE_ROLE_IMMUTABLE"));
+        send(chairman(), delete("/api/v1/roles/" + UUID.randomUUID()).accept(MediaType.APPLICATION_JSON), null)
+                .andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("NOT_FOUND"));
+        assertThat(roleExists(inUse)).isTrue();
+    }
+
     // ---- member roles --------------------------------------------------------------------------------------------------
 
     @Test

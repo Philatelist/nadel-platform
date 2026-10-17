@@ -62,8 +62,8 @@ single-test command: `cd backend && ./mvnw -B test -Dtest='<Classes>'` (requires
   - [x] Backend: run `cd backend && ./mvnw -B verify`, read the measured line coverage from `target/site/jacoco/jacoco.csv` or the report, and raise `coverage.minimum` in `backend/pom.xml` to that value rounded down to 0.01 (never lower it). **[Agent: spring-backend]**
   - [x] Verify: `make infra`, then `make e2e` (record the PIDs it starts; the target stops backend and web itself), then `pnpm format:check`, `pnpm -r typecheck`, `pnpm -r lint`, `cd backend && ./mvnw -B verify`. Afterwards run `make down`, delete `web/playwright-report/` and `web/test-results/` and any other temporary files, and stop any remaining process by its recorded PID. **[Agent: devops-infra]**
 
-- [ ] **Slice 7: Feature Testing & Regression**
+- [x] **Slice 7: Feature Testing & Regression**
 
   > Verifies the whole feature end-to-end against functional-spec.md, run after all implementation slices are complete.
-  - [ ] Read functional-spec.md acceptance criteria in full. Generate acceptance-level tests that verify the entire feature as a whole — not individual slices. Cover applicable layers (unit for pure logic, integration for service interactions, e2e for user flows) based on the project's testing stack. Write tests with RED validation (must fail before implementation is confirmed done). Annotate each test with `@spec: 001-members-access` and `@regression` if suitable for long-term regression. **[Agent: testing-expert]**
-  - [ ] Run all generated tests. All must pass. Fix any failures before proceeding. **[Agent: testing-expert]**
+  - [x] Read functional-spec.md acceptance criteria in full. Generate acceptance-level tests that verify the entire feature as a whole — not individual slices. Cover applicable layers (unit for pure logic, integration for service interactions, e2e for user flows) based on the project's testing stack. Write tests with RED validation (must fail before implementation is confirmed done). Annotate each test with `@spec: 001-members-access` and `@regression` if suitable for long-term regression. **[Agent: testing-expert]**
+  - [x] Run all generated tests. All must pass. Fix any failures before proceeding. **[Agent: testing-expert]**

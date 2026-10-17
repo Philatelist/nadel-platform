@@ -566,10 +566,16 @@ components:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/Problem'
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Problem'
     Unauthorized:
       description: Missing or invalid token (code `UNAUTHENTICATED`)
       content:
         application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+        application/json:
           schema:
             $ref: '#/components/schemas/Problem'
     Forbidden:
@@ -580,10 +586,16 @@ components:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/Problem'
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Problem'
     NotFound:
       description: The resource does not exist or is not visible to the caller (code `NOT_FOUND`)
       content:
         application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+        application/json:
           schema:
             $ref: '#/components/schemas/Problem'
     Conflict:
@@ -595,6 +607,9 @@ components:
         (code `BASE_ROLE_IMMUTABLE`)
       content:
         application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+        application/json:
           schema:
             $ref: '#/components/schemas/Problem'
 
@@ -1059,8 +1074,9 @@ components:
     Problem:
       type: object
       description: >-
-        RFC 9457 Problem Details, served as `application/problem+json`. `detail` is English and never contains
-        personal data.
+        RFC 9457 Problem Details, served as `application/problem+json`. Error responses also declare
+        `application/json` so that a client sending `Accept: application/json` (the web client does) is never
+        answered with 406; the body is the same. `detail` is English and never contains personal data.
       required: [title, status, code]
       properties:
         type:
