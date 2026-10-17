@@ -4,7 +4,7 @@ import { useRoleName } from '../roleName';
 import { Panel } from './ui';
 
 /** Read-only member card. Optional fields (notes, messengers) appear only when the response has them. */
-export function MemberDetails({ member }: { member: Member }) {
+export function MemberDetails({ member, title, large }: { member: Member; title?: string; large?: boolean }) {
   const t = useT();
   const f = t.member.fields;
   const roleName = useRoleName();
@@ -22,11 +22,17 @@ export function MemberDetails({ member }: { member: Member }) {
   rows.push([f.roles, member.roles.map(roleName).join(', ') || f.none]);
 
   return (
-    <Panel>
-      <dl className="grid grid-cols-1 gap-x-6 gap-y-3 text-[15px] sm:grid-cols-[minmax(10rem,max-content)_1fr]">
+    <Panel {...(title ? { title } : {})}>
+      <dl
+        className={`grid grid-cols-1 gap-x-6 gap-y-3 ${large ? 'text-base' : 'text-[15px]'} sm:grid-cols-[minmax(10rem,max-content)_1fr]`}
+      >
         {rows.map(([label, value]) => (
           <div key={label} className="contents">
-            <dt className="text-sm font-medium text-ink-muted sm:text-[15px] sm:font-normal">{label}</dt>
+            <dt
+              className={`font-medium text-ink-muted sm:font-normal ${large ? 'text-base' : 'text-sm sm:text-[15px]'}`}
+            >
+              {label}
+            </dt>
             <dd className="mb-2 break-words whitespace-pre-line sm:mb-0">{value}</dd>
           </div>
         ))}

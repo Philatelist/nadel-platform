@@ -2,7 +2,7 @@ import { useGetPlots, type PlotFeatureCollection, type PlotStatus } from '@nadel
 import { formatMoney, formatSotky, isZeroMoney } from '@nadel/shared';
 import { LngLatBounds, Map as MapLibreMap, NavigationControl, type GeoJSONSource } from 'maplibre-gl';
 import { useEffect, useRef, useState } from 'react';
-import { QueryError } from '../components/QueryState';
+import { ErrorState } from '../components/ui';
 import { useT } from '../i18n';
 
 const STATUSES: PlotStatus[] = ['RED', 'YELLOW', 'GREEN', 'GREY'];
@@ -135,7 +135,7 @@ export function MapPage() {
 
       {isError && (
         <div className="absolute inset-x-4 top-4 rounded-xl border border-line bg-surface">
-          <QueryError onRetry={() => void refetch()} />
+          <ErrorState message={t.errors.generic} onRetry={() => void refetch()} />
         </div>
       )}
       {!isLoading && collection && collection.features.length === 0 && (
@@ -159,7 +159,7 @@ export function MapPage() {
       {plot && (
         <aside className="absolute right-4 top-4 w-64 rounded-xl border border-line bg-surface p-4">
           <div className="flex items-start justify-between gap-2">
-            <h2 className="font-serif text-lg font-bold">
+            <h2 className="font-serif text-lg font-semibold">
               {plot.kind === 'COMMON' ? t.map.commonLand : `${t.map.plot} ${plot.number}`}
             </h2>
             <button type="button" onClick={() => setSelected(null)} className="text-ink-muted" aria-label="×">

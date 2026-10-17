@@ -29,12 +29,12 @@ created or changed.
   - [x] Update e2e selectors in `web/e2e` broken by the new markup (tech spec 2.8: `header nav`, `getByRole('navigation')` ambiguity, member `listitem` rows → table rows, `a > span:first-child`, `support/login.ts` wait), preferring roles and labels. **[Agent: testing-expert]**
   - [x] Verify: `pnpm --filter web test && pnpm -r typecheck && pnpm -r lint && pnpm format:check` green, then `make e2e` green (needs Docker and JDK 25; ports 8080/5173 free). Delete any temporary files produced. **[Agent: testing-expert]**
 
-- [ ] **Slice 4: Remaining screens, narrow-screen spec and clean-up**
+- [x] **Slice 4: Remaining screens, narrow-screen spec and clean-up**
 
   > Roles, Audit, My account and the full-page messages restyled; old styling helpers removed; the 390 px flow covered.
-  - [ ] Restyle Roles (per-role `Panel`s, `Badge`, `Button`s; structure and behaviour kept), Audit (`DataTable` + pagination), My account (two `Panel`s, roles as `Badge` list items, body ≥ 16 px), Not found, No access, Sign-in and `FullPageMessage` (centered `Panel`, serif h1) against `board-roles.png`, `board-audit.png`, `member-account.png`. Replace remaining `Banner`, `inputs.tsx` and `QueryState` usages and delete those files. Add the ESLint `no-restricted-syntax` rule against hex color literals in `web/src/components` and `web/src/pages`. Update docs that describe web styling (`web/README*`, `docs/design/README.md`) if they mention old fonts or palette. **[Agent: react-frontend]**
-  - [ ] Add `web/e2e/responsive.spec.ts` at 390 × 844 (tech spec 2.8): menu toggle with `aria-expanded`, members table scrolls inside its panel, no horizontal page scroll, a plain member sees no Menu button; plus a desktop check of the active menu item (`aria-current="page"`). Fix any other e2e selectors broken by this slice. **[Agent: testing-expert]**
-  - [ ] Verify: `make check` green, then `make e2e` green. Delete any temporary files produced. **[Agent: testing-expert]**
+  - [x] Restyle Roles (per-role `Panel`s, `Badge`, `Button`s; structure and behaviour kept), Audit (`DataTable` + pagination), My account (two `Panel`s, roles as `Badge` list items, body ≥ 16 px), Not found, No access, Sign-in and `FullPageMessage` (centered `Panel`, serif h1) against `board-roles.png`, `board-audit.png`, `member-account.png`. Replace remaining `Banner`, `inputs.tsx` and `QueryState` usages and delete those files. Add the ESLint `no-restricted-syntax` rule against hex color literals in `web/src/components` and `web/src/pages`. Update docs that describe web styling (`web/README*`, `docs/design/README.md`) if they mention old fonts or palette. **[Agent: react-frontend]**
+  - [x] Add `web/e2e/responsive.spec.ts` at 390 × 844 (tech spec 2.8): menu toggle with `aria-expanded`, members table scrolls inside its panel, no horizontal page scroll, a plain member sees no Menu button; plus a desktop check of the active menu item (`aria-current="page"`). Fix any other e2e selectors broken by this slice. **[Agent: testing-expert]**
+  - [x] Verify: `make check` green, then `make e2e` green. Delete any temporary files produced. **[Agent: testing-expert]**
 
 - [ ] **Slice 5: Feature Testing & Regression**
 

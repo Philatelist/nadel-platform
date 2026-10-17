@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { Panel } from './ui';
 
 export function FullPageMessage({
   title,
@@ -11,10 +12,12 @@ export function FullPageMessage({
 }) {
   return (
     <main className="grid h-full place-items-center px-4">
-      <div className="flex w-full max-w-md flex-col items-start gap-4 rounded-2xl border border-line bg-surface p-8">
-        <h1 className="font-serif text-2xl font-bold">{title}</h1>
-        <p className="text-ink-muted">{message}</p>
-        {children}
+      <div className="w-full max-w-[480px]">
+        <Panel>
+          <h1 className="font-serif text-3xl font-semibold text-ink">{title}</h1>
+          <p className="text-ink-muted">{message}</p>
+          {children && <div className="flex flex-wrap gap-2">{children}</div>}
+        </Panel>
       </div>
     </main>
   );

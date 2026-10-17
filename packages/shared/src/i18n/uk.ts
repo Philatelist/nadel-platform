@@ -89,6 +89,7 @@ export const uk: Messages = {
   rolesPage: {
     title: 'Ролі',
     baseRole: 'Базова роль',
+    customRole: 'Власна роль',
     memberCount: 'Членів: {n}',
     add: 'Додати роль',
     newTitle: 'Нова роль',

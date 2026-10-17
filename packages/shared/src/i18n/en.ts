@@ -77,6 +77,7 @@ export const en = {
   rolesPage: {
     title: 'Roles',
     baseRole: 'Base role',
+    customRole: 'Custom role',
     memberCount: '{n} members',
     add: 'Add role',
     newTitle: 'New role',

@@ -29,7 +29,7 @@ export function MemberPage() {
   if (member.error instanceof ApiError && member.error.status === 404) return <NotFoundPage />;
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-4 px-4 py-8 text-[15px]">
+    <div className="flex flex-col gap-4 text-[15px]">
       <Link to="/members" className="text-ink-muted hover:text-ink">
         {t.members.back}
       </Link>

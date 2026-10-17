@@ -3,6 +3,7 @@ import { createContext, useContext, type ReactNode } from 'react';
 import { useAuth } from 'react-oidc-context';
 import { FullPageMessage } from './components/FullPageMessage';
 import { QueryBoundary } from './components/QueryBoundary';
+import { Button } from './components/ui';
 import { useT } from './i18n';
 import { problemCode } from './problem';
 
@@ -13,13 +14,9 @@ export function MeProvider({ children }: { children: ReactNode }) {
   const auth = useAuth();
   const query = useGetMe();
   const signOut = (
-    <button
-      type="button"
-      onClick={() => void auth.signoutRedirect()}
-      className="rounded-md border border-line px-3 py-1.5 text-sm"
-    >
+    <Button variant="secondary" onClick={() => void auth.signoutRedirect()}>
       {t.auth.signOut}
-    </button>
+    </Button>
   );
 
   if (

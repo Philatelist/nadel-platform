@@ -80,7 +80,7 @@ export function MembersPage() {
   ];
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-8 text-[15px]">
+    <div className="flex flex-col gap-4 text-[15px]">
       <PageHeader
         title={t.members.title}
         actions={

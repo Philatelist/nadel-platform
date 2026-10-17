@@ -79,7 +79,7 @@ export function MemberForm({
   const [viberPhone, setViberPhone] = useState(member?.viberPhone ?? '');
   const [notes, setNotes] = useState(member?.notes ?? '');
   const [errors, setErrors] = useState<FieldErrors>({});
-  const [bannerError, setBannerError] = useState<string>();
+  const [formError, setFormError] = useState<string>();
   const sentPhoneRows = useRef<number[]>([]);
 
   async function handleSaved(saved: Member) {
@@ -94,7 +94,7 @@ export function MemberForm({
   function handleError(error: unknown) {
     const fieldErrors = remapPhoneErrors(problemFieldErrors(t, error), sentPhoneRows.current);
     setErrors(fieldErrors);
-    setBannerError(Object.keys(fieldErrors).length === 0 ? problemMessage(t, error) : undefined);
+    setFormError(Object.keys(fieldErrors).length === 0 ? problemMessage(t, error) : undefined);
   }
 
   const create = useCreateMember({ mutation: { onSuccess: handleSaved, onError: handleError } });
@@ -114,7 +114,7 @@ export function MemberForm({
 
   function submit(event: FormEvent) {
     event.preventDefault();
-    setBannerError(undefined);
+    setFormError(undefined);
     const clientErrors: Record<string, string> = {};
     if (lastName.trim() === '') clientErrors.lastName = t.validation.REQUIRED_lastName;
     if (firstName.trim() === '') clientErrors.firstName = t.validation.REQUIRED_firstName;
@@ -141,7 +141,7 @@ export function MemberForm({
   return (
     <Panel>
       <form onSubmit={submit} noValidate className="flex flex-col gap-4">
-        {bannerError && <Notice tone="danger">{bannerError}</Notice>}
+        {formError && <Notice tone="danger">{formError}</Notice>}
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <TextField

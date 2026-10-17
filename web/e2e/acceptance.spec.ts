@@ -598,7 +598,7 @@ test.describe('§2.4 / §2.12 other people', () => {
   }) => {
     await loginAs(page, 'member@other.local');
 
-    await expect(page.getByText('Melnyk Olena Stepanivna')).toBeVisible();
+    await expect(page.getByRole('main').getByText('Melnyk Olena Stepanivna')).toBeVisible();
     await expect(page.getByRole('main').getByText('Other Cooperative')).toBeVisible();
     await page.goto(`/members/${CHAIRMAN_ID}`);
     await expect(page.getByRole('heading', { level: 1, name: 'Not found' })).toBeVisible();

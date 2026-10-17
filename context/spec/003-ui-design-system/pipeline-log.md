@@ -78,3 +78,4 @@
 - Slice 1 committed 0b35db5 (tests: ui-tokens 56, shared 5, web 3 passing; typecheck, lint, format, build, audit green). Review r1 started.
 - Slice 1 review r1: MAJOR_ISSUES (M1 stale --color-bg in MapPage); fix committed 8e8bf1a with a guard test.
 - Slice 2 committed bfba724 (web 35 tests); review r1 PASS. Slice 1 review r2 PASS.
+- Slice 3 committed 4657f49 (web 37 tests, make e2e 17 passed); review r1 PASS.

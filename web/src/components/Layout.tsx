@@ -51,7 +51,7 @@ export function Layout() {
   return (
     <div className="flex h-full flex-col">
       <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line bg-surface px-4 py-3">
-        <Link to="/" className="font-serif text-xl font-bold text-ink no-underline">
+        <Link to="/" className="font-serif text-xl font-semibold text-ink no-underline">
           {t.app.name}
         </Link>
         {me.tenant?.name && <span className="min-w-0 truncate text-sm text-ink-muted">{me.tenant.name}</span>}

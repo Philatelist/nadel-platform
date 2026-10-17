@@ -18,3 +18,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `8e8bf1a..bfba724` | PASS | — | minor: some tests grouped per file; hint sits between input and error; MapPage still uses QueryError (slice 4); PageHeader uses `<header>` (mind e2e `header` locators) |
+
+## Slice 3 — App shell and members screens
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `bfba724..4657f49` | PASS | — | minor: page-level padding/max-width doubles the shell padding (picked up in slice 4); redundant `.first()` in members.spec; plain-member "no Menu button" check deferred to responsive spec; slice commit subjects follow the pipeline's `{N}: Slice` format, not Conventional Commits (squash title will be Conventional) |

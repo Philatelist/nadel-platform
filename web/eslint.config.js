@@ -15,6 +15,23 @@ export default tseslint.config(
     },
   },
   {
+    files: ['src/components/**/*.{ts,tsx}', 'src/pages/**/*.{ts,tsx}'],
+    ignores: ['**/*.test.{ts,tsx}'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'Literal[value=/#[0-9a-fA-F]{3,8}\\b/]',
+          message: 'Hex colors are not allowed here; use the design tokens (Tailwind token utilities).',
+        },
+        {
+          selector: 'TemplateElement[value.raw=/#[0-9a-fA-F]{3,8}\\b/]',
+          message: 'Hex colors are not allowed here; use the design tokens (Tailwind token utilities).',
+        },
+      ],
+    },
+  },
+  {
     files: ['e2e/**/*.ts', 'playwright.config.ts'],
     languageOptions: { globals: globals.node },
   },
