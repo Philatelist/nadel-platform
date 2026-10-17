@@ -183,10 +183,17 @@ test.describe('target size in the page frame (2.4)', () => {
       .evaluateAll((els) =>
         els
           .filter((el) => (el as HTMLElement).offsetParent !== null)
-          .map((el) => ({ label: (el.textContent ?? '').trim(), height: el.getBoundingClientRect().height })),
+          .map((el) => ({
+            label: (el.textContent ?? '').trim(),
+            height: el.getBoundingClientRect().height,
+            radius: getComputedStyle(el).borderTopLeftRadius,
+          })),
       );
     expect(buttons.length).toBeGreaterThanOrEqual(3);
-    for (const button of buttons) expect(button.height, button.label).toBeGreaterThanOrEqual(44);
+    for (const button of buttons) {
+      expect(button.height, button.label).toBeGreaterThanOrEqual(44);
+      expect(button.radius, button.label).toBe('10px');
+    }
   });
 });
 

@@ -30,3 +30,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `4657f49..792b4f7` | PASS | — | minor: `RolesPage` state naming (`banner`/`setFormError`); Audit cells no longer top-aligned; Account "My details" h2 absent while loading, sub-headings inside the Roles panel; permission descriptions 14 px on a member screen; second Menu click not asserted (Slice 5) |
+
+## Slice 5 — Feature Testing & Regression
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `792b4f7..05a3791` | MAJOR_ISSUES | M1 `LocaleSwitch.tsx:15` uses `rounded-md` (6 px), spec 2.4 requires 10 px control radius | minor: registry row still says FAILING; active language text now `text-accent`; dark "light text" check is loose |

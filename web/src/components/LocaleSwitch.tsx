@@ -12,7 +12,7 @@ export function LocaleSwitch() {
           type="button"
           aria-pressed={code === locale}
           onClick={() => setLocale(code)}
-          className={`inline-flex min-h-11 min-w-11 items-center justify-center rounded-md px-2 text-xs uppercase ${code === locale ? 'bg-accent-soft text-accent' : 'text-ink-muted hover:text-ink'}`}
+          className={`inline-flex min-h-11 min-w-11 items-center justify-center rounded-control px-2 text-xs uppercase ${code === locale ? 'bg-accent-soft text-accent' : 'text-ink-muted hover:text-ink'}`}
         >
           {code}
         </button>

@@ -31,7 +31,7 @@
 | web/e2e/design-system.spec.ts | 2.1 light palette on Members (page ground, white panel, accent button) | e2e | positive | yes | OK | spec 003 |
 | web/e2e/design-system.spec.ts | 2.2 dark appearance changes Members to the dark palette | e2e | positive | yes | OK | spec 003 |
 | web/e2e/design-system.spec.ts | 2.4 buttons and inputs on Members and Member form are at least 44 px | e2e | positive | yes | OK | spec 003 |
-| web/e2e/design-system.spec.ts | 2.4 header buttons incl. language switch at least 44 px | e2e | negative | yes | FAILING | GAP: LocaleSwitch buttons 24 px; marked test.fail until fixed |
+| web/e2e/design-system.spec.ts | 2.4 header buttons incl. language switch at least 44 px | e2e | negative | yes | OK | Gap fixed: LocaleSwitch buttons are 44 px with 10 px corners (rounded-control); test also asserts the radius |
 | web/e2e/design-system.spec.ts | 2.6 chairman header contents and active menu item | e2e | positive | yes | OK | spec 003 |
 | web/e2e/design-system.spec.ts | 2.6 Menu pressed twice opens then closes at 390 px | e2e | positive | yes | OK | spec 003 |
 | web/e2e/design-system.spec.ts | 2.6 plain member has header and no menu or Menu button | e2e | negative | yes | OK | spec 003 |
