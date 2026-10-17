@@ -6,5 +6,8 @@
         "repo": "provectus/awos"
       }
     }
+  },
+  "enabledPlugins": {
+    "awos@awos-marketplace": true
   }
 }
