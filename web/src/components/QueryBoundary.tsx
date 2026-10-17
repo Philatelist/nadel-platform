@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { useT } from '../i18n';
 import { problemMessage } from '../problem';
+import { EmptyState, ErrorState, LoadingState } from './ui';
 
 interface QueryLike<TData> {
   data: TData | undefined;
@@ -23,23 +24,12 @@ export function QueryBoundary<TData>({
   children: (data: TData) => ReactNode;
 }) {
   const t = useT();
-  if (query.isPending) return <div className="p-6 text-ink-muted">{t.state.loading}</div>;
+  if (query.isPending) return <LoadingState message={t.state.loading} />;
   if (query.isError || query.data === undefined) {
-    return (
-      <div role="alert" className="flex flex-col items-start gap-3 p-6">
-        <p className="text-ink-muted">{problemMessage(t, query.error)}</p>
-        <button
-          type="button"
-          onClick={() => void query.refetch()}
-          className="rounded-md border border-line px-3 py-1.5 text-sm"
-        >
-          {t.errors.retry}
-        </button>
-      </div>
-    );
+    return <ErrorState message={problemMessage(t, query.error)} onRetry={() => void query.refetch()} />;
   }
   if (isEmpty?.(query.data) ?? false) {
-    return <div className="p-6 text-ink-muted">{emptyMessage ?? t.state.empty}</div>;
+    return <EmptyState message={emptyMessage ?? t.state.empty} />;
   }
   return <>{children(query.data)}</>;
 }

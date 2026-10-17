@@ -14,7 +14,7 @@ import { useT } from '../i18n';
 import { useCan } from '../me';
 import { problemFieldErrors, problemMessage, type FieldErrors } from '../problem';
 import { Banner } from './Banner';
-import { Field } from './Field';
+import { Field } from './ui/Field';
 import { SelectInput, TextArea, TextInput } from './inputs';
 
 interface PhoneRow {

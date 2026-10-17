@@ -75,3 +75,5 @@
 ## Phase 3 — implement
 
 - Slice 1 task 4 (devops-infra): Makefile `test` runs `pnpm -r test`; CI `clients` job gets a `pnpm -r test` step. The agent also renamed the CI job; reverted by the orchestrator (job names may be required checks). Follow-up for the owner: CLAUDE.md `make test` line → "backend ./mvnw verify (Testcontainers, coverage floor) + client typecheck + client unit tests (vitest)".
+- Slice 1 committed 0b35db5 (tests: ui-tokens 56, shared 5, web 3 passing; typecheck, lint, format, build, audit green). Review r1 started.
+- Slice 1 review r1: MAJOR_ISSUES (M1 stale --color-bg in MapPage); fix committed 8e8bf1a with a guard test.

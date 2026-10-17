@@ -13,7 +13,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
 import { Banner } from '../components/Banner';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { Field } from '../components/Field';
+import { Field } from '../components/ui/Field';
 import { TextArea, TextInput } from '../components/inputs';
 import { QueryBoundary } from '../components/QueryBoundary';
 import { useT } from '../i18n';

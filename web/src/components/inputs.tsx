@@ -1,5 +1,5 @@
 import type { ComponentProps } from 'react';
-import type { ControlProps } from './Field';
+import type { ControlProps } from './ui/Field';
 
 const base = 'w-full rounded-md border bg-surface px-3 py-1.5 text-sm aria-invalid:border-danger border-line';
 

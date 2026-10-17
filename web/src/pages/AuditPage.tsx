@@ -1,7 +1,7 @@
 import { useListAuditEntries, type AuditEntry } from '@nadel/api-client';
 import { keepPreviousData } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router';
-import { Field } from '../components/Field';
+import { Field } from '../components/ui/Field';
 import { SelectInput, TextInput } from '../components/inputs';
 import { Pagination } from '../components/Pagination';
 import { QueryBoundary } from '../components/QueryBoundary';

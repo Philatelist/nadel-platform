@@ -15,11 +15,11 @@ created or changed.
   - [x] Wire unit tests into the Makefile `test` target (`pnpm -r test`) and add a `pnpm -r test` step to the CI `clients` job in `.github/workflows/ci.yml` (after typecheck). Update README/`make help` text if it lists what `make test` runs. **[Agent: devops-infra]**
   - [x] Verify: `pnpm install && pnpm -r test && pnpm -r typecheck && pnpm -r lint && pnpm format:check && pnpm --filter web build && pnpm audit --prod --audit-level high` all green; `grep -r "fonts.googleapis" web/` finds nothing. Delete any temporary files produced. **[Agent: react-frontend]**
 
-- [ ] **Slice 2: Component kit**
+- [x] **Slice 2: Component kit**
 
   > The kit exists with tests; every screen's loading, empty and error states already come from it.
-  - [ ] Create `web/src/components/ui/` per tech spec 2.4: `Button` (+ `buttonClass`), `Field` (moved from `components/Field.tsx`, old imports updated), `TextField`, `SearchField`, `Select`, `TextArea`, `Panel`, `PageHeader`, `Badge`, `DataTable`, `Money` (uses `formatMoney`), `StatusDot`, `Notice`, `EmptyState`, `LoadingState`, `ErrorState`, and an `index.ts` barrel. One co-located `*.test.tsx` per component (render, accessible name, disabled state where relevant, field error linkage via `aria-describedby`, `Money` output for the four sample amounts). Make `QueryBoundary` render `LoadingState` / `ErrorState` / `EmptyState`. New strings only via i18n. **[Agent: react-frontend]**
-  - [ ] Verify: `pnpm --filter web test && pnpm -r typecheck && pnpm -r lint && pnpm format:check && pnpm --filter web build` green. Delete any temporary files produced. **[Agent: react-frontend]**
+  - [x] Create `web/src/components/ui/` per tech spec 2.4: `Button` (+ `buttonClass`), `Field` (moved from `components/Field.tsx`, old imports updated), `TextField`, `SearchField`, `Select`, `TextArea`, `Panel`, `PageHeader`, `Badge`, `DataTable`, `Money` (uses `formatMoney`), `StatusDot`, `Notice`, `EmptyState`, `LoadingState`, `ErrorState`, and an `index.ts` barrel. One co-located `*.test.tsx` per component (render, accessible name, disabled state where relevant, field error linkage via `aria-describedby`, `Money` output for the four sample amounts). Make `QueryBoundary` render `LoadingState` / `ErrorState` / `EmptyState`. New strings only via i18n. **[Agent: react-frontend]**
+  - [x] Verify: `pnpm --filter web test && pnpm -r typecheck && pnpm -r lint && pnpm format:check && pnpm --filter web build` green. Delete any temporary files produced. **[Agent: react-frontend]**
 
 - [ ] **Slice 3: App shell and members screens**
 
