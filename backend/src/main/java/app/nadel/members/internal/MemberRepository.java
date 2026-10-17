@@ -31,7 +31,7 @@ interface MemberRepository extends JpaRepository<Member, UUID> {
             + "and m.keycloakSubject is null and m.archivedAt is null")
     int linkSubject(@Param("tenantId") UUID tenantId, @Param("id") UUID id, @Param("subject") String subject);
 
-    @Query("select new app.nadel.members.internal.RoleGrantRow(r.id, r.name, r.baseCode, rp.permission) "
+    @Query("select new app.nadel.members.internal.RoleGrantRow(r.id, r.name, r.baseCode, r.nameCustomized, rp.permission) "
             + "from MemberRole mr join Role r on r.id = mr.roleId "
             + "left join RolePermission rp on rp.roleId = r.id "
             + "where mr.tenantId = :tenantId and mr.memberId = :memberId")
@@ -73,7 +73,7 @@ interface MemberRepository extends JpaRepository<Member, UUID> {
             @Param("phonePattern") String phonePattern, Pageable pageable);
 
     /** Roles of several members in one query (no permissions), for the list. */
-    @Query("select new app.nadel.members.internal.MemberRoleRow(mr.memberId, r.id, r.name, r.baseCode) "
+    @Query("select new app.nadel.members.internal.MemberRoleRow(mr.memberId, r.id, r.name, r.baseCode, r.nameCustomized) "
             + "from MemberRole mr join Role r on r.id = mr.roleId "
             + "where mr.tenantId = :tenantId and mr.memberId in :memberIds")
     List<MemberRoleRow> findRolesOfMembers(@Param("tenantId") UUID tenantId,

@@ -30,8 +30,10 @@ import org.springframework.transaction.annotation.Transactional;
  * cooperative always comes from the caller's {@link AccessProfile}. The caller must hold {@code ROLES_MANAGE}
  * (checked on the controller).
  * <p>
- * Base roles: they cannot be renamed or deleted, and the Chairman role always has every permission. Treasurer and
- * Member permissions and the descriptions of all roles can be edited.
+ * Every role can be renamed, base roles included (names are unique per cooperative, ignoring case). A base role keeps
+ * a stored flag {@code name_customized}: it is false while the role has its standard name and
+ * {@code useDefaultName} restores that. Base roles cannot be deleted, and the Chairman role always has every
+ * permission. Treasurer and Member permissions and the descriptions of all roles can be edited.
  */
 @Service
 class RoleCommands {
@@ -68,34 +70,49 @@ class RoleCommands {
     @Transactional
     RoleDetails update(UUID id, RoleInput input, AccessProfile actor) {
         Role role = find(id, actor);
-        String name = cleanName(input.getName());
+        boolean base = role.getBaseCode() != null;
+        boolean restore = Boolean.TRUE.equals(input.getUseDefaultName());
+        if (restore && !base) {
+            throw invalid("useDefaultName");
+        }
+
+        String name;
+        boolean customized;
+        if (restore) {
+            name = BaseRoles.defaultName(role.getBaseCode());
+            customized = false;
+        } else {
+            name = cleanName(input.getName());
+            customized = !name.equals(role.getName()) || role.isNameCustomized();
+        }
         String description = blankToNull(input.getDescription());
         Set<Permission> requested = permissionsOf(input);
 
-        boolean base = role.getBaseCode() != null;
-        if (base && !role.getName().equals(name)) {
-            throw baseRoleImmutable("A base role cannot be renamed.");
-        }
         boolean chairman = PermissionUnion.CHAIRMAN.equals(role.getBaseCode());
         if (chairman && !requested.equals(EnumSet.allOf(Permission.class))) {
             throw baseRoleImmutable("The Chairman role always has every permission.");
         }
-        if (!base) {
+        boolean renamed = !name.equals(role.getName());
+        if (renamed) {
             ensureNameFree(actor.tenantId(), name, role.getId());
         }
 
         Set<Permission> current = RoleDtoMapper.effective(role,
                 roles.findPermissions(role.getId()).stream().map(RolePermissionRow::permission).toList());
         List<FieldChange> changes = RoleSnapshot.diff(
-                RoleSnapshot.of(role.getName(), role.getDescription(), current),
-                RoleSnapshot.of(name, description, requested));
-        if (!changes.isEmpty()) {
-            role.edit(name, description, Instant.now());
+                RoleSnapshot.of(RoleSnapshot.auditName(role.getName(), role.getBaseCode(), role.isNameCustomized()),
+                        role.getDescription(), current),
+                RoleSnapshot.of(RoleSnapshot.auditName(name, role.getBaseCode(), customized), description, requested));
+        boolean flagChanged = customized != role.isNameCustomized();
+        if (!changes.isEmpty() || flagChanged) {
+            role.edit(name, customized, description, Instant.now());
             role = save(role);
             if (!chairman) {
                 writePermissions(actor.tenantId(), role.getId(), current, requested);
             }
-            publish(actor, "ROLE_UPDATED", role, changes);
+            if (!changes.isEmpty()) {
+                publish(actor, "ROLE_UPDATED", role, changes);
+            }
         }
         return RoleDtoMapper.toDto(role, requested, activeHolders(actor.tenantId(), role.getId()));
     }
@@ -174,7 +191,7 @@ class RoleCommands {
                 action,
                 "ROLE",
                 role.getId(),
-                role.getName(),
+                RoleSnapshot.auditName(role.getName(), role.getBaseCode(), role.isNameCustomized()),
                 changes));
     }
 
@@ -209,6 +226,11 @@ class RoleCommands {
     private static ApiProblemException invalidName(String code) {
         return new ApiProblemException(HttpStatus.BAD_REQUEST, ProblemCodes.VALIDATION_FAILED,
                 "The request is not valid.", List.of(new FieldProblem("name", code)));
+    }
+
+    private static ApiProblemException invalid(String field) {
+        return new ApiProblemException(HttpStatus.BAD_REQUEST, ProblemCodes.VALIDATION_FAILED,
+                "The request is not valid.", List.of(new FieldProblem(field, ProblemCodes.INVALID)));
     }
 
     private static ApiProblemException nameTaken() {

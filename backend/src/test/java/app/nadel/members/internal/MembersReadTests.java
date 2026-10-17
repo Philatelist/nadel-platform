@@ -113,7 +113,9 @@ class MembersReadTests extends IntegrationTest {
                 .andExpect(jsonPath("$.items[0].roles", hasSize(2)))
                 .andExpect(jsonPath("$.items[0].roles[0].name").value("Member"))
                 .andExpect(jsonPath("$.items[0].roles[0].baseCode").value("MEMBER"))
+                .andExpect(jsonPath("$.items[0].roles[0].nameCustomized").value(false))
                 .andExpect(jsonPath("$.items[0].roles[1].name").value("Treasurer"))
+                .andExpect(jsonPath("$.items[0].roles[1].nameCustomized").value(false))
                 .andExpect(content().string(not(containsString("notes"))))
                 .andExpect(content().string(not(containsString("private note"))))
                 .andExpect(content().string(not(containsString("private address"))));
@@ -128,7 +130,14 @@ class MembersReadTests extends IntegrationTest {
                 .andExpect(jsonPath("$.items[?(@.id == '" + DEMO_SECRETARY + "')].roles[?(@.name == 'Secretary')]",
                         hasSize(1)))
                 .andExpect(jsonPath("$.items[?(@.id == '" + DEMO_SECRETARY
-                        + "')].roles[?(@.name == 'Secretary')].baseCode").isEmpty());
+                        + "')].roles[?(@.name == 'Secretary')].baseCode").isEmpty())
+                .andExpect(jsonPath("$.items[?(@.id == '" + DEMO_SECRETARY
+                        + "')].roles[?(@.name == 'Secretary')].nameCustomized").value(true));
+        // the card carries the same flag
+        getAs(viewer(DEMO_TENANT), "/api/v1/members/" + DEMO_SECRETARY)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.roles[?(@.name == 'Secretary')].nameCustomized").value(true))
+                .andExpect(jsonPath("$.roles[?(@.baseCode == 'MEMBER')].nameCustomized").value(false));
     }
 
     // ---- search -----------------------------------------------------------------------------------------------

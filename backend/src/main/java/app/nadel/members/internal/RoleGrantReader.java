@@ -34,7 +34,8 @@ class RoleGrantReader {
             }
         }
         List<RoleGrant> grants = new ArrayList<>();
-        heads.forEach((id, head) -> grants.add(new RoleGrant(id, head.roleName(), head.baseCode(), permissions.get(id))));
+        heads.forEach((id, head) -> grants.add(new RoleGrant(id, head.roleName(), head.baseCode(),
+                head.nameCustomized(), permissions.get(id))));
         grants.sort(Comparator.comparing(RoleGrant::name, String.CASE_INSENSITIVE_ORDER));
         return grants;
     }
@@ -50,7 +51,8 @@ class RoleGrantReader {
         return members.findRolesOfMembers(tenantId, memberIds).stream()
                 .sorted(Comparator.comparing(MemberRoleRow::roleName, String.CASE_INSENSITIVE_ORDER))
                 .collect(Collectors.groupingBy(MemberRoleRow::memberId, LinkedHashMap::new,
-                        Collectors.mapping(r -> new RoleRef(r.roleId(), r.roleName(), r.baseCode()),
+                        Collectors.mapping(r -> new RoleRef(r.roleId(), r.roleName(), r.baseCode(),
+                                r.nameCustomized()),
                                 Collectors.toList())));
     }
 }

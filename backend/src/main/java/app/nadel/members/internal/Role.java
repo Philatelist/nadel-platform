@@ -25,6 +25,10 @@ class Role {
     @Column(nullable = false)
     private String name;
 
+    /** Stored flag; read it through {@link #isNameCustomized()}, which also covers custom roles. */
+    @Column(name = "name_customized", nullable = false)
+    private boolean nameCustomized;
+
     private String description;
 
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -42,14 +46,17 @@ class Role {
         role.id = UUID.randomUUID();
         role.tenantId = tenantId;
         role.name = name;
+        role.nameCustomized = true;
         role.description = description;
         role.createdAt = now;
         role.updatedAt = now;
         return role;
     }
 
-    void edit(String name, String description, Instant now) {
+    /** Changes name, flag and description. For a custom role the stored flag stays true. */
+    void edit(String name, boolean nameCustomized, String description, Instant now) {
         this.name = name;
+        this.nameCustomized = baseCode == null || nameCustomized;
         this.description = description;
         this.updatedAt = now;
     }
@@ -72,5 +79,15 @@ class Role {
 
     String getDescription() {
         return description;
+    }
+
+    /** True for custom roles and for base roles that were renamed; false for a base role with its standard name. */
+    boolean isNameCustomized() {
+        return isNameCustomized(baseCode, nameCustomized);
+    }
+
+    /** The rule behind {@link #isNameCustomized()}, shared with the query rows: custom roles are always customised. */
+    static boolean isNameCustomized(String baseCode, boolean storedFlag) {
+        return baseCode == null || storedFlag;
     }
 }

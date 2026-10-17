@@ -32,7 +32,7 @@ class MemberAuthenticationConverterTests {
     void permissionsBecomeAuthorities() {
         source.profile = new AccessProfile(TENANT, MEMBER, "sub-1", "Shevchenko Iryna",
                 Set.of(Permission.MEMBERS_VIEW, Permission.AUDIT_VIEW),
-                List.of(new RoleRef(UUID.randomUUID(), "Treasurer", "TREASURER")), false);
+                List.of(new RoleRef(UUID.randomUUID(), "Treasurer", "TREASURER", false)), false);
 
         var token = (MemberAuthenticationToken) converter.convert(jwt(TENANT.toString(), true, null));
 

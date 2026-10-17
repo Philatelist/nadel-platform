@@ -18,4 +18,10 @@ export interface RoleRef {
   id: string;
   name: string;
   baseCode?: BaseRole;
+  /**
+     * True when `name` is the cooperative's own wording: always true for custom roles, true for a base role
+     * once it was renamed. When false (a base role with its standard name) clients show the standard name from
+     * their own catalog, in the user's language, chosen by `baseCode`.
+     */
+  nameCustomized: boolean;
 }

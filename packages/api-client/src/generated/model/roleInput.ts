@@ -12,8 +12,9 @@
 import type { Permission } from './permission';
 
 /**
- * Editable fields of a role (full replacement). For base roles the server refuses renames and changes of the
- * Chairman role's permissions (409 `BASE_ROLE_IMMUTABLE`); Treasurer and Member permissions are editable.
+ * Editable fields of a role (full replacement). Every role can be renamed, base roles included. The server
+ * refuses changes of the Chairman role's permissions (409 `BASE_ROLE_IMMUTABLE`); Treasurer and Member
+ * permissions are editable.
  */
 export interface RoleInput {
   /**
@@ -22,6 +23,12 @@ export interface RoleInput {
      * @maxLength 60
      */
   name: string;
+  /**
+     * Base roles only. When true the role gets its standard name back (`nameCustomized` becomes false) and the
+     * submitted `name` is ignored. On a custom role this is a validation error (400 `VALIDATION_FAILED`,
+     * field `useDefaultName`, code `INVALID`).
+     */
+  useDefaultName?: boolean;
   /** @maxLength 500 */
   description?: string;
   permissions: Permission[];

@@ -56,7 +56,7 @@ class MeController implements MeApi {
     }
 
     private static RoleRef toDto(app.nadel.identity.RoleRef role) {
-        var dto = new RoleRef(role.id(), role.name());
+        var dto = new RoleRef(role.id(), role.name(), role.nameCustomized());
         if (role.baseCode() != null) {
             dto.setBaseCode(BaseRole.fromValue(role.baseCode()));
         }

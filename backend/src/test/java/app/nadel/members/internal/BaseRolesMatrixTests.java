@@ -1,6 +1,7 @@
 package app.nadel.members.internal;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import app.nadel.IntegrationTest;
 import app.nadel.identity.Permission;
@@ -26,6 +27,15 @@ class BaseRolesMatrixTests extends IntegrationTest {
         try {
             owner.queryForList("select seed_base_roles(?)", tenant);
 
+            Map<String, String> seededNames = new HashMap<>();
+            owner.queryForList("select base_code, name from role where tenant_id = ?", tenant)
+                    .forEach(row -> seededNames.put((String) row.get("base_code"), (String) row.get("name")));
+            Map<String, String> javaNames = new HashMap<>();
+            BaseRoles.ALL.forEach(d -> javaNames.put(d.code(), d.name()));
+            assertThat(seededNames)
+                    .as("base-role names of seed_base_roles (database) vs BaseRoles (Java)")
+                    .isEqualTo(javaNames);
+
             Map<String, EnumSet<Permission>> seeded = new HashMap<>();
             List<Map<String, Object>> rows = owner.queryForList(
                     "select r.base_code, rp.permission from role r left join role_permission rp on rp.role_id = r.id "
@@ -49,6 +59,12 @@ class BaseRolesMatrixTests extends IntegrationTest {
             owner.update("delete from role where tenant_id = ?", tenant);
             owner.update("delete from tenant where id = ?", tenant);
         }
+    }
+
+    @Test
+    void defaultNameReturnsTheSeedNameOfABaseRole() {
+        assertThat(BaseRoles.defaultName("TREASURER")).isEqualTo("Treasurer");
+        assertThatThrownBy(() -> BaseRoles.defaultName("SECRETARY")).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test

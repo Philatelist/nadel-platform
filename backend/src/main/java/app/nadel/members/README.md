@@ -54,9 +54,15 @@ None yet. Features 004 (ownership) and 005 (import) will add a lookup API in the
   - Name: trimmed; empty is 400 `REQUIRED`, over 60 is 400 `TOO_LONG` (field `name`). Unique per cooperative ignoring case
     (`lower(name)` on both sides in the database, so Cyrillic works): a pre-check plus a mapping of the unique index
     `role_tenant_name_uq` give 409 `ROLE_NAME_TAKEN`.
-  - Base roles: rename and delete are 409 `BASE_ROLE_IMMUTABLE` (a case change is a rename); Chairman's permission set must
-    stay all eight (a PUT with the full set is accepted and changes nothing); Treasurer and Member permissions and every
+  - Base roles: delete is 409 `BASE_ROLE_IMMUTABLE`; Chairman's permission set must stay all eight (a PUT with the full
+    set is accepted and changes nothing, and its name can be changed); Treasurer and Member permissions and every
     description are editable. A PUT omits `description` = clears it.
+  - Renaming (feature 004): every role, base roles included, can be renamed; names stay unique per cooperative ignoring
+    case. `role.name_customized` (API `nameCustomized`) is true once a base role's stored name was changed, always true for
+    custom roles (`Role.isNameCustomized()` derives it); clients show the language catalog name for a base role while the
+    flag is false, and the stored name once it is true. `RoleInput.useDefaultName` on a base role restores the standard
+    name (the seed name from `BaseRoles.defaultName`, flag false; 409 `ROLE_NAME_TAKEN` if another role holds it); on a
+    custom role it is 400 `INVALID` on `useDefaultName`. Renaming never touches permissions, which follow the base code.
   - Deleting a role that any member row references (active or archived) is 409 `ROLE_IN_USE` (the foreign key is the guard
     against a concurrent assignment).
   - `setMemberRoles`: unknown or other-cooperative role or member is 404. Archived members may be given or lose roles. When the
@@ -65,6 +71,11 @@ None yet. Features 004 (ownership) and 005 (import) will add a lookup API in the
   - Audit events: `ROLE_CREATED`, `ROLE_UPDATED` (changed fields only), `ROLE_DELETED` (entity type `ROLE`, label = role
     name; fields `name`, `description`, `permissions` as sorted names joined by ", ") and `MEMBER_ROLES_CHANGED` (field
     `roles`, old and new sorted role names joined by ", "). A change that changes nothing writes no event.
+  - Audit name token: the server cannot hold language catalogs, so a base role that still has its standard name is written
+    to the audit log as `base:<CODE>` (for example `base:TREASURER`) in the `name` field, the `ROLE_UPDATED` label and the
+    `roles` values of `MEMBER_ROLES_CHANGED` (`RoleSnapshot.auditName`); the web audit page renders it as the catalog name
+    in the reader's language. A customised name is written as stored. Accepted risk: a custom role literally named
+    `base:MEMBER` is shown as the standard Member name in the audit view; it affects display only, never permissions.
   - `BaseRoles` is the Java copy of the base-role matrix; `BaseRolesMatrixTests` compares it with `seed_base_roles`.
 
 Base roles are `CHAIRMAN`, `TREASURER`, `MEMBER` (seeded per cooperative by the SQL function `seed_base_roles`); custom

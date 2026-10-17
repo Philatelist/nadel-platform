@@ -32,5 +32,5 @@
 | Electrician | — | Admin who works only with meters. Not a base role: a custom role, given meter permissions when meters arrive |
 | Platform operator | `PLATFORM_OPERATOR` | Owner of the SaaS. Manages cooperatives and subscriptions, cannot see their data |
 | Permission | `Permission` | A single allowed action from a fixed list, for example `PAYMENTS_ALLOCATE` or `MEMBERS_EDIT` |
-| Role | `Role` | A named set of permissions stored per cooperative. Base roles (Chairman, Treasurer, Member) exist in every cooperative and cannot be renamed or deleted; custom roles are added by anyone with `ROLES_MANAGE`. A member may hold several roles (table `member_role`) and gets the union of their permissions |
+| Role | `Role` | A named set of permissions stored per cooperative. Base roles (Chairman, Treasurer, Member) exist in every cooperative and cannot be deleted, but can be renamed (feature 004; the code stays, `Role.nameCustomized` tells a renamed role from one that still has its standard name); custom roles are added by anyone with `ROLES_MANAGE`. A member may hold several roles (table `member_role`) and gets the union of their permissions |
 | Audit entry | `AuditEvent` (table `audit_entry`) | Append-only record of an admin change: who, when, what, and old and new value of each changed field |

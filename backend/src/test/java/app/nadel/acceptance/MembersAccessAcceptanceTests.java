@@ -15,6 +15,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import app.nadel.DemoAccessChecks;
 import app.nadel.IntegrationTest;
 import app.nadel.TestTokens;
 import java.nio.file.Files;
@@ -74,7 +75,7 @@ class MembersAccessAcceptanceTests extends IntegrationTest {
     void cleanUp() {
         // first sign-in links demo members and the journeys touch base roles
         inTenant(DEMO_TENANT, sql -> sql.update("update member set keycloak_subject = null "
-                + "where email in ('chairman@demo.local', 'treasurer@demo.local', 'member@demo.local')"));
+                + "where email in ('chairman@demo.local', 'treasurer@demo.local', 'member@demo.local', 'electrician@demo.local')"));
         inTenant(DEMO_TENANT, sql -> sql.update("update member set archived_at = null where id = ?", DEMO_CHAIRMAN));
         for (UUID id : createdMembers) {
             inTenant(DEMO_TENANT, sql -> {
@@ -311,6 +312,80 @@ class MembersAccessAcceptanceTests extends IntegrationTest {
         List<String> permissions = new ArrayList<>();
         restored.get("permissions").forEach(node -> permissions.add(node.asString()));
         assertThat(permissions).containsExactlyInAnyOrder("MEMBERS_VIEW", "PLOTS_VIEW", "AUDIT_VIEW");
+    }
+
+    /**
+     * Feature 004: names are labels, never permissions. All three base roles are renamed through the API, then the
+     * permission checks of {@code MeEndpointTests} run unchanged (chairman, treasurer, member and the electrician with
+     * a custom role): the same permissions in {@code /me} and the same allowed and denied endpoints. The seeded names and
+     * flags are put back afterwards.
+     */
+    @Test
+    void renamingEveryBaseRoleDoesNotChangeWhoCanDoWhat() throws Exception {
+        String tag = tag();
+        Map<String, String> newNames = Map.of("CHAIRMAN", "Head-" + tag, "TREASURER", "Bookkeeper-" + tag,
+                "MEMBER", "Plotholder-" + tag);
+        Map<String, JsonNode> seeded = new LinkedHashMap<>();
+        for (JsonNode role : readJson(doGet(chairman(), "/api/v1/roles"))) {
+            if (role.hasNonNull("baseCode")) {
+                seeded.put(role.get("baseCode").asString(), role);
+            }
+        }
+        assertThat(seeded.keySet()).containsExactlyInAnyOrder("CHAIRMAN", "TREASURER", "MEMBER");
+        DemoAccessChecks.all(mvc);
+        try {
+            for (Map.Entry<String, String> rename : newNames.entrySet()) {
+                JsonNode before = seeded.get(rename.getKey());
+                Map<String, Object> body = new LinkedHashMap<>();
+                body.put("name", rename.getValue());
+                body.put("description", before.get("description").asString());
+                List<String> permissions = new ArrayList<>();
+                before.get("permissions").forEach(p -> permissions.add(p.asString()));
+                body.put("permissions", permissions);
+                doPut(chairman(), "/api/v1/roles/" + before.get("id").asString(), body)
+                        .andExpect(status().isOk())
+                        .andExpect(jsonPath("$.name").value(rename.getValue()))
+                        .andExpect(jsonPath("$.nameCustomized").value(true));
+            }
+
+            // the new names are what people see ...
+            mvc.perform(get("/api/v1/me").header(HttpHeaders.AUTHORIZATION, demo("treasurer@demo.local")))
+                    .andExpect(jsonPath("$.roles[0].name").value(newNames.get("TREASURER")))
+                    .andExpect(jsonPath("$.roles[0].nameCustomized").value(true));
+            mvc.perform(get("/api/v1/me").header(HttpHeaders.AUTHORIZATION, demo("electrician@demo.local")))
+                    .andExpect(jsonPath("$.roles[?(@.baseCode == 'MEMBER')].name").value(newNames.get("MEMBER")))
+                    .andExpect(jsonPath("$.roles[?(@.name == 'Electrician')].nameCustomized").value(true));
+            // ... and nothing else changed
+            DemoAccessChecks.all(mvc);
+        } finally {
+            restoreSeededBaseRoles(seeded);
+        }
+
+        mvc.perform(get("/api/v1/roles").header(HttpHeaders.AUTHORIZATION, chairman()))
+                .andExpect(jsonPath("$[?(@.baseCode == 'CHAIRMAN')].name").value("Chairman"))
+                .andExpect(jsonPath("$[?(@.baseCode == 'TREASURER')].name").value("Treasurer"))
+                .andExpect(jsonPath("$[?(@.baseCode == 'MEMBER')].name").value("Member"))
+                .andExpect(jsonPath("$[?(@.baseCode == 'CHAIRMAN')].nameCustomized").value(false))
+                .andExpect(jsonPath("$[?(@.baseCode == 'TREASURER')].nameCustomized").value(false))
+                .andExpect(jsonPath("$[?(@.baseCode == 'MEMBER')].nameCustomized").value(false));
+        DemoAccessChecks.all(mvc);
+    }
+
+    /** Puts the base roles of the demo cooperative back to the state read before the test: name, flag, permissions. */
+    private void restoreSeededBaseRoles(Map<String, JsonNode> seeded) {
+        inTenant(DEMO_TENANT, sql -> {
+            for (Map.Entry<String, JsonNode> entry : seeded.entrySet()) {
+                sql.update("update role set name = ?, name_customized = false where base_code = ?",
+                        entry.getValue().get("name").asString(), entry.getKey());
+                sql.update("delete from role_permission where role_id = (select id from role where base_code = ?)",
+                        entry.getKey());
+                entry.getValue().get("permissions").forEach(permission -> sql.update(
+                        "insert into role_permission (tenant_id, role_id, permission) "
+                                + "select tenant_id, id, ? from role where base_code = ?",
+                        permission.asString(), entry.getKey()));
+            }
+            return null;
+        });
     }
 
     private JsonNode treasurerRoleBody() throws Exception {

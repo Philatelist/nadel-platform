@@ -53,8 +53,16 @@ class SeedBaseRolesTests extends IntegrationTest {
     }
 
     @Test
+    void seededBaseRolesAreNotCustomised() {
+        assertThat(as(() -> jdbc.queryForList(
+                "select name_customized from role where base_code is not null", Boolean.class)))
+                .hasSize(3).containsOnly(false);
+    }
+
+    @Test
     void secondRunChangesNothingAndKeepsCustomisations() {
-        as(() -> jdbc.update("update role set name = 'Chair', description = 'custom' where base_code = 'CHAIRMAN'"));
+        as(() -> jdbc.update("update role set name = 'Chair', name_customized = true, description = 'custom' "
+                + "where base_code = 'CHAIRMAN'"));
         as(() -> jdbc.update("delete from role_permission where permission = 'AUDIT_VIEW' "
                 + "and role_id = md5(?::text || ':TREASURER')::uuid", DEMO));
         Map<String, TreeSet<String>> before = matrix();
@@ -67,11 +75,14 @@ class SeedBaseRolesTests extends IntegrationTest {
         assertThat(matrix().get("CHAIRMAN")).isEqualTo(before.get("CHAIRMAN"));
         assertThat(as(() -> jdbc.queryForObject("select name from role where base_code = 'CHAIRMAN'", String.class)))
                 .isEqualTo("Chair");
+        assertThat(as(() -> jdbc.queryForObject(
+                "select name_customized from role where base_code = 'CHAIRMAN'", Boolean.class))).isTrue();
         assertThat(as(() -> jdbc.queryForObject("select count(*) from role where base_code is not null", Integer.class)))
                 .isEqualTo(3);
 
         // restore the demo state for other tests
-        as(() -> jdbc.update("update role set name = 'Chairman', description = 'Full access' where base_code = 'CHAIRMAN'"));
+        as(() -> jdbc.update("update role set name = 'Chairman', name_customized = false, description = 'Full access' "
+                + "where base_code = 'CHAIRMAN'"));
     }
 
     private Map<String, TreeSet<String>> matrix() {

@@ -51,7 +51,7 @@ General rules for every feature in this sequence:
 Create all eight now so roles can be configured once. Design the enum and seeding so that a later permission
 (`TARIFFS_EDIT`, `PAYMENTS_ALLOCATE`, ...) is an enum value plus a migration that grants it to base roles where needed.
 
-### 2.2 Base roles (seeded for every cooperative; cannot be deleted or renamed)
+### 2.2 Base roles (seeded for every cooperative; cannot be deleted)
 
 | Role | Permissions |
 |---|---|
@@ -61,6 +61,11 @@ Create all eight now so roles can be configured once. Design the enum and seedin
 
 The chairman may change the permissions of all roles. At least one active member must hold
 `CHAIRMAN`: the system refuses to remove that role from, or archive, the last chairman.
+
+> Since feature 004 ([004-role-names.md](004-role-names.md)) base roles can be renamed (and their standard name
+> restored) by anyone with `ROLES_MANAGE`; the "cannot be renamed" rule above is superseded. They still cannot be
+> deleted, and the code of a base role (`CHAIRMAN`, `TREASURER`, `MEMBER`) and its permission rules never change with the
+> name.
 
 ### 2.3 Custom roles
 

@@ -82,7 +82,7 @@ export const uk: Messages = {
   },
   roles: {
     CHAIRMAN: 'Голова',
-    TREASURER: 'Скарбник',
+    TREASURER: 'Казначей',
     MEMBER: 'Член кооперативу',
     PLATFORM_OPERATOR: 'Оператор платформи',
   },
@@ -108,6 +108,9 @@ export const uk: Messages = {
     deleted: 'Роль видалено',
     empty: 'Ролей ще немає.',
     memberRoles: 'Змінити ролі',
+    baseHint: 'Базова роль: {name}',
+    restoreName: 'Повернути стандартну назву',
+    nameClash: 'Інша роль уже показується під такою назвою.',
   },
   members: {
     title: 'Члени кооперативу',
@@ -198,7 +201,7 @@ export const uk: Messages = {
     ROLE_NAME_TAKEN: 'Роль з такою назвою вже існує.',
     ROLE_IN_USE: 'Цю роль призначено членам кооперативу, тому її не можна видалити.',
     LAST_CHAIRMAN: 'У кооперативі має лишатися принаймні один голова.',
-    BASE_ROLE_IMMUTABLE: 'Базові ролі не можна перейменовувати чи видаляти.',
+    BASE_ROLE_IMMUTABLE: 'Базові ролі не можна видаляти, а дозволи голови змінювати.',
     UNKNOWN: 'Щось пішло не так. Спробуйте ще раз.',
   },
   map: {

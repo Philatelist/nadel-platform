@@ -5,6 +5,7 @@ import { Pagination } from '../components/Pagination';
 import { QueryBoundary } from '../components/QueryBoundary';
 import { DataTable, PageHeader, Panel, Select, TextField, type Column } from '../components/ui';
 import { useLocale, useT } from '../i18n';
+import { auditRoleValue } from '../roleName';
 import { problemCode, problemFieldErrors } from '../problem';
 
 const PAGE_SIZE = 50;
@@ -177,8 +178,13 @@ function AuditTime({ entry, locale }: { entry: AuditEntry; locale: string }) {
 }
 
 function AuditRecord({ entry }: { entry: AuditEntry }) {
-  const a = useT().audit;
-  const label = entry.entityLabel ?? a.unlabelled;
+  const t = useT();
+  const a = t.audit;
+  const label = entry.entityLabel
+    ? entry.entityType === 'ROLE'
+      ? auditRoleValue(entry.entityLabel, t)
+      : entry.entityLabel
+    : a.unlabelled;
   return (
     <>
       <span className="text-ink-muted">{a.entityType[entry.entityType]}: </span>
@@ -200,7 +206,7 @@ function AuditChanges({ entry }: { entry: AuditEntry }) {
   const value = (field: string, raw: string | undefined): string => {
     if (raw === undefined || raw === '') return a.noValue;
     if (field === 'archived') return raw === 'true' ? a.yes : a.no;
-    return raw;
+    return field === 'name' || field === 'roles' ? auditRoleValue(raw, t) : raw;
   };
   return (
     <ul className="flex flex-col gap-1">

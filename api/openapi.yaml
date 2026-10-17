@@ -394,9 +394,13 @@ paths:
       summary: Update a role
       description: |
         Replaces the name, description and permissions of the role. Requires `ROLES_MANAGE`; the change is
-        written to the audit log. The name must stay unique within the cooperative (409 `ROLE_NAME_TAKEN`).
-        Base roles cannot be renamed (409 `BASE_ROLE_IMMUTABLE`) and the permissions of the Chairman role cannot be
-        changed (409 `BASE_ROLE_IMMUTABLE`); the permissions of the Treasurer and Member roles can be edited.
+        written to the audit log. Every role, base roles included, can be renamed. The name must stay unique within
+        the cooperative, ignoring upper and lower case (409 `ROLE_NAME_TAKEN`). With `useDefaultName: true` a base
+        role gets its standard name back (the submitted `name` is ignored); that can also end in 409
+        `ROLE_NAME_TAKEN` when another role already holds the standard name, and for a custom role it is a 400
+        `VALIDATION_FAILED` on `useDefaultName`. The permissions of the Chairman role cannot be changed
+        (409 `BASE_ROLE_IMMUTABLE`); the permissions of the Treasurer and Member roles can be edited. Renaming a role
+        never changes what its holders may do.
       parameters:
         - name: id
           in: path
@@ -603,8 +607,8 @@ components:
         The request conflicts with the current state: the email is already used by another member of the
         cooperative (code `EMAIL_TAKEN`, with `errors[{field: email}]`), the action would leave the cooperative
         without an active chairman (code `LAST_CHAIRMAN`), the role name is already used (code `ROLE_NAME_TAKEN`),
-        the role is still given to members (code `ROLE_IN_USE`), or a base role cannot be changed that way
-        (code `BASE_ROLE_IMMUTABLE`)
+        the role is still given to members (code `ROLE_IN_USE`), or a base role cannot be deleted or, for the Chairman
+        role, have its permissions changed (code `BASE_ROLE_IMMUTABLE`)
       content:
         application/problem+json:
           schema:
@@ -641,7 +645,7 @@ components:
     RoleRef:
       type: object
       description: Reference to a role of the cooperative
-      required: [id, name]
+      required: [id, name, nameCustomized]
       properties:
         id:
           type: string
@@ -650,6 +654,12 @@ components:
           type: string
         baseCode:
           $ref: '#/components/schemas/BaseRole'
+        nameCustomized:
+          type: boolean
+          description: |
+            True when `name` is the cooperative's own wording: always true for custom roles, true for a base role
+            once it was renamed. When false (a base role with its standard name) clients show the standard name from
+            their own catalog, in the user's language, chosen by `baseCode`.
 
     PermissionInfo:
       type: object
@@ -666,8 +676,9 @@ components:
     RoleInput:
       type: object
       description: |
-        Editable fields of a role (full replacement). For base roles the server refuses renames and changes of the
-        Chairman role's permissions (409 `BASE_ROLE_IMMUTABLE`); Treasurer and Member permissions are editable.
+        Editable fields of a role (full replacement). Every role can be renamed, base roles included. The server
+        refuses changes of the Chairman role's permissions (409 `BASE_ROLE_IMMUTABLE`); Treasurer and Member
+        permissions are editable.
       required: [name, permissions]
       properties:
         name:
@@ -675,6 +686,13 @@ components:
           minLength: 1
           maxLength: 60
           description: Role name; surrounding whitespace is trimmed; unique within the cooperative, ignoring case
+        useDefaultName:
+          type: boolean
+          default: false
+          description: |
+            Base roles only. When true the role gets its standard name back (`nameCustomized` becomes false) and the
+            submitted `name` is ignored. On a custom role this is a validation error (400 `VALIDATION_FAILED`,
+            field `useDefaultName`, code `INVALID`).
         description:
           type: string
           maxLength: 500
@@ -687,13 +705,19 @@ components:
     RoleDetails:
       type: object
       description: A role with its permissions and the number of active members who hold it
-      required: [id, name, permissions, memberCount]
+      required: [id, name, nameCustomized, permissions, memberCount]
       properties:
         id:
           type: string
           format: uuid
         name:
           type: string
+        nameCustomized:
+          type: boolean
+          description: |
+            True when `name` is the cooperative's own wording: always true for custom roles, true for a base role
+            once it was renamed. When false (a base role with its standard name) clients show the standard name from
+            their own catalog, in the user's language, chosen by `baseCode`.
         description:
           type: string
         baseCode:

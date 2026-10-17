@@ -262,9 +262,13 @@ export const useCreateRole = <TError = BadRequestResponse | UnauthorizedResponse
 
 /**
  * Replaces the name, description and permissions of the role. Requires `ROLES_MANAGE`; the change is
- * written to the audit log. The name must stay unique within the cooperative (409 `ROLE_NAME_TAKEN`).
- * Base roles cannot be renamed (409 `BASE_ROLE_IMMUTABLE`) and the permissions of the Chairman role cannot be
- * changed (409 `BASE_ROLE_IMMUTABLE`); the permissions of the Treasurer and Member roles can be edited.
+ * written to the audit log. Every role, base roles included, can be renamed. The name must stay unique within
+ * the cooperative, ignoring upper and lower case (409 `ROLE_NAME_TAKEN`). With `useDefaultName: true` a base
+ * role gets its standard name back (the submitted `name` is ignored); that can also end in 409
+ * `ROLE_NAME_TAKEN` when another role already holds the standard name, and for a custom role it is a 400
+ * `VALIDATION_FAILED` on `useDefaultName`. The permissions of the Chairman role cannot be changed
+ * (409 `BASE_ROLE_IMMUTABLE`); the permissions of the Treasurer and Member roles can be edited. Renaming a role
+ * never changes what its holders may do.
  * @summary Update a role
  */
 export const updateRole = async (id: string,

@@ -59,8 +59,8 @@ ON CONFLICT (id) DO UPDATE SET
     last_name = EXCLUDED.last_name, first_name = EXCLUDED.first_name, middle_name = EXCLUDED.middle_name,
     phones = EXCLUDED.phones, email = EXCLUDED.email, delivery_channel = EXCLUDED.delivery_channel;
 
-INSERT INTO role (id, tenant_id, base_code, name, description) VALUES
-    ('cccccccc-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111', NULL, 'Electrician', 'Custom role without permissions')
+INSERT INTO role (id, tenant_id, base_code, name, name_customized, description) VALUES
+    ('cccccccc-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111', NULL, 'Electrician', true, 'Custom role without permissions')
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO member_role (tenant_id, member_id, role_id)
@@ -121,8 +121,8 @@ ON CONFLICT (id) DO UPDATE SET
     viber_phone = EXCLUDED.viber_phone, notes = EXCLUDED.notes, archived_at = EXCLUDED.archived_at;
 
 -- Custom role Secretary, assigned to the regular member 9. Permissions are reset to the listed set on every run.
-INSERT INTO role (id, tenant_id, base_code, name, description) VALUES
-    ('cccccccc-0000-0000-0000-000000000002', '11111111-1111-1111-1111-111111111111', NULL, 'Secretary', 'Maintains members, plots and ownership')
+INSERT INTO role (id, tenant_id, base_code, name, name_customized, description) VALUES
+    ('cccccccc-0000-0000-0000-000000000002', '11111111-1111-1111-1111-111111111111', NULL, 'Secretary', true, 'Maintains members, plots and ownership')
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO role_permission (tenant_id, role_id, permission)
