@@ -1,0 +1,6 @@
+# /feature-pipeline settings for nadel-platform. See .claude/skills/feature-pipeline/references/feature-pipeline.example.yml
+autonomy: minimal
+baseBranch: auto
+# Push the spec branch, open a PR and fix the branch until CI is green. The owner reviews and merges.
+publish: pr+checks
+notify: true

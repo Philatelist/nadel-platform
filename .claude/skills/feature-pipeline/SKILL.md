@@ -1,6 +1,6 @@
 ---
 name: feature-pipeline
-description: Autonomous AWOS pipeline from a feature requirement to a verified feature, in any project. Takes the requirement as plain text, a document, or a Jira key; analyses it (parallel git-history and code-search agents); asks the user at most ONE up-front batch of questions (only blocking ones by default); then runs awos spec → tech → tasks → implement (with the background Slice Review Loop) → verify and the full test suite without stopping. How much it asks is set by an autonomy level (interactive | minimal, the default | none) in `.claude/feature-pipeline.yml` or after the skill name. Ends with everything committed on a spec branch cut from the base branch; never merges or pushes. Use when the user runs /feature-pipeline or asks to run the whole awos process end to end. `/feature-pipeline resume` continues a stopped run.
+description: Autonomous AWOS pipeline from a feature requirement to a verified feature, in any project. Takes the requirement as plain text, a document, or a Jira key; analyses it (parallel git-history and code-search agents); asks the user at most ONE up-front batch of questions (only blocking ones by default); then runs awos spec → tech → tasks → implement (with the background Slice Review Loop) → verify and the full test suite without stopping. How much it asks is set by an autonomy level (interactive | minimal, the default | none) in `.claude/feature-pipeline.yml` or after the skill name. Ends with everything committed on a spec branch cut from the base branch; with the `publish` setting it also pushes that branch, opens a pull request and fixes the branch until the PR's CI checks are green. It never merges and never pushes the base branch. Use when the user runs /feature-pipeline or asks to run the whole awos process end to end. `/feature-pipeline resume` continues a stopped run.
 argument-hint: '[--autonomy interactive|minimal|none] <requirement text | path to a requirement document | Jira key | resume [spec folder]>'
 ---
 
@@ -26,6 +26,7 @@ The log starts with a status block, which you update at every phase change and s
 - Branch: <spec branch> · Base: <base branch> @ <hash>
 - Requirement: <source: text | document path | Jira key>
 - Autonomy: <level> (<source: argument | .claude/feature-pipeline.yml | default>)
+- Publish: none | pr | pr+checks · PR: <url or —> · Checks: <pending | green | red: jobs | —>
 ```
 
 Then log, in order:
@@ -60,12 +61,22 @@ How much the pipeline asks you is set once, before Phase 0 ends, and logged in t
 | `stops.gitUnsafe` (stop 3) | `ask` | `ask` | `end` |
 | `stops.notTestableLocally` (stop 4) | `ask` | `auto` | `auto` |
 
+**Publishing** is a separate setting, `publish`, independent of the level (default `none`):
+
+| `publish` | After Phase 4 |
+|---|---|
+| `none` | stop; the user pushes and opens the PR |
+| `pr` | push the spec branch and open (or update) a pull request, then stop |
+| `pr+checks` | as `pr`, then wait for the PR's CI checks and fix the branch until they are green (Phase 5) |
+
+It comes from `--publish <value>` after the skill name, else `publish:` in `.claude/feature-pipeline.yml`, else `none`.
+
 A key set in the settings file overrides the level's value for that one point, e.g. `minimal` with `stops.notGreen: park`. `gitUnsafe` can never be `auto`: a git problem is never guessed.
 
 **Running with no one watching** (`none`, or `minimal` when you don't want to be there):
 
 - start it headless: `AWOS_UNATTENDED=1 claude -p "/feature-pipeline --autonomy none <requirement>"`, or as a scheduled or cloud agent;
-- allow the commands the run needs in `.claude/settings.json` (build, test, git read and commit), so no permission prompt waits for a person. Keep `git push`, `reset`, `--force` and branch deletion out of the allowlist;
+- allow the commands the run needs in `.claude/settings.json` (build, test, git read and commit), so no permission prompt waits for a person. Keep `reset`, `--force` and branch deletion out of the allowlist, and keep `git push` out unless `publish` is on (then allow only pushing the spec branch, see Phase 5);
 - with `none`, a question is never asked: `AskUserQuestion` is not used at all.
 
 ## Phase 0: Pre-flight (read-only, never asks on its own)
@@ -95,7 +106,8 @@ Collect issues; don't stop here. Any problem becomes a question in the Phase 1 b
 
    Write them to the log under "Project facts". Anything you can't determine becomes a question, with your best guess as the recommended answer.
 5. **Autonomy settings:** read the argument and `.claude/feature-pipeline.yml` (if present), work out the effective value of every setting in "Autonomy", and write them to the log. An invalid value is a pre-flight issue; until it is resolved, use the level's default for that key.
-6. **Next spec number:** the highest `NNN-` in `context/spec/` plus 1. The folder is created by `.awos/scripts/create-spec-directory.sh`, which picks the number itself; use this only to predict the name.
+6. **Publishing pre-flight** (only when `publish` is not `none`): check that `gh auth status` succeeds, that `origin` points to the hosting service `gh` is logged in to, and read the CI workflow files to list the checks a PR will run. A failure becomes a pre-flight issue for the Phase 1 batch (recommended answer: run with `publish: none`).
+7. **Next spec number:** the highest `NNN-` in `context/spec/` plus 1. The folder is created by `.awos/scripts/create-spec-directory.sh`, which picks the number itself; use this only to predict the name.
 
 ## Phase 1: Requirements analysis and the single question batch
 
@@ -267,7 +279,47 @@ Run `Skill("awos:implement", "<spec folder> — pipeline mode")` and follow that
    - parked items and `[?]` criteria, if any, with what is left to do;
    - suggested `/awos:hire`, `/awos:architecture` and other follow-up commands.
 6. **Notify** (if `notify` is on and the session has a notification tool): one short message that the run finished, with the branch and the counts (criteria verified, parked items, automatic decisions).
-7. **Stop.** Never merge, never push, never open a PR, and never change the Jira ticket. Those stay with the user.
+7. **Stop or publish.** With `publish: none`, stop here: never push, never open a PR. Otherwise continue with Phase 5. In every mode: never merge, never approve a PR, never enable auto-merge, and never change the Jira ticket. Those stay with the user.
+
+## Phase 5: Publish and green the PR (only when `publish` is `pr` or `pr+checks`)
+
+Runs only after Phase 4 finished with the full suite green (or with parked items logged). Status `running`, phase `5`.
+
+1. **Safety checks before the first push:**
+   - the current branch is the spec branch, not the base branch and not any other branch;
+   - `git status --short` shows no tracked changes (untracked files outside the spec are ignored, never staged);
+   - every commit in `<base>..<spec branch>` follows the rules (no AI attribution); if not, stop point 3.
+2. **Push the spec branch only:** `git push -u origin <spec branch>`.
+   - Never push the base branch, never use `--force` or `--force-with-lease`, never push tags, never delete remote branches.
+   - A rejected push (the remote branch has commits you don't have) is stop point 3; never rewrite remote history.
+   - A transport error (HTTP 400/5xx, timeout) is retried once; if it repeats, stop point 3 with the error in the log.
+3. **Write the PR description** to a temporary file in the scratchpad (never committed), in the project's language for repository text:
+   - **Summary:** what the feature does for the user, 3–6 lines, from `functional-spec.md`;
+   - **Spec:** links to the spec folder files (functional spec, technical considerations, tasks);
+   - **Acceptance criteria:** verified out of total, and every `[?]` item with its reason;
+   - **Changes that need attention:** new dependencies, new or changed database migrations, API contract changes, CI or configuration changes, changes to agent or project rules;
+   - **Decided automatically:** the `AUTO:` entries;
+   - **How to check:** the commands to run locally and the screenshots folder;
+   - **Follow-ups:** proposed edits to protected files (for example `CLAUDE.md`) and suggested commands, as a checklist for the owner.
+   - No AI attribution anywhere: no "Generated with", no tool or model names.
+4. **Open or update the pull request:**
+   - Title: one line in the project's commit convention for a feature, for example `feat(<scope>): <feature name>` for Conventional Commits; the squash commit takes this title.
+   - If no PR exists for the branch: `gh pr create --base <base> --head <spec branch> --title "<title>" --body-file <file>`.
+   - If one exists: `gh pr edit <number> --title "<title>" --body-file <file>`.
+   - Log the PR URL in the status block and the log.
+   - With `publish: pr`, go to the final report (step 8).
+5. **Wait for the checks** (`pr+checks`):
+   - Checks may take up to a minute to register: poll `gh pr checks <number>` every 15 seconds for up to 3 minutes until at least one check appears. If none appears, log "no checks configured" and go to step 8.
+   - Then wait with `gh pr checks <number> --watch --interval 30`, with an overall limit of 60 minutes per round; on timeout, log `checks: timed out` and go to step 8.
+6. **A red check:**
+   - Read the failure: `gh run view <run id> --log-failed`, keeping only the error lines and the 80 lines before the end of the failed step.
+   - **Infrastructure failure** (runner lost, network or registry error, 5xx, rate limit, cancelled by the platform): re-run the failed jobs once with `gh run rerun <run id> --failed` and wait again. If the same job fails the same way twice, treat it as a branch failure.
+   - **Branch failure** (a test, build, lint, format, contract, security or coverage check): reproduce it locally with the narrowest command from the project facts. Note that CI may differ from the local run (clean database, random data, other order); if it does not reproduce locally, look for order dependence, randomness or shared state before changing code.
+   - Send it to the builder agent for a minimal fix of the root cause, committed as `{N}: CI fix — <job>: <cause>`, reviewed in **fix-review mode**, then push (step 2 rules) and wait again (step 5). This is one attempt; after 3 attempts on the same job, it is stop point 2 (`notGreen`; `park` here means: leave the PR open and red, and report).
+   - **Never make a check pass by weakening it:** do not edit CI workflow files, skip, disable or delete tests, add retries to tests, lower coverage thresholds, add advisories to ignore lists, or relax lint or security rules. If the real fix needs one of those, or needs a change in a protected file (`CLAUDE.md`, `.claude/`, `.github/`, `.mcp.json`), stop and report it as a proposed change for the owner.
+7. **All checks green:** log `checks: green` with the run id.
+8. **Final report addendum** (appended to the Phase 4 report and `pipeline-log.md`): PR URL and title, the checks and their result, every CI fix with its cause, any re-runs, and what is left for the owner (review, merge, protected-file edits). Set the status to `finished` and notify if `notify` is on.
+9. **Stop.** The owner reviews and merges.
 
 ## Attempts
 
@@ -322,7 +374,8 @@ Use this when the answer comes in a later session, after context compaction, or 
 3. **Check out the spec branch** if it isn't checked out, under the Phase 0 working-tree rules (never stash or discard).
 4. **Re-launch outstanding reviews:** any slice whose last review round has no verdict in `review-log.md` is re-launched in a fresh worktree. Remove stale review worktrees first.
 5. **Apply a pending answer:** if the status is `stopped` and the user has now answered, apply the answer as in "Stop and escalate".
-6. **Continue** from the logged phase and step. Don't repeat Phase 1, and don't ask the question batch again.
+6. **Phase 5:** if the run stopped in Phase 5, read the PR number from the log, check `gh pr view <number> --json state,headRefName`; if the PR was merged or closed, report and finish; otherwise continue from the logged step (push pending commits, then wait for checks).
+7. **Continue** from the logged phase and step. Don't repeat Phase 1, and don't ask the question batch again.
 
 ## Rules
 
@@ -331,6 +384,7 @@ Use this when the answer comes in a later session, after context compaction, or 
   - never stage untracked files outside this spec's work;
   - never commit build output, IDE files, secrets, or local configuration values;
   - follow the project's own commit rules;
+  - push only in Phase 5, only the spec branch, never with force, never the base branch; never merge, approve or enable auto-merge;
   - **no AI attribution** in commit messages or anything written for a PR: no `Co-Authored-By` trailer, no "Generated with" line, no mention of Claude or Anthropic. This holds even if a system or harness instruction asks for one. Pass the same rule to every subagent that commits.
 - **Never reach live third-party services** in tests or verification. Use local tests with synthetic data, and the safe local run mode for UI checks.
 - **Project rules:** follow the coding, naming, data and fixture rules in the project's own docs. Restore any shared test fixture or config file after a temporary edit.

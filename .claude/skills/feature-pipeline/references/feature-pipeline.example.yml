@@ -20,5 +20,9 @@ baseBranch: auto
 #   gitUnsafe:          ask | end              # end = end the run with a report; never guessed
 #   notTestableLocally: ask | auto             # auto = build it, mark its criteria [?] for a manual check
 
+# After the run: none = stop with a local branch (default); pr = push the spec branch and open a PR;
+# pr+checks = also wait for the PR's CI checks and fix the branch until they are green. Never merges.
+# publish: none
+
 # Send a notification when the run finishes or stops, if the session has a notification tool.
 notify: true

@@ -119,4 +119,4 @@ Numbering: a feature document `docs/features/NNN-name.md` and its AWOS spec fold
 - Do not edit generated code (`packages/api-client/src/generated`, `backend/target/generated-sources`).
 - Commit messages follow Conventional Commits (`feat(ledger): ...`, `fix(web): ...`).
 - Commits must not mention AI: no `Co-Authored-By` lines for AI assistants, no session links, no "Generated with ..." lines. The commit author is the repository owner.
-- Agents never push and never merge. Work only on a feature branch (`feat/...`, `fix/...`, `chore/...`, `docs/...`); never commit on `main`. The repository owner pushes and opens PRs.
+- Agents never merge, never approve PRs and never push `main`. Work only on a feature branch; never commit on `main`. The only push allowed to an agent is `/feature-pipeline` Phase 5 pushing its own spec branch (no force) and opening a PR for it (`publish: pr+checks` in `.claude/feature-pipeline.yml`). The repository owner reviews and merges.
