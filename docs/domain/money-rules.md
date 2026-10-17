@@ -60,6 +60,8 @@ charge               = (consumption + share of losses) × kWh tariff
 - A plot without an active meter gets no electricity charge, is not in the "missing readings" list, is not shown to the
   electrician for readings and takes no share of transformer losses.
 - A meter can be installed on a plot later; its installation date and initial reading start the plot's metering.
+- There is no fixed electricity fee for a plot without a meter: no meter, no electricity charge (confirmed by the
+  chairman).
 
 ### 6.2 Meter replacement
 
@@ -83,8 +85,7 @@ consumption = (final reading of old meter − old meter reading at period start)
 
 ### 6.3 Meter types and the meter tree
 
-Feedback from the first cooperative's chairman (17.10.2026); details marked *open* are to be confirmed with him before
-the meters feature is specified.
+Feedback from the first cooperative's chairman (17.10.2026), answers confirmed 18.10.2026.
 
 - A meter measures one resource: `ELECTRICITY` (kWh) now, `WATER` (m³) later. The meters module is built for both from
   the start; water charges need their own tariff (`PER_M3`) and are added when the cooperative installs water meters.
@@ -97,16 +98,20 @@ substation (transformer) meter
 └── common consumers: well pumps, street lighting, office
 ```
 
+- The chairman configures the tree in the cooperative settings: how many substations, which quarter meters and common
+  consumers exist, and which plots each one feeds. Nothing about the tree is hard-coded.
 - Each meter except a plot meter has a list of the plots (or child meters) it feeds; the board keeps that list. Readings
   of substation, quarter and common-consumer meters are entered by the board or the electrician, on the same schedule
   as plot readings.
 - Losses are computed per node: `node losses = node reading for the period − Σ readings of its children`, and are
   shared among the plots under that node (mode as in section 6). With no quarter meters the tree is one level and
   section 6 applies unchanged.
-- The board report per quarter meter shows: consumption, number of plots and members it feeds, sum of their plot
-  readings, losses in kWh and %. *Open:* exact columns the chairman wants.
-- Common consumers (well pumps, lighting): their consumption is a cooperative expense charged to plots. *Open:* split
-  equally per plot, per plot with water access, or included in the membership fee.
+- The board report per substation, quarter meter and common consumer shows: readings (start, end, consumption), the
+  cost per kWh, and the amount; plus the number of plots and members it feeds, the sum of their plot readings and the
+  losses in kWh and %.
+- Common consumers (well pumps, lighting): their consumption is a cooperative expense charged to plots. How it is split
+  is a cooperative setting chosen by the chairman: equally per plot, only among plots marked as using the service, or
+  not charged separately (covered by the membership fee).
 
 ## 7. Allocation
 

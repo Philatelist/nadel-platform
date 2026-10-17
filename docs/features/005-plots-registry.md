@@ -40,7 +40,7 @@ General rules for every feature in this sequence:
 | `kind` | `PLOT` or `COMMON` (roads, shared areas; never has owners) |
 | `area_m2` | required; > 0 for `PLOT`; numeric(10,2); UI shows sotkas (1 sotka = 100 m²) and accepts either unit on input |
 | `cadastral_number` | optional; format `NNNNNNNNNN:NN:NNN:NNNN`; unique per cooperative |
-| `has_building` | required boolean, default `false`: whether a building stands on the plot (requested by the chairman; may later be a tariff criterion) |
+| `has_building` | required boolean, default `false`: whether a building stands on the plot (requested by the chairman; reference information only, it does not affect charges) |
 | `notes` | optional, visible only with `PLOTS_VIEW` |
 | `archived_at` | soft archive; archived plots hidden by default |
 | `boundary` | stays nullable and unused |
