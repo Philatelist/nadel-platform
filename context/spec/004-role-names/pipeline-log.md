@@ -1,11 +1,11 @@
 # Pipeline log — 004 Role names
 
 - Status: running
-- Phase: 5 — publish
+- Phase: 6 — review run
 - Branch: 004-role-names · Base: main @ 23451fb
 - Requirement: docs/features/004-role-names.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
-- Publish: pr+checks · PR: — · Checks: —
+- Publish: pr+checks · PR: https://github.com/Philatelist/nadel-platform/pull/21 · Checks: green (run 39079616098)
 - Review run: on (pending)
 
 ## Project facts
@@ -77,3 +77,17 @@
 - Acceptance criteria: 15 of 15 verified. Status: Completed.
 - Full suite on aa853d6 (final code): `make check` green (backend 259, ui-tokens 56, shared 5, web 65; JaCoCo floor 0.93 met), `make e2e` 33 passed. Baseline 0 failures → no regressions.
 - Product docs: no `/awos:architecture` or `/awos:product` change needed (extends 002 within the existing architecture).
+
+## Phase 5 — publish
+
+- Pushed `004-role-names`; PR https://github.com/Philatelist/nadel-platform/pull/21 — "feat(members): rename any role, including base roles".
+- Checks on 7745f32: Backend, Clients, End-to-end, SAST, Security — all green (run 39079616098). No CI fixes, no re-runs.
+
+## Final report
+
+- Commits: a35ddff specs · 54971bf S1 · 138490e S2 · f40a963 S2 fix · 02a9b37 S3 · aa853d6 S4 · 7745f32 verification · (this log commit).
+- Acceptance criteria: 15/15 verified.
+- Reviews: S1 1 round PASS; S2 2 rounds (M1 untested submit-name guard) PASS; S3 1 round PASS; S4 1 round PASS.
+- Full suite vs baseline: baseline 0 failures; branch 0 failures (backend 259, web 65, shared 5, ui-tokens 56; e2e 33). Coverage 0.939, floor 0.90 → 0.93.
+- Decided automatically: see Phase 1 decisions (audit token, restore semantics, trim/case rules, Chairman Save, mobile out of scope, coverage floor).
+- Follow-ups: pre-existing 60-char + trailing space edge; raw permission codes in the audit log; minor review notes in review-log.md.
