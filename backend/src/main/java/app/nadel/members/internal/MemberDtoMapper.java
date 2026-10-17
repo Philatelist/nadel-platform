@@ -61,7 +61,7 @@ final class MemberDtoMapper {
     }
 
     private static RoleRef roleRef(app.nadel.identity.RoleRef role) {
-        var ref = new RoleRef(role.id(), role.name());
+        var ref = new RoleRef(role.id(), role.name(), role.nameCustomized());
         if (role.baseCode() != null) {
             ref.setBaseCode(BaseRole.fromValue(role.baseCode()));
         }

@@ -79,12 +79,12 @@ class RolesTests extends IntegrationTest {
 
     /**
      * Puts the three base roles of the demo cooperative back to what {@code seed_base_roles} writes (name,
-     * description, permissions) - the database is shared by every test class - and checks that it worked.
+     * name_customized, description, permissions) - the database is shared by every test class - and checks that it worked.
      */
     private void restoreBaseRoles() {
         inTenant(DEMO_TENANT, sql -> {
             for (BaseRoleSeed seed : SEEDED_BASE_ROLES) {
-                sql.update("update role set name = ?, description = ? where base_code = ?",
+                sql.update("update role set name = ?, name_customized = false, description = ? where base_code = ?",
                         seed.name(), seed.description(), seed.code());
                 sql.update("delete from role_permission where role_id = (select id from role where base_code = ?)",
                         seed.code());
@@ -193,6 +193,24 @@ class RolesTests extends IntegrationTest {
         JsonNode alphaNode = find(roles, alpha);
         assertThat(alphaNode.get("memberCount").asInt()).as("archived members are not counted").isEqualTo(1);
         assertThat(find(roles, zeta).get("memberCount").asInt()).isZero();
+    }
+
+    @Test
+    void listIncludesNameCustomizedFlags() throws Exception {
+        UUID custom = createRole("Flagged " + tag(), "MEMBERS_VIEW");
+
+        String body = send(chairman(), get("/api/v1/roles"), null).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        JsonNode roles = json.readTree(body);
+
+        for (int i = 0; i < 3; i++) {
+            assertThat(roles.get(i).get("nameCustomized").asBoolean())
+                    .as("base role %s keeps its standard name", roles.get(i).get("baseCode").asString()).isFalse();
+        }
+        assertThat(find(roles, custom).get("nameCustomized").asBoolean()).isTrue();
+        for (int i = 3; i < roles.size(); i++) {
+            assertThat(roles.get(i).get("nameCustomized").asBoolean()).as("custom roles are always customised").isTrue();
+        }
     }
 
     // ---- create ----------------------------------------------------------------------------------------------------

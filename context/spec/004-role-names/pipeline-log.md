@@ -60,3 +60,6 @@
 - functional-spec.md written (Creation Mode, no questions, no markers).
 - technical-considerations.md from spring-backend and react-frontend design input. Assumptions: client-side rendering of `base:<CODE>` audit token (also for member-role audit values); restore resets the stored seed name and may hit ROLE_NAME_TAKEN; `useDefaultName` on a custom role → 400 field `useDefaultName`/`INVALID`; no CHECK constraint on the flag; mobile unchanged; web submits the stored name when the catalog name is untouched.
 - tasks.md: 4 slices, no staffing gaps (postgres-database not needed for a one-column migration; spring-backend owns it). No `not-user-reviewed` marker.
+
+## Phase 3 — implement
+

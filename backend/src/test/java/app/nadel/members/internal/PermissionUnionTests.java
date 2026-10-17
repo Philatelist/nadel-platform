@@ -51,6 +51,6 @@ class PermissionUnionTests {
     }
 
     private static RoleGrant role(String baseCode, Set<String> permissions) {
-        return new RoleGrant(UUID.randomUUID(), "Role", baseCode, permissions);
+        return new RoleGrant(UUID.randomUUID(), "Role", baseCode, baseCode == null, permissions);
     }
 }

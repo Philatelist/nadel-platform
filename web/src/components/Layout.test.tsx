@@ -16,7 +16,7 @@ function meWith(permissions: Permission[]): Me {
     email: 'a@example.test',
     fullName: 'Test User',
     platformOperator: false,
-    roles: [{ id: 'r1', name: 'Member', baseCode: 'MEMBER' }],
+    roles: [{ id: 'r1', name: 'Member', baseCode: 'MEMBER', nameCustomized: false }],
     permissions,
     tenant: { id: 't1', name: 'Coop' },
   } as Me;

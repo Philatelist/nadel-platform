@@ -82,7 +82,7 @@ export const uk: Messages = {
   },
   roles: {
     CHAIRMAN: 'Голова',
-    TREASURER: 'Скарбник',
+    TREASURER: 'Казначей',
     MEMBER: 'Член кооперативу',
     PLATFORM_OPERATOR: 'Оператор платформи',
   },

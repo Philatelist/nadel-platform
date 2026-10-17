@@ -6,12 +6,12 @@ Rules for every task: follow `CLAUDE.md` (English in code; UI text only in `pack
 and `en.ts`; contract first; existing migrations are never edited; exact dependency pins; no edits to generated code).
 Do not commit; report every file created or changed.
 
-- [ ] **Slice 1: Standard names shown from the new flag ("Казначей")**
+- [x] **Slice 1: Standard names shown from the new flag ("Казначей")**
 
   > After this slice every screen shows "Казначей" for the never-renamed Treasurer role in Ukrainian, driven by the new `nameCustomized` flag end to end.
-  - [ ] Contract and persistence: `api/openapi.yaml` changes from tech spec 2.2 (RoleInput.useDefaultName, RoleRef/RoleDetails.nameCustomized, descriptions), `make gen`; `V4__role_name_customized.sql`; `Role` flag + `isNameCustomized()` rule + `custom()`; `BaseRoles` seed names + `defaultName`; plumb the flag through `identity/RoleRef`, `RoleGrant`, `RoleGrantRow`, `MemberRoleRow`, `MemberRepository` JPQL, `RoleGrantReader`, `MemberDtoMapper`, `RoleDtoMapper`, `MeController`; demo data custom roles flagged; fix test constructors. Tests: `listIncludesNameCustomizedFlags`, `SeedBaseRolesTests` (seeded not customised; second run keeps a customised name and flag), `BaseRolesMatrixTests` (Java names = SQL seed). Rename logic is NOT part of this task. **[Agent: spring-backend]**
-  - [ ] Web: `roleDisplayName`/`useRoleName` per tech spec 2.4 with `web/src/roleName.test.ts`; uk `roles.TREASURER` = "Казначей"; add `nameCustomized` to role fixtures (e.g. `Layout.test.tsx`). **[Agent: react-frontend]**
-  - [ ] Verify: `cd backend && ./mvnw -B test -Dtest='SeedBaseRolesTests,BaseRolesMatrixTests,MeEndpointTests,RolesTests,MemberAuthenticationConverterTests,PermissionUnionTests'` green; `pnpm -r test && pnpm -r typecheck && pnpm -r lint && pnpm format:check` green; generated client has no diff after `pnpm gen:api`. **[Agent: spring-backend]**
+  - [x] Contract and persistence: `api/openapi.yaml` changes from tech spec 2.2 (RoleInput.useDefaultName, RoleRef/RoleDetails.nameCustomized, descriptions), `make gen`; `V4__role_name_customized.sql`; `Role` flag + `isNameCustomized()` rule + `custom()`; `BaseRoles` seed names + `defaultName`; plumb the flag through `identity/RoleRef`, `RoleGrant`, `RoleGrantRow`, `MemberRoleRow`, `MemberRepository` JPQL, `RoleGrantReader`, `MemberDtoMapper`, `RoleDtoMapper`, `MeController`; demo data custom roles flagged; fix test constructors. Tests: `listIncludesNameCustomizedFlags`, `SeedBaseRolesTests` (seeded not customised; second run keeps a customised name and flag), `BaseRolesMatrixTests` (Java names = SQL seed). Rename logic is NOT part of this task. **[Agent: spring-backend]**
+  - [x] Web: `roleDisplayName`/`useRoleName` per tech spec 2.4 with `web/src/roleName.test.ts`; uk `roles.TREASURER` = "Казначей"; add `nameCustomized` to role fixtures (e.g. `Layout.test.tsx`). **[Agent: react-frontend]**
+  - [x] Verify: `cd backend && ./mvnw -B test -Dtest='SeedBaseRolesTests,BaseRolesMatrixTests,MeEndpointTests,RolesTests,MemberAuthenticationConverterTests,PermissionUnionTests'` green; `pnpm -r test && pnpm -r typecheck && pnpm -r lint && pnpm format:check` green; generated client has no diff after `pnpm gen:api`. **[Agent: spring-backend]**
 
 - [ ] **Slice 2: Rename and restore any role, audited**
 
