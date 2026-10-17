@@ -5,25 +5,24 @@ updates:
     schedule:
       interval: weekly
     groups:
-      spring:
-        patterns: ['org.springframework*']
-    open-pull-requests-limit: 5
+      maven-minor-patch:
+        update-types: [minor, patch]
 
   - package-ecosystem: npm
     directory: /
     schedule:
       interval: weekly
     groups:
-      expo:
-        patterns: ['expo*', 'react-native*']
-      dev-tooling:
-        dependency-type: development
-    open-pull-requests-limit: 5
+      npm-minor-patch:
+        update-types: [minor, patch]
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    groups:
+      github-actions:
+        patterns: ['*']
 
   - package-ecosystem: docker-compose
     directory: /infra
