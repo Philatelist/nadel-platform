@@ -1,6 +1,7 @@
 # 002. Members and access control
 
 Roadmap phase 1, feature 1 of 4. Input for `/feature-pipeline`.
+Implemented by spec 001: functional spec, technical design and tasks in `context/spec/001-members-access/`.
 
 ## 1. Goal
 

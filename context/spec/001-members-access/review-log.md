@@ -36,3 +36,4 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `eb74fb7..f03fd4c` | MAJOR_ISSUES | M1 `RolesTests` leaves the shared demo Member role description changed (no restore in `@AfterEach`) | minor: custom role named like a localized base role ("Скарбник") is not refused, so two same-looking names appear; Chairman description not editable from the UI (Save disabled) though the backend allows it; role deleted concurrently with assignment → 500 instead of 404 (unmapped FK race); `RoleInput.name` maxLength checked before trim |
+| 2 | + `92eb53a` | PASS | M1 resolved (constants match V2; restore runs in @AfterEach) | minor: wrap custom-role deletes in try/finally so the restore always runs; note that SEEDED_BASE_ROLES mirrors V2 |

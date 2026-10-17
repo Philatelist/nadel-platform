@@ -2,7 +2,7 @@
 
 The append-only audit log: who changed what, when, from which value to which. Table `audit_entry` (RLS
 `tenant_isolation`; the application role `nadel_app` can only `SELECT` and `INSERT`, so entries can never be changed or
-removed). The reading side (`GET /audit`) arrives with slice 4 of spec 001.
+removed). Read with `GET /audit` (below).
 
 ## Public API
 
@@ -65,4 +65,5 @@ profile (the token) and is an explicit `tenant_id` condition on top of RLS.
 - Listeners and the writer are idempotent; keep it so when adding a listener.
 - `Actor.displayName` travels with the event but is not stored: `audit_entry` keeps the member id and subject.
 
-Depends on `tenancy` (public `TenantContext`). Used by `members`; it never depends on the modules that publish.
+Depends on `tenancy` (public `TenantContext`), `identity` (`CurrentUser` in the controller) and `problem`. Used by
+`members`; it never depends on the modules that publish (actor names come through the `ActorNames` SPI).

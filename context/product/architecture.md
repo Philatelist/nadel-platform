@@ -17,13 +17,13 @@
 - **Language:** Java 25 **[in code]**: `<java.version>25</java.version>` in `backend/pom.xml`. CI uses Temurin 25 (`.github/workflows/ci.yml`).
 - **Framework:** Spring Boot 4.1 (currently 4.1.1) **[in code]**: parent POM in `backend/pom.xml`.
   - Starters: webmvc, validation, data-jpa, flyway, actuator.
-  - Virtual threads and ProblemDetails are on (`backend/src/main/resources/application.yml`).
+  - Virtual threads are on (`backend/src/main/resources/application.yml`). Problem Details come from the `problem` module's own exception handler.
 - **Architecture style:** a modular monolith built with Spring Modulith 2.1.1 **[in code]**. See ADR 0001; boundaries are verified by `backend/src/test/java/app/nadel/ModularityTests.java`.
   - Each top-level package `app.nadel.*` is a module.
   - Modules talk only through their public root package or through domain events. `internal` subpackages are closed.
   - A module never reads another module's tables.
-  - Modules in code: `tenancy`, `identity`, `plots`.
-  - Modules planned, in roadmap order: `members`, `tariffs`, `meters`, `ledger`, `payments`, `documents`, `notifications`, `audit`.
+  - Modules in code: `tenancy`, `identity`, `plots`, `members`, `audit`, `problem`. Each has a README next to its `package-info.java` (`backend/src/main/java/app/nadel/<module>/README.md`).
+  - Modules planned, in roadmap order: `tariffs`, `meters`, `ledger`, `payments`, `documents`, `notifications`.
   - The `plots` module keeps plots as records from phase 1; polygon import, coordinate conversion and the map view arrive in roadmap phase 6. `plot.boundary` is nullable, and every feature before phase 6 must work for plots without a polygon.
 - **Security:** Spring Security as an OAuth2 JWT resource server **[in code]**.
   - Starter: `spring-boot-starter-security-oauth2-resource-server` (the Boot 4 name). The issuer URI is in `application.yml`.
@@ -38,6 +38,7 @@
   - Settings: `spring` generator, `interfaceOnly`, `useSpringBoot4`, `useJackson3`.
   - Output goes to the `nadel.contract.api` and `nadel.contract.model` packages, outside `app.nadel`, so the generated code is not a Modulith module. It is also excluded from JaCoCo.
 - **Client code generation:** orval 8.43.0 **[in code]**. It generates a typed fetch client and TanStack Query hooks in `packages/api-client/src/generated` (mutator `nadelFetch`). CI regenerates the client and fails if it differs from the committed one.
+- **Errors:** every error is `application/problem+json` with a stable `code` and optional `errors[{field, code, message}]` **[in code]**: `Problem` schema in `api/openapi.yaml`, module `problem`. Texts never contain personal data, SQL or stack traces; clients map `code` to i18n messages and never show server text.
 - **Money on the wire:** a string matching `^-?\d+\.\d{2}$` **[in code]** (`api/openapi.yaml`). Clients display amounts and never compute them.
 
 ### Web client
@@ -95,7 +96,8 @@
   - The product gets its own ADR. MinIO stopped publishing community images.
   - Candidates: Garage, SeaweedFS, or managed S3 from the hosting provider.
   - The backend should use only the S3 API, so the product can be swapped later.
-- **Event outbox:** the Spring Modulith Event Publication Registry (`spring-modulith-starter-jpa`) **[planned, decided]**. Domain events are stored in the same transaction as the change that raised them and redelivered until their listeners finish. All cross-module side effects (notifications, recalculations, status cache refresh) go through it.
+- **Event outbox:** the Spring Modulith Event Publication Registry (`spring-modulith-starter-jpa`) **[in code, since spec 001]**. Domain events are stored in the same transaction as the change that raised them and redelivered until their listeners finish; outstanding ones are resubmitted at startup, completed ones are deleted. All cross-module side effects (notifications, recalculations, status cache refresh) go through it. See ADR 0007.
+  - The table `event_publication` (`V3__audit_and_event_publication.sql`) is the one table without `tenant_id` and RLS: startup resubmission runs without a tenant. Listeners bind the event's `tenantId` with `TenantContext.runAs` before opening their transaction (ADR 0007 implementation notes).
 - **Background jobs:** JobRunr with PostgreSQL storage **[planned, with period closing and notifications]**. It runs scheduled and retryable jobs: period-close runs, invoice generation, delivery retries to external channels. It is not the event outbox. See ADR 0007.
 - **Cash receipts:** a cash payment carries a receipt number from a per-cooperative counter **[planned, phase 3]**. The counter row is locked in the same transaction as the payment insert, so numbers are sequential, never reused and never changed; a reversed cash payment keeps its receipt number in history.
 - **Caching:** none beyond `plot_status` **[assumption]**. The load is small (tens to hundreds of cooperatives), so Redis is not justified.
@@ -108,17 +110,23 @@
   - Clients:
     - `nadel-web`: public, standard flow only, PKCE S256.
     - `nadel-mobile`: public, PKCE S256, redirects `nadel://*` and `exp://*`.
-  - Realm roles: `CHAIRMAN`, `TREASURER`, `ELECTRICIAN`, `MEMBER`, `PLATFORM_OPERATOR`. The backend mirrors them in `identity/Roles`. From phase 1 only `PLATFORM_OPERATOR` stays meaningful in Keycloak; cooperative roles move to the database (see Authorization).
+  - Realm roles: only `PLATFORM_OPERATOR` **[in code]** (`identity/Roles.PLATFORM_OPERATOR`). Cooperative roles live in the database (see Authorization). Test users keep email, `emailVerified: true` and `tenant_id`; after a realm change the local stack is recreated with `docker compose down -v` (`infra/README.md`).
+  - Compose has a Keycloak healthcheck (management port, `/health/ready`), so `make infra` returns only when Keycloak is ready.
   - The user attribute `tenant_id` is mapped into the access token by an `oidc-usermodel-attribute-mapper` on both clients.
   - Later: Keycloak Organizations for people in several cooperatives, with cooperative selection at sign-in **[planned, separate ADR]**.
 - **Mobile OIDC library:** not chosen yet **[assumption: `expo-auth-session` with PKCE]**. It is not in `mobile/package.json`.
-- **Authorization:** always on the server, with `@PreAuthorize`. Clients hide UI by permission only for convenience. See ADR 0009 **[planned, phase 1]**:
-  - A fixed list of permissions is defined in code (`PAYMENTS_ALLOCATE`, `MEMBERS_EDIT`, `PERIOD_CLOSE`, ...).
-  - Roles are named permission sets stored per cooperative (`role`, `role_permission`, `person_role`, tenant-scoped with RLS). Base roles are seeded and cannot be deleted; the chairman creates custom admin roles.
-  - The backend resolves the current user's permissions from the database per request and exposes them as `PERM_*` authorities. Code checks permissions, never role names.
+- **Authentication flow** **[in code, since spec 001]** (`identity/internal/MemberAuthenticationConverter`, see the `identity` README):
+  1. A token with the realm role `PLATFORM_OPERATOR` becomes the operator, with no database access and no permissions (ADR 0008).
+  2. Otherwise the `tenant_id` claim is bound with `TenantContext.runAs` and the active member of that cooperative is looked up: by Keycloak subject; on first sign-in, by email (case-insensitive) only when `email_verified` is true and the member is not yet linked, and the subject is then stored on the member. A member linked to another subject is never relinked; archived members are never found.
+  3. No member: 403 `MEMBER_NOT_LINKED`. A failure of the lookup itself is 500, not 401.
+  4. The union of the member's role permissions becomes the `PERM_*` authorities. Nothing is cached, so a role change applies on the next request.
+- **Authorization:** always on the server, with `@PreAuthorize("hasAuthority('PERM_...')")` **[in code, since spec 001]**. Clients hide UI by permission only for convenience (web: `useCan`, `RequirePermission`). See ADR 0009:
+  - A fixed list of permissions is defined in code (`identity.Permission`: `MEMBERS_VIEW`, `MEMBERS_EDIT`, `ROLES_MANAGE`, `AUDIT_VIEW`, `PLOTS_VIEW`, `PLOTS_EDIT`, `OWNERSHIP_EDIT`, `IMPORT_RUN`; later features add theirs, such as `PAYMENTS_ALLOCATE`).
+  - Roles are named permission sets stored per cooperative (`role`, `role_permission`, `member_role`, tenant-scoped with RLS). Base roles `CHAIRMAN`, `TREASURER`, `MEMBER` are seeded by `seed_base_roles` and cannot be renamed or deleted; Chairman always has every permission; at least one active chairman must remain. Custom roles (for example "Secretary", or "Electrician" for meters) are created by anyone with `ROLES_MANAGE`.
+  - Code checks permissions, never role names. A caller without `MEMBERS_VIEW` gets 404 for any member card but their own, so other members' existence is not revealed.
 - **Data visibility for members:** a member sees the number and status color of every plot, but debt amounts, owners and personal data only for plots they own. The API enforces this (for example, `GET /plots` omits `debt` on plots the caller does not own), not just the UI **[planned, phase 1]**.
 - **Platform operator:** sees no cooperative rows (no `tenant_id`, so RLS returns nothing). Platform reports use aggregate views without personal or financial detail through a separate read-only role; support access is granted by the chairman for a limited time and audited. See ADR 0008.
-- **Audit:** every admin action that changes data is written to the audit log **[planned, `audit` module]**.
+- **Audit:** every admin action that changes data is written to the audit log **[in code, `audit` module]**. The changing module publishes an `AuditEvent` in its transaction; a listener writes `audit_entry` through the outbox (idempotent by event id). `nadel_app` has only `SELECT` and `INSERT` on `audit_entry`. Read with `GET /audit` (`AUDIT_VIEW`). So far members, roles and role assignments are audited.
 - **Logging hygiene:** names, phone numbers, emails and addresses never appear in logs.
 - **Secrets:** only from environment variables. The repository contains only dev values for the local docker-compose (`.env.example`, gitleaks allowlist in `.gitleaks.toml`).
 
@@ -155,14 +163,17 @@
   - staging deployed from `main`
   - production deployed from a release tag, with manual approval
 - **Releases:** release-please for versions and the changelog **[planned; not configured yet]**.
-- **CI:** GitHub Actions **[in code]** (`.github/workflows/ci.yml`), with three jobs:
-  - `backend`: `./mvnw verify`, which runs Testcontainers, `ModularityTests` and the JaCoCo floor (`coverage.minimum`, currently 40%, may only go up).
+- **CI:** GitHub Actions **[in code]** (`.github/workflows/ci.yml`), with these jobs:
+  - `backend`: `./mvnw verify`, which runs Testcontainers, `ModularityTests` and the JaCoCo floor (`coverage.minimum` in `backend/pom.xml`, may only go up).
   - `clients`: contract regeneration with a diff check, `format:check`, typecheck, lint and the web build.
   - `security`: gitleaks, `pnpm audit --prod --audit-level high` and OSV-Scanner (pinned version). OSV-Scanner fails on any severity, `pnpm audit` only on high and critical, so `osv-scanner.toml` lists every accepted advisory and `pnpm-workspace.yaml` lists only the accepted high and critical ones, each with a reason.
+  - `sast`: Semgrep with the Java, TypeScript and React rule sets.
+  - `e2e`: Playwright against the real stack on `localhost` (compose `up --wait`, backend jar in the dev profile, `vite dev`, readiness loops, cached chromium); report, traces and logs are uploaded on failure; 20-minute timeout.
 - **Dependency updates:** Dependabot **[in code]** (`.github/dependabot.yml`): Maven, npm and Actions weekly; docker-compose monthly. Versions are pinned exactly.
 - **Testing:**
   - Backend **[in code]**: JUnit 5, Spring Security Test, Spring Modulith Test and Testcontainers.
-  - Clients: typecheck and lint only. There is no client test framework yet.
+  - Clients: typecheck and lint. There is no client unit test framework yet.
+  - Browser E2E **[in code, since spec 001]**: Playwright (chromium only) in `web/e2e/`, run against `make infra` + backend + web with `make e2e` locally (browser installed once with `make e2e-install`) and by the CI `e2e` job. Not part of `make check`.
 
 ---
 
@@ -188,8 +199,9 @@ Resolved:
 4. **Rounding wording:** `money-rules.md` section 1 and `CLAUDE.md` agree: rounding happens in `Money`, applied when a charge is created.
 5. **Ignored advisories:** the lists differ on purpose (OSV fails on every severity, `pnpm audit` only on high); `CLAUDE.md` now says so.
 6. **OSV-Scanner version:** pinned in CI.
+7. **Base roles:** Chairman, Treasurer and Member. Electrician is no longer a base role (spec 001); an electrician gets a custom role with meter permissions when meters arrive. `CLAUDE.md` still lists `ELECTRICIAN` until the owner updates it.
 
 Open:
 
-7. **Nothing exists for delivery yet.** Dockerfiles, a Caddyfile, a deploy workflow, `eas.json`, release-please and OpenTelemetry/Sentry dependencies are all missing. Everything in sections 5 and 6 marked [planned] is unimplemented.
-8. **ADRs still to write:** S3-compatible storage product, email provider, Keycloak Organizations, basemap tile source, backup tooling, data residency.
+8. **Nothing exists for delivery yet.** Dockerfiles, a Caddyfile, a deploy workflow, `eas.json`, release-please and OpenTelemetry/Sentry dependencies are all missing. Everything in sections 5 and 6 marked [planned] is unimplemented.
+9. **ADRs still to write:** S3-compatible storage product, email provider, Keycloak Organizations, basemap tile source, backup tooling, data residency.

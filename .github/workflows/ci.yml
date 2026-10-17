@@ -100,3 +100,70 @@ jobs:
         run: pip install semgrep==1.178.0
       - name: Scan Java and TypeScript
         run: semgrep scan --config p/java --config p/typescript --config p/react --error --metrics=off
+
+  e2e:
+    name: End-to-end (Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Start Postgres and Keycloak
+        run: docker compose -f infra/docker-compose.yml up -d --wait
+      - name: Package the backend
+        working-directory: backend
+        run: ./mvnw --batch-mode --no-transfer-progress -DskipTests package
+      - name: Start backend (dev profile) and web
+        run: |
+          nohup java -jar backend/target/nadel-backend-*-SNAPSHOT.jar > backend.log 2>&1 &
+          nohup pnpm --filter web dev > web.log 2>&1 &
+      - name: Wait for readiness
+        run: |
+          wait_for() {
+            for i in $(seq 1 90); do curl -sf -o /dev/null "$2" && return 0; sleep 2; done
+            echo "timeout waiting for $1"; return 1
+          }
+          wait_for keycloak http://localhost:8180/realms/nadel/.well-known/openid-configuration
+          wait_for backend http://localhost:8080/actuator/health/readiness
+          wait_for web http://localhost:5173/
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Install chromium with system dependencies
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: pnpm --filter web exec playwright install --with-deps chromium
+      - name: Install system dependencies only (browser from cache)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: pnpm --filter web exec playwright install-deps chromium
+      - name: Run end-to-end specs
+        run: pnpm --filter web test:e2e
+      - name: Report, traces and logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-failure
+          path: |
+            web/playwright-report
+            web/test-results
+            backend.log
+            web.log
+          if-no-files-found: ignore
+      - name: Keycloak logs
+        if: failure()
+        run: docker compose -f infra/docker-compose.yml logs keycloak
+      - name: Stop infrastructure
+        if: always()
+        run: docker compose -f infra/docker-compose.yml down -v

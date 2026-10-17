@@ -10,8 +10,12 @@ None yet. Features 004 (ownership) and 005 (import) will add a lookup API in the
 ## What is here
 
 - `MemberAccessProfileSource` implements `identity`'s `AccessProfileSource`: finds the active member for a token and
-  links the Keycloak subject on the first sign-in (conditional update; a concurrent first sign-in or a subject still
-  held by an archived member ends as "not linked", never as a 500). Logs tenant id, subject and member id only.
+  links the Keycloak subject on the first sign-in. Order: the active member with this subject; otherwise, only when the
+  token's e-mail is verified, the active member with this e-mail (case-insensitive) if it has no subject yet, linked by
+  a conditional update. A member already linked to another subject is refused (never relinked). Each step runs in its
+  own short transaction; a unique-index violation (a concurrent first sign-in won the race, or an archived member still
+  holds the subject) is answered by a fresh lookup by subject, so it ends as the linked member or "not linked", never
+  as a 500. Logs tenant id, subject and member id only.
 - `PermissionUnion`: the union of the permissions of all roles of a member. The Chairman base role always yields every
   `Permission` in code, so a permission added later needs no migration for the chairman. Unknown stored names grant
   nothing.
@@ -35,13 +39,13 @@ None yet. Features 004 (ownership) and 005 (import) will add a lookup API in the
   - E-mail is unique among active members: a pre-check plus a mapping of the unique index `member_tenant_email_uq` give
     409 `EMAIL_TAKEN` with `errors[{field: "email"}]`. Archived members free their e-mail; restore re-checks.
   - `LastChairmanGuard.ensureNotLast(tenant, member)` takes `pg_advisory_xact_lock(hashtextextended(tenant, 0))` in the
-    transaction and refuses (409 `LAST_CHAIRMAN`) to take the only active chairman away. Archive uses it; slice 5 reuses it
-    for removing the Chairman role.
+    transaction and refuses (409 `LAST_CHAIRMAN`) to take the only active chairman away. Archive and `setMemberRoles` use
+    it.
   - `notes` need `MEMBERS_VIEW`: a `PUT` by an editor without it keeps the stored notes, a `POST` stores none.
   - Each change publishes an `audit.AuditEvent` (`MEMBER_CREATED`, `MEMBER_UPDATED`, `MEMBER_ARCHIVED`, `MEMBER_RESTORED`)
     built from `MemberSnapshot.diff(before, after)`; see the `audit` README.
 
-- Roles (slice 5), all `@PreAuthorize("hasAuthority('PERM_ROLES_MANAGE')")` on the controllers, one transaction each:
+- Roles, all `@PreAuthorize("hasAuthority('PERM_ROLES_MANAGE')")` on the controllers, one transaction each:
   `GET /permissions` (`PermissionCatalog`: the eight permissions in enum order with English text), `GET /roles`
   (base roles first, then custom by name; `memberCount` counts active members only; Chairman always lists all eight),
   `POST /roles`, `PUT /roles/{id}` (full replacement), `DELETE /roles/{id}`, and `PUT /members/{id}/roles` (replaces the

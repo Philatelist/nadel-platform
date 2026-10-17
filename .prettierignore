@@ -16,3 +16,7 @@ backend/
 
 # Prose is reviewed by people, not reflowed
 *.md
+
+# Playwright output
+web/playwright-report/
+web/test-results/

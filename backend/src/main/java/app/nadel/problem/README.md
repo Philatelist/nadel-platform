@@ -10,7 +10,7 @@ Texts are fixed English sentences and never contain personal data, exception mes
 |---|---|
 | `ApiProblemException(status, code, detail, errors)` | Throw from any module for a business failure (409 `EMAIL_TAKEN` / `LAST_CHAIRMAN` / `ROLE_NAME_TAKEN` / `ROLE_IN_USE` / `BASE_ROLE_IMMUTABLE`, 404 `NOT_FOUND`, ...). `ApiProblemException.notFound()` is the shortcut for 404 |
 | `FieldProblem(field, code, message)` | One invalid field in `errors` |
-| `ProblemCodes` | Codes that are shared by several modules |
+| `ProblemCodes` | Problem codes (`VALIDATION_FAILED`, `MALFORMED_REQUEST`, `UNAUTHENTICATED`, `MEMBER_NOT_LINKED`, `PERMISSION_DENIED`, `NOT_FOUND`, `INTERNAL_ERROR` and the 409 codes) and field codes (`REQUIRED`, `TOO_LONG`, `INVALID`, `PHONE_INVALID`, `CHANNEL_CONTACT_MISSING`). Clients translate them by code; add new codes here and to the i18n catalogs |
 | `ProblemWriter` | Writes a problem straight to a servlet response. For security handlers and filters, which run before Spring MVC and cannot throw |
 
 ## Internal
@@ -21,4 +21,4 @@ Texts are fixed English sentences and never contain personal data, exception mes
 (400 `MALFORMED_REQUEST`, 404, 405, 406, 415) and, as a catch-all, any unexpected exception to 500 `INTERNAL_ERROR`
 without internals. The catch-all logs class names only, because persistence exception messages can contain row values.
 
-Depends on nothing (besides the generated `Problem` model). `identity` and `members` depend on it.
+Depends on nothing (besides the generated `Problem` model). `identity`, `members` and `audit` depend on it.

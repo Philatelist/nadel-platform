@@ -34,3 +34,7 @@ mobile/web-build/
 .claude/settings.local.json
 
 context/audits/
+
+# Playwright
+web/playwright-report/
+web/test-results/

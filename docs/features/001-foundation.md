@@ -15,4 +15,5 @@ The base every feature builds on: monorepo, sign-in, roles, cooperative isolatio
 - CI: backend build and tests, client typecheck, lint and build.
 
 ## Next
-Phase 1: `002-plots-map-import.md`, `003-members-ownership.md`.
+Phase 1, in order: [`002-members-access.md`](002-members-access.md), [`003-plots-registry.md`](003-plots-registry.md),
+[`004-ownership.md`](004-ownership.md), [`005-excel-import.md`](005-excel-import.md).
