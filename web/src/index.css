@@ -1,40 +1,77 @@
 @import 'tailwindcss';
 @import 'maplibre-gl/dist/maplibre-gl.css';
 
-/* Tokens match packages/ui-tokens. Dark theme follows the system setting. */
+/* Tokens match packages/ui-tokens (checked by theme.test.ts). Dark theme follows the system setting. */
 @theme {
-  --color-bg: #f2f5f1;
+  --color-background: #f3f5f0;
   --color-surface: #ffffff;
-  --color-ink: #16211b;
-  --color-muted: #5a6a60;
-  --color-line: #d3dcd5;
-  --color-accent: #2347b5;
-  --color-accent-soft: #e2e8fa;
+  --color-line: #d9dfd4;
+  --color-line-subtle: #edf0ea;
+  --color-line-strong: #b9c3b3;
+  --color-ink: #1c2a22;
+  --color-ink-muted: #46564c;
+  --color-ink-subtle: #5b6a60;
+  --color-accent: #245a41;
+  --color-accent-hover: #143826;
+  --color-accent-soft: #e3eee6;
   --color-on-accent: #ffffff;
-  --color-status-red: #cf4339;
-  --color-status-yellow: #d49b12;
+  --color-danger: #a3301b;
+  --color-danger-soft: #fbe9e5;
+  --color-warning-soft: #fff6e5;
+  --color-warning-line: #ebcb98;
+  --color-warning-ink: #6b4a0b;
+  --color-success-soft: #dcefe3;
+  --color-success-ink: #14532d;
+  --color-info-soft: #e1e9f6;
+  --color-info-ink: #1e3a6e;
   --color-status-green: #2e8b57;
-  --color-status-grey: #b9c3bd;
+  --color-status-yellow: #e0b23a;
+  --color-status-red: #c2412b;
+  --color-status-grey: #9aa39a;
+  --color-status-on-green: #ffffff;
+  --color-status-on-yellow: #1c2a22;
+  --color-status-on-red: #ffffff;
+  --color-status-on-grey: #1c2a22;
 
-  --font-display: 'Unbounded', 'Golos Text', system-ui, sans-serif;
-  --font-sans: 'Golos Text', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+  --font-serif: 'IBM Plex Serif', Georgia, 'Times New Roman', serif;
+  --font-sans: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+
+  --radius-control: 10px;
+  --radius-panel: 12px;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --color-bg: #0f1512;
-    --color-surface: #161f1a;
-    --color-ink: #e5ece7;
-    --color-muted: #93a39a;
-    --color-line: #2b3731;
-    --color-accent: #86a0ff;
-    --color-accent-soft: #1c2645;
+    --color-background: #0f1512;
+    --color-surface: #17211b;
+    --color-line: #2b3a31;
+    --color-line-subtle: #1f2b24;
+    --color-line-strong: #41554a;
+    --color-ink: #e6ede8;
+    --color-ink-muted: #b4c2b8;
+    --color-ink-subtle: #94a59a;
+    --color-accent: #7fcb9c;
+    --color-accent-hover: #a3ddb9;
+    --color-accent-soft: #1d3326;
     --color-on-accent: #0f1512;
-    --color-status-red: #ee6b60;
-    --color-status-yellow: #e6b83c;
+    --color-danger: #f08a78;
+    --color-danger-soft: #3a1d18;
+    --color-warning-soft: #33290f;
+    --color-warning-line: #6b5420;
+    --color-warning-ink: #f2cf8a;
+    --color-success-soft: #17301f;
+    --color-success-ink: #8fd6a8;
+    --color-info-soft: #1b2a44;
+    --color-info-ink: #a9c4f0;
     --color-status-green: #4dba7c;
-    --color-status-grey: #46524c;
+    --color-status-yellow: #e6b83c;
+    --color-status-red: #e5604f;
+    --color-status-grey: #6f7c74;
+    --color-status-on-green: #0f1512;
+    --color-status-on-yellow: #0f1512;
+    --color-status-on-red: #0f1512;
+    --color-status-on-grey: #0f1512;
     color-scheme: dark;
   }
 }
@@ -45,10 +82,14 @@ body,
   height: 100%;
 }
 body {
-  background: var(--color-bg);
+  background: var(--color-background);
   color: var(--color-ink);
   font-family: var(--font-sans);
+  font-size: 15px;
   -webkit-font-smoothing: antialiased;
+}
+h1 {
+  font-family: var(--font-serif);
 }
 :focus-visible {
   outline: 2px solid var(--color-accent);

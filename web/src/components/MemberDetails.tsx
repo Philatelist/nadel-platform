@@ -24,7 +24,7 @@ export function MemberDetails({ member }: { member: Member }) {
     <dl className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-3 rounded-xl border border-line bg-surface p-5">
       {rows.map(([label, value]) => (
         <div key={label} className="contents">
-          <dt className="text-muted">{label}</dt>
+          <dt className="text-ink-muted">{label}</dt>
           <dd className="break-words whitespace-pre-line">{value}</dd>
         </div>
       ))}

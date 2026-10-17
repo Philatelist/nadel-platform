@@ -9,10 +9,10 @@ export function MemberFormPage() {
   const navigate = useNavigate();
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-4 px-4 py-8">
-      <Link to="/members" className="text-sm text-muted hover:text-ink">
+      <Link to="/members" className="text-sm text-ink-muted hover:text-ink">
         {t.members.back}
       </Link>
-      <h1 className="font-display text-2xl font-bold">{t.members.addTitle}</h1>
+      <h1 className="font-serif text-2xl font-bold">{t.members.addTitle}</h1>
       <MemberForm
         onSaved={(saved) => void navigate(`/members/${saved.id}`, { state: { saved: true } })}
         onCancel={() => void navigate('/members')}

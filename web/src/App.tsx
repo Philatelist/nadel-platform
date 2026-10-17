@@ -66,7 +66,7 @@ export function App() {
   const t = useT();
 
   if (auth.isLoading) {
-    return <div className="grid h-full place-items-center text-muted">{t.auth.signingIn}</div>;
+    return <div className="grid h-full place-items-center text-ink-muted">{t.auth.signingIn}</div>;
   }
   if (!auth.isAuthenticated) {
     return <SignIn error={auth.error?.message} />;

@@ -71,3 +71,7 @@
 - technical-considerations.md written from react-frontend and expo-mobile design input. Assumptions: `warningInk` token; status on-color contrast 3:1; "My account" moves into the header; Roles keeps its per-role structure; hand-written CSS + sync test; mobile fonts at runtime without the expo-font config plugin.
 - AUTO: CI `clients` job gains a `pnpm -r test` step (rule: section 8 needs unit tests in `make check`; adding a check is not weakening one). Listed for the PR.
 - tasks.md written: 5 slices; no staffing gaps. The `<!-- not-user-reviewed -->` marker is not present (pipeline: Phase 1 stands in for plan review; the plan is listed in the final report).
+
+## Phase 3 — implement
+
+- Slice 1 task 4 (devops-infra): Makefile `test` runs `pnpm -r test`; CI `clients` job gets a `pnpm -r test` step. The agent also renamed the CI job; reverted by the orchestrator (job names may be required checks). Follow-up for the owner: CLAUDE.md `make test` line → "backend ./mvnw verify (Testcontainers, coverage floor) + client typecheck + client unit tests (vitest)".

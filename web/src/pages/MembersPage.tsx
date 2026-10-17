@@ -54,7 +54,7 @@ export function MembersPage() {
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-4 px-4 py-8">
       <div className="flex items-center justify-between gap-4">
-        <h1 className="font-display text-2xl font-bold">{t.members.title}</h1>
+        <h1 className="font-serif text-2xl font-bold">{t.members.title}</h1>
         {canEdit && (
           <Link
             to="/members/new"
@@ -105,12 +105,12 @@ export function MembersPage() {
                     <span className="font-medium">
                       {[m.lastName, m.firstName, m.middleName].filter(Boolean).join(' ')}
                       {m.archived && (
-                        <span className="ml-2 rounded-full border border-line px-2 py-0.5 text-xs text-muted">
+                        <span className="ml-2 rounded-full border border-line px-2 py-0.5 text-xs text-ink-muted">
                           {t.members.archived}
                         </span>
                       )}
                     </span>
-                    <span className="text-sm text-muted">
+                    <span className="text-sm text-ink-muted">
                       {[m.phones.join(', '), m.email, t.channel[m.deliveryChannel]]
                         .filter(Boolean)
                         .join(' · ')}

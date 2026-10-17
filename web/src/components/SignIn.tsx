@@ -7,9 +7,9 @@ export function SignIn({ error }: { error?: string | undefined }) {
   return (
     <main className="grid h-full place-items-center px-4">
       <div className="flex w-full max-w-sm flex-col gap-5 rounded-2xl border border-line bg-surface p-8">
-        <h1 className="font-display text-3xl font-bold">{t.app.name}</h1>
-        <p className="text-muted">{t.auth.signInHint}</p>
-        {error && <p className="text-sm text-status-red">{error}</p>}
+        <h1 className="font-serif text-3xl font-bold">{t.app.name}</h1>
+        <p className="text-ink-muted">{t.auth.signInHint}</p>
+        {error && <p className="text-sm text-danger">{error}</p>}
         <button
           type="button"
           onClick={() => void auth.signinRedirect()}

@@ -29,10 +29,10 @@ export function ConfirmDialog({
       aria-labelledby="confirm-title"
       className="m-auto w-full max-w-sm rounded-xl border border-line bg-surface p-5 text-ink backdrop:bg-black/40"
     >
-      <h2 id="confirm-title" className="font-display text-lg font-bold">
+      <h2 id="confirm-title" className="font-serif text-lg font-bold">
         {title}
       </h2>
-      <p className="mt-2 text-sm text-muted">{message}</p>
+      <p className="mt-2 text-sm text-ink-muted">{message}</p>
       <div className="mt-4 flex justify-end gap-2">
         <button
           type="button"

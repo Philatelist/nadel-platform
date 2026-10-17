@@ -16,7 +16,7 @@ export function AccountPage() {
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6 px-4 py-8" lang={locale}>
-      <h1 className="font-display text-2xl font-bold">{t.account.title}</h1>
+      <h1 className="font-serif text-2xl font-bold">{t.account.title}</h1>
 
       <section className="flex flex-col gap-3">
         <h2 className="font-semibold">{t.account.details}</h2>
@@ -39,13 +39,13 @@ export function AccountPage() {
       <section className="flex flex-col gap-3">
         <h2 className="font-semibold">{t.account.permissions}</h2>
         {permissions.length === 0 ? (
-          <p className="text-muted">{t.account.noPermissions}</p>
+          <p className="text-ink-muted">{t.account.noPermissions}</p>
         ) : (
           <ul className="flex flex-col gap-2">
             {permissions.map((p) => (
               <li key={p} className="rounded-lg border border-line bg-surface px-4 py-2">
                 <div className="font-medium">{t.permission[p].name}</div>
-                <div className="text-sm text-muted">{t.permission[p].description}</div>
+                <div className="text-sm text-ink-muted">{t.permission[p].description}</div>
               </li>
             ))}
           </ul>

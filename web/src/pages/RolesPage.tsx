@@ -53,7 +53,7 @@ export function RolesPage() {
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-4 px-4 py-8">
       <div className="flex items-center gap-3">
-        <h1 className="font-display text-2xl font-bold">{c.title}</h1>
+        <h1 className="font-serif text-2xl font-bold">{c.title}</h1>
         <button
           type="button"
           className={`${buttonClass} ml-auto`}
@@ -105,13 +105,15 @@ export function RolesPage() {
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="font-semibold">{roleName(role)}</span>
                           {role.baseCode && (
-                            <span className="rounded-full border border-line px-2 py-0.5 text-xs text-muted">
+                            <span className="rounded-full border border-line px-2 py-0.5 text-xs text-ink-muted">
                               {c.baseRole}
                             </span>
                           )}
                         </div>
-                        {role.description && <p className="text-sm text-muted">{role.description}</p>}
-                        <p className="text-sm text-muted">{format(c.memberCount, { n: role.memberCount })}</p>
+                        {role.description && <p className="text-sm text-ink-muted">{role.description}</p>}
+                        <p className="text-sm text-ink-muted">
+                          {format(c.memberCount, { n: role.memberCount })}
+                        </p>
                       </div>
                       <div className="ml-auto flex gap-2">
                         <button
@@ -233,7 +235,7 @@ function RoleEditor({
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-3" noValidate>
-      <h2 className="font-display text-lg font-bold">{role ? roleName(role) : c.newTitle}</h2>
+      <h2 className="font-serif text-lg font-bold">{role ? roleName(role) : c.newTitle}</h2>
       {banner && <Banner variant="error">{banner}</Banner>}
       <Field label={c.name} error={errors.name}>
         {(control) => (
@@ -264,7 +266,7 @@ function RoleEditor({
         legend={c.permissions}
         onToggle={toggle}
       />
-      {isChairman && <p className="text-sm text-muted">{c.chairmanNote}</p>}
+      {isChairman && <p className="text-sm text-ink-muted">{c.chairmanNote}</p>}
       <div className="flex justify-end gap-2">
         <button type="button" className={buttonClass} onClick={onCancel}>
           {c.cancel}
@@ -297,7 +299,7 @@ function PermissionBoxes({
   const t = useT();
   return (
     <fieldset className="flex flex-col gap-2">
-      <legend className="mb-1 text-sm text-muted">{legend}</legend>
+      <legend className="mb-1 text-sm text-ink-muted">{legend}</legend>
       {codes.map((code) => (
         <label key={code} className="flex items-start gap-2 text-sm">
           <input
@@ -309,7 +311,7 @@ function PermissionBoxes({
           />
           <span>
             <span className="font-medium">{t.permission[code].name}</span>
-            <span className="block text-muted">{t.permission[code].description}</span>
+            <span className="block text-ink-muted">{t.permission[code].description}</span>
           </span>
         </label>
       ))}

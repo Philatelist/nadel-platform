@@ -23,11 +23,11 @@ export function QueryBoundary<TData>({
   children: (data: TData) => ReactNode;
 }) {
   const t = useT();
-  if (query.isPending) return <div className="p-6 text-muted">{t.state.loading}</div>;
+  if (query.isPending) return <div className="p-6 text-ink-muted">{t.state.loading}</div>;
   if (query.isError || query.data === undefined) {
     return (
       <div role="alert" className="flex flex-col items-start gap-3 p-6">
-        <p className="text-muted">{problemMessage(t, query.error)}</p>
+        <p className="text-ink-muted">{problemMessage(t, query.error)}</p>
         <button
           type="button"
           onClick={() => void query.refetch()}
@@ -39,7 +39,7 @@ export function QueryBoundary<TData>({
     );
   }
   if (isEmpty?.(query.data) ?? false) {
-    return <div className="p-6 text-muted">{emptyMessage ?? t.state.empty}</div>;
+    return <div className="p-6 text-ink-muted">{emptyMessage ?? t.state.empty}</div>;
   }
   return <>{children(query.data)}</>;
 }

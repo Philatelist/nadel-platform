@@ -1,8 +1,7 @@
 import type { ComponentProps } from 'react';
 import type { ControlProps } from './Field';
 
-const base =
-  'w-full rounded-md border bg-surface px-3 py-1.5 text-sm aria-invalid:border-status-red border-line';
+const base = 'w-full rounded-md border bg-surface px-3 py-1.5 text-sm aria-invalid:border-danger border-line';
 
 type Extra = Pick<ControlProps, 'invalid'>;
 

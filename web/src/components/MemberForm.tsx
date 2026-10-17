@@ -196,7 +196,7 @@ export function MemberForm({
       </Field>
 
       <fieldset className="flex flex-col gap-3">
-        <legend className="mb-1 text-sm text-muted">{f.phones}</legend>
+        <legend className="mb-1 text-sm text-ink-muted">{f.phones}</legend>
         {phones.map((row, index) => (
           <div key={row.id} className="flex items-start gap-2">
             <div className="flex-1">
@@ -231,7 +231,7 @@ export function MemberForm({
           </div>
         ))}
         {errors.phones && (
-          <p role="alert" className="text-sm text-status-red">
+          <p role="alert" className="text-sm text-danger">
             {errors.phones}
           </p>
         )}

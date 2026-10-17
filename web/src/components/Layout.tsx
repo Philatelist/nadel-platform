@@ -23,12 +23,12 @@ export function Layout() {
   const auth = useAuth();
   const t = useT();
   const link = ({ isActive }: { isActive: boolean }) =>
-    `rounded-md px-3 py-1.5 text-sm ${isActive ? 'bg-accent-soft text-ink' : 'text-muted hover:text-ink'}`;
+    `rounded-md px-3 py-1.5 text-sm ${isActive ? 'bg-accent-soft text-ink' : 'text-ink-muted hover:text-ink'}`;
 
   return (
     <div className="flex h-full flex-col">
       <header className="flex flex-wrap items-center gap-3 border-b border-line bg-surface px-4 py-3">
-        <span className="font-display text-lg font-bold">{t.app.name}</span>
+        <span className="font-serif text-lg font-bold">{t.app.name}</span>
         <nav className="flex gap-1">
           {NAV_ITEMS.filter((item) => !item.permission || permissions.includes(item.permission)).map(
             (item) => (
@@ -43,7 +43,7 @@ export function Layout() {
           <button
             type="button"
             onClick={() => void auth.signoutRedirect()}
-            className="text-sm text-muted hover:text-ink"
+            className="text-sm text-ink-muted hover:text-ink"
           >
             {t.auth.signOut}
           </button>

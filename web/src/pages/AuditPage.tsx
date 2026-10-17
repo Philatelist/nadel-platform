@@ -55,7 +55,7 @@ export function AuditPage() {
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-8">
-      <h1 className="font-display text-2xl font-bold">{a.title}</h1>
+      <h1 className="font-serif text-2xl font-bold">{a.title}</h1>
       <div className="flex flex-wrap items-start gap-4">
         <Field label={a.filters.entityType}>
           {({ id }) => (
@@ -109,7 +109,7 @@ export function AuditPage() {
           <>
             <div className="overflow-x-auto rounded-xl border border-line bg-surface">
               <table className="w-full text-left text-sm">
-                <thead className="border-b border-line text-muted">
+                <thead className="border-b border-line text-ink-muted">
                   <tr>
                     {(['time', 'author', 'action', 'record', 'changes'] as const).map((col) => (
                       <th key={col} scope="col" className="px-3 py-2 font-medium">
@@ -155,7 +155,7 @@ function Chip({ label, onRemove }: { label: string; onRemove: () => void }) {
         type="button"
         onClick={onRemove}
         aria-label={`${t.audit.filters.remove}: ${label}`}
-        className="text-muted hover:text-ink"
+        className="text-ink-muted hover:text-ink"
       >
         ×
       </button>
@@ -208,7 +208,7 @@ function AuditRow({
       </td>
       <td className="px-3 py-2">{a.action[entry.action]}</td>
       <td className="px-3 py-2">
-        <span className="text-muted">{a.entityType[entry.entityType]}: </span>
+        <span className="text-ink-muted">{a.entityType[entry.entityType]}: </span>
         {entry.entityType === 'MEMBER' ? (
           <Link to={`/members/${entry.entityId}`} className="underline hover:text-accent">
             {label}
@@ -221,7 +221,7 @@ function AuditRow({
         <ul className="flex flex-col gap-1">
           {entry.changes.map((change) => (
             <li key={change.field}>
-              <span className="text-muted">{fieldNames[change.field] ?? change.field}: </span>
+              <span className="text-ink-muted">{fieldNames[change.field] ?? change.field}: </span>
               {value(change.field, change.oldValue)} → {value(change.field, change.newValue)}
             </li>
           ))}

@@ -30,7 +30,7 @@ export function MemberPage() {
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-4 px-4 py-8">
-      <Link to="/members" className="text-sm text-muted hover:text-ink">
+      <Link to="/members" className="text-sm text-ink-muted hover:text-ink">
         {t.members.back}
       </Link>
       <QueryBoundary query={member}>{(data) => <MemberView key={data.id} member={data} />}</QueryBoundary>
@@ -76,9 +76,9 @@ function MemberView({ member }: { member: Member }) {
   return (
     <>
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="font-display text-2xl font-bold">{fullName}</h1>
+        <h1 className="font-serif text-2xl font-bold">{fullName}</h1>
         {member.archived && (
-          <span className="rounded-full border border-line px-2 py-0.5 text-xs text-muted">
+          <span className="rounded-full border border-line px-2 py-0.5 text-xs text-ink-muted">
             {t.members.archived}
           </span>
         )}
@@ -140,7 +140,7 @@ function MemberView({ member }: { member: Member }) {
           {canAudit && (
             <Link
               to={`/audit?entityType=MEMBER&entityId=${member.id}`}
-              className="text-sm text-muted underline hover:text-ink"
+              className="text-sm text-ink-muted underline hover:text-ink"
             >
               {t.members.history}
             </Link>

@@ -20,7 +20,7 @@ export function Pagination({
       <button type="button" className={button} disabled={page <= 0} onClick={() => onPageChange(page - 1)}>
         {t.pagination.previous}
       </button>
-      <span className="text-sm text-muted">
+      <span className="text-sm text-ink-muted">
         {format(t.pagination.pageOf, { page: page + 1, total: totalPages })}
       </span>
       <button

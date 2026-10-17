@@ -11,7 +11,8 @@
     "lint": "pnpm -r lint",
     "build": "pnpm -r build",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "test": "pnpm -r test"
   },
   "devDependencies": {
     "prettier": "3.9.9"

@@ -12,7 +12,7 @@ export function LocaleSwitch() {
           type="button"
           aria-pressed={code === locale}
           onClick={() => setLocale(code)}
-          className={`rounded-md px-2 py-1 text-xs uppercase ${code === locale ? 'bg-accent-soft text-ink' : 'text-muted hover:text-ink'}`}
+          className={`rounded-md px-2 py-1 text-xs uppercase ${code === locale ? 'bg-accent-soft text-ink' : 'text-ink-muted hover:text-ink'}`}
         >
           {code}
         </button>

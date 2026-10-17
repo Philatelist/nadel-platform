@@ -20,12 +20,12 @@ export function Field({
   const errorId = `${id}-error`;
   return (
     <div className="flex flex-col gap-1">
-      <label htmlFor={id} className="text-sm text-muted">
+      <label htmlFor={id} className="text-sm text-ink-muted">
         {label}
       </label>
       {children({ id, invalid: error !== undefined, 'aria-describedby': error ? errorId : undefined })}
       {error && (
-        <p id={errorId} role="alert" className="text-sm text-status-red">
+        <p id={errorId} role="alert" className="text-sm text-danger">
           {error}
         </p>
       )}

@@ -55,6 +55,7 @@ jobs:
           git diff --exit-code packages/api-client/src/generated
       - run: pnpm format:check
       - run: pnpm -r typecheck
+      - run: pnpm -r test
       - run: pnpm -r lint
       - run: pnpm --filter web build
 

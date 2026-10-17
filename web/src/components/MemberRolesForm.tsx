@@ -65,7 +65,7 @@ export function MemberRolesForm({
       <QueryBoundary query={roles}>
         {(data) => (
           <fieldset className="flex flex-col gap-2">
-            <legend className="mb-1 text-sm text-muted">{t.member.fields.roles}</legend>
+            <legend className="mb-1 text-sm text-ink-muted">{t.member.fields.roles}</legend>
             {data.map((role) => (
               <label key={role.id} className="flex items-center gap-2 text-sm">
                 <input type="checkbox" checked={selected.has(role.id)} onChange={() => toggle(role.id)} />
