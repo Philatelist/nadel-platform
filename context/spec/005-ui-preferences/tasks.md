@@ -31,8 +31,8 @@ commit; report every file created or changed.
   - [x] E2E: dark ↔ light switch, reload keeps the choice, `data-theme` present before the app renders (no flash), phone placement (menu for the chairman, header for a member), header title "Demo Garden Cooperative" and tab title, Ukrainian base role descriptions on the Roles page, description change → restore flow with cleanup in `finally`. Fix other specs broken by the header change. **[Agent: testing-expert]**
   - [x] Verify: `make check` green; raise `coverage.minimum` in `backend/pom.xml` to the measured line coverage rounded down to two decimals (never lower) and re-run `cd backend && ./mvnw -B verify`; `make e2e` green. **[Agent: testing-expert]**
 
-- [ ] **Slice 5: Feature Testing & Regression**
+- [x] **Slice 5: Feature Testing & Regression**
 
   > Verifies the whole feature end-to-end against functional-spec.md, run after all implementation slices are complete.
-  - [ ] Read functional-spec.md acceptance criteria in full. Generate acceptance-level tests that verify the entire feature as a whole — not individual slices. Cover applicable layers (unit for pure logic, integration for service interactions, e2e for user flows) based on the project's testing stack. Write tests with RED validation (must fail before implementation is confirmed done). Annotate each test with `@spec: 005-ui-preferences` and `@regression` if suitable for long-term regression. **[Agent: testing-expert]**
-  - [ ] Run all generated tests. All must pass. Fix any failures before proceeding. **[Agent: testing-expert]**
+  - [x] Read functional-spec.md acceptance criteria in full. Generate acceptance-level tests that verify the entire feature as a whole — not individual slices. Cover applicable layers (unit for pure logic, integration for service interactions, e2e for user flows) based on the project's testing stack. Write tests with RED validation (must fail before implementation is confirmed done). Annotate each test with `@spec: 005-ui-preferences` and `@regression` if suitable for long-term regression. **[Agent: testing-expert]**
+  - [x] Run all generated tests. All must pass. Fix any failures before proceeding. **[Agent: testing-expert]**
