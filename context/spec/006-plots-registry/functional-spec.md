@@ -45,7 +45,7 @@ only the plot numbers, streets and status colours.
     - [ ] Given plot "12" is archived, when the chairman creates a new plot "12", then it is saved.
     - [ ] When the chairman enters a cadastral number in a wrong format (for example "123:45"), then the save is refused and the field shows the expected format; when the number is already used by another plot of the cooperative, then the field shows that it is already taken.
     - [ ] When the chairman enters area 0 for a plot, then the save is refused with a message under the area field; when the kind is common land, then area 0 is accepted.
-    - [ ] When the chairman types the area as 600 m², then the plot shows "6 соток"; when they type 6.5 sotkas, then the plot stores and shows "6,5 соток".
+    - [ ] When the chairman types the area as 600 m², then the plot shows "6 соток"; when they type 6.5 sotkas, then the plot stores and shows "6,5 сотки".
 
 ### 2.2 Plots list
 

@@ -11,3 +11,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `f36a3d5..aeba3dd` | PASS | — | minor: map query orders by plain text; demo upsert does not touch `updated_at`, and rolling dev back to the previous release would fail its old demo script (dev only); SQL function without `search_path`; mobile legend shows GREY as "Common land" only |
+
+## Slice 2 — Plots list and plot card
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `aeba3dd..441f9b1` | PASS | — | minor: page past the end shows the empty state; search box does not follow external URL changes; malformed id shows the error state; area wording "6,5 сот." vs spec examples (picked up in Slice 3 with Ukrainian plural forms); dead no-menu branch in Layout; 005 spec text about members having no menu is now historical |

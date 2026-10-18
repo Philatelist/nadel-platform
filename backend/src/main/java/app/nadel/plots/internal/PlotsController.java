@@ -4,14 +4,17 @@ import app.nadel.identity.AccessProfile;
 import app.nadel.identity.CurrentUser;
 import app.nadel.problem.ApiProblemException;
 import app.nadel.problem.ProblemCodes;
+import java.net.URI;
 import java.util.UUID;
 import nadel.contract.api.PlotsApi;
 import nadel.contract.model.PlotDetails;
 import nadel.contract.model.PlotFeatureCollection;
+import nadel.contract.model.PlotInput;
 import nadel.contract.model.PlotPage;
 import nadel.contract.model.PlotStatus;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -21,10 +24,12 @@ class PlotsController implements PlotsApi {
 
     private final CurrentUser currentUser;
     private final PlotQueries queries;
+    private final PlotCommands commands;
 
-    PlotsController(CurrentUser currentUser, PlotQueries queries) {
+    PlotsController(CurrentUser currentUser, PlotQueries queries, PlotCommands commands) {
         this.currentUser = currentUser;
         this.queries = queries;
+        this.commands = commands;
     }
 
     /** Every member of a cooperative may read the map; the platform operator has no cooperative data. */
@@ -53,6 +58,19 @@ class PlotsController implements PlotsApi {
         AccessProfile viewer = currentUser.profile();
         requireCooperativeMember(viewer);
         return ResponseEntity.ok(queries.card(id, viewer).orElseThrow(ApiProblemException::notFound));
+    }
+
+    @Override
+    @PreAuthorize("hasAuthority('PERM_PLOTS_EDIT')")
+    public ResponseEntity<PlotDetails> createPlot(PlotInput plotInput) {
+        PlotDetails created = commands.create(plotInput, currentUser.profile());
+        return ResponseEntity.created(URI.create("/api/v1/plots/" + created.getId())).body(created);
+    }
+
+    @Override
+    @PreAuthorize("hasAuthority('PERM_PLOTS_EDIT')")
+    public ResponseEntity<PlotDetails> updatePlot(UUID id, PlotInput plotInput) {
+        return ResponseEntity.ok(commands.update(id, plotInput, currentUser.profile()));
     }
 
     private static void requireCooperativeMember(AccessProfile viewer) {

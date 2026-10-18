@@ -12,7 +12,7 @@
 
 export interface ProblemFieldError {
   field: string;
-  /** Field error code: `REQUIRED` (missing or blank), `TOO_LONG` (over the maximum length or item count), `INVALID` (wrong format, for example an email), `PHONE_INVALID` (not a valid phone number), `CHANNEL_CONTACT_MISSING` (the chosen delivery channel has no contact to deliver to) */
+  /** Field error code: `REQUIRED` (missing or blank), `TOO_LONG` (over the maximum length or item count), `INVALID` (wrong format, for example an email), `PHONE_INVALID` (not a valid phone number), `CHANNEL_CONTACT_MISSING` (the chosen delivery channel has no contact to deliver to), `CADASTRAL_INVALID` (not of the form `NNNNNNNNNN:NN:NNN:NNNN`), `AREA_INVALID` (more than two decimal places, too large, or not greater than zero for a plot) */
   code: string;
   message?: string;
 }

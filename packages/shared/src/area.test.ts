@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatSotky, m2ToSotky } from './area';
+import { formatSotky, formatSotkyWithUnit, m2ToSotky, toSquareMetres } from './area';
 
 describe('m2ToSotky', () => {
   it.each([
@@ -38,5 +38,52 @@ describe('formatSotky', () => {
   });
   it('shows whole sotkas without decimals', () => {
     expect(formatSotky(600, 'en-US')).toBe('6');
+  });
+});
+
+describe('toSquareMetres', () => {
+  it.each([
+    ['6.5', 'SOTKA', '650'],
+    ['6,5', 'SOTKA', '650'],
+    ['6', 'SOTKA', '600'],
+    ['0.01', 'SOTKA', '1'],
+    ['0.015', 'SOTKA', '1.5'],
+    ['600', 'M2', '600'],
+    ['600,25', 'M2', '600.25'],
+    ['0', 'M2', '0'],
+    [' 007 ', 'M2', '7'],
+  ] as const)('converts %s %s to %s m²', (value, unit, m2) => {
+    expect(toSquareMetres(value, unit)).toBe(m2);
+  });
+
+  it.each([
+    ['abc', 'SOTKA'],
+    ['', 'SOTKA'],
+    ['-1', 'M2'],
+    ['1.2.3', 'M2'],
+    ['0.00001', 'SOTKA'],
+    ['1.234', 'M2'],
+  ] as const)('rejects %j in %s', (value, unit) => {
+    expect(toSquareMetres(value, unit)).toBeUndefined();
+  });
+});
+
+describe('formatSotkyWithUnit', () => {
+  it.each([
+    ['100', 'сотка'],
+    ['200', 'сотки'],
+    ['500', 'соток'],
+    ['2100', 'сотка'],
+    ['1100', 'соток'],
+  ])('uk %s m²', (m2, unit) => {
+    expect(formatSotkyWithUnit(m2, 'uk')).toMatch(new RegExp(`^\\d+ ${unit}$`));
+  });
+  it('uk fractions', () => {
+    expect(formatSotkyWithUnit('650', 'uk')).toBe('6,5 сотки');
+  });
+  it('en', () => {
+    expect(formatSotkyWithUnit('100', 'en')).toBe('1 sotka');
+    expect(formatSotkyWithUnit('600', 'en')).toBe('6 sotkas');
+    expect(formatSotkyWithUnit('650', 'en')).toBe('6.5 sotkas');
   });
 });

@@ -28,3 +28,39 @@ export function formatSotky(areaM2: string | number, locale: string = 'uk-UA'): 
   const grouped = nf.format(BigInt(digits));
   return `${negative ? '-' : ''}${grouped}${decimals ? separator + decimals : ''}`;
 }
+
+export type AreaUnit = 'SOTKA' | 'M2';
+
+const INPUT = /^(\d+)(?:[.,](\d*))?$/;
+
+/**
+ * Parses what a person typed (a "," or "." separator) in the given unit into square metres as a plain decimal
+ * string, by moving the decimal point in the text: no floating point. Sotkas are multiplied by 100. Returns
+ * `undefined` for empty, invalid or negative input and when the result would need more than two decimals of m².
+ */
+export function toSquareMetres(value: string, unit: AreaUnit): string | undefined {
+  const match = INPUT.exec(value.trim());
+  if (!match) return undefined;
+  const whole = match[1] ?? '';
+  const fraction = (match[2] ?? '').replace(/0+$/, '');
+  const shift = unit === 'SOTKA' ? 2 : 0;
+  if (fraction.length > 2 + shift) return undefined;
+  const decimals = fraction.padEnd(shift, '0');
+  const integer = (whole + decimals.slice(0, shift)).replace(/^0+(?=\d)/, '');
+  const rest = decimals.slice(shift);
+  return rest ? `${integer}.${rest}` : integer;
+}
+
+/** "1 sotka", "6 sotkas", "6.5 sotkas" / "1 сотка", "2 сотки", "5 соток", "21 сотка", "6,5 сотки". */
+export function formatSotkyWithUnit(areaM2: string | number, locale: string = 'uk-UA'): string {
+  const amount = m2ToSotky(areaM2);
+  const hasFraction = amount.includes('.');
+  const category = hasFraction ? 'other' : new Intl.PluralRules(locale).select(Number(amount));
+  const isUk = locale.toLowerCase().startsWith('uk');
+  const unit = isUk
+    ? ({ one: 'сотка', few: 'сотки', many: 'соток', other: 'сотки' } as Record<string, string>)[category]
+    : category === 'one'
+      ? 'sotka'
+      : 'sotkas';
+  return `${formatSotky(areaM2, locale)} ${unit ?? ''}`.trim();
+}

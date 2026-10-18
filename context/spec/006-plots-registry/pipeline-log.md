@@ -55,3 +55,6 @@ Same as 004/005 (see `context/spec/005-ui-preferences/pipeline-log.md`). Re-chec
 
 ## Phase 3 — implement
 - Slice 1 committed aeba3dd (backend 45 targeted, web 102 unit; typecheck/lint/format green; generated client stable). Note: mobile/App.tsx touched only to compile after the status-key rename (same label). Review r1 started.
+- Slice 1 review r1 PASS. Slice 2 committed 441f9b1 (backend PlotsReadTests 27 + map; web 108, shared 20 unit; e2e specs updated for landing/menu, typechecked only — run in Slice 5). Review r1 started.
+- AUTO: area wording uses Ukrainian plural forms (1 сотка, 2–4 сотки, 5+ соток, fractions сотки); the spec example "6,5 соток" corrected to "6,5 сотки" (rule: correct Ukrainian; reviewer note in Slice 2).
+- Slice 2 review r1 PASS.

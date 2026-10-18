@@ -38,6 +38,7 @@ export * from './plotFeature';
 export * from './plotFeatureCollection';
 export * from './plotFeatureCollectionType';
 export * from './plotFeatureType';
+export * from './plotInput';
 export * from './plotKind';
 export * from './plotPage';
 export * from './plotProperties';

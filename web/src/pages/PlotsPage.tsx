@@ -9,11 +9,12 @@ import {
 import { keepPreviousData } from '@tanstack/react-query';
 import { formatSotky } from '@nadel/shared';
 import { useEffect, useState } from 'react';
-import { Link, useSearchParams } from 'react-router';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import { Pagination } from '../components/Pagination';
 import { QueryBoundary } from '../components/QueryBoundary';
 import {
   Badge,
+  Button,
   DataTable,
   PageHeader,
   Panel,
@@ -43,6 +44,8 @@ export function PlotsPage() {
   const { locale } = useLocale();
   useDocumentTitle(t.plots.title);
   const canView = useCan('PLOTS_VIEW');
+  const canEdit = useCan('PLOTS_EDIT');
+  const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const q = params.get('q') ?? '';
   const kind: PlotKindValue | undefined = oneOf(KINDS, params.get('kind'));
@@ -136,7 +139,10 @@ export function PlotsPage() {
 
   return (
     <div className="flex flex-col gap-4 text-[15px]">
-      <PageHeader title={t.plots.title} />
+      <PageHeader
+        title={t.plots.title}
+        actions={canEdit && <Button onClick={() => void navigate('/plots/new')}>{t.plots.add}</Button>}
+      />
       <Panel>
         <div className="flex flex-wrap items-end gap-x-6 gap-y-3">
           <div className="min-w-64 flex-1 sm:max-w-md">

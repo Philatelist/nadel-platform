@@ -35,6 +35,16 @@ interface PlotRepository extends JpaRepository<Plot, UUID> {
             """)
     List<PlotRow> findRowsByIds(@Param("ids") Collection<UUID> ids);
 
+    /** The active plot with this number, ignoring case; at most one (unique index {@code plot_tenant_number_uq}). */
+    @Query("select p from Plot p where p.tenantId = :tenantId and lower(p.number) = lower(:number) "
+            + "and p.archivedAt is null")
+    Optional<Plot> findActiveByNumber(@Param("tenantId") UUID tenantId, @Param("number") String number);
+
+    /** The plot, archived or not, with this cadastral number; at most one (unique index {@code plot_tenant_cadastral_uq}). */
+    @Query("select p from Plot p where p.tenantId = :tenantId and p.cadastralNumber = :cadastralNumber")
+    Optional<Plot> findByCadastralNumber(@Param("tenantId") UUID tenantId,
+            @Param("cadastralNumber") String cadastralNumber);
+
     /**
      * One page of the plots list in natural order of the number. {@code textPattern} is a LIKE pattern over
      * lower-cased text ({@code %token%}, with {@code !} as the escape character) matched against the number, the

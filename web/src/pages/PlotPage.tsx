@@ -1,9 +1,9 @@
 import { ApiError, useGetPlot, type PlotDetails } from '@nadel/api-client';
-import { format, formatSotky } from '@nadel/shared';
+import { format, formatSotkyWithUnit } from '@nadel/shared';
 import type { ReactNode } from 'react';
-import { Link, useParams } from 'react-router';
+import { Link, useNavigate, useParams } from 'react-router';
 import { QueryBoundary } from '../components/QueryBoundary';
-import { Badge, PageHeader, Panel, StatusDot } from '../components/ui';
+import { Badge, Button, PageHeader, Panel, StatusDot } from '../components/ui';
 import { useLocale, useT } from '../i18n';
 import { useCan } from '../me';
 import { plotStatusLabel } from '../plotStatus';
@@ -38,6 +38,8 @@ function PlotView({ plot }: { plot: PlotDetails }) {
   const t = useT();
   const { locale } = useLocale();
   const canView = useCan('PLOTS_VIEW');
+  const canEdit = useCan('PLOTS_EDIT');
+  const navigate = useNavigate();
   const f = t.plot.fields;
 
   const rows: [string, ReactNode][] = [
@@ -53,7 +55,7 @@ function PlotView({ plot }: { plot: PlotDetails }) {
         plot.areaM2 === undefined
           ? f.none
           : format(t.plot.areaValue, {
-              sotky: formatSotky(plot.areaM2, locale),
+              sotky: formatSotkyWithUnit(plot.areaM2, locale),
               m2: formatDecimal(String(plot.areaM2), locale),
             }),
       ],
@@ -68,6 +70,9 @@ function PlotView({ plot }: { plot: PlotDetails }) {
       <PageHeader
         title={cardTitle(t, plot)}
         badge={plot.archived && <Badge tone="neutral">{t.plots.archived}</Badge>}
+        actions={
+          canEdit && <Button onClick={() => void navigate(`/plots/${plot.id}/edit`)}>{t.plot.edit}</Button>
+        }
       />
       <Panel>
         <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-[minmax(10rem,max-content)_1fr]">

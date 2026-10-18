@@ -610,6 +610,46 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
 
+    post:
+      tags: [plots]
+      operationId: createPlot
+      summary: Create a plot or common land
+      description: |
+        Creates a plot or common land in the current cooperative. Requires the `PLOTS_EDIT` permission. The new plot
+        is active and has the status `GREY`.
+        The number is trimmed and must be unique among the active plots of the cooperative, ignoring upper and lower
+        case (409 `PLOT_NUMBER_TAKEN`, field `number`). The cadastral number, when given, must look like
+        `1234567890:12:345:6789` (400 `CADASTRAL_INVALID`) and be unique in the cooperative, archived plots included
+        (409 `CADASTRAL_NUMBER_TAKEN`, field `cadastralNumber`). The area of a plot must be greater than zero and
+        that of common land may be zero, with at most two decimal places and at most eight integer digits
+        (400 `AREA_INVALID`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlotInput'
+      responses:
+        '201':
+          description: Created
+          headers:
+            Location:
+              description: URL of the created plot
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlotDetails'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
   /plots/map:
     get:
       tags: [plots]
@@ -665,6 +705,47 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+    put:
+      tags: [plots]
+      operationId: updatePlot
+      summary: Update a plot or common land
+      description: |
+        Replaces all editable fields of the plot (full replacement; optional fields absent from the body are
+        cleared). Requires the `PLOTS_EDIT` permission. An archived plot can be edited too; its number is then not
+        checked against the active plots, and restoring it checks the number again.
+        The same rules apply as when creating: 409 `PLOT_NUMBER_TAKEN`, 409 `CADASTRAL_NUMBER_TAKEN`,
+        400 `CADASTRAL_INVALID`, 400 `AREA_INVALID`. A change that alters nothing is accepted and not audited.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlotInput'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlotDetails'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -717,7 +798,10 @@ components:
         cooperative (code `EMAIL_TAKEN`, with `errors[{field: email}]`), the action would leave the cooperative
         without an active chairman (code `LAST_CHAIRMAN`), the role name is already used (code `ROLE_NAME_TAKEN`),
         the role is still given to members (code `ROLE_IN_USE`), or a base role cannot be deleted or, for the Chairman
-        role, have its permissions changed (code `BASE_ROLE_IMMUTABLE`)
+        role, have its permissions changed (code `BASE_ROLE_IMMUTABLE`), another active plot already has the number
+        (code `PLOT_NUMBER_TAKEN`, with `errors[{field: number}]`), or another plot of the cooperative, archived ones
+        included, already has the cadastral number (code `CADASTRAL_NUMBER_TAKEN`, with
+        `errors[{field: cadastralNumber}]`)
       content:
         application/problem+json:
           schema:
@@ -1031,11 +1115,16 @@ components:
         - ROLE_CREATED
         - ROLE_UPDATED
         - ROLE_DELETED
+        - PLOT_CREATED
+        - PLOT_UPDATED
+        - PLOT_ARCHIVED
+        - PLOT_RESTORED
+        - PLOT_DELETED
 
     AuditEntityType:
       type: string
       description: Kind of the entity an audit entry is about
-      enum: [MEMBER, ROLE]
+      enum: [MEMBER, ROLE, PLOT]
 
     AuditFieldChange:
       type: object
@@ -1204,6 +1293,41 @@ components:
               type: string
               format: date-time
 
+    PlotInput:
+      type: object
+      description: |
+        Editable fields of a plot or common land (full replacement on update). The number is trimmed; blank optional
+        text becomes empty. The area is never rounded: more than two decimal places is rejected (`AREA_INVALID`).
+        The cadastral number format is checked by the server (`CADASTRAL_INVALID`), not by the schema.
+      required: [number, kind, areaM2]
+      properties:
+        number:
+          type: string
+          minLength: 1
+          maxLength: 20
+          description: Free text such as `12`, `12а` or `R-1`; unique among the active plots, ignoring case
+        street:
+          type: string
+          maxLength: 100
+        kind:
+          $ref: '#/components/schemas/PlotKind'
+        areaM2:
+          type: number
+          description: >-
+            Area in square metres with at most two decimal places and at most eight integer digits; greater than
+            zero for a plot, zero or more for common land
+        cadastralNumber:
+          type: string
+          maxLength: 22
+          description: Optional, of the form `1234567890:12:345:6789`; unique in the cooperative, archived plots included
+        hasBuilding:
+          type: boolean
+          default: false
+          description: Whether a building stands on the plot; reference information only
+        notes:
+          type: string
+          maxLength: 2000
+
     PlotPage:
       type: object
       required: [items, page, size, totalItems, totalPages]
@@ -1326,6 +1450,8 @@ components:
           description: >-
             Field error code: `REQUIRED` (missing or blank), `TOO_LONG` (over the maximum length or item count),
             `INVALID` (wrong format, for example an email), `PHONE_INVALID` (not a valid phone number),
-            `CHANNEL_CONTACT_MISSING` (the chosen delivery channel has no contact to deliver to)
+            `CHANNEL_CONTACT_MISSING` (the chosen delivery channel has no contact to deliver to),
+            `CADASTRAL_INVALID` (not of the form `NNNNNNNNNN:NN:NNN:NNNN`), `AREA_INVALID` (more than two decimal
+            places, too large, or not greater than zero for a plot)
         message:
           type: string

@@ -14,6 +14,19 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <HomeRedirect /> },
       {
+        element: <RequirePermission permission="PLOTS_EDIT" />,
+        children: [
+          {
+            path: 'plots/new',
+            lazy: () => import('./pages/PlotFormPage').then((m) => ({ Component: m.PlotFormPage })),
+          },
+          {
+            path: 'plots/:id/edit',
+            lazy: () => import('./pages/PlotFormPage').then((m) => ({ Component: m.PlotFormPage })),
+          },
+        ],
+      },
+      {
         path: 'plots',
         lazy: () => import('./pages/PlotsPage').then((m) => ({ Component: m.PlotsPage })),
       },

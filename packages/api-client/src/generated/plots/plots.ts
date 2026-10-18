@@ -10,27 +10,33 @@
  * OpenAPI spec version: 0.1.0
  */
 import {
+  useMutation,
   useQuery
 } from '@tanstack/react-query';
 import type {
   DataTag,
   DefinedInitialDataOptions,
   DefinedUseQueryResult,
+  MutationFunction,
   QueryClient,
   QueryFunction,
   QueryKey,
   UndefinedInitialDataOptions,
+  UseMutationOptions,
+  UseMutationResult,
   UseQueryOptions,
   UseQueryResult
 } from '@tanstack/react-query';
 
 import type {
   BadRequestResponse,
+  ConflictResponse,
   ForbiddenResponse,
   ListPlotsParams,
   NotFoundResponse,
   PlotDetails,
   PlotFeatureCollection,
+  PlotInput,
   PlotPage,
   UnauthorizedResponse
 } from '../model';
@@ -173,7 +179,102 @@ export function useListPlots<TData = Awaited<ReturnType<typeof listPlots>>, TErr
 
 
 
-export const getGetPlotMapUrl = () => {
+export const getCreatePlotUrl = () => {
+
+
+
+
+  return `/api/v1/plots`
+}
+
+/**
+ * Creates a plot or common land in the current cooperative. Requires the `PLOTS_EDIT` permission. The new plot
+ * is active and has the status `GREY`.
+ * The number is trimmed and must be unique among the active plots of the cooperative, ignoring upper and lower
+ * case (409 `PLOT_NUMBER_TAKEN`, field `number`). The cadastral number, when given, must look like
+ * `1234567890:12:345:6789` (400 `CADASTRAL_INVALID`) and be unique in the cooperative, archived plots included
+ * (409 `CADASTRAL_NUMBER_TAKEN`, field `cadastralNumber`). The area of a plot must be greater than zero and
+ * that of common land may be zero, with at most two decimal places and at most eight integer digits
+ * (400 `AREA_INVALID`).
+ * @summary Create a plot or common land
+ */
+export const createPlot = async (plotInput: PlotInput, options?: Parameters<typeof nadelFetch>[1]): Promise<PlotDetails> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return nadelFetch<PlotDetails>(getCreatePlotUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(plotInput)
+  }
+);}
+
+
+
+
+
+export const getCreatePlotMutationKey = () => ['createPlot'] as const;
+
+export const getCreatePlotMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createPlot>>, TError,CreatePlotMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createPlot>>, TError,CreatePlotMutationVariables, TContext> => {
+
+const mutationKey = getCreatePlotMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createPlot>>, CreatePlotMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  createPlot(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreatePlotMutationResult = NonNullable<Awaited<ReturnType<typeof createPlot>>>
+    export type CreatePlotMutationBody = PlotInput
+    export type CreatePlotMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse
+    export type CreatePlotMutationVariables = {data: PlotInput}
+
+    /**
+ * @summary Create a plot or common land
+ */
+export const useCreatePlot = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createPlot>>, TError,CreatePlotMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof createPlot>>,
+        TError,
+        CreatePlotMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreatePlotMutationOptions(options), queryClient);
+    }
+    export const getGetPlotMapUrl = () => {
 
 
 
@@ -381,3 +482,96 @@ export function useGetPlot<TData = Awaited<ReturnType<typeof getPlot>>, TError =
 
 
 
+export const getUpdatePlotUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/plots/${id}`
+}
+
+/**
+ * Replaces all editable fields of the plot (full replacement; optional fields absent from the body are
+ * cleared). Requires the `PLOTS_EDIT` permission. An archived plot can be edited too; its number is then not
+ * checked against the active plots, and restoring it checks the number again.
+ * The same rules apply as when creating: 409 `PLOT_NUMBER_TAKEN`, 409 `CADASTRAL_NUMBER_TAKEN`,
+ * 400 `CADASTRAL_INVALID`, 400 `AREA_INVALID`. A change that alters nothing is accepted and not audited.
+ * @summary Update a plot or common land
+ */
+export const updatePlot = async (id: string,
+    plotInput: PlotInput, options?: Parameters<typeof nadelFetch>[1]): Promise<PlotDetails> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return nadelFetch<PlotDetails>(getUpdatePlotUrl(id),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(plotInput)
+  }
+);}
+
+
+
+
+
+export const getUpdatePlotMutationKey = () => ['updatePlot'] as const;
+
+export const getUpdatePlotMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updatePlot>>, TError,UpdatePlotMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updatePlot>>, TError,UpdatePlotMutationVariables, TContext> => {
+
+const mutationKey = getUpdatePlotMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updatePlot>>, UpdatePlotMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updatePlot(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdatePlotMutationResult = NonNullable<Awaited<ReturnType<typeof updatePlot>>>
+    export type UpdatePlotMutationBody = PlotInput
+    export type UpdatePlotMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse
+    export type UpdatePlotMutationVariables = {id: string;data: PlotInput}
+
+    /**
+ * @summary Update a plot or common land
+ */
+export const useUpdatePlot = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updatePlot>>, TError,UpdatePlotMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof updatePlot>>,
+        TError,
+        UpdatePlotMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdatePlotMutationOptions(options), queryClient);
+    }

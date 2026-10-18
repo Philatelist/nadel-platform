@@ -19,4 +19,5 @@ export type AuditEntityType = typeof AuditEntityType[keyof typeof AuditEntityTyp
 export const AuditEntityType = {
   MEMBER: 'MEMBER',
   ROLE: 'ROLE',
+  PLOT: 'PLOT',
 } as const;
