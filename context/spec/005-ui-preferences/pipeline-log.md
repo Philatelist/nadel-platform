@@ -1,11 +1,11 @@
 # Pipeline log — 005 UI preferences
 
 - Status: running
-- Phase: 5 — publish
+- Phase: 6 — review run
 - Branch: 005-ui-preferences · Base: main @ 5999343
 - Requirement: docs/features/005-ui-preferences.md (the run was first started with the stale path `docs/features/005-plots-registry.md`; the user re-ran it with this document)
 - Autonomy: minimal (.claude/feature-pipeline.yml)
-- Publish: pr+checks · PR: — · Checks: —
+- Publish: pr+checks · PR: https://github.com/Philatelist/nadel-platform/pull/23 · Checks: green (run 39141013064)
 - Review run: on (pending)
 
 ## Project facts
@@ -67,3 +67,16 @@ Same as 004 (see `context/spec/004-role-names/pipeline-log.md`), re-checked: bas
 - Acceptance criteria: 17 of 17 verified. Status: Completed.
 - Full suite: `make check` green at d75dd4a (backend 278 after the fix via `./mvnw verify` at 7ef6e94, floor 0.94 met; unit 56/5/96); `make e2e` 48 passed at d75dd4a (the later fix only touched a backend test). Baseline 0 failures → no regressions.
 - Product docs: none needed.
+
+## Phase 5 — publish
+
+- Pushed `005-ui-preferences`; PR https://github.com/Philatelist/nadel-platform/pull/23 — "feat(web): theme switch, cooperative name in the header, translated role descriptions".
+- Checks: Backend, Clients, End-to-end, SAST, Security — all green (run 39141013064). `gh pr checks --watch` exited early twice while e2e was pending; waited with `gh run watch` instead. No CI fixes, no re-runs.
+
+## Final report
+
+- Commits: b5e85b4 specs · a33b050 S1 · 39719cd S2 · 413ee10 S3 · c99e535 S3 fix · 0abc642 S4 (incl. phone header gap fix) · 46b47b5 S4 fix · d75dd4a S5 · 7ef6e94 S5 fix · verification · (this log commit).
+- Acceptance criteria: 17/17 verified.
+- Reviews: S1 2 rounds (M1 withdrawn: MapPage unreachable) PASS; S2 1 round PASS; S3 2 rounds (M1 name restore customised the description in uk) PASS; S4 2 rounds (M1 desktop header order, M2 e2e cleanup) PASS; S5 2 rounds (M1 order-dependent acceptance test) PASS. One gap from Slice 4 e2e (Menu button wrapped below the name at 390 px) fixed in Layout.
+- Full suite vs baseline: baseline 0 failures; branch 0 failures (backend 278, unit 56/5/96, e2e 48). Coverage 0.940, floor 0.93 → 0.94.
+- Follow-ups: map re-reads colours on theme change (phase 6); full-storage block breaks sign-in (pre-existing); Keycloak page not themed; minor review notes in review-log.md.
