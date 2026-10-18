@@ -40,7 +40,7 @@ only the plot numbers, streets and status colours.
   owner"; common land shows grey labelled "Спільні землі" / "Common land". The colour is never the only signal; the
   label is always shown.
   - **Acceptance Criteria:**
-    - [ ] When the chairman saves a new plot "31" on "Вишнева" with area 6 sotkas, then the plot appears in the list with area "6 соток" and a grey "Без власника" mark.
+    - [ ] When the chairman saves a new plot "31" on "Вишнева" with area 6 sotkas, then the plot appears in the list with 6 in the "Площа, соток" (area, sotkas) column and a grey "Без власника" mark, and its card shows "6 соток".
     - [ ] When the chairman saves a plot with the number of an existing active plot (for example "12" or " 12 "), then the save is refused and the number field shows "a plot with this number already exists".
     - [ ] Given plot "12" is archived, when the chairman creates a new plot "12", then it is saved.
     - [ ] When the chairman enters a cadastral number in a wrong format (for example "123:45"), then the save is refused and the field shows the expected format; when the number is already used by another plot of the cooperative, then the field shows that it is already taken.
@@ -78,7 +78,7 @@ only the plot numbers, streets and status colours.
     - [ ] When the chairman archives plot "31", then it disappears from the default list and appears with "show archived" marked as archived; when they restore it, then it is back in the default list.
     - [ ] Given another active plot now has number "31", when the chairman restores the archived "31", then the restore is refused with "a plot with this number already exists".
     - [ ] When the chairman deletes the active plot "31" and confirms, then it is gone from the list, including the archived view; when they cancel the confirmation, then nothing changes.
-    - [ ] Given plot "31" is archived, when the chairman tries to delete it, then the deletion is refused with a message to restore it first.
+    - [ ] Given plot "31" is archived, when the chairman opens its card, then no Delete button is offered (only Restore), and a deletion attempt sent anyway is refused with the message to restore it first.
     - [ ] When a person without permission to edit plots tries to change, archive, restore or delete a plot, then the action is refused with the "You don't have access" message.
 
 ### 2.4 Create and edit form

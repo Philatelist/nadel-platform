@@ -64,3 +64,7 @@ Same as 004/005 (see `context/spec/005-ui-preferences/pipeline-log.md`). Re-chec
 - Slice 3 review r1 MAJOR_ISSUES (M1 blind writes) → fix 27bfa1f → r2 PASS.
 - Slice 4 review r1 PASS. All slice reviews so far PASS (1–4).
 - Slice 5 (testing-expert): web/e2e/plots.spec.ts (3 flows); acceptance.spec.ts role-rename test opens /account first (treasurer now lands on Plots); make check green (backend 422, unit 56/42/122), coverage 0.9579 → floor 0.94→0.95, ./mvnw verify green, make e2e 51 passed. Early failed runs left E2E plots in the local DB; removed with psql (local only).
+- Slice 5 review r1 PASS. All slice reviews 1–5 PASS — Slice 6 gate open.
+- AUTO: functional spec 2.3 archived-delete criterion reworded to match the built behaviour (the card hides Delete for archived plots; the server refuses with PLOT_ARCHIVED) (rule: the UI never offers an action the server will refuse; wording change before verification, not a behaviour change).
+- AUTO: §2.1 #1 reworded — the list shows the area number under the "Площа, соток" column header; the card shows "6 соток" (rule: unit in the column header is the table convention; wording change, no behaviour change).
+- Slice 6 (testing-expert): PlotsRegistryAcceptanceTests (5) + web/e2e/plots-acceptance.spec.ts (6) + plots.spec.ts review-note fixes; no GAP; make check green (backend 427, coverage 0.9586, floor 0.95), make e2e 57 passed; no app code changed.

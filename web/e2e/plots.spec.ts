@@ -57,6 +57,17 @@ test.describe('plots registry', () => {
     for (const name of ['Add plot', 'Edit', 'Archive', 'Delete', 'Restore']) {
       await expect(page.getByRole('button', { name, exact: true })).toHaveCount(0);
     }
+
+    // plot 9 carries a note: the treasurer reads it on the card
+    await page.getByRole('link', { name: 'Back to plots' }).click();
+    await field(page, 'Search by number, street or cadastral number').fill('9');
+    await rows(page)
+      .filter({ hasText: 'Garden St' })
+      .first()
+      .getByRole('link', { name: '9', exact: true })
+      .click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Plot 9' })).toBeVisible();
+    await expect(page.getByRole('main')).toContainText('Corner plot next to the entrance gate');
   });
 
   test('member opens Plots from the menu and sees the restricted view only', async ({ page }) => {
@@ -86,6 +97,7 @@ test.describe('plots registry', () => {
   }) => {
     const number = `E2E-${Date.now()}`;
     let plotId: string | undefined;
+    let cleanupError: unknown;
     await loginAs(page, 'chairman@demo.local');
     const main = page.getByRole('main');
     try {
@@ -108,10 +120,14 @@ test.describe('plots registry', () => {
       await field(page, 'Number').fill(number);
       await field(page, 'Street').fill('E2E Lane');
       await field(page, 'Area').fill('6,5');
+      // the id comes from the POST response, so a later failure still leaves a plot that the cleanup can remove
+      const created = page.waitForResponse(
+        (r) => r.request().method() === 'POST' && r.url().endsWith('/api/v1/plots') && r.status() === 201,
+      );
       await page.getByRole('button', { name: 'Save', exact: true }).click();
+      plotId = ((await (await created).json()) as { id: string }).id;
+      expect(plotId).toMatch(/^[0-9a-f-]{36}$/);
       await expect(page.getByRole('heading', { level: 1, name: `Plot ${number}` })).toBeVisible();
-      plotId = /\/plots\/([0-9a-f-]{36})$/.exec(page.url())?.[1];
-      expect(plotId).toBeTruthy();
       await expect(main).toContainText('6.5 sotkas (650 m²)');
       await expect(main).toContainText('E2E Lane');
 
@@ -139,8 +155,7 @@ test.describe('plots registry', () => {
 
       // deleting an archived plot is refused by the server (the UI offers no Delete button)
       const refused = await apiDelete(page, plotId ?? '');
-      expect(refused.status).toBeGreaterThanOrEqual(400);
-      expect(refused.status).toBeLessThan(500);
+      expect(refused.status).toBe(409);
       expect(refused.body).toContain('PLOT_ARCHIVED');
 
       // restore
@@ -187,19 +202,27 @@ test.describe('plots registry', () => {
       ).toContainText('E2E Lane → E2E Avenue');
     } finally {
       if (plotId) {
-        // leftover from a failed run: restore if needed, then delete, so the demo data stays clean
-        await page.goto(`/plots/${plotId}`);
-        const restore = page.getByRole('button', { name: 'Restore', exact: true });
-        const remove = page.getByRole('button', { name: 'Delete', exact: true });
-        await restore.or(remove).waitFor({ timeout: 10_000 });
-        if (await restore.isVisible()) {
-          await restore.click();
-          await remove.waitFor({ timeout: 10_000 });
+        // leftover from a failed run: restore if needed, then delete, so the demo data stays clean;
+        // a cleanup problem is reported but never hides the failure of the test itself
+        try {
+          await page.goto(`/plots/${plotId}`);
+          const restore = page.getByRole('button', { name: 'Restore', exact: true });
+          const remove = page.getByRole('button', { name: 'Delete', exact: true });
+          await restore.or(remove).waitFor({ timeout: 10_000 });
+          if (await restore.isVisible()) {
+            await restore.click();
+            await remove.waitFor({ timeout: 10_000 });
+          }
+          await remove.click();
+          await page.getByRole('dialog').getByRole('button', { name: 'Delete', exact: true }).click();
+          await expect(page).toHaveURL(/\/plots$/);
+        } catch (cleanupFailure) {
+          cleanupError = cleanupError ?? cleanupFailure;
+          console.warn(`cleanup of plot ${plotId} failed: ${String(cleanupFailure)}`);
         }
-        await remove.click();
-        await page.getByRole('dialog').getByRole('button', { name: 'Delete', exact: true }).click();
-        await expect(page).toHaveURL(/\/plots$/);
       }
     }
+    // reached only when the test itself passed: a plot left behind must still fail the run
+    if (cleanupError) throw cleanupError;
   });
 });

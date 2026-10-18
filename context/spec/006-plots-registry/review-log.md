@@ -30,3 +30,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `9cc8a6d..e2e7631` | PASS | — | minor: no `@Version`/row lock, so concurrent archive/restore may write two audit entries and archive-after-delete may 500; PlotPage tests only check button visibility; `setQueryData` + invalidate double refetch; a test helper builds SQL from constants |
+
+## Slice 5 — End-to-end flows and coverage floor
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `27bfa1f..397c4da` | PASS | — | minor: e2e captures the plot id after the heading check (a failure in between leaves a local leftover); cleanup errors can mask the original failure; archived delete asserts any 4xx instead of 409; treasurer card check uses a plot without notes |
