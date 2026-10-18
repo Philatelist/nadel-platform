@@ -25,3 +25,9 @@
 |---|---|---|---|---|
 | 1 | `39719cd..413ee10` | MAJOR_ISSUES | M1 `RolesPage.restoreName` sends the displayed (catalog) description, customising a standard description in Ukrainian | minor: `restoreDescription` sends the typed name and permissions; migration-rule test copies the SQL condition; fixed sleeps for no-audit checks; a custom description literally `base:…` renders as catalog text; duplicate `roleDescription` call |
 | 2 | + `c99e535` | PASS | M1 resolved (`restoreNameDescription` → `descriptionToSubmit`, tests) | minor: thin wrapper; no test for an already-customised description; round 1 minors open |
+
+## Slice 4 — End-to-end flows, phone header fix and coverage floor
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `c99e535..0abc642` | MAJOR_ISSUES | M1 `Layout.tsx:59` title keeps `order-1` from md up, so the desktop header shows the cluster before the title; M2 e2e cleanup uses a non-waiting `count()` and §2.3 #4 has no restore | minor: phone Tab order differs from visual order (Menu reached after Sign out); class order; audit row check may match older runs; context not closed if the first `try` fails |

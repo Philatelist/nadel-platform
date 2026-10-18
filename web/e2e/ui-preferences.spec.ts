@@ -212,6 +212,18 @@ test.describe('cooperative name as the title (Ukrainian UI)', () => {
       ]);
       expect(labelSize).toBeLessThan(titleSize);
 
+      // desktop order: the title first, the product label next to it, the controls on the right
+      const [titleBox, labelBox, controlsBox] = await Promise.all([
+        title.boundingBox(),
+        header.getByText('Наділ', { exact: true }).boundingBox(),
+        header.getByRole('group', { name: 'Тема' }).boundingBox(),
+      ]);
+      expect(titleBox).not.toBeNull();
+      expect(labelBox).not.toBeNull();
+      expect(controlsBox).not.toBeNull();
+      expect(titleBox!.x).toBeLessThan(labelBox!.x);
+      expect(titleBox!.x).toBeLessThan(controlsBox!.x);
+
       await page
         .locator('#app-menu nav')
         .getByRole('link', { name: 'Члени кооперативу', exact: true })
@@ -228,6 +240,22 @@ test.describe('base role descriptions (Ukrainian UI)', () => {
     page.locator('#app-menu nav').getByRole('link', { name, exact: true });
   const roleItems = (page: Page) => page.getByRole('main').getByRole('listitem');
   const STANDARD = 'Перегляд членів, ділянок і журналу змін';
+
+  // Opens the Treasurer form and restores the standard description if any custom text is stored.
+  async function restoreTreasurerDescription(page: Page) {
+    await page.goto('/roles');
+    const treasurer = roleItems(page).filter({ hasText: /^Казначей/ });
+    await expect(treasurer).toBeVisible();
+    await treasurer.getByRole('button', { name: 'Редагувати' }).click();
+    await expect(page.getByRole('button', { name: 'Зберегти' })).toBeVisible();
+    const restore = page.getByRole('button', { name: 'Повернути стандартний опис' });
+    if (await restore.isVisible()) {
+      await restore.click();
+      await expect(page.getByRole('status')).toHaveText('Збережено');
+    } else {
+      await page.getByRole('button', { name: 'Скасувати' }).click();
+    }
+  }
 
   async function expectAuditRow(page: Page, text: string | RegExp) {
     await expect(async () => {
@@ -246,44 +274,39 @@ test.describe('base role descriptions (Ukrainian UI)', () => {
     const restore = page.getByRole('button', { name: 'Повернути стандартний опис' });
 
     try {
-      await expect(roleItems(page).filter({ hasText: /^Голова/ })).toContainText('Повний доступ');
-      await expect(treasurer).toContainText(STANDARD);
-      await expect(roleItems(page).filter({ hasText: /^Член кооперативу/ })).toContainText(
-        'Лише власні дані',
-      );
+      try {
+        await expect(roleItems(page).filter({ hasText: /^Голова/ })).toContainText('Повний доступ');
+        await expect(treasurer).toContainText(STANDARD);
+        await expect(roleItems(page).filter({ hasText: /^Член кооперативу/ })).toContainText(
+          'Лише власні дані',
+        );
 
-      await treasurer.getByRole('button', { name: 'Редагувати' }).click();
-      await expect(restore).toHaveCount(0);
-      await page.getByLabel('Опис', { exact: true }).fill('Веде касу');
-      await page.getByRole('button', { name: 'Зберегти' }).click();
-      await expect(page.getByRole('status')).toHaveText('Збережено');
-      await expect(treasurer).toContainText('Веде касу');
-      await expect(treasurer).not.toContainText(STANDARD);
-
-      // the changed text is shown in English too
-      await page.getByRole('group', { name: 'Мова' }).getByRole('button', { name: 'en' }).click();
-      await expect(roleItems(page).filter({ hasText: /^Treasurer/ })).toContainText('Веде касу');
-      await page.getByRole('group', { name: 'Language' }).getByRole('button', { name: 'uk' }).click();
-
-      await treasurer.getByRole('button', { name: 'Редагувати' }).click();
-      await expect(restore).toBeVisible();
-      await restore.click();
-      await expect(page.getByRole('status')).toHaveText('Збережено');
-      await expect(treasurer).toContainText(STANDARD);
-      await expect(treasurer).not.toContainText('Веде касу');
-      await treasurer.getByRole('button', { name: 'Редагувати' }).click();
-      await expect(restore).toHaveCount(0);
-      await page.getByRole('button', { name: 'Скасувати' }).click();
-    } finally {
-      await page.goto('/roles');
-      if ((await treasurer.filter({ hasText: 'Веде касу' }).count()) > 0) {
         await treasurer.getByRole('button', { name: 'Редагувати' }).click();
+        await expect(restore).toHaveCount(0);
+        await page.getByLabel('Опис', { exact: true }).fill('Веде касу');
+        await page.getByRole('button', { name: 'Зберегти' }).click();
+        await expect(page.getByRole('status')).toHaveText('Збережено');
+        await expect(treasurer).toContainText('Веде касу');
+        await expect(treasurer).not.toContainText(STANDARD);
+
+        // the changed text is shown in English too
+        await page.getByRole('group', { name: 'Мова' }).getByRole('button', { name: 'en' }).click();
+        await expect(roleItems(page).filter({ hasText: /^Treasurer/ })).toContainText('Веде касу');
+        await page.getByRole('group', { name: 'Language' }).getByRole('button', { name: 'uk' }).click();
+
+        await treasurer.getByRole('button', { name: 'Редагувати' }).click();
+        await expect(restore).toBeVisible();
         await restore.click();
         await expect(page.getByRole('status')).toHaveText('Збережено');
+        await expect(treasurer).toContainText(STANDARD);
+        await expect(treasurer).not.toContainText('Веде касу');
+        await treasurer.getByRole('button', { name: 'Редагувати' }).click();
+        await expect(restore).toHaveCount(0);
+        await page.getByRole('button', { name: 'Скасувати' }).click();
+      } finally {
+        await restoreTreasurerDescription(page);
       }
-    }
 
-    try {
       await menuLink(page, 'Журнал змін').click();
       await page.getByLabel('Вид запису').selectOption({ label: 'Роль' });
       await expectAuditRow(page, `${STANDARD} → Веде касу`);
@@ -313,7 +336,11 @@ test.describe('base role descriptions (Ukrainian UI)', () => {
         'Read access to members, plots and audit',
       );
     } finally {
-      await page.context().close();
+      try {
+        await restoreTreasurerDescription(page);
+      } finally {
+        await page.context().close();
+      }
     }
   });
 });
