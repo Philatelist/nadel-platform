@@ -38,3 +38,4 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `46b47b5..d75dd4a` | MAJOR_ISSUES | M1 `RoleDescriptionsAcceptanceTests` asserts all historical audit changes of the shared Treasurer role with `containsExactly` and reads values without null checks — fails when `RolesTests` runs first (reproduced with reverse order) | minor: fully qualified `post`/`delete`; registry label "negative" for the long-name row; registry could note the localised audit display is covered by e2e |
+| 2 | + `7ef6e94` | PASS | M1 resolved (scoped audit window, null-safe, both run orders green) | minor: window assumes no late async audit event; newest-first ordering assumed |

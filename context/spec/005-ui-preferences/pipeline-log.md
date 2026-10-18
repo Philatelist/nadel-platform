@@ -1,7 +1,7 @@
 # Pipeline log — 005 UI preferences
 
 - Status: running
-- Phase: 2 — branch and specs
+- Phase: 5 — publish
 - Branch: 005-ui-preferences · Base: main @ 5999343
 - Requirement: docs/features/005-ui-preferences.md (the run was first started with the stale path `docs/features/005-plots-registry.md`; the user re-ran it with this document)
 - Autonomy: minimal (.claude/feature-pipeline.yml)
@@ -59,3 +59,11 @@ Same as 004 (see `context/spec/004-role-names/pipeline-log.md`), re-checked: bas
 - Gap fix (Layout: Menu button on the title row below md) verified: 22 targeted e2e passed. Slice 4 verify: make check green (backend 275; unit 56/5/96), coverage 0.9402 → floor 0.93→0.94, make e2e 43 passed.
 - Slice 4 committed 0abc642; review r1 MAJOR_ISSUES (M1 desktop header order, M2 e2e cleanup) → fix 46b47b5 (make e2e 43 passed) → r2 PASS. All slice reviews PASS — Slice 5 gate open.
 - Slice 5 (testing-expert): RoleDescriptionsAcceptanceTests (3) + e2e ui-preferences-acceptance.spec.ts (5); no GAP; make check green (backend 278, floor 0.94 met), make e2e 48 passed.
+- Slice 5 committed d75dd4a; review r1 MAJOR_ISSUES (order-dependent acceptance test) → fix 7ef6e94 (green in both run orders; `./mvnw verify` 278, floor met) → r2 PASS. All slice reviews PASS.
+
+## Phase 4 — verify
+
+- UI checked in Ukrainian with the project's Playwright on the local stack; screenshots `docs/screenshots/005-ui-preferences-*.png`; Dark persists across navigation; tab titles "<page> — Demo Garden Cooperative". (A first screenshot attempt looked like a bug — "Темна" matched "Системна" in a non-exact lookup in my script; not an app issue.)
+- Acceptance criteria: 17 of 17 verified. Status: Completed.
+- Full suite: `make check` green at d75dd4a (backend 278 after the fix via `./mvnw verify` at 7ef6e94, floor 0.94 met; unit 56/5/96); `make e2e` 48 passed at d75dd4a (the later fix only touched a backend test). Baseline 0 failures → no regressions.
+- Product docs: none needed.

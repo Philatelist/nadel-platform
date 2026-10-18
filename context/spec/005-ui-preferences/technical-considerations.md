@@ -1,7 +1,7 @@
 # Technical Specification: UI Preferences
 
 - **Functional Specification:** [functional-spec.md](functional-spec.md) (source: `docs/features/005-ui-preferences.md`)
-- **Status:** Draft
+- **Status:** Completed
 - **Author(s):** Alex Usov
 
 ---
@@ -25,7 +25,7 @@
 | Item | Change |
 |---|---|
 | `web/src/theme.ts` | `THEMES = ['system','light','dark']`, `ThemeChoice`, `STORAGE_KEY = 'nadel.theme'`, `readTheme()` (try/catch, invalid → `system`), `writeTheme()` (try/catch, swallow), `applyTheme()` (set/remove `data-theme`, update `theme-color` metas) |
-| `web/src/theme.tsx` (provider) | `ThemeProvider`/`useTheme` like `I18nProvider`; wrapped in `main.tsx` |
+| `web/src/themeContext.tsx` (provider) | `ThemeProvider`/`useTheme` like `I18nProvider`; wrapped in `main.tsx` |
 | `web/index.html` | inline IIFE in `<head>` (English comment, try/catch): reads `nadel.theme`, sets `data-theme` for `light`/`dark`, sets the `theme-color` meta; `<title>` stays the product name |
 | `web/src/index.css` | light tokens in `@theme`; dark tokens in `:root[data-theme='dark']` and `@media (prefers-color-scheme: dark) { :root:not([data-theme='light']) }` (identical bodies, `color-scheme: dark`); `:root[data-theme='light'] { color-scheme: light }`; `:root { color-scheme: light dark }` |
 | `web/src/theme.test.ts` | both dark blocks equal the dark tokens and each other; script/meta colours equal `palette.*.background` |
