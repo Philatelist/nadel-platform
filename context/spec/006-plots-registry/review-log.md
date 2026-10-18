@@ -36,3 +36,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `27bfa1f..397c4da` | PASS | — | minor: e2e captures the plot id after the heading check (a failure in between leaves a local leftover); cleanup errors can mask the original failure; archived delete asserts any 4xx instead of 409; treasurer card check uses a plot without notes |
+
+## Slice 6 — Feature Testing & Regression
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `397c4da..4892a23` | PASS | — | minor: criterion ids differ between Javadoc, registry and an e2e title; demo plot 12 restored by SQL leaves an unpaired audit entry in the test DB; two different demo-count expectations; fully qualified `Collections`; a backend test name claims a sotka conversion done on the client |

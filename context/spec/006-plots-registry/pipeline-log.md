@@ -1,7 +1,7 @@
 # Pipeline log — 006 Plots registry
 
 - Status: running
-- Phase: 2 — branch and specs
+- Phase: 5 — publish
 - Branch: 006-plots-registry · Base: origin/main @ 48cd8e0
 - Requirement: docs/features/006-plots-registry.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
@@ -68,3 +68,11 @@ Same as 004/005 (see `context/spec/005-ui-preferences/pipeline-log.md`). Re-chec
 - AUTO: functional spec 2.3 archived-delete criterion reworded to match the built behaviour (the card hides Delete for archived plots; the server refuses with PLOT_ARCHIVED) (rule: the UI never offers an action the server will refuse; wording change before verification, not a behaviour change).
 - AUTO: §2.1 #1 reworded — the list shows the area number under the "Площа, соток" column header; the card shows "6 соток" (rule: unit in the column header is the table convention; wording change, no behaviour change).
 - Slice 6 (testing-expert): PlotsRegistryAcceptanceTests (5) + web/e2e/plots-acceptance.spec.ts (6) + plots.spec.ts review-note fixes; no GAP; make check green (backend 427, coverage 0.9586, floor 0.95), make e2e 57 passed; no app code changed.
+- Slice 6 committed 4892a23; review r1 PASS. All slice reviews PASS.
+
+## Phase 4 — verify
+
+- UI checked in Ukrainian with the project's Playwright on the local stack (read-only): screenshots `docs/screenshots/006-plots-registry-*.png` (treasurer list and card, member list and card, common-land filter, new-plot form). A first card screenshot was taken before navigation finished (script timing); re-taken.
+- Acceptance criteria: 23 of 23 verified. Status: Completed.
+- Full suite on 4892a23 (final code): `make check` green (backend 427, unit 56/42/122, coverage 0.9586, floor 0.95), `make e2e` 57 passed. Baseline: 0 failing tests but the coverage check failed on main (0.9393 < 0.94); the branch is above its raised floor → no regressions.
+- Product docs: suggest `/awos:architecture` to note that plots are a registry module with CRUD and the map moved to `/plots/map` (not run).
