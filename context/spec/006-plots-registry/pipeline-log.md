@@ -1,11 +1,11 @@
 # Pipeline log — 006 Plots registry
 
 - Status: running
-- Phase: 5 — publish
+- Phase: 6 — review run
 - Branch: 006-plots-registry · Base: origin/main @ 48cd8e0
 - Requirement: docs/features/006-plots-registry.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
-- Publish: pr+checks · PR: — · Checks: —
+- Publish: pr+checks · PR: https://github.com/Philatelist/nadel-platform/pull/24 · Checks: green (run 39151864414)
 - Review run: on (pending)
 
 ## Project facts
@@ -76,3 +76,16 @@ Same as 004/005 (see `context/spec/005-ui-preferences/pipeline-log.md`). Re-chec
 - Acceptance criteria: 23 of 23 verified. Status: Completed.
 - Full suite on 4892a23 (final code): `make check` green (backend 427, unit 56/42/122, coverage 0.9586, floor 0.95), `make e2e` 57 passed. Baseline: 0 failing tests but the coverage check failed on main (0.9393 < 0.94); the branch is above its raised floor → no regressions.
 - Product docs: suggest `/awos:architecture` to note that plots are a registry module with CRUD and the map moved to `/plots/map` (not run).
+
+## Phase 5 — publish
+
+- Pushed `006-plots-registry`; PR https://github.com/Philatelist/nadel-platform/pull/24 — "feat(plots): plots registry — list, card, create, edit, archive and delete".
+- Checks: Backend, Clients, End-to-end, SAST, Security — all green (run 39151864414). No CI fixes, no re-runs.
+
+## Final report
+
+- Commits: f36a3d5 specs · aeba3dd S1 · 441f9b1 S2 · 9cc8a6d S3 · e2e7631 S4 · 27bfa1f S3 fix · 397c4da S5 · 4892a23 S6 · verification · (this log commit).
+- Acceptance criteria: 23/23 verified (two criteria reworded to match built behaviour: list area under the column header; no Delete on an archived card).
+- Reviews: S1 PASS; S2 PASS; S3 2 rounds (M1 blind writes by an edit-only role → all writes need PLOTS_VIEW + PLOTS_EDIT) PASS; S4 PASS; S5 PASS; S6 PASS.
+- Full suite vs baseline: baseline 0 failing tests but coverage 0.9393 below the 0.94 floor on main; branch 427 backend tests green, coverage 0.9586, floor raised to 0.95; e2e 57.
+- Follow-ups: flaky floor history on main; 005 spec member-menu text historical; minor review notes in review-log.md; optional `/awos:architecture`.
