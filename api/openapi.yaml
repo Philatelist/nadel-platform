@@ -543,11 +543,123 @@ paths:
   /plots:
     get:
       tags: [plots]
-      operationId: getPlots
+      operationId: listPlots
+      summary: List plots
+      description: |
+        Returns a page of plots and common land of the current cooperative, sorted naturally by number
+        (`2` before `10`, `12` before `12а`). Every member of the cooperative may call it; the platform operator
+        has no cooperative data: 403.
+        `q` is a case-insensitive substring match against the number and the street, and, for callers with
+        `PLOTS_VIEW`, the cadastral number. `status` is the displayed status (common land is always `GREY`).
+        Archived plots are excluded unless `includeArchived` is true.
+        A caller without `PLOTS_VIEW` sees only `id`, `number`, `kind`, `status`, `street` and `archived`: `areaM2`,
+        `cadastralNumber` and `hasBuilding` are absent, `q` does not match the cadastral number, and
+        `includeArchived` is ignored (archived plots are never listed).
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 100
+        - name: kind
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/PlotKind'
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/PlotStatus'
+        - name: includeArchived
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+        - name: page
+          in: query
+          required: false
+          description: Zero-based page index
+          schema:
+            type: integer
+            format: int32
+            minimum: 0
+            default: 0
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlotPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      tags: [plots]
+      operationId: createPlot
+      summary: Create a plot or common land
+      description: |
+        Creates a plot or common land in the current cooperative. Requires the `PLOTS_VIEW` and `PLOTS_EDIT` permissions
+        (an editor must be able to see what they write). The new plot is active and has the status `GREY`.
+        The number is trimmed and must be unique among the active plots of the cooperative, ignoring upper and lower
+        case (409 `PLOT_NUMBER_TAKEN`, field `number`). The cadastral number, when given, must look like
+        `1234567890:12:345:6789` (400 `CADASTRAL_INVALID`) and be unique in the cooperative, archived plots included
+        (409 `CADASTRAL_NUMBER_TAKEN`, field `cadastralNumber`). The area of a plot must be greater than zero and
+        that of common land may be zero, with at most two decimal places and at most eight integer digits
+        (400 `AREA_INVALID`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlotInput'
+      responses:
+        '201':
+          description: Created
+          headers:
+            Location:
+              description: URL of the created plot
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlotDetails'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /plots/map:
+    get:
+      tags: [plots]
+      operationId: getPlotMap
       summary: Cooperative plots as GeoJSON for the map
       description: |
-        Returns all plots and common land of the current cooperative with polygons and debt status.
-        Members see the number and status of every plot, but the debt amount only for their own plots (from phase 1).
+        Returns all active plots and common land of the current cooperative with polygons and status. Archived plots
+        are not included. The number, kind and status of every plot are visible to every member of the cooperative;
+        `areaM2` and `debt` are present only for callers with `PLOTS_VIEW` (own plots join them later) and are omitted
+        for everyone else. The platform operator has no cooperative data: 403.
       responses:
         '200':
           description: OK
@@ -557,6 +669,177 @@ paths:
                 $ref: '#/components/schemas/PlotFeatureCollection'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /plots/{id}:
+    get:
+      tags: [plots]
+      operationId: getPlot
+      summary: Plot card
+      description: |
+        Returns one plot or common land of the current cooperative. Every member of the cooperative may call it.
+        A caller without `PLOTS_VIEW` gets only `id`, `number`, `kind`, `status`, `street` and `archived`, and the
+        answer for an archived plot is 404. A plot of another cooperative is 404, exactly as for an id that does
+        not exist.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlotDetails'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags: [plots]
+      operationId: updatePlot
+      summary: Update a plot or common land
+      description: |
+        Replaces all editable fields of the plot (full replacement; optional fields absent from the body are
+        cleared). Requires the `PLOTS_VIEW` and `PLOTS_EDIT` permissions, so that an editor never overwrites fields
+        they cannot see. An archived plot can be edited too; its number is then not
+        checked against the active plots, and restoring it checks the number again.
+        The same rules apply as when creating: 409 `PLOT_NUMBER_TAKEN`, 409 `CADASTRAL_NUMBER_TAKEN`,
+        400 `CADASTRAL_INVALID`, 400 `AREA_INVALID`. A change that alters nothing is accepted and not audited.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlotInput'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlotDetails'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+    delete:
+      tags: [plots]
+      operationId: deletePlot
+      summary: Delete a plot or common land
+      description: |
+        Removes a plot that was created by mistake, together with its status. Requires `PLOTS_VIEW` and `PLOTS_EDIT`. Only an active
+        plot can be deleted; an archived plot is refused with 409 `PLOT_ARCHIVED` and must be restored first. The
+        deletion is audited.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Deleted
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /plots/{id}/archive:
+    post:
+      tags: [plots]
+      operationId: archivePlot
+      summary: Archive a plot or common land
+      description: |
+        Moves the plot to the archive: it is hidden from the default list and its number becomes free for a new
+        plot. Archiving an already archived plot is a no-op and is not audited. Requires `PLOTS_VIEW` and `PLOTS_EDIT`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlotDetails'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /plots/{id}/restore:
+    post:
+      tags: [plots]
+      operationId: restorePlot
+      summary: Restore an archived plot or common land
+      description: |
+        Brings an archived plot back to the default list. The number is checked again: when another active plot has
+        taken it meanwhile, the answer is 409 `PLOT_NUMBER_TAKEN`. Restoring an active plot is a no-op and is not
+        audited. Requires `PLOTS_VIEW` and `PLOTS_EDIT`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlotDetails'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
 
 components:
   securitySchemes:
@@ -610,7 +893,10 @@ components:
         cooperative (code `EMAIL_TAKEN`, with `errors[{field: email}]`), the action would leave the cooperative
         without an active chairman (code `LAST_CHAIRMAN`), the role name is already used (code `ROLE_NAME_TAKEN`),
         the role is still given to members (code `ROLE_IN_USE`), or a base role cannot be deleted or, for the Chairman
-        role, have its permissions changed (code `BASE_ROLE_IMMUTABLE`)
+        role, have its permissions changed (code `BASE_ROLE_IMMUTABLE`), another active plot already has the number
+        (code `PLOT_NUMBER_TAKEN`, with `errors[{field: number}]`), or another plot of the cooperative, archived ones
+        included, already has the cadastral number (code `CADASTRAL_NUMBER_TAKEN`, with
+        `errors[{field: cadastralNumber}]`), or an archived plot is deleted (code `PLOT_ARCHIVED`)
       content:
         application/problem+json:
           schema:
@@ -924,11 +1210,16 @@ components:
         - ROLE_CREATED
         - ROLE_UPDATED
         - ROLE_DELETED
+        - PLOT_CREATED
+        - PLOT_UPDATED
+        - PLOT_ARCHIVED
+        - PLOT_RESTORED
+        - PLOT_DELETED
 
     AuditEntityType:
       type: string
       description: Kind of the entity an audit entry is about
-      enum: [MEMBER, ROLE]
+      enum: [MEMBER, ROLE, PLOT]
 
     AuditFieldChange:
       type: object
@@ -1048,6 +1339,112 @@ components:
       enum: [RED, YELLOW, GREEN, GREY]
       description: Map color, see docs/domain/money-rules.md, section 9
 
+    PlotSummary:
+      type: object
+      description: |
+        A plot or common land in the list. `areaM2`, `cadastralNumber` and `hasBuilding` are present only for callers
+        who may see the details of the plot (`PLOTS_VIEW`); `street` is absent when the plot has none.
+      required: [id, number, kind, status, archived]
+      properties:
+        id:
+          type: string
+          format: uuid
+        number:
+          type: string
+        street:
+          type: string
+        kind:
+          $ref: '#/components/schemas/PlotKind'
+        status:
+          $ref: '#/components/schemas/PlotStatus'
+        archived:
+          type: boolean
+        areaM2:
+          type: number
+          description: Area in square metres, at most two decimal places
+        cadastralNumber:
+          type: string
+        hasBuilding:
+          type: boolean
+
+    PlotDetails:
+      description: |
+        The plot card: everything in `PlotSummary` plus `notes`, `archivedAt`, `createdAt` and `updatedAt`.
+        `notes`, `createdAt` and `updatedAt` are present only for callers who may see the details of the plot
+        (`PLOTS_VIEW`); `archivedAt` is present for an archived plot.
+      allOf:
+        - $ref: '#/components/schemas/PlotSummary'
+        - type: object
+          properties:
+            notes:
+              type: string
+            archivedAt:
+              type: string
+              format: date-time
+            createdAt:
+              type: string
+              format: date-time
+            updatedAt:
+              type: string
+              format: date-time
+
+    PlotInput:
+      type: object
+      description: |
+        Editable fields of a plot or common land (full replacement on update). The number is trimmed; blank optional
+        text becomes empty. The area is never rounded: more than two decimal places is rejected (`AREA_INVALID`).
+        The cadastral number format is checked by the server (`CADASTRAL_INVALID`), not by the schema.
+      required: [number, kind, areaM2]
+      properties:
+        number:
+          type: string
+          minLength: 1
+          maxLength: 20
+          description: Free text such as `12`, `12а` or `R-1`; unique among the active plots, ignoring case
+        street:
+          type: string
+          maxLength: 100
+        kind:
+          $ref: '#/components/schemas/PlotKind'
+        areaM2:
+          type: number
+          description: >-
+            Area in square metres with at most two decimal places and at most eight integer digits; greater than
+            zero for a plot, zero or more for common land
+        cadastralNumber:
+          type: string
+          maxLength: 22
+          description: Optional, of the form `1234567890:12:345:6789`; unique in the cooperative, archived plots included
+        hasBuilding:
+          type: boolean
+          default: false
+          description: Whether a building stands on the plot; reference information only
+        notes:
+          type: string
+          maxLength: 2000
+
+    PlotPage:
+      type: object
+      required: [items, page, size, totalItems, totalPages]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlotSummary'
+        page:
+          type: integer
+          format: int32
+          description: Zero-based page index
+        size:
+          type: integer
+          format: int32
+        totalItems:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+
     PolygonGeometry:
       type: object
       required: [type, coordinates]
@@ -1068,7 +1465,7 @@ components:
 
     PlotProperties:
       type: object
-      required: [number, kind, areaM2, status]
+      required: [number, kind, status]
       properties:
         number:
           type: string
@@ -1079,6 +1476,7 @@ components:
         areaM2:
           type: number
           format: double
+          description: Absent for callers without `PLOTS_VIEW`, like `debt`
         status:
           $ref: '#/components/schemas/PlotStatus'
         debt:
@@ -1147,6 +1545,8 @@ components:
           description: >-
             Field error code: `REQUIRED` (missing or blank), `TOO_LONG` (over the maximum length or item count),
             `INVALID` (wrong format, for example an email), `PHONE_INVALID` (not a valid phone number),
-            `CHANNEL_CONTACT_MISSING` (the chosen delivery channel has no contact to deliver to)
+            `CHANNEL_CONTACT_MISSING` (the chosen delivery channel has no contact to deliver to),
+            `CADASTRAL_INVALID` (not of the form `NNNNNNNNNN:NN:NNN:NNNN`), `AREA_INVALID` (more than two decimal
+            places, too large, or not greater than zero for a plot)
         message:
           type: string

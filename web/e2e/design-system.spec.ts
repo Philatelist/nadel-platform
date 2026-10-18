@@ -220,7 +220,7 @@ test.describe('page frame (2.6)', () => {
     await expect(language.getByRole('button')).toHaveCount(2);
 
     const menu = page.locator('#app-menu nav');
-    await expect(menu.getByRole('link')).toHaveCount(3);
+    await expect(menu.getByRole('link')).toHaveCount(4); // Plots, Members, Roles, Audit log
     await page.goto('/members');
     await expect(menu.locator('a[aria-current="page"]')).toHaveCount(1);
     expect(
@@ -248,7 +248,7 @@ test.describe('page frame (2.6)', () => {
     });
   });
 
-  test('plain member sees the header and the account page, with no side menu and no Menu button', async ({
+  test('plain member sees the header and the account page, with a menu holding only Plots', async ({
     page,
   }) => {
     await loginAs(page, 'member@demo.local');
@@ -259,8 +259,9 @@ test.describe('page frame (2.6)', () => {
     await expect(page.getByRole('banner').getByText('Nadel', { exact: true })).toBeVisible();
     await expect(page.getByRole('banner').getByRole('button', { name: 'Sign out' })).toBeVisible();
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-    await expect(page.locator('#app-menu')).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Menu', exact: true })).toHaveCount(0);
+    await expect(page.locator('#app-menu nav').getByRole('link')).toHaveText(['Plots']);
+    // the Menu button is a phone-only control; this is a desktop viewport
+    await expect(page.getByRole('button', { name: 'Menu', exact: true })).toBeHidden();
   });
 });
 
@@ -296,7 +297,12 @@ test.describe('keyboard (2.8)', () => {
 
     const names = visited.map((v) => v.name);
     expect(names).toContain('Add member');
-    expect(visited.filter((v) => v.inMenu).map((v) => v.name)).toEqual(['Members', 'Roles', 'Audit log']);
+    expect(visited.filter((v) => v.inMenu).map((v) => v.name)).toEqual([
+      'Plots',
+      'Members',
+      'Roles',
+      'Audit log',
+    ]);
     expect(visited.some((v) => v.type === 'search')).toBe(true);
     for (const v of visited) {
       expect(v.outline, `focus outline on "${v.name}"`).not.toBe('none');

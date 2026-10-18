@@ -11,11 +11,13 @@ import { Button } from './ui';
 
 interface NavItem {
   to: string;
-  label: 'members' | 'roles' | 'audit';
-  permission: Permission;
+  label: 'plots' | 'members' | 'roles' | 'audit';
+  /** Omitted: shown to every signed-in member (the server decides what they may see). */
+  permission?: Permission;
 }
 
 const NAV_ITEMS: readonly NavItem[] = [
+  { to: '/plots', label: 'plots' },
   { to: '/members', label: 'members', permission: 'MEMBERS_VIEW' },
   { to: '/roles', label: 'roles', permission: 'ROLES_MANAGE' },
   { to: '/audit', label: 'audit', permission: 'AUDIT_VIEW' },
@@ -35,7 +37,7 @@ export function Layout() {
   const menuButton = useRef<HTMLButtonElement>(null);
 
   const title = me.tenant?.name ?? t.app.name;
-  const items = NAV_ITEMS.filter((item) => me.permissions.includes(item.permission));
+  const items = NAV_ITEMS.filter((item) => !item.permission || me.permissions.includes(item.permission));
   const hasMenu = items.length > 0;
 
   useEffect(() => {

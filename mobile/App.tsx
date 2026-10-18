@@ -27,7 +27,9 @@ export default function App() {
           {STATUSES.map((s) => (
             <View key={s} style={styles.legendItem}>
               <View style={[styles.swatch, { backgroundColor: status[s] }]} />
-              <Text style={[styles.legendText, { color: colors.inkMuted }]}>{t.status[s]}</Text>
+              <Text style={[styles.legendText, { color: colors.inkMuted }]}>
+                {s === 'GREY' ? t.status.GREY_COMMON : t.status[s]}
+              </Text>
             </View>
           ))}
         </View>

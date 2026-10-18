@@ -10,22 +10,34 @@
  * OpenAPI spec version: 0.1.0
  */
 import {
+  useMutation,
   useQuery
 } from '@tanstack/react-query';
 import type {
   DataTag,
   DefinedInitialDataOptions,
   DefinedUseQueryResult,
+  MutationFunction,
   QueryClient,
   QueryFunction,
   QueryKey,
   UndefinedInitialDataOptions,
+  UseMutationOptions,
+  UseMutationResult,
   UseQueryOptions,
   UseQueryResult
 } from '@tanstack/react-query';
 
 import type {
+  BadRequestResponse,
+  ConflictResponse,
+  ForbiddenResponse,
+  ListPlotsParams,
+  NotFoundResponse,
+  PlotDetails,
   PlotFeatureCollection,
+  PlotInput,
+  PlotPage,
   UnauthorizedResponse
 } from '../model';
 
@@ -51,22 +63,36 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   return result;
 };
 
-export const getGetPlotsUrl = () => {
+export const getListPlotsUrl = (params?: ListPlotsParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/v1/plots`
+  return stringifiedParams.length > 0 ? `/api/v1/plots?${stringifiedParams}` : `/api/v1/plots`
 }
 
 /**
- * Returns all plots and common land of the current cooperative with polygons and debt status.
- * Members see the number and status of every plot, but the debt amount only for their own plots (from phase 1).
- * @summary Cooperative plots as GeoJSON for the map
+ * Returns a page of plots and common land of the current cooperative, sorted naturally by number
+ * (`2` before `10`, `12` before `12а`). Every member of the cooperative may call it; the platform operator
+ * has no cooperative data: 403.
+ * `q` is a case-insensitive substring match against the number and the street, and, for callers with
+ * `PLOTS_VIEW`, the cadastral number. `status` is the displayed status (common land is always `GREY`).
+ * Archived plots are excluded unless `includeArchived` is true.
+ * A caller without `PLOTS_VIEW` sees only `id`, `number`, `kind`, `status`, `street` and `archived`: `areaM2`,
+ * `cadastralNumber` and `hasBuilding` are absent, `q` does not match the cadastral number, and
+ * `includeArchived` is ignored (archived plots are never listed).
+ * @summary List plots
  */
-export const getPlots = async ( options?: Parameters<typeof nadelFetch>[1]): Promise<PlotFeatureCollection> => {
+export const listPlots = async (params?: ListPlotsParams, options?: Parameters<typeof nadelFetch>[1]): Promise<PlotPage> => {
 
-  return nadelFetch<PlotFeatureCollection>(getGetPlotsUrl(),
+  return nadelFetch<PlotPage>(getListPlotsUrl(params),
   {
     ...options,
     method: 'GET'
@@ -79,69 +105,69 @@ export const getPlots = async ( options?: Parameters<typeof nadelFetch>[1]): Pro
 
 
 
-export const getGetPlotsQueryKey = () => {
+export const getListPlotsQueryKey = (params?: ListPlotsParams,) => {
     return [
-    `/api/v1/plots`
+    `/api/v1/plots`, ...(params ? [params] : [])
     ] as const;
     }
 
 
-export const getGetPlotsQueryOptions = <TData = Awaited<ReturnType<typeof getPlots>>, TError = UnauthorizedResponse>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPlots>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+export const getListPlotsQueryOptions = <TData = Awaited<ReturnType<typeof listPlots>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>(params?: ListPlotsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listPlots>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getGetPlotsQueryKey();
+  const queryKey =  queryOptions?.queryKey ?? getListPlotsQueryKey(params);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPlots>>> = ({ signal }) => getPlots({ signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listPlots>>> = ({ signal }) => listPlots(params, { signal, ...requestOptions });
 
 
 
 
 
-   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPlots>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listPlots>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
 }
 
-export type GetPlotsQueryResult = NonNullable<Awaited<ReturnType<typeof getPlots>>>
-export type GetPlotsQueryError = UnauthorizedResponse
+export type ListPlotsQueryResult = NonNullable<Awaited<ReturnType<typeof listPlots>>>
+export type ListPlotsQueryError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse
 
 
-export function useGetPlots<TData = Awaited<ReturnType<typeof getPlots>>, TError = UnauthorizedResponse>(
-  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPlots>>, TError, TData>> & Pick<
+export function useListPlots<TData = Awaited<ReturnType<typeof listPlots>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>(
+ params: undefined |  ListPlotsParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listPlots>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof getPlots>>,
+          Awaited<ReturnType<typeof listPlots>>,
           TError,
-          Awaited<ReturnType<typeof getPlots>>
+          Awaited<ReturnType<typeof listPlots>>
         > , 'initialData'
       >, request?: SecondParameter<typeof nadelFetch>}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetPlots<TData = Awaited<ReturnType<typeof getPlots>>, TError = UnauthorizedResponse>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPlots>>, TError, TData>> & Pick<
+export function useListPlots<TData = Awaited<ReturnType<typeof listPlots>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>(
+ params?: ListPlotsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listPlots>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof getPlots>>,
+          Awaited<ReturnType<typeof listPlots>>,
           TError,
-          Awaited<ReturnType<typeof getPlots>>
+          Awaited<ReturnType<typeof listPlots>>
         > , 'initialData'
       >, request?: SecondParameter<typeof nadelFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetPlots<TData = Awaited<ReturnType<typeof getPlots>>, TError = UnauthorizedResponse>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPlots>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+export function useListPlots<TData = Awaited<ReturnType<typeof listPlots>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>(
+ params?: ListPlotsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listPlots>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
- * @summary Cooperative plots as GeoJSON for the map
+ * @summary List plots
  */
 
-export function useGetPlots<TData = Awaited<ReturnType<typeof getPlots>>, TError = UnauthorizedResponse>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPlots>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+export function useListPlots<TData = Awaited<ReturnType<typeof listPlots>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>(
+ params?: ListPlotsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listPlots>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
-  const queryOptions = getGetPlotsQueryOptions(options)
+  const queryOptions = getListPlotsQueryOptions(params,options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 
@@ -153,3 +179,627 @@ export function useGetPlots<TData = Awaited<ReturnType<typeof getPlots>>, TError
 
 
 
+export const getCreatePlotUrl = () => {
+
+
+
+
+  return `/api/v1/plots`
+}
+
+/**
+ * Creates a plot or common land in the current cooperative. Requires the `PLOTS_VIEW` and `PLOTS_EDIT` permissions
+ * (an editor must be able to see what they write). The new plot is active and has the status `GREY`.
+ * The number is trimmed and must be unique among the active plots of the cooperative, ignoring upper and lower
+ * case (409 `PLOT_NUMBER_TAKEN`, field `number`). The cadastral number, when given, must look like
+ * `1234567890:12:345:6789` (400 `CADASTRAL_INVALID`) and be unique in the cooperative, archived plots included
+ * (409 `CADASTRAL_NUMBER_TAKEN`, field `cadastralNumber`). The area of a plot must be greater than zero and
+ * that of common land may be zero, with at most two decimal places and at most eight integer digits
+ * (400 `AREA_INVALID`).
+ * @summary Create a plot or common land
+ */
+export const createPlot = async (plotInput: PlotInput, options?: Parameters<typeof nadelFetch>[1]): Promise<PlotDetails> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return nadelFetch<PlotDetails>(getCreatePlotUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(plotInput)
+  }
+);}
+
+
+
+
+
+export const getCreatePlotMutationKey = () => ['createPlot'] as const;
+
+export const getCreatePlotMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createPlot>>, TError,CreatePlotMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createPlot>>, TError,CreatePlotMutationVariables, TContext> => {
+
+const mutationKey = getCreatePlotMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createPlot>>, CreatePlotMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  createPlot(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreatePlotMutationResult = NonNullable<Awaited<ReturnType<typeof createPlot>>>
+    export type CreatePlotMutationBody = PlotInput
+    export type CreatePlotMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse
+    export type CreatePlotMutationVariables = {data: PlotInput}
+
+    /**
+ * @summary Create a plot or common land
+ */
+export const useCreatePlot = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createPlot>>, TError,CreatePlotMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof createPlot>>,
+        TError,
+        CreatePlotMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreatePlotMutationOptions(options), queryClient);
+    }
+    export const getGetPlotMapUrl = () => {
+
+
+
+
+  return `/api/v1/plots/map`
+}
+
+/**
+ * Returns all active plots and common land of the current cooperative with polygons and status. Archived plots
+ * are not included. The number, kind and status of every plot are visible to every member of the cooperative;
+ * `areaM2` and `debt` are present only for callers with `PLOTS_VIEW` (own plots join them later) and are omitted
+ * for everyone else. The platform operator has no cooperative data: 403.
+ * @summary Cooperative plots as GeoJSON for the map
+ */
+export const getPlotMap = async ( options?: Parameters<typeof nadelFetch>[1]): Promise<PlotFeatureCollection> => {
+
+  return nadelFetch<PlotFeatureCollection>(getGetPlotMapUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPlotMapQueryKey = () => {
+    return [
+    `/api/v1/plots/map`
+    ] as const;
+    }
+
+
+export const getGetPlotMapQueryOptions = <TData = Awaited<ReturnType<typeof getPlotMap>>, TError = UnauthorizedResponse | ForbiddenResponse>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPlotMap>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPlotMapQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPlotMap>>> = ({ signal }) => getPlotMap({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPlotMap>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetPlotMapQueryResult = NonNullable<Awaited<ReturnType<typeof getPlotMap>>>
+export type GetPlotMapQueryError = UnauthorizedResponse | ForbiddenResponse
+
+
+export function useGetPlotMap<TData = Awaited<ReturnType<typeof getPlotMap>>, TError = UnauthorizedResponse | ForbiddenResponse>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPlotMap>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getPlotMap>>,
+          TError,
+          Awaited<ReturnType<typeof getPlotMap>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetPlotMap<TData = Awaited<ReturnType<typeof getPlotMap>>, TError = UnauthorizedResponse | ForbiddenResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPlotMap>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getPlotMap>>,
+          TError,
+          Awaited<ReturnType<typeof getPlotMap>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetPlotMap<TData = Awaited<ReturnType<typeof getPlotMap>>, TError = UnauthorizedResponse | ForbiddenResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPlotMap>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Cooperative plots as GeoJSON for the map
+ */
+
+export function useGetPlotMap<TData = Awaited<ReturnType<typeof getPlotMap>>, TError = UnauthorizedResponse | ForbiddenResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPlotMap>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetPlotMapQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export const getGetPlotUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/plots/${id}`
+}
+
+/**
+ * Returns one plot or common land of the current cooperative. Every member of the cooperative may call it.
+ * A caller without `PLOTS_VIEW` gets only `id`, `number`, `kind`, `status`, `street` and `archived`, and the
+ * answer for an archived plot is 404. A plot of another cooperative is 404, exactly as for an id that does
+ * not exist.
+ * @summary Plot card
+ */
+export const getPlot = async (id: string, options?: Parameters<typeof nadelFetch>[1]): Promise<PlotDetails> => {
+
+  return nadelFetch<PlotDetails>(getGetPlotUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPlotQueryKey = (id: string,) => {
+    return [
+    `/api/v1/plots/${id}`
+    ] as const;
+    }
+
+
+export const getGetPlotQueryOptions = <TData = Awaited<ReturnType<typeof getPlot>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPlot>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPlotQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPlot>>> = ({ signal }) => getPlot(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPlot>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetPlotQueryResult = NonNullable<Awaited<ReturnType<typeof getPlot>>>
+export type GetPlotQueryError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse
+
+
+export function useGetPlot<TData = Awaited<ReturnType<typeof getPlot>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPlot>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getPlot>>,
+          TError,
+          Awaited<ReturnType<typeof getPlot>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetPlot<TData = Awaited<ReturnType<typeof getPlot>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPlot>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getPlot>>,
+          TError,
+          Awaited<ReturnType<typeof getPlot>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetPlot<TData = Awaited<ReturnType<typeof getPlot>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPlot>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Plot card
+ */
+
+export function useGetPlot<TData = Awaited<ReturnType<typeof getPlot>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPlot>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetPlotQueryOptions(id,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export const getUpdatePlotUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/plots/${id}`
+}
+
+/**
+ * Replaces all editable fields of the plot (full replacement; optional fields absent from the body are
+ * cleared). Requires the `PLOTS_VIEW` and `PLOTS_EDIT` permissions, so that an editor never overwrites fields
+ * they cannot see. An archived plot can be edited too; its number is then not
+ * checked against the active plots, and restoring it checks the number again.
+ * The same rules apply as when creating: 409 `PLOT_NUMBER_TAKEN`, 409 `CADASTRAL_NUMBER_TAKEN`,
+ * 400 `CADASTRAL_INVALID`, 400 `AREA_INVALID`. A change that alters nothing is accepted and not audited.
+ * @summary Update a plot or common land
+ */
+export const updatePlot = async (id: string,
+    plotInput: PlotInput, options?: Parameters<typeof nadelFetch>[1]): Promise<PlotDetails> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return nadelFetch<PlotDetails>(getUpdatePlotUrl(id),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(plotInput)
+  }
+);}
+
+
+
+
+
+export const getUpdatePlotMutationKey = () => ['updatePlot'] as const;
+
+export const getUpdatePlotMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updatePlot>>, TError,UpdatePlotMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updatePlot>>, TError,UpdatePlotMutationVariables, TContext> => {
+
+const mutationKey = getUpdatePlotMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updatePlot>>, UpdatePlotMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updatePlot(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdatePlotMutationResult = NonNullable<Awaited<ReturnType<typeof updatePlot>>>
+    export type UpdatePlotMutationBody = PlotInput
+    export type UpdatePlotMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse
+    export type UpdatePlotMutationVariables = {id: string;data: PlotInput}
+
+    /**
+ * @summary Update a plot or common land
+ */
+export const useUpdatePlot = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updatePlot>>, TError,UpdatePlotMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof updatePlot>>,
+        TError,
+        UpdatePlotMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdatePlotMutationOptions(options), queryClient);
+    }
+    export const getDeletePlotUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/plots/${id}`
+}
+
+/**
+ * Removes a plot that was created by mistake, together with its status. Requires `PLOTS_VIEW` and `PLOTS_EDIT`. Only an active
+ * plot can be deleted; an archived plot is refused with 409 `PLOT_ARCHIVED` and must be restored first. The
+ * deletion is audited.
+ * @summary Delete a plot or common land
+ */
+export const deletePlot = async (id: string, options?: Parameters<typeof nadelFetch>[1]): Promise<void> => {
+
+  return nadelFetch<void>(getDeletePlotUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeletePlotMutationKey = () => ['deletePlot'] as const;
+
+export const getDeletePlotMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deletePlot>>, TError,DeletePlotMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deletePlot>>, TError,DeletePlotMutationVariables, TContext> => {
+
+const mutationKey = getDeletePlotMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deletePlot>>, DeletePlotMutationVariables> = (props) => {
+          const {id} = props ?? {};
+
+          return  deletePlot(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeletePlotMutationResult = NonNullable<Awaited<ReturnType<typeof deletePlot>>>
+
+    export type DeletePlotMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse
+    export type DeletePlotMutationVariables = {id: string}
+
+    /**
+ * @summary Delete a plot or common land
+ */
+export const useDeletePlot = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deletePlot>>, TError,DeletePlotMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof deletePlot>>,
+        TError,
+        DeletePlotMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeletePlotMutationOptions(options), queryClient);
+    }
+    export const getArchivePlotUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/plots/${id}/archive`
+}
+
+/**
+ * Moves the plot to the archive: it is hidden from the default list and its number becomes free for a new
+ * plot. Archiving an already archived plot is a no-op and is not audited. Requires `PLOTS_VIEW` and `PLOTS_EDIT`.
+ * @summary Archive a plot or common land
+ */
+export const archivePlot = async (id: string, options?: Parameters<typeof nadelFetch>[1]): Promise<PlotDetails> => {
+
+  return nadelFetch<PlotDetails>(getArchivePlotUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getArchivePlotMutationKey = () => ['archivePlot'] as const;
+
+export const getArchivePlotMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof archivePlot>>, TError,ArchivePlotMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof archivePlot>>, TError,ArchivePlotMutationVariables, TContext> => {
+
+const mutationKey = getArchivePlotMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof archivePlot>>, ArchivePlotMutationVariables> = (props) => {
+          const {id} = props ?? {};
+
+          return  archivePlot(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ArchivePlotMutationResult = NonNullable<Awaited<ReturnType<typeof archivePlot>>>
+
+    export type ArchivePlotMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse
+    export type ArchivePlotMutationVariables = {id: string}
+
+    /**
+ * @summary Archive a plot or common land
+ */
+export const useArchivePlot = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof archivePlot>>, TError,ArchivePlotMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof archivePlot>>,
+        TError,
+        ArchivePlotMutationVariables,
+        TContext
+      > => {
+      return useMutation(getArchivePlotMutationOptions(options), queryClient);
+    }
+    export const getRestorePlotUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/plots/${id}/restore`
+}
+
+/**
+ * Brings an archived plot back to the default list. The number is checked again: when another active plot has
+ * taken it meanwhile, the answer is 409 `PLOT_NUMBER_TAKEN`. Restoring an active plot is a no-op and is not
+ * audited. Requires `PLOTS_VIEW` and `PLOTS_EDIT`.
+ * @summary Restore an archived plot or common land
+ */
+export const restorePlot = async (id: string, options?: Parameters<typeof nadelFetch>[1]): Promise<PlotDetails> => {
+
+  return nadelFetch<PlotDetails>(getRestorePlotUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRestorePlotMutationKey = () => ['restorePlot'] as const;
+
+export const getRestorePlotMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof restorePlot>>, TError,RestorePlotMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof restorePlot>>, TError,RestorePlotMutationVariables, TContext> => {
+
+const mutationKey = getRestorePlotMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof restorePlot>>, RestorePlotMutationVariables> = (props) => {
+          const {id} = props ?? {};
+
+          return  restorePlot(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RestorePlotMutationResult = NonNullable<Awaited<ReturnType<typeof restorePlot>>>
+
+    export type RestorePlotMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse
+    export type RestorePlotMutationVariables = {id: string}
+
+    /**
+ * @summary Restore an archived plot or common land
+ */
+export const useRestorePlot = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof restorePlot>>, TError,RestorePlotMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof restorePlot>>,
+        TError,
+        RestorePlotMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRestorePlotMutationOptions(options), queryClient);
+    }

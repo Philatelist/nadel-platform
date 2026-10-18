@@ -17,7 +17,8 @@ export interface PlotProperties {
   number: string;
   street?: string;
   kind: PlotKind;
-  areaM2: number;
+  /** Absent for callers without `PLOTS_VIEW`, like `debt` */
+  areaM2?: number;
   status: PlotStatus;
   debt?: Money;
 }

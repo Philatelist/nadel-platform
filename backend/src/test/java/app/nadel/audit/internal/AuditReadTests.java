@@ -340,7 +340,7 @@ class AuditReadTests extends IntegrationTest {
         String token = auditViewer(DEMO_TENANT);
 
         // a value that cannot be parsed is MALFORMED_REQUEST, a parsed value outside its constraints is VALIDATION_FAILED
-        for (String query : List.of("entityType=PLOT", "entityId=not-a-uuid", "from=14.03.2026", "size=abc")) {
+        for (String query : List.of("entityType=UNKNOWN", "entityId=not-a-uuid", "from=14.03.2026", "size=abc")) {
             getAs(token, "/api/v1/audit?" + query)
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.code").value("MALFORMED_REQUEST"));

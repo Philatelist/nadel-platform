@@ -1,6 +1,7 @@
-import { createBrowserRouter, Navigate, RouterProvider } from 'react-router';
+import { createBrowserRouter, RouterProvider } from 'react-router';
 import { useAuth } from 'react-oidc-context';
 import { RequirePermission } from './components/RequirePermission';
+import { HomeRedirect } from './components/HomeRedirect';
 import { Layout } from './components/Layout';
 import { SignIn } from './components/SignIn';
 import { MeProvider } from './me';
@@ -11,7 +12,28 @@ const router = createBrowserRouter([
   {
     element: <Layout />,
     children: [
-      { index: true, element: <Navigate to="/account" replace /> },
+      { index: true, element: <HomeRedirect /> },
+      {
+        element: <RequirePermission permission={['PLOTS_VIEW', 'PLOTS_EDIT']} />,
+        children: [
+          {
+            path: 'plots/new',
+            lazy: () => import('./pages/PlotFormPage').then((m) => ({ Component: m.PlotFormPage })),
+          },
+          {
+            path: 'plots/:id/edit',
+            lazy: () => import('./pages/PlotFormPage').then((m) => ({ Component: m.PlotFormPage })),
+          },
+        ],
+      },
+      {
+        path: 'plots',
+        lazy: () => import('./pages/PlotsPage').then((m) => ({ Component: m.PlotsPage })),
+      },
+      {
+        path: 'plots/:id',
+        lazy: () => import('./pages/PlotPage').then((m) => ({ Component: m.PlotPage })),
+      },
       {
         path: 'account',
         lazy: () => import('./pages/AccountPage').then((m) => ({ Component: m.AccountPage })),

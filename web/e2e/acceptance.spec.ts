@@ -53,11 +53,15 @@ async function expectAuditRow(page: Page, text: string | RegExp) {
 }
 
 test.describe('§2.10 / §2.11 landing page and navigation', () => {
-  test('§2.10 #1, #2 and §2.11 #2: the treasurer lands on My account and has no Roles or Map item', async ({
+  test('§2.10 #1, #2 and §2.11 #2: the treasurer lands on Plots, opens My account and has no Roles or Map item', async ({
     page,
   }) => {
     await loginAs(page, 'treasurer@demo.local');
 
+    // people who may view plots land on the plots list; their account is one click away
+    await expect(page).toHaveURL(/\/plots$/);
+    await expect(page.getByRole('heading', { level: 1, name: 'Plots' })).toBeVisible();
+    await accountLink(page).click();
     await expect(page).toHaveURL(/\/account$/);
     await expect(page.getByRole('heading', { level: 1, name: 'My account' })).toBeVisible();
     await expect(page.getByRole('main').getByText('Shevchenko Iryna Volodymyrivna')).toBeVisible();
@@ -68,14 +72,17 @@ test.describe('§2.10 / §2.11 landing page and navigation', () => {
     for (const permission of ['Edit members', 'Manage roles']) {
       await expect(page.getByText(permission, { exact: true })).toHaveCount(0);
     }
-    await expectNavigation(page, ['My account', 'Members', 'Audit log'], ['Roles']);
+    await expectNavigation(page, ['Plots', 'My account', 'Members', 'Audit log'], ['Roles']);
   });
 
-  test('§2.11 #1: the chairman sees My account, Members, Roles and Audit log', async ({ page }) => {
+  test('§2.11 #1: the chairman lands on Plots and sees Plots, My account, Members, Roles and Audit log', async ({
+    page,
+  }) => {
     await loginAs(page, 'chairman@demo.local');
 
-    await expect(page).toHaveURL(/\/account$/);
-    await expectNavigation(page, ['My account', 'Members', 'Roles', 'Audit log'], []);
+    await expect(page).toHaveURL(/\/plots$/);
+    await expectNavigation(page, ['Plots', 'My account', 'Members', 'Roles', 'Audit log'], []);
+    await accountLink(page).click();
     for (const permission of ALL_PERMISSIONS) {
       await expect(page.getByText(permission, { exact: true })).toBeVisible();
     }
@@ -96,7 +103,7 @@ test.describe('§2.5 what an ordinary member sees', () => {
     await expect(page.getByText('Preferred channel', { exact: true })).toBeVisible();
     await expect(page.getByText('Notes', { exact: true })).toHaveCount(0);
     await expect(page.getByRole('button', { name: /edit|archive|restore/i })).toHaveCount(0);
-    await expectNavigation(page, ['My account'], ['Members', 'Roles', 'Audit log']);
+    await expectNavigation(page, ['Plots', 'My account'], ['Members', 'Roles', 'Audit log']);
 
     // someone else's card looks exactly like a card that does not exist
     await page.goto(`/members/${CHAIRMAN_ID}`);
@@ -261,6 +268,7 @@ test.describe('§2.2 / §2.13 roles screen', () => {
 
       // the treasurer's own account and the members list show the new name
       const treasurerPage = await signedInPage(browser, 'treasurer@demo.local');
+      await treasurerPage.goto('/account'); // the treasurer lands on Plots; the roles are on My account
       await expect(treasurerPage.getByRole('listitem').filter({ hasText: /^Bookkeeper$/ })).toBeVisible();
       await treasurerPage.goto('/members');
       await treasurerPage.getByRole('searchbox').fill('Shevchenko');
@@ -346,7 +354,7 @@ test.describe('§2.2 / §2.13 roles screen', () => {
     for (const name of ALL_PERMISSIONS) await expect(page.getByText(name, { exact: true })).toBeVisible();
     await expect(page.getByLabel('Name', { exact: true })).toBeVisible();
     await expect(page.getByLabel('Description', { exact: true })).toBeVisible();
-    await expectNavigation(page, ['My account', 'Members', 'Roles', 'Audit log'], []);
+    await expectNavigation(page, ['Plots', 'My account', 'Members', 'Roles', 'Audit log'], []);
     await page.getByRole('link', { name: 'Members' }).click();
     await expect(page.getByRole('heading', { level: 1, name: 'Members' })).toBeVisible();
     await expect(page.getByRole('searchbox')).toHaveAttribute(
@@ -612,7 +620,7 @@ test.describe('chairman journeys that change data', () => {
     await setAuditView(false);
     try {
       const treasurerPage = await signedInPage(browser, 'treasurer@demo.local');
-      await expectNavigation(treasurerPage, ['My account', 'Members'], ['Roles', 'Audit log']);
+      await expectNavigation(treasurerPage, ['Plots', 'My account', 'Members'], ['Roles', 'Audit log']);
       await treasurerPage.goto('/audit');
       await expect(treasurerPage.getByText("You don't have access to this page")).toBeVisible();
       await treasurerPage.context().close();
@@ -621,7 +629,7 @@ test.describe('chairman journeys that change data', () => {
     }
 
     const again = await signedInPage(browser, 'treasurer@demo.local');
-    await expectNavigation(again, ['My account', 'Members', 'Audit log'], ['Roles']);
+    await expectNavigation(again, ['Plots', 'My account', 'Members', 'Audit log'], ['Roles']);
     await again.context().close();
   });
 

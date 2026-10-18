@@ -1,49 +1,88 @@
 -- Demo data for the dev profile only. Idempotent: re-running does not duplicate rows.
--- Demo cooperative: 12 plots along a street plus a road (common land). Other cooperative: 2 plots.
--- Coordinates are arbitrary.
+-- Demo cooperative: 30 plots on two streets (a row each, on either side of a road) plus the road as common land.
+-- Other cooperative: 2 plots. Coordinates are arbitrary.
 
 INSERT INTO tenant (id, name) VALUES
     ('11111111-1111-1111-1111-111111111111', 'Demo Garden Cooperative'),
     ('22222222-2222-2222-2222-222222222222', 'Other Cooperative')
 ON CONFLICT (id) DO NOTHING;
 
--- Plots 25 x 40 m (~0.00033° longitude, ~0.00036° latitude), two rows of 6 across the road
-INSERT INTO plot (tenant_id, number, street, kind, area_m2, boundary)
+-- Plots 25 x 40 m (~0.00033° longitude, ~0.00036° latitude): 15 cells per street along the road.
+-- Garden St is the southern row (1-14 and "12а"), Orchard St the northern row (15-29). Areas are varied and independent
+-- of the drawn polygon. About every third plot has a building; two plots carry a note; some have cadastral numbers.
+-- "12а" ends in a Cyrillic letter on purpose (natural order and case-insensitive uniqueness).
+INSERT INTO plot (tenant_id, number, street, kind, area_m2, cadastral_number, has_building, notes, boundary)
 SELECT '11111111-1111-1111-1111-111111111111',
-       (r * 6 + c + 1)::text,
-       'Garden St',
+       v.number,
+       v.street,
        'PLOT',
-       1000.00,
-       ST_MakeEnvelope(30.7000 + c * 0.00033,
-                       46.6000 + r * 0.00044,
-                       30.7000 + (c + 1) * 0.00033 - 0.000015,
-                       46.6000 + r * 0.00044 + 0.00036,
+       v.area_m2,
+       v.cadastral_number,
+       v.has_building,
+       v.notes,
+       ST_MakeEnvelope(30.7000 + v.col * 0.00033,
+                       46.6000 + v.row * 0.00044,
+                       30.7000 + (v.col + 1) * 0.00033 - 0.000015,
+                       46.6000 + v.row * 0.00044 + 0.00036,
                        4326)
-FROM generate_series(0, 1) AS r, generate_series(0, 5) AS c
-ON CONFLICT (tenant_id, number) DO NOTHING;
+FROM (VALUES
+    ('1',   'Garden St',  0,  0,  600.00, '4810136300:02:001:0001', false, NULL),
+    ('2',   'Garden St',  1,  0,  600.00, NULL,                     false, NULL),
+    ('3',   'Garden St',  2,  0,  800.00, NULL,                     true,  NULL),
+    ('4',   'Garden St',  3,  0, 1000.00, '4810136300:02:001:0004', false, NULL),
+    ('5',   'Garden St',  4,  0, 1000.00, NULL,                     false, NULL),
+    ('6',   'Garden St',  5,  0, 1200.00, NULL,                     true,  NULL),
+    ('7',   'Garden St',  6,  0,  800.00, '4810136300:02:001:0007', false, NULL),
+    ('8',   'Garden St',  7,  0, 1000.00, NULL,                     false, NULL),
+    ('9',   'Garden St',  8,  0, 1500.00, NULL,                     true,  'Corner plot next to the entrance gate'),
+    ('10',  'Garden St',  9,  0, 1000.00, NULL,                     false, NULL),
+    ('11',  'Garden St', 10,  0,  600.00, '4810136300:02:001:0011', false, NULL),
+    ('12',  'Garden St', 11,  0, 1000.00, NULL,                     true,  NULL),
+    ('12а', 'Garden St', 12,  0,  400.00, NULL,                     false, 'Split off from plot 12'),
+    ('13',  'Garden St', 13,  0,  800.00, NULL,                     false, NULL),
+    ('14',  'Garden St', 14,  0, 1000.00, '4810136300:02:001:0014', false, NULL),
+    ('15',  'Orchard St', 0,  1,  600.00, NULL,                     true,  NULL),
+    ('16',  'Orchard St', 1,  1,  800.00, NULL,                     false, NULL),
+    ('17',  'Orchard St', 2,  1, 1000.00, '4810136300:02:002:0017', false, NULL),
+    ('18',  'Orchard St', 3,  1, 1000.00, NULL,                     true,  NULL),
+    ('19',  'Orchard St', 4,  1, 1200.00, NULL,                     false, NULL),
+    ('20',  'Orchard St', 5,  1,  600.00, NULL,                     false, NULL),
+    ('21',  'Orchard St', 6,  1, 1000.00, '4810136300:02:002:0021', true,  NULL),
+    ('22',  'Orchard St', 7,  1, 1000.00, NULL,                     false, NULL),
+    ('23',  'Orchard St', 8,  1,  800.00, NULL,                     false, NULL),
+    ('24',  'Orchard St', 9,  1, 1500.00, NULL,                     true,  NULL),
+    ('25',  'Orchard St', 10, 1, 1000.00, '4810136300:02:002:0025', false, NULL),
+    ('26',  'Orchard St', 11, 1,  600.00, NULL,                     false, NULL),
+    ('27',  'Orchard St', 12, 1, 1000.00, NULL,                     true,  NULL),
+    ('28',  'Orchard St', 13, 1,  800.00, NULL,                     false, NULL),
+    ('29',  'Orchard St', 14, 1, 1000.00, NULL,                     false, NULL)
+) AS v(number, street, col, row, area_m2, cadastral_number, has_building, notes)
+ON CONFLICT (tenant_id, lower(number)) WHERE archived_at IS NULL DO UPDATE SET
+    street = EXCLUDED.street, kind = EXCLUDED.kind, area_m2 = EXCLUDED.area_m2,
+    cadastral_number = EXCLUDED.cadastral_number, has_building = EXCLUDED.has_building,
+    notes = EXCLUDED.notes, boundary = EXCLUDED.boundary;
 
+-- The road between the two rows: common land, drawn on the map
 INSERT INTO plot (tenant_id, number, street, kind, area_m2, boundary)
-VALUES ('11111111-1111-1111-1111-111111111111', 'R-1', 'Garden St', 'COMMON', 1584.00,
-        ST_MakeEnvelope(30.7000, 46.60036, 30.70198, 46.60044, 4326))
-ON CONFLICT (tenant_id, number) DO NOTHING;
-
-INSERT INTO plot_status (plot_id, tenant_id, status, debt, oldest_debt_date)
-SELECT p.id, p.tenant_id, s.status, s.debt::numeric(14,2), s.since
-FROM plot p
-JOIN (VALUES
-    ('1', 'GREEN', 0, NULL::date),     ('2', 'GREEN', 0, NULL),     ('3', 'YELLOW', 640, current_date - 25),
-    ('4', 'GREEN', 0, NULL),           ('5', 'RED', 4820, current_date - 140), ('6', 'GREEN', 0, NULL),
-    ('7', 'YELLOW', 1180, current_date - 40), ('8', 'GREEN', 0, NULL), ('9', 'GREEN', 0, NULL),
-    ('10', 'RED', 3360, current_date - 95),   ('11', 'GREEN', 0, NULL), ('12', 'YELLOW', 300, current_date - 12)
-) AS s(number, status, debt, since) ON s.number = p.number
-WHERE p.tenant_id = '11111111-1111-1111-1111-111111111111'
-ON CONFLICT (plot_id) DO NOTHING;
+VALUES ('11111111-1111-1111-1111-111111111111', 'R-1', 'Garden St', 'COMMON', 2970.00,
+        ST_MakeEnvelope(30.7000, 46.60036, 30.704935, 46.60044, 4326))
+ON CONFLICT (tenant_id, lower(number)) WHERE archived_at IS NULL DO UPDATE SET
+    street = EXCLUDED.street, kind = EXCLUDED.kind, area_m2 = EXCLUDED.area_m2,
+    cadastral_number = EXCLUDED.cadastral_number, has_building = EXCLUDED.has_building,
+    notes = EXCLUDED.notes, boundary = EXCLUDED.boundary;
 
 INSERT INTO plot (tenant_id, number, street, kind, area_m2, boundary)
 SELECT '22222222-2222-2222-2222-222222222222', n::text, 'Forest St', 'PLOT', 600.00,
        ST_MakeEnvelope(30.8000 + n * 0.0003, 46.7000, 30.8000 + n * 0.0003 + 0.00028, 46.7003, 4326)
 FROM generate_series(1, 2) AS n
-ON CONFLICT (tenant_id, number) DO NOTHING;
+ON CONFLICT (tenant_id, lower(number)) WHERE archived_at IS NULL DO UPDATE SET
+    street = EXCLUDED.street, kind = EXCLUDED.kind, area_m2 = EXCLUDED.area_m2, boundary = EXCLUDED.boundary;
+
+-- Until ownership and the ledger exist (specs 007+) every plot is GREY with no debt.
+INSERT INTO plot_status (plot_id, tenant_id, status, debt)
+SELECT p.id, p.tenant_id, 'GREY', 0
+FROM plot p
+ON CONFLICT (plot_id) DO NOTHING;
 
 -- Members and roles (spec 002). Emails equal the Keycloak demo users; keycloak_subject stays null (linked on first sign-in).
 SELECT seed_base_roles(id) FROM tenant;

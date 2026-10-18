@@ -11,7 +11,7 @@ import { useDocumentTitle } from '../useDocumentTitle';
 
 const PAGE_SIZE = 50;
 const TIME_ZONE = 'Europe/Kyiv';
-const ENTITY_TYPES = ['MEMBER', 'ROLE'] as const;
+const ENTITY_TYPES = ['MEMBER', 'ROLE', 'PLOT'] as const;
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 function isEntityType(value: string | null): value is (typeof ENTITY_TYPES)[number] {
@@ -190,8 +190,11 @@ function AuditRecord({ entry }: { entry: AuditEntry }) {
   return (
     <>
       <span className="text-ink-muted">{a.entityType[entry.entityType]}: </span>
-      {entry.entityType === 'MEMBER' ? (
-        <Link to={`/members/${entry.entityId}`} className="text-accent underline">
+      {entry.entityType === 'MEMBER' || entry.entityType === 'PLOT' ? (
+        <Link
+          to={`${entry.entityType === 'MEMBER' ? '/members' : '/plots'}/${entry.entityId}`}
+          className="text-accent underline"
+        >
           {label}
         </Link>
       ) : (
@@ -205,9 +208,11 @@ function AuditChanges({ entry }: { entry: AuditEntry }) {
   const t = useT();
   const a = t.audit;
   const fieldNames: Readonly<Record<string, string>> = { ...t.member.fields, ...a.fields };
+  const kinds: Readonly<Record<string, string>> = t.plot.kind;
   const value = (field: string, raw: string | undefined): string => {
     if (raw === undefined || raw === '') return a.noValue;
-    if (field === 'archived') return raw === 'true' ? a.yes : a.no;
+    if (field === 'archived' || field === 'hasBuilding') return raw === 'true' ? a.yes : a.no;
+    if (field === 'kind') return kinds[raw] ?? raw;
     return field === 'name' || field === 'roles' || field === 'description'
       ? auditRoleValue(raw, t, field)
       : raw;

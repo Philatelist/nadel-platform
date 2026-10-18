@@ -47,11 +47,23 @@ describe('Layout', () => {
     expect(screen.getAllByText('Nadel')).toHaveLength(1);
   });
 
-  it('shows no navigation and no Menu button without sections', () => {
+  it('gives a member without permissions a menu with only Plots', () => {
     renderWithApp(<Layout />);
-    expect(screen.queryByRole('navigation')).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Menu' })).toBeNull();
+    const nav = screen.getByRole('navigation', { name: 'Main menu' });
+    const links = nav.querySelectorAll('a');
+    expect(links).toHaveLength(1);
+    expect(links[0]).toHaveAttribute('href', '/plots');
+    expect(screen.getByRole('button', { name: 'Menu' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Test User' })).toHaveAttribute('href', '/account');
+  });
+
+  it('puts Plots first in the menu', () => {
+    me = meWith(['MEMBERS_VIEW', 'ROLES_MANAGE', 'AUDIT_VIEW']);
+    renderWithApp(<Layout />);
+    const hrefs = Array.from(screen.getByRole('navigation', { name: 'Main menu' }).querySelectorAll('a')).map(
+      (a) => a.getAttribute('href'),
+    );
+    expect(hrefs).toEqual(['/plots', '/members', '/roles', '/audit']);
   });
 
   it('lists permitted sections and toggles the menu; Escape closes it', async () => {
@@ -59,7 +71,7 @@ describe('Layout', () => {
     const user = userEvent.setup();
     renderWithApp(<Layout />);
     const nav = screen.getByRole('navigation', { name: 'Main menu' });
-    expect(nav.querySelectorAll('a')).toHaveLength(3);
+    expect(nav.querySelectorAll('a')).toHaveLength(4);
 
     const button = screen.getByRole('button', { name: 'Menu' });
     expect(button).toHaveAttribute('aria-controls', 'app-menu');
@@ -74,15 +86,7 @@ describe('Layout', () => {
     expect(button).toHaveFocus();
   });
 
-  it('puts the theme switch in the header next to the language switch when there is no menu', () => {
-    renderWithApp(<Layout />);
-    const groups = screen.getAllByRole('group', { name: 'Theme' });
-    expect(groups).toHaveLength(1);
-    expect(groups[0]!.closest('header')).not.toBeNull();
-    expect(groups[0]!.parentElement).not.toHaveClass('hidden');
-  });
-
-  it('renders the theme switch in the header (md+) and in the menu (below md) when there is a menu', () => {
+  it('renders the theme switch in the header (md+) and in the menu (below md)', () => {
     me = meWith(['MEMBERS_VIEW']);
     renderWithApp(<Layout />);
     const groups = screen.getAllByRole('group', { name: 'Theme' });
