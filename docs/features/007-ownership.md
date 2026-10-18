@@ -64,8 +64,30 @@ General rules for every feature in this sequence:
 ## 4. Visibility (completes the rules from 006)
 
 - With `PLOTS_VIEW`: owners and history of every plot.
-- A member sees owners (names and shares) and history only for plots they currently own; for other plots, number, street
-  and status only.
+- A member sees owners (names and shares) and history only for plots they currently own; for other plots, number,
+  street and kind, and the status only as the setting below allows.
+
+### 4.1 Status visibility setting (decided by the owner on 18.10.2026)
+
+Once plots have owners, their status color tells neighbours who owns what and, from phase 3, who is in debt. That is
+personal data, so it is hidden by default.
+
+- New cooperative setting `memberPlotStatusVisibility`: `OWN_ONLY` (default for every cooperative, existing ones
+  included) or `ALL_PLOTS`.
+- `OWN_ONLY`: for a member without `PLOTS_VIEW`, `GET /plots` and `GET /plots/map` omit `status` (and everything else
+  except number, street and kind) on plots the member does not own; the UI draws them in a neutral color with no
+  legend entry. Own plots are unchanged.
+- `ALL_PLOTS`: the behaviour of 006 — status of every plot, never amounts, owners or personal data of other plots.
+- People with `PLOTS_VIEW` always see everything their permissions allow; the setting only affects members.
+- New permission `SETTINGS_MANAGE`, granted to the Chairman base role (and assignable to custom roles like any
+  permission). Endpoints: `GET /settings` (any signed-in member of the cooperative), `PUT /settings` (`SETTINGS_MANAGE`).
+  The settings table is tenant-scoped with RLS and an isolation test; a change is audited (`SETTINGS_UPDATED`, old and
+  new value).
+- Web: a "Налаштування кооперативу" page (menu item visible with `SETTINGS_MANAGE`) with this one option, two radio
+  buttons and a short explanation: "Показувати колір боргу всіх ділянок усім членам — лише за рішенням загальних зборів".
+  Later settings (common consumers split, meter tree) land on the same page.
+- Tests: both values × member owning / not owning a plot × user with `PLOTS_VIEW`; default for new and existing
+  cooperatives; permission checks; audit entry.
 - `GET /me` adds the list of plots the user currently owns.
 
 ## 5. API
