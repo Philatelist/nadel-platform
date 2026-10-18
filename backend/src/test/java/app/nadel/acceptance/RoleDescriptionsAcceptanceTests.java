@@ -2,7 +2,9 @@ package app.nadel.acceptance;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -11,6 +13,7 @@ import app.nadel.IntegrationTest;
 import app.nadel.TestTokens;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -92,16 +95,36 @@ class RoleDescriptionsAcceptanceTests extends IntegrationTest {
         throw new AssertionError("role " + id + " is not in the list");
     }
 
-    /** Audit entries of the role that carry a description change, as {oldValue, newValue}, newest first. */
-    private List<List<String>> descriptionChanges(String email, UUID role) throws Exception {
+    private JsonNode auditPage(String email, UUID role) throws Exception {
         String content = mvc.perform(get("/api/v1/audit").param("entityId", role.toString()).param("size", "50")
                         .header(HttpHeaders.AUTHORIZATION, bearer(email)))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        return json.readTree(content);
+    }
+
+    /** How many audit entries the role has so far; the log is append-only and shared with other tests. */
+    private long auditTotal(String email, UUID role) throws Exception {
+        return auditPage(email, role).get("totalItems").asLong();
+    }
+
+    private static String text(JsonNode value) {
+        return value == null || value.isNull() ? null : value.asString();
+    }
+
+    /**
+     * Description changes, as {oldValue, newValue} (null-safe), of only the audit entries written after the log had
+     * {@code before} entries, newest first.
+     */
+    private List<List<String>> descriptionChangesSince(String email, UUID role, long before) throws Exception {
+        JsonNode page = auditPage(email, role);
+        int added = (int) (page.get("totalItems").asLong() - before);
         List<List<String>> result = new ArrayList<>();
-        for (JsonNode entry : json.readTree(content).get("items")) {
+        int index = 0;
+        for (JsonNode entry : page.get("items")) {
+            if (index++ >= added) break;
             for (JsonNode change : entry.get("changes")) {
-                if ("description".equals(change.get("field").asString())) {
-                    result.add(List.of(change.get("oldValue").asString(), change.get("newValue").asString()));
+                if ("description".equals(text(change.get("field")))) {
+                    result.add(Arrays.asList(text(change.get("oldValue")), text(change.get("newValue"))));
                 }
             }
         }
@@ -118,6 +141,7 @@ class RoleDescriptionsAcceptanceTests extends IntegrationTest {
         UUID treasurer = treasurerRole();
         assertThat(roleInList("chairman@demo.local", treasurer).get("description").asString()).isEqualTo(STANDARD);
         assertThat(roleInList("chairman@demo.local", treasurer).get("descriptionCustomized").asBoolean()).isFalse();
+        long before = auditTotal("treasurer@demo.local", treasurer);
 
         putRole("chairman@demo.local", treasurer, body(CUSTOM, false)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.description").value(CUSTOM))
@@ -128,7 +152,8 @@ class RoleDescriptionsAcceptanceTests extends IntegrationTest {
         assertThat(listed.get("descriptionCustomized").asBoolean()).isTrue();
 
         await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> assertThat(
-                descriptionChanges("treasurer@demo.local", treasurer)).containsExactly(List.of("base:TREASURER", CUSTOM)));
+                descriptionChangesSince("treasurer@demo.local", treasurer, before))
+                .containsExactly(List.of("base:TREASURER", CUSTOM)));
 
         putRole("chairman@demo.local", treasurer, body("ignored", true)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.description").value(STANDARD))
@@ -136,7 +161,7 @@ class RoleDescriptionsAcceptanceTests extends IntegrationTest {
         assertThat(roleInList("chairman@demo.local", treasurer).get("descriptionCustomized").asBoolean()).isFalse();
 
         await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> assertThat(
-                descriptionChanges("treasurer@demo.local", treasurer))
+                descriptionChangesSince("treasurer@demo.local", treasurer, before))
                 .containsExactly(List.of(CUSTOM, "base:TREASURER"), List.of("base:TREASURER", CUSTOM)));
     }
 
@@ -162,8 +187,7 @@ class RoleDescriptionsAcceptanceTests extends IntegrationTest {
         create.put("name", name);
         create.put("description", "Custom text");
         create.put("permissions", List.of("MEMBERS_VIEW"));
-        String created = mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
-                        .post("/api/v1/roles").header(HttpHeaders.AUTHORIZATION, bearer("chairman@demo.local"))
+        String created = mvc.perform(post("/api/v1/roles").header(HttpHeaders.AUTHORIZATION, bearer("chairman@demo.local"))
                         .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(create)))
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         UUID id = UUID.fromString(json.readTree(created).get("id").asString());
@@ -176,7 +200,7 @@ class RoleDescriptionsAcceptanceTests extends IntegrationTest {
             assertThat(role.get("description").asString()).isEqualTo("Custom text");
             assertThat(role.get("descriptionCustomized").asBoolean()).isTrue();
         } finally {
-            mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/v1/roles/" + id)
+            mvc.perform(delete("/api/v1/roles/" + id)
                     .header(HttpHeaders.AUTHORIZATION, bearer("chairman@demo.local"))).andExpect(status().isNoContent());
         }
     }

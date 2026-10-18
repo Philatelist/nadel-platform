@@ -32,3 +32,9 @@
 |---|---|---|---|---|
 | 1 | `c99e535..0abc642` | MAJOR_ISSUES | M1 `Layout.tsx:59` title keeps `order-1` from md up, so the desktop header shows the cluster before the title; M2 e2e cleanup uses a non-waiting `count()` and §2.3 #4 has no restore | minor: phone Tab order differs from visual order (Menu reached after Sign out); class order; audit row check may match older runs; context not closed if the first `try` fails |
 | 2 | + `46b47b5` | PASS | M1, M2 resolved (desktop order restored + e2e position check; waiting restore helper in both `finally`) | minor: class order; audit row may match an older run |
+
+## Slice 5 — Feature Testing & Regression
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `46b47b5..d75dd4a` | MAJOR_ISSUES | M1 `RoleDescriptionsAcceptanceTests` asserts all historical audit changes of the shared Treasurer role with `containsExactly` and reads values without null checks — fails when `RolesTests` runs first (reproduced with reverse order) | minor: fully qualified `post`/`delete`; registry label "negative" for the long-name row; registry could note the localised audit display is covered by e2e |
