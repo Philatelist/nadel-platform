@@ -52,6 +52,11 @@ export function useMe(): Me {
   return me;
 }
 
+/** Like `useMe`, but returns null outside `MeProvider` (sign-in and full-page messages). */
+export function useOptionalMe(): Me | null {
+  return useContext(MeContext);
+}
+
 export function useCan(permission: Permission): boolean {
   return useMe().permissions.includes(permission);
 }

@@ -19,6 +19,7 @@ import { problemCode, problemFieldErrors, problemMessage, type FieldErrors } fro
 import { useRoleName } from '../roleName';
 import { findNameClash } from '../roleNameClash';
 import { nameToSubmit } from '../roleNameSubmit';
+import { useDocumentTitle } from '../useDocumentTitle';
 
 export function RolesPage() {
   const t = useT();
@@ -31,6 +32,7 @@ export function RolesPage() {
   const [saved, setSaved] = useState<string>();
   const [error, setError] = useState<string>();
   const c = t.rolesPage;
+  useDocumentTitle(c.title);
 
   const remove = useDeleteRole({
     mutation: {

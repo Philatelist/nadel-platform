@@ -1,8 +1,10 @@
 import { Panel } from './ui';
 import { useT } from '../i18n';
+import { useDocumentTitle } from '../useDocumentTitle';
 
 export function NoAccess() {
   const t = useT();
+  useDocumentTitle(t.access.denied);
   return (
     <div role="alert">
       <Panel>

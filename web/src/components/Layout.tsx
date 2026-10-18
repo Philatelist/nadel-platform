@@ -34,6 +34,7 @@ export function Layout() {
   const [open, setOpen] = useState(false);
   const menuButton = useRef<HTMLButtonElement>(null);
 
+  const title = me.tenant?.name ?? t.app.name;
   const items = NAV_ITEMS.filter((item) => me.permissions.includes(item.permission));
   const hasMenu = items.length > 0;
 
@@ -52,10 +53,14 @@ export function Layout() {
   return (
     <div className="flex h-full flex-col">
       <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line bg-surface px-4 py-3">
-        <Link to="/" className="font-serif text-xl font-semibold text-ink no-underline">
-          {t.app.name}
+        <Link
+          to="/"
+          title={title}
+          className="min-w-0 max-w-full flex-1 truncate font-serif text-xl font-semibold text-ink no-underline md:flex-none"
+        >
+          {title}
         </Link>
-        {me.tenant?.name && <span className="min-w-0 truncate text-sm text-ink-muted">{me.tenant.name}</span>}
+        {me.tenant?.name && <span className="text-sm text-ink-muted">{t.app.name}</span>}
         <div className="ml-auto flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
           <div className="flex min-w-0 flex-col text-sm leading-tight">
             <Link to="/account" className="truncate font-medium text-ink">

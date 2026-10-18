@@ -1,10 +1,12 @@
 import { useAuth } from 'react-oidc-context';
 import { useT } from '../i18n';
+import { useDocumentTitle } from '../useDocumentTitle';
 import { Button, Notice, Panel } from './ui';
 
 export function SignIn({ error }: { error?: string | undefined }) {
   const auth = useAuth();
   const t = useT();
+  useDocumentTitle();
   return (
     <main className="grid h-full place-items-center px-4">
       <div className="w-full max-w-[480px]">

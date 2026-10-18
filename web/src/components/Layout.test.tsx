@@ -27,6 +27,26 @@ describe('Layout', () => {
     me = meWith([]);
   });
 
+  it('titles the header with the cooperative name, keeps the product name as a muted label', () => {
+    renderWithApp(<Layout />);
+    const link = screen.getByRole('link', { name: 'Coop' });
+    expect(link).toHaveAttribute('href', '/');
+    expect(link).toHaveAttribute('title', 'Coop');
+    expect(link).toHaveClass('truncate', 'font-serif');
+    const product = screen.getByText('Nadel');
+    expect(product.tagName).toBe('SPAN');
+    expect(product).toHaveClass('text-ink-muted');
+  });
+
+  it('falls back to the product name as the title link without a tenant', () => {
+    me = { ...meWith([]), tenant: undefined } as Me;
+    renderWithApp(<Layout />);
+    const link = screen.getByRole('link', { name: 'Nadel' });
+    expect(link).toHaveAttribute('href', '/');
+    expect(link).toHaveAttribute('title', 'Nadel');
+    expect(screen.getAllByText('Nadel')).toHaveLength(1);
+  });
+
   it('shows no navigation and no Menu button without sections', () => {
     renderWithApp(<Layout />);
     expect(screen.queryByRole('navigation')).toBeNull();

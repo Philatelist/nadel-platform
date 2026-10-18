@@ -9,12 +9,14 @@ import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useT } from '../i18n';
 import { useCan } from '../me';
 import { useRoleName } from '../roleName';
+import { useDocumentTitle } from '../useDocumentTitle';
 
 const PAGE_SIZE = 20;
 const SEARCH_DELAY_MS = 300;
 
 export function MembersPage() {
   const t = useT();
+  useDocumentTitle(t.members.title);
   const roleName = useRoleName();
   const canEdit = useCan('MEMBERS_EDIT');
   const [params, setParams] = useSearchParams();

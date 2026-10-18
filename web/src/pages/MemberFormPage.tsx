@@ -3,10 +3,12 @@ import { Link } from 'react-router';
 import { MemberForm } from '../components/MemberForm';
 import { PageHeader } from '../components/ui';
 import { useT } from '../i18n';
+import { useDocumentTitle } from '../useDocumentTitle';
 
 /** `/members/new`: create a member, then open the new card with a "Saved" notice. */
 export function MemberFormPage() {
   const t = useT();
+  useDocumentTitle(t.members.addTitle);
   const navigate = useNavigate();
   return (
     <div className="flex flex-col gap-4 text-[15px]">

@@ -1,8 +1,10 @@
 import { Panel } from '../components/ui';
 import { useT } from '../i18n';
+import { useDocumentTitle } from '../useDocumentTitle';
 
 export function NotFoundPage() {
   const t = useT();
+  useDocumentTitle(t.access.notFound);
   return (
     <div>
       <Panel>

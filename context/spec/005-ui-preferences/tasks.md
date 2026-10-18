@@ -12,11 +12,11 @@ commit; report every file created or changed.
   - [x] Implement tech spec 2.1: `web/src/theme.ts` + provider, inline script in `web/index.html`, `index.css` dark blocks and `color-scheme`, `theme.test.ts` updates (both dark blocks = tokens, script/meta colours = tokens), `ThemeSwitch.tsx`, placement in `Layout.tsx` (header; inside `#app-menu` under 768 px for people with a menu; header for people without), i18n keys. Unit tests: storage restore, invalid value → system, throwing storage → system without error, `applyTheme`, ThemeSwitch `aria-pressed` and click, Layout placement. Document the inline-script CSP note in `web/README.md`. **[Agent: react-frontend]**
   - [x] Verify: `pnpm -r test && pnpm -r typecheck && pnpm -r lint && pnpm format:check && pnpm --filter web build` green (contrast test included). **[Agent: react-frontend]**
 
-- [ ] **Slice 2: Cooperative name in the header and the tab title**
+- [x] **Slice 2: Cooperative name in the header and the tab title**
 
   > The header title is the cooperative's name, the product name is a secondary label, and the browser tab reads "<page> — <cooperative>".
-  - [ ] Implement tech spec 2.2: header title link with truncation and `title`, product name label, fallback without a tenant; `useOptionalMe`; `web/src/useDocumentTitle.ts` and calls in the pages, `SignIn` and `FullPageMessage`. Unit tests: Layout title and fallback, `useDocumentTitle`. Update `web/e2e/design-system.spec.ts` header assertions (cooperative link instead of the "Наділ" link; "Наділ" still visible as text). **[Agent: react-frontend]**
-  - [ ] Verify: `pnpm -r test && pnpm -r typecheck && pnpm -r lint && pnpm format:check` green. **[Agent: react-frontend]**
+  - [x] Implement tech spec 2.2: header title link with truncation and `title`, product name label, fallback without a tenant; `useOptionalMe`; `web/src/useDocumentTitle.ts` and calls in the pages, `SignIn` and `FullPageMessage`. Unit tests: Layout title and fallback, `useDocumentTitle`. Update `web/e2e/design-system.spec.ts` header assertions (cooperative link instead of the "Наділ" link; "Наділ" still visible as text). **[Agent: react-frontend]**
+  - [x] Verify: `pnpm -r test && pnpm -r typecheck && pnpm -r lint && pnpm format:check` green. **[Agent: react-frontend]**
 
 - [ ] **Slice 3: Base role descriptions in the user's language**
 

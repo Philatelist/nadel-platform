@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { useDocumentTitle } from '../useDocumentTitle';
 import { Panel } from './ui';
 
 export function FullPageMessage({
@@ -10,6 +11,7 @@ export function FullPageMessage({
   message: string;
   children?: ReactNode;
 }) {
+  useDocumentTitle(title);
   return (
     <main className="grid h-full place-items-center px-4">
       <div className="w-full max-w-[480px]">

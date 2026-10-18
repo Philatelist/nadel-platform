@@ -7,6 +7,7 @@ import { DataTable, PageHeader, Panel, Select, TextField, type Column } from '..
 import { useLocale, useT } from '../i18n';
 import { auditRoleValue } from '../roleName';
 import { problemCode, problemFieldErrors } from '../problem';
+import { useDocumentTitle } from '../useDocumentTitle';
 
 const PAGE_SIZE = 50;
 const TIME_ZONE = 'Europe/Kyiv';
@@ -52,6 +53,7 @@ export function AuditPage() {
         t.problem.VALIDATION_FAILED)
       : undefined;
   const a = t.audit;
+  useDocumentTitle(a.title);
 
   const columns: Column<AuditEntry>[] = [
     { key: 'time', header: a.columns.time, cell: (entry) => <AuditTime entry={entry} locale={locale} /> },
