@@ -367,7 +367,10 @@ class MembersAccessAcceptanceTests extends IntegrationTest {
                 .andExpect(jsonPath("$[?(@.baseCode == 'MEMBER')].name").value("Member"))
                 .andExpect(jsonPath("$[?(@.baseCode == 'CHAIRMAN')].nameCustomized").value(false))
                 .andExpect(jsonPath("$[?(@.baseCode == 'TREASURER')].nameCustomized").value(false))
-                .andExpect(jsonPath("$[?(@.baseCode == 'MEMBER')].nameCustomized").value(false));
+                .andExpect(jsonPath("$[?(@.baseCode == 'MEMBER')].nameCustomized").value(false))
+                .andExpect(jsonPath("$[?(@.baseCode == 'CHAIRMAN')].descriptionCustomized").value(false))
+                .andExpect(jsonPath("$[?(@.baseCode == 'TREASURER')].descriptionCustomized").value(false))
+                .andExpect(jsonPath("$[?(@.baseCode == 'MEMBER')].descriptionCustomized").value(false));
         DemoAccessChecks.all(mvc);
     }
 
@@ -375,8 +378,10 @@ class MembersAccessAcceptanceTests extends IntegrationTest {
     private void restoreSeededBaseRoles(Map<String, JsonNode> seeded) {
         inTenant(DEMO_TENANT, sql -> {
             for (Map.Entry<String, JsonNode> entry : seeded.entrySet()) {
-                sql.update("update role set name = ?, name_customized = false where base_code = ?",
-                        entry.getValue().get("name").asString(), entry.getKey());
+                sql.update("update role set name = ?, name_customized = false, description = ?, "
+                                + "description_customized = false where base_code = ?",
+                        entry.getValue().get("name").asString(), entry.getValue().get("description").asString(),
+                        entry.getKey());
                 sql.update("delete from role_permission where role_id = (select id from role where base_code = ?)",
                         entry.getKey());
                 entry.getValue().get("permissions").forEach(permission -> sql.update(

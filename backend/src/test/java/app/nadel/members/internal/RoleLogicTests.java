@@ -49,6 +49,16 @@ class RoleLogicTests {
     }
 
     @Test
+    void auditDescriptionUsesBaseTokenOnlyForNonCustomizedBaseRoles() {
+        assertThat(RoleSnapshot.auditDescription("Full access", "CHAIRMAN", false)).isEqualTo("base:CHAIRMAN");
+        assertThat(RoleSnapshot.auditDescription(null, "MEMBER", false)).isEqualTo("base:MEMBER");
+        assertThat(RoleSnapshot.auditDescription("Веде касу", "TREASURER", true)).isEqualTo("Веде касу");
+        assertThat(RoleSnapshot.auditDescription(null, "TREASURER", true)).isNull();
+        assertThat(RoleSnapshot.auditDescription("Board", null, true)).isEqualTo("Board");
+        assertThat(RoleSnapshot.auditDescription("Board", null, false)).isEqualTo("Board");
+    }
+
+    @Test
     void anIndexViolationIsRecognisedThroughItsCauseChain() {
         var violation = new ConstraintViolationException("duplicate", new SQLException("x"), "role_tenant_name_uq");
         var other = new ConstraintViolationException("duplicate", new SQLException("x"), "member_tenant_email_uq");

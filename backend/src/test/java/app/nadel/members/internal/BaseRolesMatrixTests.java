@@ -28,13 +28,26 @@ class BaseRolesMatrixTests extends IntegrationTest {
             owner.queryForList("select seed_base_roles(?)", tenant);
 
             Map<String, String> seededNames = new HashMap<>();
-            owner.queryForList("select base_code, name from role where tenant_id = ?", tenant)
-                    .forEach(row -> seededNames.put((String) row.get("base_code"), (String) row.get("name")));
+            Map<String, String> seededDescriptions = new HashMap<>();
+            owner.queryForList("select base_code, name, description from role where tenant_id = ?", tenant)
+                    .forEach(row -> {
+                        seededNames.put((String) row.get("base_code"), (String) row.get("name"));
+                        seededDescriptions.put((String) row.get("base_code"), (String) row.get("description"));
+                    });
             Map<String, String> javaNames = new HashMap<>();
-            BaseRoles.ALL.forEach(d -> javaNames.put(d.code(), d.name()));
+            Map<String, String> javaDescriptions = new HashMap<>();
+            BaseRoles.ALL.forEach(d -> {
+                javaNames.put(d.code(), d.name());
+                javaDescriptions.put(d.code(), d.description());
+            });
             assertThat(seededNames)
                     .as("base-role names of seed_base_roles (database) vs BaseRoles (Java)")
                     .isEqualTo(javaNames);
+            assertThat(seededDescriptions)
+                    .as("base-role descriptions of seed_base_roles (database) vs BaseRoles (Java)")
+                    .isEqualTo(javaDescriptions);
+            assertThat(owner.queryForList("select description_customized from role where tenant_id = ?",
+                    Boolean.class, tenant)).as("seeded base roles are not customised").hasSize(3).containsOnly(false);
 
             Map<String, EnumSet<Permission>> seeded = new HashMap<>();
             List<Map<String, Object>> rows = owner.queryForList(
@@ -65,6 +78,15 @@ class BaseRolesMatrixTests extends IntegrationTest {
     void defaultNameReturnsTheSeedNameOfABaseRole() {
         assertThat(BaseRoles.defaultName("TREASURER")).isEqualTo("Treasurer");
         assertThatThrownBy(() -> BaseRoles.defaultName("SECRETARY")).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void defaultDescriptionReturnsTheSeedDescriptionOfABaseRole() {
+        assertThat(BaseRoles.defaultDescription("CHAIRMAN")).isEqualTo("Full access");
+        assertThat(BaseRoles.defaultDescription("TREASURER")).isEqualTo("Read access to members, plots and audit");
+        assertThat(BaseRoles.defaultDescription("MEMBER")).isEqualTo("Own data only");
+        assertThatThrownBy(() -> BaseRoles.defaultDescription("SECRETARY"))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test

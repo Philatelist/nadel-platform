@@ -18,12 +18,12 @@ commit; report every file created or changed.
   - [x] Implement tech spec 2.2: header title link with truncation and `title`, product name label, fallback without a tenant; `useOptionalMe`; `web/src/useDocumentTitle.ts` and calls in the pages, `SignIn` and `FullPageMessage`. Unit tests: Layout title and fallback, `useDocumentTitle`. Update `web/e2e/design-system.spec.ts` header assertions (cooperative link instead of the "Наділ" link; "Наділ" still visible as text). **[Agent: react-frontend]**
   - [x] Verify: `pnpm -r test && pnpm -r typecheck && pnpm -r lint && pnpm format:check` green. **[Agent: react-frontend]**
 
-- [ ] **Slice 3: Base role descriptions in the user's language**
+- [x] **Slice 3: Base role descriptions in the user's language**
 
   > Base role descriptions show in Ukrainian or English unless changed; a changed one can be restored; changes are audited.
-  - [ ] Backend per tech spec 2.3: OpenAPI (`RoleInput.useDefaultDescription`, `RoleDetails.descriptionCustomized`), `pnpm gen:api`, `V5__role_description_customized.sql`, `BaseRoles` descriptions + `defaultDescription`, `Role` flag, `RoleCommands.update`, `RoleSnapshot.auditDescription`, `RoleDtoMapper`, members README; tests: `RolesTests` description cases, `RoleLogicTests`, `BaseRolesMatrixTests`, `SeedBaseRolesTests`, migration rule check; every shared-DB cleanup resets `description_customized`. **[Agent: spring-backend]**
-  - [ ] Web per tech spec 2.3: `roleDescription`, `descriptionToSubmit` (+ tests), RolesPage list/form/restore button, AuditPage field-aware token mapping (+ tests), i18n `roleDescriptions.*` and `rolesPage.restoreDescription`. **[Agent: react-frontend]**
-  - [ ] Verify: `cd backend && ./mvnw -B test -Dtest='RolesTests,RoleLogicTests,SeedBaseRolesTests,BaseRolesMatrixTests,RoleNamesAcceptanceTests,MembersAccessAcceptanceTests,ModularityTests'` green; `pnpm -r test && pnpm -r typecheck && pnpm -r lint && pnpm format:check` green; `pnpm gen:api` leaves no diff. **[Agent: spring-backend]**
+  - [x] Backend per tech spec 2.3: OpenAPI (`RoleInput.useDefaultDescription`, `RoleDetails.descriptionCustomized`), `pnpm gen:api`, `V5__role_description_customized.sql`, `BaseRoles` descriptions + `defaultDescription`, `Role` flag, `RoleCommands.update`, `RoleSnapshot.auditDescription`, `RoleDtoMapper`, members README; tests: `RolesTests` description cases, `RoleLogicTests`, `BaseRolesMatrixTests`, `SeedBaseRolesTests`, migration rule check; every shared-DB cleanup resets `description_customized`. **[Agent: spring-backend]**
+  - [x] Web per tech spec 2.3: `roleDescription`, `descriptionToSubmit` (+ tests), RolesPage list/form/restore button, AuditPage field-aware token mapping (+ tests), i18n `roleDescriptions.*` and `rolesPage.restoreDescription`. **[Agent: react-frontend]**
+  - [x] Verify: `cd backend && ./mvnw -B test -Dtest='RolesTests,RoleLogicTests,SeedBaseRolesTests,BaseRolesMatrixTests,RoleNamesAcceptanceTests,MembersAccessAcceptanceTests,ModularityTests'` green; `pnpm -r test && pnpm -r typecheck && pnpm -r lint && pnpm format:check` green; `pnpm gen:api` leaves no diff. **[Agent: spring-backend]**
 
 - [ ] **Slice 4: End-to-end flows, docs and coverage floor**
 

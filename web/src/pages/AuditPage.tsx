@@ -208,7 +208,9 @@ function AuditChanges({ entry }: { entry: AuditEntry }) {
   const value = (field: string, raw: string | undefined): string => {
     if (raw === undefined || raw === '') return a.noValue;
     if (field === 'archived') return raw === 'true' ? a.yes : a.no;
-    return field === 'name' || field === 'roles' ? auditRoleValue(raw, t) : raw;
+    return field === 'name' || field === 'roles' || field === 'description'
+      ? auditRoleValue(raw, t, field)
+      : raw;
   };
   return (
     <ul className="flex flex-col gap-1">

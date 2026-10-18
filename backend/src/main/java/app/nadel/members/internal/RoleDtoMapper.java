@@ -17,6 +17,7 @@ final class RoleDtoMapper {
                 role.getId(),
                 role.getName(),
                 role.isNameCustomized(),
+                role.isDescriptionCustomized(),
                 permissions.stream().map(p -> nadel.contract.model.Permission.fromValue(p.name())).toList(),
                 (int) memberCount);
         dto.setDescription(role.getDescription());

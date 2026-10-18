@@ -31,6 +31,10 @@ class Role {
 
     private String description;
 
+    /** Stored flag; read it through {@link #isDescriptionCustomized()}, which also covers custom roles. */
+    @Column(name = "description_customized", nullable = false)
+    private boolean descriptionCustomized;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -48,16 +52,18 @@ class Role {
         role.name = name;
         role.nameCustomized = true;
         role.description = description;
+        role.descriptionCustomized = true;
         role.createdAt = now;
         role.updatedAt = now;
         return role;
     }
 
-    /** Changes name, flag and description. For a custom role the stored flag stays true. */
-    void edit(String name, boolean nameCustomized, String description, Instant now) {
+    /** Changes name, description and their flags. For a custom role the stored flags stay true. */
+    void edit(String name, boolean nameCustomized, String description, boolean descriptionCustomized, Instant now) {
         this.name = name;
         this.nameCustomized = baseCode == null || nameCustomized;
         this.description = description;
+        this.descriptionCustomized = baseCode == null || descriptionCustomized;
         this.updatedAt = now;
     }
 
@@ -84,6 +90,14 @@ class Role {
     /** True for custom roles and for base roles that were renamed; false for a base role with its standard name. */
     boolean isNameCustomized() {
         return isNameCustomized(baseCode, nameCustomized);
+    }
+
+    /**
+     * True for custom roles and for base roles whose description was changed; false for a base role with its
+     * standard description.
+     */
+    boolean isDescriptionCustomized() {
+        return baseCode == null || descriptionCustomized;
     }
 
     /** The rule behind {@link #isNameCustomized()}, shared with the query rows: custom roles are always customised. */

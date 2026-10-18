@@ -49,3 +49,7 @@ Same as 004 (see `context/spec/004-role-names/pipeline-log.md`), re-checked: bas
 - AUTO: name and description restores may be combined in one request (rule: independent fields; one audit entry).
 
 ## Phase 3 — implement
+- Slice 1 committed a33b050 (web 76 unit tests, typecheck/lint/format/build green). Review r1 started.
+- Slice 2 committed 39719cd (web 82 unit tests; typecheck/lint/format green; e2e header assertions updated, not run yet).
+- Slice 1 review r1 MAJOR_ISSUES (M1 MapPage colours) → orchestrator showed MapPage is unreachable → r2 PASS (M1 withdrawn, phase-6 note).
+- Slice 2 review r1 PASS.

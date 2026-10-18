@@ -63,6 +63,18 @@ None yet. Features 004 (ownership) and 005 (import) will add a lookup API in the
     flag is false, and the stored name once it is true. `RoleInput.useDefaultName` on a base role restores the standard
     name (the seed name from `BaseRoles.defaultName`, flag false; 409 `ROLE_NAME_TAKEN` if another role holds it); on a
     custom role it is 400 `INVALID` on `useDefaultName`. Renaming never touches permissions, which follow the base code.
+  - Role descriptions (feature 005): same rule as names. `role.description_customized` (API `descriptionCustomized`) is
+    false while a base role has its standard description, always true for custom roles (`Role.isDescriptionCustomized()`
+    derives it); clients show the language catalog description for a base role while it is false. A PUT whose
+    description text differs from the stored one (a blank or omitted description counts as `null`) sets the flag; an
+    equal text keeps it, so a permission-only save in a language that shows the catalog text does not customise it.
+    `RoleInput.useDefaultDescription` on a base role stores the seed description (`BaseRoles.defaultDescription`, flag
+    false) and ignores the submitted `description`; on a custom role it is 400 `INVALID` on `useDefaultDescription`. The
+    name and description restores are independent and can be combined. V5 flags base roles whose stored description
+    already differed from the V2 seed text. A change that only flips a flag is persisted without an audit entry.
+  - Audit values: a base role with its standard name (description) is written as the token `base:<CODE>` in the `name`
+    (`description`) field, so the reader's client shows it in the reader's language (`RoleSnapshot.auditName`,
+    `auditDescription`); the web maps the token by field.
   - Deleting a role that any member row references (active or archived) is 409 `ROLE_IN_USE` (the foreign key is the guard
     against a concurrent assignment).
   - `setMemberRoles`: unknown or other-cooperative role or member is 404. Archived members may be given or lose roles. When the

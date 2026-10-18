@@ -398,9 +398,11 @@ paths:
         the cooperative, ignoring upper and lower case (409 `ROLE_NAME_TAKEN`). With `useDefaultName: true` a base
         role gets its standard name back (the submitted `name` is ignored); that can also end in 409
         `ROLE_NAME_TAKEN` when another role already holds the standard name, and for a custom role it is a 400
-        `VALIDATION_FAILED` on `useDefaultName`. The permissions of the Chairman role cannot be changed
-        (409 `BASE_ROLE_IMMUTABLE`); the permissions of the Treasurer and Member roles can be edited. Renaming a role
-        never changes what its holders may do.
+        `VALIDATION_FAILED` on `useDefaultName`. With `useDefaultDescription: true` a base role gets its standard
+        description back (the submitted `description` is ignored); for a custom role it is a 400 `VALIDATION_FAILED`
+        on `useDefaultDescription`. Both restores can be combined in one request. The permissions of the Chairman
+        role cannot be changed (409 `BASE_ROLE_IMMUTABLE`); the permissions of the Treasurer and Member roles can be
+        edited. Renaming a role never changes what its holders may do.
       parameters:
         - name: id
           in: path
@@ -693,6 +695,13 @@ components:
             Base roles only. When true the role gets its standard name back (`nameCustomized` becomes false) and the
             submitted `name` is ignored. On a custom role this is a validation error (400 `VALIDATION_FAILED`,
             field `useDefaultName`, code `INVALID`).
+        useDefaultDescription:
+          type: boolean
+          default: false
+          description: |
+            Base roles only. When true the role gets its standard description back (`descriptionCustomized` becomes
+            false) and the submitted `description` is ignored. On a custom role this is a validation error (400
+            `VALIDATION_FAILED`, field `useDefaultDescription`, code `INVALID`).
         description:
           type: string
           maxLength: 500
@@ -705,7 +714,7 @@ components:
     RoleDetails:
       type: object
       description: A role with its permissions and the number of active members who hold it
-      required: [id, name, nameCustomized, permissions, memberCount]
+      required: [id, name, nameCustomized, descriptionCustomized, permissions, memberCount]
       properties:
         id:
           type: string
@@ -720,6 +729,13 @@ components:
             their own catalog, in the user's language, chosen by `baseCode`.
         description:
           type: string
+        descriptionCustomized:
+          type: boolean
+          description: |
+            True when `description` is the cooperative's own wording: always true for custom roles, true for a base
+            role once its description was changed (including cleared). When false (a base role with its standard
+            description) clients show the standard description from their own catalog, in the user's language,
+            chosen by `baseCode`.
         baseCode:
           $ref: '#/components/schemas/BaseRole'
         permissions:
