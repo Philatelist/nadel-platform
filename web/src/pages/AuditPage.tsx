@@ -185,7 +185,9 @@ function AuditRecord({ entry }: { entry: AuditEntry }) {
   const label = entry.entityLabel
     ? entry.entityType === 'ROLE'
       ? auditRoleValue(entry.entityLabel, t)
-      : entry.entityLabel
+      : entry.entityType === 'SETTINGS'
+        ? t.settings.title
+        : entry.entityLabel
     : a.unlabelled;
   return (
     <>

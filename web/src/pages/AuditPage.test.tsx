@@ -51,12 +51,14 @@ describe('AuditPage settings entries', () => {
       action: 'SETTINGS_UPDATED',
       entityType: 'SETTINGS',
       entityId: 's1',
-      entityLabel: 'Cooperative settings',
+      entityLabel: 'Stored backend label',
       changes: [{ field: 'memberPlotStatusVisibility', oldValue: 'OWN_ONLY', newValue: 'ALL_PLOTS' }],
     };
     renderWithApp(<AuditPage />);
     expect(screen.getByText('Settings changed')).toBeInTheDocument();
     expect(screen.getByText(/Who sees plot colours:/)).toBeInTheDocument();
+    expect(screen.getByText('Cooperative settings')).toBeInTheDocument();
+    expect(screen.queryByText('Stored backend label')).not.toBeInTheDocument();
     expect(screen.getByText(/Own plots only → All plots/)).toBeInTheDocument();
   });
 });
