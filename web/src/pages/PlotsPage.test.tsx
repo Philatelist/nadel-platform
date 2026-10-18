@@ -50,6 +50,16 @@ describe('PlotsPage', () => {
     expect(screen.getByRole('link', { name: '12' })).toHaveAttribute('href', '/plots/p1');
   });
 
+  it('shows Add plot only with both PLOTS_VIEW and PLOTS_EDIT', () => {
+    permissions = ['PLOTS_EDIT'];
+    const { unmount } = renderWithApp(<PlotsPage />);
+    expect(screen.queryByRole('button', { name: 'Add plot' })).toBeNull();
+    unmount();
+    permissions = ['PLOTS_VIEW', 'PLOTS_EDIT'];
+    renderWithApp(<PlotsPage />);
+    expect(screen.getByRole('button', { name: 'Add plot' })).toBeInTheDocument();
+  });
+
   it('shows only number, street, kind and status without PLOTS_VIEW', () => {
     permissions = [];
     data = { ...data, items: [{ ...full, areaM2: undefined, cadastralNumber: undefined }] };

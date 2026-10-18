@@ -16,11 +16,11 @@ None yet. Other modules will get a lookup API in the module root when 007 (owner
 | `GET /plots/map` | `getPlotMap` | any member of a cooperative |
 | `GET /plots` | `listPlots` | any member of a cooperative |
 | `GET /plots/{id}` | `getPlot` | any member of a cooperative |
-| `POST /plots` | `createPlot` | `PLOTS_EDIT` |
-| `PUT /plots/{id}` | `updatePlot` | `PLOTS_EDIT` |
-| `POST /plots/{id}/archive` | `archivePlot` | `PLOTS_EDIT` |
-| `POST /plots/{id}/restore` | `restorePlot` | `PLOTS_EDIT` |
-| `DELETE /plots/{id}` | `deletePlot` | `PLOTS_EDIT` |
+| `POST /plots` | `createPlot` | `PLOTS_VIEW` and `PLOTS_EDIT` |
+| `PUT /plots/{id}` | `updatePlot` | `PLOTS_VIEW` and `PLOTS_EDIT` |
+| `POST /plots/{id}/archive` | `archivePlot` | `PLOTS_VIEW` and `PLOTS_EDIT` |
+| `POST /plots/{id}/restore` | `restorePlot` | `PLOTS_VIEW` and `PLOTS_EDIT` |
+| `DELETE /plots/{id}` | `deletePlot` | `PLOTS_VIEW` and `PLOTS_EDIT` |
 
 The platform operator has no cooperative data: every endpoint answers 403 `PERMISSION_DENIED` for it. The cooperative
 always comes from the token, never from the request; a plot of another cooperative is 404 (RLS).
@@ -40,7 +40,7 @@ rebuilds it later.
 
 ## Writes
 
-`PlotCommands` (one transaction each, `@PreAuthorize("hasAuthority('PERM_PLOTS_EDIT')")` on the controller). Each change
+`PlotCommands` (one transaction each, `@PreAuthorize("hasAuthority('PERM_PLOTS_VIEW') and hasAuthority('PERM_PLOTS_EDIT')")` on the controller). Each change
 publishes an `audit.AuditEvent` built from `PlotSnapshot.diff`, with the plot number as the label: `PLOT_CREATED`,
 `PLOT_UPDATED`, `PLOT_ARCHIVED`, `PLOT_RESTORED`, `PLOT_DELETED`; see the `audit` README.
 
@@ -49,7 +49,8 @@ publishes an `audit.AuditEvent` built from `PlotSnapshot.diff`, with the plot nu
   `PLOT_NUMBER_TAKEN` with `errors[{field: "number"}]`. An archived plot frees its number.
 - Cadastral number: unique per cooperative, archived plots included (`plot_tenant_cadastral_uq`), 409
   `CADASTRAL_NUMBER_TAKEN`.
-- `notes` need `PLOTS_VIEW`: an editor without it cannot write them (create stores none, update keeps the stored value).
+- Every write needs both `PLOTS_VIEW` and `PLOTS_EDIT` (403 otherwise). `PUT` replaces all fields, and an editor who cannot
+  see the cadastral number, building flag or notes must not erase them blindly, so there is no write-only edit permission.
 - A `PUT` that changes nothing is accepted, writes no audit entry and keeps `updated_at`.
 - Archive and restore are idempotent: archiving an archived plot and restoring an active one return the card and write
   no audit entry. Restore checks the number again (pre-check plus index mapping): when another active plot took it, the

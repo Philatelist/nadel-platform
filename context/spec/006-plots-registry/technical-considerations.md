@@ -40,10 +40,10 @@ tenant keeps 2 plots.
 | `GET /plots` | `listPlots` | signed in | `q` (≤100), `kind`, `status`, `includeArchived`, `page`, `size` (default 20, max 100) → `PlotPage` |
 | `GET /plots/map` | `getPlotMap` | signed in | was `getPlots`; `PlotFeatureCollection`; `areaM2`, `debt` optional |
 | `GET /plots/{id}` | `getPlot` | signed in | `PlotDetails` |
-| `POST /plots` | `createPlot` | `PLOTS_EDIT` | 201 + `Location` |
-| `PUT /plots/{id}` | `updatePlot` | `PLOTS_EDIT` | |
-| `POST /plots/{id}/archive` / `restore` | `archivePlot` / `restorePlot` | `PLOTS_EDIT` | idempotent; restore re-checks the number |
-| `DELETE /plots/{id}` | `deletePlot` | `PLOTS_EDIT` | 204; archived → 409 `PLOT_ARCHIVED` |
+| `POST /plots` | `createPlot` | `PLOTS_VIEW` + `PLOTS_EDIT` | 201 + `Location` |
+| `PUT /plots/{id}` | `updatePlot` | `PLOTS_VIEW` + `PLOTS_EDIT` | |
+| `POST /plots/{id}/archive` / `restore` | `archivePlot` / `restorePlot` | `PLOTS_VIEW` + `PLOTS_EDIT` | idempotent; restore re-checks the number |
+| `DELETE /plots/{id}` | `deletePlot` | `PLOTS_VIEW` + `PLOTS_EDIT` | 204; archived → 409 `PLOT_ARCHIVED` |
 
 Schemas: `PlotSummary` (required `id, number, kind, status, archived`; optional `street, areaM2, cadastralNumber,
 hasBuilding` — absent for restricted viewers), `PlotDetails` (+ `notes, archivedAt, createdAt, updatedAt`), `PlotPage`
@@ -54,7 +54,7 @@ hasBuilding` — absent for restricted viewers), `PlotDetails` (+ `notes, archiv
 
 ### 2.3 Backend (`app.nadel.plots.internal`, package-private)
 
-- `PlotsController` (replaces `PlotController`): write endpoints `@PreAuthorize("hasAuthority('PERM_PLOTS_EDIT')")`;
+- `PlotsController` (replaces `PlotController`): write endpoints require `PERM_PLOTS_VIEW` and `PERM_PLOTS_EDIT` (no blind writes of fields hidden from the editor);
   reads require a cooperative member (operator → 403).
 - `PlotQueries` (`list`, `card`, `map`; absorbs `PlotMapQuery`), `PlotRepository.search` (native, escaped `like`, filters,
   `order by number_sort_key, number, id`, count query), `PlotDtoMapper` with the single visibility seam

@@ -4,7 +4,6 @@ import app.nadel.audit.Actor;
 import app.nadel.audit.AuditEvent;
 import app.nadel.audit.FieldChange;
 import app.nadel.identity.AccessProfile;
-import app.nadel.identity.Permission;
 import app.nadel.problem.ApiProblemException;
 import app.nadel.problem.FieldProblem;
 import app.nadel.problem.ProblemCodes;
@@ -46,10 +45,6 @@ class PlotCommands {
     @Transactional
     PlotDetails create(PlotInput input, AccessProfile actor) {
         PlotData data = PlotData.from(input);
-        if (!actor.can(Permission.PLOTS_VIEW)) {
-            // notes are read-protected, so an editor who cannot read them cannot write them either
-            data = withNotes(data, null);
-        }
         ensureNumberFree(actor.tenantId(), data.number(), null);
         ensureCadastralFree(actor.tenantId(), data.cadastralNumber(), null);
         Plot plot = save(Plot.create(actor.tenantId(), data, Instant.now()));
@@ -63,9 +58,6 @@ class PlotCommands {
     PlotDetails update(UUID id, PlotInput input, AccessProfile actor) {
         PlotData data = PlotData.from(input);
         Plot plot = plots.findById(id).orElseThrow(ApiProblemException::notFound);
-        if (!actor.can(Permission.PLOTS_VIEW)) {
-            data = withNotes(data, plot.getNotes()); // keep what is stored: the editor cannot see it
-        }
         if (plot.getArchivedAt() == null) {
             ensureNumberFree(actor.tenantId(), data.number(), plot.getId());
         }
@@ -172,11 +164,6 @@ class PlotCommands {
                 plot.getId(),
                 plot.getNumber(),
                 changes));
-    }
-
-    private static PlotData withNotes(PlotData data, String notes) {
-        return new PlotData(data.number(), data.street(), data.kind(), data.areaM2(), data.cadastralNumber(),
-                data.hasBuilding(), notes);
     }
 
     private static ApiProblemException numberTaken() {

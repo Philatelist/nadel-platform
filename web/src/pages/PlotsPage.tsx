@@ -26,6 +26,7 @@ import {
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useLocale, useT } from '../i18n';
 import { useCan } from '../me';
+import { useCanEditPlots } from '../hooks/useCanEditPlots';
 import { plotStatusLabel } from '../plotStatus';
 import { useDocumentTitle } from '../useDocumentTitle';
 
@@ -44,7 +45,7 @@ export function PlotsPage() {
   const { locale } = useLocale();
   useDocumentTitle(t.plots.title);
   const canView = useCan('PLOTS_VIEW');
-  const canEdit = useCan('PLOTS_EDIT');
+  const canEdit = useCanEditPlots();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const q = params.get('q') ?? '';

@@ -17,6 +17,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { Badge, Button, Notice, PageHeader, Panel, StatusDot } from '../components/ui';
 import { useLocale, useT } from '../i18n';
 import { useCan } from '../me';
+import { useCanEditPlots } from '../hooks/useCanEditPlots';
 import { plotStatusLabel } from '../plotStatus';
 import { problemMessage } from '../problem';
 import { useDocumentTitle } from '../useDocumentTitle';
@@ -50,7 +51,7 @@ function PlotView({ plot }: { plot: PlotDetails }) {
   const t = useT();
   const { locale } = useLocale();
   const canView = useCan('PLOTS_VIEW');
-  const canEdit = useCan('PLOTS_EDIT');
+  const canEdit = useCanEditPlots();
   const navigate = useNavigate();
   const f = t.plot.fields;
   const queryClient = useQueryClient();

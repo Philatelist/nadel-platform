@@ -14,7 +14,7 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <HomeRedirect /> },
       {
-        element: <RequirePermission permission="PLOTS_EDIT" />,
+        element: <RequirePermission permission={['PLOTS_VIEW', 'PLOTS_EDIT']} />,
         children: [
           {
             path: 'plots/new',

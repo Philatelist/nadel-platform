@@ -800,33 +800,41 @@ class PlotsWriteTests extends IntegrationTest {
     // ---- notes
 
     @Test
-    void anEditorWithoutPlotsViewCannotWriteNotes() throws Exception {
+    void anEditorWithoutPlotsViewIsRefusedOnEveryWrite() throws Exception {
+        String cadastral = cadastral();
+        Map<String, Object> full = body(number(), "PLOT", "600");
+        full.put("cadastralNumber", cadastral);
+        full.put("hasBuilding", true);
+        full.put("notes", "chairman note");
+        Created created = create(chairman(), full);
+        created.actions.andExpect(status().isCreated());
+        UUID target = created.id;
         String editor = editOnlyToken();
-        Map<String, Object> body = body(number(), "PLOT", "600");
-        body.put("notes", "secret from an editor");
 
-        Created created = create(editor, body);
-        created.actions
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$", not(hasKey("notes"))));
-        assertThat(notesOf(created.id)).isNull();
+        send(editor, post(PLOTS), body(number(), "PLOT", "600"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
+        send(editor, put(PLOTS + "/" + target), body(created.number, "PLOT", "700"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
+        send(editor, post(PLOTS + "/" + target + "/archive"), null)
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
+        send(editor, post(PLOTS + "/" + target + "/restore"), null)
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
+        mvcDelete(editor, target)
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
 
-        // the chairman adds a note; a later edit by the editor must keep it
-        Map<String, Object> withNote = body(created.number, "PLOT", "600");
-        withNote.put("notes", "chairman note");
-        send(chairman(), put(PLOTS + "/" + created.id), withNote)
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.notes").value("chairman note"));
-        Map<String, Object> edited = body(created.number, "PLOT", "700");
-        edited.put("notes", "overwritten by editor");
-        send(editor, put(PLOTS + "/" + created.id), edited)
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$", not(hasKey("notes"))));
-
-        assertThat(notesOf(created.id)).isEqualTo("chairman note");
-        BigDecimal area = inTenant(DEMO_TENANT, sql -> sql.queryForObject(
-                "select area_m2 from plot where id = ?", BigDecimal.class, created.id));
-        assertThat(area).isEqualByComparingTo("700");
+        // nothing changed: area, cadastral number, building flag and notes are intact, the plot is active
+        Map<String, Object> stored = inTenant(DEMO_TENANT, sql -> sql.queryForMap(
+                "select area_m2, cadastral_number, has_building, notes, archived_at from plot where id = ?", target));
+        assertThat((BigDecimal) stored.get("area_m2")).isEqualByComparingTo("600");
+        assertThat(stored.get("cadastral_number")).isEqualTo(cadastral);
+        assertThat(stored.get("has_building")).isEqualTo(true);
+        assertThat(stored.get("notes")).isEqualTo("chairman note");
+        assertThat(stored.get("archived_at")).isNull();
     }
 
     @Test

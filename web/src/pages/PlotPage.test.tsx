@@ -59,6 +59,13 @@ describe('PlotPage actions', () => {
     expect(screen.queryByRole('button', { name: 'Archive' })).toBeNull();
   });
 
+  it('hides the actions with PLOTS_EDIT alone', () => {
+    permissions = ['PLOTS_EDIT'];
+    renderCard();
+    expect(screen.queryByRole('button', { name: 'Archive' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull();
+  });
+
   it('hides the actions without PLOTS_EDIT', () => {
     permissions = ['PLOTS_VIEW'];
     renderCard();

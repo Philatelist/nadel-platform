@@ -188,8 +188,8 @@ export const getCreatePlotUrl = () => {
 }
 
 /**
- * Creates a plot or common land in the current cooperative. Requires the `PLOTS_EDIT` permission. The new plot
- * is active and has the status `GREY`.
+ * Creates a plot or common land in the current cooperative. Requires the `PLOTS_VIEW` and `PLOTS_EDIT` permissions
+ * (an editor must be able to see what they write). The new plot is active and has the status `GREY`.
  * The number is trimmed and must be unique among the active plots of the cooperative, ignoring upper and lower
  * case (409 `PLOT_NUMBER_TAKEN`, field `number`). The cadastral number, when given, must look like
  * `1234567890:12:345:6789` (400 `CADASTRAL_INVALID`) and be unique in the cooperative, archived plots included
@@ -492,7 +492,8 @@ export const getUpdatePlotUrl = (id: string,) => {
 
 /**
  * Replaces all editable fields of the plot (full replacement; optional fields absent from the body are
- * cleared). Requires the `PLOTS_EDIT` permission. An archived plot can be edited too; its number is then not
+ * cleared). Requires the `PLOTS_VIEW` and `PLOTS_EDIT` permissions, so that an editor never overwrites fields
+ * they cannot see. An archived plot can be edited too; its number is then not
  * checked against the active plots, and restoring it checks the number again.
  * The same rules apply as when creating: 409 `PLOT_NUMBER_TAKEN`, 409 `CADASTRAL_NUMBER_TAKEN`,
  * 400 `CADASTRAL_INVALID`, 400 `AREA_INVALID`. A change that alters nothing is accepted and not audited.
@@ -584,7 +585,7 @@ export const useUpdatePlot = <TError = BadRequestResponse | UnauthorizedResponse
 }
 
 /**
- * Removes a plot that was created by mistake, together with its status. Requires `PLOTS_EDIT`. Only an active
+ * Removes a plot that was created by mistake, together with its status. Requires `PLOTS_VIEW` and `PLOTS_EDIT`. Only an active
  * plot can be deleted; an archived plot is refused with 409 `PLOT_ARCHIVED` and must be restored first. The
  * deletion is audited.
  * @summary Delete a plot or common land
@@ -661,7 +662,7 @@ export const useDeletePlot = <TError = BadRequestResponse | UnauthorizedResponse
 
 /**
  * Moves the plot to the archive: it is hidden from the default list and its number becomes free for a new
- * plot. Archiving an already archived plot is a no-op and is not audited. Requires `PLOTS_EDIT`.
+ * plot. Archiving an already archived plot is a no-op and is not audited. Requires `PLOTS_VIEW` and `PLOTS_EDIT`.
  * @summary Archive a plot or common land
  */
 export const archivePlot = async (id: string, options?: Parameters<typeof nadelFetch>[1]): Promise<PlotDetails> => {
@@ -737,7 +738,7 @@ export const useArchivePlot = <TError = BadRequestResponse | UnauthorizedRespons
 /**
  * Brings an archived plot back to the default list. The number is checked again: when another active plot has
  * taken it meanwhile, the answer is 409 `PLOT_NUMBER_TAKEN`. Restoring an active plot is a no-op and is not
- * audited. Requires `PLOTS_EDIT`.
+ * audited. Requires `PLOTS_VIEW` and `PLOTS_EDIT`.
  * @summary Restore an archived plot or common land
  */
 export const restorePlot = async (id: string, options?: Parameters<typeof nadelFetch>[1]): Promise<PlotDetails> => {

@@ -61,32 +61,32 @@ class PlotsController implements PlotsApi {
     }
 
     @Override
-    @PreAuthorize("hasAuthority('PERM_PLOTS_EDIT')")
+    @PreAuthorize("hasAuthority('PERM_PLOTS_VIEW') and hasAuthority('PERM_PLOTS_EDIT')")
     public ResponseEntity<PlotDetails> createPlot(PlotInput plotInput) {
         PlotDetails created = commands.create(plotInput, currentUser.profile());
         return ResponseEntity.created(URI.create("/api/v1/plots/" + created.getId())).body(created);
     }
 
     @Override
-    @PreAuthorize("hasAuthority('PERM_PLOTS_EDIT')")
+    @PreAuthorize("hasAuthority('PERM_PLOTS_VIEW') and hasAuthority('PERM_PLOTS_EDIT')")
     public ResponseEntity<PlotDetails> updatePlot(UUID id, PlotInput plotInput) {
         return ResponseEntity.ok(commands.update(id, plotInput, currentUser.profile()));
     }
 
     @Override
-    @PreAuthorize("hasAuthority('PERM_PLOTS_EDIT')")
+    @PreAuthorize("hasAuthority('PERM_PLOTS_VIEW') and hasAuthority('PERM_PLOTS_EDIT')")
     public ResponseEntity<PlotDetails> archivePlot(UUID id) {
         return ResponseEntity.ok(commands.archive(id, currentUser.profile()));
     }
 
     @Override
-    @PreAuthorize("hasAuthority('PERM_PLOTS_EDIT')")
+    @PreAuthorize("hasAuthority('PERM_PLOTS_VIEW') and hasAuthority('PERM_PLOTS_EDIT')")
     public ResponseEntity<PlotDetails> restorePlot(UUID id) {
         return ResponseEntity.ok(commands.restore(id, currentUser.profile()));
     }
 
     @Override
-    @PreAuthorize("hasAuthority('PERM_PLOTS_EDIT')")
+    @PreAuthorize("hasAuthority('PERM_PLOTS_VIEW') and hasAuthority('PERM_PLOTS_EDIT')")
     public ResponseEntity<Void> deletePlot(UUID id) {
         commands.delete(id, currentUser.profile());
         return ResponseEntity.noContent().build();
