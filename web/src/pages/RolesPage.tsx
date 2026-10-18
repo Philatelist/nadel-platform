@@ -19,6 +19,7 @@ import { problemCode, problemFieldErrors, problemMessage, type FieldErrors } fro
 import { roleDescription, useRoleName } from '../roleName';
 import { findNameClash } from '../roleNameClash';
 import { descriptionToSubmit } from '../roleDescriptionSubmit';
+import { restoreNameDescription } from '../roleRestore';
 import { nameToSubmit } from '../roleNameSubmit';
 import { useDocumentTitle } from '../useDocumentTitle';
 
@@ -245,7 +246,7 @@ function RoleEditor({
       id: role.id,
       data: {
         name: role.name,
-        description: description.trim() === '' ? undefined : description.trim(),
+        description: restoreNameDescription(role, description, roleDescription(role, t) ?? ''),
         permissions: available.filter((code) => selected.has(code)),
         useDefaultName: true,
       },
