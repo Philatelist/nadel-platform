@@ -58,3 +58,5 @@ Same as 004/005 (see `context/spec/005-ui-preferences/pipeline-log.md`). Re-chec
 - Slice 1 review r1 PASS. Slice 2 committed 441f9b1 (backend PlotsReadTests 27 + map; web 108, shared 20 unit; e2e specs updated for landing/menu, typechecked only — run in Slice 5). Review r1 started.
 - AUTO: area wording uses Ukrainian plural forms (1 сотка, 2–4 сотки, 5+ соток, fractions сотки); the spec example "6,5 соток" corrected to "6,5 сотки" (rule: correct Ukrainian; reviewer note in Slice 2).
 - Slice 2 review r1 PASS.
+- Slice 3 committed 9cc8a6d (backend 150 targeted incl. notes guard for editors without PLOTS_VIEW; web 115, shared 42 unit; generated client stable). Review r1 started.
+- AUTO: Slice 3 review M1 fixed with the reviewer's option (b): every plot write endpoint requires PLOTS_VIEW and PLOTS_EDIT (403 otherwise), web gates Add/Edit/Archive/Restore/Delete and the form routes on both; the notes special case is removed (rule: no blind writes of fields the editor cannot see; simplest consistent rule). Applied after the Slice 4 commit because the files overlap.

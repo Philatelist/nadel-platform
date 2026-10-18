@@ -5,6 +5,7 @@ import static org.awaitility.Awaitility.await;
 import static org.hamcrest.Matchers.endsWith;
 import static org.hamcrest.Matchers.hasKey;
 import static org.hamcrest.Matchers.not;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -34,7 +35,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
-/** POST /plots and PUT /plots/{id}: permission, validation, uniqueness, the initial status and audit. */
+/** Plot writes: create, update, archive, restore and delete: permission, validation, uniqueness, status and audit. */
 class PlotsWriteTests extends IntegrationTest {
 
     private static final String PLOTS = "/api/v1/plots";
@@ -611,6 +612,191 @@ class PlotsWriteTests extends IntegrationTest {
         assertThat(updatedAt(created.id)).isEqualTo(updatedBefore);
     }
 
+    // ---- archive, restore, delete
+
+    @Test
+    void archiveHidesThePlotFromTheDefaultListAndRestoreBringsItBack() throws Exception {
+        String chairman = chairman();
+        Created created = create(chairman, body(number(), "PLOT", "600"));
+        created.actions.andExpect(status().isCreated());
+        assertThat(listed(chairman, created.number, false)).containsExactly(created.id.toString());
+
+        send(chairman, post(PLOTS + "/" + created.id + "/archive"), null)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(created.id.toString()))
+                .andExpect(jsonPath("$.archived").value(true))
+                .andExpect(jsonPath("$.archivedAt").exists());
+        assertThat(listed(chairman, created.number, false)).isEmpty();
+        assertThat(listed(chairman, created.number, true)).containsExactly(created.id.toString());
+
+        send(chairman, post(PLOTS + "/" + created.id + "/restore"), null)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.archived").value(false))
+                .andExpect(jsonPath("$", not(hasKey("archivedAt"))));
+        assertThat(listed(chairman, created.number, false)).containsExactly(created.id.toString());
+    }
+
+    @Test
+    void archivingTwiceAndRestoringAnActivePlotAreNoOpsWithoutAnAuditEntry() throws Exception {
+        String chairman = chairman();
+        Created created = create(chairman, body(number(), "PLOT", "600"));
+        created.actions.andExpect(status().isCreated());
+
+        send(chairman, post(PLOTS + "/" + created.id + "/restore"), null)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.archived").value(false));
+        send(chairman, post(PLOTS + "/" + created.id + "/archive"), null).andExpect(status().isOk());
+        Object archivedAt = archivedAtOf(created.id);
+        send(chairman, post(PLOTS + "/" + created.id + "/archive"), null)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.archived").value(true));
+
+        assertThat(archivedAtOf(created.id)).isEqualTo(archivedAt);
+        // created, then one archive; a late second entry would show up as a third one
+        awaitAudit(created.id, 2);
+        send(chairman, get(PLOTS + "/" + created.id), null).andExpect(status().isOk());
+        assertThat(auditEntries(created.id)).extracting(e -> e.get("action"))
+                .containsExactly("PLOT_CREATED", "PLOT_ARCHIVED");
+    }
+
+    @Test
+    void restoreIsRefusedWhenAnotherActivePlotTookTheNumber() throws Exception {
+        String chairman = chairman();
+        String number = number();
+        Created archived = create(chairman, body(number, "PLOT", "600"));
+        archived.actions.andExpect(status().isCreated());
+        send(chairman, post(PLOTS + "/" + archived.id + "/archive"), null).andExpect(status().isOk());
+        create(chairman, body(number.toUpperCase(), "PLOT", "500")).actions.andExpect(status().isCreated());
+
+        send(chairman, post(PLOTS + "/" + archived.id + "/restore"), null)
+                .andExpect(status().isConflict())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.code").value("PLOT_NUMBER_TAKEN"))
+                .andExpect(jsonPath("$.errors[0].field").value("number"));
+
+        assertThat(archivedAtOf(archived.id)).isNotNull();
+        awaitAudit(archived.id, 2);
+        assertThat(auditEntries(archived.id)).extracting(e -> e.get("action"))
+                .containsExactly("PLOT_CREATED", "PLOT_ARCHIVED");
+    }
+
+    @Test
+    void deletingAnActivePlotRemovesItAndItsStatusRow() throws Exception {
+        String chairman = chairman();
+        Created created = create(chairman, body(number(), "PLOT", "600"));
+        created.actions.andExpect(status().isCreated());
+
+        mvcDelete(chairman, created.id).andExpect(status().isNoContent()).andExpect(content().string(""));
+
+        send(chairman, get(PLOTS + "/" + created.id), null).andExpect(status().isNotFound());
+        assertThat(listed(chairman, created.number, true)).isEmpty();
+        assertThat(rowCount("plot", "id", created.id)).isZero();
+        assertThat(rowCount("plot_status", "plot_id", created.id)).isZero();
+        // the number is free again
+        create(chairman, body(created.number, "PLOT", "600")).actions.andExpect(status().isCreated());
+    }
+
+    @Test
+    void deletingAnArchivedPlotIsRefusedUntilItIsRestored() throws Exception {
+        String chairman = chairman();
+        Created created = create(chairman, body(number(), "PLOT", "600"));
+        created.actions.andExpect(status().isCreated());
+        send(chairman, post(PLOTS + "/" + created.id + "/archive"), null).andExpect(status().isOk());
+
+        mvcDelete(chairman, created.id)
+                .andExpect(status().isConflict())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.code").value("PLOT_ARCHIVED"));
+        assertThat(archivedAtOf(created.id)).isNotNull();
+
+        send(chairman, post(PLOTS + "/" + created.id + "/restore"), null).andExpect(status().isOk());
+        mvcDelete(chairman, created.id).andExpect(status().isNoContent());
+    }
+
+    @Test
+    void archiveRestoreAndDeleteAreDeniedWithoutPlotsEdit() throws Exception {
+        UUID target = createdByFixture();
+        for (String token : List.of(treasurer(), member())) {
+            send(token, post(PLOTS + "/" + target + "/archive"), null)
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
+            send(token, post(PLOTS + "/" + target + "/restore"), null)
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
+            mvcDelete(token, target)
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
+        }
+        assertThat(archivedAtOf(target)).isNull();
+        assertThat(rowCount("plot", "id", target)).isEqualTo(1);
+    }
+
+    @Test
+    void archiveRestoreAndDeleteAreDeniedForThePlatformOperatorAndNeedAToken() throws Exception {
+        String operator = TestTokens.token().email("operator@nadel.local").realmRoles("PLATFORM_OPERATOR").bearer();
+        UUID id = UUID.randomUUID();
+
+        send(operator, post(PLOTS + "/" + id + "/archive"), null).andExpect(status().isForbidden());
+        send(operator, post(PLOTS + "/" + id + "/restore"), null).andExpect(status().isForbidden());
+        mvcDelete(operator, id).andExpect(status().isForbidden());
+        mvc.perform(post(PLOTS + "/" + id + "/archive")).andExpect(status().isUnauthorized());
+        mvc.perform(post(PLOTS + "/" + id + "/restore")).andExpect(status().isUnauthorized());
+        mvc.perform(delete(PLOTS + "/" + id)).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void archiveRestoreAndDeleteOfAnUnknownPlotOrAPlotOfAnotherCooperativeAreNotFound() throws Exception {
+        UUID foreign = ownerJdbc().queryForObject("select id from plot where tenant_id = ? limit 1", UUID.class,
+                OTHER_TENANT);
+        String chairman = chairman();
+
+        for (UUID id : List.of(UUID.randomUUID(), foreign)) {
+            send(chairman, post(PLOTS + "/" + id + "/archive"), null)
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.code").value("NOT_FOUND"));
+            send(chairman, post(PLOTS + "/" + id + "/restore"), null)
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.code").value("NOT_FOUND"));
+            mvcDelete(chairman, id)
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.code").value("NOT_FOUND"));
+        }
+        assertThat(ownerJdbc().queryForObject("select count(*) from plot where id = ?", Integer.class, foreign))
+                .isEqualTo(1);
+    }
+
+    @Test
+    void archiveRestoreAndDeleteAreAudited() throws Exception {
+        String chairman = chairman();
+        String number = number();
+        Created created = create(chairman, body(number, "PLOT", "600"));
+        created.actions.andExpect(status().isCreated());
+        send(chairman, post(PLOTS + "/" + created.id + "/archive"), null).andExpect(status().isOk());
+        send(chairman, post(PLOTS + "/" + created.id + "/restore"), null).andExpect(status().isOk());
+        mvcDelete(chairman, created.id).andExpect(status().isNoContent());
+
+        List<Map<String, Object>> entries = awaitAudit(created.id, 4);
+        assertThat(entries).extracting(e -> e.get("action"))
+                .containsExactly("PLOT_CREATED", "PLOT_ARCHIVED", "PLOT_RESTORED", "PLOT_DELETED");
+        assertThat(entries).allSatisfy(e -> {
+            assertThat(e.get("entity_type")).isEqualTo("PLOT");
+            assertThat(e.get("entity_label")).isEqualTo(number);
+            assertThat(e.get("actor_member_id")).isNotNull();
+        });
+        JsonNode archived = json.readTree((String) entries.get(1).get("changes"));
+        assertThat(archived).hasSize(1);
+        assertThat(change(archived, "archived").get("old").asString()).isEqualTo("false");
+        assertThat(change(archived, "archived").get("new").asString()).isEqualTo("true");
+        JsonNode restored = json.readTree((String) entries.get(2).get("changes"));
+        assertThat(restored).hasSize(1);
+        assertThat(change(restored, "archived").get("new").asString()).isEqualTo("false");
+        JsonNode deleted = json.readTree((String) entries.get(3).get("changes"));
+        assertThat(change(deleted, "number").get("old").asString()).isEqualTo(number);
+        assertThat(change(deleted, "number").get("new").isNull()).isTrue();
+        assertThat(change(deleted, "areaM2").get("old").asString()).isEqualTo("600.00");
+        assertThat(change(deleted, "areaM2").get("new").isNull()).isTrue();
+    }
+
     // ---- notes
 
     @Test
@@ -778,6 +964,31 @@ class PlotsWriteTests extends IntegrationTest {
 
     private void archiveInDatabase(UUID id) {
         inTenant(DEMO_TENANT, sql -> sql.update("update plot set archived_at = now() where id = ?", id));
+    }
+
+    private ResultActions mvcDelete(String bearer, UUID id) throws Exception {
+        return send(bearer, delete(PLOTS + "/" + id), null);
+    }
+
+    /** The ids on the first page of the plots list for a search text, with or without archived plots. */
+    private List<String> listed(String bearer, String q, boolean includeArchived) throws Exception {
+        String content = send(bearer, get(PLOTS).param("q", q).param("includeArchived", String.valueOf(includeArchived)),
+                null).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        List<String> ids = new ArrayList<>();
+        json.readTree(content).get("items").forEach(item -> ids.add(item.get("id").asString()));
+        return ids;
+    }
+
+    /** Rows of a plot table for an id; the names are fixed by the tests, never user input. */
+    private int rowCount(String table, String column, UUID id) {
+        Integer count = inTenant(DEMO_TENANT, sql -> sql.queryForObject(
+                "select count(*) from " + table + " where " + column + " = ?", Integer.class, id));
+        return count;
+    }
+
+    private Object archivedAtOf(UUID id) {
+        return inTenant(DEMO_TENANT, sql -> sql.queryForObject(
+                "select archived_at from plot where id = ?", java.sql.Timestamp.class, id));
     }
 
     private Object updatedAt(UUID id) {

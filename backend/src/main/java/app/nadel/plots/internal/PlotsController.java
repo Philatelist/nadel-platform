@@ -73,6 +73,25 @@ class PlotsController implements PlotsApi {
         return ResponseEntity.ok(commands.update(id, plotInput, currentUser.profile()));
     }
 
+    @Override
+    @PreAuthorize("hasAuthority('PERM_PLOTS_EDIT')")
+    public ResponseEntity<PlotDetails> archivePlot(UUID id) {
+        return ResponseEntity.ok(commands.archive(id, currentUser.profile()));
+    }
+
+    @Override
+    @PreAuthorize("hasAuthority('PERM_PLOTS_EDIT')")
+    public ResponseEntity<PlotDetails> restorePlot(UUID id) {
+        return ResponseEntity.ok(commands.restore(id, currentUser.profile()));
+    }
+
+    @Override
+    @PreAuthorize("hasAuthority('PERM_PLOTS_EDIT')")
+    public ResponseEntity<Void> deletePlot(UUID id) {
+        commands.delete(id, currentUser.profile());
+        return ResponseEntity.noContent().build();
+    }
+
     private static void requireCooperativeMember(AccessProfile viewer) {
         if (viewer.platformOperator() || viewer.tenantId() == null) {
             throw new ApiProblemException(HttpStatus.FORBIDDEN, ProblemCodes.PERMISSION_DENIED,

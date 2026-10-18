@@ -1,12 +1,24 @@
-import { ApiError, useGetPlot, type PlotDetails } from '@nadel/api-client';
+import {
+  ApiError,
+  getGetPlotQueryKey,
+  getListPlotsQueryKey,
+  useArchivePlot,
+  useDeletePlot,
+  useGetPlot,
+  useRestorePlot,
+  type PlotDetails,
+} from '@nadel/api-client';
 import { format, formatSotkyWithUnit } from '@nadel/shared';
-import type { ReactNode } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { QueryBoundary } from '../components/QueryBoundary';
-import { Badge, Button, PageHeader, Panel, StatusDot } from '../components/ui';
+import { ConfirmDialog } from '../components/ConfirmDialog';
+import { Badge, Button, Notice, PageHeader, Panel, StatusDot } from '../components/ui';
 import { useLocale, useT } from '../i18n';
 import { useCan } from '../me';
 import { plotStatusLabel } from '../plotStatus';
+import { problemMessage } from '../problem';
 import { useDocumentTitle } from '../useDocumentTitle';
 import { NotFoundPage } from './NotFoundPage';
 
@@ -41,6 +53,33 @@ function PlotView({ plot }: { plot: PlotDetails }) {
   const canEdit = useCan('PLOTS_EDIT');
   const navigate = useNavigate();
   const f = t.plot.fields;
+  const queryClient = useQueryClient();
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [actionError, setActionError] = useState<string>();
+
+  const toggleOptions = {
+    onSuccess: async (updated: PlotDetails) => {
+      queryClient.setQueryData(getGetPlotQueryKey(plot.id), updated);
+      await queryClient.invalidateQueries({ queryKey: getListPlotsQueryKey() });
+      await queryClient.invalidateQueries({ queryKey: getGetPlotQueryKey(plot.id) });
+    },
+    onError: (error: unknown) => setActionError(problemMessage(t, error)),
+  };
+  const archive = useArchivePlot({ mutation: toggleOptions });
+  const restore = useRestorePlot({ mutation: toggleOptions });
+  const remove = useDeletePlot({
+    mutation: {
+      onSuccess: async () => {
+        await queryClient.invalidateQueries({ queryKey: getListPlotsQueryKey() });
+        void navigate('/plots');
+      },
+      onError: (error: unknown) => {
+        setConfirmingDelete(false);
+        setActionError(problemMessage(t, error));
+      },
+    },
+  });
+  const isToggling = archive.isPending || restore.isPending;
 
   const rows: [string, ReactNode][] = [
     [f.number, plot.number],
@@ -71,9 +110,35 @@ function PlotView({ plot }: { plot: PlotDetails }) {
         title={cardTitle(t, plot)}
         badge={plot.archived && <Badge tone="neutral">{t.plots.archived}</Badge>}
         actions={
-          canEdit && <Button onClick={() => void navigate(`/plots/${plot.id}/edit`)}>{t.plot.edit}</Button>
+          canEdit && (
+            <>
+              <Button onClick={() => void navigate(`/plots/${plot.id}/edit`)}>{t.plot.edit}</Button>
+              <Button
+                variant="secondary"
+                disabled={isToggling}
+                onClick={() => {
+                  setActionError(undefined);
+                  (plot.archived ? restore : archive).mutate({ id: plot.id });
+                }}
+              >
+                {plot.archived ? t.plot.restore : t.plot.archive}
+              </Button>
+              {!plot.archived && (
+                <Button
+                  variant="danger"
+                  onClick={() => {
+                    setActionError(undefined);
+                    setConfirmingDelete(true);
+                  }}
+                >
+                  {t.plot.delete}
+                </Button>
+              )}
+            </>
+          )
         }
       />
+      {actionError && <Notice tone="danger">{actionError}</Notice>}
       <Panel>
         <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-[minmax(10rem,max-content)_1fr]">
           {rows.map(([label, value]) => (
@@ -88,6 +153,16 @@ function PlotView({ plot }: { plot: PlotDetails }) {
         <Panel title={t.plot.ownersTitle}>
           <p className="text-ink-muted">{t.plot.ownersPlaceholder}</p>
         </Panel>
+      )}
+      {confirmingDelete && (
+        <ConfirmDialog
+          title={t.plot.deleteTitle}
+          message={t.plot.deleteText}
+          confirmLabel={t.plot.delete}
+          busy={remove.isPending}
+          onConfirm={() => remove.mutate({ id: plot.id })}
+          onCancel={() => setConfirmingDelete(false)}
+        />
       )}
     </>
   );

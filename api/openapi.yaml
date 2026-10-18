@@ -746,6 +746,100 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
 
+    delete:
+      tags: [plots]
+      operationId: deletePlot
+      summary: Delete a plot or common land
+      description: |
+        Removes a plot that was created by mistake, together with its status. Requires `PLOTS_EDIT`. Only an active
+        plot can be deleted; an archived plot is refused with 409 `PLOT_ARCHIVED` and must be restored first. The
+        deletion is audited.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Deleted
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /plots/{id}/archive:
+    post:
+      tags: [plots]
+      operationId: archivePlot
+      summary: Archive a plot or common land
+      description: |
+        Moves the plot to the archive: it is hidden from the default list and its number becomes free for a new
+        plot. Archiving an already archived plot is a no-op and is not audited. Requires `PLOTS_EDIT`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlotDetails'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /plots/{id}/restore:
+    post:
+      tags: [plots]
+      operationId: restorePlot
+      summary: Restore an archived plot or common land
+      description: |
+        Brings an archived plot back to the default list. The number is checked again: when another active plot has
+        taken it meanwhile, the answer is 409 `PLOT_NUMBER_TAKEN`. Restoring an active plot is a no-op and is not
+        audited. Requires `PLOTS_EDIT`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlotDetails'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -801,7 +895,7 @@ components:
         role, have its permissions changed (code `BASE_ROLE_IMMUTABLE`), another active plot already has the number
         (code `PLOT_NUMBER_TAKEN`, with `errors[{field: number}]`), or another plot of the cooperative, archived ones
         included, already has the cadastral number (code `CADASTRAL_NUMBER_TAKEN`, with
-        `errors[{field: cadastralNumber}]`)
+        `errors[{field: cadastralNumber}]`), or an archived plot is deleted (code `PLOT_ARCHIVED`)
       content:
         application/problem+json:
           schema:

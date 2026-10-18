@@ -21,7 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Creates and edits plots. Every method is one transaction that also publishes the {@link AuditEvent}: the outbox
+ * Creates, edits, archives, restores and deletes plots. Every method is one transaction that also publishes the {@link AuditEvent}: the outbox
  * stores the publication in the same transaction, so a change is never committed without its audit entry being owed.
  * <p>
  * The cooperative always comes from the caller's {@link AccessProfile}, never from the request. The caller must hold
@@ -78,6 +78,54 @@ class PlotCommands {
             save(plot);
             publish(actor, "PLOT_UPDATED", plot, changes);
         }
+        PlotRow row = plots.findRowById(plot.getId()).orElseThrow(ApiProblemException::notFound);
+        return PlotDtoMapper.toDetails(actor, row);
+    }
+
+    @Transactional
+    PlotDetails archive(UUID id, AccessProfile actor) {
+        Plot plot = plots.findById(id).orElseThrow(ApiProblemException::notFound);
+        if (plot.getArchivedAt() == null) {
+            PlotSnapshot before = PlotSnapshot.of(plot);
+            plot.archive(Instant.now());
+            save(plot);
+            publish(actor, "PLOT_ARCHIVED", plot, PlotSnapshot.diff(before, PlotSnapshot.of(plot)));
+        }
+        return card(plot, actor);
+    }
+
+    @Transactional
+    PlotDetails restore(UUID id, AccessProfile actor) {
+        Plot plot = plots.findById(id).orElseThrow(ApiProblemException::notFound);
+        if (plot.getArchivedAt() != null) {
+            ensureNumberFree(actor.tenantId(), plot.getNumber(), plot.getId());
+            PlotSnapshot before = PlotSnapshot.of(plot);
+            plot.restore(Instant.now());
+            save(plot);
+            publish(actor, "PLOT_RESTORED", plot, PlotSnapshot.diff(before, PlotSnapshot.of(plot)));
+        }
+        return card(plot, actor);
+    }
+
+    /**
+     * Removes a plot created by mistake. Only an active plot can be deleted: an archived one must be restored first.
+     * The {@code plot_status} row goes with the plot through the foreign key's cascade.
+     */
+    @Transactional
+    void delete(UUID id, AccessProfile actor) {
+        Plot plot = plots.findById(id).orElseThrow(ApiProblemException::notFound);
+        if (plot.getArchivedAt() != null) {
+            throw new ApiProblemException(HttpStatus.CONFLICT, ProblemCodes.PLOT_ARCHIVED,
+                    "An archived plot cannot be deleted; restore it first.");
+        }
+        // feature 007 (ownership): refuse here, with a conflict, a plot that has ownership history
+        PlotSnapshot before = PlotSnapshot.of(plot);
+        plots.delete(plot);
+        plots.flush();
+        publish(actor, "PLOT_DELETED", plot, PlotSnapshot.diff(before, PlotSnapshot.NONE));
+    }
+
+    private PlotDetails card(Plot plot, AccessProfile actor) {
         PlotRow row = plots.findRowById(plot.getId()).orElseThrow(ApiProblemException::notFound);
         return PlotDtoMapper.toDetails(actor, row);
     }

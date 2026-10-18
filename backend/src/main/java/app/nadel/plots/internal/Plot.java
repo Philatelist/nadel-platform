@@ -87,6 +87,16 @@ class Plot {
         updatedAt = now;
     }
 
+    void archive(Instant now) {
+        archivedAt = now;
+        updatedAt = now;
+    }
+
+    void restore(Instant now) {
+        archivedAt = null;
+        updatedAt = now;
+    }
+
     UUID getId() {
         return id;
     }

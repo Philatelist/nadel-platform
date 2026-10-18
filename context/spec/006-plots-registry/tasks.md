@@ -27,12 +27,12 @@ names; no personal data in logs; no edits to generated code). Do not commit; rep
   - [x] Web: `PlotForm` + `PlotFormPage` (routes `/plots/new`, `/plots/:id/edit` with `PLOTS_EDIT`; area + unit select using `toSquareMetres`/`m2ToSotky`; field-error mapping incl. the two conflict codes), "Add plot" and "Edit" actions, AuditPage support for PLOT entries (link, field and action labels), i18n, unit tests (form conversion and validation, error mapping). **[Agent: react-frontend]**
   - [x] Verify: `cd backend && ./mvnw -B test -Dtest='PlotsWriteTests,PlotDataTests,CadastralNumberTests,PlotSnapshotTests,AuditReadTests,ModularityTests'` green; `pnpm -r test && pnpm -r typecheck && pnpm -r lint && pnpm format:check` green. **[Agent: spring-backend]**
 
-- [ ] **Slice 4: Archive, restore and delete**
+- [x] **Slice 4: Archive, restore and delete**
 
   > The chairman archives, restores and deletes plots from the card; restore re-checks the number; an archived plot must be restored before deleting.
-  - [ ] Backend: `POST /plots/{id}/archive`, `/restore`, `DELETE /plots/{id}`, `PLOT_ARCHIVED`, `PlotCommands.archive/restore/delete` (idempotent, restore number re-check, delete removes the status row, seam comment for 007), audit, `plots/README.md`, `package-info`, `make gen`. Tests in `PlotsWriteTests` (archive/restore/delete happy paths, restore conflict, archived delete → 409, 403 for treasurer/member, audit entries). **[Agent: spring-backend]**
-  - [ ] Web: card actions Archive/Restore (mutation) and Delete with `ConfirmDialog`, navigation after delete, notices for `PLOT_NUMBER_TAKEN` on restore and `PLOT_ARCHIVED`, i18n, unit tests where feasible. **[Agent: react-frontend]**
-  - [ ] Verify: `cd backend && ./mvnw -B test -Dtest='PlotsWriteTests,ModularityTests'` green; `pnpm -r test && pnpm -r typecheck && pnpm -r lint && pnpm format:check` green. **[Agent: spring-backend]**
+  - [x] Backend: `POST /plots/{id}/archive`, `/restore`, `DELETE /plots/{id}`, `PLOT_ARCHIVED`, `PlotCommands.archive/restore/delete` (idempotent, restore number re-check, delete removes the status row, seam comment for 007), audit, `plots/README.md`, `package-info`, `make gen`. Tests in `PlotsWriteTests` (archive/restore/delete happy paths, restore conflict, archived delete → 409, 403 for treasurer/member, audit entries). **[Agent: spring-backend]**
+  - [x] Web: card actions Archive/Restore (mutation) and Delete with `ConfirmDialog`, navigation after delete, notices for `PLOT_NUMBER_TAKEN` on restore and `PLOT_ARCHIVED`, i18n, unit tests where feasible. **[Agent: react-frontend]**
+  - [x] Verify: `cd backend && ./mvnw -B test -Dtest='PlotsWriteTests,ModularityTests'` green; `pnpm -r test && pnpm -r typecheck && pnpm -r lint && pnpm format:check` green. **[Agent: spring-backend]**
 
 - [ ] **Slice 5: End-to-end flows, docs and coverage floor**
 

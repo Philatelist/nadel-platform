@@ -17,3 +17,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `aeba3dd..441f9b1` | PASS | — | minor: page past the end shows the empty state; search box does not follow external URL changes; malformed id shows the error state; area wording "6,5 сот." vs spec examples (picked up in Slice 3 with Ukrainian plural forms); dead no-menu branch in Layout; 005 spec text about members having no menu is now historical |
+
+## Slice 3 — Create and edit plots, audited
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `441f9b1..9cc8a6d` | MAJOR_ISSUES | M1 an editor with PLOTS_EDIT but without PLOTS_VIEW silently erases the cadastral number and building flag (fields hidden from them, PUT replaces all) | minor: form sends area as a JSON number (contract choice); `maxLength` checked before trimming; audit shows area with "." in Ukrainian; `violates()` message fallback; string check for area > 0. Fix overlaps Slice 4 files → applied after the Slice 4 commit |

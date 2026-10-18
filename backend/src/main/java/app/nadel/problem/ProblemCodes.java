@@ -17,6 +17,7 @@ public final class ProblemCodes {
     public static final String BASE_ROLE_IMMUTABLE = "BASE_ROLE_IMMUTABLE";
     public static final String PLOT_NUMBER_TAKEN = "PLOT_NUMBER_TAKEN";
     public static final String CADASTRAL_NUMBER_TAKEN = "CADASTRAL_NUMBER_TAKEN";
+    public static final String PLOT_ARCHIVED = "PLOT_ARCHIVED";
 
     /** Codes of single fields in {@code errors[]}. */
     public static final String REQUIRED = "REQUIRED";

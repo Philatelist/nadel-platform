@@ -575,3 +575,230 @@ export const useUpdatePlot = <TError = BadRequestResponse | UnauthorizedResponse
       > => {
       return useMutation(getUpdatePlotMutationOptions(options), queryClient);
     }
+    export const getDeletePlotUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/plots/${id}`
+}
+
+/**
+ * Removes a plot that was created by mistake, together with its status. Requires `PLOTS_EDIT`. Only an active
+ * plot can be deleted; an archived plot is refused with 409 `PLOT_ARCHIVED` and must be restored first. The
+ * deletion is audited.
+ * @summary Delete a plot or common land
+ */
+export const deletePlot = async (id: string, options?: Parameters<typeof nadelFetch>[1]): Promise<void> => {
+
+  return nadelFetch<void>(getDeletePlotUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeletePlotMutationKey = () => ['deletePlot'] as const;
+
+export const getDeletePlotMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deletePlot>>, TError,DeletePlotMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deletePlot>>, TError,DeletePlotMutationVariables, TContext> => {
+
+const mutationKey = getDeletePlotMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deletePlot>>, DeletePlotMutationVariables> = (props) => {
+          const {id} = props ?? {};
+
+          return  deletePlot(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeletePlotMutationResult = NonNullable<Awaited<ReturnType<typeof deletePlot>>>
+
+    export type DeletePlotMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse
+    export type DeletePlotMutationVariables = {id: string}
+
+    /**
+ * @summary Delete a plot or common land
+ */
+export const useDeletePlot = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deletePlot>>, TError,DeletePlotMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof deletePlot>>,
+        TError,
+        DeletePlotMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeletePlotMutationOptions(options), queryClient);
+    }
+    export const getArchivePlotUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/plots/${id}/archive`
+}
+
+/**
+ * Moves the plot to the archive: it is hidden from the default list and its number becomes free for a new
+ * plot. Archiving an already archived plot is a no-op and is not audited. Requires `PLOTS_EDIT`.
+ * @summary Archive a plot or common land
+ */
+export const archivePlot = async (id: string, options?: Parameters<typeof nadelFetch>[1]): Promise<PlotDetails> => {
+
+  return nadelFetch<PlotDetails>(getArchivePlotUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getArchivePlotMutationKey = () => ['archivePlot'] as const;
+
+export const getArchivePlotMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof archivePlot>>, TError,ArchivePlotMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof archivePlot>>, TError,ArchivePlotMutationVariables, TContext> => {
+
+const mutationKey = getArchivePlotMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof archivePlot>>, ArchivePlotMutationVariables> = (props) => {
+          const {id} = props ?? {};
+
+          return  archivePlot(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ArchivePlotMutationResult = NonNullable<Awaited<ReturnType<typeof archivePlot>>>
+
+    export type ArchivePlotMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse
+    export type ArchivePlotMutationVariables = {id: string}
+
+    /**
+ * @summary Archive a plot or common land
+ */
+export const useArchivePlot = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof archivePlot>>, TError,ArchivePlotMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof archivePlot>>,
+        TError,
+        ArchivePlotMutationVariables,
+        TContext
+      > => {
+      return useMutation(getArchivePlotMutationOptions(options), queryClient);
+    }
+    export const getRestorePlotUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/plots/${id}/restore`
+}
+
+/**
+ * Brings an archived plot back to the default list. The number is checked again: when another active plot has
+ * taken it meanwhile, the answer is 409 `PLOT_NUMBER_TAKEN`. Restoring an active plot is a no-op and is not
+ * audited. Requires `PLOTS_EDIT`.
+ * @summary Restore an archived plot or common land
+ */
+export const restorePlot = async (id: string, options?: Parameters<typeof nadelFetch>[1]): Promise<PlotDetails> => {
+
+  return nadelFetch<PlotDetails>(getRestorePlotUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRestorePlotMutationKey = () => ['restorePlot'] as const;
+
+export const getRestorePlotMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof restorePlot>>, TError,RestorePlotMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof restorePlot>>, TError,RestorePlotMutationVariables, TContext> => {
+
+const mutationKey = getRestorePlotMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof restorePlot>>, RestorePlotMutationVariables> = (props) => {
+          const {id} = props ?? {};
+
+          return  restorePlot(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RestorePlotMutationResult = NonNullable<Awaited<ReturnType<typeof restorePlot>>>
+
+    export type RestorePlotMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse
+    export type RestorePlotMutationVariables = {id: string}
+
+    /**
+ * @summary Restore an archived plot or common land
+ */
+export const useRestorePlot = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof restorePlot>>, TError,RestorePlotMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof restorePlot>>,
+        TError,
+        RestorePlotMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRestorePlotMutationOptions(options), queryClient);
+    }
