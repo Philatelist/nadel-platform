@@ -20,11 +20,18 @@ import { useT } from '../i18n';
 import { useCan } from '../me';
 import { problemMessage } from '../problem';
 import { NotFoundPage } from './NotFoundPage';
+import { useDocumentTitle } from '../useDocumentTitle';
 
 export function MemberPage() {
   const t = useT();
   const { id = '' } = useParams();
   const member = useGetMember(id);
+  const loaded = member.data;
+  useDocumentTitle(
+    loaded
+      ? [loaded.lastName, loaded.firstName, loaded.middleName].filter(Boolean).join(' ')
+      : t.members.title,
+  );
 
   if (member.error instanceof ApiError && member.error.status === 404) return <NotFoundPage />;
 

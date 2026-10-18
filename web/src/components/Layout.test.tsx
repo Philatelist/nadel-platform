@@ -27,6 +27,26 @@ describe('Layout', () => {
     me = meWith([]);
   });
 
+  it('titles the header with the cooperative name, keeps the product name as a muted label', () => {
+    renderWithApp(<Layout />);
+    const link = screen.getByRole('link', { name: 'Coop' });
+    expect(link).toHaveAttribute('href', '/');
+    expect(link).toHaveAttribute('title', 'Coop');
+    expect(link).toHaveClass('truncate', 'font-serif');
+    const product = screen.getByText('Nadel');
+    expect(product.tagName).toBe('SPAN');
+    expect(product).toHaveClass('text-ink-muted');
+  });
+
+  it('falls back to the product name as the title link without a tenant', () => {
+    me = { ...meWith([]), tenant: undefined } as Me;
+    renderWithApp(<Layout />);
+    const link = screen.getByRole('link', { name: 'Nadel' });
+    expect(link).toHaveAttribute('href', '/');
+    expect(link).toHaveAttribute('title', 'Nadel');
+    expect(screen.getAllByText('Nadel')).toHaveLength(1);
+  });
+
   it('shows no navigation and no Menu button without sections', () => {
     renderWithApp(<Layout />);
     expect(screen.queryByRole('navigation')).toBeNull();
@@ -52,5 +72,24 @@ describe('Layout', () => {
     await user.keyboard('{Escape}');
     expect(button).toHaveAttribute('aria-expanded', 'false');
     expect(button).toHaveFocus();
+  });
+
+  it('puts the theme switch in the header next to the language switch when there is no menu', () => {
+    renderWithApp(<Layout />);
+    const groups = screen.getAllByRole('group', { name: 'Theme' });
+    expect(groups).toHaveLength(1);
+    expect(groups[0]!.closest('header')).not.toBeNull();
+    expect(groups[0]!.parentElement).not.toHaveClass('hidden');
+  });
+
+  it('renders the theme switch in the header (md+) and in the menu (below md) when there is a menu', () => {
+    me = meWith(['MEMBERS_VIEW']);
+    renderWithApp(<Layout />);
+    const groups = screen.getAllByRole('group', { name: 'Theme' });
+    expect(groups).toHaveLength(2);
+    const inHeader = groups.find((g) => g.closest('header'))!;
+    const inMenu = groups.find((g) => g.closest('#app-menu'))!;
+    expect(inHeader.parentElement).toHaveClass('hidden', 'md:flex');
+    expect(inMenu.parentElement).toHaveClass('md:hidden');
   });
 });

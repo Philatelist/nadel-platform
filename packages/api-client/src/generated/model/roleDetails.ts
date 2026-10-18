@@ -25,6 +25,13 @@ export interface RoleDetails {
      */
   nameCustomized: boolean;
   description?: string;
+  /**
+     * True when `description` is the cooperative's own wording: always true for custom roles, true for a base
+     * role once its description was changed (including cleared). When false (a base role with its standard
+     * description) clients show the standard description from their own catalog, in the user's language,
+     * chosen by `baseCode`.
+     */
+  descriptionCustomized: boolean;
   baseCode?: BaseRole;
   permissions: Permission[];
   /** Number of active (not archived) members who hold the role */

@@ -79,12 +79,13 @@ class RolesTests extends IntegrationTest {
 
     /**
      * Puts the three base roles of the demo cooperative back to what {@code seed_base_roles} writes (name,
-     * name_customized, description, permissions) - the database is shared by every test class - and checks that it worked.
+     * name_customized, description, description_customized, permissions) - the database is shared by every test class - and checks that it worked.
      */
     private void restoreBaseRoles() {
         inTenant(DEMO_TENANT, sql -> {
             for (BaseRoleSeed seed : SEEDED_BASE_ROLES) {
-                sql.update("update role set name = ?, name_customized = false, description = ? where base_code = ?",
+                sql.update("update role set name = ?, name_customized = false, description = ?, "
+                        + "description_customized = false where base_code = ?",
                         seed.name(), seed.description(), seed.code());
                 sql.update("delete from role_permission where role_id = (select id from role where base_code = ?)",
                         seed.code());
@@ -104,8 +105,9 @@ class RolesTests extends IntegrationTest {
                         rs.getString("description"), rs.getString("permissions").isEmpty() ? List.of()
                                 : List.of(rs.getString("permissions").split(",")))));
         List<String> stillFlagged = inTenant(DEMO_TENANT, sql -> sql.queryForList(
-                "select base_code from role where base_code is not null and name_customized", String.class));
-        assertThat(stillFlagged).as("no base role is left flagged as renamed").isEmpty();
+                "select base_code from role where base_code is not null and (name_customized or description_customized)",
+                String.class));
+        assertThat(stillFlagged).as("no base role is left flagged as renamed or re-described").isEmpty();
         assertThat(actual).as("base roles restored to the seeded state").containsExactlyInAnyOrderElementsOf(
                 SEEDED_BASE_ROLES.stream().map(s -> new BaseRoleSeed(s.code(), s.name(), s.description(),
                         s.permissions().stream().sorted().toList())).toList());
@@ -216,6 +218,26 @@ class RolesTests extends IntegrationTest {
         }
     }
 
+    @Test
+    void listIncludesDescriptionCustomizedFlags() throws Exception {
+        UUID custom = createRole("Described " + tag(), "MEMBERS_VIEW");
+
+        String body = send(chairman(), get("/api/v1/roles"), null).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        JsonNode roles = json.readTree(body);
+
+        for (int i = 0; i < 3; i++) {
+            assertThat(roles.get(i).get("descriptionCustomized").asBoolean())
+                    .as("base role %s keeps its standard description", roles.get(i).get("baseCode").asString())
+                    .isFalse();
+        }
+        assertThat(find(roles, custom).get("descriptionCustomized").asBoolean()).isTrue();
+        for (int i = 3; i < roles.size(); i++) {
+            assertThat(roles.get(i).get("descriptionCustomized").asBoolean())
+                    .as("custom roles are always customised").isTrue();
+        }
+    }
+
     // ---- create ----------------------------------------------------------------------------------------------------
 
     @Test
@@ -229,6 +251,7 @@ class RolesTests extends IntegrationTest {
                 .andExpect(jsonPath("$.name").value(name))
                 .andExpect(jsonPath("$.description").value("Keeps the records"))
                 .andExpect(jsonPath("$.baseCode").doesNotExist())
+                .andExpect(jsonPath("$.descriptionCustomized").value(true))
                 .andExpect(jsonPath("$.permissions", containsInAnyOrder("MEMBERS_VIEW", "MEMBERS_EDIT")))
                 .andExpect(jsonPath("$.memberCount").value(0));
         UUID id = track(created);
@@ -653,6 +676,277 @@ class RolesTests extends IntegrationTest {
         }
     }
 
+    // ---- base role descriptions (feature 005) ------------------------------------------------------------------------
+
+    @Test
+    void changingTheTreasurerDescriptionSetsTheFlagAndAuditsTheStandardTokenAsTheOldValue() throws Exception {
+        UUID treasurer = baseRoleId("TREASURER");
+        long before = auditCountForRole(treasurer);
+
+        Map<String, Object> body = seedBody("TREASURER", "Treasurer");
+        body.put("description", "Веде касу");
+        send(chairman(), put("/api/v1/roles/" + treasurer), body)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.description").value("Веде касу"))
+                .andExpect(jsonPath("$.descriptionCustomized").value(true))
+                .andExpect(jsonPath("$.nameCustomized").value(false));
+
+        assertThat(roleDescription(treasurer)).isEqualTo("Веде касу");
+        assertThat(descriptionCustomized(treasurer)).isTrue();
+        send(chairman(), get("/api/v1/roles"), null)
+                .andExpect(jsonPath("$[?(@.id == '" + treasurer + "')].description").value("Веде касу"))
+                .andExpect(jsonPath("$[?(@.id == '" + treasurer + "')].descriptionCustomized").value(true));
+        List<Map<String, Object>> entries = awaitNewAudit(treasurer, before, 1);
+        assertThat(entries.get(0).get("action")).isEqualTo("ROLE_UPDATED");
+        assertThat(entries.get(0).get("entity_label")).isEqualTo("base:TREASURER"); // the name is still standard
+        JsonNode changes = json.readTree((String) entries.get(0).get("changes"));
+        assertThat(changes).hasSize(1);
+        assertThat(change(changes, "description").get("old").asString()).isEqualTo("base:TREASURER");
+        assertThat(change(changes, "description").get("new").asString()).isEqualTo("Веде касу");
+    }
+
+    @Test
+    void restoringTheStandardDescriptionBringsBackTheSeedTextIgnoresTheSubmittedOneAndAuditsTextToToken()
+            throws Exception {
+        UUID treasurer = baseRoleId("TREASURER");
+        long start = auditCountForRole(treasurer);
+        Map<String, Object> change = seedBody("TREASURER", "Treasurer");
+        change.put("description", "Веде касу");
+        send(chairman(), put("/api/v1/roles/" + treasurer), change).andExpect(status().isOk());
+        awaitNewAudit(treasurer, start, 1); // the change's entry is written asynchronously
+        long before = start + 1;
+
+        Map<String, Object> restore = seedBody("TREASURER", "Treasurer");
+        restore.put("description", "Some other text");
+        restore.put("useDefaultDescription", true);
+        send(chairman(), put("/api/v1/roles/" + treasurer), restore)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.description").value("Read access to members, plots and audit"))
+                .andExpect(jsonPath("$.descriptionCustomized").value(false));
+
+        assertThat(roleDescription(treasurer)).isEqualTo("Read access to members, plots and audit");
+        assertThat(descriptionCustomized(treasurer)).isFalse();
+        JsonNode changes = json.readTree((String) awaitNewAudit(treasurer, before, 1).get(0).get("changes"));
+        assertThat(changes).hasSize(1);
+        assertThat(change(changes, "description").get("old").asString()).isEqualTo("Веде касу");
+        assertThat(change(changes, "description").get("new").asString()).isEqualTo("base:TREASURER");
+    }
+
+    @Test
+    void restoringTheStandardDescriptionOfARoleThatWasNeverChangedChangesNothing() throws Exception {
+        UUID treasurer = baseRoleId("TREASURER");
+        long before = auditCountForRole(treasurer);
+
+        Map<String, Object> restore = seedBody("TREASURER", "Treasurer");
+        restore.put("description", "Ignored");
+        restore.put("useDefaultDescription", true);
+        send(chairman(), put("/api/v1/roles/" + treasurer), restore)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.description").value("Read access to members, plots and audit"))
+                .andExpect(jsonPath("$.descriptionCustomized").value(false));
+
+        Thread.sleep(500); // an event, if one were published, would be written within this time
+        assertThat(auditCountForRole(treasurer)).isEqualTo(before);
+        assertThat(roleDescription(treasurer)).isEqualTo("Read access to members, plots and audit");
+        assertThat(descriptionCustomized(treasurer)).isFalse();
+    }
+
+    @Test
+    void useDefaultDescriptionOnACustomRoleIsAValidationErrorOnThatField() throws Exception {
+        String name = "Custom " + tag();
+        UUID id = createRole(name, "MEMBERS_VIEW");
+
+        Map<String, Object> body = roleBody("Another " + tag(), "MEMBERS_VIEW");
+        body.put("description", "Changed");
+        body.put("useDefaultDescription", true);
+        send(chairman(), put("/api/v1/roles/" + id), body)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.errors", hasSize(1)))
+                .andExpect(jsonPath("$.errors[0].field").value("useDefaultDescription"))
+                .andExpect(jsonPath("$.errors[0].code").value("INVALID"));
+
+        assertThat(roleName(id)).isEqualTo(name);
+        assertThat(roleDescription(id)).isNull(); // refused before any change
+        // an explicit false is the default and fine
+        body.put("useDefaultDescription", false);
+        send(chairman(), put("/api/v1/roles/" + id), body)
+                .andExpect(status().isOk()).andExpect(jsonPath("$.descriptionCustomized").value(true));
+    }
+
+    @Test
+    void bothRestoreFlagsOnACustomRoleReportBothFields() throws Exception {
+        UUID id = createRole("Custom " + tag(), "MEMBERS_VIEW");
+
+        Map<String, Object> body = roleBody("Another " + tag(), "MEMBERS_VIEW");
+        body.put("useDefaultName", true);
+        body.put("useDefaultDescription", true);
+        send(chairman(), put("/api/v1/roles/" + id), body)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[*].field", containsInAnyOrder("useDefaultName", "useDefaultDescription")));
+    }
+
+    @Test
+    void aPermissionOnlySaveWithTheStoredDescriptionKeepsItNonCustomized() throws Exception {
+        UUID treasurer = baseRoleId("TREASURER");
+        long before = auditCountForRole(treasurer);
+
+        Map<String, Object> body = seedBody("TREASURER", "Treasurer"); // the stored description, sent back untouched
+        body.put("permissions", List.of("MEMBERS_VIEW"));
+        send(chairman(), put("/api/v1/roles/" + treasurer), body)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.description").value("Read access to members, plots and audit"))
+                .andExpect(jsonPath("$.descriptionCustomized").value(false));
+
+        assertThat(descriptionCustomized(treasurer)).isFalse();
+        JsonNode changes = json.readTree((String) awaitNewAudit(treasurer, before, 1).get(0).get("changes"));
+        assertThat(changes).hasSize(1); // the description is not part of the entry
+        assertThat(change(changes, "permissions")).isNotNull();
+    }
+
+    @Test
+    void aPermissionOnlySaveKeepsAChangedDescriptionCustomized() throws Exception {
+        UUID treasurer = baseRoleId("TREASURER");
+        Map<String, Object> change = seedBody("TREASURER", "Treasurer");
+        change.put("description", "Веде касу");
+        send(chairman(), put("/api/v1/roles/" + treasurer), change).andExpect(status().isOk());
+
+        change.put("permissions", List.of("MEMBERS_VIEW"));
+        send(chairman(), put("/api/v1/roles/" + treasurer), change)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.description").value("Веде касу"))
+                .andExpect(jsonPath("$.descriptionCustomized").value(true));
+
+        assertThat(descriptionCustomized(treasurer)).isTrue();
+    }
+
+    @Test
+    void aBlankDescriptionOnABaseRoleCustomizesItWithNull() throws Exception {
+        UUID member = baseRoleId("MEMBER");
+        long before = auditCountForRole(member);
+
+        Map<String, Object> body = seedBody("MEMBER", "Member");
+        body.put("description", "   ");
+        send(chairman(), put("/api/v1/roles/" + member), body)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.description").doesNotExist())
+                .andExpect(jsonPath("$.descriptionCustomized").value(true));
+
+        assertThat(roleDescription(member)).isNull();
+        assertThat(descriptionCustomized(member)).isTrue();
+        JsonNode changes = json.readTree((String) awaitNewAudit(member, before, 1).get(0).get("changes"));
+        assertThat(changes).hasSize(1);
+        assertThat(change(changes, "description").get("old").asString()).isEqualTo("base:MEMBER");
+        JsonNode newValue = change(changes, "description").get("new");
+        assertThat(newValue == null || newValue.isNull()).isTrue();
+    }
+
+    @Test
+    void restoringBothTheNameAndTheDescriptionTogetherRestoresBothAndAuditsOnce() throws Exception {
+        UUID treasurer = baseRoleId("TREASURER");
+        long start = auditCountForRole(treasurer);
+        Map<String, Object> change = seedBody("TREASURER", "Бухгалтер");
+        change.put("description", "Веде касу");
+        send(chairman(), put("/api/v1/roles/" + treasurer), change)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nameCustomized").value(true))
+                .andExpect(jsonPath("$.descriptionCustomized").value(true));
+        awaitNewAudit(treasurer, start, 1);
+        long before = start + 1;
+
+        Map<String, Object> restore = seedBody("TREASURER", "Whatever");
+        restore.put("description", "Whatever");
+        restore.put("useDefaultName", true);
+        restore.put("useDefaultDescription", true);
+        send(chairman(), put("/api/v1/roles/" + treasurer), restore)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Treasurer"))
+                .andExpect(jsonPath("$.nameCustomized").value(false))
+                .andExpect(jsonPath("$.description").value("Read access to members, plots and audit"))
+                .andExpect(jsonPath("$.descriptionCustomized").value(false));
+
+        assertThat(nameCustomized(treasurer)).isFalse();
+        assertThat(descriptionCustomized(treasurer)).isFalse();
+        Thread.sleep(500);
+        List<Map<String, Object>> entries = awaitNewAudit(treasurer, before, 1);
+        assertThat(entries).hasSize(1);
+        JsonNode changes = json.readTree((String) entries.get(0).get("changes"));
+        assertThat(changes).hasSize(2);
+        assertThat(change(changes, "name").get("old").asString()).isEqualTo("Бухгалтер");
+        assertThat(change(changes, "name").get("new").asString()).isEqualTo("base:TREASURER");
+        assertThat(change(changes, "description").get("old").asString()).isEqualTo("Веде касу");
+        assertThat(change(changes, "description").get("new").asString()).isEqualTo("base:TREASURER");
+    }
+
+    @Test
+    void theNameAndDescriptionRestoresAreIndependent() throws Exception {
+        UUID treasurer = baseRoleId("TREASURER");
+        Map<String, Object> change = seedBody("TREASURER", "Бухгалтер");
+        change.put("description", "Веде касу");
+        send(chairman(), put("/api/v1/roles/" + treasurer), change).andExpect(status().isOk());
+
+        // restoring only the description keeps the new name
+        Map<String, Object> restoreDescription = seedBody("TREASURER", "Бухгалтер");
+        restoreDescription.put("useDefaultDescription", true);
+        send(chairman(), put("/api/v1/roles/" + treasurer), restoreDescription)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Бухгалтер"))
+                .andExpect(jsonPath("$.nameCustomized").value(true))
+                .andExpect(jsonPath("$.descriptionCustomized").value(false));
+
+        // changing the description again, then restoring only the name keeps the new description
+        send(chairman(), put("/api/v1/roles/" + treasurer), change).andExpect(status().isOk());
+        Map<String, Object> restoreName = new LinkedHashMap<>(change);
+        restoreName.put("useDefaultName", true);
+        send(chairman(), put("/api/v1/roles/" + treasurer), restoreName)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Treasurer"))
+                .andExpect(jsonPath("$.nameCustomized").value(false))
+                .andExpect(jsonPath("$.description").value("Веде касу"))
+                .andExpect(jsonPath("$.descriptionCustomized").value(true));
+
+        assertThat(roleDescription(treasurer)).isEqualTo("Веде касу");
+        assertThat(nameCustomized(treasurer)).isFalse();
+    }
+
+    @Test
+    void renamingDoesNotCustomizeTheDescriptionAndChangingTheDescriptionDoesNotCustomizeTheName() throws Exception {
+        UUID treasurer = baseRoleId("TREASURER");
+        UUID member = baseRoleId("MEMBER");
+
+        send(chairman(), put("/api/v1/roles/" + treasurer), seedBody("TREASURER", "Бухгалтер"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nameCustomized").value(true))
+                .andExpect(jsonPath("$.descriptionCustomized").value(false));
+        Map<String, Object> described = seedBody("MEMBER", "Member");
+        described.put("description", "Everyone");
+        send(chairman(), put("/api/v1/roles/" + member), described)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nameCustomized").value(false))
+                .andExpect(jsonPath("$.descriptionCustomized").value(true));
+
+        assertThat(descriptionCustomized(treasurer)).isFalse();
+        assertThat(nameCustomized(member)).isFalse();
+    }
+
+    @Test
+    void aTreasurerWithoutRolesManageCannotChangeOrRestoreADescription() throws Exception {
+        UUID treasurer = baseRoleId("TREASURER");
+        Map<String, Object> change = seedBody("TREASURER", "Treasurer");
+        change.put("description", "Веде касу");
+
+        send(demo("treasurer@demo.local"), put("/api/v1/roles/" + treasurer), change)
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
+        Map<String, Object> restore = seedBody("TREASURER", "Treasurer");
+        restore.put("useDefaultDescription", true);
+        send(demo("treasurer@demo.local"), put("/api/v1/roles/" + treasurer), restore)
+                .andExpect(status().isForbidden());
+
+        assertThat(roleDescription(treasurer)).isEqualTo("Read access to members, plots and audit");
+        assertThat(descriptionCustomized(treasurer)).isFalse();
+    }
+
     @Test
     void baseRolesCannotBeDeleted() throws Exception {
         for (String code : List.of("CHAIRMAN", "TREASURER", "MEMBER")) {
@@ -1018,6 +1312,16 @@ class RolesTests extends IntegrationTest {
     private boolean nameCustomized(UUID id) {
         return inTenant(DEMO_TENANT, sql -> sql.queryForObject(
                 "select name_customized from role where id = ?", Boolean.class, id));
+    }
+
+    private String roleDescription(UUID id) {
+        return inTenant(DEMO_TENANT, sql -> sql.queryForObject(
+                "select description from role where id = ?", String.class, id));
+    }
+
+    private boolean descriptionCustomized(UUID id) {
+        return inTenant(DEMO_TENANT, sql -> sql.queryForObject(
+                "select description_customized from role where id = ?", Boolean.class, id));
     }
 
     private boolean roleExists(UUID id) {

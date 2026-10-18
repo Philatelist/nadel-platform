@@ -10,8 +10,10 @@ import app.nadel.problem.FieldProblem;
 import app.nadel.problem.ProblemCodes;
 import jakarta.persistence.EntityManager;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -32,8 +34,11 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>
  * Every role can be renamed, base roles included (names are unique per cooperative, ignoring case). A base role keeps
  * a stored flag {@code name_customized}: it is false while the role has its standard name and
- * {@code useDefaultName} restores that. Base roles cannot be deleted, and the Chairman role always has every
- * permission. Treasurer and Member permissions and the descriptions of all roles can be edited.
+ * {@code useDefaultName} restores that. A base role also keeps {@code description_customized}: false while the role
+ * has its standard description, set by any change of the description text (a blank one included) and cleared by
+ * {@code useDefaultDescription}. The two restores are independent and can be combined in one request. Base roles
+ * cannot be deleted, and the Chairman role always has every permission. Treasurer and Member permissions and the
+ * descriptions of all roles can be edited.
  */
 @Service
 class RoleCommands {
@@ -71,21 +76,31 @@ class RoleCommands {
     RoleDetails update(UUID id, RoleInput input, AccessProfile actor) {
         Role role = find(id, actor);
         boolean base = role.getBaseCode() != null;
-        boolean restore = Boolean.TRUE.equals(input.getUseDefaultName());
-        if (restore && !base) {
-            throw invalid("useDefaultName");
+        boolean restoreName = Boolean.TRUE.equals(input.getUseDefaultName());
+        boolean restoreDescription = Boolean.TRUE.equals(input.getUseDefaultDescription());
+        if (!base && (restoreName || restoreDescription)) {
+            throw invalidRestore(restoreName, restoreDescription);
         }
 
         String name;
-        boolean customized;
-        if (restore) {
+        boolean nameCustomized;
+        if (restoreName) {
             name = BaseRoles.defaultName(role.getBaseCode());
-            customized = false;
+            nameCustomized = false;
         } else {
             name = cleanName(input.getName());
-            customized = !name.equals(role.getName()) || role.isNameCustomized();
+            nameCustomized = !name.equals(role.getName()) || role.isNameCustomized();
         }
-        String description = blankToNull(input.getDescription());
+        String description;
+        boolean descriptionCustomized;
+        if (restoreDescription) {
+            description = BaseRoles.defaultDescription(role.getBaseCode());
+            descriptionCustomized = false;
+        } else {
+            description = blankToNull(input.getDescription());
+            descriptionCustomized = !Objects.equals(description, role.getDescription())
+                    || role.isDescriptionCustomized();
+        }
         Set<Permission> requested = permissionsOf(input);
 
         boolean chairman = PermissionUnion.CHAIRMAN.equals(role.getBaseCode());
@@ -99,13 +114,17 @@ class RoleCommands {
 
         Set<Permission> current = RoleDtoMapper.effective(role,
                 roles.findPermissions(role.getId()).stream().map(RolePermissionRow::permission).toList());
+        String baseCode = role.getBaseCode();
         List<FieldChange> changes = RoleSnapshot.diff(
-                RoleSnapshot.of(RoleSnapshot.auditName(role.getName(), role.getBaseCode(), role.isNameCustomized()),
-                        role.getDescription(), current),
-                RoleSnapshot.of(RoleSnapshot.auditName(name, role.getBaseCode(), customized), description, requested));
-        boolean flagChanged = customized != role.isNameCustomized();
+                RoleSnapshot.of(RoleSnapshot.auditName(role.getName(), baseCode, role.isNameCustomized()),
+                        RoleSnapshot.auditDescription(role.getDescription(), baseCode, role.isDescriptionCustomized()),
+                        current),
+                RoleSnapshot.of(RoleSnapshot.auditName(name, baseCode, nameCustomized),
+                        RoleSnapshot.auditDescription(description, baseCode, descriptionCustomized), requested));
+        boolean flagChanged = nameCustomized != role.isNameCustomized()
+                || descriptionCustomized != role.isDescriptionCustomized();
         if (!changes.isEmpty() || flagChanged) {
-            role.edit(name, customized, description, Instant.now());
+            role.edit(name, nameCustomized, description, descriptionCustomized, Instant.now());
             role = save(role);
             if (!chairman) {
                 writePermissions(actor.tenantId(), role.getId(), current, requested);
@@ -228,9 +247,17 @@ class RoleCommands {
                 "The request is not valid.", List.of(new FieldProblem("name", code)));
     }
 
-    private static ApiProblemException invalid(String field) {
+    /** A restore flag on a custom role: every offending field is reported. */
+    private static ApiProblemException invalidRestore(boolean restoreName, boolean restoreDescription) {
+        List<FieldProblem> problems = new ArrayList<>();
+        if (restoreName) {
+            problems.add(new FieldProblem("useDefaultName", ProblemCodes.INVALID));
+        }
+        if (restoreDescription) {
+            problems.add(new FieldProblem("useDefaultDescription", ProblemCodes.INVALID));
+        }
         return new ApiProblemException(HttpStatus.BAD_REQUEST, ProblemCodes.VALIDATION_FAILED,
-                "The request is not valid.", List.of(new FieldProblem(field, ProblemCodes.INVALID)));
+                "The request is not valid.", problems);
     }
 
     private static ApiProblemException nameTaken() {

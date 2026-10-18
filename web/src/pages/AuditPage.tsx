@@ -7,6 +7,7 @@ import { DataTable, PageHeader, Panel, Select, TextField, type Column } from '..
 import { useLocale, useT } from '../i18n';
 import { auditRoleValue } from '../roleName';
 import { problemCode, problemFieldErrors } from '../problem';
+import { useDocumentTitle } from '../useDocumentTitle';
 
 const PAGE_SIZE = 50;
 const TIME_ZONE = 'Europe/Kyiv';
@@ -52,6 +53,7 @@ export function AuditPage() {
         t.problem.VALIDATION_FAILED)
       : undefined;
   const a = t.audit;
+  useDocumentTitle(a.title);
 
   const columns: Column<AuditEntry>[] = [
     { key: 'time', header: a.columns.time, cell: (entry) => <AuditTime entry={entry} locale={locale} /> },
@@ -206,7 +208,9 @@ function AuditChanges({ entry }: { entry: AuditEntry }) {
   const value = (field: string, raw: string | undefined): string => {
     if (raw === undefined || raw === '') return a.noValue;
     if (field === 'archived') return raw === 'true' ? a.yes : a.no;
-    return field === 'name' || field === 'roles' ? auditRoleValue(raw, t) : raw;
+    return field === 'name' || field === 'roles' || field === 'description'
+      ? auditRoleValue(raw, t, field)
+      : raw;
   };
   return (
     <ul className="flex flex-col gap-1">

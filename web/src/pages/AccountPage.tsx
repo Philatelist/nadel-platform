@@ -5,9 +5,11 @@ import { MemberDetails } from '../components/MemberDetails';
 import { Badge, PageHeader, Panel } from '../components/ui';
 import { useMe } from '../me';
 import { useRoleName } from '../roleName';
+import { useDocumentTitle } from '../useDocumentTitle';
 
 export function AccountPage() {
   const t = useT();
+  useDocumentTitle(t.account.title);
   const { locale } = useLocale();
   const me = useMe();
   const roleName = useRoleName();

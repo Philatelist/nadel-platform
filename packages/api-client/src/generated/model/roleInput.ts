@@ -29,6 +29,12 @@ export interface RoleInput {
      * field `useDefaultName`, code `INVALID`).
      */
   useDefaultName?: boolean;
+  /**
+     * Base roles only. When true the role gets its standard description back (`descriptionCustomized` becomes
+     * false) and the submitted `description` is ignored. On a custom role this is a validation error (400
+     * `VALIDATION_FAILED`, field `useDefaultDescription`, code `INVALID`).
+     */
+  useDefaultDescription?: boolean;
   /** @maxLength 500 */
   description?: string;
   permissions: Permission[];

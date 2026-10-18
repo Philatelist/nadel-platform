@@ -16,9 +16,12 @@ import { QueryBoundary } from '../components/QueryBoundary';
 import { Badge, Button, Notice, PageHeader, TextArea, TextField } from '../components/ui';
 import { useLocale, useT } from '../i18n';
 import { problemCode, problemFieldErrors, problemMessage, type FieldErrors } from '../problem';
-import { useRoleName } from '../roleName';
+import { roleDescription, useRoleName } from '../roleName';
 import { findNameClash } from '../roleNameClash';
+import { descriptionToSubmit } from '../roleDescriptionSubmit';
+import { restoreNameDescription } from '../roleRestore';
 import { nameToSubmit } from '../roleNameSubmit';
+import { useDocumentTitle } from '../useDocumentTitle';
 
 export function RolesPage() {
   const t = useT();
@@ -31,6 +34,7 @@ export function RolesPage() {
   const [saved, setSaved] = useState<string>();
   const [error, setError] = useState<string>();
   const c = t.rolesPage;
+  useDocumentTitle(c.title);
 
   const remove = useDeleteRole({
     mutation: {
@@ -109,7 +113,9 @@ export function RolesPage() {
                             {role.baseCode ? c.baseRole : c.customRole}
                           </Badge>
                         </div>
-                        {role.description && <p className="text-sm text-ink-muted">{role.description}</p>}
+                        {roleDescription(role, t) && (
+                          <p className="text-sm text-ink-muted">{roleDescription(role, t)}</p>
+                        )}
                         <p className="text-sm text-ink-muted">
                           {format(c.memberCount, { n: role.memberCount })}
                         </p>
@@ -182,7 +188,7 @@ function RoleEditor({
   const { locale } = useLocale();
 
   const [name, setName] = useState(role ? roleName(role) : '');
-  const [description, setDescription] = useState(role?.description ?? '');
+  const [description, setDescription] = useState(role ? (roleDescription(role, t) ?? '') : '');
   const [selected, setSelected] = useState<ReadonlySet<Permission>>(
     new Set(isChairman ? available : (role?.permissions ?? [])),
   );
@@ -225,7 +231,7 @@ function RoleEditor({
     setFormError(undefined);
     const data = {
       name: nameToSubmit(role, name, role ? roleName(role) : ''),
-      description: description.trim() === '' ? undefined : description.trim(),
+      description: descriptionToSubmit(role, description, role ? (roleDescription(role, t) ?? '') : ''),
       permissions: available.filter((code) => selected.has(code)),
     };
     if (role) update.mutate({ id: role.id, data });
@@ -240,9 +246,23 @@ function RoleEditor({
       id: role.id,
       data: {
         name: role.name,
-        description: description.trim() === '' ? undefined : description.trim(),
+        description: restoreNameDescription(role, description, roleDescription(role, t) ?? ''),
         permissions: available.filter((code) => selected.has(code)),
         useDefaultName: true,
+      },
+    });
+  };
+
+  const restoreDescription = () => {
+    if (!role) return;
+    setErrors({});
+    setFormError(undefined);
+    update.mutate({
+      id: role.id,
+      data: {
+        name: nameToSubmit(role, name, roleName(role)),
+        permissions: available.filter((code) => selected.has(code)),
+        useDefaultDescription: true,
       },
     });
   };
@@ -277,6 +297,13 @@ function RoleEditor({
         maxLength={500}
         onChange={(e) => setDescription(e.target.value)}
       />
+      {role?.baseCode && role.descriptionCustomized && (
+        <div>
+          <Button variant="secondary" onClick={restoreDescription} disabled={busy}>
+            {c.restoreDescription}
+          </Button>
+        </div>
+      )}
       <PermissionBoxes
         codes={available}
         selected={selected}

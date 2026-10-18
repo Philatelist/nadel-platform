@@ -1,6 +1,6 @@
 import { messages } from '@nadel/shared';
 import { describe, expect, it } from 'vitest';
-import { auditRoleValue, roleDisplayName } from './roleName';
+import { auditRoleValue, roleDescription, roleDisplayName } from './roleName';
 
 describe('roleDisplayName', () => {
   it.each([
@@ -42,5 +42,30 @@ describe('auditRoleValue', () => {
 
   it('leaves a plain value unchanged', () => {
     expect(auditRoleValue('Cashier', messages('en'))).toBe('Cashier');
+  });
+});
+
+describe('roleDescription', () => {
+  const base = { baseCode: 'MEMBER', description: 'Own data only', descriptionCustomized: false } as const;
+  it('shows the catalog text for a standard base description', () =>
+    expect(roleDescription(base, messages('uk'))).toBe('Лише власні дані'));
+  it('shows the stored text for a customised base role', () =>
+    expect(
+      roleDescription({ ...base, description: 'Ours', descriptionCustomized: true }, messages('uk')),
+    ).toBe('Ours'));
+  it('shows the stored text for a custom role, possibly none', () =>
+    expect(roleDescription({ descriptionCustomized: true }, messages('uk'))).toBeUndefined());
+});
+
+describe('auditRoleValue for description', () => {
+  it.each([
+    ['uk', 'Повний доступ'],
+    ['en', 'Full access'],
+  ] as const)('maps base:CHAIRMAN (%s)', (locale, expected) =>
+    expect(auditRoleValue('base:CHAIRMAN', messages(locale), 'description')).toBe(expected),
+  );
+  it('leaves free text and unknown codes alone', () => {
+    expect(auditRoleValue('Meters', messages('en'), 'description')).toBe('Meters');
+    expect(auditRoleValue('base:NOPE', messages('en'), 'description')).toBe('base:NOPE');
   });
 });

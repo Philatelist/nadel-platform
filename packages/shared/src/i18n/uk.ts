@@ -15,9 +15,11 @@ export const uk: Messages = {
     roles: 'Ролі',
     audit: 'Журнал змін',
     language: 'Мова',
+    theme: 'Тема',
     menu: 'Меню',
     main: 'Головне меню',
   },
+  theme: { system: 'Системна', light: 'Світла', dark: 'Темна' },
   state: {
     loading: 'Завантаження…',
     empty: 'Тут поки нічого немає.',
@@ -86,6 +88,11 @@ export const uk: Messages = {
     MEMBER: 'Член кооперативу',
     PLATFORM_OPERATOR: 'Оператор платформи',
   },
+  roleDescriptions: {
+    CHAIRMAN: 'Повний доступ',
+    TREASURER: 'Перегляд членів, ділянок і журналу змін',
+    MEMBER: 'Лише власні дані',
+  },
   rolesPage: {
     title: 'Ролі',
     baseRole: 'Базова роль',
@@ -110,6 +117,7 @@ export const uk: Messages = {
     memberRoles: 'Змінити ролі',
     baseHint: 'Базова роль: {name}',
     restoreName: 'Повернути стандартну назву',
+    restoreDescription: 'Повернути стандартний опис',
     nameClash: 'Інша роль уже показується під такою назвою.',
   },
   members: {

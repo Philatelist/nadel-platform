@@ -266,9 +266,11 @@ export const useCreateRole = <TError = BadRequestResponse | UnauthorizedResponse
  * the cooperative, ignoring upper and lower case (409 `ROLE_NAME_TAKEN`). With `useDefaultName: true` a base
  * role gets its standard name back (the submitted `name` is ignored); that can also end in 409
  * `ROLE_NAME_TAKEN` when another role already holds the standard name, and for a custom role it is a 400
- * `VALIDATION_FAILED` on `useDefaultName`. The permissions of the Chairman role cannot be changed
- * (409 `BASE_ROLE_IMMUTABLE`); the permissions of the Treasurer and Member roles can be edited. Renaming a role
- * never changes what its holders may do.
+ * `VALIDATION_FAILED` on `useDefaultName`. With `useDefaultDescription: true` a base role gets its standard
+ * description back (the submitted `description` is ignored); for a custom role it is a 400 `VALIDATION_FAILED`
+ * on `useDefaultDescription`. Both restores can be combined in one request. The permissions of the Chairman
+ * role cannot be changed (409 `BASE_ROLE_IMMUTABLE`); the permissions of the Treasurer and Member roles can be
+ * edited. Renaming a role never changes what its holders may do.
  * @summary Update a role
  */
 export const updateRole = async (id: string,

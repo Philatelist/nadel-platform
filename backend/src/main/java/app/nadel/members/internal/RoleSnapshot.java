@@ -29,6 +29,16 @@ record RoleSnapshot(String name, @Nullable String description, @Nullable String 
         return baseCode != null && !nameCustomized ? "base:" + baseCode : name;
     }
 
+    /**
+     * The description as written to the audit log. A base role that still has its standard description is written as
+     * the token {@code base:<BASE_CODE>}, because the standard description is shown in the reader's language by the
+     * client; every other role is written under its stored description (possibly null).
+     */
+    static @Nullable String auditDescription(@Nullable String description, @Nullable String baseCode,
+            boolean descriptionCustomized) {
+        return baseCode != null && !descriptionCustomized ? "base:" + baseCode : description;
+    }
+
     /** The state before a role exists (or after it is gone): every field empty. */
     static final RoleSnapshot NONE = new RoleSnapshot(null, null, null);
 

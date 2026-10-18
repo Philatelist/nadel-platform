@@ -6,6 +6,7 @@ import { useMe } from '../me';
 import { useT } from '../i18n';
 import { useRoleName } from '../roleName';
 import { LocaleSwitch } from './LocaleSwitch';
+import { ThemeSwitch } from './ThemeSwitch';
 import { Button } from './ui';
 
 interface NavItem {
@@ -33,6 +34,7 @@ export function Layout() {
   const [open, setOpen] = useState(false);
   const menuButton = useRef<HTMLButtonElement>(null);
 
+  const title = me.tenant?.name ?? t.app.name;
   const items = NAV_ITEMS.filter((item) => me.permissions.includes(item.permission));
   const hasMenu = items.length > 0;
 
@@ -50,12 +52,19 @@ export function Layout() {
 
   return (
     <div className="flex h-full flex-col">
+      {/* Below md the visual order (name, Menu, label, controls) differs from the Tab order: Menu is reached after the header controls, right before #app-menu. Deliberate. */}
       <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line bg-surface px-4 py-3">
-        <Link to="/" className="font-serif text-xl font-semibold text-ink no-underline">
-          {t.app.name}
+        <Link
+          to="/"
+          title={title}
+          className="order-1 md:order-none min-w-[8rem] max-w-full flex-1 truncate font-serif text-xl font-semibold text-ink no-underline md:flex-none"
+        >
+          {title}
         </Link>
-        {me.tenant?.name && <span className="min-w-0 truncate text-sm text-ink-muted">{me.tenant.name}</span>}
-        <div className="ml-auto flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
+        {me.tenant?.name && (
+          <span className="order-3 text-sm text-ink-muted md:order-none">{t.app.name}</span>
+        )}
+        <div className="order-4 ml-auto flex min-w-0 flex-wrap md:order-none items-center gap-x-3 gap-y-2">
           <div className="flex min-w-0 flex-col text-sm leading-tight">
             <Link to="/account" className="truncate font-medium text-ink">
               {me.fullName}
@@ -63,22 +72,25 @@ export function Layout() {
             <span className="truncate text-xs text-ink-muted">{me.roles.map(roleName).join(', ')}</span>
           </div>
           <LocaleSwitch />
+          <div className={hasMenu ? 'hidden md:flex' : 'flex'}>
+            <ThemeSwitch />
+          </div>
           <Button variant="secondary" onClick={() => void auth.signoutRedirect()}>
             {t.auth.signOut}
           </Button>
-          {hasMenu && (
-            <Button
-              ref={menuButton}
-              variant="secondary"
-              className="md:hidden"
-              aria-expanded={open}
-              aria-controls="app-menu"
-              onClick={() => setOpen((value) => !value)}
-            >
-              {t.nav.menu}
-            </Button>
-          )}
         </div>
+        {hasMenu && (
+          <Button
+            ref={menuButton}
+            variant="secondary"
+            className="order-2 md:hidden"
+            aria-expanded={open}
+            aria-controls="app-menu"
+            onClick={() => setOpen((value) => !value)}
+          >
+            {t.nav.menu}
+          </Button>
+        )}
       </header>
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
         {hasMenu && (
@@ -86,6 +98,9 @@ export function Layout() {
             id="app-menu"
             className={`${open ? 'block' : 'hidden'} border-b border-line bg-surface p-3 md:block md:w-60 md:shrink-0 md:border-b-0 md:border-r`}
           >
+            <div className="mb-2 md:hidden">
+              <ThemeSwitch />
+            </div>
             <nav aria-label={t.nav.main} className="flex flex-col gap-1">
               {items.map((item) => (
                 <NavLink key={item.to} to={item.to} className={itemClass} onClick={() => setOpen(false)}>

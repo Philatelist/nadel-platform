@@ -12,7 +12,7 @@ import java.util.Set;
  */
 final class BaseRoles {
 
-    record Definition(String code, String name, Set<Permission> permissions) {
+    record Definition(String code, String name, String description, Set<Permission> permissions) {
     }
 
     static final String CHAIRMAN = PermissionUnion.CHAIRMAN;
@@ -21,10 +21,10 @@ final class BaseRoles {
 
     /** In display order: base roles come first in the roles list, in this order. */
     static final List<Definition> ALL = List.of(
-            new Definition(CHAIRMAN, "Chairman", EnumSet.allOf(Permission.class)),
-            new Definition(TREASURER, "Treasurer",
+            new Definition(CHAIRMAN, "Chairman", "Full access", EnumSet.allOf(Permission.class)),
+            new Definition(TREASURER, "Treasurer", "Read access to members, plots and audit",
                     EnumSet.of(Permission.MEMBERS_VIEW, Permission.PLOTS_VIEW, Permission.AUDIT_VIEW)),
-            new Definition(MEMBER, "Member", EnumSet.noneOf(Permission.class)));
+            new Definition(MEMBER, "Member", "Own data only", EnumSet.noneOf(Permission.class)));
 
     private BaseRoles() {
     }
@@ -38,6 +38,17 @@ final class BaseRoles {
     static String defaultName(String code) {
         return ALL.stream().filter(d -> d.code().equals(code)).findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("Not a base role: " + code)).name();
+    }
+
+    /**
+     * The seed (stored) description of a base role, English, as {@code seed_base_roles} writes it. Restoring the
+     * standard description of a changed base role stores this value.
+     *
+     * @throws IllegalArgumentException for a code that is not a base role
+     */
+    static String defaultDescription(String code) {
+        return ALL.stream().filter(d -> d.code().equals(code)).findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Not a base role: " + code)).description();
     }
 
     /** Position of a base role in the display order; custom roles (null code) sort after all base roles. */

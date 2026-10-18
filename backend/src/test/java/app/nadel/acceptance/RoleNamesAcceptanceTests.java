@@ -46,7 +46,9 @@ class RoleNamesAcceptanceTests extends IntegrationTest {
     @AfterEach
     void restoreTreasurer() {
         inTenant(DEMO_TENANT, sql -> {
-            sql.update("update role set name = 'Treasurer', name_customized = false where base_code = 'TREASURER'");
+            sql.update("update role set name = 'Treasurer', name_customized = false, "
+                    + "description = 'Read access to members, plots and audit', description_customized = false "
+                    + "where base_code = 'TREASURER'");
             sql.update("update member set keycloak_subject = null "
                     + "where email in ('chairman@demo.local', 'treasurer@demo.local')");
             return null;
@@ -122,7 +124,8 @@ class RoleNamesAcceptanceTests extends IntegrationTest {
         Map<String, Object> restore = treasurerBody("ignored");
         restore.put("useDefaultName", true);
         putRole(treasurer, restore).andExpect(status().isOk())
-                .andExpect(jsonPath("$.name").value("Treasurer")).andExpect(jsonPath("$.nameCustomized").value(false));
+                .andExpect(jsonPath("$.name").value("Treasurer")).andExpect(jsonPath("$.nameCustomized").value(false))
+                .andExpect(jsonPath("$.descriptionCustomized").value(false));
         mvc.perform(get("/api/v1/me").header(HttpHeaders.AUTHORIZATION, treasurerToken))
                 .andExpect(jsonPath("$.roles[?(@.baseCode == 'TREASURER')].nameCustomized").value(false));
     }

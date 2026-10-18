@@ -13,9 +13,11 @@ export const en = {
     roles: 'Roles',
     audit: 'Audit log',
     language: 'Language',
+    theme: 'Theme',
     menu: 'Menu',
     main: 'Main menu',
   },
+  theme: { system: 'System', light: 'Light', dark: 'Dark' },
   state: { loading: 'Loading…', empty: 'Nothing here yet.', error: 'Could not load data. Please try again.' },
   access: {
     denied: "You don't have access to this page",
@@ -74,6 +76,11 @@ export const en = {
     MEMBER: 'Member',
     PLATFORM_OPERATOR: 'Platform operator',
   },
+  roleDescriptions: {
+    CHAIRMAN: 'Full access',
+    TREASURER: 'Read access to members, plots and audit',
+    MEMBER: 'Own data only',
+  },
   rolesPage: {
     title: 'Roles',
     baseRole: 'Base role',
@@ -98,6 +105,7 @@ export const en = {
     memberRoles: 'Edit roles',
     baseHint: 'Base role: {name}',
     restoreName: 'Restore standard name',
+    restoreDescription: 'Restore standard description',
     nameClash: 'Another role is already shown under this name.',
   },
   members: {

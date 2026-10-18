@@ -57,12 +57,42 @@ class SeedBaseRolesTests extends IntegrationTest {
         assertThat(as(() -> jdbc.queryForList(
                 "select name_customized from role where base_code is not null", Boolean.class)))
                 .hasSize(3).containsOnly(false);
+        assertThat(as(() -> jdbc.queryForList(
+                "select description_customized from role where base_code is not null", Boolean.class)))
+                .hasSize(3).containsOnly(false);
+    }
+
+    /**
+     * The condition of the V5 data fix: a base role counts as customised when its stored description differs from the
+     * V2 seed text of its code (a cleared description included); custom roles always do.
+     */
+    @Test
+    void migrationRuleFlagsBaseRolesWithAnEditedDescriptionOnly() {
+        String rule = "select count(*) from role where id = ? and (base_code is null or description is distinct from "
+                + "case base_code when 'CHAIRMAN' then 'Full access' "
+                + "when 'TREASURER' then 'Read access to members, plots and audit' "
+                + "when 'MEMBER' then 'Own data only' end)";
+        UUID treasurer = as(() -> jdbc.queryForObject(
+                "select id from role where base_code = 'TREASURER'", UUID.class));
+        try {
+            assertThat(as(() -> jdbc.queryForObject(rule, Integer.class, treasurer))).as("seed text").isZero();
+            as(() -> jdbc.update("update role set description = 'Keeps the cash desk' where id = ?", treasurer));
+            assertThat(as(() -> jdbc.queryForObject(rule, Integer.class, treasurer))).as("edited").isOne();
+            as(() -> jdbc.update("update role set description = null where id = ?", treasurer));
+            assertThat(as(() -> jdbc.queryForObject(rule, Integer.class, treasurer))).as("cleared").isOne();
+            // the seed text of another code is an edit for this one
+            as(() -> jdbc.update("update role set description = 'Own data only' where id = ?", treasurer));
+            assertThat(as(() -> jdbc.queryForObject(rule, Integer.class, treasurer))).as("other code's text").isOne();
+        } finally {
+            as(() -> jdbc.update("update role set description = 'Read access to members, plots and audit' "
+                    + "where id = ?", treasurer));
+        }
     }
 
     @Test
     void secondRunChangesNothingAndKeepsCustomisations() {
-        as(() -> jdbc.update("update role set name = 'Chair', name_customized = true, description = 'custom' "
-                + "where base_code = 'CHAIRMAN'"));
+        as(() -> jdbc.update("update role set name = 'Chair', name_customized = true, description = 'custom', "
+                + "description_customized = true where base_code = 'CHAIRMAN'"));
         as(() -> jdbc.update("delete from role_permission where permission = 'AUDIT_VIEW' "
                 + "and role_id = md5(?::text || ':TREASURER')::uuid", DEMO));
         Map<String, TreeSet<String>> before = matrix();
@@ -77,12 +107,16 @@ class SeedBaseRolesTests extends IntegrationTest {
                 .isEqualTo("Chair");
         assertThat(as(() -> jdbc.queryForObject(
                 "select name_customized from role where base_code = 'CHAIRMAN'", Boolean.class))).isTrue();
+        assertThat(as(() -> jdbc.queryForObject(
+                "select description_customized from role where base_code = 'CHAIRMAN'", Boolean.class))).isTrue();
+        assertThat(as(() -> jdbc.queryForObject(
+                "select description from role where base_code = 'CHAIRMAN'", String.class))).isEqualTo("custom");
         assertThat(as(() -> jdbc.queryForObject("select count(*) from role where base_code is not null", Integer.class)))
                 .isEqualTo(3);
 
         // restore the demo state for other tests
-        as(() -> jdbc.update("update role set name = 'Chairman', name_customized = false, description = 'Full access' "
-                + "where base_code = 'CHAIRMAN'"));
+        as(() -> jdbc.update("update role set name = 'Chairman', name_customized = false, description = 'Full access', "
+                + "description_customized = false where base_code = 'CHAIRMAN'"));
     }
 
     private Map<String, TreeSet<String>> matrix() {
