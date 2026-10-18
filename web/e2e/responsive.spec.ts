@@ -54,12 +54,15 @@ test.describe('responsive page frame', () => {
       await expect(menuButton).toBeFocused();
     });
 
-    test('plain member: no Menu button and no main navigation landmark', async ({ page }) => {
+    test('plain member: the Menu button opens a menu with only Plots', async ({ page }) => {
       await loginAs(page, 'member@demo.local');
 
       await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-      await expect(page.getByRole('button', { name: 'Menu', exact: true })).toHaveCount(0);
-      await expect(page.getByRole('navigation', { name: 'Main menu' })).toHaveCount(0);
+      const menuButton = page.getByRole('button', { name: 'Menu', exact: true });
+      await expect(menuButton).toBeVisible();
+      await menuButton.click();
+      const nav = page.getByRole('navigation', { name: 'Main menu' });
+      await expect(nav.getByRole('link')).toHaveText(['Plots']);
     });
   });
 

@@ -25,8 +25,13 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  BadRequestResponse,
   ForbiddenResponse,
+  ListPlotsParams,
+  NotFoundResponse,
+  PlotDetails,
   PlotFeatureCollection,
+  PlotPage,
   UnauthorizedResponse
 } from '../model';
 
@@ -51,6 +56,122 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getListPlotsUrl = (params?: ListPlotsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/v1/plots?${stringifiedParams}` : `/api/v1/plots`
+}
+
+/**
+ * Returns a page of plots and common land of the current cooperative, sorted naturally by number
+ * (`2` before `10`, `12` before `12а`). Every member of the cooperative may call it; the platform operator
+ * has no cooperative data: 403.
+ * `q` is a case-insensitive substring match against the number and the street, and, for callers with
+ * `PLOTS_VIEW`, the cadastral number. `status` is the displayed status (common land is always `GREY`).
+ * Archived plots are excluded unless `includeArchived` is true.
+ * A caller without `PLOTS_VIEW` sees only `id`, `number`, `kind`, `status`, `street` and `archived`: `areaM2`,
+ * `cadastralNumber` and `hasBuilding` are absent, `q` does not match the cadastral number, and
+ * `includeArchived` is ignored (archived plots are never listed).
+ * @summary List plots
+ */
+export const listPlots = async (params?: ListPlotsParams, options?: Parameters<typeof nadelFetch>[1]): Promise<PlotPage> => {
+
+  return nadelFetch<PlotPage>(getListPlotsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListPlotsQueryKey = (params?: ListPlotsParams,) => {
+    return [
+    `/api/v1/plots`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListPlotsQueryOptions = <TData = Awaited<ReturnType<typeof listPlots>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>(params?: ListPlotsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listPlots>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListPlotsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listPlots>>> = ({ signal }) => listPlots(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listPlots>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListPlotsQueryResult = NonNullable<Awaited<ReturnType<typeof listPlots>>>
+export type ListPlotsQueryError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse
+
+
+export function useListPlots<TData = Awaited<ReturnType<typeof listPlots>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>(
+ params: undefined |  ListPlotsParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listPlots>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listPlots>>,
+          TError,
+          Awaited<ReturnType<typeof listPlots>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListPlots<TData = Awaited<ReturnType<typeof listPlots>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>(
+ params?: ListPlotsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listPlots>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listPlots>>,
+          TError,
+          Awaited<ReturnType<typeof listPlots>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListPlots<TData = Awaited<ReturnType<typeof listPlots>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>(
+ params?: ListPlotsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listPlots>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List plots
+ */
+
+export function useListPlots<TData = Awaited<ReturnType<typeof listPlots>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>(
+ params?: ListPlotsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listPlots>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListPlotsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
 
 export const getGetPlotMapUrl = () => {
 
@@ -145,6 +266,110 @@ export function useGetPlotMap<TData = Awaited<ReturnType<typeof getPlotMap>>, TE
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getGetPlotMapQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export const getGetPlotUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/plots/${id}`
+}
+
+/**
+ * Returns one plot or common land of the current cooperative. Every member of the cooperative may call it.
+ * A caller without `PLOTS_VIEW` gets only `id`, `number`, `kind`, `status`, `street` and `archived`, and the
+ * answer for an archived plot is 404. A plot of another cooperative is 404, exactly as for an id that does
+ * not exist.
+ * @summary Plot card
+ */
+export const getPlot = async (id: string, options?: Parameters<typeof nadelFetch>[1]): Promise<PlotDetails> => {
+
+  return nadelFetch<PlotDetails>(getGetPlotUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPlotQueryKey = (id: string,) => {
+    return [
+    `/api/v1/plots/${id}`
+    ] as const;
+    }
+
+
+export const getGetPlotQueryOptions = <TData = Awaited<ReturnType<typeof getPlot>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPlot>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPlotQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPlot>>> = ({ signal }) => getPlot(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPlot>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetPlotQueryResult = NonNullable<Awaited<ReturnType<typeof getPlot>>>
+export type GetPlotQueryError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse
+
+
+export function useGetPlot<TData = Awaited<ReturnType<typeof getPlot>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPlot>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getPlot>>,
+          TError,
+          Awaited<ReturnType<typeof getPlot>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetPlot<TData = Awaited<ReturnType<typeof getPlot>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPlot>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getPlot>>,
+          TError,
+          Awaited<ReturnType<typeof getPlot>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetPlot<TData = Awaited<ReturnType<typeof getPlot>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPlot>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Plot card
+ */
+
+export function useGetPlot<TData = Awaited<ReturnType<typeof getPlot>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPlot>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetPlotQueryOptions(id,options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 

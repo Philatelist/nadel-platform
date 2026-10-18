@@ -47,6 +47,9 @@ class Plot {
     @Column(name = "archived_at")
     private Instant archivedAt;
 
+    @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
+    private Instant createdAt;
+
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
@@ -79,6 +82,10 @@ class Plot {
         return areaM2;
     }
 
+    String getCadastralNumber() {
+        return cadastralNumber;
+    }
+
     Polygon getBoundary() {
         return boundary;
     }
@@ -93,6 +100,10 @@ class Plot {
 
     Instant getArchivedAt() {
         return archivedAt;
+    }
+
+    Instant getCreatedAt() {
+        return createdAt;
     }
 
     Instant getUpdatedAt() {

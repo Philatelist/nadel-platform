@@ -54,3 +54,4 @@ Same as 004/005 (see `context/spec/005-ui-preferences/pipeline-log.md`). Re-chec
 - AUTO: plot number limited to 20 characters (rule: conservative bound; free-text numbers like "12а", "R-1").
 
 ## Phase 3 — implement
+- Slice 1 committed aeba3dd (backend 45 targeted, web 102 unit; typecheck/lint/format green; generated client stable). Note: mobile/App.tsx touched only to compile after the status-key rename (same label). Review r1 started.

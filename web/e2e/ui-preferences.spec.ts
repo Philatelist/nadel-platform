@@ -183,10 +183,10 @@ test.describe('theme switch (phone)', () => {
     expect(titleMiddle).toBeLessThan(menuBox!.y + menuBox!.height);
   });
 
-  test('§2.1 #5: a plain member finds the theme choice in the header and has no menu', async ({ page }) => {
+  test('§2.1 #5: a plain member also finds the theme choice inside the opened menu', async ({ page }) => {
     await loginAs(page, 'member@demo.local');
-    await expect(page.getByRole('button', { name: 'Menu', exact: true })).toHaveCount(0);
-    await expect(page.getByRole('banner').getByRole('group', { name: 'Theme' })).toBeVisible();
+    await page.getByRole('button', { name: 'Menu', exact: true }).click();
+    await expect(page.locator('#app-menu').getByRole('group', { name: 'Theme' })).toBeVisible();
     await themeButton(page, 'Dark').click();
     await expect(themeButton(page, 'Dark')).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
