@@ -268,6 +268,7 @@ test.describe('§2.2 / §2.13 roles screen', () => {
 
       // the treasurer's own account and the members list show the new name
       const treasurerPage = await signedInPage(browser, 'treasurer@demo.local');
+      await treasurerPage.goto('/account'); // the treasurer lands on Plots; the roles are on My account
       await expect(treasurerPage.getByRole('listitem').filter({ hasText: /^Bookkeeper$/ })).toBeVisible();
       await treasurerPage.goto('/members');
       await treasurerPage.getByRole('searchbox').fill('Shevchenko');

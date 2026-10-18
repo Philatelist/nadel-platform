@@ -61,3 +61,6 @@ Same as 004/005 (see `context/spec/005-ui-preferences/pipeline-log.md`). Re-chec
 - Slice 3 committed 9cc8a6d (backend 150 targeted incl. notes guard for editors without PLOTS_VIEW; web 115, shared 42 unit; generated client stable). Review r1 started.
 - AUTO: Slice 3 review M1 fixed with the reviewer's option (b): every plot write endpoint requires PLOTS_VIEW and PLOTS_EDIT (403 otherwise), web gates Add/Edit/Archive/Restore/Delete and the form routes on both; the notes special case is removed (rule: no blind writes of fields the editor cannot see; simplest consistent rule). Applied after the Slice 4 commit because the files overlap.
 - Slice 4 committed e2e7631 (backend PlotsWriteTests 42 + read; web 118 unit). Its review starts after the Slice 3 fix commit (gate: one outstanding review).
+- Slice 3 review r1 MAJOR_ISSUES (M1 blind writes) → fix 27bfa1f → r2 PASS.
+- Slice 4 review r1 PASS. All slice reviews so far PASS (1–4).
+- Slice 5 (testing-expert): web/e2e/plots.spec.ts (3 flows); acceptance.spec.ts role-rename test opens /account first (treasurer now lands on Plots); make check green (backend 422, unit 56/42/122), coverage 0.9579 → floor 0.94→0.95, ./mvnw verify green, make e2e 51 passed. Early failed runs left E2E plots in the local DB; removed with psql (local only).

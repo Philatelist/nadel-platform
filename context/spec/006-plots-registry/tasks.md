@@ -24,7 +24,7 @@ names; no personal data in logs; no edits to generated code). Do not commit; rep
 
   > The chairman adds and corrects plots with per-field messages; each change is in the audit log.
   - [x] Backend: `POST /plots`, `PUT /plots/{id}`, `PlotInput`, `PlotData` (+ `CadastralNumber`), `PlotCommands.create/update` (pre-checks, index-name mapping, GREY status row on create, no-op without audit), `PlotSnapshot`, Problem codes `PLOT_NUMBER_TAKEN`, `CADASTRAL_NUMBER_TAKEN`, field codes `CADASTRAL_INVALID`, `AREA_INVALID`, `AuditAction`/`AuditEntityType` additions, `make gen`. Tests: `PlotDataTests`, `CadastralNumberTests`, `PlotSnapshotTests`, `PlotsWriteTests` (create/update, uniqueness incl. other tenant and case, cadastral uniqueness incl. archived, concurrency → 409, treasurer/member 403, audit entries). **[Agent: spring-backend]**
-  - [x] Web: `PlotForm` + `PlotFormPage` (routes `/plots/new`, `/plots/:id/edit` with `PLOTS_EDIT`; area + unit select using `toSquareMetres`/`m2ToSotky`; field-error mapping incl. the two conflict codes), "Add plot" and "Edit" actions, AuditPage support for PLOT entries (link, field and action labels), i18n, unit tests (form conversion and validation, error mapping). **[Agent: react-frontend]**
+  - [x] Web: `PlotForm` + `PlotFormPage` (routes `/plots/new`, `/plots/:id/edit` with `PLOTS_VIEW` + `PLOTS_EDIT` (after the Slice 3 review fix); area + unit select using `toSquareMetres`/`m2ToSotky`; field-error mapping incl. the two conflict codes), "Add plot" and "Edit" actions, AuditPage support for PLOT entries (link, field and action labels), i18n, unit tests (form conversion and validation, error mapping). **[Agent: react-frontend]**
   - [x] Verify: `cd backend && ./mvnw -B test -Dtest='PlotsWriteTests,PlotDataTests,CadastralNumberTests,PlotSnapshotTests,AuditReadTests,ModularityTests'` green; `pnpm -r test && pnpm -r typecheck && pnpm -r lint && pnpm format:check` green. **[Agent: spring-backend]**
 
 - [x] **Slice 4: Archive, restore and delete**
@@ -34,11 +34,11 @@ names; no personal data in logs; no edits to generated code). Do not commit; rep
   - [x] Web: card actions Archive/Restore (mutation) and Delete with `ConfirmDialog`, navigation after delete, notices for `PLOT_NUMBER_TAKEN` on restore and `PLOT_ARCHIVED`, i18n, unit tests where feasible. **[Agent: react-frontend]**
   - [x] Verify: `cd backend && ./mvnw -B test -Dtest='PlotsWriteTests,ModularityTests'` green; `pnpm -r test && pnpm -r typecheck && pnpm -r lint && pnpm format:check` green. **[Agent: spring-backend]**
 
-- [ ] **Slice 5: End-to-end flows, docs and coverage floor**
+- [x] **Slice 5: End-to-end flows, docs and coverage floor**
 
   > Proves the user flows in a browser and closes the quality bar.
-  - [ ] E2E `web/e2e/plots.spec.ts`: treasurer lands on the plots list, searches "12" (12 before 12а), opens a card with area/cadastral/building, no edit actions; member opens Plots from the menu, sees no area column and no area/notes on the card; chairman create (area in sotkas) → edit → duplicate number error → archive → show archived → restore → archived delete refused → delete with confirmation; audit row for a plot. Clean up created data in `finally`. Fix other specs broken by the menu/landing changes. Update `docs/domain/glossary.md` if plot terms change. **[Agent: testing-expert]**
-  - [ ] Verify: `make check` green (if coverage is below the floor, report it with the measured numbers instead of lowering anything); raise `coverage.minimum` in `backend/pom.xml` to the measured line coverage rounded down (never lower) and re-run `cd backend && ./mvnw -B verify`; `make e2e` green. **[Agent: testing-expert]**
+  - [x] E2E `web/e2e/plots.spec.ts`: treasurer lands on the plots list, searches "12" (12 before 12а), opens a card with area/cadastral/building, no edit actions; member opens Plots from the menu, sees no area column and no area/notes on the card; chairman create (area in sotkas) → edit → duplicate number error → archive → show archived → restore → archived delete refused → delete with confirmation; audit row for a plot. Clean up created data in `finally`. Fix other specs broken by the menu/landing changes. Update `docs/domain/glossary.md` if plot terms change. **[Agent: testing-expert]**
+  - [x] Verify: `make check` green (if coverage is below the floor, report it with the measured numbers instead of lowering anything); raise `coverage.minimum` in `backend/pom.xml` to the measured line coverage rounded down (never lower) and re-run `cd backend && ./mvnw -B verify`; `make e2e` green. **[Agent: testing-expert]**
 
 - [ ] **Slice 6: Feature Testing & Regression**
 

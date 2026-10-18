@@ -23,3 +23,10 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `441f9b1..9cc8a6d` | MAJOR_ISSUES | M1 an editor with PLOTS_EDIT but without PLOTS_VIEW silently erases the cadastral number and building flag (fields hidden from them, PUT replaces all) | minor: form sends area as a JSON number (contract choice); `maxLength` checked before trimming; audit shows area with "." in Ukrainian; `violates()` message fallback; string check for area > 0. Fix overlaps Slice 4 files → applied after the Slice 4 commit |
+| 2 | + `27bfa1f` | PASS | M1 resolved (all writes need PLOTS_VIEW + PLOTS_EDIT on server and web; notes special case removed) | minor: tasks.md Slice 3 line still says PLOTS_EDIT; long description line in openapi |
+
+## Slice 4 — Archive, restore and delete
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `9cc8a6d..e2e7631` | PASS | — | minor: no `@Version`/row lock, so concurrent archive/restore may write two audit entries and archive-after-delete may 500; PlotPage tests only check button visibility; `setQueryData` + invalidate double refetch; a test helper builds SQL from constants |
