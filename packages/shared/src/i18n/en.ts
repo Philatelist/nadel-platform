@@ -213,7 +213,8 @@ export const en = {
     RED: 'Debt above threshold',
     YELLOW: 'Has debt',
     GREEN: 'No debt',
-    GREY: 'Common land',
+    GREY_PLOT: 'No owner',
+    GREY_COMMON: 'Common land',
   },
   errors: {
     generic: 'Could not load data. Please try again.',

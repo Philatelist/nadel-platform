@@ -1,11 +1,18 @@
-import { useGetPlots, type PlotFeatureCollection, type PlotStatus } from '@nadel/api-client';
+import { useGetPlotMap, type PlotFeatureCollection, type PlotKind, type PlotStatus } from '@nadel/api-client';
 import { formatMoney, formatSotky, isZeroMoney } from '@nadel/shared';
 import { LngLatBounds, Map as MapLibreMap, NavigationControl, type GeoJSONSource } from 'maplibre-gl';
 import { useEffect, useRef, useState } from 'react';
 import { ErrorState } from '../components/ui';
 import { useT } from '../i18n';
+import { plotStatusLabel } from '../plotStatus';
 
-const STATUSES: PlotStatus[] = ['RED', 'YELLOW', 'GREEN', 'GREY'];
+const LEGEND: { status: PlotStatus; kind: PlotKind }[] = [
+  { status: 'RED', kind: 'PLOT' },
+  { status: 'YELLOW', kind: 'PLOT' },
+  { status: 'GREEN', kind: 'PLOT' },
+  { status: 'GREY', kind: 'PLOT' },
+  { status: 'GREY', kind: 'COMMON' },
+];
 
 function cssVar(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -39,7 +46,7 @@ function bounds(fc: PlotFeatureCollection): LngLatBounds | null {
 
 export function MapPage() {
   const t = useT();
-  const { data, isLoading, isError, refetch } = useGetPlots();
+  const { data, isLoading, isError, refetch } = useGetPlotMap();
   const container = useRef<HTMLDivElement>(null);
   const map = useRef<MapLibreMap | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
@@ -145,13 +152,13 @@ export function MapPage() {
       )}
 
       <div className="absolute bottom-4 left-4 flex flex-wrap gap-3 rounded-xl border border-line bg-surface px-3 py-2 text-xs text-ink-muted">
-        {STATUSES.map((s) => (
-          <span key={s} className="flex items-center gap-1.5">
+        {LEGEND.map(({ status, kind }) => (
+          <span key={`${status}-${kind}`} className="flex items-center gap-1.5">
             <i
               className="inline-block h-2.5 w-2.5 rounded-sm"
-              style={{ background: `var(--color-status-${s.toLowerCase()})` }}
+              style={{ background: `var(--color-status-${status.toLowerCase()})` }}
             />
-            {t.status[s]}
+            {plotStatusLabel(t, { status, kind })}
           </span>
         ))}
       </div>
@@ -167,10 +174,14 @@ export function MapPage() {
             </button>
           </div>
           <dl className="mt-3 grid grid-cols-2 gap-y-1.5 text-sm">
-            <dt className="text-ink-muted">{t.map.area}</dt>
-            <dd className="tabular-nums">
-              {formatSotky(plot.areaM2)} {t.map.sotky}
-            </dd>
+            {plot.areaM2 !== undefined && (
+              <>
+                <dt className="text-ink-muted">{t.map.area}</dt>
+                <dd className="tabular-nums">
+                  {formatSotky(plot.areaM2)} {t.map.sotky}
+                </dd>
+              </>
+            )}
             {plot.debt && !isZeroMoney(plot.debt) && (
               <>
                 <dt className="text-ink-muted">{t.map.debt}</dt>
@@ -178,7 +189,7 @@ export function MapPage() {
               </>
             )}
           </dl>
-          <p className="mt-3 text-sm">{t.status[plot.status]}</p>
+          <p className="mt-3 text-sm">{plotStatusLabel(t, plot)}</p>
         </aside>
       )}
     </div>

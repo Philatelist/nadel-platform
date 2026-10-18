@@ -37,4 +37,30 @@ class PlotStatusEntry {
 
     protected PlotStatusEntry() {
     }
+
+    /** The status row of a new plot: GREY with no debt, until ownership and the ledger exist. */
+    static PlotStatusEntry initial(UUID plotId, UUID tenantId) {
+        var entry = new PlotStatusEntry();
+        entry.plotId = plotId;
+        entry.tenantId = tenantId;
+        entry.status = PlotStatusCode.GREY;
+        entry.debt = BigDecimal.ZERO.setScale(2);
+        return entry;
+    }
+
+    UUID getPlotId() {
+        return plotId;
+    }
+
+    UUID getTenantId() {
+        return tenantId;
+    }
+
+    PlotStatusCode getStatus() {
+        return status;
+    }
+
+    BigDecimal getDebt() {
+        return debt;
+    }
 }

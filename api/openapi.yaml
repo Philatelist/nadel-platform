@@ -540,14 +540,16 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
 
-  /plots:
+  /plots/map:
     get:
       tags: [plots]
-      operationId: getPlots
+      operationId: getPlotMap
       summary: Cooperative plots as GeoJSON for the map
       description: |
-        Returns all plots and common land of the current cooperative with polygons and debt status.
-        Members see the number and status of every plot, but the debt amount only for their own plots (from phase 1).
+        Returns all active plots and common land of the current cooperative with polygons and status. Archived plots
+        are not included. The number, kind and status of every plot are visible to every member of the cooperative;
+        `areaM2` and `debt` are present only for callers with `PLOTS_VIEW` (own plots join them later) and are omitted
+        for everyone else. The platform operator has no cooperative data: 403.
       responses:
         '200':
           description: OK
@@ -557,6 +559,8 @@ paths:
                 $ref: '#/components/schemas/PlotFeatureCollection'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
 components:
   securitySchemes:
@@ -1068,7 +1072,7 @@ components:
 
     PlotProperties:
       type: object
-      required: [number, kind, areaM2, status]
+      required: [number, kind, status]
       properties:
         number:
           type: string
@@ -1079,6 +1083,7 @@ components:
         areaM2:
           type: number
           format: double
+          description: Absent for callers without `PLOTS_VIEW`, like `debt`
         status:
           $ref: '#/components/schemas/PlotStatus'
         debt:

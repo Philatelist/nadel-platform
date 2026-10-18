@@ -6,12 +6,12 @@ Rules for every task: follow `CLAUDE.md` (English in code; UI text only in `pack
 and `en.ts`; contract first; existing migrations never edited; RLS/isolation for tenant data; permissions not role
 names; no personal data in logs; no edits to generated code). Do not commit; report every file created or changed.
 
-- [ ] **Slice 1: Plot records in the database, demo plots, map endpoint moved**
+- [x] **Slice 1: Plot records in the database, demo plots, map endpoint moved**
 
   > The demo cooperative has ~30 grey plots and a road; the map data moves to its own address with permission-based visibility; GREY is labelled by kind.
-  - [ ] Backend per tech spec 2.1 and the map row of 2.2/2.3: `V6__plots_registry.sql`, demo data rewrite, `Plot`/`PlotStatusEntry` fields, `/plots/map` (`getPlotMap`, optional `areaM2`/`debt`) with visibility and operator guard, `PlotQueries.map`, `PlotStatusPolicy`; `make gen`. Tests: `NaturalSortKeyTests` (ordering, "12а"/"12А" collide), updated `plots/internal/TenantIsolationTests` (counts, GREY, isolation for new columns and `plot_status`), `MeEndpointTests` path/count, map visibility tests (member: no area/debt; treasurer: both; operator: 403). **[Agent: spring-backend]**
-  - [ ] Web: `MapPage` uses `useGetPlotMap` and tolerates missing area/debt; `plotStatusLabel` helper with i18n `status.GREY_PLOT` / `status.GREY_COMMON` (uk "Без власника" / "Спільні землі"); unit test for the helper. **[Agent: react-frontend]**
-  - [ ] Verify: `cd backend && ./mvnw -B test -Dtest='NaturalSortKeyTests,TenantIsolationTests,MeEndpointTests,PlotMapTests,ModularityTests'` green; `pnpm gen:api` leaves no diff; `pnpm -r test && pnpm -r typecheck && pnpm -r lint && pnpm format:check` green. **[Agent: spring-backend]**
+  - [x] Backend per tech spec 2.1 and the map row of 2.2/2.3: `V6__plots_registry.sql`, demo data rewrite, `Plot`/`PlotStatusEntry` fields, `/plots/map` (`getPlotMap`, optional `areaM2`/`debt`) with visibility and operator guard, `PlotQueries.map`, `PlotStatusPolicy`; `make gen`. Tests: `NaturalSortKeyTests` (ordering, "12а"/"12А" collide), updated `plots/internal/TenantIsolationTests` (counts, GREY, isolation for new columns and `plot_status`), `MeEndpointTests` path/count, map visibility tests (member: no area/debt; treasurer: both; operator: 403). **[Agent: spring-backend]**
+  - [x] Web: `MapPage` uses `useGetPlotMap` and tolerates missing area/debt; `plotStatusLabel` helper with i18n `status.GREY_PLOT` / `status.GREY_COMMON` (uk "Без власника" / "Спільні землі"); unit test for the helper. **[Agent: react-frontend]**
+  - [x] Verify: `cd backend && ./mvnw -B test -Dtest='NaturalSortKeyTests,TenantIsolationTests,MeEndpointTests,PlotMapTests,ModularityTests'` green; `pnpm gen:api` leaves no diff; `pnpm -r test && pnpm -r typecheck && pnpm -r lint && pnpm format:check` green. **[Agent: spring-backend]**
 
 - [ ] **Slice 2: Plots list and plot card (read only)**
 

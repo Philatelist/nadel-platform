@@ -25,6 +25,7 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  ForbiddenResponse,
   PlotFeatureCollection,
   UnauthorizedResponse
 } from '../model';
@@ -51,22 +52,24 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   return result;
 };
 
-export const getGetPlotsUrl = () => {
+export const getGetPlotMapUrl = () => {
 
 
 
 
-  return `/api/v1/plots`
+  return `/api/v1/plots/map`
 }
 
 /**
- * Returns all plots and common land of the current cooperative with polygons and debt status.
- * Members see the number and status of every plot, but the debt amount only for their own plots (from phase 1).
+ * Returns all active plots and common land of the current cooperative with polygons and status. Archived plots
+ * are not included. The number, kind and status of every plot are visible to every member of the cooperative;
+ * `areaM2` and `debt` are present only for callers with `PLOTS_VIEW` (own plots join them later) and are omitted
+ * for everyone else. The platform operator has no cooperative data: 403.
  * @summary Cooperative plots as GeoJSON for the map
  */
-export const getPlots = async ( options?: Parameters<typeof nadelFetch>[1]): Promise<PlotFeatureCollection> => {
+export const getPlotMap = async ( options?: Parameters<typeof nadelFetch>[1]): Promise<PlotFeatureCollection> => {
 
-  return nadelFetch<PlotFeatureCollection>(getGetPlotsUrl(),
+  return nadelFetch<PlotFeatureCollection>(getGetPlotMapUrl(),
   {
     ...options,
     method: 'GET'
@@ -79,69 +82,69 @@ export const getPlots = async ( options?: Parameters<typeof nadelFetch>[1]): Pro
 
 
 
-export const getGetPlotsQueryKey = () => {
+export const getGetPlotMapQueryKey = () => {
     return [
-    `/api/v1/plots`
+    `/api/v1/plots/map`
     ] as const;
     }
 
 
-export const getGetPlotsQueryOptions = <TData = Awaited<ReturnType<typeof getPlots>>, TError = UnauthorizedResponse>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPlots>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+export const getGetPlotMapQueryOptions = <TData = Awaited<ReturnType<typeof getPlotMap>>, TError = UnauthorizedResponse | ForbiddenResponse>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPlotMap>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getGetPlotsQueryKey();
+  const queryKey =  queryOptions?.queryKey ?? getGetPlotMapQueryKey();
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPlots>>> = ({ signal }) => getPlots({ signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPlotMap>>> = ({ signal }) => getPlotMap({ signal, ...requestOptions });
 
 
 
 
 
-   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPlots>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPlotMap>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
 }
 
-export type GetPlotsQueryResult = NonNullable<Awaited<ReturnType<typeof getPlots>>>
-export type GetPlotsQueryError = UnauthorizedResponse
+export type GetPlotMapQueryResult = NonNullable<Awaited<ReturnType<typeof getPlotMap>>>
+export type GetPlotMapQueryError = UnauthorizedResponse | ForbiddenResponse
 
 
-export function useGetPlots<TData = Awaited<ReturnType<typeof getPlots>>, TError = UnauthorizedResponse>(
-  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPlots>>, TError, TData>> & Pick<
+export function useGetPlotMap<TData = Awaited<ReturnType<typeof getPlotMap>>, TError = UnauthorizedResponse | ForbiddenResponse>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPlotMap>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof getPlots>>,
+          Awaited<ReturnType<typeof getPlotMap>>,
           TError,
-          Awaited<ReturnType<typeof getPlots>>
+          Awaited<ReturnType<typeof getPlotMap>>
         > , 'initialData'
       >, request?: SecondParameter<typeof nadelFetch>}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetPlots<TData = Awaited<ReturnType<typeof getPlots>>, TError = UnauthorizedResponse>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPlots>>, TError, TData>> & Pick<
+export function useGetPlotMap<TData = Awaited<ReturnType<typeof getPlotMap>>, TError = UnauthorizedResponse | ForbiddenResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPlotMap>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof getPlots>>,
+          Awaited<ReturnType<typeof getPlotMap>>,
           TError,
-          Awaited<ReturnType<typeof getPlots>>
+          Awaited<ReturnType<typeof getPlotMap>>
         > , 'initialData'
       >, request?: SecondParameter<typeof nadelFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetPlots<TData = Awaited<ReturnType<typeof getPlots>>, TError = UnauthorizedResponse>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPlots>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+export function useGetPlotMap<TData = Awaited<ReturnType<typeof getPlotMap>>, TError = UnauthorizedResponse | ForbiddenResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPlotMap>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
  * @summary Cooperative plots as GeoJSON for the map
  */
 
-export function useGetPlots<TData = Awaited<ReturnType<typeof getPlots>>, TError = UnauthorizedResponse>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPlots>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+export function useGetPlotMap<TData = Awaited<ReturnType<typeof getPlotMap>>, TError = UnauthorizedResponse | ForbiddenResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPlotMap>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
-  const queryOptions = getGetPlotsQueryOptions(options)
+  const queryOptions = getGetPlotMapQueryOptions(options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 

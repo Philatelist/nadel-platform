@@ -11,7 +11,8 @@ interface PlotRepository extends JpaRepository<Plot, UUID> {
     @Query("""
             select new app.nadel.plots.internal.PlotRow(p, s.status, s.debt)
             from Plot p left join PlotStatusEntry s on s.plotId = p.id
-            order by length(p.number), p.number
+            where p.archivedAt is null
+            order by p.number, p.id
             """)
-    List<PlotRow> findAllWithStatus();
+    List<PlotRow> findActiveWithStatus();
 }

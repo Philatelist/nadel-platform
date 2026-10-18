@@ -225,7 +225,8 @@ export const uk: Messages = {
     RED: 'Борг понад поріг',
     YELLOW: 'Є борг',
     GREEN: 'Без боргу',
-    GREY: 'Спільні землі',
+    GREY_PLOT: 'Без власника',
+    GREY_COMMON: 'Спільні землі',
   },
   errors: {
     generic: 'Не вдалося завантажити дані. Спробуйте ще раз.',

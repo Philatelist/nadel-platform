@@ -194,9 +194,9 @@ class MeEndpointTests extends IntegrationTest {
 
     @Test
     void plotsStillWorkForALinkedMember() throws Exception {
-        getAs(demo("member@demo.local"), "/api/v1/plots")
+        getAs(demo("member@demo.local"), "/api/v1/plots/map")
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.features", hasSize(13)));
+                .andExpect(jsonPath("$.features", hasSize(31)));
     }
 
     /** A token as Keycloak would issue it for a demo user; the subject is stable per e-mail. */
