@@ -15,9 +15,11 @@ export const uk: Messages = {
     roles: 'Ролі',
     audit: 'Журнал змін',
     language: 'Мова',
+    theme: 'Тема',
     menu: 'Меню',
     main: 'Головне меню',
   },
+  theme: { system: 'Системна', light: 'Світла', dark: 'Темна' },
   state: {
     loading: 'Завантаження…',
     empty: 'Тут поки нічого немає.',

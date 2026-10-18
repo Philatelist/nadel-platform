@@ -53,4 +53,23 @@ describe('Layout', () => {
     expect(button).toHaveAttribute('aria-expanded', 'false');
     expect(button).toHaveFocus();
   });
+
+  it('puts the theme switch in the header next to the language switch when there is no menu', () => {
+    renderWithApp(<Layout />);
+    const groups = screen.getAllByRole('group', { name: 'Theme' });
+    expect(groups).toHaveLength(1);
+    expect(groups[0]!.closest('header')).not.toBeNull();
+    expect(groups[0]!.parentElement).not.toHaveClass('hidden');
+  });
+
+  it('renders the theme switch in the header (md+) and in the menu (below md) when there is a menu', () => {
+    me = meWith(['MEMBERS_VIEW']);
+    renderWithApp(<Layout />);
+    const groups = screen.getAllByRole('group', { name: 'Theme' });
+    expect(groups).toHaveLength(2);
+    const inHeader = groups.find((g) => g.closest('header'))!;
+    const inMenu = groups.find((g) => g.closest('#app-menu'))!;
+    expect(inHeader.parentElement).toHaveClass('hidden', 'md:flex');
+    expect(inMenu.parentElement).toHaveClass('md:hidden');
+  });
 });

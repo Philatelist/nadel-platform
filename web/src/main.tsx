@@ -19,6 +19,7 @@ import { AuthProvider } from 'react-oidc-context';
 import { App } from './App';
 import { OIDC_AUTHORITY, OIDC_CLIENT_ID, oidcConfig } from './auth';
 import { I18nProvider } from './i18n';
+import { ThemeProvider } from './themeContext';
 import './index.css';
 
 function currentAccessToken(): string | null {
@@ -45,7 +46,9 @@ createRoot(document.getElementById('root')!).render(
     <AuthProvider {...oidcConfig}>
       <QueryClientProvider client={queryClient}>
         <I18nProvider>
-          <App />
+          <ThemeProvider>
+            <App />
+          </ThemeProvider>
         </I18nProvider>
       </QueryClientProvider>
     </AuthProvider>

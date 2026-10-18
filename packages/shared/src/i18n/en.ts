@@ -13,9 +13,11 @@ export const en = {
     roles: 'Roles',
     audit: 'Audit log',
     language: 'Language',
+    theme: 'Theme',
     menu: 'Menu',
     main: 'Main menu',
   },
+  theme: { system: 'System', light: 'Light', dark: 'Dark' },
   state: { loading: 'Loading…', empty: 'Nothing here yet.', error: 'Could not load data. Please try again.' },
   access: {
     denied: "You don't have access to this page",

@@ -5,6 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#F3F5F0" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#0F1512" media="(prefers-color-scheme: dark)" />
+    <script>
+      // Apply the stored theme before first paint to avoid a flash. Colours must equal palette.*.background (theme.test.ts).
+      (function () {
+        try {
+          var c = localStorage.getItem('nadel.theme');
+          if (c !== 'light' && c !== 'dark') return;
+          document.documentElement.setAttribute('data-theme', c);
+          var metas = document.querySelectorAll('meta[name="theme-color"]');
+          for (var i = 0; i < metas.length; i++) {
+            if (i > 0) metas[i].remove();
+          }
+          metas[0].removeAttribute('media');
+          metas[0].setAttribute('content', c === 'dark' ? '#0F1512' : '#F3F5F0');
+        } catch (e) {}
+      })();
+    </script>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <title>Nadel</title>
   </head>

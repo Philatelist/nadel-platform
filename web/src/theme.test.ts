@@ -43,8 +43,32 @@ describe('index.css matches @nadel/ui-tokens', () => {
     expect(colorVars(blockAfter('@theme {'))).toEqual(expected('light'));
   });
 
-  it('dark colors in the prefers-color-scheme block equal the dark tokens, with none missing or extra', () => {
-    expect(colorVars(blockAfter('@media (prefers-color-scheme: dark) {'))).toEqual(expected('dark'));
+  it('dark colors under :root[data-theme=dark] equal the dark tokens, with none missing or extra', () => {
+    expect(colorVars(blockAfter(":root[data-theme='dark'] {"))).toEqual(expected('dark'));
+  });
+
+  it('dark colors in the prefers-color-scheme block equal the dark tokens and the explicit block', () => {
+    const media = blockAfter('@media (prefers-color-scheme: dark) {');
+    expect(colorVars(media)).toEqual(expected('dark'));
+    expect(media).toContain(":root:not([data-theme='light'])");
+    const squash = (b: string) => b.replace(/\s+/g, ' ').trim();
+    expect(squash(blockAfter(":root:not([data-theme='light']) {"))).toBe(
+      squash(blockAfter(":root[data-theme='dark'] {")),
+    );
+  });
+
+  it('declares color-scheme for system, light and dark', () => {
+    expect(blockAfter(':root {')).toContain('color-scheme: light dark');
+    expect(blockAfter(":root[data-theme='light'] {")).toContain('color-scheme: light');
+    expect(blockAfter(":root[data-theme='dark'] {")).toContain('color-scheme: dark');
+  });
+
+  it('the inline script in index.html uses the background colours of the tokens', () => {
+    const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+    const script = html.slice(html.indexOf('<script>'), html.indexOf('</script>'));
+    expect(script).toContain(`'${palette.light.background.toUpperCase()}'`);
+    expect(script).toContain(`'${palette.dark.background.toUpperCase()}'`);
+    expect(html).toContain(`content="${palette.light.background.toUpperCase()}"`);
   });
 
   it('does not use var() inside @theme values', () => {

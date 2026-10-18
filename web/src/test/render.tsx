@@ -2,6 +2,7 @@ import { render, type RenderOptions, type RenderResult } from '@testing-library/
 import type { ReactElement } from 'react';
 import { MemoryRouter } from 'react-router';
 import { I18nProvider } from '../i18n';
+import { ThemeProvider } from '../themeContext';
 
 interface RenderWithAppOptions extends Omit<RenderOptions, 'wrapper'> {
   route?: string;
@@ -15,7 +16,9 @@ export function renderWithApp(
   return render(ui, {
     wrapper: ({ children }) => (
       <MemoryRouter initialEntries={[route]}>
-        <I18nProvider>{children}</I18nProvider>
+        <I18nProvider>
+          <ThemeProvider>{children}</ThemeProvider>
+        </I18nProvider>
       </MemoryRouter>
     ),
     ...options,

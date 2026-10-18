@@ -6,6 +6,7 @@ import { useMe } from '../me';
 import { useT } from '../i18n';
 import { useRoleName } from '../roleName';
 import { LocaleSwitch } from './LocaleSwitch';
+import { ThemeSwitch } from './ThemeSwitch';
 import { Button } from './ui';
 
 interface NavItem {
@@ -63,6 +64,9 @@ export function Layout() {
             <span className="truncate text-xs text-ink-muted">{me.roles.map(roleName).join(', ')}</span>
           </div>
           <LocaleSwitch />
+          <div className={hasMenu ? 'hidden md:flex' : 'flex'}>
+            <ThemeSwitch />
+          </div>
           <Button variant="secondary" onClick={() => void auth.signoutRedirect()}>
             {t.auth.signOut}
           </Button>
@@ -86,6 +90,9 @@ export function Layout() {
             id="app-menu"
             className={`${open ? 'block' : 'hidden'} border-b border-line bg-surface p-3 md:block md:w-60 md:shrink-0 md:border-b-0 md:border-r`}
           >
+            <div className="mb-2 md:hidden">
+              <ThemeSwitch />
+            </div>
             <nav aria-label={t.nav.main} className="flex flex-col gap-1">
               {items.map((item) => (
                 <NavLink key={item.to} to={item.to} className={itemClass} onClick={() => setOpen(false)}>
