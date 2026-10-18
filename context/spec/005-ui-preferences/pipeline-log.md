@@ -53,3 +53,7 @@ Same as 004 (see `context/spec/004-role-names/pipeline-log.md`), re-checked: bas
 - Slice 2 committed 39719cd (web 82 unit tests; typecheck/lint/format green; e2e header assertions updated, not run yet).
 - Slice 1 review r1 MAJOR_ISSUES (M1 MapPage colours) → orchestrator showed MapPage is unreachable → r2 PASS (M1 withdrawn, phase-6 note).
 - Slice 2 review r1 PASS.
+- Slice 3 committed 413ee10 (backend 88 targeted, web 94 unit; typecheck/lint/format clean; generated client in sync). Review r1 started.
+- Slice 3 review r1 MAJOR_ISSUES (M1 name restore customised the description in uk) → fix c99e535 → r2 PASS.
+- Slice 4 (testing-expert): `web/e2e/ui-preferences.spec.ts` (10 tests). GAP: at 390 px the Menu button wraps to a third header row below the cooperative name (functional spec 2.2: name next to Menu). Sent to react-frontend as a minimal Layout fix (attempt 1 of 3). Also: blocking all of localStorage breaks the sign-in library (pre-existing), so the storage-blocked test blocks only the app's `nadel.*` keys; a failed run left dirty local data, so the testing agent reset the local Docker database (`down -v`, local dev only).
+- Gap fix (Layout: Menu button on the title row below md) verified: 22 targeted e2e passed. Slice 4 verify: make check green (backend 275; unit 56/5/96), coverage 0.9402 → floor 0.93→0.94, make e2e 43 passed.

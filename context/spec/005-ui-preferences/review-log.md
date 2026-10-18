@@ -24,3 +24,4 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `39719cd..413ee10` | MAJOR_ISSUES | M1 `RolesPage.restoreName` sends the displayed (catalog) description, customising a standard description in Ukrainian | minor: `restoreDescription` sends the typed name and permissions; migration-rule test copies the SQL condition; fixed sleeps for no-audit checks; a custom description literally `base:…` renders as catalog text; duplicate `roleDescription` call |
+| 2 | + `c99e535` | PASS | M1 resolved (`restoreNameDescription` → `descriptionToSubmit`, tests) | minor: thin wrapper; no test for an already-customised description; round 1 minors open |

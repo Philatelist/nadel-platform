@@ -25,11 +25,11 @@ commit; report every file created or changed.
   - [x] Web per tech spec 2.3: `roleDescription`, `descriptionToSubmit` (+ tests), RolesPage list/form/restore button, AuditPage field-aware token mapping (+ tests), i18n `roleDescriptions.*` and `rolesPage.restoreDescription`. **[Agent: react-frontend]**
   - [x] Verify: `cd backend && ./mvnw -B test -Dtest='RolesTests,RoleLogicTests,SeedBaseRolesTests,BaseRolesMatrixTests,RoleNamesAcceptanceTests,MembersAccessAcceptanceTests,ModularityTests'` green; `pnpm -r test && pnpm -r typecheck && pnpm -r lint && pnpm format:check` green; `pnpm gen:api` leaves no diff. **[Agent: spring-backend]**
 
-- [ ] **Slice 4: End-to-end flows, docs and coverage floor**
+- [x] **Slice 4: End-to-end flows, docs and coverage floor**
 
   > Proves the user flows in a browser and closes the feature's quality bar.
-  - [ ] E2E: dark ↔ light switch, reload keeps the choice, `data-theme` present before the app renders (no flash), phone placement (menu for the chairman, header for a member), header title "Demo Garden Cooperative" and tab title, Ukrainian base role descriptions on the Roles page, description change → restore flow with cleanup in `finally`. Fix other specs broken by the header change. **[Agent: testing-expert]**
-  - [ ] Verify: `make check` green; raise `coverage.minimum` in `backend/pom.xml` to the measured line coverage rounded down to two decimals (never lower) and re-run `cd backend && ./mvnw -B verify`; `make e2e` green. **[Agent: testing-expert]**
+  - [x] E2E: dark ↔ light switch, reload keeps the choice, `data-theme` present before the app renders (no flash), phone placement (menu for the chairman, header for a member), header title "Demo Garden Cooperative" and tab title, Ukrainian base role descriptions on the Roles page, description change → restore flow with cleanup in `finally`. Fix other specs broken by the header change. **[Agent: testing-expert]**
+  - [x] Verify: `make check` green; raise `coverage.minimum` in `backend/pom.xml` to the measured line coverage rounded down to two decimals (never lower) and re-run `cd backend && ./mvnw -B verify`; `make e2e` green. **[Agent: testing-expert]**
 
 - [ ] **Slice 5: Feature Testing & Regression**
 

@@ -56,12 +56,14 @@ export function Layout() {
         <Link
           to="/"
           title={title}
-          className="min-w-0 max-w-full flex-1 truncate font-serif text-xl font-semibold text-ink no-underline md:flex-none"
+          className="order-1 min-w-[8rem] max-w-full flex-1 truncate font-serif text-xl font-semibold text-ink no-underline md:flex-none"
         >
           {title}
         </Link>
-        {me.tenant?.name && <span className="text-sm text-ink-muted">{t.app.name}</span>}
-        <div className="ml-auto flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
+        {me.tenant?.name && (
+          <span className="order-3 text-sm text-ink-muted md:order-none">{t.app.name}</span>
+        )}
+        <div className="order-4 ml-auto flex min-w-0 flex-wrap md:order-none items-center gap-x-3 gap-y-2">
           <div className="flex min-w-0 flex-col text-sm leading-tight">
             <Link to="/account" className="truncate font-medium text-ink">
               {me.fullName}
@@ -75,19 +77,19 @@ export function Layout() {
           <Button variant="secondary" onClick={() => void auth.signoutRedirect()}>
             {t.auth.signOut}
           </Button>
-          {hasMenu && (
-            <Button
-              ref={menuButton}
-              variant="secondary"
-              className="md:hidden"
-              aria-expanded={open}
-              aria-controls="app-menu"
-              onClick={() => setOpen((value) => !value)}
-            >
-              {t.nav.menu}
-            </Button>
-          )}
         </div>
+        {hasMenu && (
+          <Button
+            ref={menuButton}
+            variant="secondary"
+            className="order-2 md:hidden"
+            aria-expanded={open}
+            aria-controls="app-menu"
+            onClick={() => setOpen((value) => !value)}
+          >
+            {t.nav.menu}
+          </Button>
+        )}
       </header>
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
         {hasMenu && (
