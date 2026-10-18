@@ -90,7 +90,7 @@ Numbering: a feature document `docs/features/NNN-name.md` and its AWOS spec fold
 
 **Security and data**
 - Authorization is permission-based (ADR 0009): code checks `@PreAuthorize("hasAuthority('PERM_...')")` at service or controller level, never role names. Roles are permission sets stored per cooperative; base roles are `CHAIRMAN` (always every permission), `TREASURER` and `MEMBER`; other duties (for example an electrician) are custom roles. `PLATFORM_OPERATOR` is global and the only Keycloak realm role.
-- A member sees the number and status color of every plot, but amounts, owners and personal data only for their own plots. Enforce this in the API response, not only in the UI.
+- A member sees amounts, owners, status and personal data only for their own plots. The status color of other plots is shown only when the cooperative setting `memberPlotStatusVisibility` is `ALL_PLOTS` (default `OWN_ONLY`); amounts, owners and personal data of other plots are never shown to a member. Enforce this in the API response, not only in the UI.
 - Admin actions that change data are written to the audit log.
 - Personal data is never logged (names, phone numbers, emails, addresses).
 - Secrets come only from environment variables. The repository contains only dev values for the local docker-compose.

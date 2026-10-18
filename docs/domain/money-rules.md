@@ -139,7 +139,7 @@ GREEN  if debt = 0 (including when there is a prepayment)
 GREY   common land, or a plot without an owner
 ```
 
-Visibility: a member sees the status color and number of every plot, but debt amounts, owners and personal data only for plots they own. Admins see what their permissions allow. This is enforced by the API, not only hidden in the UI.
+Visibility: A member always sees full details (status, amounts, owners) of the plots they own. Whether a member also sees the status color of other plots is a cooperative setting chosen by the chairman: `OWN_ONLY` (default; other plots show number, street and kind with a neutral color) or `ALL_PLOTS` (the status color of every plot, still without amounts, owners or personal data). Showing every plot's color should follow a general meeting decision; changing the setting is audited. Admins see what their permissions allow. This is enforced by the API, not only hidden in the UI.
 
 The status is recalculated after every allocation, charge and recalculation and is stored as a cache in `plot_status` (the cache can be rebuilt from the ledger at any time).
 
