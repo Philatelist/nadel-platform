@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { renderWithApp } from '../test/render';
 import { AuditPage } from './AuditPage';
 
-const entry: AuditEntry = {
+let entry: AuditEntry = {
   id: 'a1',
   occurredAt: '2026-10-01T10:00:00Z',
   action: 'PLOT_UPDATED',
@@ -40,5 +40,23 @@ describe('AuditPage plot entries', () => {
     expect(screen.getByText(/No → Yes/)).toBeInTheDocument();
     expect(screen.getByText(/Area, m²:/)).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'Plot' })).toBeInTheDocument();
+  });
+});
+
+describe('AuditPage settings entries', () => {
+  it('shows the settings action and readable visibility values', () => {
+    entry = {
+      id: 'a2',
+      occurredAt: '2026-10-01T10:00:00Z',
+      action: 'SETTINGS_UPDATED',
+      entityType: 'SETTINGS',
+      entityId: 's1',
+      entityLabel: 'Cooperative settings',
+      changes: [{ field: 'memberPlotStatusVisibility', oldValue: 'OWN_ONLY', newValue: 'ALL_PLOTS' }],
+    };
+    renderWithApp(<AuditPage />);
+    expect(screen.getByText('Settings changed')).toBeInTheDocument();
+    expect(screen.getByText(/Who sees plot colours:/)).toBeInTheDocument();
+    expect(screen.getByText(/Own plots only → All plots/)).toBeInTheDocument();
   });
 });

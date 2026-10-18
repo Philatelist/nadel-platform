@@ -13,6 +13,7 @@ export const en = {
     members: 'Members',
     roles: 'Roles',
     audit: 'Audit log',
+    settings: 'Cooperative settings',
     language: 'Language',
     theme: 'Theme',
     menu: 'Menu',
@@ -70,6 +71,10 @@ export const en = {
     PLOTS_EDIT: { name: 'Edit plots', description: 'Add, edit and archive plots' },
     OWNERSHIP_EDIT: { name: 'Edit ownership', description: 'Add, change and correct plot ownership' },
     IMPORT_RUN: { name: 'Run import', description: 'Run the Excel import' },
+    SETTINGS_MANAGE: {
+      name: 'Manage cooperative settings',
+      description: 'Change cooperative-wide settings, such as who sees plot colours',
+    },
   },
   roles: {
     CHAIRMAN: 'Chairman',
@@ -220,6 +225,26 @@ export const en = {
     CADASTRAL_INVALID: 'Use the form 1234567890:12:345:6789.',
     AREA_INVALID: 'Enter a valid area: at most two decimals of m², greater than zero for a plot.',
   },
+  settings: {
+    title: 'Cooperative settings',
+    visibilityLegend: 'Who sees plot colours',
+    visibilityHint:
+      'Show the debt colour of all plots to all members only by decision of the general meeting',
+    visibility: {
+      OWN_ONLY: {
+        label: 'Own plots only',
+        description: 'A member sees the colour only of plots they own; other plots are neutral.',
+      },
+      ALL_PLOTS: {
+        label: 'All plots',
+        description:
+          'Every member sees the colour of every plot, but never amounts, owners or personal data of other plots.',
+      },
+    },
+    save: 'Save',
+    saving: 'Saving…',
+    saved: 'Settings saved.',
+  },
   audit: {
     title: 'Audit log',
     columns: { time: 'Time', author: 'Author', action: 'Action', record: 'Record', changes: 'Changes' },
@@ -237,8 +262,9 @@ export const en = {
       PLOT_ARCHIVED: 'Plot archived',
       PLOT_RESTORED: 'Plot restored',
       PLOT_DELETED: 'Plot deleted',
+      SETTINGS_UPDATED: 'Settings changed',
     },
-    entityType: { MEMBER: 'Member', ROLE: 'Role', PLOT: 'Plot' },
+    entityType: { MEMBER: 'Member', ROLE: 'Role', PLOT: 'Plot', SETTINGS: 'Settings' },
     fields: {
       archived: 'Archived',
       name: 'Name',
@@ -250,6 +276,7 @@ export const en = {
       cadastralNumber: 'Cadastral number',
       hasBuilding: 'Building',
       notes: 'Notes',
+      memberPlotStatusVisibility: 'Who sees plot colours',
     },
     yes: 'Yes',
     no: 'No',

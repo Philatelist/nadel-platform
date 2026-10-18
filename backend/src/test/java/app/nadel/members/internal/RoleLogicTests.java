@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
 class RoleLogicTests {
 
     @Test
-    void listsAllEightPermissionsInEnumOrderWithEnglishText() {
+    void listsAllNinePermissionsInEnumOrderWithEnglishText() {
         List<PermissionInfo> all = PermissionCatalog.all();
 
         assertThat(all).extracting(p -> p.getCode().getValue())

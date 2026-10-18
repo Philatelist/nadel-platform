@@ -220,7 +220,7 @@ test.describe('page frame (2.6)', () => {
     await expect(language.getByRole('button')).toHaveCount(2);
 
     const menu = page.locator('#app-menu nav');
-    await expect(menu.getByRole('link')).toHaveCount(4); // Plots, Members, Roles, Audit log
+    await expect(menu.getByRole('link')).toHaveCount(5); // Plots, Members, Roles, Audit log, Cooperative settings
     await page.goto('/members');
     await expect(menu.locator('a[aria-current="page"]')).toHaveCount(1);
     expect(
@@ -302,6 +302,7 @@ test.describe('keyboard (2.8)', () => {
       'Members',
       'Roles',
       'Audit log',
+      'Cooperative settings',
     ]);
     expect(visited.some((v) => v.type === 'search')).toBe(true);
     for (const v of visited) {

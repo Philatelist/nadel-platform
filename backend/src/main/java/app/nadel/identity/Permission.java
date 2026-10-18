@@ -12,7 +12,8 @@ public enum Permission {
     PLOTS_VIEW,
     PLOTS_EDIT,
     OWNERSHIP_EDIT,
-    IMPORT_RUN;
+    IMPORT_RUN,
+    SETTINGS_MANAGE;
 
     public static final String AUTHORITY_PREFIX = "PERM_";
 

@@ -209,10 +209,12 @@ function AuditChanges({ entry }: { entry: AuditEntry }) {
   const a = t.audit;
   const fieldNames: Readonly<Record<string, string>> = { ...t.member.fields, ...a.fields };
   const kinds: Readonly<Record<string, string>> = t.plot.kind;
+  const visibilities: Readonly<Record<string, { label: string } | undefined>> = t.settings.visibility;
   const value = (field: string, raw: string | undefined): string => {
     if (raw === undefined || raw === '') return a.noValue;
     if (field === 'archived' || field === 'hasBuilding') return raw === 'true' ? a.yes : a.no;
     if (field === 'kind') return kinds[raw] ?? raw;
+    if (field === 'memberPlotStatusVisibility') return visibilities[raw]?.label ?? raw;
     return field === 'name' || field === 'roles' || field === 'description'
       ? auditRoleValue(raw, t, field)
       : raw;

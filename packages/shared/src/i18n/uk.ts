@@ -15,6 +15,7 @@ export const uk: Messages = {
     members: 'Члени кооперативу',
     roles: 'Ролі',
     audit: 'Журнал змін',
+    settings: 'Налаштування кооперативу',
     language: 'Мова',
     theme: 'Тема',
     menu: 'Меню',
@@ -82,6 +83,10 @@ export const uk: Messages = {
       description: 'Додавати, змінювати й виправляти власників ділянок',
     },
     IMPORT_RUN: { name: 'Запуск імпорту', description: 'Запускати імпорт з Excel' },
+    SETTINGS_MANAGE: {
+      name: 'Керування налаштуваннями кооперативу',
+      description: 'Змінювати налаштування всього кооперативу, наприклад, хто бачить кольори ділянок',
+    },
   },
   roles: {
     CHAIRMAN: 'Голова',
@@ -232,6 +237,25 @@ export const uk: Messages = {
     CADASTRAL_INVALID: 'Формат: 1234567890:12:345:6789.',
     AREA_INVALID: 'Введіть коректну площу: до двох знаків після коми в м², для ділянки більше нуля.',
   },
+  settings: {
+    title: 'Налаштування кооперативу',
+    visibilityLegend: 'Хто бачить кольори ділянок',
+    visibilityHint: 'Показувати колір боргу всіх ділянок усім членам — лише за рішенням загальних зборів',
+    visibility: {
+      OWN_ONLY: {
+        label: 'Лише свої ділянки',
+        description: 'Член кооперативу бачить колір лише своїх ділянок; решта ділянок — нейтральні.',
+      },
+      ALL_PLOTS: {
+        label: 'Усі ділянки',
+        description:
+          'Кожен член бачить колір кожної ділянки, але ніколи не бачить суми, власників чи персональні дані чужих ділянок.',
+      },
+    },
+    save: 'Зберегти',
+    saving: 'Зберігаємо…',
+    saved: 'Налаштування збережено.',
+  },
   audit: {
     title: 'Журнал змін',
     columns: { time: 'Час', author: 'Автор', action: 'Дія', record: 'Запис', changes: 'Зміни' },
@@ -249,8 +273,9 @@ export const uk: Messages = {
       PLOT_ARCHIVED: 'Ділянку архівовано',
       PLOT_RESTORED: 'Ділянку відновлено',
       PLOT_DELETED: 'Ділянку видалено',
+      SETTINGS_UPDATED: 'Налаштування змінено',
     },
-    entityType: { MEMBER: 'Член кооперативу', ROLE: 'Роль', PLOT: 'Ділянка' },
+    entityType: { MEMBER: 'Член кооперативу', ROLE: 'Роль', PLOT: 'Ділянка', SETTINGS: 'Налаштування' },
     fields: {
       archived: 'В архіві',
       name: 'Назва',
@@ -262,6 +287,7 @@ export const uk: Messages = {
       cadastralNumber: 'Кадастровий номер',
       hasBuilding: 'Будівля',
       notes: 'Примітки',
+      memberPlotStatusVisibility: 'Хто бачить кольори ділянок',
     },
     yes: 'Так',
     no: 'Ні',

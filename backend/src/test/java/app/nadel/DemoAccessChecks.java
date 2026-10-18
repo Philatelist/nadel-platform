@@ -39,7 +39,8 @@ public final class DemoAccessChecks {
                 .andExpect(jsonPath("$.roles", hasSize(1)))
                 .andExpect(jsonPath("$.roles[0].baseCode").value("CHAIRMAN"))
                 .andExpect(jsonPath("$.permissions", containsInAnyOrder("MEMBERS_VIEW", "MEMBERS_EDIT",
-                        "ROLES_MANAGE", "AUDIT_VIEW", "PLOTS_VIEW", "PLOTS_EDIT", "OWNERSHIP_EDIT", "IMPORT_RUN")));
+                        "ROLES_MANAGE", "AUDIT_VIEW", "PLOTS_VIEW", "PLOTS_EDIT", "OWNERSHIP_EDIT", "IMPORT_RUN",
+                        "SETTINGS_MANAGE")));
     }
 
     public static void treasurerHasReadPermissions(MockMvc mvc) throws Exception {

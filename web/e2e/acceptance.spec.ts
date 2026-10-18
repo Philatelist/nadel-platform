@@ -20,6 +20,7 @@ const ALL_PERMISSIONS = [
   'Edit plots',
   'Edit ownership',
   'Run import',
+  'Manage cooperative settings',
 ];
 
 const nav = (page: Page) => page.locator('#app-menu nav');

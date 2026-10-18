@@ -22,7 +22,7 @@
   - Each top-level package `app.nadel.*` is a module.
   - Modules talk only through their public root package or through domain events. `internal` subpackages are closed.
   - A module never reads another module's tables.
-  - Modules in code: `tenancy`, `identity`, `plots`, `members`, `audit`, `problem`. Each has a README next to its `package-info.java` (`backend/src/main/java/app/nadel/<module>/README.md`).
+  - Modules in code: `tenancy`, `identity`, `plots`, `members`, `audit`, `problem`, `settings` (cooperative settings, since spec 007). Each has a README next to its `package-info.java` (`backend/src/main/java/app/nadel/<module>/README.md`).
   - Modules planned, in roadmap order: `tariffs`, `meters`, `ledger`, `payments`, `documents`, `notifications`.
   - The `plots` module keeps plots as records from phase 1; polygon import, coordinate conversion and the map view arrive in roadmap phase 6. `plot.boundary` is nullable, and every feature before phase 6 must work for plots without a polygon.
 - **Security:** Spring Security as an OAuth2 JWT resource server **[in code]**.
@@ -121,12 +121,12 @@
   3. No member: 403 `MEMBER_NOT_LINKED`. A failure of the lookup itself is 500, not 401.
   4. The union of the member's role permissions becomes the `PERM_*` authorities. Nothing is cached, so a role change applies on the next request.
 - **Authorization:** always on the server, with `@PreAuthorize("hasAuthority('PERM_...')")` **[in code, since spec 002]**. Clients hide UI by permission only for convenience (web: `useCan`, `RequirePermission`). See ADR 0009:
-  - A fixed list of permissions is defined in code (`identity.Permission`: `MEMBERS_VIEW`, `MEMBERS_EDIT`, `ROLES_MANAGE`, `AUDIT_VIEW`, `PLOTS_VIEW`, `PLOTS_EDIT`, `OWNERSHIP_EDIT`, `IMPORT_RUN`; later features add theirs, such as `PAYMENTS_ALLOCATE`).
+  - A fixed list of permissions is defined in code (`identity.Permission`: `MEMBERS_VIEW`, `MEMBERS_EDIT`, `ROLES_MANAGE`, `AUDIT_VIEW`, `PLOTS_VIEW`, `PLOTS_EDIT`, `OWNERSHIP_EDIT`, `IMPORT_RUN`, `SETTINGS_MANAGE`; later features add theirs, such as `PAYMENTS_ALLOCATE`).
   - Roles are named permission sets stored per cooperative (`role`, `role_permission`, `member_role`, tenant-scoped with RLS). Base roles `CHAIRMAN`, `TREASURER`, `MEMBER` are seeded by `seed_base_roles` and cannot be renamed or deleted; Chairman always has every permission; at least one active chairman must remain. Custom roles (for example "Secretary", or "Electrician" for meters) are created by anyone with `ROLES_MANAGE`.
   - Code checks permissions, never role names. A caller without `MEMBERS_VIEW` gets 404 for any member card but their own, so other members' existence is not revealed.
 - **Data visibility for members:** a member sees debt amounts, owners, status and personal data only for plots they own. The status color of other plots is visible only when the chairman sets the cooperative setting `memberPlotStatusVisibility` to `ALL_PLOTS` (default `OWN_ONLY`, feature 007). The API enforces this (for example, `GET /plots` omits `debt` on plots the caller does not own), not just the UI **[planned, phase 1]**.
 - **Platform operator:** sees no cooperative rows (no `tenant_id`, so RLS returns nothing). Platform reports use aggregate views without personal or financial detail through a separate read-only role; support access is granted by the chairman for a limited time and audited. See ADR 0008.
-- **Audit:** every admin action that changes data is written to the audit log **[in code, `audit` module]**. The changing module publishes an `AuditEvent` in its transaction; a listener writes `audit_entry` through the outbox (idempotent by event id). `nadel_app` has only `SELECT` and `INSERT` on `audit_entry`. Read with `GET /audit` (`AUDIT_VIEW`). So far members, roles and role assignments are audited.
+- **Audit:** every admin action that changes data is written to the audit log **[in code, `audit` module]**. The changing module publishes an `AuditEvent` in its transaction; a listener writes `audit_entry` through the outbox (idempotent by event id). `nadel_app` has only `SELECT` and `INSERT` on `audit_entry`. Read with `GET /audit` (`AUDIT_VIEW`). So far members, roles, role assignments, plots and cooperative settings are audited.
 - **Logging hygiene:** names, phone numbers, emails and addresses never appear in logs.
 - **Secrets:** only from environment variables. The repository contains only dev values for the local docker-compose (`.env.example`, gitleaks allowlist in `.gitleaks.toml`).
 

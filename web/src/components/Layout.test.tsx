@@ -66,6 +66,20 @@ describe('Layout', () => {
     expect(hrefs).toEqual(['/plots', '/members', '/roles', '/audit']);
   });
 
+  it('shows Cooperative settings last, only with SETTINGS_MANAGE', () => {
+    me = meWith(['MEMBERS_VIEW', 'SETTINGS_MANAGE']);
+    const { unmount } = renderWithApp(<Layout />);
+    const hrefs = () =>
+      Array.from(screen.getByRole('navigation', { name: 'Main menu' }).querySelectorAll('a')).map((a) =>
+        a.getAttribute('href'),
+      );
+    expect(hrefs()).toEqual(['/plots', '/members', '/settings']);
+    unmount();
+    me = meWith(['MEMBERS_VIEW', 'ROLES_MANAGE', 'AUDIT_VIEW']);
+    renderWithApp(<Layout />);
+    expect(hrefs()).not.toContain('/settings');
+  });
+
   it('lists permitted sections and toggles the menu; Escape closes it', async () => {
     me = meWith(['MEMBERS_VIEW', 'ROLES_MANAGE', 'AUDIT_VIEW']);
     const user = userEvent.setup();

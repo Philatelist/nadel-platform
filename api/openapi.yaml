@@ -24,6 +24,8 @@ tags:
     description: Audit log of administrative changes
   - name: plots
     description: Plots and map
+  - name: settings
+    description: Cooperative settings
 
 paths:
   /me:
@@ -841,6 +843,54 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
 
+  /settings:
+    get:
+      tags: [settings]
+      operationId: getSettings
+      summary: Cooperative settings
+      description: |
+        Returns the settings of the current cooperative. Every member of the cooperative may call it; the platform
+        operator has no cooperative data: 403. A cooperative that never saved its settings has the defaults
+        (`memberPlotStatusVisibility` is `OWN_ONLY`).
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CooperativeSettings'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    put:
+      tags: [settings]
+      operationId: updateSettings
+      summary: Change cooperative settings
+      description: |
+        Replaces the settings of the current cooperative. Requires the `SETTINGS_MANAGE` permission. A change is
+        written to the audit log with the old and the new value; saving the current value changes nothing and writes
+        no audit entry.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CooperativeSettings'
+      responses:
+        '200':
+          description: The saved settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CooperativeSettings'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -924,6 +974,22 @@ components:
         - PLOTS_EDIT
         - OWNERSHIP_EDIT
         - IMPORT_RUN
+        - SETTINGS_MANAGE
+
+    PlotStatusVisibility:
+      type: string
+      description: >-
+        Who sees the debt status (colour) of a plot. `OWN_ONLY`: a member sees the status of the plots they own only.
+        `ALL_PLOTS`: a member sees the status of every plot, but never amounts, owners or personal data of other
+        plots. People allowed to view plots always see every status.
+      enum: [OWN_ONLY, ALL_PLOTS]
+
+    CooperativeSettings:
+      type: object
+      required: [memberPlotStatusVisibility]
+      properties:
+        memberPlotStatusVisibility:
+          $ref: '#/components/schemas/PlotStatusVisibility'
 
     BaseRole:
       type: string
@@ -1215,11 +1281,12 @@ components:
         - PLOT_ARCHIVED
         - PLOT_RESTORED
         - PLOT_DELETED
+        - SETTINGS_UPDATED
 
     AuditEntityType:
       type: string
       description: Kind of the entity an audit entry is about
-      enum: [MEMBER, ROLE, PLOT]
+      enum: [MEMBER, ROLE, PLOT, SETTINGS]
 
     AuditFieldChange:
       type: object
