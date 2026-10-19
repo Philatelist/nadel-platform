@@ -70,3 +70,5 @@ Same as 004–006 (see `context/spec/005-ui-preferences/pipeline-log.md`). Re-ch
 - Slice 4 committed (backend targeted 48 green, verify 607 / coverage 0.9524; web 171, shared 64, ui-tokens 56; typecheck/lint/format green). Review r1 started.
 - Slice 5 backend: verify 631 tests green, coverage 0.9664. AUTO: member archive takes the chairman advisory lock before the member row lock (rule: avoids a deadlock with role changes, which take the advisory lock then FK-lock the member row).
 - Slice 5 committed (backend targeted 95 green, verify 631 / coverage 0.9664; web 175, shared 64, ui-tokens 56; typecheck/lint/format green). Review r1 started. Slice 4 review fix to follow as a separate commit.
+- Slice 5 review r1 PASS. Reviewer note routed to the Slice 4 fix: a correction must not make an archived member a current owner.
+- Slice 4 review fix (round 1): M1 overlap with a different owner reported on the moved date (OWNERSHIP_OVERLAP); plus a correction can no longer make an archived member a current owner (409 MEMBER_ARCHIVED on validTo). Targeted 85 tests green.

@@ -148,6 +148,21 @@ class OwnershipCorrectionTests extends OwnershipTestSupport {
     }
 
     @Test
+    void aRecordOfAnArchivedMemberCannotBeMadeCurrentByClearingTheEndDate() throws Exception {
+        UUID plot = newPlot();
+        UUID record = seedOwner(plot, ARCHIVED_MEMBER, "1/1", "2020-01-01", "2022-12-31");
+        List<Map<String, Object>> before = ownershipRows(plot);
+
+        correct(chairman(), record, ARCHIVED_MEMBER, "1/1", "2020-01-01", null, "seeded", REASON, List.of())
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("MEMBER_ARCHIVED"))
+                .andExpect(jsonPath("$.errors[0].field").value("validTo"))
+                .andExpect(jsonPath("$.errors[0].code").value("MEMBER_ARCHIVED"));
+        assertThat(ownershipRows(plot)).isEqualTo(before);
+        assertThat(statusOf(plot)).isEqualTo("GREY");
+    }
+
+    @Test
     void aHistoricalRecordOfAMemberArchivedLaterCanStillBeCorrected() throws Exception {
         UUID plot = demoPlot("9");
         Map<String, Object> row = ownerJdbc().queryForMap("select id, share_numerator || '/' || share_denominator "
@@ -308,6 +323,50 @@ class OwnershipCorrectionTests extends OwnershipTestSupport {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("OWNERSHIP_OVERLAP"))
                 .andExpect(jsonPath("$.errors[0].field").value("validTo"));
+    }
+
+    @Test
+    void aStartDateThatOverlapsThePreviousOwnersPeriodIsRefusedOnTheStartDate() throws Exception {
+        UUID plot = newPlot();
+        UUID boris = demoMember("Beta", "Boris");
+        UUID anna = demoMember("Alpha", "Anna");
+        seedOwner(plot, boris, "1/1", "2020-01-01", "2022-12-31");
+        UUID current = seedOwner(plot, anna, "1/1", "2023-01-01", null);
+        List<Map<String, Object>> before = ownershipRows(plot);
+
+        correct(chairman(), current, anna, "1/1", "2022-06-01", null, "seeded", REASON, List.of())
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errors[0].field").value("validFrom"))
+                .andExpect(jsonPath("$.errors[0].code").value("OWNERSHIP_OVERLAP"));
+        assertThat(ownershipRows(plot)).isEqualTo(before);
+    }
+
+    @Test
+    void anEndDateMovedForwardIntoTheNextOwnersPeriodIsRefusedOnTheEndDate() throws Exception {
+        UUID plot = newPlot();
+        UUID boris = demoMember("Beta", "Boris");
+        UUID anna = demoMember("Alpha", "Anna");
+        UUID previous = seedOwner(plot, boris, "1/1", "2020-01-01", "2022-12-31");
+        seedOwner(plot, anna, "1/1", "2023-01-01", null);
+
+        correct(chairman(), previous, boris, "1/1", "2020-01-01", "2023-06-30", "seeded", REASON, List.of())
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errors[0].field").value("validTo"))
+                .andExpect(jsonPath("$.errors[0].code").value("OWNERSHIP_OVERLAP"));
+    }
+
+    @Test
+    void aWrongShareWithUnchangedDatesStaysOnTheShareField() throws Exception {
+        UUID plot = newPlot();
+        UUID boris = demoMember("Beta", "Boris");
+        UUID anna = demoMember("Alpha", "Anna");
+        seedOwner(plot, boris, "1/1", "2020-01-01", "2022-12-31");
+        UUID current = seedOwner(plot, anna, "1/1", "2023-01-01", null);
+
+        correct(chairman(), current, anna, "1/2", "2023-01-01", null, "seeded", REASON, List.of())
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errors[0].field").value("share"))
+                .andExpect(jsonPath("$.errors[0].code").value("SHARES_NOT_ONE"));
     }
 
     @Test

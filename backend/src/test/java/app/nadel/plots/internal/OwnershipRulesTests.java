@@ -128,6 +128,18 @@ class OwnershipRulesTests {
         assertThat(kinds(OwnershipRules.checkTimeline(periods, TODAY))).containsExactly(Kind.SHARES_NOT_ONE);
     }
 
+    @Test
+    void theFirstDayWithWrongSharesIsTheEarliestBoundaryThatFails() {
+        var periods = List.of(
+                period(0, A, "1/1", "2020-01-01", "2022-12-31"),
+                period(1, B, "1/1", "2022-06-01", null));
+
+        assertThat(OwnershipRules.firstDayWithWrongShares(periods)).contains(LocalDate.of(2022, 6, 1));
+        assertThat(OwnershipRules.firstDayWithWrongShares(List.of(
+                period(0, A, "1/1", "2020-01-01", "2022-12-31"),
+                period(1, B, "1/1", "2023-01-01", null)))).isEmpty();
+    }
+
     // ---- overlap of one member
 
     @Test

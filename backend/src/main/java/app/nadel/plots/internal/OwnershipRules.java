@@ -133,17 +133,18 @@ final class OwnershipRules {
                 }
             }
         }
-        if (!sharesAddUpEveryDay(periods)) {
+        if (firstDayWithWrongShares(periods).isPresent()) {
             violations.add(new Violation(Kind.SHARES_NOT_ONE, null));
         }
         return violations;
     }
 
     /**
-     * The shares only change on a day an owner starts or the day after an owner ends, so it is enough to add up the
-     * shares at those boundaries: every segment between two boundaries has the same owners as its first day.
+     * The first day (earliest) on which the owners' shares do not add up to one whole, if any. The shares only change
+     * on a day an owner starts or the day after an owner ends, so it is enough to add up the shares at those
+     * boundaries: every segment between two boundaries has the same owners as its first day.
      */
-    private static boolean sharesAddUpEveryDay(Collection<Period> periods) {
+    static Optional<LocalDate> firstDayWithWrongShares(Collection<Period> periods) {
         TreeSet<LocalDate> boundaries = new TreeSet<>();
         for (Period period : periods) {
             boundaries.add(period.validFrom());
@@ -160,13 +161,13 @@ final class OwnershipRules {
                 try {
                     sum = sum == null ? period.share() : sum.plus(period.share());
                 } catch (ArithmeticException tooLarge) {
-                    return false; // a sum that does not fit a fraction is never one whole
+                    return Optional.of(day); // a sum that does not fit a fraction is never one whole
                 }
             }
             if (sum != null && !sum.isWhole()) {
-                return false;
+                return Optional.of(day);
             }
         }
-        return true;
+        return Optional.empty();
     }
 }

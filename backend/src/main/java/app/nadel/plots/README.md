@@ -99,9 +99,13 @@ member, share, dates and basis; `coOwnerShares` replaces the shares of other rec
   the same plot, is the target itself (`OWNERSHIP_NOT_FOUND` on `coOwnerShares[i].ownershipId`) or is repeated (`INVALID`),
   and a blank `reason` (`REQUIRED`). The member is locked `FOR SHARE`: unknown is 400 `MEMBER_NOT_FOUND` on `memberId`;
   archived is 409 `MEMBER_ARCHIVED` on `memberId`, unless it is the record's own member, so a historical record of a member
-  archived later can still be corrected.
+  archived later can still be corrected, but never as a current record: an archived member with no `validTo` is refused
+  (409 `MEMBER_ARCHIVED`, field `validTo`).
 - A correction that changes nothing is a 200 without an audit entry. Otherwise `OwnershipRules.checkTimeline` runs on the
-  whole plot timeline after the correction, and the first violation is mapped to a field: `SHARES_NOT_ONE` on `share`,
+  whole plot timeline after the correction, and the first violation is mapped to a field: `SHARES_NOT_ONE` on `share`
+  (unless the target's dates moved and caused the first failing day: other owners on a day the target newly covers is
+  `OWNERSHIP_OVERLAP` on `validFrom` when the day is before the old start, else on `validTo`; a day the target no longer
+  covers is `SHARES_NOT_ONE` on the moved date),
   `OWNERSHIP_OVERLAP` on `validFrom` (the record starts inside another period of its member) or `validTo`,
   `OWNERSHIP_DATE_INVALID` on `validFrom` or `validTo` for a future date, and for an end before the start (checked first
   in the command). So the end date of the only current record may be set (the plot then has no owner and becomes GREY),

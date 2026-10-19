@@ -30,3 +30,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `00c30ed..36e99ac` | MAJOR_ISSUES | M1 moving an owner's start date into the previous (different) owner's period is reported as SHARES_NOT_ONE on `share` instead of a message under the date (spec 2.3 AC 4); only the same-member overlap is tested | minor: stray period in an OwnersPanel comment; "Correct" also requires MEMBERS_VIEW (dialog uses the member picker); no client check end < start; end-before-start is a 409 not 400. Fix overlaps Slice 5 files (OwnershipCommands) → applied after the Slice 5 commit |
+
+## Slice 5 — Guards on members and plots
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `36e99ac..96ced1f` | PASS | — | minor: `problem.PLOT_HAS_OWNERSHIP_HISTORY` top-level text says "deleted" though the code also covers the kind change (the form shows the field text); no test for archive racing a role change; README claim "an archived current owner cannot result" did not cover corrections — a correction could clear `validTo` on an archived member's past record (Slice 4 code, routed into the Slice 4 fix round); `OwnershipOverlapMappingTests` belongs to Slices 3/4 behaviour |

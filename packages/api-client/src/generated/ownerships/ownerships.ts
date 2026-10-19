@@ -287,12 +287,16 @@ export const useCreateOwnershipChange = <TError = BadRequestResponse | Unauthori
  * audited.
  *
  * The whole timeline of the plot after the correction must satisfy every rule: on every day with owners the
- * shares add up to exactly one whole (`SHARES_NOT_ONE`, `errors[{field: share}]`), the same member never owns the
+ * shares add up to exactly one whole (`SHARES_NOT_ONE`, `errors[{field: share}]`; when moving the record's dates
+ * causes it, the error is on the date: a day the record newly covers while other owners cover it too is
+ * `OWNERSHIP_OVERLAP` on `validFrom` or `validTo`, a day the record no longer covers is `SHARES_NOT_ONE` on the
+ * moved date), the same member never owns the
  * plot in overlapping periods (`OWNERSHIP_OVERLAP`, `errors[{field: validFrom}]` or `validTo`, whichever
  * overlaps), no date is in the future and `validTo` is not before `validFrom` (`OWNERSHIP_DATE_INVALID`,
  * `errors[{field: validFrom}]` or `validTo`). The member must be active (`MEMBER_ARCHIVED`,
  * `errors[{field: memberId}]`) unless it is the record's own member, so a historical record of a member who was
- * archived later can still be corrected. An archived plot cannot be corrected (`PLOT_ARCHIVED`). The plot
+ * archived later can still be corrected; but such a record must keep an end date, so clearing `validTo` on a
+ * record of an archived member is refused (`MEMBER_ARCHIVED`, `errors[{field: validTo}]`). An archived plot cannot be corrected (`PLOT_ARCHIVED`). The plot
  * status follows the current owners. Ending the only current owner's record makes the plot ownerless (GREY).
  *
  * Requires `PLOTS_VIEW` and `OWNERSHIP_EDIT`; the platform operator and everyone without them get 403. A record

@@ -173,6 +173,11 @@ class OwnershipCommands {
             throw conflict(ProblemCodes.OWNERSHIP_DATE_INVALID, "The end date cannot be before the start date.",
                     List.of(new FieldProblem("validTo", ProblemCodes.OWNERSHIP_DATE_INVALID)));
         }
+        if (newMember.archived() && validTo == null) {
+            // an archived member may keep a historical record but never becomes a current owner
+            throw conflict(ProblemCodes.MEMBER_ARCHIVED, "An archived member cannot be a current owner.",
+                    List.of(new FieldProblem("validTo", ProblemCodes.MEMBER_ARCHIVED)));
+        }
         String basis = blankToNull(request.getBasis());
 
         List<Ownership> changed = new ArrayList<>();
@@ -207,7 +212,7 @@ class OwnershipCommands {
         }).toList();
         List<Violation> violations = OwnershipRules.checkTimeline(timeline, today);
         if (!violations.isEmpty()) {
-            throw toCorrectionProblem(violations.getFirst(), timeline, ownershipId);
+            throw toCorrectionProblem(violations.getFirst(), timeline, target);
         }
 
         Map<UUID, MemberRef> names = new LinkedHashMap<>(members.find(rows.stream().map(Ownership::getMemberId)
@@ -298,20 +303,47 @@ class OwnershipCommands {
     }
 
     /**
-     * Maps the first violation of the corrected timeline to the field the person can fix. An overlap is reported on
-     * the start date when the target starts inside the other period, otherwise on the end date.
+     * Maps the first violation of the corrected timeline to the field the person can fix. An overlap of one member is
+     * reported on the start date when the target starts inside the other period, otherwise on the end date. A sum of
+     * shares that is not one whole is reported on {@code share} unless the correction moved a date of the target and
+     * that move causes the first failing day, see {@link #sharesProblem}.
      */
     private static ApiProblemException toCorrectionProblem(Violation violation, List<Period> timeline,
-            UUID targetId) {
+            Ownership old) {
+        UUID targetId = old.getId();
         return switch (violation.kind()) {
-            case SHARES_NOT_ONE -> conflict(ProblemCodes.SHARES_NOT_ONE, "The shares must add up to 1.",
-                    List.of(new FieldProblem("share", ProblemCodes.SHARES_NOT_ONE)));
+            case SHARES_NOT_ONE -> sharesProblem(timeline, old);
             case MEMBER_OVERLAP -> overlapOn(overlapField(timeline, targetId));
             case STARTS_IN_FUTURE -> conflict(ProblemCodes.OWNERSHIP_DATE_INVALID, "The date cannot be in the future.",
                     List.of(new FieldProblem("validFrom", ProblemCodes.OWNERSHIP_DATE_INVALID)));
             case ENDS_IN_FUTURE -> conflict(ProblemCodes.OWNERSHIP_DATE_INVALID, "The date cannot be in the future.",
                     List.of(new FieldProblem("validTo", ProblemCodes.OWNERSHIP_DATE_INVALID)));
         };
+    }
+
+    /**
+     * Attributes a sum of shares that is not one whole to the date that caused it. On the first failing day: if the
+     * target now covers a day it did not cover before while other owners cover it too, the corrected period overlaps
+     * them (OWNERSHIP_OVERLAP) on the start date when the day is before the old start, otherwise on the end date; if
+     * the target covered the day before but no longer does, a date was moved away from it (SHARES_NOT_ONE) on the date
+     * on that side. Everything else, including unchanged dates, stays on {@code share}.
+     */
+    private static ApiProblemException sharesProblem(List<Period> timeline, Ownership old) {
+        Period target = timeline.stream().filter(p -> old.getId().equals(p.key())).findFirst().orElseThrow();
+        Period before = new Period(old.getId(), old.getMemberId(), old.getShare(), old.getValidFrom(),
+                old.getValidTo());
+        LocalDate day = OwnershipRules.firstDayWithWrongShares(timeline).orElse(null);
+        if (day != null && !before.coversDay(day) && target.coversDay(day)
+                && timeline.stream().anyMatch(p -> p != target && p.coversDay(day))) {
+            return overlapOn(day.isBefore(old.getValidFrom()) ? "validFrom" : "validTo");
+        }
+        if (day != null && before.coversDay(day) && !target.coversDay(day)) {
+            String field = day.isBefore(target.validFrom()) ? "validFrom" : "validTo";
+            return conflict(ProblemCodes.SHARES_NOT_ONE, "The shares must add up to 1.",
+                    List.of(new FieldProblem(field, ProblemCodes.SHARES_NOT_ONE)));
+        }
+        return conflict(ProblemCodes.SHARES_NOT_ONE, "The shares must add up to 1.",
+                List.of(new FieldProblem("share", ProblemCodes.SHARES_NOT_ONE)));
     }
 
     private static String overlapField(List<Period> timeline, UUID targetId) {
