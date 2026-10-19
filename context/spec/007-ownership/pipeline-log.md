@@ -84,3 +84,17 @@ Same as 004–006 (see `context/spec/005-ui-preferences/pipeline-log.md`). Re-ch
 
 ## Phase 4 — verify
 - Verify: UI rendered on make up; screenshots docs/screenshots/007-ownership-*.png (7). Found two wording mismatches vs the criteria (ownership dates with two-digit years; a whole share shown as "1" instead of "1/1") → verify fix by react-frontend (shared formatDay, formatShare always a fraction, e2e date helpers aligned); unit tests green; screenshots re-captured.
+- Verify fix review r1 PASS.
+- Criteria: 35/35 verified with evidence in functional-spec.md; functional spec and technical considerations set to Completed.
+- Full suite on the final code (6c6ae04 + docs): `make check` green — backend 691 tests, 0 failures, line coverage 0.9676 (floor 0.96); web 186, shared 65, ui-tokens 56 unit tests; typecheck, lint, format green. `make e2e` 72 passed. Baseline comparison: no new failures; the baseline's local coverage failure (0.9481 < 0.95) is gone.
+- Product docs: architecture.md, ADR 0009/0011, glossary and module READMEs updated in the slices; no `/awos:architecture` or `/awos:product` run needed.
+
+## Final report (Phase 4)
+
+- **Branch:** `007-ownership` from main @ 0af7859. Commits: 4b3101f specs · c9a91b3 S1 · 2d5914c S1 fix · 2e95b90 S2 · 00c30ed S3 · 36e99ac S4 · 96ced1f S5 · edd95b3 S4 fix · a53200c S6 · 7f6b386 S7 · cc47d11 S8 · 6c6ae04 verify fix · (this commit) verification.
+- **Criteria:** 35/35 verified; no `[?]` items.
+- **Reviews:** S1 2 rounds (English audit label in the uk UI fixed); S2, S3, S5, S6, S7, S8 PASS in round 1; S4 2 rounds (overlap with the previous owner reported on the date; a correction could make an archived member a current owner — found by the S5 reviewer); verify fix PASS. Minor notes in review-log.md.
+- **Full suite vs baseline:** see above.
+- **Decided automatically:** every `AUTO:` line in this log (Phase 1, Phase 2, Slices 4–6).
+- **Parked:** none.
+- **Follow-ups:** `GET /plots/{id}` serialises `"owners": []` where the contract says absent (no leak); search placeholder does not mention owner names; `PlotPage` own-plot check uses the cached `/me`; archive vs role-change deadlock avoidance has no test; e2e count assertions are fragile to leftovers from killed runs.

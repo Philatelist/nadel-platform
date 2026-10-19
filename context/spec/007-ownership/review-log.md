@@ -55,3 +55,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `7f6b386..cc47d11` | PASS | — | minor: limited-card test accepts `"owners": []` (contract says absent; no leak — follow-up); a silent skip if plot 9 is not on the `q=9` page; a duplicated assertion; settings audit cleanup can leave rows in the test DB; exact demo counts are fragile to leftovers; RED validation not recorded in the log (now recorded) |
+
+## Fix — verify: ownership dates with four-digit years (2.2) and whole shares as 1/1 (2.1)
+
+| Round | Commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `cc47d11..6c6ae04` | PASS | — | minor: an e2e helper comment says "dd.MM.yyyy-style" for en-US (prints MM/dd/yyyy); no component test asserts a whole share renders "1/1" (only the shared unit test) |

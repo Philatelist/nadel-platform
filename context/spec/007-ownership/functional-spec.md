@@ -3,7 +3,7 @@
 - **Topic:** Who owns each plot, in what share and since when, with full history; a change of owner as one safe
   operation; corrections; owner-based status and visibility; and the cooperative setting that decides whether members
   see the status of other people's plots.
-- **Status:** Draft
+- **Status:** Completed
 - **Author:** Alex Usov
 - **Source:** `docs/features/007-ownership.md` (roadmap phase 1, feature 3 of 4)
 
@@ -42,17 +42,17 @@ history, while other people's plots show no colour.
 - A plot with no current owner shows grey "Без власника" / "No owner"; a plot with at least one current owner shows green
   "Без боргу" / "No debt" until debts are introduced in later phases.
   - **Acceptance Criteria:**
-    - [ ] When the chairman records owners whose shares add up to less or more than one whole (for example 1/2 and 1/3),
-      then the save is refused with "Частки мають разом становити 1" / "Shares must add up to 1" and nothing changes.
-    - [ ] When the chairman records three owners at 1/3 each, then the save succeeds and the card shows each owner with
-      "1/3".
-    - [ ] When the chairman enters a share as "2/4", then it is saved and shown as "1/2".
-    - [ ] When the chairman lists the same member twice among the new owners, then the save is refused with a message on
-      the second row.
-    - [ ] Given plot 25 has no owner, when the chairman records its first owner, then the plot's mark changes from grey
-      "Без власника" to green in the list and on its card.
-    - [ ] When the chairman opens the card of the common-land road, then no "Change owner" action is offered, and a change
-      sent anyway is refused.
+    - [x] When the chairman records owners whose shares add up to less or more than one whole (for example 1/2 and 1/3),
+      then the save is refused with "Частки мають разом становити 1" / "Shares must add up to 1" and nothing changes. _Evidence: `OwnershipAcceptanceTests` §2.1 (1/2+1/3 and 1/2+1/2+1/3 → 409 SHARES_NOT_ONE, nothing changed); `OwnershipRulesTests`; e2e `ownership-acceptance.spec.ts` (uk message on a refused save)._
+    - [x] When the chairman records three owners at 1/3 each, then the save succeeds and the card shows each owner with
+      "1/3". _Evidence: `OwnershipAcceptanceTests` §2.1 (three owners at 1/3 shown as 1/3); `OwnershipRulesTests`._
+    - [x] When the chairman enters a share as "2/4", then it is saved and shown as "1/2". _Evidence: `OwnershipAcceptanceTests` §2.1 (2/4 and 3/6 stored and shown as 1/2); e2e `ownership.spec.ts` ("2/4" typed, card shows 1/2); `ShareTests`, `fraction.test.ts`._
+    - [x] When the chairman lists the same member twice among the new owners, then the save is refused with a message on
+      the second row. _Evidence: `OwnershipAcceptanceTests` §2.1 (409 DUPLICATE_OWNER on `owners[1].memberId`); `ChangeOwnerDialog.test.tsx` (message on row 2)._
+    - [x] Given plot 25 has no owner, when the chairman records its first owner, then the plot's mark changes from grey
+      "Без власника" to green in the list and on its card. _Evidence: `OwnershipAcceptanceTests` §2.1 (grey plot turns green in the list and on the card); `OwnershipChangeTests` (demo plot 25)._
+    - [x] When the chairman opens the card of the common-land road, then no "Change owner" action is offered, and a change
+      sent anyway is refused. _Evidence: e2e `ownership-acceptance.spec.ts` (road R-1: no Change owner; API 409 PLOT_COMMON_LAND); `OwnershipAcceptanceTests` §2.1._
 
 ### 2.2 Change of owner
 
@@ -66,21 +66,21 @@ history, while other people's plots show no colour.
 - The date cannot be in the future, and it must be later than the start date of every current owner and later than the
   end date of every past owner, so periods never overlap.
   - **Acceptance Criteria:**
-    - [ ] Given plot 9 is owned by one member since 01.06.2025, when the chairman changes the owner on 01.03.2026 to two
+    - [x] Given plot 9 is owned by one member since 01.06.2025, when the chairman changes the owner on 01.03.2026 to two
       members at 1/2 each, then the card shows the two new owners from 01.03.2026 and the history shows the previous
-      owner from 01.06.2025 to 28.02.2026.
-    - [ ] When the chairman changes the owner with the date 1 January 2026, then the previous owner's period ends on
-      31 December 2025; with the date 1 March 2024, then it ends on 29 February 2024.
-    - [ ] When the chairman picks a date in the future, or a date not later than the current owner's start date, then the
-      save is refused with a message under the date.
-    - [ ] When the chairman types shares 1/2 and 1/3 in the dialog, then the dialog shows that the total is 5/6, not 1,
-      and the Save button stays disabled.
-    - [ ] When the chairman removes every owner row and saves, then the plot shows grey "Без власника" from that date and
-      the former owners appear in the history.
-    - [ ] When the chairman changes the owner and then opens the audit log filtered to ownership, then they see one entry
-      for that plot naming the date and the new owners with shares.
-    - [ ] When a person without permission to edit ownership opens a plot card, then no "Change owner" or "Correct"
-      action is shown, and a change sent anyway is refused with "You don't have access".
+      owner from 01.06.2025 to 28.02.2026. _Evidence: `OwnershipAcceptanceTests` §2.2 (plot 9 sold on 01.03.2026: previous owner 01.06.2025–28.02.2026); dates shown as dd.MM.yyyy — see docs/screenshots/007-ownership-card-treasurer.png._
+    - [x] When the chairman changes the owner with the date 1 January 2026, then the previous owner's period ends on
+      31 December 2025; with the date 1 March 2024, then it ends on 29 February 2024. _Evidence: `OwnershipAcceptanceTests` §2.2 (01.01.2026 → 31.12.2025, 01.03.2024 → 29.02.2024); `OwnershipRulesTests`._
+    - [x] When the chairman picks a date in the future, or a date not later than the current owner's start date, then the
+      save is refused with a message under the date. _Evidence: `OwnershipAcceptanceTests` §2.2 (future date, the start day and an earlier date → 409 on `effectiveFrom`); `ChangeOwnerDialog.test.tsx` (date after today blocked)._
+    - [x] When the chairman types shares 1/2 and 1/3 in the dialog, then the dialog shows that the total is 5/6, not 1,
+      and the Save button stays disabled. _Evidence: e2e `ownership.spec.ts` ("Total: 5/6 — must be 1", Save disabled); `ChangeOwnerDialog.test.tsx`; see docs/screenshots/007-ownership-change-owner-total.png._
+    - [x] When the chairman removes every owner row and saves, then the plot shows grey "Без власника" from that date and
+      the former owners appear in the history. _Evidence: `OwnershipAcceptanceTests` §2.2 (empty list → grey, former owner in history); e2e `ownership-acceptance.spec.ts` (uk "Без власника" after removing every row)._
+    - [x] When the chairman changes the owner and then opens the audit log filtered to ownership, then they see one entry
+      for that plot naming the date and the new owners with shares. _Evidence: e2e `ownership.spec.ts` (audit filtered to ownership: one row per change); `OwnershipAcceptanceTests` §2.2 (entry names the date and owners with shares)._
+    - [x] When a person without permission to edit ownership opens a plot card, then no "Change owner" or "Correct"
+      action is shown, and a change sent anyway is refused with "You don't have access". _Evidence: e2e `ownership.spec.ts` (treasurer: no Change owner/Correct); `OwnershipAcceptanceTests` §2.2 (403 for treasurer, member, edit-only roles); `OwnersPanel.test.tsx`._
 
 ### 2.3 Correction
 
@@ -90,28 +90,28 @@ history, while other people's plots show no colour.
 - A correction must still satisfy every rule (shares add up to one whole, no overlaps, no future dates). The previous
   values stay visible in the audit log. Owner records are never deleted.
   - **Acceptance Criteria:**
-    - [ ] Given plot 3 is owned 1/2 + 1/2, when the chairman corrects the first owner's share to 2/3 and the co-owner's to
+    - [x] Given plot 3 is owned 1/2 + 1/2, when the chairman corrects the first owner's share to 2/3 and the co-owner's to
       1/3 with the reason "Wrong shares in the contract copy", then the card shows 2/3 and 1/3, and the audit log shows
-      the old and new shares and the reason.
-    - [ ] When the chairman corrects only one co-owner's share so that the total is no longer one whole, then the
-      correction is refused with "Частки мають разом становити 1" / "Shares must add up to 1".
-    - [ ] When the chairman submits a correction without a reason, then the reason field shows "required" and nothing
-      changes.
-    - [ ] When the chairman corrects the start date of an owner so that it overlaps the previous owner's period, then the
-      correction is refused with a message under the date.
+      the old and new shares and the reason. _Evidence: `OwnershipAcceptanceTests` §2.3 (1/2+1/2 → 2/3+1/3, audit old/new shares and reason); e2e `ownership.spec.ts` (correction with a reason)._
+    - [x] When the chairman corrects only one co-owner's share so that the total is no longer one whole, then the
+      correction is refused with "Частки мають разом становити 1" / "Shares must add up to 1". _Evidence: `OwnershipAcceptanceTests` §2.3 (409 SHARES_NOT_ONE, nothing changed); `OwnershipCorrectionTests`._
+    - [x] When the chairman submits a correction without a reason, then the reason field shows "required" and nothing
+      changes. _Evidence: `OwnershipAcceptanceTests` §2.3 (400 REQUIRED on `reason`); e2e `ownership.spec.ts` (Save disabled without a reason); `CorrectOwnershipDialog.test.tsx`._
+    - [x] When the chairman corrects the start date of an owner so that it overlaps the previous owner's period, then the
+      correction is refused with a message under the date. _Evidence: `OwnershipAcceptanceTests` §2.3 (409 OWNERSHIP_OVERLAP on `validFrom`); `OwnershipCorrectionTests` (Slice 4 review fix)._
 
 ### 2.4 Guards on members and plots
 
 - A member who currently owns a plot cannot be archived until the plot's owner is changed.
 - A plot that has ever had an owner cannot be deleted; it can be archived only when it has no current owner.
   - **Acceptance Criteria:**
-    - [ ] Given a member currently owns plot 12, when the chairman archives that member and confirms, then the archive
+    - [x] Given a member currently owns plot 12, when the chairman archives that member and confirms, then the archive
       is refused with "Цей член кооперативу є власником ділянки — спочатку змініть власника" / "This member owns a plot —
-      change the owner first".
-    - [ ] Given plot 9 had an owner in the past, when the chairman tries to delete it, then the deletion is refused with
-      a message that a plot with ownership history cannot be deleted.
-    - [ ] Given plot 12 has a current owner, when the chairman archives it, then the archive is refused with a message to
-      change the owner first.
+      change the owner first". _Evidence: `OwnershipAcceptanceTests` §2.4 (409 MEMBER_OWNS_PLOT); e2e `ownership.spec.ts` (en message) and `ownership-acceptance.spec.ts` (uk message); `MemberArchiveGuardTests`._
+    - [x] Given plot 9 had an owner in the past, when the chairman tries to delete it, then the deletion is refused with
+      a message that a plot with ownership history cannot be deleted. _Evidence: `OwnershipAcceptanceTests` §2.4 (demo plot 9 → 409 PLOT_HAS_OWNERSHIP_HISTORY); e2e `ownership.spec.ts` (message shown); `PlotGuardsTests`._
+    - [x] Given plot 12 has a current owner, when the chairman archives it, then the archive is refused with a message to
+      change the owner first. _Evidence: `OwnershipAcceptanceTests` §2.4 (demo plot 12 → 409 PLOT_HAS_OWNERS); e2e `ownership.spec.ts` (message shown); `PlotGuardsTests`._
 
 ### 2.5 Where owners are shown
 
@@ -124,14 +124,14 @@ history, while other people's plots show no colour.
 - **My account → My plots:** the member's own current plots with their co-owners, shares and history; a member who owns
   nothing sees "You do not own any plots".
   - **Acceptance Criteria:**
-    - [ ] When the treasurer opens the plots list, then each owned plot shows its owners' names in the "Owners" column,
-      and typing an owner's last name in the search finds that owner's plots.
-    - [ ] When the treasurer opens plot 9, then they see the current owners with shares and the history with the
-      previous owner and period, and no "Change owner" or "Correct" actions.
-    - [ ] When the chairman opens the member card of a member who owns plot 7 and owned another plot in the past, then
-      the "Plots" section lists plot 7 with the share and the past plot with its period.
-    - [ ] When the demo member signs in and opens "My account", then they see their plots, including plot 7 shared 1/2
-      with a co-owner whose name is shown.
+    - [x] When the treasurer opens the plots list, then each owned plot shows its owners' names in the "Owners" column,
+      and typing an owner's last name in the search finds that owner's plots. _Evidence: e2e `ownership.spec.ts` (Owners column; searching "Moroz"/"Kravchenko" finds plots 7/11); `OwnershipAcceptanceTests` §2.5; see docs/screenshots/007-ownership-list-treasurer.png._
+    - [x] When the treasurer opens plot 9, then they see the current owners with shares and the history with the
+      previous owner and period, and no "Change owner" or "Correct" actions. _Evidence: e2e `ownership.spec.ts` (plot 9: Lytvynenko since 01.06.2025, Honcharenko 01.06.2015–31.05.2025, no actions); see docs/screenshots/007-ownership-card-treasurer.png._
+    - [x] When the chairman opens the member card of a member who owns plot 7 and owned another plot in the past, then
+      the "Plots" section lists plot 7 with the share and the past plot with its period. _Evidence: e2e `ownership-acceptance.spec.ts` (member card "Plots": owns now with share, owned before with period); `OwnershipAcceptanceTests` §2.5; `MemberOwnershipsTests`._
+    - [x] When the demo member signs in and opens "My account", then they see their plots, including plot 7 shared 1/2
+      with a co-owner whose name is shown. _Evidence: e2e `ownership.spec.ts` (My plots: plot 7 at 1/2 with Moroz, plot 15); `MeOwnedPlotsTests`; see docs/screenshots/007-ownership-my-plots-member.png._
 
 ### 2.6 What a member sees
 
@@ -141,11 +141,11 @@ history, while other people's plots show no colour.
   status only when the cooperative allows it (section 2.7).
 - People allowed to view plots always see every plot's owners and history.
   - **Acceptance Criteria:**
-    - [ ] When the demo member opens plot 7, which they co-own, then they see the area, the green status and both
-      co-owners with shares.
-    - [ ] When the demo member opens plot 9, which they do not own, then they see only number, street and kind — no
-      owners, no area and no history.
-    - [ ] When a member who sold their plot opens it, then they see it like any other plot they do not own.
+    - [x] When the demo member opens plot 7, which they co-own, then they see the area, the green status and both
+      co-owners with shares. _Evidence: `OwnershipAcceptanceTests` §2.6 (plot 7: area 800, green, both co-owners, no notes); `OwnershipVisibilityTests`; see docs/screenshots/007-ownership-card-own-plot-member.png._
+    - [x] When the demo member opens plot 9, which they do not own, then they see only number, street and kind — no
+      owners, no area and no history. _Evidence: e2e `ownership.spec.ts` (plot 9: no owners, no area, no status); `OwnershipAcceptanceTests` §2.6 (ownerships endpoint 404)._
+    - [x] When a member who sold their plot opens it, then they see it like any other plot they do not own. _Evidence: `OwnershipAcceptanceTests` §2.6 (former owner gets the limited view); `OwnershipVisibilityTests` (former owner, list/card/map/ownerships)._
 
 ### 2.7 Cooperative setting: who sees plot colours
 
@@ -160,19 +160,19 @@ history, while other people's plots show no colour.
 - Every change of the setting is recorded in the audit log with the old and new value.
 - Permission to manage settings is a new permission that can be added to any role on the roles page.
   - **Acceptance Criteria:**
-    - [ ] Given the setting is "Own plots only" (the default), when the demo member opens the plots list, then their own
-      plots show their status labels and every other plot shows a neutral mark with no label.
-    - [ ] Given the setting is "Own plots only", when the demo member filters the list by a status, then only their own
-      plots with that status are listed.
-    - [ ] Given the chairman switches the setting to "All plots" and saves, when the demo member opens the plots list,
-      then every plot shows its status label, and other people's plots still show no area and no owners.
-    - [ ] When the treasurer opens the plots list under either setting, then every plot shows its status label.
-    - [ ] When the chairman changes the setting and opens the audit log, then they see an entry with the old and the new
-      value.
-    - [ ] When the treasurer or a member signs in, then the menu has no "Cooperative settings" item, opening its address
-      shows "You don't have access", and a change sent anyway is refused.
-    - [ ] When the chairman opens a role on the roles page, then "Manage cooperative settings" is one of the permissions
-      that can be ticked.
+    - [x] Given the setting is "Own plots only" (the default), when the demo member opens the plots list, then their own
+      plots show their status labels and every other plot shows a neutral mark with no label. _Evidence: e2e `ownership.spec.ts` (only 7 and 15 show "No debt", the rest neutral); `OwnershipVisibilityTests`; see docs/screenshots/007-ownership-list-member-own-only.png._
+    - [x] Given the setting is "Own plots only", when the demo member filters the list by a status, then only their own
+      plots with that status are listed. _Evidence: e2e `ownership.spec.ts` (status filter returns only 7 and 15); `OwnershipAcceptanceTests` §2.7; `OwnershipVisibilityTests`._
+    - [x] Given the chairman switches the setting to "All plots" and saves, when the demo member opens the plots list,
+      then every plot shows its status label, and other people's plots still show no area and no owners. _Evidence: e2e `ownership.spec.ts` (chairman sets "All plots": member sees every label, no area/owners; restored); `OwnershipAcceptanceTests` §2.7._
+    - [x] When the treasurer opens the plots list under either setting, then every plot shows its status label. _Evidence: `OwnershipAcceptanceTests` §2.7 (treasurer sees every status under both settings); `OwnershipVisibilityTests`._
+    - [x] When the chairman changes the setting and opens the audit log, then they see an entry with the old and the new
+      value. _Evidence: e2e `ownership.spec.ts` (audit "Own plots only → All plots"); `OwnershipAcceptanceTests` §2.7; `SettingsTests`._
+    - [x] When the treasurer or a member signs in, then the menu has no "Cooperative settings" item, opening its address
+      shows "You don't have access", and a change sent anyway is refused. _Evidence: e2e `ownership.spec.ts` (treasurer and member: no menu item, "You don't have access", PUT 403); `SettingsTests`; see docs/screenshots/007-ownership-settings.png._
+    - [x] When the chairman opens a role on the roles page, then "Manage cooperative settings" is one of the permissions
+      that can be ticked. _Evidence: e2e `ownership-acceptance.spec.ts` (roles page offers "Manage cooperative settings"); `OwnershipAcceptanceTests` §2.7 (custom role with the permission can change the setting)._
 
 ### 2.8 Demo data
 
@@ -180,8 +180,8 @@ history, while other people's plots show no colour.
   with the previous owner in its history, and a few plots without an owner. The demo member co-owns plot 7 (1/2) and
   owns another plot alone.
   - **Acceptance Criteria:**
-    - [ ] When the treasurer opens the demo plots list, then most plots are green with owners, a few are grey without an
-      owner, plots with two owners show both names, and one plot's card shows a sale last year in its history.
+    - [x] When the treasurer opens the demo plots list, then most plots are green with owners, a few are grey without an
+      owner, plots with two owners show both names, and one plot's card shows a sale last year in its history. _Evidence: e2e `ownership-acceptance.spec.ts` (treasurer overview: 25 "No debt", 5 "No owner", road "Common land", plot 3 with two names, plot 9 history); `OwnershipAcceptanceTests` §2.8; see docs/screenshots/007-ownership-list-treasurer.png._
 
 ---
 
