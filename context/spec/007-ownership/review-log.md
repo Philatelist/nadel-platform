@@ -37,3 +37,9 @@
 |---|---|---|---|---|
 | 1 | `36e99ac..96ced1f` | PASS | — | minor: `problem.PLOT_HAS_OWNERSHIP_HISTORY` top-level text says "deleted" though the code also covers the kind change (the form shows the field text); no test for archive racing a role change; README claim "an archived current owner cannot result" did not cover corrections — a correction could clear `validTo` on an archived member's past record (Slice 4 code, routed into the Slice 4 fix round); `OwnershipOverlapMappingTests` belongs to Slices 3/4 behaviour |
 | 2 | + `edd95b3` | PASS | M1 resolved (overlap with a different owner reported on the moved date as OWNERSHIP_OVERLAP); archived-member rule correct | minor: one test asserts only the code for the moved-away date branch; a co-owned record moved into an unowned period reports on `share`; archived no-op correction with no end date gets 409 (legacy data only); MEMBER_ARCHIVED wording under the end date |
+
+## Slice 6 — What members see: own plots, My account, member card, status visibility
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `edd95b3..a53200c` | PASS | — | minor: `PlotPage` decides "own plot" from the cached `/me` (may be stale after an ownership change in the same session; the server still filters); the neutral mark is fully aria-hidden (empty status cell for screen readers, as specified); no cross-tenant test for the setting; double map lookup in OwnershipQueries |

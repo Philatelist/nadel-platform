@@ -51,7 +51,7 @@ the share as `share_numerator` / `share_denominator` (CHECK `1 <= n <= d <= 1000
 keys `(tenant_id, plot_id)` and `(tenant_id, member_id)` (`ON DELETE RESTRICT`), so a link never crosses cooperatives.
 An exclusion constraint (`btree_gist`) forbids the same member owning the same plot in overlapping periods. Rows are never
 deleted: `nadel_app` has no `DELETE`/`TRUNCATE` on the table. The shares of the current owners adding up to one whole is
-enforced by the application (a change of owner, coming in the next slices).
+enforced by the application (a change of owner and a correction, below).
 
 - `Share` is the exact fraction value object (parse "n/d", reduce by gcd, format, `plus`, compare by cross-multiplication);
   an invalid share is an `InvalidShareException`. Shares are never decimals.
@@ -79,7 +79,7 @@ transaction in `OwnershipCommands.change`: it ends every current row on `effecti
   refused by the contract pattern with the same code), refuse a member listed twice (409 `DUPLICATE_OWNER` on
   `owners[i].memberId` of the second row), lock the new members `FOR SHARE` through `MemberDirectory.lockActive` (unknown
   or other cooperative's member: 400 `MEMBER_NOT_FOUND`; archived: 409 `MEMBER_ARCHIVED`), then the rules below.
-- `OwnershipRules` is pure and shared with the correction of a later slice. `checkChangeDate`: the date is not after
+- `OwnershipRules` is pure and shared with the correction. `checkChangeDate`: the date is not after
   today (the Europe/Kyiv date from the `Clock` bean) and later than the start of every current row and the end of every
   past row (409 `OWNERSHIP_DATE_INVALID`, field `effectiveFrom`). `checkTimeline` validates the whole timeline the change
   would produce: on every day with owners the shares add up to exactly one whole (409 `SHARES_NOT_ONE`, field `owners`;

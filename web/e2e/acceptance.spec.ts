@@ -73,7 +73,11 @@ test.describe('§2.10 / §2.11 landing page and navigation', () => {
     for (const permission of ['Edit members', 'Manage roles']) {
       await expect(page.getByText(permission, { exact: true })).toHaveCount(0);
     }
-    await expectNavigation(page, ['Plots', 'My account', 'Members', 'Audit log'], ['Roles']);
+    await expectNavigation(
+      page,
+      ['Plots', 'My account', 'Members', 'Audit log'],
+      ['Roles', 'Cooperative settings'],
+    );
   });
 
   test('§2.11 #1: the chairman lands on Plots and sees Plots, My account, Members, Roles and Audit log', async ({
@@ -82,7 +86,11 @@ test.describe('§2.10 / §2.11 landing page and navigation', () => {
     await loginAs(page, 'chairman@demo.local');
 
     await expect(page).toHaveURL(/\/plots$/);
-    await expectNavigation(page, ['Plots', 'My account', 'Members', 'Roles', 'Audit log'], []);
+    await expectNavigation(
+      page,
+      ['Plots', 'My account', 'Members', 'Roles', 'Audit log', 'Cooperative settings'],
+      [],
+    );
     await accountLink(page).click();
     for (const permission of ALL_PERMISSIONS) {
       await expect(page.getByText(permission, { exact: true })).toBeVisible();
@@ -202,7 +210,7 @@ test.describe('§2.7 / §2.8 members list and read-only card', () => {
 });
 
 test.describe('§2.2 / §2.13 roles screen', () => {
-  test('§2.2 #1, #2 and §2.13 #2: five roles, base role names are editable, Chairman has all eight permissions locked', async ({
+  test('§2.2 #1, #2 and §2.13 #2: five roles, base role names are editable, Chairman has all nine permissions locked', async ({
     page,
   }) => {
     await loginAs(page, 'chairman@demo.local');
@@ -228,8 +236,8 @@ test.describe('§2.2 / §2.13 roles screen', () => {
       .click();
     await expect(page.getByLabel('Name', { exact: true })).toBeEnabled();
     const boxes = page.getByRole('checkbox');
-    await expect(boxes).toHaveCount(8);
-    for (let i = 0; i < 8; i++) {
+    await expect(boxes).toHaveCount(ALL_PERMISSIONS.length);
+    for (let i = 0; i < ALL_PERMISSIONS.length; i++) {
       await expect(boxes.nth(i)).toBeChecked();
       await expect(boxes.nth(i)).toBeDisabled();
     }
@@ -263,7 +271,7 @@ test.describe('§2.2 / §2.13 roles screen', () => {
       await expect(page.getByRole('button', { name: 'Restore standard name' })).toHaveCount(0);
       await name.fill('Bookkeeper');
       await page.getByRole('button', { name: 'Save' }).click();
-      await expect(page.getByRole('status')).toHaveText('Saved');
+      await expect(page.getByRole('status').filter({ hasText: 'Saved' })).toHaveText('Saved');
       await expect(bookkeeper).toBeVisible();
       await expect(treasurer).toHaveCount(0);
 
@@ -282,7 +290,7 @@ test.describe('§2.2 / §2.13 roles screen', () => {
       await bookkeeper.getByRole('button', { name: 'Edit' }).click();
       await expect(page.getByText('Base role: Treasurer')).toBeVisible();
       await page.getByRole('button', { name: 'Restore standard name' }).click();
-      await expect(page.getByRole('status')).toHaveText('Saved');
+      await expect(page.getByRole('status').filter({ hasText: 'Saved' })).toHaveText('Saved');
       await expect(treasurer).toBeVisible();
       await expect(bookkeeper).toHaveCount(0);
       await treasurer.getByRole('button', { name: 'Edit' }).click();
@@ -294,7 +302,7 @@ test.describe('§2.2 / §2.13 roles screen', () => {
       if ((await bookkeeper.count()) > 0) {
         await bookkeeper.getByRole('button', { name: 'Edit' }).click();
         await page.getByRole('button', { name: 'Restore standard name' }).click();
-        await expect(page.getByRole('status')).toHaveText('Saved');
+        await expect(page.getByRole('status').filter({ hasText: 'Saved' })).toHaveText('Saved');
       }
     }
 
@@ -318,7 +326,7 @@ test.describe('§2.2 / §2.13 roles screen', () => {
     expect(await page.getByRole('main').innerText()).not.toContain('base:');
   });
 
-  test('§2.1 #1 and §2.11 #3: eight permissions with descriptions in Ukrainian by default, English on switch', async ({
+  test('§2.1 #1 and §2.11 #3: nine permissions with descriptions in Ukrainian by default, English on switch', async ({
     browser,
   }) => {
     // a browser language that is not supported falls back to the default locale (Ukrainian)
@@ -342,8 +350,12 @@ test.describe('§2.2 / §2.13 roles screen', () => {
       ['Редагування ділянок', 'Додавати, редагувати й архівувати ділянки'],
       ['Редагування власності', 'Додавати, змінювати й виправляти власників ділянок'],
       ['Запуск імпорту', 'Запускати імпорт з Excel'],
+      [
+        'Керування налаштуваннями кооперативу',
+        'Змінювати налаштування всього кооперативу, наприклад, хто бачить кольори ділянок',
+      ],
     ];
-    await expect(page.getByRole('checkbox')).toHaveCount(8);
+    await expect(page.getByRole('checkbox')).toHaveCount(ALL_PERMISSIONS.length);
     for (const [name, description] of ukrainian as [string, string][]) {
       await expect(page.getByText(name, { exact: true })).toBeVisible();
       await expect(page.getByText(description)).toBeVisible();
@@ -389,7 +401,7 @@ test.describe('chairman journeys that change data', () => {
     await page.getByRole('checkbox', { name: /^View members/ }).check();
     await page.getByRole('checkbox', { name: /^Edit members/ }).check();
     await page.getByRole('button', { name: 'Save' }).click();
-    await expect(page.getByRole('status')).toHaveText('Saved');
+    await expect(page.getByRole('status').filter({ hasText: 'Saved' })).toHaveText('Saved');
     await expect(roleItem).toBeVisible();
     await roleItem.getByRole('button', { name: 'Edit' }).click();
     await expect(page.getByRole('checkbox', { checked: true })).toHaveCount(2);
@@ -410,7 +422,7 @@ test.describe('chairman journeys that change data', () => {
     await page.getByRole('button', { name: 'Edit roles' }).click();
     await page.getByRole('checkbox', { name: roleName }).check();
     await page.getByRole('button', { name: 'Save' }).click();
-    await expect(page.getByRole('status')).toHaveText('Saved');
+    await expect(page.getByRole('status').filter({ hasText: 'Saved' })).toHaveText('Saved');
     await expect(page.getByText(roleName, { exact: true })).toBeVisible();
     const holderUrl = page.url();
 
@@ -428,7 +440,7 @@ test.describe('chairman journeys that change data', () => {
     await page.getByRole('button', { name: 'Edit roles' }).click();
     await page.getByRole('checkbox', { name: roleName }).uncheck();
     await page.getByRole('button', { name: 'Save' }).click();
-    await expect(page.getByRole('status')).toHaveText('Saved');
+    await expect(page.getByRole('status').filter({ hasText: 'Saved' })).toHaveText('Saved');
     await page.getByRole('button', { name: 'Archive' }).click();
     await page.getByRole('dialog').getByRole('button', { name: 'Archive' }).click();
     await expect(page.getByText('Archived', { exact: true })).toBeVisible();
@@ -493,7 +505,7 @@ test.describe('chairman journeys that change data', () => {
     await page.getByLabel('Preferred channel').selectOption({ label: 'Paper' });
     await page.getByLabel('Email', { exact: true }).fill(email);
     await page.getByRole('button', { name: 'Save' }).click();
-    await expect(page.getByRole('status')).toHaveText('Saved');
+    await expect(page.getByRole('status').filter({ hasText: 'Saved' })).toHaveText('Saved');
     await expect(page.getByRole('heading', { level: 1, name: `${lastName} Ivan` })).toBeVisible();
     await expect(page.getByText('+380671234567', { exact: true })).toBeVisible();
     const channelRow = page
@@ -516,7 +528,7 @@ test.describe('chairman journeys that change data', () => {
     await page.getByLabel('Postal address').fill('5 Acceptance Street, Kyiv');
     await page.getByLabel('Phone 1', { exact: true }).fill('050 111 22 33');
     await page.getByRole('button', { name: 'Save' }).click();
-    await expect(page.getByRole('status')).toHaveText('Saved');
+    await expect(page.getByRole('status').filter({ hasText: 'Saved' })).toHaveText('Saved');
     await expect(page.getByText('5 Acceptance Street, Kyiv')).toBeVisible();
     await expect(page.getByText('+380501112233', { exact: true })).toBeVisible();
 
@@ -524,7 +536,7 @@ test.describe('chairman journeys that change data', () => {
     await page.getByRole('button', { name: 'Edit roles' }).click();
     await page.getByRole('checkbox', { name: 'Secretary' }).check();
     await page.getByRole('button', { name: 'Save' }).click();
-    await expect(page.getByRole('status')).toHaveText('Saved');
+    await expect(page.getByRole('status').filter({ hasText: 'Saved' })).toHaveText('Saved');
     await expect(
       page.locator('dt', { hasText: 'Roles' }).locator('xpath=following-sibling::dd[1]'),
     ).toHaveText('Secretary');
@@ -615,7 +627,7 @@ test.describe('chairman journeys that change data', () => {
       await treasurer.getByRole('button', { name: 'Edit' }).click();
       await page.getByRole('checkbox', { name: /^View audit log/ }).setChecked(ticked);
       await page.getByRole('button', { name: 'Save' }).click();
-      await expect(page.getByRole('status')).toHaveText('Saved');
+      await expect(page.getByRole('status').filter({ hasText: 'Saved' })).toHaveText('Saved');
     };
 
     await setAuditView(false);
@@ -630,7 +642,11 @@ test.describe('chairman journeys that change data', () => {
     }
 
     const again = await signedInPage(browser, 'treasurer@demo.local');
-    await expectNavigation(again, ['Plots', 'My account', 'Members', 'Audit log'], ['Roles']);
+    await expectNavigation(
+      again,
+      ['Plots', 'My account', 'Members', 'Audit log'],
+      ['Roles', 'Cooperative settings'],
+    );
     await again.context().close();
   });
 

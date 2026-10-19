@@ -75,3 +75,5 @@ Same as 004–006 (see `context/spec/005-ui-preferences/pipeline-log.md`). Re-ch
 - Slice 4 review r2 PASS.
 - Slice 6 backend: verify 681 tests green, coverage 0.9676. Backend agent resumed once after a network error. AUTO: a member who owns nothing gets 404 (not 403) on GET /plots/{id}/ownerships, the same as for a plot they do not own (rule: do not reveal which plots exist behind the permission).
 - Slice 6 committed (backend targeted 123 green, verify 681 / coverage 0.9676; web 186, shared 64, ui-tokens 56; typecheck incl. mobile/lint/format green; mobile needed no change). Review r1 started.
+- Slice 6 review r1 PASS.
+- Slice 7 committed (make check green: backend 681, coverage 0.9676, floor raised 0.95 → 0.96; web 186, shared 64, ui-tokens 56; make e2e 65 passed per the testing agent; one stale active e2e member from an earlier failed run was archived through the API). Review r1 started.
