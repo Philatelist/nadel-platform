@@ -34,6 +34,7 @@ import type {
   ForbiddenResponse,
   NotFoundResponse,
   OwnershipChange,
+  OwnershipCorrection,
   PlotOwnerships,
   UnauthorizedResponse
 } from '../model';
@@ -267,4 +268,114 @@ export const useCreateOwnershipChange = <TError = BadRequestResponse | Unauthori
         TContext
       > => {
       return useMutation(getCreateOwnershipChangeMutationOptions(options), queryClient);
+    }
+    export const getCreateOwnershipCorrectionUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/ownerships/${id}/corrections`
+}
+
+/**
+ * Fixes a mistake in one owner record (the target): the body is a full replacement of its member, share, dates
+ * and basis, and `reason` is required. `coOwnerShares` corrects the shares of other records of the same plot in
+ * the same step, so that "1/2 + 1/2" can become "2/3 + 1/3"; each id must belong to the same plot and differ
+ * from the target (otherwise 400, `errors[{field: coOwnerShares[i].ownershipId, code: OWNERSHIP_NOT_FOUND}]`).
+ * Records are never deleted; the old values stay in the audit log (`OWNERSHIP_CORRECTED`, one entry on the plot,
+ * with the owners before and after and the reason). A correction that changes nothing is accepted and not
+ * audited.
+ *
+ * The whole timeline of the plot after the correction must satisfy every rule: on every day with owners the
+ * shares add up to exactly one whole (`SHARES_NOT_ONE`, `errors[{field: share}]`), the same member never owns the
+ * plot in overlapping periods (`OWNERSHIP_OVERLAP`, `errors[{field: validFrom}]` or `validTo`, whichever
+ * overlaps), no date is in the future and `validTo` is not before `validFrom` (`OWNERSHIP_DATE_INVALID`,
+ * `errors[{field: validFrom}]` or `validTo`). The member must be active (`MEMBER_ARCHIVED`,
+ * `errors[{field: memberId}]`) unless it is the record's own member, so a historical record of a member who was
+ * archived later can still be corrected. An archived plot cannot be corrected (`PLOT_ARCHIVED`). The plot
+ * status follows the current owners. Ending the only current owner's record makes the plot ownerless (GREY).
+ *
+ * Requires `PLOTS_VIEW` and `OWNERSHIP_EDIT`; the platform operator and everyone without them get 403. A record
+ * that does not exist or belongs to another cooperative is 404. A missing or blank `reason`
+ * (`errors[{field: reason, code: REQUIRED}]`), invalid shares (`errors[{field: share | coOwnerShares[i].share,
+ * code: SHARE_INVALID}]`) and an unknown member (`errors[{field: memberId, code: MEMBER_NOT_FOUND}]`) are 400
+ * `VALIDATION_FAILED`.
+ * @summary Correct an owner record
+ */
+export const createOwnershipCorrection = async (id: string,
+    ownershipCorrection: OwnershipCorrection, options?: Parameters<typeof nadelFetch>[1]): Promise<PlotOwnerships> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return nadelFetch<PlotOwnerships>(getCreateOwnershipCorrectionUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(ownershipCorrection)
+  }
+);}
+
+
+
+
+
+export const getCreateOwnershipCorrectionMutationKey = () => ['createOwnershipCorrection'] as const;
+
+export const getCreateOwnershipCorrectionMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createOwnershipCorrection>>, TError,CreateOwnershipCorrectionMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createOwnershipCorrection>>, TError,CreateOwnershipCorrectionMutationVariables, TContext> => {
+
+const mutationKey = getCreateOwnershipCorrectionMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createOwnershipCorrection>>, CreateOwnershipCorrectionMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  createOwnershipCorrection(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateOwnershipCorrectionMutationResult = NonNullable<Awaited<ReturnType<typeof createOwnershipCorrection>>>
+    export type CreateOwnershipCorrectionMutationBody = OwnershipCorrection
+    export type CreateOwnershipCorrectionMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse
+    export type CreateOwnershipCorrectionMutationVariables = {id: string;data: OwnershipCorrection}
+
+    /**
+ * @summary Correct an owner record
+ */
+export const useCreateOwnershipCorrection = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createOwnershipCorrection>>, TError,CreateOwnershipCorrectionMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof createOwnershipCorrection>>,
+        TError,
+        CreateOwnershipCorrectionMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateOwnershipCorrectionMutationOptions(options), queryClient);
     }

@@ -35,6 +35,8 @@ export * from './notFoundResponse';
 export * from './ownership';
 export * from './ownershipChange';
 export * from './ownershipChangeOwner';
+export * from './ownershipCorrection';
+export * from './ownershipCorrectionCoOwner';
 export * from './ownershipShare';
 export * from './permission';
 export * from './permissionInfo';

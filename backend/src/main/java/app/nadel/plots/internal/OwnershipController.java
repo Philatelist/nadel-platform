@@ -5,6 +5,7 @@ import app.nadel.problem.ApiProblemException;
 import java.util.UUID;
 import nadel.contract.api.OwnershipsApi;
 import nadel.contract.model.OwnershipChange;
+import nadel.contract.model.OwnershipCorrection;
 import nadel.contract.model.PlotOwnerships;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -45,5 +46,16 @@ class OwnershipController implements OwnershipsApi {
     public ResponseEntity<PlotOwnerships> createOwnershipChange(UUID id, OwnershipChange ownershipChange) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(commands.change(id, ownershipChange, currentUser.profile()));
+    }
+
+    /**
+     * Corrects one owner record (and, optionally, the shares of its co-owners) with a reason. The platform operator
+     * and everyone without both permissions get 403; a record that does not exist or belongs to another cooperative
+     * (RLS) is 404.
+     */
+    @Override
+    @PreAuthorize("hasAuthority('PERM_PLOTS_VIEW') and hasAuthority('PERM_OWNERSHIP_EDIT')")
+    public ResponseEntity<PlotOwnerships> createOwnershipCorrection(UUID id, OwnershipCorrection ownershipCorrection) {
+        return ResponseEntity.ok(commands.correct(id, ownershipCorrection, currentUser.profile()));
     }
 }

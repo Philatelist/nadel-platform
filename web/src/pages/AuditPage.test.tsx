@@ -85,4 +85,23 @@ describe('AuditPage ownership entries', () => {
     expect(screen.getByText(/Basis:/)).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'Ownership' })).toBeInTheDocument();
   });
+
+  it('shows a corrected ownership with the reason', () => {
+    entry = {
+      id: 'a4',
+      occurredAt: '2026-10-02T10:00:00Z',
+      action: 'OWNERSHIP_CORRECTED',
+      entityType: 'OWNERSHIP',
+      entityId: 'p7',
+      entityLabel: '33',
+      changes: [
+        { field: 'owners', oldValue: 'Ivanenko Oleh 1/2', newValue: 'Ivanenko Oleh 2/3' },
+        { field: 'reason', newValue: 'Typo in the contract' },
+      ],
+    };
+    renderWithApp(<AuditPage />);
+    expect(screen.getByText('Ownership corrected')).toBeInTheDocument();
+    expect(screen.getByText(/Reason:/)).toBeInTheDocument();
+    expect(screen.getByText(/Typo in the contract/)).toBeInTheDocument();
+  });
 });

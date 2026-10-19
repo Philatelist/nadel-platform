@@ -3,6 +3,7 @@ import { format, formatShare } from '@nadel/shared';
 import { Link } from 'react-router';
 import { useLocale, useT } from '../../i18n';
 import { useCan } from '../../me';
+import { Button } from '../ui';
 
 /** Date-only values ("2015-06-01") are calendar days, so they are formatted in UTC to avoid a shifted day. */
 function formatDay(value: string, locale: string): string {
@@ -28,7 +29,15 @@ function OwnerName({ ownership }: { ownership: Ownership }) {
   );
 }
 
-function OwnershipRow({ ownership, kind }: { ownership: Ownership; kind: 'current' | 'history' }) {
+function OwnershipRow({
+  ownership,
+  kind,
+  onCorrect,
+}: {
+  ownership: Ownership;
+  kind: 'current' | 'history';
+  onCorrect?: (ownership: Ownership) => void;
+}) {
   const t = useT();
   const { locale } = useLocale();
   const when =
@@ -44,7 +53,15 @@ function OwnershipRow({ ownership, kind }: { ownership: Ownership; kind: 'curren
         <OwnerName ownership={ownership} />
         <span>{formatShare(ownership.share)}</span>
         <span className="text-ink-muted">{when}</span>
-        {/* Slice 3-4: row actions (Correct) go here for people who may edit ownership. */}
+        {onCorrect && (
+          <Button
+            variant="secondary"
+            aria-label={format(t.ownership.correctRow, { name: ownership.memberName })}
+            onClick={() => onCorrect(ownership)}
+          >
+            {t.ownership.correct}
+          </Button>
+        )}
       </div>
       {ownership.basis && (
         <div className="text-sm text-ink-muted">{format(t.ownership.basis, { basis: ownership.basis })}</div>
@@ -54,7 +71,13 @@ function OwnershipRow({ ownership, kind }: { ownership: Ownership; kind: 'curren
 }
 
 /** Read-only current owners and history (newest first, as the server orders them) of one plot. */
-export function OwnershipLists({ ownerships }: { ownerships: PlotOwnerships }) {
+export function OwnershipLists({
+  ownerships,
+  onCorrect,
+}: {
+  ownerships: PlotOwnerships;
+  onCorrect?: (ownership: Ownership) => void;
+}) {
   const t = useT();
   return (
     <div className="flex flex-col gap-5">
@@ -67,7 +90,7 @@ export function OwnershipLists({ ownerships }: { ownerships: PlotOwnerships }) {
         ) : (
           <ul className="flex flex-col gap-2">
             {ownerships.current.map((o) => (
-              <OwnershipRow key={o.id} ownership={o} kind="current" />
+              <OwnershipRow key={o.id} ownership={o} kind="current" onCorrect={onCorrect} />
             ))}
           </ul>
         )}
@@ -81,7 +104,7 @@ export function OwnershipLists({ ownerships }: { ownerships: PlotOwnerships }) {
         ) : (
           <ul className="flex flex-col gap-2">
             {ownerships.history.map((o) => (
-              <OwnershipRow key={o.id} ownership={o} kind="history" />
+              <OwnershipRow key={o.id} ownership={o} kind="history" onCorrect={onCorrect} />
             ))}
           </ul>
         )}

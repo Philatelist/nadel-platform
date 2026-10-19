@@ -65,3 +65,6 @@ Same as 004–006 (see `context/spec/005-ui-preferences/pipeline-log.md`). Re-ch
 - Slice 2 review r1 PASS.
 - Slice 3 backend: verify 583 tests green, coverage 0.9519 (thin margin over 0.95; uncovered: 23P01 safety net and rare toProblem branches).
 - Slice 3 committed (backend targeted 104 green, verify 583 / coverage 0.9519; web 160, shared 64, ui-tokens 56; typecheck/lint/format green). Web agent resumed once after a network error. Review r1 started.
+- Slice 3 review r1 PASS.
+- Slice 4 backend: verify 607 tests green, coverage 0.9524. AUTO: a correction may set an end date on a current record when the result satisfies every rule (single owner → plot GREY; one of two co-owners → refused); an archived member may stay on their own record (rule: corrections fix history).
+- Slice 4 committed (backend targeted 48 green, verify 607 / coverage 0.9524; web 171, shared 64, ui-tokens 56; typecheck/lint/format green). Review r1 started.

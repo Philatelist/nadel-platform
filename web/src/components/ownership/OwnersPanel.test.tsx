@@ -93,6 +93,36 @@ describe('OwnersPanel change owner button', () => {
   });
 });
 
+describe('OwnersPanel correct button', () => {
+  const full: Permission[] = ['PLOTS_VIEW', 'OWNERSHIP_EDIT', 'MEMBERS_VIEW'];
+  const buttons = () => screen.queryAllByRole('button', { name: /^Correct the record/ });
+  beforeEach(() => {
+    state = { data: ownerships, isPending: false, isError: false };
+  });
+
+  it('is shown on every current and history row for editors', () => {
+    permissions = full;
+    renderWithApp(<OwnersPanel plotId="p9" />);
+    expect(buttons()).toHaveLength(4);
+  });
+
+  it.each([
+    ['PLOTS_VIEW', full.filter((p) => p !== 'PLOTS_VIEW')],
+    ['OWNERSHIP_EDIT', full.filter((p) => p !== 'OWNERSHIP_EDIT')],
+    ['MEMBERS_VIEW', full.filter((p) => p !== 'MEMBERS_VIEW')],
+  ])('is hidden without %s', (_name, given) => {
+    permissions = given;
+    renderWithApp(<OwnersPanel plotId="p9" />);
+    expect(buttons()).toHaveLength(0);
+  });
+
+  it('is hidden for archived plots', () => {
+    permissions = full;
+    renderWithApp(<OwnersPanel plotId="p9" archived />);
+    expect(buttons()).toHaveLength(0);
+  });
+});
+
 describe('OwnersPanel', () => {
   beforeEach(() => {
     permissions = ['PLOTS_VIEW'];

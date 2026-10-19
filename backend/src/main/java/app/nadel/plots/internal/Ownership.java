@@ -74,6 +74,24 @@ class Ownership {
         updatedAt = now;
     }
 
+    /** Replaces the fields a correction may change (everything except the plot and the tenant). */
+    void correct(UUID memberId, Share share, LocalDate validFrom, LocalDate validTo, String basis, Instant now) {
+        this.memberId = memberId;
+        this.shareNumerator = (short) share.numerator();
+        this.shareDenominator = (short) share.denominator();
+        this.validFrom = validFrom;
+        this.validTo = validTo;
+        this.basis = basis;
+        this.updatedAt = now;
+    }
+
+    /** Replaces the share only (the shares of the co-owners of a corrected record). */
+    void reshare(Share share, Instant now) {
+        this.shareNumerator = (short) share.numerator();
+        this.shareDenominator = (short) share.denominator();
+        this.updatedAt = now;
+    }
+
     UUID getId() {
         return id;
     }

@@ -18,3 +18,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `2d5914c..2e95b90` | PASS | — | minor: search placeholder does not mention owner names; the 200-match cap on owner-name search is silent; import order in PlotQueries; unchecked member lookup in OwnershipQueries (safe by the composite FK) |
+
+## Slice 3 — Change of owner
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `2e95b90..00c30ed` | PASS | — | minor: an empty change on a plot with no owners is accepted and audited; running share sum can overflow `int` for many large unrelated denominators (order-dependent, unrealistic); tests compute "today" separately from the server clock (could flake at Kyiv midnight); `lockActive` name also returns archived members; `basis` lacks `@Nullable`; client duplicate-member branch not unit-tested |

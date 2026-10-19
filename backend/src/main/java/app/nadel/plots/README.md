@@ -18,6 +18,7 @@ None yet. Other modules will get a lookup API in the module root when 007 (owner
 | `GET /plots/{id}` | `getPlot` | any member of a cooperative |
 | `GET /plots/{id}/ownerships` | `listPlotOwnerships` | `PLOTS_VIEW` |
 | `POST /plots/{id}/ownership-changes` | `createOwnershipChange` | `PLOTS_VIEW` and `OWNERSHIP_EDIT` |
+| `POST /ownerships/{id}/corrections` | `createOwnershipCorrection` | `PLOTS_VIEW` and `OWNERSHIP_EDIT` |
 | `POST /plots` | `createPlot` | `PLOTS_VIEW` and `PLOTS_EDIT` |
 | `PUT /plots/{id}` | `updatePlot` | `PLOTS_VIEW` and `PLOTS_EDIT` |
 | `POST /plots/{id}/archive` | `archivePlot` | `PLOTS_VIEW` and `PLOTS_EDIT` |
@@ -84,6 +85,33 @@ transaction in `OwnershipCommands.change`: it ends every current row on `effecti
 - Audit `OWNERSHIP_CHANGED` (entity `OWNERSHIP`, entity id = the plot id, label = the plot number) with `effectiveFrom`,
   `owners` (old and new, each "Last First 1/2", sorted, joined by ", ") and `basis` when given. Names are in the audit
   payload only, never in logs.
+
+## Correction (feature 007)
+
+`POST /ownerships/{id}/corrections` with `{memberId, share, validFrom, validTo?, basis?, reason, coOwnerShares[{ownershipId,
+share}] (0..20)}` is one transaction in `OwnershipCommands.correct`. The body is a full replacement of the target record's
+member, share, dates and basis; `coOwnerShares` replaces the shares of other records of the same plot in the same step
+(so 1/2 + 1/2 becomes 2/3 + 1/3). It answers 200 with the `PlotOwnerships` of the record's plot. Records are never deleted.
+
+- Order of work: read the plot id of the record as a scalar (404 when missing or of another cooperative), lock the plot
+  (`FOR UPDATE`), refuse an archived plot (409 `PLOT_ARCHIVED`), re-read the plot's rows fresh, then validate the request
+  at once as a 400: bad shares (`SHARE_INVALID` on `share` or `coOwnerShares[i].share`), a co-owner id that is not a row of
+  the same plot, is the target itself (`OWNERSHIP_NOT_FOUND` on `coOwnerShares[i].ownershipId`) or is repeated (`INVALID`),
+  and a blank `reason` (`REQUIRED`). The member is locked `FOR SHARE`: unknown is 400 `MEMBER_NOT_FOUND` on `memberId`;
+  archived is 409 `MEMBER_ARCHIVED` on `memberId`, unless it is the record's own member, so a historical record of a member
+  archived later can still be corrected.
+- A correction that changes nothing is a 200 without an audit entry. Otherwise `OwnershipRules.checkTimeline` runs on the
+  whole plot timeline after the correction, and the first violation is mapped to a field: `SHARES_NOT_ONE` on `share`,
+  `OWNERSHIP_OVERLAP` on `validFrom` (the record starts inside another period of its member) or `validTo`,
+  `OWNERSHIP_DATE_INVALID` on `validFrom` or `validTo` for a future date, and for an end before the start (checked first
+  in the command). So the end date of the only current record may be set (the plot then has no owner and becomes GREY),
+  but not the end date of one co-owner of two, which breaks the sum.
+- The changed rows are written and flushed together; only the target changes member or dates, so no intermediate state
+  can meet the exclusion constraint, whose violation (SQLSTATE 23P01) is still mapped to 409 `OWNERSHIP_OVERLAP`.
+  `plot_status` is refreshed in the same transaction from the current rows.
+- Audit `OWNERSHIP_CORRECTED` (entity `OWNERSHIP`, entity id = the plot id, label = the plot number) with `owners` (old and
+  new text of every changed record, "Last First 1/2 (2020-01-01–2026-02-28)", the period open at the end while the
+  record is current, sorted, joined by ", "), `basis` when it changed, and `reason`.
 
 ## Status
 

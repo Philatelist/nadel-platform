@@ -23,13 +23,16 @@ export type FieldErrors = Readonly<Record<string, string>>;
 
 /**
  * Wire field path to form key: `phones[1].x` and `phones[1]` both become `phones[1]`; `owners[2].share` keeps
- * its row and property (`owners[2].share`, `owners[2].memberId`); `owners` and `effectiveFrom` stay as they are.
+ * its row and property (`owners[2].share`, `owners[2].memberId`); `coOwnerShares[0].share` likewise; `owners`,
+ * `share`, `reason` and the dates stay as they are.
  */
 export function fieldKey(field: string): string {
   const phone = /^phones\[(\d+)\]/.exec(field);
   if (phone) return `phones[${phone[1]}]`;
   const owner = /^owners\[(\d+)\]\.(memberId|share)$/.exec(field);
-  return owner ? `owners[${owner[1]}].${owner[2]}` : field;
+  if (owner) return `owners[${owner[1]}].${owner[2]}`;
+  const coOwner = /^coOwnerShares\[(\d+)\]\.(ownershipId|share)$/.exec(field);
+  return coOwner ? `coOwnerShares[${coOwner[1]}].${coOwner[2]}` : field;
 }
 
 function isFieldError(value: unknown): value is { field: string; code: string } {

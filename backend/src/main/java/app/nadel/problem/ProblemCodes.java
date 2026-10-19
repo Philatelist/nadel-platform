@@ -35,6 +35,7 @@ public final class ProblemCodes {
     public static final String AREA_INVALID = "AREA_INVALID";
     public static final String SHARE_INVALID = "SHARE_INVALID";
     public static final String MEMBER_NOT_FOUND = "MEMBER_NOT_FOUND";
+    public static final String OWNERSHIP_NOT_FOUND = "OWNERSHIP_NOT_FOUND";
 
     private ProblemCodes() {
     }
