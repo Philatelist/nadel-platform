@@ -497,7 +497,8 @@ export const getUpdatePlotUrl = (id: string,) => {
  * they cannot see. An archived plot can be edited too; its number is then not
  * checked against the active plots, and restoring it checks the number again.
  * The same rules apply as when creating: 409 `PLOT_NUMBER_TAKEN`, 409 `CADASTRAL_NUMBER_TAKEN`,
- * 400 `CADASTRAL_INVALID`, 400 `AREA_INVALID`. A change that alters nothing is accepted and not audited.
+ * 400 `CADASTRAL_INVALID`, 400 `AREA_INVALID`. A plot that has ever had an owner cannot become common land
+ * (409 `PLOT_HAS_OWNERSHIP_HISTORY`, `errors[{field: kind}]`). A change that alters nothing is accepted and not audited.
  * @summary Update a plot or common land
  */
 export const updatePlot = async (id: string,
@@ -587,8 +588,8 @@ export const useUpdatePlot = <TError = BadRequestResponse | UnauthorizedResponse
 
 /**
  * Removes a plot that was created by mistake, together with its status. Requires `PLOTS_VIEW` and `PLOTS_EDIT`. Only an active
- * plot can be deleted; an archived plot is refused with 409 `PLOT_ARCHIVED` and must be restored first. The
- * deletion is audited.
+ * plot can be deleted; an archived plot is refused with 409 `PLOT_ARCHIVED` and must be restored first, and a plot
+ * that has ever had an owner is refused with 409 `PLOT_HAS_OWNERSHIP_HISTORY`. The deletion is audited.
  * @summary Delete a plot or common land
  */
 export const deletePlot = async (id: string, options?: Parameters<typeof nadelFetch>[1]): Promise<void> => {
@@ -663,7 +664,8 @@ export const useDeletePlot = <TError = BadRequestResponse | UnauthorizedResponse
 
 /**
  * Moves the plot to the archive: it is hidden from the default list and its number becomes free for a new
- * plot. Archiving an already archived plot is a no-op and is not audited. Requires `PLOTS_VIEW` and `PLOTS_EDIT`.
+ * plot. Archiving an already archived plot is a no-op and is not audited. A plot that has a current owner cannot
+ * be archived (409 `PLOT_HAS_OWNERS`). Requires `PLOTS_VIEW` and `PLOTS_EDIT`.
  * @summary Archive a plot or common land
  */
 export const archivePlot = async (id: string, options?: Parameters<typeof nadelFetch>[1]): Promise<PlotDetails> => {
@@ -683,7 +685,7 @@ export const archivePlot = async (id: string, options?: Parameters<typeof nadelF
 
 export const getArchivePlotMutationKey = () => ['archivePlot'] as const;
 
-export const getArchivePlotMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse,
+export const getArchivePlotMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof archivePlot>>, TError,ArchivePlotMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof archivePlot>>, TError,ArchivePlotMutationVariables, TContext> => {
 
@@ -712,13 +714,13 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type ArchivePlotMutationResult = NonNullable<Awaited<ReturnType<typeof archivePlot>>>
 
-    export type ArchivePlotMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse
+    export type ArchivePlotMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse
     export type ArchivePlotMutationVariables = {id: string}
 
     /**
  * @summary Archive a plot or common land
  */
-export const useArchivePlot = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse,
+export const useArchivePlot = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof archivePlot>>, TError,ArchivePlotMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof archivePlot>>,

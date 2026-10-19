@@ -8,6 +8,7 @@ import { convertAreaText, PlotForm } from './PlotForm';
 
 const createMutate = vi.fn();
 const updateMutate = vi.fn();
+let updateOptions: { mutation: { onError: (e: unknown) => void } };
 let createOptions: { mutation: { onError: (e: unknown) => void } };
 
 vi.mock('@nadel/api-client', async (importOriginal) => ({
@@ -16,7 +17,10 @@ vi.mock('@nadel/api-client', async (importOriginal) => ({
     createOptions = options;
     return { mutate: createMutate, isPending: false };
   },
-  useUpdatePlot: () => ({ mutate: updateMutate, isPending: false }),
+  useUpdatePlot: (options: typeof updateOptions) => {
+    updateOptions = options;
+    return { mutate: updateMutate, isPending: false };
+  },
 }));
 
 const existing: PlotDetails = {
@@ -102,6 +106,14 @@ describe('PlotForm', () => {
     createOptions.mutation.onError(conflict('CADASTRAL_NUMBER_TAKEN', 'cadastralNumber'));
     expect(
       await screen.findByText('Another plot of the cooperative already has this cadastral number.'),
+    ).toBeInTheDocument();
+  });
+
+  it('shows the ownership-history conflict under the kind field', async () => {
+    renderForm(existing);
+    updateOptions.mutation.onError(conflict('PLOT_HAS_OWNERSHIP_HISTORY', 'kind'));
+    expect(
+      await screen.findByText('This plot has had owners and cannot become common land'),
     ).toBeInTheDocument();
   });
 });

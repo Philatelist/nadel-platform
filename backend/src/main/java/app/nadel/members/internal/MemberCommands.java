@@ -5,6 +5,7 @@ import app.nadel.audit.AuditEvent;
 import app.nadel.audit.FieldChange;
 import app.nadel.identity.AccessProfile;
 import app.nadel.identity.Permission;
+import app.nadel.members.MemberArchiveGuard;
 import app.nadel.problem.ApiProblemException;
 import app.nadel.problem.FieldProblem;
 import app.nadel.problem.ProblemCodes;
@@ -35,13 +36,15 @@ class MemberCommands {
     private final MemberRepository members;
     private final RoleGrantReader grants;
     private final LastChairmanGuard lastChairman;
+    private final List<MemberArchiveGuard> archiveGuards;
     private final ApplicationEventPublisher events;
 
     MemberCommands(MemberRepository members, RoleGrantReader grants, LastChairmanGuard lastChairman,
-            ApplicationEventPublisher events) {
+            List<MemberArchiveGuard> archiveGuards, ApplicationEventPublisher events) {
         this.members = members;
         this.grants = grants;
         this.lastChairman = lastChairman;
+        this.archiveGuards = archiveGuards;
         this.events = events;
     }
 
@@ -79,11 +82,19 @@ class MemberCommands {
         return card(member, actor);
     }
 
+    /**
+     * Archives a member. The member row is locked first ({@code FOR UPDATE}): a concurrent change of owner that adds
+     * this member holds a {@code FOR SHARE} lock on it, so the two serialise, and whichever runs second sees the
+     * other's result. Then the last-chairman check and every {@link MemberArchiveGuard} run. The chairman lock is
+     * taken before the row lock, the order a role change already uses (see {@link LastChairmanGuard#lock}).
+     */
     @Transactional
     nadel.contract.model.Member archive(UUID id, AccessProfile actor) {
-        Member member = find(id);
+        lastChairman.lock(actor.tenantId());
+        Member member = members.findByIdForUpdate(id).orElseThrow(ApiProblemException::notFound);
         if (!member.isArchived()) {
             lastChairman.ensureNotLast(actor.tenantId(), member.getId());
+            archiveGuards.forEach(guard -> guard.ensureCanArchive(member.getId()));
             MemberSnapshot before = MemberSnapshot.of(member);
             member.archive(Instant.now());
             save(member);

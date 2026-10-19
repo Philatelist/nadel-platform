@@ -24,6 +24,9 @@ public final class ProblemCodes {
     public static final String OWNERSHIP_DATE_INVALID = "OWNERSHIP_DATE_INVALID";
     public static final String OWNERSHIP_OVERLAP = "OWNERSHIP_OVERLAP";
     public static final String MEMBER_ARCHIVED = "MEMBER_ARCHIVED";
+    public static final String MEMBER_OWNS_PLOT = "MEMBER_OWNS_PLOT";
+    public static final String PLOT_HAS_OWNERS = "PLOT_HAS_OWNERS";
+    public static final String PLOT_HAS_OWNERSHIP_HISTORY = "PLOT_HAS_OWNERSHIP_HISTORY";
 
     /** Codes of single fields in {@code errors[]}. */
     public static final String REQUIRED = "REQUIRED";

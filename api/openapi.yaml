@@ -217,7 +217,8 @@ paths:
       description: |
         Moves the member to the archive; the member keeps their history but is hidden from the default list and
         can no longer sign in. Archiving an already archived member is a no-op. Requires `MEMBERS_EDIT`.
-        The last active chairman cannot be archived (409 `LAST_CHAIRMAN`).
+        The last active chairman cannot be archived (409 `LAST_CHAIRMAN`), and neither can a member who currently
+        owns a plot (409 `MEMBER_OWNS_PLOT`): change the owner of the plot first.
       parameters:
         - name: id
           in: path
@@ -720,7 +721,8 @@ paths:
         they cannot see. An archived plot can be edited too; its number is then not
         checked against the active plots, and restoring it checks the number again.
         The same rules apply as when creating: 409 `PLOT_NUMBER_TAKEN`, 409 `CADASTRAL_NUMBER_TAKEN`,
-        400 `CADASTRAL_INVALID`, 400 `AREA_INVALID`. A change that alters nothing is accepted and not audited.
+        400 `CADASTRAL_INVALID`, 400 `AREA_INVALID`. A plot that has ever had an owner cannot become common land
+        (409 `PLOT_HAS_OWNERSHIP_HISTORY`, `errors[{field: kind}]`). A change that alters nothing is accepted and not audited.
       parameters:
         - name: id
           in: path
@@ -758,8 +760,8 @@ paths:
       summary: Delete a plot or common land
       description: |
         Removes a plot that was created by mistake, together with its status. Requires `PLOTS_VIEW` and `PLOTS_EDIT`. Only an active
-        plot can be deleted; an archived plot is refused with 409 `PLOT_ARCHIVED` and must be restored first. The
-        deletion is audited.
+        plot can be deleted; an archived plot is refused with 409 `PLOT_ARCHIVED` and must be restored first, and a plot
+        that has ever had an owner is refused with 409 `PLOT_HAS_OWNERSHIP_HISTORY`. The deletion is audited.
       parameters:
         - name: id
           in: path
@@ -788,7 +790,8 @@ paths:
       summary: Archive a plot or common land
       description: |
         Moves the plot to the archive: it is hidden from the default list and its number becomes free for a new
-        plot. Archiving an already archived plot is a no-op and is not audited. Requires `PLOTS_VIEW` and `PLOTS_EDIT`.
+        plot. Archiving an already archived plot is a no-op and is not audited. A plot that has a current owner cannot
+        be archived (409 `PLOT_HAS_OWNERS`). Requires `PLOTS_VIEW` and `PLOTS_EDIT`.
       parameters:
         - name: id
           in: path
@@ -811,6 +814,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
 
   /plots/{id}/restore:
     post:
@@ -1103,7 +1108,10 @@ components:
         listed member is archived (code `MEMBER_ARCHIVED`, `errors[{field: owners[i].memberId}]`), or the plot is
         common land (code `PLOT_COMMON_LAND`), or a correction of an owner record is refused with the same
         codes (`SHARES_NOT_ONE` on `share`, `OWNERSHIP_OVERLAP` and `OWNERSHIP_DATE_INVALID` on `validFrom` or
-        `validTo`, `MEMBER_ARCHIVED` on `memberId`)
+        `validTo`, `MEMBER_ARCHIVED` on `memberId`), or the member currently owns a plot and is archived (code
+        `MEMBER_OWNS_PLOT`), or a plot with a current owner is archived (code `PLOT_HAS_OWNERS`), or a plot with
+        ownership history is deleted or turned into common land (code `PLOT_HAS_OWNERSHIP_HISTORY`, with
+        `errors[{field: kind}]` for the update)
       content:
         application/problem+json:
           schema:

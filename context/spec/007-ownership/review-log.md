@@ -24,3 +24,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `2e95b90..00c30ed` | PASS | — | minor: an empty change on a plot with no owners is accepted and audited; running share sum can overflow `int` for many large unrelated denominators (order-dependent, unrealistic); tests compute "today" separately from the server clock (could flake at Kyiv midnight); `lockActive` name also returns archived members; `basis` lacks `@Nullable`; client duplicate-member branch not unit-tested |
+
+## Slice 4 — Corrections
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `00c30ed..36e99ac` | MAJOR_ISSUES | M1 moving an owner's start date into the previous (different) owner's period is reported as SHARES_NOT_ONE on `share` instead of a message under the date (spec 2.3 AC 4); only the same-member overlap is tested | minor: stray period in an OwnersPanel comment; "Correct" also requires MEMBERS_VIEW (dialog uses the member picker); no client check end < start; end-before-start is a 409 not 400. Fix overlaps Slice 5 files (OwnershipCommands) → applied after the Slice 5 commit |

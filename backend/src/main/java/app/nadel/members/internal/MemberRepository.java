@@ -15,6 +15,14 @@ import org.springframework.data.repository.query.Param;
 
 interface MemberRepository extends JpaRepository<Member, UUID> {
 
+    /**
+     * The member with an exclusive row lock ({@code FOR UPDATE}) until the end of the transaction. Archiving takes it
+     * first; it conflicts with the shared lock a change of owner takes through {@code MemberDirectory.lockActive}.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select m from Member m where m.id = :id")
+    Optional<Member> findByIdForUpdate(@Param("id") UUID id);
+
     @Query("select m from Member m where m.tenantId = :tenantId and m.keycloakSubject = :subject "
             + "and m.archivedAt is null")
     Optional<Member> findActiveBySubject(@Param("tenantId") UUID tenantId, @Param("subject") String subject);

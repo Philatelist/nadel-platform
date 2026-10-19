@@ -7,7 +7,7 @@ soft archive (`archived_at`). Owners are described below; polygons are imported 
 
 ## Public API
 
-None yet. Other modules will get a lookup API in the module root when 007 (ownership) needs one.
+None. `plots` implements the SPI `members.MemberArchiveGuard` (see Guards) and uses `members.MemberDirectory`.
 
 ## Endpoints
 
@@ -138,9 +138,23 @@ publishes an `audit.AuditEvent` built from `PlotSnapshot.diff`, with the plot nu
   answer is 409 `PLOT_NUMBER_TAKEN`. An archived plot can still be edited; its number is then not checked.
 - Delete is for a plot created by mistake. It is allowed only for an active plot: an archived plot is refused with 409
   `PLOT_ARCHIVED` and must be restored first. The `plot_status` row goes with the plot through the foreign key's
-  `ON DELETE CASCADE`. The audit entry has the old values of every field and `NONE` as the new state. Feature 007 will
-  also refuse a plot with ownership history (until then the foreign key of `ownership` makes the database refuse it); the
-  seam is marked with a comment in `PlotCommands.delete`.
+  `ON DELETE CASCADE`. The audit entry has the old values of every field and `NONE` as the new state.
+
+## Guards (feature 007)
+
+`PlotCommands.archive`, `delete` and `update` lock the plot row first (`PlotRepository.findByIdForUpdate`, the same
+lock a change of owner takes), so a guard and an ownership change of one plot run one after another.
+
+- Archive: 409 `PLOT_HAS_OWNERS` while the plot has a current owner; end the ownership first (a change of owner with an
+  empty list). Archiving an archived plot stays a no-op.
+- Delete: 409 `PLOT_HAS_OWNERSHIP_HISTORY` when the plot has any ownership row, current or past. The foreign key of
+  `ownership` (`ON DELETE RESTRICT`) stays as the database backstop.
+- Update: a plot that has any ownership row cannot become common land: 409 `PLOT_HAS_OWNERSHIP_HISTORY` with
+  `errors[{field: kind}]`. Common land with no history can become a plot, and other edits are unaffected.
+- `OwnershipArchiveGuard` implements `members.MemberArchiveGuard`: 409 `MEMBER_OWNS_PLOT` when the member has a current
+  ownership. Lock order: a change of owner takes the plot lock, then the members `FOR SHARE`; the member archive takes
+  only the member row lock (after the chairman lock) and the guard takes no locks, so no cycle is possible. If the
+  change commits first the archive sees the owner; if the archive commits first the change finds the member archived.
 
 Depends on `identity`, `problem`, `audit` and `members` (public `MemberDirectory` only). The `Clock` bean (Europe/Kyiv) is
 declared in `app.nadel.ClockConfiguration`.

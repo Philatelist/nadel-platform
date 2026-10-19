@@ -227,27 +227,17 @@ class PlotsRegistryAcceptanceTests extends IntegrationTest {
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.status").value("GREY")));
         assertThat(common).isNotNull();
 
-        // plot 12 archived frees its number; the new plot 12 is saved; then restoring the old one is refused
-        UUID twelve = inTenant(DEMO_TENANT, sql -> sql.queryForObject(
-                "select id from plot where number = '12'", UUID.class));
-        try {
-            send(chairman, post(PLOTS + "/" + twelve + "/archive"), null).andExpect(status().isOk());
-            UUID replacement = remember(send(chairman, post(PLOTS), input("12", "PLOT", "600"))
-                    .andExpect(status().isCreated()));
-            assertThat(replacement).isNotEqualTo(twelve);
-            send(chairman, post(PLOTS + "/" + twelve + "/restore"), null).andExpect(status().isConflict())
-                    .andExpect(jsonPath("$.code").value("PLOT_NUMBER_TAKEN"));
-        } finally {
-            // the replacement is deleted by the cleanup; put the demo plot back
-            for (UUID id : new ArrayList<>(created)) {
-                inTenant(DEMO_TENANT, sql -> {
-                    sql.update("delete from plot_status where plot_id = ?", id);
-                    return sql.update("delete from plot where id = ?", id);
-                });
-            }
-            created.clear();
-            inTenant(DEMO_TENANT, sql -> sql.update("update plot set archived_at = null where id = ?", twelve));
-        }
+        // an archived plot frees its number; a new plot takes it; then restoring the old one is refused
+        // (a plot created here, because a demo plot has an owner and could not be archived)
+        String reused = "R-" + tag();
+        UUID original = remember(send(chairman, post(PLOTS), input(reused, "PLOT", "600"))
+                .andExpect(status().isCreated()));
+        send(chairman, post(PLOTS + "/" + original + "/archive"), null).andExpect(status().isOk());
+        UUID replacement = remember(send(chairman, post(PLOTS), input(reused, "PLOT", "600"))
+                .andExpect(status().isCreated()));
+        assertThat(replacement).isNotEqualTo(original);
+        send(chairman, post(PLOTS + "/" + original + "/restore"), null).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("PLOT_NUMBER_TAKEN"));
     }
 
     /** §2.1 #6: 600 m2 is stored as 6 sotkas and 6.5 sotkas as 650 m2 (the server keeps m2 and never rounds). */

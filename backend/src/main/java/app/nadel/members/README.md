@@ -15,6 +15,11 @@ the caller can refuse them (used by the change of owner, so a member cannot be a
 implementation is `JpaMemberDirectory` (internal); `plots` uses it for owners (feature 007). Feature 005 (import) will
 add more lookups here.
 
+`MemberArchiveGuard` is a synchronous veto SPI (feature 007): `ensureCanArchive(memberId)` is called by
+`MemberCommands.archive` on every guard bean of the application, inside the archive transaction, and throws a 409
+`ApiProblemException` to refuse. `plots` implements it (`OwnershipArchiveGuard`, 409 `MEMBER_OWNS_PLOT` while the member
+has a current ownership). A guard must only read and must take no lock that is ordered before a member lock.
+
 ## What is here
 
 - `MemberAccessProfileSource` implements `identity`'s `AccessProfileSource`: finds the active member for a token and
@@ -46,6 +51,14 @@ add more lookups here.
     fields become null, `DeliveryChannel.check` (`CHANNEL_CONTACT_MISSING` on `email` / `telegramUsername` / `viberPhone`).
   - E-mail is unique among active members: a pre-check plus a mapping of the unique index `member_tenant_email_uq` give
     409 `EMAIL_TAKEN` with `errors[{field: "email"}]`. Archived members free their e-mail; restore re-checks.
+  - Archive order of work (`MemberCommands.archive`): take the chairman lock (below), lock the member row `FOR UPDATE`
+    (`MemberRepository.findByIdForUpdate`; 404 when missing or of another cooperative), and for a member who is not
+    archived yet run `LastChairmanGuard.ensureNotLast` and then every `MemberArchiveGuard`. The row lock serialises the
+    archive with a change of owner that adds the member (it holds `FOR SHARE` through `MemberDirectory.lockActive`): the
+    archive sees the committed owner and answers `MEMBER_OWNS_PLOT`, or the change finds the member archived and answers
+    `MEMBER_ARCHIVED`; an archived current owner cannot result. The chairman lock comes before the row lock because
+    `setMemberRoles` holds the chairman lock and then needs a share lock on the member row for a new role link; the
+    opposite order would deadlock.
   - `LastChairmanGuard.ensureNotLast(tenant, member)` takes `pg_advisory_xact_lock(hashtextextended(tenant, 0))` in the
     transaction and refuses (409 `LAST_CHAIRMAN`) to take the only active chairman away. Archive and `setMemberRoles` use
     it.

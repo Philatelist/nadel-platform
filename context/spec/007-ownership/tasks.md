@@ -38,12 +38,12 @@ split by slice).
   - [x] Web: `CorrectOwnershipDialog.tsx` (prefilled member/share/dates/basis, co-owner shares with `ShareTotal`, required reason), "Correct" on each owner row for editors; i18n; AuditPage label for `OWNERSHIP_CORRECTED`; unit tests (reason required, co-owner total, error mapping). **[Agent: react-frontend]**
   - [x] Verify: `cd backend && ./mvnw -B test -Dtest='OwnershipCorrectionTests,OwnershipRulesTests,ModularityTests'` green; `pnpm -r test && pnpm -r typecheck && pnpm -r lint && pnpm format:check` green. **[Agent: spring-backend]**
 
-- [ ] **Slice 5: Guards on members and plots**
+- [x] **Slice 5: Guards on members and plots**
 
   > A current owner cannot be archived; a plot with owners cannot be archived; a plot with ownership history cannot be deleted or turned into common land.
-  - [ ] Backend: public SPI `MemberArchiveGuard` in members, `MemberCommands.archive` locks the member row (`findByIdForUpdate`) then calls the last-chairman check and every guard; `OwnershipArchiveGuard` in plots (409 `MEMBER_OWNS_PLOT`); `PlotCommands.archive` (409 `PLOT_HAS_OWNERS`), `delete` (409 `PLOT_HAS_OWNERSHIP_HISTORY`), `update` refusing kind → COMMON with ownership history — all after the plot lock; contract problem descriptions + `make gen` if needed. Tests: `MemberArchiveGuardTests`, `PlotGuardsTests`, a concurrency test (member archive vs change of owner), update `PlotsWriteTests`/`MembersWriteTests` cases that archive or delete demo rows with owners. **[Agent: spring-backend]**
-  - [ ] Web: i18n `problem.MEMBER_OWNS_PLOT`, `PLOT_HAS_OWNERS`, `PLOT_HAS_OWNERSHIP_HISTORY` (uk/en wording from the spec) shown through the existing notices on MemberPage and PlotPage; unit tests for the messages. **[Agent: react-frontend]**
-  - [ ] Verify: `cd backend && ./mvnw -B test -Dtest='MemberArchiveGuardTests,PlotGuardsTests,PlotsWriteTests,MembersWriteTests,ModularityTests'` green; `pnpm -r test && pnpm -r typecheck && pnpm -r lint && pnpm format:check` green. **[Agent: spring-backend]**
+  - [x] Backend: public SPI `MemberArchiveGuard` in members, `MemberCommands.archive` locks the member row (`findByIdForUpdate`) then calls the last-chairman check and every guard; `OwnershipArchiveGuard` in plots (409 `MEMBER_OWNS_PLOT`); `PlotCommands.archive` (409 `PLOT_HAS_OWNERS`), `delete` (409 `PLOT_HAS_OWNERSHIP_HISTORY`), `update` refusing kind → COMMON with ownership history — all after the plot lock; contract problem descriptions + `make gen` if needed. Tests: `MemberArchiveGuardTests`, `PlotGuardsTests`, a concurrency test (member archive vs change of owner), update `PlotsWriteTests`/`MembersWriteTests` cases that archive or delete demo rows with owners. **[Agent: spring-backend]**
+  - [x] Web: i18n `problem.MEMBER_OWNS_PLOT`, `PLOT_HAS_OWNERS`, `PLOT_HAS_OWNERSHIP_HISTORY` (uk/en wording from the spec) shown through the existing notices on MemberPage and PlotPage; unit tests for the messages. **[Agent: react-frontend]**
+  - [x] Verify: `cd backend && ./mvnw -B test -Dtest='MemberArchiveGuardTests,PlotGuardsTests,PlotsWriteTests,MembersWriteTests,ModularityTests'` green; `pnpm -r test && pnpm -r typecheck && pnpm -r lint && pnpm format:check` green. **[Agent: spring-backend]**
 
 - [ ] **Slice 6: What members see — own plots, My account, member card, status visibility**
 

@@ -68,3 +68,5 @@ Same as 004–006 (see `context/spec/005-ui-preferences/pipeline-log.md`). Re-ch
 - Slice 3 review r1 PASS.
 - Slice 4 backend: verify 607 tests green, coverage 0.9524. AUTO: a correction may set an end date on a current record when the result satisfies every rule (single owner → plot GREY; one of two co-owners → refused); an archived member may stay on their own record (rule: corrections fix history).
 - Slice 4 committed (backend targeted 48 green, verify 607 / coverage 0.9524; web 171, shared 64, ui-tokens 56; typecheck/lint/format green). Review r1 started.
+- Slice 5 backend: verify 631 tests green, coverage 0.9664. AUTO: member archive takes the chairman advisory lock before the member row lock (rule: avoids a deadlock with role changes, which take the advisory lock then FK-lock the member row).
+- Slice 5 committed (backend targeted 95 green, verify 631 / coverage 0.9664; web 175, shared 64, ui-tokens 56; typecheck/lint/format green). Review r1 started. Slice 4 review fix to follow as a separate commit.

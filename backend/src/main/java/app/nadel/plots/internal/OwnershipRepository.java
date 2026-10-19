@@ -35,4 +35,16 @@ interface OwnershipRepository extends JpaRepository<Ownership, UUID> {
     /** The current owners of several plots in one query, for a page of the plots list. */
     @Query("select o from Ownership o where o.plotId in :plotIds and o.validTo is null")
     List<Ownership> findCurrentByPlotIds(@Param("plotIds") Collection<UUID> plotIds);
+
+    /** True when the member owns at least one plot now (a row without an end date). */
+    @Query("select count(o) > 0 from Ownership o where o.memberId = :memberId and o.validTo is null")
+    boolean existsCurrentByMemberId(@Param("memberId") UUID memberId);
+
+    /** True when the plot has a row that is still current. */
+    @Query("select count(o) > 0 from Ownership o where o.plotId = :plotId and o.validTo is null")
+    boolean existsCurrentByPlotId(@Param("plotId") UUID plotId);
+
+    /** True when the plot has any ownership row, current or past. */
+    @Query("select count(o) > 0 from Ownership o where o.plotId = :plotId")
+    boolean existsByPlotId(@Param("plotId") UUID plotId);
 }
