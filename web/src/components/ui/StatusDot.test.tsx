@@ -9,4 +9,12 @@ describe('StatusDot', () => {
     const dot = container.querySelector('[aria-hidden="true"]');
     expect(dot).toHaveClass('bg-status-red');
   });
+
+  it('draws a decorative neutral ring without a status', () => {
+    const { container } = render(<StatusDot />);
+    const ring = screen.getByTestId('status-neutral');
+    expect(ring).toHaveAttribute('aria-hidden', 'true');
+    expect(ring.className).not.toMatch(/bg-status/);
+    expect(container.textContent).toBe('');
+  });
 });

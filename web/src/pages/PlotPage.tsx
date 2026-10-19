@@ -14,9 +14,10 @@ import { useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { QueryBoundary } from '../components/QueryBoundary';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { OwnersPanel } from '../components/ownership/OwnersPanel';
 import { Badge, Button, Notice, PageHeader, Panel, StatusDot } from '../components/ui';
 import { useLocale, useT } from '../i18n';
-import { useCan } from '../me';
+import { useCan, useMe } from '../me';
 import { useCanEditPlots } from '../hooks/useCanEditPlots';
 import { plotStatusLabel } from '../plotStatus';
 import { problemMessage } from '../problem';
@@ -52,6 +53,7 @@ function PlotView({ plot }: { plot: PlotDetails }) {
   const { locale } = useLocale();
   const canView = useCan('PLOTS_VIEW');
   const canEdit = useCanEditPlots();
+  const isOwner = useMe().ownedPlots.some((p) => p.plotId === plot.id);
   const navigate = useNavigate();
   const f = t.plot.fields;
   const queryClient = useQueryClient();
@@ -86,9 +88,12 @@ function PlotView({ plot }: { plot: PlotDetails }) {
     [f.number, plot.number],
     [f.street, plot.street ?? f.none],
     [f.kind, t.plot.kind[plot.kind]],
-    [f.status, <StatusDot key="status" status={plot.status} label={plotStatusLabel(t, plot)} />],
   ];
-  if (canView) {
+  if (plot.status !== undefined) {
+    rows.push([f.status, <StatusDot key="status" status={plot.status} label={plotStatusLabel(t, plot)} />]);
+  }
+  // the server sends the details of an owned plot to its owner, so show whatever arrived
+  if (canView || isOwner) {
     rows.push(
       [
         f.area,
@@ -101,8 +106,8 @@ function PlotView({ plot }: { plot: PlotDetails }) {
       ],
       [f.cadastralNumber, plot.cadastralNumber ?? f.none],
       [f.building, plot.hasBuilding ? t.plot.hasBuilding : t.plot.noBuilding],
-      [f.notes, plot.notes ?? f.none],
     );
+    if (canView) rows.push([f.notes, plot.notes ?? f.none]);
   }
 
   return (
@@ -150,11 +155,14 @@ function PlotView({ plot }: { plot: PlotDetails }) {
           ))}
         </dl>
       </Panel>
-      {canView && (
-        <Panel title={t.plot.ownersTitle}>
-          <p className="text-ink-muted">{t.plot.ownersPlaceholder}</p>
-        </Panel>
-      )}
+      {(canView || isOwner) &&
+        (plot.kind === 'COMMON' ? (
+          <Panel title={t.plot.ownersTitle}>
+            <p className="text-ink-muted">{t.ownership.commonLand}</p>
+          </Panel>
+        ) : (
+          <OwnersPanel plotId={plot.id} kind={plot.kind} archived={plot.archived} />
+        ))}
       {confirmingDelete && (
         <ConfirmDialog
           title={t.plot.deleteTitle}

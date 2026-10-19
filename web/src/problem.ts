@@ -21,10 +21,18 @@ export function problemMessage(t: Messages, error: unknown): string {
 /** Field errors keyed by form field: `lastName`, `email`, `phones[1]`, ... */
 export type FieldErrors = Readonly<Record<string, string>>;
 
-/** Wire field path to form key: `phones[1].x` and `phones[1]` both become `phones[1]`. */
-function fieldKey(field: string): string {
+/**
+ * Wire field path to form key: `phones[1].x` and `phones[1]` both become `phones[1]`; `owners[2].share` keeps
+ * its row and property (`owners[2].share`, `owners[2].memberId`); `coOwnerShares[0].share` likewise; `owners`,
+ * `share`, `reason` and the dates stay as they are.
+ */
+export function fieldKey(field: string): string {
   const phone = /^phones\[(\d+)\]/.exec(field);
-  return phone ? `phones[${phone[1]}]` : field;
+  if (phone) return `phones[${phone[1]}]`;
+  const owner = /^owners\[(\d+)\]\.(memberId|share)$/.exec(field);
+  if (owner) return `owners[${owner[1]}].${owner[2]}`;
+  const coOwner = /^coOwnerShares\[(\d+)\]\.(ownershipId|share)$/.exec(field);
+  return coOwner ? `coOwnerShares[${coOwner[1]}].${coOwner[2]}` : field;
 }
 
 function isFieldError(value: unknown): value is { field: string; code: string } {

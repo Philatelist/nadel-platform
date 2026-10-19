@@ -53,6 +53,7 @@ class MeEndpointTests extends IntegrationTest {
                 .andExpect(jsonPath("$.email").value("chairman@demo.local"))
                 .andExpect(jsonPath("$.tenant.id").value(DEMO_TENANT.toString()))
                 .andExpect(jsonPath("$.tenant.name").value("Demo Garden Cooperative"))
+                .andExpect(jsonPath("$.ownedPlots", hasSize(0)))
                 .andExpect(jsonPath("$.roles", hasSize(1)))
                 .andExpect(jsonPath("$.roles[0].name").value("Chairman"))
                 .andExpect(jsonPath("$.roles[0].nameCustomized").value(false));

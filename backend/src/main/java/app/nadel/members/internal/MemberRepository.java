@@ -1,5 +1,6 @@
 package app.nadel.members.internal;
 
+import jakarta.persistence.LockModeType;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -7,11 +8,20 @@ import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 interface MemberRepository extends JpaRepository<Member, UUID> {
+
+    /**
+     * The member with an exclusive row lock ({@code FOR UPDATE}) until the end of the transaction. Archiving takes it
+     * first; it conflicts with the shared lock a change of owner takes through {@code MemberDirectory.lockActive}.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select m from Member m where m.id = :id")
+    Optional<Member> findByIdForUpdate(@Param("id") UUID id);
 
     @Query("select m from Member m where m.tenantId = :tenantId and m.keycloakSubject = :subject "
             + "and m.archivedAt is null")
@@ -93,4 +103,22 @@ interface MemberRepository extends JpaRepository<Member, UUID> {
     @Query(value = "select count(*) from (select pg_advisory_xact_lock(hashtextextended(cast(:tenantId as text), 0))) l",
             nativeQuery = true)
     long lockChairmen(@Param("tenantId") UUID tenantId);
+
+    /**
+     * Ids of the members (archived included) whose last, first or middle name matches a LIKE pattern over lower-cased
+     * text ({@code %token%}, with {@code !} as the escape character). The cooperative is hidden by RLS.
+     */
+    @Query("""
+            select m.id from Member m
+            where lower(m.lastName) like :pattern escape '!'
+               or lower(m.firstName) like :pattern escape '!'
+               or lower(m.middleName) like :pattern escape '!'
+            order by lower(m.lastName), lower(m.firstName), m.id
+            """)
+    List<UUID> findIdsByName(@Param("pattern") String pattern, Pageable limit);
+
+    /** The given members (archived included) with a shared row lock ({@code FOR SHARE}), in id order. */
+    @Lock(LockModeType.PESSIMISTIC_READ)
+    @Query("select m from Member m where m.id in :ids order by m.id")
+    List<Member> lockAllById(@Param("ids") Collection<UUID> ids);
 }

@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { renderWithApp } from '../test/render';
 import { AuditPage } from './AuditPage';
 
-const entry: AuditEntry = {
+let entry: AuditEntry = {
   id: 'a1',
   occurredAt: '2026-10-01T10:00:00Z',
   action: 'PLOT_UPDATED',
@@ -40,5 +40,68 @@ describe('AuditPage plot entries', () => {
     expect(screen.getByText(/No → Yes/)).toBeInTheDocument();
     expect(screen.getByText(/Area, m²:/)).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'Plot' })).toBeInTheDocument();
+  });
+});
+
+describe('AuditPage settings entries', () => {
+  it('shows the settings action and readable visibility values', () => {
+    entry = {
+      id: 'a2',
+      occurredAt: '2026-10-01T10:00:00Z',
+      action: 'SETTINGS_UPDATED',
+      entityType: 'SETTINGS',
+      entityId: 's1',
+      entityLabel: 'Stored backend label',
+      changes: [{ field: 'memberPlotStatusVisibility', oldValue: 'OWN_ONLY', newValue: 'ALL_PLOTS' }],
+    };
+    renderWithApp(<AuditPage />);
+    expect(screen.getByText('Settings changed')).toBeInTheDocument();
+    expect(screen.getByText(/Who sees plot colours:/)).toBeInTheDocument();
+    expect(screen.getByText('Cooperative settings')).toBeInTheDocument();
+    expect(screen.queryByText('Stored backend label')).not.toBeInTheDocument();
+    expect(screen.getByText(/Own plots only → All plots/)).toBeInTheDocument();
+  });
+});
+
+describe('AuditPage ownership entries', () => {
+  it('shows the ownership action with a link to the plot and readable fields', () => {
+    entry = {
+      id: 'a3',
+      occurredAt: '2026-10-01T10:00:00Z',
+      action: 'OWNERSHIP_CHANGED',
+      entityType: 'OWNERSHIP',
+      entityId: 'p7',
+      entityLabel: '33',
+      changes: [
+        { field: 'effectiveFrom', newValue: '2026-10-01' },
+        { field: 'owners', newValue: 'Ivanenko Oleh 1/2, Petrenko Ivan 1/2' },
+        { field: 'basis', newValue: 'Sale' },
+      ],
+    };
+    renderWithApp(<AuditPage />);
+    expect(screen.getByText('Owners changed')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '33' })).toHaveAttribute('href', '/plots/p7');
+    expect(screen.getByText(/Owners from:/)).toBeInTheDocument();
+    expect(screen.getByText(/Basis:/)).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Ownership' })).toBeInTheDocument();
+  });
+
+  it('shows a corrected ownership with the reason', () => {
+    entry = {
+      id: 'a4',
+      occurredAt: '2026-10-02T10:00:00Z',
+      action: 'OWNERSHIP_CORRECTED',
+      entityType: 'OWNERSHIP',
+      entityId: 'p7',
+      entityLabel: '33',
+      changes: [
+        { field: 'owners', oldValue: 'Ivanenko Oleh 1/2', newValue: 'Ivanenko Oleh 2/3' },
+        { field: 'reason', newValue: 'Typo in the contract' },
+      ],
+    };
+    renderWithApp(<AuditPage />);
+    expect(screen.getByText('Ownership corrected')).toBeInTheDocument();
+    expect(screen.getByText(/Reason:/)).toBeInTheDocument();
+    expect(screen.getByText(/Typo in the contract/)).toBeInTheDocument();
   });
 });

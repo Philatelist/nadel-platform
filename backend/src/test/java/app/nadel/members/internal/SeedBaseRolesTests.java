@@ -39,7 +39,8 @@ class SeedBaseRolesTests extends IntegrationTest {
         Map<String, TreeSet<String>> matrix = matrix();
 
         assertThat(matrix.get("CHAIRMAN")).containsExactlyInAnyOrder("MEMBERS_VIEW", "MEMBERS_EDIT", "ROLES_MANAGE",
-                "AUDIT_VIEW", "PLOTS_VIEW", "PLOTS_EDIT", "OWNERSHIP_EDIT", "IMPORT_RUN");
+                "AUDIT_VIEW", "PLOTS_VIEW", "PLOTS_EDIT", "OWNERSHIP_EDIT", "IMPORT_RUN",
+                "SETTINGS_MANAGE");
         assertThat(matrix.get("TREASURER")).containsExactlyInAnyOrder("MEMBERS_VIEW", "PLOTS_VIEW", "AUDIT_VIEW");
         assertThat(matrix.get("MEMBER")).isEmpty();
     }

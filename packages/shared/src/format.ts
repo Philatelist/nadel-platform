@@ -5,3 +5,13 @@ export function format(template: string, vars: Readonly<Record<string, string | 
     return value === undefined ? match : String(value);
   });
 }
+
+/** Formats a date-only value ("2015-06-01") with a four-digit year (dd.MM.yyyy in uk). UTC keeps the calendar day. */
+export function formatDay(value: string, locale: string): string {
+  return new Intl.DateTimeFormat(locale, {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    timeZone: 'UTC',
+  }).format(new Date(value));
+}

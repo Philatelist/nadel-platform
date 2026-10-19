@@ -20,4 +20,6 @@ export const AuditEntityType = {
   MEMBER: 'MEMBER',
   ROLE: 'ROLE',
   PLOT: 'PLOT',
+  SETTINGS: 'SETTINGS',
+  OWNERSHIP: 'OWNERSHIP',
 } as const;

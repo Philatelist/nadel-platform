@@ -3,7 +3,6 @@ package app.nadel.plots.internal;
 import app.nadel.identity.AccessProfile;
 import app.nadel.identity.CurrentUser;
 import app.nadel.problem.ApiProblemException;
-import app.nadel.problem.ProblemCodes;
 import java.net.URI;
 import java.util.UUID;
 import nadel.contract.api.PlotsApi;
@@ -12,7 +11,6 @@ import nadel.contract.model.PlotFeatureCollection;
 import nadel.contract.model.PlotInput;
 import nadel.contract.model.PlotPage;
 import nadel.contract.model.PlotStatus;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -36,7 +34,7 @@ class PlotsController implements PlotsApi {
     @Override
     public ResponseEntity<PlotFeatureCollection> getPlotMap() {
         AccessProfile viewer = currentUser.profile();
-        requireCooperativeMember(viewer);
+        CooperativeCallers.require(viewer);
         return ResponseEntity.ok(queries.map(viewer));
     }
 
@@ -45,7 +43,7 @@ class PlotsController implements PlotsApi {
     public ResponseEntity<PlotPage> listPlots(String q, nadel.contract.model.PlotKind kind, PlotStatus status,
             Boolean includeArchived, Integer page, Integer size) {
         AccessProfile viewer = currentUser.profile();
-        requireCooperativeMember(viewer);
+        CooperativeCallers.require(viewer);
         return ResponseEntity.ok(queries.list(viewer, q, kind, status, includeArchived, page, size));
     }
 
@@ -56,7 +54,7 @@ class PlotsController implements PlotsApi {
     @Override
     public ResponseEntity<PlotDetails> getPlot(UUID id) {
         AccessProfile viewer = currentUser.profile();
-        requireCooperativeMember(viewer);
+        CooperativeCallers.require(viewer);
         return ResponseEntity.ok(queries.card(id, viewer).orElseThrow(ApiProblemException::notFound));
     }
 
@@ -90,12 +88,5 @@ class PlotsController implements PlotsApi {
     public ResponseEntity<Void> deletePlot(UUID id) {
         commands.delete(id, currentUser.profile());
         return ResponseEntity.noContent().build();
-    }
-
-    private static void requireCooperativeMember(AccessProfile viewer) {
-        if (viewer.platformOperator() || viewer.tenantId() == null) {
-            throw new ApiProblemException(HttpStatus.FORBIDDEN, ProblemCodes.PERMISSION_DENIED,
-                    "The platform operator has no access to cooperative data.");
-        }
     }
 }

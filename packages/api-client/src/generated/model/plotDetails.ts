@@ -13,8 +13,8 @@ import type { PlotSummary } from './plotSummary';
 
 /**
  * The plot card: everything in `PlotSummary` plus `notes`, `archivedAt`, `createdAt` and `updatedAt`.
- * `notes`, `createdAt` and `updatedAt` are present only for callers who may see the details of the plot
- * (`PLOTS_VIEW`); `archivedAt` is present for an archived plot.
+ * `notes`, `createdAt` and `updatedAt` are board-only: present only for callers with `PLOTS_VIEW`, never for an
+ * owner of the plot; `archivedAt` is present for an archived plot.
  */
 export type PlotDetails = PlotSummary & {
   notes?: string;

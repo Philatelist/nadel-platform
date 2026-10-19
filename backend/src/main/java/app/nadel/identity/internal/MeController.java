@@ -2,6 +2,8 @@ package app.nadel.identity.internal;
 
 import app.nadel.identity.AccessProfile;
 import app.nadel.identity.CurrentUser;
+import app.nadel.identity.OwnedPlot;
+import app.nadel.identity.OwnedPlotsSource;
 import app.nadel.tenancy.TenantDirectory;
 import java.util.Optional;
 import nadel.contract.api.MeApi;
@@ -22,10 +24,12 @@ class MeController implements MeApi {
 
     private final CurrentUser currentUser;
     private final TenantDirectory tenantDirectory;
+    private final OwnedPlotsSource ownedPlots;
 
-    MeController(CurrentUser currentUser, TenantDirectory tenantDirectory) {
+    MeController(CurrentUser currentUser, TenantDirectory tenantDirectory, OwnedPlotsSource ownedPlots) {
         this.currentUser = currentUser;
         this.tenantDirectory = tenantDirectory;
+        this.ownedPlots = ownedPlots;
     }
 
     @Override
@@ -44,6 +48,10 @@ class MeController implements MeApi {
         me.setPermissions(profile.permissions().stream()
                 .map(p -> Permission.fromValue(p.name()))
                 .toList());
+        // the generated model starts with an empty list, which stays for the operator and for a member with no plots
+        if (!profile.platformOperator() && profile.memberId() != null) {
+            me.setOwnedPlots(ownedPlots.currentPlotsOf(profile.memberId()).stream().map(MeController::toDto).toList());
+        }
         if (!profile.platformOperator()) {
             tenantDirectory.current().ifPresent(t -> {
                 var tenant = new TenantSummary();
@@ -53,6 +61,12 @@ class MeController implements MeApi {
             });
         }
         return ResponseEntity.ok(me);
+    }
+
+    private static nadel.contract.model.OwnedPlot toDto(OwnedPlot plot) {
+        var dto = new nadel.contract.model.OwnedPlot(plot.plotId(), plot.number(), plot.share());
+        dto.setStreet(plot.street());
+        return dto;
     }
 
     private static RoleRef toDto(app.nadel.identity.RoleRef role) {

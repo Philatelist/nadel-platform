@@ -11,7 +11,7 @@ import { useDocumentTitle } from '../useDocumentTitle';
 
 const PAGE_SIZE = 50;
 const TIME_ZONE = 'Europe/Kyiv';
-const ENTITY_TYPES = ['MEMBER', 'ROLE', 'PLOT'] as const;
+const ENTITY_TYPES = ['MEMBER', 'ROLE', 'PLOT', 'SETTINGS', 'OWNERSHIP'] as const;
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 function isEntityType(value: string | null): value is (typeof ENTITY_TYPES)[number] {
@@ -185,12 +185,14 @@ function AuditRecord({ entry }: { entry: AuditEntry }) {
   const label = entry.entityLabel
     ? entry.entityType === 'ROLE'
       ? auditRoleValue(entry.entityLabel, t)
-      : entry.entityLabel
+      : entry.entityType === 'SETTINGS'
+        ? t.settings.title
+        : entry.entityLabel
     : a.unlabelled;
   return (
     <>
       <span className="text-ink-muted">{a.entityType[entry.entityType]}: </span>
-      {entry.entityType === 'MEMBER' || entry.entityType === 'PLOT' ? (
+      {entry.entityType === 'MEMBER' || entry.entityType === 'PLOT' || entry.entityType === 'OWNERSHIP' ? (
         <Link
           to={`${entry.entityType === 'MEMBER' ? '/members' : '/plots'}/${entry.entityId}`}
           className="text-accent underline"
@@ -209,10 +211,12 @@ function AuditChanges({ entry }: { entry: AuditEntry }) {
   const a = t.audit;
   const fieldNames: Readonly<Record<string, string>> = { ...t.member.fields, ...a.fields };
   const kinds: Readonly<Record<string, string>> = t.plot.kind;
+  const visibilities: Readonly<Record<string, { label: string } | undefined>> = t.settings.visibility;
   const value = (field: string, raw: string | undefined): string => {
     if (raw === undefined || raw === '') return a.noValue;
     if (field === 'archived' || field === 'hasBuilding') return raw === 'true' ? a.yes : a.no;
     if (field === 'kind') return kinds[raw] ?? raw;
+    if (field === 'memberPlotStatusVisibility') return visibilities[raw]?.label ?? raw;
     return field === 'name' || field === 'roles' || field === 'description'
       ? auditRoleValue(raw, t, field)
       : raw;

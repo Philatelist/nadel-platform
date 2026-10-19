@@ -20,4 +20,8 @@ describe('plotStatusLabel', () => {
     expect(plotStatusLabel(t, { status: 'YELLOW', kind: 'PLOT' })).toBe(expected);
     expect(plotStatusLabel(t, { status: 'YELLOW', kind: 'COMMON' })).toBe(expected);
   });
+
+  it('is undefined when the status is hidden from the viewer', () => {
+    expect(plotStatusLabel(messages('en'), { kind: 'PLOT' })).toBeUndefined();
+  });
 });

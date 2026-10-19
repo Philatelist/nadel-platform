@@ -34,11 +34,14 @@ class PlotCommands {
 
     private final PlotRepository plots;
     private final PlotStatusRepository statuses;
+    private final OwnershipRepository ownerships;
     private final ApplicationEventPublisher events;
 
-    PlotCommands(PlotRepository plots, PlotStatusRepository statuses, ApplicationEventPublisher events) {
+    PlotCommands(PlotRepository plots, PlotStatusRepository statuses, OwnershipRepository ownerships,
+            ApplicationEventPublisher events) {
         this.plots = plots;
         this.statuses = statuses;
+        this.ownerships = ownerships;
         this.events = events;
     }
 
@@ -57,7 +60,12 @@ class PlotCommands {
     @Transactional
     PlotDetails update(UUID id, PlotInput input, AccessProfile actor) {
         PlotData data = PlotData.from(input);
-        Plot plot = plots.findById(id).orElseThrow(ApiProblemException::notFound);
+        Plot plot = plots.findByIdForUpdate(id).orElseThrow(ApiProblemException::notFound);
+        if (plot.getKind() == PlotKind.PLOT && data.kind() == PlotKind.COMMON && ownerships.existsByPlotId(id)) {
+            throw new ApiProblemException(HttpStatus.CONFLICT, ProblemCodes.PLOT_HAS_OWNERSHIP_HISTORY,
+                    "A plot that has had owners cannot become common land.",
+                    List.of(new FieldProblem("kind", ProblemCodes.PLOT_HAS_OWNERSHIP_HISTORY)));
+        }
         if (plot.getArchivedAt() == null) {
             ensureNumberFree(actor.tenantId(), data.number(), plot.getId());
         }
@@ -76,8 +84,12 @@ class PlotCommands {
 
     @Transactional
     PlotDetails archive(UUID id, AccessProfile actor) {
-        Plot plot = plots.findById(id).orElseThrow(ApiProblemException::notFound);
+        Plot plot = plots.findByIdForUpdate(id).orElseThrow(ApiProblemException::notFound);
         if (plot.getArchivedAt() == null) {
+            if (ownerships.existsCurrentByPlotId(id)) {
+                throw new ApiProblemException(HttpStatus.CONFLICT, ProblemCodes.PLOT_HAS_OWNERS,
+                        "A plot with a current owner cannot be archived; change the owner first.");
+            }
             PlotSnapshot before = PlotSnapshot.of(plot);
             plot.archive(Instant.now());
             save(plot);
@@ -100,17 +112,22 @@ class PlotCommands {
     }
 
     /**
-     * Removes a plot created by mistake. Only an active plot can be deleted: an archived one must be restored first.
+     * Removes a plot created by mistake. Only an active plot can be deleted: an archived one must be restored first,
+     * and a plot with any ownership row, current or past, is refused ({@code PLOT_HAS_OWNERSHIP_HISTORY}).
      * The {@code plot_status} row goes with the plot through the foreign key's cascade.
      */
     @Transactional
     void delete(UUID id, AccessProfile actor) {
-        Plot plot = plots.findById(id).orElseThrow(ApiProblemException::notFound);
+        Plot plot = plots.findByIdForUpdate(id).orElseThrow(ApiProblemException::notFound);
         if (plot.getArchivedAt() != null) {
             throw new ApiProblemException(HttpStatus.CONFLICT, ProblemCodes.PLOT_ARCHIVED,
                     "An archived plot cannot be deleted; restore it first.");
         }
-        // feature 007 (ownership): refuse here, with a conflict, a plot that has ownership history
+        // the foreign key of ownership (ON DELETE RESTRICT) stays as the backstop of this check
+        if (ownerships.existsByPlotId(id)) {
+            throw new ApiProblemException(HttpStatus.CONFLICT, ProblemCodes.PLOT_HAS_OWNERSHIP_HISTORY,
+                    "A plot that has had owners cannot be deleted.");
+        }
         PlotSnapshot before = PlotSnapshot.of(plot);
         plots.delete(plot);
         plots.flush();

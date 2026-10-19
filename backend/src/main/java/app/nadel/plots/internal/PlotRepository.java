@@ -1,5 +1,6 @@
 package app.nadel.plots.internal;
 
+import jakarta.persistence.LockModeType;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -7,10 +8,19 @@ import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 interface PlotRepository extends JpaRepository<Plot, UUID> {
+
+    /**
+     * The plot with an exclusive row lock ({@code FOR UPDATE}) until the end of the transaction. Every write that
+     * depends on the plot's ownership takes this lock first, so such writes on one plot run one after another.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select p from Plot p where p.id = :id")
+    Optional<Plot> findByIdForUpdate(@Param("id") UUID id);
 
     // no tenant_id filter needed: RLS hides other cooperatives' rows
     @Query("""
@@ -35,6 +45,11 @@ interface PlotRepository extends JpaRepository<Plot, UUID> {
             """)
     List<PlotRow> findRowsByIds(@Param("ids") Collection<UUID> ids);
 
+    /** The given plots' ids in natural order of the number (the order of the plots list). */
+    @Query(value = "select p.id from plot p where p.id in (:ids) order by p.number_sort_key, p.number, p.id",
+            nativeQuery = true)
+    List<UUID> findIdsInNaturalOrder(@Param("ids") Collection<UUID> ids);
+
     /** The active plot with this number, ignoring case; at most one (unique index {@code plot_tenant_number_uq}). */
     @Query("select p from Plot p where p.tenantId = :tenantId and lower(p.number) = lower(:number) "
             + "and p.archivedAt is null")
@@ -48,7 +63,10 @@ interface PlotRepository extends JpaRepository<Plot, UUID> {
     /**
      * One page of the plots list in natural order of the number. {@code textPattern} is a LIKE pattern over
      * lower-cased text ({@code %token%}, with {@code !} as the escape character) matched against the number, the
-     * street and, only when {@code searchCadastral} is true, the cadastral number. {@code kind} and {@code status} are
+     * street and, only when {@code searchCadastral} is true, the cadastral number. When {@code searchOwners} is true
+     * the plot also matches when one of its current owners is among {@code ownerIds}, which must not be empty (pass a
+     * placeholder id while the branch is off). When {@code ownedOnly} is true only plots among {@code ownedPlotIds}
+     * are listed, and that list must not be empty either (placeholder while off). {@code kind} and {@code status} are
      * optional filters; the status is the displayed one (common land is always GREY, a plot without a status row is
      * GREY). The order is fixed here, so the {@code Pageable} must be unsorted. Rows of other cooperatives are hidden
      * by RLS.
@@ -61,9 +79,13 @@ interface PlotRepository extends JpaRepository<Plot, UUID> {
               and (cast(:status as text) is null
                    or coalesce(case when p.kind = 'COMMON' then 'GREY' else s.status end, 'GREY')
                       = cast(:status as text))
+              and (:ownedOnly = false or p.id in (:ownedPlotIds))
               and (lower(p.number) like :textPattern escape '!'
                    or lower(p.street) like :textPattern escape '!'
-                   or (:searchCadastral = true and lower(p.cadastral_number) like :textPattern escape '!'))
+                   or (:searchCadastral = true and lower(p.cadastral_number) like :textPattern escape '!')
+                   or (:searchOwners = true and exists (
+                         select 1 from ownership o
+                         where o.plot_id = p.id and o.valid_to is null and o.member_id in (:ownerIds))))
             order by p.number_sort_key, p.number, p.id
             """,
             countQuery = """
@@ -74,12 +96,18 @@ interface PlotRepository extends JpaRepository<Plot, UUID> {
               and (cast(:status as text) is null
                    or coalesce(case when p.kind = 'COMMON' then 'GREY' else s.status end, 'GREY')
                       = cast(:status as text))
+              and (:ownedOnly = false or p.id in (:ownedPlotIds))
               and (lower(p.number) like :textPattern escape '!'
                    or lower(p.street) like :textPattern escape '!'
-                   or (:searchCadastral = true and lower(p.cadastral_number) like :textPattern escape '!'))
+                   or (:searchCadastral = true and lower(p.cadastral_number) like :textPattern escape '!')
+                   or (:searchOwners = true and exists (
+                         select 1 from ownership o
+                         where o.plot_id = p.id and o.valid_to is null and o.member_id in (:ownerIds))))
             """,
             nativeQuery = true)
     Page<Plot> search(@Param("includeArchived") boolean includeArchived, @Param("kind") String kind,
             @Param("status") String status, @Param("textPattern") String textPattern,
-            @Param("searchCadastral") boolean searchCadastral, Pageable pageable);
+            @Param("searchCadastral") boolean searchCadastral, @Param("searchOwners") boolean searchOwners,
+            @Param("ownerIds") Collection<UUID> ownerIds, @Param("ownedOnly") boolean ownedOnly,
+            @Param("ownedPlotIds") Collection<UUID> ownedPlotIds, Pageable pageable);
 }

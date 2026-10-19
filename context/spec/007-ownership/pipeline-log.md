@@ -1,0 +1,110 @@
+# Pipeline log — 007 Ownership
+
+- Status: finished
+- Phase: 6 — review run
+- Branch: 007-ownership · Base: main (= origin/main) @ 0af7859
+- Requirement: docs/features/007-ownership.md
+- Autonomy: minimal (.claude/feature-pipeline.yml)
+- Publish: pr+checks · PR: https://github.com/Philatelist/nadel-platform/pull/26 · Checks: green (run 39336701013)
+- Review run: running at http://localhost:5173 (API :8080, Keycloak :8180; PIDs in backend/target/review-run.pids)
+
+## Project facts
+
+Same as 004–006 (see `context/spec/005-ui-preferences/pipeline-log.md`). Re-checked: main = origin/main @ 0af7859 (includes 006 #24 and the docs change #25 on status visibility); pipeline tooling present on main; clean tree; the 006 review run was stopped (PIDs 4300 4477 4537); ports 8080/5173 free; JaCoCo floor 0.95; latest migration V6 → next V7. Agents: spring-backend, postgres-database, react-frontend, testing-expert, slice-reviewer. UI verification with the project's Playwright. Safe local run: `make up` (demo data via the repeatable migration; no realm change expected).
+
+## Settings
+
+- questions: blocking · reviewerEscalation: auto · notGreen: ask · gitUnsafe: ask · notTestableLocally: auto · publish: pr+checks · reviewRun: on · notify: true
+
+## Phase 1 — requirements brief
+
+**Requirement:** plot ownership — who owns each plot, in what exact fractional share and since when, full history, change of owner as one audited operation, corrections; plot status GREY/GREEN from ownership; member archive and plot delete refusals; member visibility of owners; cooperative setting `memberPlotStatusVisibility` (OWN_ONLY default / ALL_PLOTS) with new permission `SETTINGS_MANAGE`, `GET/PUT /settings` and a settings page; `GET /me` owned plots; owners on the plot card, plots list, member card and My account. Users: chairman (edits), treasurer (views), members (own plots).
+
+**Prior work:** Agent A — nothing off main (only docs commits, all merged). Agent B — `OWNERSHIP_EDIT` permission exists (enum, contract, V2 seed, catalog, i18n); 006 left hooks: `PlotDtoMapper.canSeeDetails` seam, `PlotCommands.delete` 007 comment, `PlotStatusPolicy` GREY-only, "Owners" placeholder on the plot card. No ownership/settings tables, endpoints or UI; `SETTINGS_MANAGE` absent; tests hardcode 8 permissions. Verdict: **new, extends 006 (plots) and 002 (members)**.
+
+**Scope:** sections 2–7 of the feature doc. Out: section 8 (Excel import, debt certificate, ledger, notifications), mobile.
+
+**Verification:** backend unit tests (fractions, sum-to-one, overlap, date arithmetic incl. 1st of month and 1 January), Testcontainers integration (change of owner, correction audit, visibility matrix both setting values × own/not own × PLOTS_VIEW, archive refusal, delete refusal, plot_status, settings default/permissions/audit, isolation for new tables), web unit tests, Playwright (chairman → two co-owners at 1/2; member sees co-owners only on own plot; settings page), `make check`, `make e2e`, screenshots via Playwright on `make up`.
+
+**Risks:** module cycles (plots ↔ members ↔ ownership; Spring Modulith forbids cycles); `status` becomes optional in `PlotSummary`/`PlotProperties` (client changes); new permission breaks tests counting 8 permissions and needs a re-seed of `seed_base_roles`; status filter could leak statuses under OWN_ONLY; demo data rewrite (owners, co-owners, history).
+
+## Phase 1 — decisions
+
+- AUTO: no blocking question (rule: questions=blocking; no prior work, tooling present, clean tree, requirement detailed with decisions in section 9).
+- AUTO: a change of owner, a correction and an ownership date may not lie in the future; "current" = `valid_to is null` (rule: plot_status is a cache updated in the ownership transaction; future-dated changes would need a scheduled job the feature doc does not ask for).
+- AUTO: change date D must be later than the start of every current ownership and later than the end of every ended one, so history never overlaps and sums stay valid (rule: section 3 sum-to-one on any date, no overlaps).
+- AUTO: a change of owner may have an empty new-owner list — it ends the current ownership and the plot becomes GREY "No owner" (rule: section 3 "or the plot has no owner"); the dialog offers at least one owner row by default.
+- AUTO: archiving a plot that has current owners is refused until ownership is ended (rule: same reasoning as section 3's member archive refusal; keeps "no owners on archived plots"). Ownership changes on archived plots, common land, or to archived members are refused.
+- AUTO: a correction edits one record (member, share, dates, basis) with a required reason; it may include corrected shares of the plot's other records for the same period so that a 1/2+1/2 → 2/3+1/3 fix is one valid operation; recorded as one audited action with old and new values (rule: section 3 "the change must still satisfy all rules"; single-record corrections could never fix co-owner shares).
+- AUTO: shares are stored reduced (2/4 → 1/2); denominator 1–1000; numerator ≥ 1 and ≤ denominator; the same member twice in one change is refused (rule: exact fractions; conservative bounds).
+- AUTO: a member's own plots = plots they currently own; on own plots a member sees status, area, cadastral number, building, owners and history (not notes, which stay with PLOTS_VIEW per 006); former owners get the ordinary restricted view (rule: section 4, CLAUDE.md visibility).
+- AUTO: under OWN_ONLY the status is omitted for every plot the member does not own, common land included; a member's status filter then only matches their own plots (rule: section 4.1 literal; the filter must not leak statuses).
+- AUTO: ownership writes require PLOTS_VIEW + OWNERSHIP_EDIT (rule: 006 write rule — editors must see what they edit); the Change owner action also needs MEMBERS_VIEW in the UI for the member picker (existing `GET /members`); the Chairman has all of them.
+- AUTO: `SETTINGS_MANAGE` granted to Chairman only by default, via a new migration re-seeding `seed_base_roles` (rule: section 4.1; V2 comment on adding permissions). Docs listing eight permissions (ADR 0009, architecture, READMEs) are updated to nine.
+- AUTO: a missing settings row means OWN_ONLY (default for new and existing cooperatives) (rule: section 4.1).
+- AUTO: coverage floor raised to the measured value rounded down (rule: general rules).
+
+## Phase 2 — branch and specs
+
+- Spec folder and branch `007-ownership` from main @ 0af7859 (= origin/main). Baseline `make check` started in a detached worktree.
+- functional-spec.md written (Creation Mode, no markers; 8 requirement groups, assumptions from Phase 1).
+- Baseline: 427 backend tests green; local coverage 0.9481 < 0.95 (CI on main green). Recorded in review-log.md.
+- technical-considerations.md written (inputs: spring-backend, postgres-database, react-frontend; exploration from Phase 1 Agent B).
+- AUTO: ownership lives in the plots module; new `settings` module; synchronous SPIs `MemberArchiveGuard` (members) and `OwnedPlotsSource` (identity) implemented in plots; new public `MemberDirectory` (rule: Spring Modulith forbids cycles; plots owns status and visibility).
+- AUTO: overlap backstop with a `btree_gist` exclusion constraint; fallback partial unique index if the extension cannot be created (rule: the only defence against concurrent writes besides the plot lock).
+- AUTO: the plots search box also matches current owners' names for PLOTS_VIEW; no separate owner parameter (rule: spec "typing an owner's last name in the search"; fewer controls).
+- AUTO: "today" is the Europe/Kyiv date via a Clock bean (rule: AuditQueries precedent; UTC server would refuse today's changes at night).
+- AUTO: a member sees the basis on their own plot's records; `GET /members/{id}/ownerships` for PLOTS_VIEW or MEMBERS_VIEW or self (rule: spec 2.5/2.6).
+- AUTO: a plot with ownership history cannot be changed to common land (rule: common land never has owners; backend review C5).
+- Spec example for plot 9 aligned with the demo plan (owner since 01.06.2025); owner search wording aligned with the design.
+- tasks.md written: 8 slices (settings; owners read; change of owner; corrections; guards; member visibility; e2e/docs/coverage; Feature Testing & Regression by testing-expert). No staffing gaps (database work stays with spring-backend for two migrations + demo data, as in 006). No `not-user-reviewed` marker (Phase 1 decisions stand in for the plan review).
+- AUTO: the migration is split by slice — V7 settings + permission, V8 ownership (rule: each slice commit runnable; no edits to a committed migration).
+- Slice 1 committed c9a91b3 (backend 98 targeted incl. SettingsTests 13, isolation 7, roles 57; verify 447 tests, coverage 0.9584; web 134, shared 42, ui-tokens 56; typecheck/lint/format green; generated client stable). Review r1 started.
+- Slice 1 review r1 MAJOR_ISSUES (M1 English audit label in uk UI) → fix 2d5914c → r2 PASS.
+- Slice 2 committed (backend targeted 137 green, verify 528 tests, coverage 0.9611; shared 64, web 144, ui-tokens 56; typecheck/lint/format green). Note: machine load average 40–65 slowed client runs. Review r1 started.
+- Slice 2 review r1 PASS.
+- Slice 3 backend: verify 583 tests green, coverage 0.9519 (thin margin over 0.95; uncovered: 23P01 safety net and rare toProblem branches).
+- Slice 3 committed (backend targeted 104 green, verify 583 / coverage 0.9519; web 160, shared 64, ui-tokens 56; typecheck/lint/format green). Web agent resumed once after a network error. Review r1 started.
+- Slice 3 review r1 PASS.
+- Slice 4 backend: verify 607 tests green, coverage 0.9524. AUTO: a correction may set an end date on a current record when the result satisfies every rule (single owner → plot GREY; one of two co-owners → refused); an archived member may stay on their own record (rule: corrections fix history).
+- Slice 4 committed (backend targeted 48 green, verify 607 / coverage 0.9524; web 171, shared 64, ui-tokens 56; typecheck/lint/format green). Review r1 started.
+- Slice 5 backend: verify 631 tests green, coverage 0.9664. AUTO: member archive takes the chairman advisory lock before the member row lock (rule: avoids a deadlock with role changes, which take the advisory lock then FK-lock the member row).
+- Slice 5 committed (backend targeted 95 green, verify 631 / coverage 0.9664; web 175, shared 64, ui-tokens 56; typecheck/lint/format green). Review r1 started. Slice 4 review fix to follow as a separate commit.
+- Slice 5 review r1 PASS. Reviewer note routed to the Slice 4 fix: a correction must not make an archived member a current owner.
+- Slice 4 review fix (round 1): M1 overlap with a different owner reported on the moved date (OWNERSHIP_OVERLAP); plus a correction can no longer make an archived member a current owner (409 MEMBER_ARCHIVED on validTo). Targeted 85 tests green.
+- Slice 4 review r2 PASS.
+- Slice 6 backend: verify 681 tests green, coverage 0.9676. Backend agent resumed once after a network error. AUTO: a member who owns nothing gets 404 (not 403) on GET /plots/{id}/ownerships, the same as for a plot they do not own (rule: do not reveal which plots exist behind the permission).
+- Slice 6 committed (backend targeted 123 green, verify 681 / coverage 0.9676; web 186, shared 64, ui-tokens 56; typecheck incl. mobile/lint/format green; mobile needed no change). Review r1 started.
+- Slice 6 review r1 PASS.
+- Slice 7 committed (make check green: backend 681, coverage 0.9676, floor raised 0.95 → 0.96; web 186, shared 64, ui-tokens 56; make e2e 65 passed per the testing agent; one stale active e2e member from an earlier failed run was archived through the API). Review r1 started.
+- Slice 7 review r1 PASS. All slice reviews PASS → Slice 8 (Feature Testing & Regression) started.
+- Slice 8 committed (OwnershipAcceptanceTests 10 journeys, ownership-acceptance.spec.ts 7 tests; make check green: 691 backend, coverage 0.9676 vs floor 0.96; make e2e 72 passed). Observation: GET /plots/{id} serialises "owners": [] (contract says absent); no leak. Review r1 started.
+- Slice 8 RED validation (testing agent): SHARES_NOT_ONE check disabled → `OwnershipAcceptanceTests.sharesMustAddUp…` 201 instead of 409; `ViewerScope.canSeeStatus` forced true → `theColourSetting…` saw every plot's status; uk `SHARES_NOT_ONE` text changed → e2e expected "Частки мають разом становити 1". All restored (empty diff) and green.
+- Slice 8 review r1 PASS. All slice reviews PASS.
+
+## Phase 4 — verify
+- Verify: UI rendered on make up; screenshots docs/screenshots/007-ownership-*.png (7). Found two wording mismatches vs the criteria (ownership dates with two-digit years; a whole share shown as "1" instead of "1/1") → verify fix by react-frontend (shared formatDay, formatShare always a fraction, e2e date helpers aligned); unit tests green; screenshots re-captured.
+- Verify fix review r1 PASS.
+- Criteria: 35/35 verified with evidence in functional-spec.md; functional spec and technical considerations set to Completed.
+- Full suite on the final code (6c6ae04 + docs): `make check` green — backend 691 tests, 0 failures, line coverage 0.9676 (floor 0.96); web 186, shared 65, ui-tokens 56 unit tests; typecheck, lint, format green. `make e2e` 72 passed. Baseline comparison: no new failures; the baseline's local coverage failure (0.9481 < 0.95) is gone.
+- Product docs: architecture.md, ADR 0009/0011, glossary and module READMEs updated in the slices; no `/awos:architecture` or `/awos:product` run needed.
+
+## Final report (Phase 4)
+
+- **Branch:** `007-ownership` from main @ 0af7859. Commits: 4b3101f specs · c9a91b3 S1 · 2d5914c S1 fix · 2e95b90 S2 · 00c30ed S3 · 36e99ac S4 · 96ced1f S5 · edd95b3 S4 fix · a53200c S6 · 7f6b386 S7 · cc47d11 S8 · 6c6ae04 verify fix · (this commit) verification.
+- **Criteria:** 35/35 verified; no `[?]` items.
+- **Reviews:** S1 2 rounds (English audit label in the uk UI fixed); S2, S3, S5, S6, S7, S8 PASS in round 1; S4 2 rounds (overlap with the previous owner reported on the date; a correction could make an archived member a current owner — found by the S5 reviewer); verify fix PASS. Minor notes in review-log.md.
+- **Full suite vs baseline:** see above.
+- **Decided automatically:** every `AUTO:` line in this log (Phase 1, Phase 2, Slices 4–6).
+- **Parked:** none.
+- **Follow-ups:** `GET /plots/{id}` serialises `"owners": []` where the contract says absent (no leak); search placeholder does not mention owner names; `PlotPage` own-plot check uses the cached `/me`; archive vs role-change deadlock avoidance has no test; e2e count assertions are fragile to leftovers from killed runs.
+
+## Phase 5 — publish
+
+- Pushed `007-ownership` (no force); PR https://github.com/Philatelist/nadel-platform/pull/26 "feat(plots): ownership — owners with shares and history, change of owner, corrections, status visibility setting".
+- Checks: green on the first run (39336701013) — Backend, Clients, End-to-end, SAST, Security. No CI fixes, no re-runs.
+- Left for the owner: review and merge; follow-ups listed in the PR.
+
+## Phase 6 — review run
+- Started `make up` detached from `007-ownership` @ eb57562; ready after 30 s; `/plots` and `/actuator/health` answer 200. Log: `backend/target/review-run.log`; PIDs `21007 21170 21210` in `backend/target/review-run.pids`. Stop: `kill 21007 21170 21210`, then `make down`.
+- Try (password `nadel`): treasurer@demo.local → owners column, search "Moroz", plot 9 history; chairman@demo.local → Change owner on a plot (1/2 + 1/3 blocked at 5/6), Correct with a reason, Cooperative settings; member@demo.local → My account "My plots" (7 with Moroz, 15), neutral marks on other plots, plot 7 full card.

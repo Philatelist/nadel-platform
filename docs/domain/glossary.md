@@ -6,7 +6,11 @@
 | Plot | `Plot` | A land plot with a number, area and polygon on the map. Kind: plot or common land |
 | Sotka | — | 100 m². Plot area is stored in m² and shown in sotkas in the UI |
 | Member | `Member` | A natural person in a cooperative's member list. May own several plots. Signs in when their Keycloak account is linked to the member record. Archived, never deleted |
-| Ownership | `Ownership` | Member–plot link with a share and a validity period (from / to) |
+| Ownership | `Ownership` | Member–plot link with a share and a validity period (`validFrom`, inclusive `validTo`, empty while current). The current owners of a plot (not common land) have shares that add up to exactly one whole, or the plot has no owner. A member may own several plots; the same member never owns a plot in two overlapping periods. Rows are never deleted: a past owner stays in the history (feature 007) |
+| Share | `Share` | An exact fraction `n/d` of a plot owned by one owner (`1/2`, `2/3`, default `1/1`; shown in lowest terms, so `2/4` becomes `1/2`; `d` is at most 1000). Never a decimal. Money-bearing features split by shares only through this type |
+| Change of owner | `OwnershipCommands.change` | One operation on a plot from a date: every current owner's period ends the day before, the new owners start on that date, with an optional basis (sale contract, inheritance, court decision). An empty list leaves the plot without an owner. The date is not in the future and later than every current start and past end. One audit entry `OWNERSHIP_CHANGED` per change |
+| Correction | `OwnershipCommands.correct` | Fixes a mistake in one ownership record (member, share, dates, basis) and, in the same step, the shares of its co-owners, with a required reason. The old values stay in the audit log (`OWNERSHIP_CORRECTED`); records are corrected, never erased |
+| Plot status visibility | `memberPlotStatusVisibility` | Cooperative setting (`settings` module, `SETTINGS_MANAGE`): `OWN_ONLY` (default) shows a member the status colour only of plots they own, `ALL_PLOTS` shows every plot's colour to every member. Amounts, owners and personal data of other plots are never shown to a member; people with `PLOTS_VIEW` always see every colour |
 | Charge type | `ChargeType` | Kind of payment: membership fee, special-purpose fee, electricity, land tax |
 | Tariff | `Tariff` | Calculation rule for a charge type |
 | Tariff version | `TariffVersion` | Rate and calculation basis effective from a given date |

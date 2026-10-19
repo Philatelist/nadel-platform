@@ -11,7 +11,7 @@ import { Button } from './ui';
 
 interface NavItem {
   to: string;
-  label: 'plots' | 'members' | 'roles' | 'audit';
+  label: 'plots' | 'members' | 'roles' | 'audit' | 'settings';
   /** Omitted: shown to every signed-in member (the server decides what they may see). */
   permission?: Permission;
 }
@@ -21,6 +21,7 @@ const NAV_ITEMS: readonly NavItem[] = [
   { to: '/members', label: 'members', permission: 'MEMBERS_VIEW' },
   { to: '/roles', label: 'roles', permission: 'ROLES_MANAGE' },
   { to: '/audit', label: 'audit', permission: 'AUDIT_VIEW' },
+  { to: '/settings', label: 'settings', permission: 'SETTINGS_MANAGE' },
 ];
 
 const itemClass = ({ isActive }: { isActive: boolean }) =>

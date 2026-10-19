@@ -5,7 +5,20 @@ The people of a cooperative, their roles and the permissions of those roles (ADR
 
 ## Public API
 
-None yet. Features 004 (ownership) and 005 (import) will add a lookup API in the module root.
+`MemberDirectory` and `MemberRef` in the module root: a read-only lookup for other modules, which must never read the
+member tables. `find(ids)` returns the names and the archived flag of the given members (archived included);
+`idsMatchingName(text)` returns the ids of members whose last, first or middle name contains the text (case-insensitive,
+archived included, literal match, at most 200 ids); `lockActive(ids)` pins members for the caller's transaction with a
+shared row lock (`FOR SHARE`, in id order, transaction mandatory) and returns those that exist, archived ones included so
+the caller can refuse them (used by the change of owner, so a member cannot be archived while the change commits).
+`MemberRef.shortName()` is "Last First" without the patronymic. The
+implementation is `JpaMemberDirectory` (internal); `plots` uses it for owners (feature 007). Feature 005 (import) will
+add more lookups here.
+
+`MemberArchiveGuard` is a synchronous veto SPI (feature 007): `ensureCanArchive(memberId)` is called by
+`MemberCommands.archive` on every guard bean of the application, inside the archive transaction, and throws a 409
+`ApiProblemException` to refuse. `plots` implements it (`OwnershipArchiveGuard`, 409 `MEMBER_OWNS_PLOT` while the member
+has a current ownership). A guard must only read and must take no lock that is ordered before a member lock.
 
 ## What is here
 
@@ -38,6 +51,14 @@ None yet. Features 004 (ownership) and 005 (import) will add a lookup API in the
     fields become null, `DeliveryChannel.check` (`CHANNEL_CONTACT_MISSING` on `email` / `telegramUsername` / `viberPhone`).
   - E-mail is unique among active members: a pre-check plus a mapping of the unique index `member_tenant_email_uq` give
     409 `EMAIL_TAKEN` with `errors[{field: "email"}]`. Archived members free their e-mail; restore re-checks.
+  - Archive order of work (`MemberCommands.archive`): take the chairman lock (below), lock the member row `FOR UPDATE`
+    (`MemberRepository.findByIdForUpdate`; 404 when missing or of another cooperative), and for a member who is not
+    archived yet run `LastChairmanGuard.ensureNotLast` and then every `MemberArchiveGuard`. The row lock serialises the
+    archive with a change of owner that adds the member (it holds `FOR SHARE` through `MemberDirectory.lockActive`): the
+    archive sees the committed owner and answers `MEMBER_OWNS_PLOT`, or the change finds the member archived and answers
+    `MEMBER_ARCHIVED`; an archived current owner cannot result. The chairman lock comes before the row lock because
+    `setMemberRoles` holds the chairman lock and then needs a share lock on the member row for a new role link; the
+    opposite order would deadlock.
   - `LastChairmanGuard.ensureNotLast(tenant, member)` takes `pg_advisory_xact_lock(hashtextextended(tenant, 0))` in the
     transaction and refuses (409 `LAST_CHAIRMAN`) to take the only active chairman away. Archive and `setMemberRoles` use
     it.
@@ -46,15 +67,15 @@ None yet. Features 004 (ownership) and 005 (import) will add a lookup API in the
     built from `MemberSnapshot.diff(before, after)`; see the `audit` README.
 
 - Roles, all `@PreAuthorize("hasAuthority('PERM_ROLES_MANAGE')")` on the controllers, one transaction each:
-  `GET /permissions` (`PermissionCatalog`: the eight permissions in enum order with English text), `GET /roles`
-  (base roles first, then custom by name; `memberCount` counts active members only; Chairman always lists all eight),
+  `GET /permissions` (`PermissionCatalog`: the nine permissions in enum order with English text), `GET /roles`
+  (base roles first, then custom by name; `memberCount` counts active members only; Chairman always lists all nine),
   `POST /roles`, `PUT /roles/{id}` (full replacement), `DELETE /roles/{id}`, and `PUT /members/{id}/roles` (replaces the
   member's whole role set). Permission changes apply on the next request: `AccessProfile` is resolved from the database on
   every request, nothing is cached.
   - Name: trimmed; empty is 400 `REQUIRED`, over 60 is 400 `TOO_LONG` (field `name`). Unique per cooperative ignoring case
     (`lower(name)` on both sides in the database, so Cyrillic works): a pre-check plus a mapping of the unique index
     `role_tenant_name_uq` give 409 `ROLE_NAME_TAKEN`.
-  - Base roles: delete is 409 `BASE_ROLE_IMMUTABLE`; Chairman's permission set must stay all eight (a PUT with the full
+  - Base roles: delete is 409 `BASE_ROLE_IMMUTABLE`; Chairman's permission set must stay all nine (a PUT with the full
     set is accepted and changes nothing, and its name can be changed); Treasurer and Member permissions and every
     description are editable. A PUT omits `description` = clears it.
   - Renaming (feature 004): every role, base roles included, can be renamed; names stay unique per cooperative ignoring

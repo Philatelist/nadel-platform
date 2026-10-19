@@ -13,12 +13,16 @@ import type { Money } from './money';
 import type { PlotKind } from './plotKind';
 import type { PlotStatus } from './plotStatus';
 
+/**
+ * `areaM2` and `debt` are present for callers with `PLOTS_VIEW` and for the current owners of the plot. `status`
+ * is absent when the caller may not see it, under the same rule as `PlotSummary.status`.
+ */
 export interface PlotProperties {
   number: string;
   street?: string;
   kind: PlotKind;
-  /** Absent for callers without `PLOTS_VIEW`, like `debt` */
+  /** Absent for callers who may not see the details of the plot, like `debt` */
   areaM2?: number;
-  status: PlotStatus;
+  status?: PlotStatus;
   debt?: Money;
 }

@@ -119,6 +119,8 @@ class ProblemExceptionHandler extends ResponseEntityExceptionHandler {
         String code = switch (constraint) {
             case "NotNull", "NotBlank", "NotEmpty" -> "REQUIRED";
             case "Size", "Max", "Length" -> isEmptyText(error.getRejectedValue()) ? "REQUIRED" : "TOO_LONG";
+            // a share that does not look like n/d is the same mistake as one outside the bounds: SHARE_INVALID
+            case "Pattern" -> error.getField().endsWith("share") ? ProblemCodes.SHARE_INVALID : "INVALID";
             default -> "INVALID";
         };
         return new FieldProblem(error.getField(), code);

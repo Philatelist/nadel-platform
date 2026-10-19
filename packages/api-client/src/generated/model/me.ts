@@ -9,6 +9,7 @@
  *
  * OpenAPI spec version: 0.1.0
  */
+import type { OwnedPlot } from './ownedPlot';
 import type { Permission } from './permission';
 import type { RoleRef } from './roleRef';
 import type { TenantSummary } from './tenantSummary';
@@ -26,4 +27,9 @@ export interface Me {
   /** Union of the permissions of all the member's roles */
   permissions: Permission[];
   tenant?: TenantSummary;
+  /**
+     * The plots the member owns now, in natural order of the plot number; empty for a member who owns nothing
+     * and for the platform operator.
+     */
+  ownedPlots: OwnedPlot[];
 }

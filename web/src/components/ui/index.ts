@@ -9,6 +9,7 @@ export { Money, type MoneyTone } from './Money';
 export { Notice, type NoticeTone } from './Notice';
 export { PageHeader } from './PageHeader';
 export { Panel } from './Panel';
+export { RadioGroup, type RadioOption } from './RadioGroup';
 export { SearchField } from './SearchField';
 export { Select } from './Select';
 export { StatusDot } from './StatusDot';

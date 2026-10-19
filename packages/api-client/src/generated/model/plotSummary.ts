@@ -10,21 +10,30 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { PlotKind } from './plotKind';
+import type { PlotOwnerSummary } from './plotOwnerSummary';
 import type { PlotStatus } from './plotStatus';
 
 /**
  * A plot or common land in the list. `areaM2`, `cadastralNumber` and `hasBuilding` are present only for callers
- * who may see the details of the plot (`PLOTS_VIEW`); `street` is absent when the plot has none.
+ * who may see the details of the plot (`PLOTS_VIEW`, or the caller currently owns the plot); `street` is absent
+ * when the plot has none. `status` is absent when the caller may not see it: a member who does not own the plot
+ * while the cooperative setting `memberPlotStatusVisibility` is `OWN_ONLY` (people with `PLOTS_VIEW` and the
+ * plot's current owners always see it).
  */
 export interface PlotSummary {
   id: string;
   number: string;
   street?: string;
   kind: PlotKind;
-  status: PlotStatus;
+  status?: PlotStatus;
   archived: boolean;
   /** Area in square metres, at most two decimal places */
   areaM2?: number;
   cadastralNumber?: string;
   hasBuilding?: boolean;
+  /**
+     * The current owners (name and share), ordered by name. Present only for callers with `PLOTS_VIEW`, and
+     * absent for common land and for a plot without owners.
+     */
+  owners?: PlotOwnerSummary[];
 }

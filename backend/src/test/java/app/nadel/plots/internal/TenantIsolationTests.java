@@ -60,25 +60,33 @@ class TenantIsolationTests extends IntegrationTest {
     }
 
     @Test
-    void everyDemoPlotIsGreyWithoutDebtAndCommonLandIsMarkedAsSuch() {
+    void ownedDemoPlotsAreGreenTheRestAreGreyAndNoneHasDebt() {
         PlotFeatureCollection demo = as(DEMO, () -> queries.map(viewer(DEMO)));
 
-        assertThat(demo.getFeatures()).allSatisfy(f -> {
-            assertThat(f.getProperties().getStatus()).isEqualTo(PlotStatus.GREY);
-            assertThat(f.getProperties().getDebt()).isEqualTo("0.00");
-        });
+        assertThat(demo.getFeatures()).allSatisfy(f -> assertThat(f.getProperties().getDebt()).isEqualTo("0.00"));
+        assertThat(demo.getFeatures()).filteredOn(f -> f.getProperties().getStatus() == PlotStatus.GREEN)
+                .hasSize(25);
+        assertThat(demo.getFeatures()).filteredOn(f -> f.getProperties().getStatus() == PlotStatus.GREY)
+                .extracting(f -> f.getProperties().getNumber())
+                .containsExactlyInAnyOrder("25", "26", "27", "28", "29", "R-1");
+        assertThat(feature(demo, "7").getProperties().getStatus()).isEqualTo(PlotStatus.GREEN);
         assertThat(feature(demo, "R-1").getProperties().getKind()).isEqualTo(nadel.contract.model.PlotKind.COMMON);
         assertThat(feature(demo, "12\u0430").getProperties().getKind())
                 .isEqualTo(nadel.contract.model.PlotKind.PLOT);
     }
 
     @Test
-    void everyPlotHasAGreyStatusRow() {
+    void everyPlotHasAStatusRowWithoutDebtAndOnlyOwnedPlotsAreGreen() {
         List<String> statuses = as(DEMO, () -> tx.execute(status -> jdbc.queryForList(
                 "select distinct s.status || ':' || s.debt from plot p left join plot_status s on s.plot_id = p.id",
                 String.class)));
+        List<String> greenWithoutOwner = as(DEMO, () -> tx.execute(status -> jdbc.queryForList(
+                "select p.number from plot p join plot_status s on s.plot_id = p.id where s.status = 'GREEN' "
+                        + "and not exists (select 1 from ownership o where o.plot_id = p.id and o.valid_to is null)",
+                String.class)));
 
-        assertThat(statuses).containsExactly("GREY:0.00");
+        assertThat(statuses).containsExactlyInAnyOrder("GREEN:0.00", "GREY:0.00");
+        assertThat(greenWithoutOwner).isEmpty();
     }
 
     @Test
@@ -149,9 +157,10 @@ class TenantIsolationTests extends IntegrationTest {
 
         assertThat(updated).isZero();
         assertThat(deleted).isZero();
-        assertThat(ownerJdbc().queryForObject(
-                "select count(*) from plot_status where tenant_id = ? and status = 'GREY'", Integer.class, OTHER))
-                .isEqualTo(2);
+        // the other cooperative's plot 1 is owned (GREEN), plot 2 is not (GREY); nothing turned RED
+        assertThat(ownerJdbc().queryForList(
+                "select status from plot_status where tenant_id = ? order by status", String.class, OTHER))
+                .containsExactly("GREEN", "GREY");
     }
 
     @Test

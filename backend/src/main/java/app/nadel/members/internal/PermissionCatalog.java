@@ -27,6 +27,8 @@ final class PermissionCatalog {
             case PLOTS_EDIT -> new String[] {"Edit plots", "Add, edit and archive plots"};
             case OWNERSHIP_EDIT -> new String[] {"Edit ownership", "Add, change and correct plot ownership"};
             case IMPORT_RUN -> new String[] {"Run import", "Run the Excel import"};
+            case SETTINGS_MANAGE -> new String[] {"Manage cooperative settings",
+                    "Change the settings of the cooperative, such as who sees the colour of plots"};
         };
         return new PermissionInfo(nadel.contract.model.Permission.fromValue(permission.name()), text[0], text[1]);
     }

@@ -70,7 +70,7 @@ class PlotsRegistryAcceptanceTests extends IntegrationTest {
 
     /**
      * §2.1 #1, §2.2 #2, §2.2 #4, §2.3 #1-#4, §2.3 #6, §2.5 #2: the chairman creates a plot, the treasurer reads every
-     * field, an ordinary member reads number, street, kind and status only (list, card, map), archive hides it,
+     * field, an ordinary member who owns nothing reads number, street and kind only (list, card, map), archive hides it,
      * restore brings it back, delete removes it for good, and each action has its own audit entry.
      */
     @Test
@@ -109,16 +109,15 @@ class PlotsRegistryAcceptanceTests extends IntegrationTest {
                 .andExpect(jsonPath("$.notes").value(RESTRICTED_NOTE))
                 .andExpect(jsonPath("$.status").value("GREY"));
 
-        // the member sees the plot with number, street, kind and status, and no other field, in list and card
+        // the member sees the plot with number, street and kind, and no other field, in list and card
         JsonNode listedByMember = list(member, "q=" + number).get("items").get(0);
-        assertThat(fieldNames(listedByMember)).containsExactlyInAnyOrder("id", "number", "street", "kind", "status",
-                "archived");
+        assertThat(fieldNames(listedByMember)).containsExactlyInAnyOrder("id", "number", "street", "kind", "archived");
         assertThat(listedByMember.get("street").asString()).isEqualTo("Вишнева");
         assertThat(list(member, "q=" + cadastral).get("totalItems").asInt()).isZero();
         String memberCard = send(member, get(PLOTS + "/" + id), null).andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
         assertThat(fieldNames(json.readTree(memberCard))).doesNotContain("areaM2", "cadastralNumber", "hasBuilding",
-                "notes", "createdAt", "updatedAt");
+                "notes", "createdAt", "updatedAt", "status");
         assertThat(memberCard).doesNotContain(RESTRICTED_NOTE).doesNotContain(cadastral);
 
         // the hidden map follows the same visibility (a new plot has no polygon, so a drawn demo plot is used)
@@ -227,27 +226,17 @@ class PlotsRegistryAcceptanceTests extends IntegrationTest {
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.status").value("GREY")));
         assertThat(common).isNotNull();
 
-        // plot 12 archived frees its number; the new plot 12 is saved; then restoring the old one is refused
-        UUID twelve = inTenant(DEMO_TENANT, sql -> sql.queryForObject(
-                "select id from plot where number = '12'", UUID.class));
-        try {
-            send(chairman, post(PLOTS + "/" + twelve + "/archive"), null).andExpect(status().isOk());
-            UUID replacement = remember(send(chairman, post(PLOTS), input("12", "PLOT", "600"))
-                    .andExpect(status().isCreated()));
-            assertThat(replacement).isNotEqualTo(twelve);
-            send(chairman, post(PLOTS + "/" + twelve + "/restore"), null).andExpect(status().isConflict())
-                    .andExpect(jsonPath("$.code").value("PLOT_NUMBER_TAKEN"));
-        } finally {
-            // the replacement is deleted by the cleanup; put the demo plot back
-            for (UUID id : new ArrayList<>(created)) {
-                inTenant(DEMO_TENANT, sql -> {
-                    sql.update("delete from plot_status where plot_id = ?", id);
-                    return sql.update("delete from plot where id = ?", id);
-                });
-            }
-            created.clear();
-            inTenant(DEMO_TENANT, sql -> sql.update("update plot set archived_at = null where id = ?", twelve));
-        }
+        // an archived plot frees its number; a new plot takes it; then restoring the old one is refused
+        // (a plot created here, because a demo plot has an owner and could not be archived)
+        String reused = "R-" + tag();
+        UUID original = remember(send(chairman, post(PLOTS), input(reused, "PLOT", "600"))
+                .andExpect(status().isCreated()));
+        send(chairman, post(PLOTS + "/" + original + "/archive"), null).andExpect(status().isOk());
+        UUID replacement = remember(send(chairman, post(PLOTS), input(reused, "PLOT", "600"))
+                .andExpect(status().isCreated()));
+        assertThat(replacement).isNotEqualTo(original);
+        send(chairman, post(PLOTS + "/" + original + "/restore"), null).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("PLOT_NUMBER_TAKEN"));
     }
 
     /** §2.1 #6: 600 m2 is stored as 6 sotkas and 6.5 sotkas as 650 m2 (the server keeps m2 and never rounds). */
@@ -267,12 +256,12 @@ class PlotsRegistryAcceptanceTests extends IntegrationTest {
     }
 
     /**
-     * §2.2 #3, #5, §2.6 #1: the demo cooperative has about 30 plots on two streets and one common-land road, all grey,
-     * some with cadastral numbers and buildings; the list pages of 20 continue in the same natural order; the kind
+     * §2.2 #3, #5, §2.6 #1: the demo cooperative has about 30 plots on two streets and one common-land road, the owned
+     * ones green (feature 007) and the rest grey, some with cadastral numbers and buildings; the list pages of 20 continue in the same natural order; the kind
      * filter lists only the road.
      */
     @Test
-    void theDemoCooperativeHasThirtyPlotsOnTwoStreetsAndARoadAllGreyListedInPages() throws Exception {
+    void theDemoCooperativeHasThirtyPlotsOnTwoStreetsAndARoadListedInPages() throws Exception {
         String treasurer = tokenWithBaseRole("TREASURER");
 
         List<JsonNode> all = new ArrayList<>();
@@ -286,7 +275,8 @@ class PlotsRegistryAcceptanceTests extends IntegrationTest {
         assertThat(streets).hasSize(2);
         assertThat(common).hasSize(1);
         assertThat(common.get(0).get("number").asString()).isEqualTo("R-1");
-        assertThat(all).allSatisfy(p -> assertThat(p.get("status").asString()).isEqualTo("GREY"));
+        assertThat(all).allSatisfy(p -> assertThat(p.get("status").asString()).isIn("GREEN", "GREY"));
+        assertThat(common.get(0).get("status").asString()).isEqualTo("GREY");
         assertThat(all.stream().filter(p -> p.has("cadastralNumber")).count()).isBetween(5L, 15L);
         assertThat(all.stream().filter(p -> p.get("hasBuilding").asBoolean()).count()).isPositive();
 
@@ -311,16 +301,17 @@ class PlotsRegistryAcceptanceTests extends IntegrationTest {
         assertThat(list(treasurer, "q=no-such-plot-" + tag()).get("items")).isEmpty();
     }
 
-    /** §2.2 #4 on the demo plots: the demo member sees every plot number and street but nothing of area or cadastral. */
+    /** §2.2 #4 on the demo plots: an ordinary member sees every plot number and street but nothing of area or cadastral. */
     @Test
-    void anOrdinaryMemberSeesEveryDemoPlotAsNumberStreetKindAndStatusOnly() throws Exception {
+    void anOrdinaryMemberWhoOwnsNothingSeesEveryDemoPlotAsNumberStreetAndKindOnly() throws Exception {
         String member = tokenWithBaseRole("MEMBER");
 
         JsonNode page = list(member, "size=100");
         assertThat(page.get("totalItems").asInt()).isEqualTo(31);
         for (JsonNode plot : page.get("items")) {
             assertThat(fieldNames(plot)).doesNotContain("areaM2", "cadastralNumber", "hasBuilding", "notes");
-            assertThat(plot.get("status").asString()).isEqualTo("GREY");
+            // the default cooperative setting is "own plots only", and this member owns nothing: no colour at all
+            assertThat(fieldNames(plot)).doesNotContain("status", "owners");
         }
     }
 
