@@ -1,11 +1,11 @@
 # Pipeline log — 007 Ownership
 
 - Status: running
-- Phase: 1 — analysis
+- Phase: 6 — review run
 - Branch: 007-ownership · Base: main (= origin/main) @ 0af7859
 - Requirement: docs/features/007-ownership.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
-- Publish: pr+checks · PR: — · Checks: —
+- Publish: pr+checks · PR: https://github.com/Philatelist/nadel-platform/pull/26 · Checks: green (run 39336701013)
 - Review run: on (pending)
 
 ## Project facts
@@ -98,3 +98,11 @@ Same as 004–006 (see `context/spec/005-ui-preferences/pipeline-log.md`). Re-ch
 - **Decided automatically:** every `AUTO:` line in this log (Phase 1, Phase 2, Slices 4–6).
 - **Parked:** none.
 - **Follow-ups:** `GET /plots/{id}` serialises `"owners": []` where the contract says absent (no leak); search placeholder does not mention owner names; `PlotPage` own-plot check uses the cached `/me`; archive vs role-change deadlock avoidance has no test; e2e count assertions are fragile to leftovers from killed runs.
+
+## Phase 5 — publish
+
+- Pushed `007-ownership` (no force); PR https://github.com/Philatelist/nadel-platform/pull/26 "feat(plots): ownership — owners with shares and history, change of owner, corrections, status visibility setting".
+- Checks: green on the first run (39336701013) — Backend, Clients, End-to-end, SAST, Security. No CI fixes, no re-runs.
+- Left for the owner: review and merge; follow-ups listed in the PR.
+
+## Phase 6 — review run
