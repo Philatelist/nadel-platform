@@ -51,6 +51,29 @@ class Ownership {
     protected Ownership() {
     }
 
+    /** A new current owner: no end date yet. */
+    static Ownership start(UUID tenantId, UUID plotId, UUID memberId, Share share, LocalDate validFrom, String basis,
+            Instant now) {
+        var ownership = new Ownership();
+        ownership.id = UUID.randomUUID();
+        ownership.tenantId = tenantId;
+        ownership.plotId = plotId;
+        ownership.memberId = memberId;
+        ownership.shareNumerator = (short) share.numerator();
+        ownership.shareDenominator = (short) share.denominator();
+        ownership.validFrom = validFrom;
+        ownership.basis = basis;
+        ownership.createdAt = now;
+        ownership.updatedAt = now;
+        return ownership;
+    }
+
+    /** Ends the period on {@code lastDay} (inclusive). */
+    void endOn(LocalDate lastDay, Instant now) {
+        validTo = lastDay;
+        updatedAt = now;
+    }
+
     UUID getId() {
         return id;
     }

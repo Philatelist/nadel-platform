@@ -61,6 +61,38 @@ const ownerships: PlotOwnerships = {
   ],
 };
 
+describe('OwnersPanel change owner button', () => {
+  const full: Permission[] = ['PLOTS_VIEW', 'OWNERSHIP_EDIT', 'MEMBERS_VIEW'];
+  const button = () => screen.queryByRole('button', { name: 'Change owner' });
+  beforeEach(() => {
+    state = { data: ownerships, isPending: false, isError: false };
+  });
+
+  it('is shown with PLOTS_VIEW, OWNERSHIP_EDIT and MEMBERS_VIEW', () => {
+    permissions = full;
+    renderWithApp(<OwnersPanel plotId="p9" />);
+    expect(button()).toBeInTheDocument();
+  });
+
+  it.each([
+    ['PLOTS_VIEW', full.filter((p) => p !== 'PLOTS_VIEW')],
+    ['OWNERSHIP_EDIT', full.filter((p) => p !== 'OWNERSHIP_EDIT')],
+    ['MEMBERS_VIEW', full.filter((p) => p !== 'MEMBERS_VIEW')],
+  ])('is hidden without %s', (_name, given) => {
+    permissions = given;
+    renderWithApp(<OwnersPanel plotId="p9" />);
+    expect(button()).not.toBeInTheDocument();
+  });
+
+  it('is hidden for common land and archived plots', () => {
+    permissions = full;
+    const { rerender } = renderWithApp(<OwnersPanel plotId="p9" kind="COMMON" />);
+    expect(button()).not.toBeInTheDocument();
+    rerender(<OwnersPanel plotId="p9" archived />);
+    expect(button()).not.toBeInTheDocument();
+  });
+});
+
 describe('OwnersPanel', () => {
   beforeEach(() => {
     permissions = ['PLOTS_VIEW'];

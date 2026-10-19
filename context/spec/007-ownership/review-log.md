@@ -12,3 +12,9 @@
 |---|---|---|---|---|
 | 1 | `4b3101f..c9a91b3` | MAJOR_ISSUES | M1 the audit record of a settings change shows the stored English label "Cooperative settings" in the Ukrainian UI | minor: audit entity-type filter lacks SETTINGS; concurrent identical saves can write two audit entries (no row lock); SettingsPage comment mentions a `key` that is not set |
 | 2 | + `2d5914c` | PASS | M1 resolved (SETTINGS entries show the catalog title) | minor notes from round 1 unchanged |
+
+## Slice 2 — Owners recorded and shown (read only)
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `2d5914c..2e95b90` | PASS | — | minor: search placeholder does not mention owner names; the 200-match cap on owner-name search is silent; import order in PlotQueries; unchecked member lookup in OwnershipQueries (safe by the composite FK) |

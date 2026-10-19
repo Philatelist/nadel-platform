@@ -1,5 +1,6 @@
 package app.nadel.members.internal;
 
+import jakarta.persistence.LockModeType;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -7,6 +8,7 @@ import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -106,4 +108,9 @@ interface MemberRepository extends JpaRepository<Member, UUID> {
             order by lower(m.lastName), lower(m.firstName), m.id
             """)
     List<UUID> findIdsByName(@Param("pattern") String pattern, Pageable limit);
+
+    /** The given members (archived included) with a shared row lock ({@code FOR SHARE}), in id order. */
+    @Lock(LockModeType.PESSIMISTIC_READ)
+    @Query("select m from Member m where m.id in :ids order by m.id")
+    List<Member> lockAllById(@Param("ids") Collection<UUID> ids);
 }

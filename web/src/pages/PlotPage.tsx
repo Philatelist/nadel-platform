@@ -157,7 +157,7 @@ function PlotView({ plot }: { plot: PlotDetails }) {
             <p className="text-ink-muted">{t.ownership.commonLand}</p>
           </Panel>
         ) : (
-          <OwnersPanel plotId={plot.id} />
+          <OwnersPanel plotId={plot.id} kind={plot.kind} archived={plot.archived} />
         ))}
       {confirmingDelete && (
         <ConfirmDialog

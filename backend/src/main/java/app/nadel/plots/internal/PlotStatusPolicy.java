@@ -19,4 +19,16 @@ final class PlotStatusPolicy {
         }
         return cached;
     }
+
+    /**
+     * The cached status after the owners of a plot changed. Until debts exist (the ledger rebuilds the cache later): a
+     * plot that has current owners and is GREY becomes GREEN; a plot without current owners becomes GREY; any other
+     * status of a plot with owners (RED, YELLOW, GREEN) is kept.
+     */
+    static PlotStatusCode afterOwnershipChange(boolean hasCurrentOwners, PlotStatusCode cached) {
+        if (!hasCurrentOwners) {
+            return PlotStatusCode.GREY;
+        }
+        return cached == PlotStatusCode.GREY ? PlotStatusCode.GREEN : cached;
+    }
 }

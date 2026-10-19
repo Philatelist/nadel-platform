@@ -7,6 +7,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
 
@@ -35,6 +36,10 @@ class PlotStatusEntry {
     @Column(name = "oldest_debt_date")
     private LocalDate oldestDebtDate;
 
+    // set by the database on insert; written when the cached status changes
+    @Column(name = "updated_at", insertable = false)
+    private Instant updatedAt;
+
     protected PlotStatusEntry() {
     }
 
@@ -46,6 +51,12 @@ class PlotStatusEntry {
         entry.status = PlotStatusCode.GREY;
         entry.debt = BigDecimal.ZERO.setScale(2);
         return entry;
+    }
+
+    /** Overwrites the cached status (the cache can be rebuilt at any time); the debt is not touched. */
+    void changeStatus(PlotStatusCode newStatus, Instant now) {
+        status = newStatus;
+        updatedAt = now;
     }
 
     UUID getPlotId() {

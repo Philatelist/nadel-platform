@@ -20,6 +20,10 @@ interface OwnershipRepository extends JpaRepository<Ownership, UUID> {
             + "order by o.validFrom desc, o.validTo desc, o.id")
     List<Ownership> findHistoryByPlotId(@Param("plotId") UUID plotId);
 
+    /** Every ownership row of a plot, current and past, oldest first. */
+    @Query("select o from Ownership o where o.plotId = :plotId order by o.validFrom, o.id")
+    List<Ownership> findAllByPlotId(@Param("plotId") UUID plotId);
+
     /** The current owners of several plots in one query, for a page of the plots list. */
     @Query("select o from Ownership o where o.plotId in :plotIds and o.validTo is null")
     List<Ownership> findCurrentByPlotIds(@Param("plotIds") Collection<UUID> plotIds);

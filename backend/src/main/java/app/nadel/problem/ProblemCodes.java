@@ -18,6 +18,12 @@ public final class ProblemCodes {
     public static final String PLOT_NUMBER_TAKEN = "PLOT_NUMBER_TAKEN";
     public static final String CADASTRAL_NUMBER_TAKEN = "CADASTRAL_NUMBER_TAKEN";
     public static final String PLOT_ARCHIVED = "PLOT_ARCHIVED";
+    public static final String PLOT_COMMON_LAND = "PLOT_COMMON_LAND";
+    public static final String SHARES_NOT_ONE = "SHARES_NOT_ONE";
+    public static final String DUPLICATE_OWNER = "DUPLICATE_OWNER";
+    public static final String OWNERSHIP_DATE_INVALID = "OWNERSHIP_DATE_INVALID";
+    public static final String OWNERSHIP_OVERLAP = "OWNERSHIP_OVERLAP";
+    public static final String MEMBER_ARCHIVED = "MEMBER_ARCHIVED";
 
     /** Codes of single fields in {@code errors[]}. */
     public static final String REQUIRED = "REQUIRED";
@@ -27,6 +33,8 @@ public final class ProblemCodes {
     public static final String CHANNEL_CONTACT_MISSING = "CHANNEL_CONTACT_MISSING";
     public static final String CADASTRAL_INVALID = "CADASTRAL_INVALID";
     public static final String AREA_INVALID = "AREA_INVALID";
+    public static final String SHARE_INVALID = "SHARE_INVALID";
+    public static final String MEMBER_NOT_FOUND = "MEMBER_NOT_FOUND";
 
     private ProblemCodes() {
     }

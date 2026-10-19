@@ -62,3 +62,6 @@ Same as 004–006 (see `context/spec/005-ui-preferences/pipeline-log.md`). Re-ch
 - Slice 1 committed c9a91b3 (backend 98 targeted incl. SettingsTests 13, isolation 7, roles 57; verify 447 tests, coverage 0.9584; web 134, shared 42, ui-tokens 56; typecheck/lint/format green; generated client stable). Review r1 started.
 - Slice 1 review r1 MAJOR_ISSUES (M1 English audit label in uk UI) → fix 2d5914c → r2 PASS.
 - Slice 2 committed (backend targeted 137 green, verify 528 tests, coverage 0.9611; shared 64, web 144, ui-tokens 56; typecheck/lint/format green). Note: machine load average 40–65 slowed client runs. Review r1 started.
+- Slice 2 review r1 PASS.
+- Slice 3 backend: verify 583 tests green, coverage 0.9519 (thin margin over 0.95; uncovered: 23P01 safety net and rare toProblem branches).
+- Slice 3 committed (backend targeted 104 green, verify 583 / coverage 0.9519; web 160, shared 64, ui-tokens 56; typecheck/lint/format green). Web agent resumed once after a network error. Review r1 started.

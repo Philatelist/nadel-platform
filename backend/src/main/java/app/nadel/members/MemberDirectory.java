@@ -23,4 +23,13 @@ public interface MemberDirectory {
      * nobody. At most {@value #MAX_NAME_MATCHES} ids are returned, so a very short text cannot flood a query.
      */
     List<UUID> idsMatchingName(String text);
+
+    /**
+     * Pins the given members for the rest of the caller's transaction: takes a shared row lock ({@code FOR SHARE}), so
+     * a concurrent archiving of one of them waits until the caller commits (and the other way round). Returns the
+     * members that exist in the cooperative, archived ones included (they are flagged in {@link MemberRef#archived()},
+     * so the caller can refuse them); unknown ids and ids of other cooperatives are absent from the map. Must run in
+     * a transaction. Locks are taken in id order, so two callers cannot deadlock on each other.
+     */
+    Map<UUID, MemberRef> lockActive(Collection<UUID> ids);
 }

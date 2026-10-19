@@ -879,6 +879,59 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /plots/{id}/ownership-changes:
+    post:
+      tags: [ownerships]
+      operationId: createOwnershipChange
+      summary: Change the owners of a plot
+      description: |
+        Records a change of owner as one step: every current owner's period ends on the day before `effectiveFrom`
+        and the listed owners start on `effectiveFrom`. An empty `owners` list ends ownership (the plot has no owner
+        from that date). The shares of the new owners must add up to exactly one whole (`SHARES_NOT_ONE`). Shares are
+        written as fractions and saved in lowest terms ("2/4" becomes "1/2"); a missing share is "1/1".
+
+        `effectiveFrom` cannot be in the future (today is the Europe/Kyiv date) and must be later than the start date
+        of every current owner and the end date of every past owner (`OWNERSHIP_DATE_INVALID`). A member may be listed
+        once (`DUPLICATE_OWNER`, on the second row) and must be active (`MEMBER_ARCHIVED`). Common land has no owners
+        (`PLOT_COMMON_LAND`) and an archived plot cannot change owners (`PLOT_ARCHIVED`). The plot status becomes
+        GREEN when a plot gets its first owner and GREY when it loses its last one. The change is audited as one entry
+        (`OWNERSHIP_CHANGED`) on the plot.
+
+        Requires `PLOTS_VIEW` and `OWNERSHIP_EDIT`; the platform operator and everyone without them get 403. A plot that
+        does not exist or belongs to another cooperative is 404. Invalid shares (`errors[{field: owners[i].share, code:
+        SHARE_INVALID}]`) and members that do not exist in the cooperative (`errors[{field: owners[i].memberId, code:
+        MEMBER_NOT_FOUND}]`) are 400 `VALIDATION_FAILED`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OwnershipChange'
+      responses:
+        '201':
+          description: Created; the owners and the history of the plot after the change
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlotOwnerships'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
   /settings:
     get:
       tags: [settings]
@@ -982,7 +1035,13 @@ components:
         role, have its permissions changed (code `BASE_ROLE_IMMUTABLE`), another active plot already has the number
         (code `PLOT_NUMBER_TAKEN`, with `errors[{field: number}]`), or another plot of the cooperative, archived ones
         included, already has the cadastral number (code `CADASTRAL_NUMBER_TAKEN`, with
-        `errors[{field: cadastralNumber}]`), or an archived plot is deleted (code `PLOT_ARCHIVED`)
+        `errors[{field: cadastralNumber}]`), or an archived plot is deleted or given new owners (code `PLOT_ARCHIVED`), or a change of owner is refused:
+        the shares do not add up to one whole (code `SHARES_NOT_ONE`, `errors[{field: owners}]`), the same member is
+        listed twice (code `DUPLICATE_OWNER`, `errors[{field: owners[i].memberId}]` on the second row), the date is
+        in the future or not later than a start or end date of the plot's owners (code `OWNERSHIP_DATE_INVALID`,
+        `errors[{field: effectiveFrom}]`), the periods of a member would overlap (code `OWNERSHIP_OVERLAP`), a
+        listed member is archived (code `MEMBER_ARCHIVED`, `errors[{field: owners[i].memberId}]`), or the plot is
+        common land (code `PLOT_COMMON_LAND`)
       content:
         application/problem+json:
           schema:
@@ -1318,11 +1377,12 @@ components:
         - PLOT_RESTORED
         - PLOT_DELETED
         - SETTINGS_UPDATED
+        - OWNERSHIP_CHANGED
 
     AuditEntityType:
       type: string
       description: Kind of the entity an audit entry is about
-      enum: [MEMBER, ROLE, PLOT, SETTINGS]
+      enum: [MEMBER, ROLE, PLOT, SETTINGS, OWNERSHIP]
 
     AuditFieldChange:
       type: object
@@ -1546,6 +1606,48 @@ components:
           items:
             $ref: '#/components/schemas/Ownership'
 
+    OwnershipChangeOwner:
+      type: object
+      description: One owner of a plot from the date of the change.
+      required: [memberId]
+      properties:
+        memberId:
+          type: string
+          format: uuid
+          description: An active member of the cooperative
+        share:
+          type: string
+          pattern: '^[1-9][0-9]{0,3}/[1-9][0-9]{0,3}$'
+          default: '1/1'
+          example: '1/2'
+          description: |
+            Share as a fraction "numerator/denominator" (the same form as `OwnershipShare`; written inline because the
+            code generator does not quote a default next to a `$ref`). A missing share is "1/1". The denominator is at
+            most 1000 and the numerator is at most the denominator, otherwise `SHARE_INVALID`; "2/4" is saved as "1/2".
+
+    OwnershipChange:
+      type: object
+      description: A change of the owners of a plot, effective on a date.
+      required: [effectiveFrom, owners]
+      properties:
+        effectiveFrom:
+          type: string
+          format: date
+          description: |
+            The day the new owners start; the previous owners end the day before. Not in the future, and later than
+            every current owner's start date and every past owner's end date.
+        owners:
+          type: array
+          minItems: 0
+          maxItems: 20
+          description: The owners from `effectiveFrom`, with shares adding up to one whole; empty means no owner.
+          items:
+            $ref: '#/components/schemas/OwnershipChangeOwner'
+        basis:
+          type: string
+          maxLength: 500
+          description: Note on the basis of the change (sale contract, inheritance, court decision)
+
     PlotDetails:
       description: |
         The plot card: everything in `PlotSummary` plus `notes`, `archivedAt`, `createdAt` and `updatedAt`.
@@ -1726,6 +1828,7 @@ components:
             `INVALID` (wrong format, for example an email), `PHONE_INVALID` (not a valid phone number),
             `CHANNEL_CONTACT_MISSING` (the chosen delivery channel has no contact to deliver to),
             `CADASTRAL_INVALID` (not of the form `NNNNNNNNNN:NN:NNN:NNNN`), `AREA_INVALID` (more than two decimal
-            places, too large, or not greater than zero for a plot)
+            places, too large, or not greater than zero for a plot), `SHARE_INVALID` (not a fraction `n/d` with
+            1 <= n <= d <= 1000), `MEMBER_NOT_FOUND` (no such member in the cooperative)
         message:
           type: string

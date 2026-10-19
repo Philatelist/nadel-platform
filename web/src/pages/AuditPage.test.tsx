@@ -62,3 +62,27 @@ describe('AuditPage settings entries', () => {
     expect(screen.getByText(/Own plots only → All plots/)).toBeInTheDocument();
   });
 });
+
+describe('AuditPage ownership entries', () => {
+  it('shows the ownership action with a link to the plot and readable fields', () => {
+    entry = {
+      id: 'a3',
+      occurredAt: '2026-10-01T10:00:00Z',
+      action: 'OWNERSHIP_CHANGED',
+      entityType: 'OWNERSHIP',
+      entityId: 'p7',
+      entityLabel: '33',
+      changes: [
+        { field: 'effectiveFrom', newValue: '2026-10-01' },
+        { field: 'owners', newValue: 'Ivanenko Oleh 1/2, Petrenko Ivan 1/2' },
+        { field: 'basis', newValue: 'Sale' },
+      ],
+    };
+    renderWithApp(<AuditPage />);
+    expect(screen.getByText('Owners changed')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '33' })).toHaveAttribute('href', '/plots/p7');
+    expect(screen.getByText(/Owners from:/)).toBeInTheDocument();
+    expect(screen.getByText(/Basis:/)).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Ownership' })).toBeInTheDocument();
+  });
+});

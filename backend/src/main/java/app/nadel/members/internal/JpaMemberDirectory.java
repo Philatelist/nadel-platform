@@ -11,6 +11,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /** Serves the public {@link MemberDirectory} from the member table. */
@@ -30,6 +31,18 @@ class JpaMemberDirectory implements MemberDirectory {
             return Map.of();
         }
         return members.findAllById(ids).stream()
+                .map(member -> new MemberRef(member.getId(), member.getLastName(), member.getFirstName(),
+                        member.getMiddleName(), member.isArchived()))
+                .collect(Collectors.toMap(MemberRef::id, Function.identity()));
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Map<UUID, MemberRef> lockActive(Collection<UUID> ids) {
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        return members.lockAllById(ids).stream()
                 .map(member -> new MemberRef(member.getId(), member.getLastName(), member.getFirstName(),
                         member.getMiddleName(), member.isArchived()))
                 .collect(Collectors.toMap(MemberRef::id, Function.identity()));

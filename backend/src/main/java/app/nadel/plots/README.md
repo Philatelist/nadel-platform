@@ -17,6 +17,7 @@ None yet. Other modules will get a lookup API in the module root when 007 (owner
 | `GET /plots` | `listPlots` | any member of a cooperative |
 | `GET /plots/{id}` | `getPlot` | any member of a cooperative |
 | `GET /plots/{id}/ownerships` | `listPlotOwnerships` | `PLOTS_VIEW` |
+| `POST /plots/{id}/ownership-changes` | `createOwnershipChange` | `PLOTS_VIEW` and `OWNERSHIP_EDIT` |
 | `POST /plots` | `createPlot` | `PLOTS_VIEW` and `PLOTS_EDIT` |
 | `PUT /plots/{id}` | `updatePlot` | `PLOTS_VIEW` and `PLOTS_EDIT` |
 | `POST /plots/{id}/archive` | `archivePlot` | `PLOTS_VIEW` and `PLOTS_EDIT` |
@@ -56,6 +57,34 @@ enforced by the application (a change of owner, coming in the next slices).
   members, then an `exists` on `ownership` in the native search; an empty id list switches the branch off instead of
   producing an invalid `IN ()`).
 
+## Change of owner (feature 007)
+
+`POST /plots/{id}/ownership-changes` with `{effectiveFrom, owners[{memberId, share = "1/1"}] (0..20), basis?}` is one
+transaction in `OwnershipCommands.change`: it ends every current row on `effectiveFrom - 1 day` (calendar arithmetic:
+1 March 2024 gives 29 February 2024) and inserts the new rows from `effectiveFrom`. An empty list ends ownership. It answers
+201 with the same `PlotOwnerships` as the read endpoint.
+
+- Order of work: lock the plot row (`PlotRepository.findByIdForUpdate`, `FOR UPDATE`; 404 when missing or of another
+  cooperative), refuse an archived plot (409 `PLOT_ARCHIVED`) and common land (409 `PLOT_COMMON_LAND`), parse the shares
+  (400 `VALIDATION_FAILED` with `SHARE_INVALID` on each bad `owners[i].share`; a share that does not look like `n/d` is
+  refused by the contract pattern with the same code), refuse a member listed twice (409 `DUPLICATE_OWNER` on
+  `owners[i].memberId` of the second row), lock the new members `FOR SHARE` through `MemberDirectory.lockActive` (unknown
+  or other cooperative's member: 400 `MEMBER_NOT_FOUND`; archived: 409 `MEMBER_ARCHIVED`), then the rules below.
+- `OwnershipRules` is pure and shared with the correction of a later slice. `checkChangeDate`: the date is not after
+  today (the Europe/Kyiv date from the `Clock` bean) and later than the start of every current row and the end of every
+  past row (409 `OWNERSHIP_DATE_INVALID`, field `effectiveFrom`). `checkTimeline` validates the whole timeline the change
+  would produce: on every day with owners the shares add up to exactly one whole (409 `SHARES_NOT_ONE`, field `owners`;
+  exact `Share` arithmetic, and a sum too large to represent is "not one"), the same member never overlaps (409
+  `OWNERSHIP_OVERLAP`) and no period starts or ends after today. The exclusion constraint `ownership_no_overlap_ex` (SQLSTATE
+  23P01) is the backstop and is mapped to the same `OWNERSHIP_OVERLAP`.
+- The old rows are closed and flushed before the new ones are inserted: the exclusion constraint is checked per statement
+  and Hibernate runs inserts before updates, so a member who stays an owner would otherwise meet their own open row.
+- `plot_status` is refreshed in the same transaction (`PlotStatusPolicy.afterOwnershipChange`): GREY with owners becomes
+  GREEN, no owners becomes GREY, anything else is kept.
+- Audit `OWNERSHIP_CHANGED` (entity `OWNERSHIP`, entity id = the plot id, label = the plot number) with `effectiveFrom`,
+  `owners` (old and new, each "Last First 1/2", sorted, joined by ", ") and `basis` when given. Names are in the audit
+  payload only, never in logs.
+
 ## Status
 
 `PlotStatusPolicy`: common land is always `GREY`; every other plot shows its cached `plot_status` (a missing row is `GREY`).
@@ -85,4 +114,5 @@ publishes an `audit.AuditEvent` built from `PlotSnapshot.diff`, with the plot nu
   also refuse a plot with ownership history (until then the foreign key of `ownership` makes the database refuse it); the
   seam is marked with a comment in `PlotCommands.delete`.
 
-Depends on `identity`, `problem`, `audit` and `members` (public `MemberDirectory` only).
+Depends on `identity`, `problem`, `audit` and `members` (public `MemberDirectory` only). The `Clock` bean (Europe/Kyiv) is
+declared in `app.nadel.ClockConfiguration`.

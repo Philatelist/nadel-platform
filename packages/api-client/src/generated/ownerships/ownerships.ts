@@ -10,24 +10,30 @@
  * OpenAPI spec version: 0.1.0
  */
 import {
+  useMutation,
   useQuery
 } from '@tanstack/react-query';
 import type {
   DataTag,
   DefinedInitialDataOptions,
   DefinedUseQueryResult,
+  MutationFunction,
   QueryClient,
   QueryFunction,
   QueryKey,
   UndefinedInitialDataOptions,
+  UseMutationOptions,
+  UseMutationResult,
   UseQueryOptions,
   UseQueryResult
 } from '@tanstack/react-query';
 
 import type {
   BadRequestResponse,
+  ConflictResponse,
   ForbiddenResponse,
   NotFoundResponse,
+  OwnershipChange,
   PlotOwnerships,
   UnauthorizedResponse
 } from '../model';
@@ -158,3 +164,107 @@ export function useListPlotOwnerships<TData = Awaited<ReturnType<typeof listPlot
 
 
 
+export const getCreateOwnershipChangeUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/plots/${id}/ownership-changes`
+}
+
+/**
+ * Records a change of owner as one step: every current owner's period ends on the day before `effectiveFrom`
+ * and the listed owners start on `effectiveFrom`. An empty `owners` list ends ownership (the plot has no owner
+ * from that date). The shares of the new owners must add up to exactly one whole (`SHARES_NOT_ONE`). Shares are
+ * written as fractions and saved in lowest terms ("2/4" becomes "1/2"); a missing share is "1/1".
+ *
+ * `effectiveFrom` cannot be in the future (today is the Europe/Kyiv date) and must be later than the start date
+ * of every current owner and the end date of every past owner (`OWNERSHIP_DATE_INVALID`). A member may be listed
+ * once (`DUPLICATE_OWNER`, on the second row) and must be active (`MEMBER_ARCHIVED`). Common land has no owners
+ * (`PLOT_COMMON_LAND`) and an archived plot cannot change owners (`PLOT_ARCHIVED`). The plot status becomes
+ * GREEN when a plot gets its first owner and GREY when it loses its last one. The change is audited as one entry
+ * (`OWNERSHIP_CHANGED`) on the plot.
+ *
+ * Requires `PLOTS_VIEW` and `OWNERSHIP_EDIT`; the platform operator and everyone without them get 403. A plot that
+ * does not exist or belongs to another cooperative is 404. Invalid shares (`errors[{field: owners[i].share, code:
+ * SHARE_INVALID}]`) and members that do not exist in the cooperative (`errors[{field: owners[i].memberId, code:
+ * MEMBER_NOT_FOUND}]`) are 400 `VALIDATION_FAILED`.
+ * @summary Change the owners of a plot
+ */
+export const createOwnershipChange = async (id: string,
+    ownershipChange: OwnershipChange, options?: Parameters<typeof nadelFetch>[1]): Promise<PlotOwnerships> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return nadelFetch<PlotOwnerships>(getCreateOwnershipChangeUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(ownershipChange)
+  }
+);}
+
+
+
+
+
+export const getCreateOwnershipChangeMutationKey = () => ['createOwnershipChange'] as const;
+
+export const getCreateOwnershipChangeMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createOwnershipChange>>, TError,CreateOwnershipChangeMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createOwnershipChange>>, TError,CreateOwnershipChangeMutationVariables, TContext> => {
+
+const mutationKey = getCreateOwnershipChangeMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createOwnershipChange>>, CreateOwnershipChangeMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  createOwnershipChange(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateOwnershipChangeMutationResult = NonNullable<Awaited<ReturnType<typeof createOwnershipChange>>>
+    export type CreateOwnershipChangeMutationBody = OwnershipChange
+    export type CreateOwnershipChangeMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse
+    export type CreateOwnershipChangeMutationVariables = {id: string;data: OwnershipChange}
+
+    /**
+ * @summary Change the owners of a plot
+ */
+export const useCreateOwnershipChange = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createOwnershipChange>>, TError,CreateOwnershipChangeMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof createOwnershipChange>>,
+        TError,
+        CreateOwnershipChangeMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateOwnershipChangeMutationOptions(options), queryClient);
+    }

@@ -1,5 +1,6 @@
 package app.nadel.plots.internal;
 
+import jakarta.persistence.LockModeType;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -7,10 +8,19 @@ import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 interface PlotRepository extends JpaRepository<Plot, UUID> {
+
+    /**
+     * The plot with an exclusive row lock ({@code FOR UPDATE}) until the end of the transaction. Every write that
+     * depends on the plot's ownership takes this lock first, so such writes on one plot run one after another.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select p from Plot p where p.id = :id")
+    Optional<Plot> findByIdForUpdate(@Param("id") UUID id);
 
     // no tenant_id filter needed: RLS hides other cooperatives' rows
     @Query("""

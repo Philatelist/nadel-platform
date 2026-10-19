@@ -21,4 +21,5 @@ export const AuditEntityType = {
   ROLE: 'ROLE',
   PLOT: 'PLOT',
   SETTINGS: 'SETTINGS',
+  OWNERSHIP: 'OWNERSHIP',
 } as const;
