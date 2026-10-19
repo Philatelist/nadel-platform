@@ -7,7 +7,7 @@ soft archive (`archived_at`). Owners are described below; polygons are imported 
 
 ## Public API
 
-None. `plots` implements the SPI `members.MemberArchiveGuard` (see Guards) and uses `members.MemberDirectory`.
+None. `plots` implements the SPIs `members.MemberArchiveGuard` (see Guards) and `identity.OwnedPlotsSource` (`GET /me` ownedPlots), and uses `members.MemberDirectory` and `settings.CooperativeSettings`.
 
 ## Endpoints
 
@@ -16,7 +16,8 @@ None. `plots` implements the SPI `members.MemberArchiveGuard` (see Guards) and u
 | `GET /plots/map` | `getPlotMap` | any member of a cooperative |
 | `GET /plots` | `listPlots` | any member of a cooperative |
 | `GET /plots/{id}` | `getPlot` | any member of a cooperative |
-| `GET /plots/{id}/ownerships` | `listPlotOwnerships` | `PLOTS_VIEW` |
+| `GET /plots/{id}/ownerships` | `listPlotOwnerships` | `PLOTS_VIEW`, or a member who owns the plot now (else 404) |
+| `GET /members/{id}/ownerships` | `listMemberOwnerships` | `PLOTS_VIEW` or `MEMBERS_VIEW`, or the member themself (else 404) |
 | `POST /plots/{id}/ownership-changes` | `createOwnershipChange` | `PLOTS_VIEW` and `OWNERSHIP_EDIT` |
 | `POST /ownerships/{id}/corrections` | `createOwnershipCorrection` | `PLOTS_VIEW` and `OWNERSHIP_EDIT` |
 | `POST /plots` | `createPlot` | `PLOTS_VIEW` and `PLOTS_EDIT` |
@@ -30,11 +31,18 @@ always comes from the token, never from the request; a plot of another cooperati
 
 ## Visibility
 
-`PlotDtoMapper` is the only place that decides who sees what. A caller with `PLOTS_VIEW` sees area, cadastral number,
-building flag, notes and timestamps; any other member sees only number, street, kind, status and the archived flag. A
-caller without `PLOTS_VIEW` never sees archived plots (404 on the card, ignored `includeArchived` on the list) and cannot
-search by cadastral number or by owner. Owners will join this rule later in 007 (a member sees the details of their own
-plots); until then the status of every plot is shown to every member.
+`PlotDtoMapper` is the only place that decides who sees what, through the `ViewerScope` that `PlotQueries` builds once
+per request (`full` = `PLOTS_VIEW`, the plots the viewer's member owns now, the cooperative setting; the setting and the
+owned plots are not read for a full viewer).
+
+| Rule | Who |
+|---|---|
+| details: area, cadastral number, building flag (map: area and debt) | `PLOTS_VIEW`, or the current owner of that plot |
+| notes, `createdAt`, `updatedAt` | `PLOTS_VIEW` only, owners included |
+| `status` | `PLOTS_VIEW`, the current owner, and everyone when `memberPlotStatusVisibility` is `ALL_PLOTS`; otherwise absent from the JSON (common land included) |
+| owners column, owner and cadastral search, archived plots | `PLOTS_VIEW` only |
+| status filter | for a member under `OWN_ONLY` it matches only their own plots (an empty set short-circuits to an empty page) |
+| `GET /plots/{id}/ownerships` | `PLOTS_VIEW` or a current owner of the plot; a former owner gets 404 like any other member |
 
 ## Ownership (feature 007, read side)
 

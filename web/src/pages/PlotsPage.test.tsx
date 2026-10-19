@@ -70,6 +70,14 @@ describe('PlotsPage', () => {
     expect(screen.getByText('No owner')).toBeInTheDocument();
   });
 
+  it('shows a neutral mark and no label for a plot whose status is hidden', () => {
+    permissions = [];
+    data = { ...data, items: [{ ...full, status: undefined }] };
+    renderWithApp(<PlotsPage />);
+    expect(screen.getByTestId('status-neutral')).toBeInTheDocument();
+    expect(screen.queryByText('No owner')).toBeNull();
+  });
+
   it('shows up to two owner names and +N for the rest to viewers of plots, nothing when unowned', () => {
     permissions = ['PLOTS_VIEW'];
     const owner = (n: number) => ({ memberId: `m${n}`, name: `Owner ${n}`, share: '1/3' });

@@ -1,9 +1,12 @@
 package app.nadel.plots.internal;
 
+import app.nadel.identity.AccessProfile;
 import app.nadel.identity.CurrentUser;
+import app.nadel.identity.Permission;
 import app.nadel.problem.ApiProblemException;
 import java.util.UUID;
 import nadel.contract.api.OwnershipsApi;
+import nadel.contract.model.MemberOwnerships;
 import nadel.contract.model.OwnershipChange;
 import nadel.contract.model.OwnershipCorrection;
 import nadel.contract.model.PlotOwnerships;
@@ -28,13 +31,32 @@ class OwnershipController implements OwnershipsApi {
     }
 
     /**
-     * Owners and history of a plot, for callers with {@code PLOTS_VIEW} (the platform operator has no such
-     * permission). A plot that does not exist or belongs to another cooperative (RLS) is 404.
+     * Owners and history of a plot, for callers with {@code PLOTS_VIEW} and for a member who owns the plot now. The
+     * platform operator is refused (403); for everyone else, a former owner included, a plot they may not read is 404,
+     * exactly like a plot that does not exist or belongs to another cooperative (RLS).
      */
     @Override
-    @PreAuthorize("hasAuthority('PERM_PLOTS_VIEW')")
     public ResponseEntity<PlotOwnerships> listPlotOwnerships(UUID id) {
-        return ResponseEntity.ok(queries.ofPlot(id).orElseThrow(ApiProblemException::notFound));
+        AccessProfile viewer = currentUser.profile();
+        CooperativeCallers.require(viewer);
+        return ResponseEntity.ok(queries.ofPlotFor(id, viewer).orElseThrow(ApiProblemException::notFound));
+    }
+
+    /**
+     * The plots of a member, for callers with {@code PLOTS_VIEW} or {@code MEMBERS_VIEW} and for the member
+     * themself. The platform operator is refused (403); everyone else gets 404 before any lookup when not allowed,
+     * and for a member who does not exist or belongs to another cooperative (RLS), so existence is not revealed.
+     */
+    @Override
+    public ResponseEntity<MemberOwnerships> listMemberOwnerships(UUID id) {
+        AccessProfile viewer = currentUser.profile();
+        CooperativeCallers.require(viewer);
+        boolean allowed = id.equals(viewer.memberId())
+                || viewer.can(Permission.PLOTS_VIEW) || viewer.can(Permission.MEMBERS_VIEW);
+        if (!allowed) {
+            throw ApiProblemException.notFound();
+        }
+        return ResponseEntity.ok(queries.ofMember(id).orElseThrow(ApiProblemException::notFound));
     }
 
     /**

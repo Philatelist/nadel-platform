@@ -36,6 +36,24 @@ interface OwnershipRepository extends JpaRepository<Ownership, UUID> {
     @Query("select o from Ownership o where o.plotId in :plotIds and o.validTo is null")
     List<Ownership> findCurrentByPlotIds(@Param("plotIds") Collection<UUID> plotIds);
 
+    /** The plots a member owns now. */
+    @Query("select o.plotId from Ownership o where o.memberId = :memberId and o.validTo is null")
+    List<UUID> findCurrentPlotIdsByMemberId(@Param("memberId") UUID memberId);
+
+    /** The records of a member that have not ended. */
+    @Query("select o from Ownership o where o.memberId = :memberId and o.validTo is null")
+    List<Ownership> findCurrentByMemberId(@Param("memberId") UUID memberId);
+
+    /** The records of a member that have ended, the most recently ended first. */
+    @Query("select o from Ownership o where o.memberId = :memberId and o.validTo is not null "
+            + "order by o.validTo desc, o.validFrom desc, o.id")
+    List<Ownership> findPastByMemberId(@Param("memberId") UUID memberId);
+
+    /** True when the member currently owns the plot (a former owner does not). */
+    @Query("select count(o) > 0 from Ownership o where o.plotId = :plotId and o.memberId = :memberId "
+            + "and o.validTo is null")
+    boolean existsCurrentByPlotIdAndMemberId(@Param("plotId") UUID plotId, @Param("memberId") UUID memberId);
+
     /** True when the member owns at least one plot now (a row without an end date). */
     @Query("select count(o) > 0 from Ownership o where o.memberId = :memberId and o.validTo is null")
     boolean existsCurrentByMemberId(@Param("memberId") UUID memberId);

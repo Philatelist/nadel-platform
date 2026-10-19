@@ -8,6 +8,7 @@ import { PlotPage } from './PlotPage';
 
 let permissions: Permission[];
 let plot: PlotDetails;
+let ownedPlots: { plotId: string; number: string; share: string }[] = [];
 type Opts = { mutation: { onError: (e: unknown) => void } };
 let archiveOptions: Opts;
 let deleteOptions: Opts;
@@ -15,6 +16,7 @@ let deleteOptions: Opts;
 vi.mock('../me', () => ({
   useCan: (p: Permission) => permissions.includes(p),
   useOptionalMe: () => null,
+  useMe: () => ({ ownedPlots }),
 }));
 vi.mock('@nadel/api-client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@nadel/api-client')>()),
@@ -116,6 +118,34 @@ describe('PlotPage owners', () => {
     renderCard();
     expect(screen.getByText('Common land has no owners.')).toBeInTheDocument();
     expect(screen.queryByText('No ownership history')).toBeNull();
+  });
+});
+
+describe('PlotPage for a member', () => {
+  beforeEach(() => {
+    permissions = [];
+  });
+
+  it('shows the details sent for an owned plot and the owners without actions', () => {
+    ownedPlots = [{ plotId: 'p1', number: '12', share: '1' }];
+    plot = { ...active, status: 'GREEN', areaM2: 600, cadastralNumber: '4810136300:01:001:0001' };
+    renderCard();
+    expect(screen.getByText('4810136300:01:001:0001')).toBeInTheDocument();
+    expect(screen.getByText('Area')).toBeInTheDocument();
+    expect(screen.queryByText('Notes')).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Owners' })).toBeInTheDocument();
+    expect(screen.queryByRole('button')).toBeNull();
+    ownedPlots = [];
+  });
+
+  it('shows another plot limited, with no status mark when the status is absent', () => {
+    ownedPlots = [{ plotId: 'other', number: '7', share: '1' }];
+    plot = { ...active, status: undefined };
+    renderCard();
+    expect(screen.queryByText('Area')).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Owners' })).toBeNull();
+    expect(screen.queryByText('Status')).toBeNull();
+    ownedPlots = [];
   });
 });
 

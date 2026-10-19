@@ -124,12 +124,13 @@ class OwnershipReadTests extends IntegrationTest {
     }
 
     @Test
-    void aMemberAndAnyoneWithoutPlotsViewAreRefused() throws Exception {
+    void aMemberWhoDoesNotOwnThePlotAndAnyoneWithoutRolesGetNotFound() throws Exception {
+        // the owners of a plot are visible to the board and to the plot's own owners only (see OwnershipVisibilityTests)
         for (String bearer : List.of(member(), bearerWithoutPermissions())) {
             ownershipsAs(bearer, plotId("7"))
-                    .andExpect(status().isForbidden())
+                    .andExpect(status().isNotFound())
                     .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
-                    .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"))
+                    .andExpect(jsonPath("$.code").value("NOT_FOUND"))
                     .andExpect(content().string(not(containsString("Bondarenko"))));
         }
     }

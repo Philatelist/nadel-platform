@@ -13,6 +13,7 @@ and whether they are the `PLATFORM_OPERATOR`; everything else is data in the dat
 | `RoleRef` | A role of a member (`baseCode` is set for Chairman, Treasurer, Member; `nameCustomized` is false while a base role still has its standard name, so clients show the catalog name, and true for a renamed base role and every custom role) |
 | `CurrentUser` | Inject into controllers and services: `profile()`, `memberId()`, `can(permission)` |
 | `AccessProfileSource` | SPI implemented by `members`. Keeps the dependency one-way: `members` -> `identity`, never the opposite |
+| `OwnedPlotsSource`, `OwnedPlot` | SPI implemented by `plots`: the plots the signed-in member owns now, returned as `ownedPlots` by `GET /me` (empty for the platform operator). Keeps the dependency one-way: `plots` -> `identity` |
 | `Roles.PLATFORM_OPERATOR` | The only role name left in code |
 
 ## Authentication flow

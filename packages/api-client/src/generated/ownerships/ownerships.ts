@@ -32,6 +32,7 @@ import type {
   BadRequestResponse,
   ConflictResponse,
   ForbiddenResponse,
+  MemberOwnerships,
   NotFoundResponse,
   OwnershipChange,
   OwnershipCorrection,
@@ -61,6 +62,111 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   return result;
 };
 
+export const getListMemberOwnershipsUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/members/${id}/ownerships`
+}
+
+/**
+ * Returns the plots the member owns now (`current`, ordered by plot number in natural order) and the plots they
+ * owned in the past (`past`, the most recently ended first). Allowed with `PLOTS_VIEW` or `MEMBERS_VIEW`, and
+ * for a member asking about themself; for anyone else, and for an id that does not exist or belongs to another
+ * cooperative, the answer is 404, so the existence of a member is not revealed. The platform operator gets 403.
+ * A member without plots gets two empty lists.
+ * @summary Plots of a member
+ */
+export const listMemberOwnerships = async (id: string, options?: Parameters<typeof nadelFetch>[1]): Promise<MemberOwnerships> => {
+
+  return nadelFetch<MemberOwnerships>(getListMemberOwnershipsUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListMemberOwnershipsQueryKey = (id: string,) => {
+    return [
+    `/api/v1/members/${id}/ownerships`
+    ] as const;
+    }
+
+
+export const getListMemberOwnershipsQueryOptions = <TData = Awaited<ReturnType<typeof listMemberOwnerships>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listMemberOwnerships>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListMemberOwnershipsQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listMemberOwnerships>>> = ({ signal }) => listMemberOwnerships(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listMemberOwnerships>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListMemberOwnershipsQueryResult = NonNullable<Awaited<ReturnType<typeof listMemberOwnerships>>>
+export type ListMemberOwnershipsQueryError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse
+
+
+export function useListMemberOwnerships<TData = Awaited<ReturnType<typeof listMemberOwnerships>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listMemberOwnerships>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listMemberOwnerships>>,
+          TError,
+          Awaited<ReturnType<typeof listMemberOwnerships>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListMemberOwnerships<TData = Awaited<ReturnType<typeof listMemberOwnerships>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listMemberOwnerships>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listMemberOwnerships>>,
+          TError,
+          Awaited<ReturnType<typeof listMemberOwnerships>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListMemberOwnerships<TData = Awaited<ReturnType<typeof listMemberOwnerships>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listMemberOwnerships>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Plots of a member
+ */
+
+export function useListMemberOwnerships<TData = Awaited<ReturnType<typeof listMemberOwnerships>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listMemberOwnerships>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListMemberOwnershipsQueryOptions(id,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 export const getListPlotOwnershipsUrl = (id: string,) => {
 
 
@@ -71,9 +177,11 @@ export const getListPlotOwnershipsUrl = (id: string,) => {
 
 /**
  * Returns the current owners of the plot (the ones without an end date), ordered by member name, and its
- * history of past owners, newest first (by start date). Requires `PLOTS_VIEW`; the platform operator and
- * everyone without it get 403. A plot that does not exist or belongs to another cooperative is 404. Common
- * land and a plot without owners return empty lists. The member name is "Last First" (no patronymic).
+ * history of past owners, newest first (by start date). Allowed with `PLOTS_VIEW`, and for a member who owns
+ * the plot now (with the names, shares, dates and basis of its records); for anyone else, a former owner
+ * included, the answer is 404, exactly as for a plot that does not exist or belongs to another cooperative.
+ * The platform operator gets 403. Common land and a plot without owners return empty lists. The member name is
+ * "Last First" (no patronymic).
  * @summary Owners of a plot
  */
 export const listPlotOwnerships = async (id: string, options?: Parameters<typeof nadelFetch>[1]): Promise<PlotOwnerships> => {

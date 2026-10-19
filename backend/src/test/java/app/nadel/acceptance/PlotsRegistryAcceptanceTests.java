@@ -70,7 +70,7 @@ class PlotsRegistryAcceptanceTests extends IntegrationTest {
 
     /**
      * §2.1 #1, §2.2 #2, §2.2 #4, §2.3 #1-#4, §2.3 #6, §2.5 #2: the chairman creates a plot, the treasurer reads every
-     * field, an ordinary member reads number, street, kind and status only (list, card, map), archive hides it,
+     * field, an ordinary member who owns nothing reads number, street and kind only (list, card, map), archive hides it,
      * restore brings it back, delete removes it for good, and each action has its own audit entry.
      */
     @Test
@@ -109,16 +109,15 @@ class PlotsRegistryAcceptanceTests extends IntegrationTest {
                 .andExpect(jsonPath("$.notes").value(RESTRICTED_NOTE))
                 .andExpect(jsonPath("$.status").value("GREY"));
 
-        // the member sees the plot with number, street, kind and status, and no other field, in list and card
+        // the member sees the plot with number, street and kind, and no other field, in list and card
         JsonNode listedByMember = list(member, "q=" + number).get("items").get(0);
-        assertThat(fieldNames(listedByMember)).containsExactlyInAnyOrder("id", "number", "street", "kind", "status",
-                "archived");
+        assertThat(fieldNames(listedByMember)).containsExactlyInAnyOrder("id", "number", "street", "kind", "archived");
         assertThat(listedByMember.get("street").asString()).isEqualTo("Вишнева");
         assertThat(list(member, "q=" + cadastral).get("totalItems").asInt()).isZero();
         String memberCard = send(member, get(PLOTS + "/" + id), null).andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
         assertThat(fieldNames(json.readTree(memberCard))).doesNotContain("areaM2", "cadastralNumber", "hasBuilding",
-                "notes", "createdAt", "updatedAt");
+                "notes", "createdAt", "updatedAt", "status");
         assertThat(memberCard).doesNotContain(RESTRICTED_NOTE).doesNotContain(cadastral);
 
         // the hidden map follows the same visibility (a new plot has no polygon, so a drawn demo plot is used)
@@ -302,17 +301,17 @@ class PlotsRegistryAcceptanceTests extends IntegrationTest {
         assertThat(list(treasurer, "q=no-such-plot-" + tag()).get("items")).isEmpty();
     }
 
-    /** §2.2 #4 on the demo plots: the demo member sees every plot number and street but nothing of area or cadastral. */
+    /** §2.2 #4 on the demo plots: an ordinary member sees every plot number and street but nothing of area or cadastral. */
     @Test
-    void anOrdinaryMemberSeesEveryDemoPlotAsNumberStreetKindAndStatusOnly() throws Exception {
+    void anOrdinaryMemberWhoOwnsNothingSeesEveryDemoPlotAsNumberStreetAndKindOnly() throws Exception {
         String member = tokenWithBaseRole("MEMBER");
 
         JsonNode page = list(member, "size=100");
         assertThat(page.get("totalItems").asInt()).isEqualTo(31);
         for (JsonNode plot : page.get("items")) {
             assertThat(fieldNames(plot)).doesNotContain("areaM2", "cadastralNumber", "hasBuilding", "notes");
-            assertThat(plot.get("status").asString()).isIn("GREEN", "GREY");
-            assertThat(fieldNames(plot)).doesNotContain("owners");
+            // the default cooperative setting is "own plots only", and this member owns nothing: no colour at all
+            assertThat(fieldNames(plot)).doesNotContain("status", "owners");
         }
     }
 

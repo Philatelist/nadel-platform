@@ -29,7 +29,7 @@ class PlotMapTests extends IntegrationTest {
     MockMvc mvc;
 
     @Test
-    void memberSeesNumberKindAndStatusButNeitherAreaNorDebt() throws Exception {
+    void memberWhoOwnsNothingSeesNumberAndKindButNeitherStatusNorAreaNorDebt() throws Exception {
         String member = bearerWithBaseRole("MEMBER");
 
         mapAs(member)
@@ -38,10 +38,8 @@ class PlotMapTests extends IntegrationTest {
                 .andExpect(jsonPath("$.features", hasSize(31)))
                 .andExpect(jsonPath("$.features[*].properties.number", hasSize(31)))
                 .andExpect(jsonPath("$.features[*].properties.kind", hasSize(31)))
-                .andExpect(jsonPath("$.features[*].properties.status", hasSize(31)))
-                .andExpect(jsonPath("$.features[?(@.properties.number == '7')].properties.status").value("GREEN"))
-                .andExpect(jsonPath("$.features[?(@.properties.number == '25')].properties.status").value("GREY"))
-                .andExpect(jsonPath("$.features[?(@.properties.number == 'R-1')].properties.status").value("GREY"))
+                .andExpect(jsonPath("$.features[*].properties.status").isEmpty())
+                .andExpect(content().string(not(containsString("status"))))
                 .andExpect(jsonPath("$.features[*].properties.areaM2").isEmpty())
                 .andExpect(jsonPath("$.features[*].properties.debt").isEmpty())
                 .andExpect(content().string(not(containsString("areaM2"))))
@@ -56,6 +54,10 @@ class PlotMapTests extends IntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.features[*].properties.areaM2", hasSize(31)))
                 .andExpect(jsonPath("$.features[*].properties.debt", hasSize(31)))
+                .andExpect(jsonPath("$.features[*].properties.status", hasSize(31)))
+                .andExpect(jsonPath("$.features[?(@.properties.number == '7')].properties.status").value("GREEN"))
+                .andExpect(jsonPath("$.features[?(@.properties.number == '25')].properties.status").value("GREY"))
+                .andExpect(jsonPath("$.features[?(@.properties.number == 'R-1')].properties.status").value("GREY"))
                 .andExpect(jsonPath("$.features[?(@.properties.number == 'R-1')].properties.areaM2").value(2970.0))
                 .andExpect(jsonPath("$.features[?(@.properties.number == 'R-1')].properties.kind").value("COMMON"))
                 .andExpect(jsonPath("$.features[?(@.properties.number == '9')].properties.areaM2").value(1500.0))

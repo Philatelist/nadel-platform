@@ -13,6 +13,7 @@ import { Link, useLocation, useParams } from 'react-router';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { MemberDetails } from '../components/MemberDetails';
 import { MemberForm } from '../components/MemberForm';
+import { MemberPlotsPanel } from '../components/ownership/MemberPlotsPanel';
 import { MemberRolesForm } from '../components/MemberRolesForm';
 import { QueryBoundary } from '../components/QueryBoundary';
 import { Badge, Button, buttonClass, Notice, PageHeader } from '../components/ui';
@@ -158,6 +159,7 @@ function MemberView({ member }: { member: Member }) {
           ) : (
             <MemberDetails member={member} />
           )}
+          <MemberPlotsPanel memberId={member.id} />
         </>
       )}
 

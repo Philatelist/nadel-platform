@@ -11,8 +11,9 @@ Today there is one setting, `memberPlotStatusVisibility`: who sees the debt stat
 | `OWN_ONLY` (default) | A member sees the status of the plots they own only; other plots are neutral |
 | `ALL_PLOTS` | A member sees the status of every plot, but never amounts, owners or personal data of other plots |
 
-People allowed to view plots (`PLOTS_VIEW`) always see every status. The setting has no effect until the plots module
-reads it (feature 007, slice 6).
+People allowed to view plots (`PLOTS_VIEW`) always see every status. The plots module reads the setting to decide
+whether a member sees the status of plots they do not own (hidden statuses are absent from the JSON, and the status
+filter then matches only the member's own plots).
 
 ## Public API
 

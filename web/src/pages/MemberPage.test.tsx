@@ -22,7 +22,9 @@ const member = {
 vi.mock('../me', () => ({
   useCan: (p: Permission) => permissions.includes(p),
   useOptionalMe: () => null,
+  useMe: () => ({ memberId: 'me', ownedPlots: [] }),
 }));
+vi.mock('../components/ownership/MemberPlotsPanel', () => ({ MemberPlotsPanel: () => null }));
 vi.mock('@nadel/api-client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@nadel/api-client')>()),
   useGetMember: () => ({ data: member, error: null, isPending: false, isError: false, refetch: vi.fn() }),

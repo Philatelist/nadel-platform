@@ -245,16 +245,16 @@ class PlotsReadTests extends IntegrationTest {
     // ---- visibility
 
     @Test
-    void memberSeesNumberStreetKindStatusAndNothingElseInTheList() throws Exception {
+    void memberWhoOwnsNothingSeesNumberStreetAndKindOnlyInTheList() throws Exception {
+        // the cooperative setting is "own plots only" by default: no colour for plots that are not theirs
         listAs(member(), "size=100")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items", hasSize(31)))
                 .andExpect(jsonPath("$.items[*].id", hasSize(31)))
                 .andExpect(jsonPath("$.items[*].number", hasSize(31)))
                 .andExpect(jsonPath("$.items[*].kind", hasSize(31)))
-                .andExpect(jsonPath("$.items[*].status", hasSize(31)))
-                .andExpect(jsonPath("$.items[?(@.number == '7')].status").value("GREEN"))
-                .andExpect(jsonPath("$.items[?(@.number == '25')].status").value("GREY"))
+                .andExpect(jsonPath("$.items[*].status").doesNotExist())
+                .andExpect(content().string(not(containsString("status"))))
                 .andExpect(jsonPath("$.items[*].archived", everyItem(is(false))))
                 .andExpect(jsonPath("$.items[?(@.number == '9')].street").value("Garden St"))
                 .andExpect(jsonPath("$.items[*].areaM2").doesNotExist())
@@ -320,7 +320,7 @@ class PlotsReadTests extends IntegrationTest {
                 .andExpect(jsonPath("$.number").value("9"))
                 .andExpect(jsonPath("$.street").value("Garden St"))
                 .andExpect(jsonPath("$.kind").value("PLOT"))
-                .andExpect(jsonPath("$.status").value("GREEN")) // until the visibility rules of 007 slice 6
+                .andExpect(jsonPath("$.status").doesNotExist()) // "own plots only" is the default setting
                 .andExpect(jsonPath("$.archived").value(false))
                 .andExpect(jsonPath("$.areaM2").doesNotExist())
                 .andExpect(jsonPath("$.cadastralNumber").doesNotExist())
@@ -333,10 +333,13 @@ class PlotsReadTests extends IntegrationTest {
     }
 
     @Test
-    void commonLandCardShowsTheCommonLandStatus() throws Exception {
-        cardAs(member(), plotId("R-1"))
+    void commonLandCardShowsTheCommonLandStatusToTheBoardOnly() throws Exception {
+        cardAs(treasurer(), plotId("R-1"))
                 .andExpect(jsonPath("$.kind").value("COMMON"))
                 .andExpect(jsonPath("$.status").value("GREY"));
+        cardAs(member(), plotId("R-1"))
+                .andExpect(jsonPath("$.kind").value("COMMON"))
+                .andExpect(jsonPath("$.status").doesNotExist());
     }
 
     @Test

@@ -19,6 +19,7 @@ function meWith(permissions: Permission[]): Me {
     roles: [{ id: 'r1', name: 'Member', baseCode: 'MEMBER', nameCustomized: false }],
     permissions,
     tenant: { id: 't1', name: 'Coop' },
+    ownedPlots: [],
   } as Me;
 }
 

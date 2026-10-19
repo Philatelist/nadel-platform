@@ -18,12 +18,14 @@ function cssVar(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 
-function statusColors(): Record<PlotStatus, string> {
+function statusColors(): Record<PlotStatus | 'NEUTRAL', string> {
   return {
     RED: cssVar('--color-status-red'),
     YELLOW: cssVar('--color-status-yellow'),
     GREEN: cssVar('--color-status-green'),
     GREY: cssVar('--color-status-grey'),
+    // the status is absent when the server hides it from the viewer
+    NEUTRAL: cssVar('--color-line-strong'),
   };
 }
 
@@ -108,7 +110,9 @@ export function MapPage() {
               colors.YELLOW,
               'GREEN',
               colors.GREEN,
+              'GREY',
               colors.GREY,
+              colors.NEUTRAL,
             ],
             'fill-opacity': 0.85,
           },
@@ -189,7 +193,7 @@ export function MapPage() {
               </>
             )}
           </dl>
-          <p className="mt-3 text-sm">{plotStatusLabel(t, plot)}</p>
+          {plot.status !== undefined && <p className="mt-3 text-sm">{plotStatusLabel(t, plot)}</p>}
         </aside>
       )}
     </div>
