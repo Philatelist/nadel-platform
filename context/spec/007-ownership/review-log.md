@@ -43,3 +43,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `edd95b3..a53200c` | PASS | — | minor: `PlotPage` decides "own plot" from the cached `/me` (may be stale after an ownership change in the same session; the server still filters); the neutral mark is fully aria-hidden (empty status cell for screen readers, as specified); no cross-tenant test for the setting; double map lookup in OwnershipQueries |
+
+## Slice 7 — End-to-end flows, docs and coverage floor
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `a53200c..7f6b386` | PASS | — | minor: role-names spec hard-codes 9 permissions; an `.or()` locator in the guard test could hit strict mode; a duplicate assertion; the 18/20 counts depend on page size and on no active leftovers from a killed run; plots README dependency line omits `settings` and no module README links ADR 0011 |
