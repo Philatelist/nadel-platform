@@ -70,6 +70,30 @@ describe('PlotsPage', () => {
     expect(screen.getByText('No owner')).toBeInTheDocument();
   });
 
+  it('shows up to two owner names and +N for the rest to viewers of plots, nothing when unowned', () => {
+    permissions = ['PLOTS_VIEW'];
+    const owner = (n: number) => ({ memberId: `m${n}`, name: `Owner ${n}`, share: '1/3' });
+    data = {
+      ...data,
+      items: [
+        { ...full, id: 'a', number: '1', owners: [owner(1), owner(2), owner(3)] },
+        { ...full, id: 'b', number: '2', owners: [owner(4), owner(5)] },
+        { ...full, id: 'c', number: '3' },
+      ],
+    };
+    renderWithApp(<PlotsPage />);
+    expect(screen.getByRole('columnheader', { name: 'Owners' })).toBeInTheDocument();
+    expect(screen.getByText('Owner 1, Owner 2 +1')).toBeInTheDocument();
+    expect(screen.getByText('Owner 4, Owner 5')).toBeInTheDocument();
+    expect(screen.queryByText(/Owner 3/)).toBeNull();
+  });
+
+  it('has no owners column for a member', () => {
+    permissions = [];
+    renderWithApp(<PlotsPage />);
+    expect(screen.queryByRole('columnheader', { name: 'Owners' })).toBeNull();
+  });
+
   it('distinguishes an empty registry from a filtered list with no match', () => {
     permissions = [];
     data = { items: [], page: 0, size: 20, totalItems: 0, totalPages: 0 };

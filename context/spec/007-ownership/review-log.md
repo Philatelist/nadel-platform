@@ -11,3 +11,4 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `4b3101f..c9a91b3` | MAJOR_ISSUES | M1 the audit record of a settings change shows the stored English label "Cooperative settings" in the Ukrainian UI | minor: audit entity-type filter lacks SETTINGS; concurrent identical saves can write two audit entries (no row lock); SettingsPage comment mentions a `key` that is not set |
+| 2 | + `2d5914c` | PASS | M1 resolved (SETTINGS entries show the catalog title) | minor notes from round 1 unchanged |

@@ -267,12 +267,12 @@ class PlotsRegistryAcceptanceTests extends IntegrationTest {
     }
 
     /**
-     * §2.2 #3, #5, §2.6 #1: the demo cooperative has about 30 plots on two streets and one common-land road, all grey,
-     * some with cadastral numbers and buildings; the list pages of 20 continue in the same natural order; the kind
+     * §2.2 #3, #5, §2.6 #1: the demo cooperative has about 30 plots on two streets and one common-land road, the owned
+     * ones green (feature 007) and the rest grey, some with cadastral numbers and buildings; the list pages of 20 continue in the same natural order; the kind
      * filter lists only the road.
      */
     @Test
-    void theDemoCooperativeHasThirtyPlotsOnTwoStreetsAndARoadAllGreyListedInPages() throws Exception {
+    void theDemoCooperativeHasThirtyPlotsOnTwoStreetsAndARoadListedInPages() throws Exception {
         String treasurer = tokenWithBaseRole("TREASURER");
 
         List<JsonNode> all = new ArrayList<>();
@@ -286,7 +286,8 @@ class PlotsRegistryAcceptanceTests extends IntegrationTest {
         assertThat(streets).hasSize(2);
         assertThat(common).hasSize(1);
         assertThat(common.get(0).get("number").asString()).isEqualTo("R-1");
-        assertThat(all).allSatisfy(p -> assertThat(p.get("status").asString()).isEqualTo("GREY"));
+        assertThat(all).allSatisfy(p -> assertThat(p.get("status").asString()).isIn("GREEN", "GREY"));
+        assertThat(common.get(0).get("status").asString()).isEqualTo("GREY");
         assertThat(all.stream().filter(p -> p.has("cadastralNumber")).count()).isBetween(5L, 15L);
         assertThat(all.stream().filter(p -> p.get("hasBuilding").asBoolean()).count()).isPositive();
 
@@ -320,7 +321,8 @@ class PlotsRegistryAcceptanceTests extends IntegrationTest {
         assertThat(page.get("totalItems").asInt()).isEqualTo(31);
         for (JsonNode plot : page.get("items")) {
             assertThat(fieldNames(plot)).doesNotContain("areaM2", "cadastralNumber", "hasBuilding", "notes");
-            assertThat(plot.get("status").asString()).isEqualTo("GREY");
+            assertThat(plot.get("status").asString()).isIn("GREEN", "GREY");
+            assertThat(fieldNames(plot)).doesNotContain("owners");
         }
     }
 

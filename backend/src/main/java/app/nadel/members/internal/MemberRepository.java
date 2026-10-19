@@ -93,4 +93,17 @@ interface MemberRepository extends JpaRepository<Member, UUID> {
     @Query(value = "select count(*) from (select pg_advisory_xact_lock(hashtextextended(cast(:tenantId as text), 0))) l",
             nativeQuery = true)
     long lockChairmen(@Param("tenantId") UUID tenantId);
+
+    /**
+     * Ids of the members (archived included) whose last, first or middle name matches a LIKE pattern over lower-cased
+     * text ({@code %token%}, with {@code !} as the escape character). The cooperative is hidden by RLS.
+     */
+    @Query("""
+            select m.id from Member m
+            where lower(m.lastName) like :pattern escape '!'
+               or lower(m.firstName) like :pattern escape '!'
+               or lower(m.middleName) like :pattern escape '!'
+            order by lower(m.lastName), lower(m.firstName), m.id
+            """)
+    List<UUID> findIdsByName(@Param("pattern") String pattern, Pageable limit);
 }

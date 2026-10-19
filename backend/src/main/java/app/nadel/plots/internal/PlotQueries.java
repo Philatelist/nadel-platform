@@ -1,6 +1,7 @@
 package app.nadel.plots.internal;
 
 import app.nadel.identity.AccessProfile;
+import app.nadel.members.MemberDirectory;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
@@ -13,6 +14,7 @@ import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import nadel.contract.model.PlotDetails;
+import nadel.contract.model.PlotOwnerSummary;
 import nadel.contract.model.PlotFeature;
 import nadel.contract.model.PlotFeatureCollection;
 import nadel.contract.model.PlotPage;
@@ -30,10 +32,17 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 class PlotQueries {
 
-    private final PlotRepository plots;
+    /** Stands in for an empty list of owner ids: a native {@code IN ()} is invalid SQL; the owner branch is off then. */
+    private static final List<UUID> NO_OWNER_IDS = List.of(new UUID(0, 0));
 
-    PlotQueries(PlotRepository plots) {
+    private final PlotRepository plots;
+    private final OwnershipQueries ownerships;
+    private final MemberDirectory members;
+
+    PlotQueries(PlotRepository plots, OwnershipQueries ownerships, MemberDirectory members) {
         this.plots = plots;
+        this.ownerships = ownerships;
+        this.members = members;
     }
 
     /**
@@ -53,19 +62,24 @@ class PlotQueries {
 
     /**
      * One page of plots in natural order of the number. A viewer without {@code PLOTS_VIEW} gets the restricted
-     * summaries, never sees archived plots and cannot search by cadastral number.
+     * summaries, never sees archived plots and can search neither by cadastral number nor by owner. A viewer with
+     * {@code PLOTS_VIEW} also finds plots by the name of a current owner and gets each plot's owners.
      */
     @Transactional(readOnly = true)
     PlotPage list(AccessProfile viewer, String query, nadel.contract.model.PlotKind kind, PlotStatus status,
             boolean includeArchived, int page, int size) {
         boolean full = PlotDtoMapper.canSeeAllDetails(viewer);
         String text = query == null ? "" : query.strip();
+        List<UUID> ownerIds = full && !text.isEmpty() ? members.idsMatchingName(text) : List.of();
         Page<Plot> result = plots.search(full && includeArchived, kind == null ? null : kind.getValue(),
-                status == null ? null : status.getValue(), likeContains(text), full, PageRequest.of(page, size));
-        Map<UUID, PlotRow> rows = plots.findRowsByIds(result.getContent().stream().map(Plot::getId).toList()).stream()
+                status == null ? null : status.getValue(), likeContains(text), full, !ownerIds.isEmpty(),
+                ownerIds.isEmpty() ? NO_OWNER_IDS : ownerIds, PageRequest.of(page, size));
+        List<UUID> plotIds = result.getContent().stream().map(Plot::getId).toList();
+        Map<UUID, PlotRow> rows = plots.findRowsByIds(plotIds).stream()
                 .collect(Collectors.toMap(row -> row.plot().getId(), Function.identity()));
+        Map<UUID, List<PlotOwnerSummary>> owners = full ? ownerships.currentOwners(plotIds) : Map.of();
         List<PlotSummary> items = result.getContent().stream()
-                .map(plot -> PlotDtoMapper.toSummary(viewer, rows.get(plot.getId())))
+                .map(plot -> PlotDtoMapper.toSummary(viewer, rows.get(plot.getId()), owners.get(plot.getId())))
                 .toList();
         return new PlotPage(items, page, size, result.getTotalElements(), result.getTotalPages());
     }

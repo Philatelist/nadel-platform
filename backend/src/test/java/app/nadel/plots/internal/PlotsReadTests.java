@@ -123,11 +123,14 @@ class PlotsReadTests extends IntegrationTest {
     void statusFilterUsesTheDisplayedStatus() throws Exception {
         String treasurer = treasurer();
 
+        // 25 plots have a current owner (GREEN); plots 25-29 and the road R-1 have none (GREY)
         listAs(treasurer, "status=GREY&size=100")
-                .andExpect(jsonPath("$.totalItems").value(31))
+                .andExpect(jsonPath("$.totalItems").value(6))
                 .andExpect(jsonPath("$.items[*].status", everyItem(is("GREY"))));
+        listAs(treasurer, "status=GREEN&size=100")
+                .andExpect(jsonPath("$.totalItems").value(25))
+                .andExpect(jsonPath("$.items[*].status", everyItem(is("GREEN"))));
         listAs(treasurer, "status=RED").andExpect(jsonPath("$.items", empty()));
-        listAs(treasurer, "status=GREEN").andExpect(jsonPath("$.totalItems").value(0));
     }
 
     @Test
@@ -142,11 +145,17 @@ class PlotsReadTests extends IntegrationTest {
             listAs(treasurer, "status=RED")
                     .andExpect(jsonPath("$.items[*].number", contains("3")))
                     .andExpect(jsonPath("$.items[0].status").value("RED"));
+            // plot 3 is RED now; the road keeps GREY whatever its cached row says: plots 25-29 and R-1
             listAs(treasurer, "status=GREY&size=100")
-                    .andExpect(jsonPath("$.totalItems").value(30))
+                    .andExpect(jsonPath("$.totalItems").value(6))
                     .andExpect(jsonPath("$.items[?(@.number == 'R-1')].status").value("GREY"));
         } finally {
-            inTenant(DEMO_TENANT, sql -> sql.update("update plot_status set status = 'GREY'"));
+            // back to the demo statuses: GREEN with a current owner, GREY without
+            inTenant(DEMO_TENANT, sql -> sql.update("""
+                    update plot_status s set status = case when p.kind = 'PLOT' and exists (
+                        select 1 from ownership o where o.plot_id = p.id and o.valid_to is null)
+                        then 'GREEN' else 'GREY' end
+                    from plot p where p.id = s.plot_id"""));
         }
     }
 
@@ -243,7 +252,9 @@ class PlotsReadTests extends IntegrationTest {
                 .andExpect(jsonPath("$.items[*].id", hasSize(31)))
                 .andExpect(jsonPath("$.items[*].number", hasSize(31)))
                 .andExpect(jsonPath("$.items[*].kind", hasSize(31)))
-                .andExpect(jsonPath("$.items[*].status", everyItem(is("GREY"))))
+                .andExpect(jsonPath("$.items[*].status", hasSize(31)))
+                .andExpect(jsonPath("$.items[?(@.number == '7')].status").value("GREEN"))
+                .andExpect(jsonPath("$.items[?(@.number == '25')].status").value("GREY"))
                 .andExpect(jsonPath("$.items[*].archived", everyItem(is(false))))
                 .andExpect(jsonPath("$.items[?(@.number == '9')].street").value("Garden St"))
                 .andExpect(jsonPath("$.items[*].areaM2").doesNotExist())
@@ -290,7 +301,7 @@ class PlotsReadTests extends IntegrationTest {
                 .andExpect(jsonPath("$.number").value("9"))
                 .andExpect(jsonPath("$.street").value("Garden St"))
                 .andExpect(jsonPath("$.kind").value("PLOT"))
-                .andExpect(jsonPath("$.status").value("GREY"))
+                .andExpect(jsonPath("$.status").value("GREEN"))
                 .andExpect(jsonPath("$.archived").value(false))
                 .andExpect(jsonPath("$.areaM2").value(1500.0))
                 .andExpect(jsonPath("$.hasBuilding").value(true))
@@ -309,7 +320,7 @@ class PlotsReadTests extends IntegrationTest {
                 .andExpect(jsonPath("$.number").value("9"))
                 .andExpect(jsonPath("$.street").value("Garden St"))
                 .andExpect(jsonPath("$.kind").value("PLOT"))
-                .andExpect(jsonPath("$.status").value("GREY"))
+                .andExpect(jsonPath("$.status").value("GREEN")) // until the visibility rules of 007 slice 6
                 .andExpect(jsonPath("$.archived").value(false))
                 .andExpect(jsonPath("$.areaM2").doesNotExist())
                 .andExpect(jsonPath("$.cadastralNumber").doesNotExist())

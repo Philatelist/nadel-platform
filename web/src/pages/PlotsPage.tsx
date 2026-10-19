@@ -7,7 +7,7 @@ import {
   type PlotSummary,
 } from '@nadel/api-client';
 import { keepPreviousData } from '@tanstack/react-query';
-import { formatSotky } from '@nadel/shared';
+import { format, formatSotky } from '@nadel/shared';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { Pagination } from '../components/Pagination';
@@ -29,6 +29,22 @@ import { useCan } from '../me';
 import { useCanEditPlots } from '../hooks/useCanEditPlots';
 import { plotStatusLabel } from '../plotStatus';
 import { useDocumentTitle } from '../useDocumentTitle';
+
+const MAX_OWNER_NAMES = 2;
+
+/** Up to two owner names joined by a comma, then "+N" for the rest; nothing for unowned or common land. */
+function OwnerNames({ owners }: { owners: PlotSummary['owners'] }) {
+  const t = useT();
+  if (!owners || owners.length === 0) return null;
+  const names = owners.slice(0, MAX_OWNER_NAMES).map((o) => o.name);
+  const more = owners.length - MAX_OWNER_NAMES;
+  return (
+    <>
+      {names.join(', ')}
+      {more > 0 && ` ${format(t.plots.ownersMore, { count: more })}`}
+    </>
+  );
+}
 
 const PAGE_SIZE = 20;
 const SEARCH_DELAY_MS = 300;
@@ -130,6 +146,11 @@ export function PlotsPage() {
         },
         kindColumn,
         statusColumn,
+        {
+          key: 'owners',
+          header: c.owners,
+          cell: (p) => <OwnerNames owners={p.owners} />,
+        },
         {
           key: 'archived',
           header: c.archived,

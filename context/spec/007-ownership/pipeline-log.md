@@ -59,3 +59,6 @@ Same as 004–006 (see `context/spec/005-ui-preferences/pipeline-log.md`). Re-ch
 - Spec example for plot 9 aligned with the demo plan (owner since 01.06.2025); owner search wording aligned with the design.
 - tasks.md written: 8 slices (settings; owners read; change of owner; corrections; guards; member visibility; e2e/docs/coverage; Feature Testing & Regression by testing-expert). No staffing gaps (database work stays with spring-backend for two migrations + demo data, as in 006). No `not-user-reviewed` marker (Phase 1 decisions stand in for the plan review).
 - AUTO: the migration is split by slice — V7 settings + permission, V8 ownership (rule: each slice commit runnable; no edits to a committed migration).
+- Slice 1 committed c9a91b3 (backend 98 targeted incl. SettingsTests 13, isolation 7, roles 57; verify 447 tests, coverage 0.9584; web 134, shared 42, ui-tokens 56; typecheck/lint/format green; generated client stable). Review r1 started.
+- Slice 1 review r1 MAJOR_ISSUES (M1 English audit label in uk UI) → fix 2d5914c → r2 PASS.
+- Slice 2 committed (backend targeted 137 green, verify 528 tests, coverage 0.9611; shared 64, web 144, ui-tokens 56; typecheck/lint/format green). Note: machine load average 40–65 slowed client runs. Review r1 started.

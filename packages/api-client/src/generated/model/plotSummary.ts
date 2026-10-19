@@ -10,6 +10,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { PlotKind } from './plotKind';
+import type { PlotOwnerSummary } from './plotOwnerSummary';
 import type { PlotStatus } from './plotStatus';
 
 /**
@@ -27,4 +28,9 @@ export interface PlotSummary {
   areaM2?: number;
   cadastralNumber?: string;
   hasBuilding?: boolean;
+  /**
+     * The current owners (name and share), ordered by name. Present only for callers with `PLOTS_VIEW`, and
+     * absent for common land and for a plot without owners.
+     */
+  owners?: PlotOwnerSummary[];
 }

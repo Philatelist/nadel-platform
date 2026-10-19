@@ -1,9 +1,9 @@
 # plots
 
 Plots and common land of a cooperative as records, and the debt status (color) shown for them. Tables: `plot` and
-`plot_status` (both under RLS `tenant_isolation`). A plot has a number, street, kind (`PLOT` or `COMMON`), area in square
-metres, cadastral number, a building flag, notes, a nullable map polygon (`boundary`, SRID 4326) and a soft archive
-(`archived_at`). Owners come with feature 007; polygons are imported in the map phase.
+`plot_status` and `ownership` (all under RLS `tenant_isolation`). A plot has a number, street, kind (`PLOT` or `COMMON`),
+area in square metres, cadastral number, a building flag, notes, a nullable map polygon (`boundary`, SRID 4326) and a
+soft archive (`archived_at`). Owners are described below; polygons are imported in the map phase.
 
 ## Public API
 
@@ -16,6 +16,7 @@ None yet. Other modules will get a lookup API in the module root when 007 (owner
 | `GET /plots/map` | `getPlotMap` | any member of a cooperative |
 | `GET /plots` | `listPlots` | any member of a cooperative |
 | `GET /plots/{id}` | `getPlot` | any member of a cooperative |
+| `GET /plots/{id}/ownerships` | `listPlotOwnerships` | `PLOTS_VIEW` |
 | `POST /plots` | `createPlot` | `PLOTS_VIEW` and `PLOTS_EDIT` |
 | `PUT /plots/{id}` | `updatePlot` | `PLOTS_VIEW` and `PLOTS_EDIT` |
 | `POST /plots/{id}/archive` | `archivePlot` | `PLOTS_VIEW` and `PLOTS_EDIT` |
@@ -30,13 +31,36 @@ always comes from the token, never from the request; a plot of another cooperati
 `PlotDtoMapper` is the only place that decides who sees what. A caller with `PLOTS_VIEW` sees area, cadastral number,
 building flag, notes and timestamps; any other member sees only number, street, kind, status and the archived flag. A
 caller without `PLOTS_VIEW` never sees archived plots (404 on the card, ignored `includeArchived` on the list) and cannot
-search by cadastral number. Owners will join this rule with 007 (a member sees the details of their own plots).
+search by cadastral number or by owner. Owners will join this rule later in 007 (a member sees the details of their own
+plots); until then the status of every plot is shown to every member.
 
-## Status until 007
+## Ownership (feature 007, read side)
 
-A plot shows `GREY` while it has no owner and no ledger: common land is always `GREY` (`PlotStatusPolicy`), and a plot
-without a `plot_status` row is `GREY` too. Creating a plot inserts the initial `GREY` row with no debt; the ledger
-rebuilds it later.
+Table `ownership`: one row per owner of a plot and period (`valid_from`, `valid_to` inclusive, empty while current), with
+the share as `share_numerator` / `share_denominator` (CHECK `1 <= n <= d <= 1000`), a `basis` note and composite foreign
+keys `(tenant_id, plot_id)` and `(tenant_id, member_id)` (`ON DELETE RESTRICT`), so a link never crosses cooperatives.
+An exclusion constraint (`btree_gist`) forbids the same member owning the same plot in overlapping periods. Rows are never
+deleted: `nadel_app` has no `DELETE`/`TRUNCATE` on the table. The shares of the current owners adding up to one whole is
+enforced by the application (a change of owner, coming in the next slices).
+
+- `Share` is the exact fraction value object (parse "n/d", reduce by gcd, format, `plus`, compare by cross-multiplication);
+  an invalid share is an `InvalidShareException`. Shares are never decimals.
+- `OwnershipQueries` reads owners. `GET /plots/{id}/ownerships` returns `current` (ordered by member name) and `history`
+  (past owners, newest first by `validFrom`); member names are "Last First" from `members.MemberDirectory`, the
+  member tables are never read. It needs `PLOTS_VIEW` (403 otherwise, including the platform operator); a plot that does
+  not exist or belongs to another cooperative is 404.
+- `GET /plots` adds `owners` (name and share of the current owners, ordered by name) to every summary for callers with
+  `PLOTS_VIEW`: one query for the ownership rows of the page and one `MemberDirectory.find`, no per-plot query. The key
+  is absent for common land, for a plot without owners and for everyone else. For callers with `PLOTS_VIEW`, `q` also
+  matches plots whose current owner's last, first or middle name contains it (`MemberDirectory.idsMatchingName`, at most 200
+  members, then an `exists` on `ownership` in the native search; an empty id list switches the branch off instead of
+  producing an invalid `IN ()`).
+
+## Status
+
+`PlotStatusPolicy`: common land is always `GREY`; every other plot shows its cached `plot_status` (a missing row is `GREY`).
+Until debts exist, the demo data and the ownership changes keep the cache as `GREEN` for a plot with a current owner and
+`GREY` for a plot without one, with no debt. Creating a plot inserts the initial `GREY` row; the ledger rebuilds it later.
 
 ## Writes
 
@@ -58,6 +82,7 @@ publishes an `audit.AuditEvent` built from `PlotSnapshot.diff`, with the plot nu
 - Delete is for a plot created by mistake. It is allowed only for an active plot: an archived plot is refused with 409
   `PLOT_ARCHIVED` and must be restored first. The `plot_status` row goes with the plot through the foreign key's
   `ON DELETE CASCADE`. The audit entry has the old values of every field and `NONE` as the new state. Feature 007 will
-  also refuse a plot with ownership history; the seam is marked with a comment in `PlotCommands.delete`.
+  also refuse a plot with ownership history (until then the foreign key of `ownership` makes the database refuse it); the
+  seam is marked with a comment in `PlotCommands.delete`.
 
-Depends on `identity`, `problem` and `audit`.
+Depends on `identity`, `problem`, `audit` and `members` (public `MemberDirectory` only).

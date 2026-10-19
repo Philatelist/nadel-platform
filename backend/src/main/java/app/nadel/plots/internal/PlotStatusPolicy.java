@@ -9,8 +9,9 @@ final class PlotStatusPolicy {
     }
 
     /**
-     * Common land is always GREY, and so is a plot without a cached status row (a plot without an owner has none
-     * until ownership and the ledger exist); every other plot shows its cached status.
+     * Common land is always GREY, and so is a plot without a cached status row; every other plot shows its cached
+     * status (GREEN while it has a current owner and no debt, GREY without an owner, later RED or YELLOW from the
+     * ledger).
      */
     static PlotStatusCode statusOf(PlotKind kind, @Nullable PlotStatusCode cached) {
         if (kind == PlotKind.COMMON || cached == null) {

@@ -48,7 +48,9 @@ interface PlotRepository extends JpaRepository<Plot, UUID> {
     /**
      * One page of the plots list in natural order of the number. {@code textPattern} is a LIKE pattern over
      * lower-cased text ({@code %token%}, with {@code !} as the escape character) matched against the number, the
-     * street and, only when {@code searchCadastral} is true, the cadastral number. {@code kind} and {@code status} are
+     * street and, only when {@code searchCadastral} is true, the cadastral number. When {@code searchOwners} is true
+     * the plot also matches when one of its current owners is among {@code ownerIds}, which must not be empty (pass a
+     * placeholder id while the branch is off). {@code kind} and {@code status} are
      * optional filters; the status is the displayed one (common land is always GREY, a plot without a status row is
      * GREY). The order is fixed here, so the {@code Pageable} must be unsorted. Rows of other cooperatives are hidden
      * by RLS.
@@ -63,7 +65,10 @@ interface PlotRepository extends JpaRepository<Plot, UUID> {
                       = cast(:status as text))
               and (lower(p.number) like :textPattern escape '!'
                    or lower(p.street) like :textPattern escape '!'
-                   or (:searchCadastral = true and lower(p.cadastral_number) like :textPattern escape '!'))
+                   or (:searchCadastral = true and lower(p.cadastral_number) like :textPattern escape '!')
+                   or (:searchOwners = true and exists (
+                         select 1 from ownership o
+                         where o.plot_id = p.id and o.valid_to is null and o.member_id in (:ownerIds))))
             order by p.number_sort_key, p.number, p.id
             """,
             countQuery = """
@@ -76,10 +81,14 @@ interface PlotRepository extends JpaRepository<Plot, UUID> {
                       = cast(:status as text))
               and (lower(p.number) like :textPattern escape '!'
                    or lower(p.street) like :textPattern escape '!'
-                   or (:searchCadastral = true and lower(p.cadastral_number) like :textPattern escape '!'))
+                   or (:searchCadastral = true and lower(p.cadastral_number) like :textPattern escape '!')
+                   or (:searchOwners = true and exists (
+                         select 1 from ownership o
+                         where o.plot_id = p.id and o.valid_to is null and o.member_id in (:ownerIds))))
             """,
             nativeQuery = true)
     Page<Plot> search(@Param("includeArchived") boolean includeArchived, @Param("kind") String kind,
             @Param("status") String status, @Param("textPattern") String textPattern,
-            @Param("searchCadastral") boolean searchCadastral, Pageable pageable);
+            @Param("searchCadastral") boolean searchCadastral, @Param("searchOwners") boolean searchOwners,
+            @Param("ownerIds") Collection<UUID> ownerIds, Pageable pageable);
 }

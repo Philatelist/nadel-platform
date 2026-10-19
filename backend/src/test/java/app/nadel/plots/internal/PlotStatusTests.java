@@ -25,6 +25,12 @@ class PlotStatusTests {
     }
 
     @Test
+    void anOwnedPlotShowsGreenButCommonLandNeverDoes() {
+        assertThat(PlotStatusPolicy.statusOf(PlotKind.PLOT, PlotStatusCode.GREEN)).isEqualTo(PlotStatusCode.GREEN);
+        assertThat(PlotStatusPolicy.statusOf(PlotKind.COMMON, PlotStatusCode.GREEN)).isEqualTo(PlotStatusCode.GREY);
+    }
+
+    @Test
     void initialStatusRowIsGreyWithoutDebt() {
         UUID plot = UUID.randomUUID();
         UUID tenant = UUID.randomUUID();

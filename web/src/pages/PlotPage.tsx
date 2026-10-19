@@ -14,6 +14,7 @@ import { useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { QueryBoundary } from '../components/QueryBoundary';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { OwnersPanel } from '../components/ownership/OwnersPanel';
 import { Badge, Button, Notice, PageHeader, Panel, StatusDot } from '../components/ui';
 import { useLocale, useT } from '../i18n';
 import { useCan } from '../me';
@@ -150,11 +151,14 @@ function PlotView({ plot }: { plot: PlotDetails }) {
           ))}
         </dl>
       </Panel>
-      {canView && (
-        <Panel title={t.plot.ownersTitle}>
-          <p className="text-ink-muted">{t.plot.ownersPlaceholder}</p>
-        </Panel>
-      )}
+      {canView &&
+        (plot.kind === 'COMMON' ? (
+          <Panel title={t.plot.ownersTitle}>
+            <p className="text-ink-muted">{t.ownership.commonLand}</p>
+          </Panel>
+        ) : (
+          <OwnersPanel plotId={plot.id} />
+        ))}
       {confirmingDelete && (
         <ConfirmDialog
           title={t.plot.deleteTitle}

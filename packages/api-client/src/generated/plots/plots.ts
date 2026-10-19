@@ -83,11 +83,12 @@ export const getListPlotsUrl = (params?: ListPlotsParams,) => {
  * (`2` before `10`, `12` before `12а`). Every member of the cooperative may call it; the platform operator
  * has no cooperative data: 403.
  * `q` is a case-insensitive substring match against the number and the street, and, for callers with
- * `PLOTS_VIEW`, the cadastral number. `status` is the displayed status (common land is always `GREY`).
+ * `PLOTS_VIEW`, the cadastral number and the name (last, first or middle name) of a current owner of the plot.
+ * `status` is the displayed status (common land is always `GREY`).
  * Archived plots are excluded unless `includeArchived` is true.
  * A caller without `PLOTS_VIEW` sees only `id`, `number`, `kind`, `status`, `street` and `archived`: `areaM2`,
- * `cadastralNumber` and `hasBuilding` are absent, `q` does not match the cadastral number, and
- * `includeArchived` is ignored (archived plots are never listed).
+ * `cadastralNumber`, `hasBuilding` and `owners` are absent, `q` does not match the cadastral number or
+ * owners' names, and `includeArchived` is ignored (archived plots are never listed).
  * @summary List plots
  */
 export const listPlots = async (params?: ListPlotsParams, options?: Parameters<typeof nadelFetch>[1]): Promise<PlotPage> => {

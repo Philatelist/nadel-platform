@@ -2,6 +2,7 @@ export * from './http';
 export * from './generated/audit/audit';
 export * from './generated/me/me';
 export * from './generated/members/members';
+export * from './generated/ownerships/ownerships';
 export * from './generated/permissions/permissions';
 export * from './generated/plots/plots';
 export * from './generated/roles/roles';

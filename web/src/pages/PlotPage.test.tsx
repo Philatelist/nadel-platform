@@ -16,6 +16,13 @@ vi.mock('../me', () => ({
 vi.mock('@nadel/api-client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@nadel/api-client')>()),
   useGetPlot: () => ({ data: plot, error: null, isPending: false, isError: false, refetch: vi.fn() }),
+  useListPlotOwnerships: () => ({
+    data: { plotId: 'p1', current: [], history: [] },
+    error: null,
+    isPending: false,
+    isError: false,
+    refetch: vi.fn(),
+  }),
 }));
 
 const active: PlotDetails = {
@@ -71,5 +78,32 @@ describe('PlotPage actions', () => {
     renderCard();
     expect(screen.queryByRole('button', { name: 'Archive' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull();
+  });
+});
+
+describe('PlotPage owners', () => {
+  beforeEach(() => {
+    plot = active;
+  });
+
+  it('shows the owners panel to viewers of plots', () => {
+    permissions = ['PLOTS_VIEW'];
+    renderCard();
+    expect(screen.getByRole('heading', { name: 'Owners' })).toBeInTheDocument();
+    expect(screen.getByText('No ownership history')).toBeInTheDocument();
+  });
+
+  it('does not show the owners panel to a member without PLOTS_VIEW', () => {
+    permissions = [];
+    renderCard();
+    expect(screen.queryByRole('heading', { name: 'Owners' })).toBeNull();
+  });
+
+  it('says common land has no owners instead of listing them', () => {
+    permissions = ['PLOTS_VIEW'];
+    plot = { ...active, kind: 'COMMON' };
+    renderCard();
+    expect(screen.getByText('Common land has no owners.')).toBeInTheDocument();
+    expect(screen.queryByText('No ownership history')).toBeNull();
   });
 });

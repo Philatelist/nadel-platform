@@ -3,7 +3,9 @@ package app.nadel.plots.internal;
 import app.nadel.identity.AccessProfile;
 import app.nadel.identity.Permission;
 import java.time.ZoneOffset;
+import java.util.List;
 import nadel.contract.model.PlotDetails;
+import nadel.contract.model.PlotOwnerSummary;
 import nadel.contract.model.PlotStatus;
 import nadel.contract.model.PlotSummary;
 
@@ -15,7 +17,7 @@ final class PlotDtoMapper {
 
     /**
      * The one place that decides who sees area, cadastral number, building, notes and debt of a plot. Today that is
-     * everyone with {@code PLOTS_VIEW}; ownership of the plot joins the rule with spec 007.
+     * everyone with {@code PLOTS_VIEW}; owning the plot joins the rule later in spec 007.
      */
     static boolean canSeeDetails(AccessProfile viewer, Plot plot) {
         return canSeeAllDetails(viewer);
@@ -33,7 +35,11 @@ final class PlotDtoMapper {
         return PlotStatus.fromValue(PlotStatusPolicy.statusOf(row.plot().getKind(), row.status()).name());
     }
 
-    static PlotSummary toSummary(AccessProfile viewer, PlotRow row) {
+    /**
+     * @param owners the current owners of the plot, or null/empty when it has none; they are shown only to a viewer
+     *               who may see the details of every plot
+     */
+    static PlotSummary toSummary(AccessProfile viewer, PlotRow row, List<PlotOwnerSummary> owners) {
         Plot plot = row.plot();
         var dto = new PlotSummary();
         dto.setId(plot.getId());
@@ -47,6 +53,9 @@ final class PlotDtoMapper {
             dto.setCadastralNumber(plot.getCadastralNumber());
             dto.setHasBuilding(plot.hasBuilding());
         }
+        // the generated model defaults to an empty list, which would be written as "owners": []
+        boolean showOwners = canSeeAllDetails(viewer) && owners != null && !owners.isEmpty();
+        dto.setOwners(showOwners ? owners : null);
         return dto;
     }
 

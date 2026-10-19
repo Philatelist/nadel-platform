@@ -5,7 +5,12 @@ The people of a cooperative, their roles and the permissions of those roles (ADR
 
 ## Public API
 
-None yet. Features 004 (ownership) and 005 (import) will add a lookup API in the module root.
+`MemberDirectory` and `MemberRef` in the module root: a read-only lookup for other modules, which must never read the
+member tables. `find(ids)` returns the names and the archived flag of the given members (archived included);
+`idsMatchingName(text)` returns the ids of members whose last, first or middle name contains the text (case-insensitive,
+archived included, literal match, at most 200 ids). `MemberRef.shortName()` is "Last First" without the patronymic. The
+implementation is `JpaMemberDirectory` (internal); `plots` uses it for owners (feature 007). Feature 005 (import) will
+add more lookups here.
 
 ## What is here
 

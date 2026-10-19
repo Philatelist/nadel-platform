@@ -179,3 +179,70 @@ ON CONFLICT DO NOTHING;
 INSERT INTO member_role (tenant_id, member_id, role_id) VALUES
     ('11111111-1111-1111-1111-111111111111', 'aaaaaaaa-0000-0000-0000-000000000009', 'cccccccc-0000-0000-0000-000000000002')
 ON CONFLICT DO NOTHING;
+
+-- Ownership (spec 007). Plot ids are random, so plots are looked up by (tenant, number); ownership ids are fixed so the
+-- script stays idempotent. Plots 25-29 and the road R-1 have no owner. The chairman (1), the treasurer (2) and the
+-- electrician (4) own nothing: tests archive or re-role them, and 32-35 are left free as spare members.
+--  - plot 3: 1/2 + 1/2; plot 7: 1/2 demo member (3, member@demo.local) + 1/2 Moroz (7); plot 11: 2/3 + 1/3
+--  - plot 9: archived member 20 until 2025-05-31, then member 11 (the plot "sold last year", with history)
+--  - the demo member also owns plot 15 alone
+--  - every other plot of 1-24 and "12а" has one distinct active owner at 1/1
+INSERT INTO ownership (id, tenant_id, plot_id, member_id, share_numerator, share_denominator, valid_from, valid_to, basis)
+SELECT v.id, p.tenant_id, p.id, v.member_id, v.num, v.den, v.valid_from, v.valid_to, v.basis
+FROM (VALUES
+    ('dddddddd-0000-0000-0000-000000000001'::uuid, '1',   'aaaaaaaa-0000-0000-0000-000000000009'::uuid, 1, 1, DATE '2012-05-20', NULL::date, NULL),
+    ('dddddddd-0000-0000-0000-000000000002'::uuid, '2',   'aaaaaaaa-0000-0000-0000-000000000012'::uuid, 1, 1, DATE '2013-03-11', NULL, NULL),
+    ('dddddddd-0000-0000-0000-000000000003'::uuid, '3',   'aaaaaaaa-0000-0000-0000-000000000005'::uuid, 1, 2, DATE '2016-08-01', NULL, 'Inheritance, certificate of 2016-07-12'),
+    ('dddddddd-0000-0000-0000-000000000004'::uuid, '3',   'aaaaaaaa-0000-0000-0000-000000000006'::uuid, 1, 2, DATE '2016-08-01', NULL, 'Inheritance, certificate of 2016-07-12'),
+    ('dddddddd-0000-0000-0000-000000000005'::uuid, '4',   'aaaaaaaa-0000-0000-0000-000000000013'::uuid, 1, 1, DATE '2014-09-30', NULL, NULL),
+    ('dddddddd-0000-0000-0000-000000000006'::uuid, '5',   'aaaaaaaa-0000-0000-0000-000000000014'::uuid, 1, 1, DATE '2011-06-15', NULL, NULL),
+    ('dddddddd-0000-0000-0000-000000000007'::uuid, '6',   'aaaaaaaa-0000-0000-0000-000000000015'::uuid, 1, 1, DATE '2017-04-02', NULL, NULL),
+    ('dddddddd-0000-0000-0000-000000000008'::uuid, '7',   'aaaaaaaa-0000-0000-0000-000000000003'::uuid, 1, 2, DATE '2019-04-15', NULL, 'Purchase, contract of 2019-04-10'),
+    ('dddddddd-0000-0000-0000-000000000009'::uuid, '7',   'aaaaaaaa-0000-0000-0000-000000000007'::uuid, 1, 2, DATE '2019-04-15', NULL, 'Purchase, contract of 2019-04-10'),
+    ('dddddddd-0000-0000-0000-000000000010'::uuid, '8',   'aaaaaaaa-0000-0000-0000-000000000016'::uuid, 1, 1, DATE '2015-10-12', NULL, NULL),
+    ('dddddddd-0000-0000-0000-000000000011'::uuid, '9',   'aaaaaaaa-0000-0000-0000-000000000020'::uuid, 1, 1, DATE '2015-06-01', DATE '2025-05-31', 'Initial allocation'),
+    ('dddddddd-0000-0000-0000-000000000012'::uuid, '9',   'aaaaaaaa-0000-0000-0000-000000000011'::uuid, 1, 1, DATE '2025-06-01', NULL, 'Sale contract of 2025-05-20'),
+    ('dddddddd-0000-0000-0000-000000000013'::uuid, '10',  'aaaaaaaa-0000-0000-0000-000000000017'::uuid, 1, 1, DATE '2012-11-05', NULL, NULL),
+    ('dddddddd-0000-0000-0000-000000000014'::uuid, '11',  'aaaaaaaa-0000-0000-0000-000000000008'::uuid, 2, 3, DATE '2018-02-19', NULL, 'Court decision on the division of property'),
+    ('dddddddd-0000-0000-0000-000000000015'::uuid, '11',  'aaaaaaaa-0000-0000-0000-000000000010'::uuid, 1, 3, DATE '2018-02-19', NULL, 'Court decision on the division of property'),
+    ('dddddddd-0000-0000-0000-000000000016'::uuid, '12',  'aaaaaaaa-0000-0000-0000-000000000018'::uuid, 1, 1, DATE '2013-07-23', NULL, NULL),
+    ('dddddddd-0000-0000-0000-000000000017'::uuid, '12а', 'aaaaaaaa-0000-0000-0000-000000000019'::uuid, 1, 1, DATE '2020-01-14', NULL, 'Split off from plot 12'),
+    ('dddddddd-0000-0000-0000-000000000018'::uuid, '13',  'aaaaaaaa-0000-0000-0000-000000000021'::uuid, 1, 1, DATE '2016-05-09', NULL, NULL),
+    ('dddddddd-0000-0000-0000-000000000019'::uuid, '14',  'aaaaaaaa-0000-0000-0000-000000000022'::uuid, 1, 1, DATE '2014-12-01', NULL, NULL),
+    ('dddddddd-0000-0000-0000-000000000020'::uuid, '15',  'aaaaaaaa-0000-0000-0000-000000000003'::uuid, 1, 1, DATE '2021-03-25', NULL, 'Purchase, contract of 2021-03-18'),
+    ('dddddddd-0000-0000-0000-000000000021'::uuid, '16',  'aaaaaaaa-0000-0000-0000-000000000023'::uuid, 1, 1, DATE '2010-08-17', NULL, NULL),
+    ('dddddddd-0000-0000-0000-000000000022'::uuid, '17',  'aaaaaaaa-0000-0000-0000-000000000024'::uuid, 1, 1, DATE '2015-02-28', NULL, NULL),
+    ('dddddddd-0000-0000-0000-000000000023'::uuid, '18',  'aaaaaaaa-0000-0000-0000-000000000025'::uuid, 1, 1, DATE '2017-09-06', NULL, NULL),
+    ('dddddddd-0000-0000-0000-000000000024'::uuid, '19',  'aaaaaaaa-0000-0000-0000-000000000026'::uuid, 1, 1, DATE '2011-04-21', NULL, NULL),
+    ('dddddddd-0000-0000-0000-000000000025'::uuid, '20',  'aaaaaaaa-0000-0000-0000-000000000027'::uuid, 1, 1, DATE '2019-11-11', NULL, NULL),
+    ('dddddddd-0000-0000-0000-000000000026'::uuid, '21',  'aaaaaaaa-0000-0000-0000-000000000028'::uuid, 1, 1, DATE '2013-01-30', NULL, NULL),
+    ('dddddddd-0000-0000-0000-000000000027'::uuid, '22',  'aaaaaaaa-0000-0000-0000-000000000029'::uuid, 1, 1, DATE '2016-06-18', NULL, NULL),
+    ('dddddddd-0000-0000-0000-000000000028'::uuid, '23',  'aaaaaaaa-0000-0000-0000-000000000030'::uuid, 1, 1, DATE '2018-10-03', NULL, NULL),
+    ('dddddddd-0000-0000-0000-000000000029'::uuid, '24',  'aaaaaaaa-0000-0000-0000-000000000031'::uuid, 1, 1, DATE '2012-02-14', NULL, NULL)
+) AS v(id, plot_number, member_id, num, den, valid_from, valid_to, basis)
+JOIN plot p ON p.tenant_id = '11111111-1111-1111-1111-111111111111' AND p.number = v.plot_number
+     AND p.archived_at IS NULL
+ON CONFLICT (id) DO UPDATE SET
+    plot_id = EXCLUDED.plot_id, member_id = EXCLUDED.member_id,
+    share_numerator = EXCLUDED.share_numerator, share_denominator = EXCLUDED.share_denominator,
+    valid_from = EXCLUDED.valid_from, valid_to = EXCLUDED.valid_to, basis = EXCLUDED.basis;
+
+-- The other cooperative: one owned plot (plot 2 stays free), for isolation checks.
+INSERT INTO ownership (id, tenant_id, plot_id, member_id, share_numerator, share_denominator, valid_from)
+SELECT 'dddddddd-0000-0000-0000-000000000030', p.tenant_id, p.id, 'bbbbbbbb-0000-0000-0000-000000000001', 1, 1,
+       DATE '2018-01-01'
+FROM plot p
+WHERE p.tenant_id = '22222222-2222-2222-2222-222222222222' AND p.number = '1' AND p.archived_at IS NULL
+ON CONFLICT (id) DO UPDATE SET
+    plot_id = EXCLUDED.plot_id, member_id = EXCLUDED.member_id,
+    share_numerator = EXCLUDED.share_numerator, share_denominator = EXCLUDED.share_denominator,
+    valid_from = EXCLUDED.valid_from, valid_to = EXCLUDED.valid_to, basis = EXCLUDED.basis;
+
+-- Until debts exist (specs 007+): a plot with a current owner is GREEN, every other plot (no owner, common land) GREY.
+UPDATE plot_status s
+SET status = CASE WHEN p.kind = 'PLOT' AND EXISTS (
+                      SELECT 1 FROM ownership o WHERE o.plot_id = p.id AND o.valid_to IS NULL)
+                  THEN 'GREEN' ELSE 'GREY' END,
+    debt = 0, oldest_debt_date = NULL, updated_at = now()
+FROM plot p
+WHERE p.id = s.plot_id;
