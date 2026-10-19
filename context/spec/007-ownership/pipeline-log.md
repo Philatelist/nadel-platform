@@ -79,3 +79,8 @@ Same as 004–006 (see `context/spec/005-ui-preferences/pipeline-log.md`). Re-ch
 - Slice 7 committed (make check green: backend 681, coverage 0.9676, floor raised 0.95 → 0.96; web 186, shared 64, ui-tokens 56; make e2e 65 passed per the testing agent; one stale active e2e member from an earlier failed run was archived through the API). Review r1 started.
 - Slice 7 review r1 PASS. All slice reviews PASS → Slice 8 (Feature Testing & Regression) started.
 - Slice 8 committed (OwnershipAcceptanceTests 10 journeys, ownership-acceptance.spec.ts 7 tests; make check green: 691 backend, coverage 0.9676 vs floor 0.96; make e2e 72 passed). Observation: GET /plots/{id} serialises "owners": [] (contract says absent); no leak. Review r1 started.
+- Slice 8 RED validation (testing agent): SHARES_NOT_ONE check disabled → `OwnershipAcceptanceTests.sharesMustAddUp…` 201 instead of 409; `ViewerScope.canSeeStatus` forced true → `theColourSetting…` saw every plot's status; uk `SHARES_NOT_ONE` text changed → e2e expected "Частки мають разом становити 1". All restored (empty diff) and green.
+- Slice 8 review r1 PASS. All slice reviews PASS.
+
+## Phase 4 — verify
+- Verify: UI rendered on make up; screenshots docs/screenshots/007-ownership-*.png (7). Found two wording mismatches vs the criteria (ownership dates with two-digit years; a whole share shown as "1" instead of "1/1") → verify fix by react-frontend (shared formatDay, formatShare always a fraction, e2e date helpers aligned); unit tests green; screenshots re-captured.

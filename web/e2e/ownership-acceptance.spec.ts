@@ -29,7 +29,12 @@ const owners = (page: Page, name: string) => main(page).getByRole('listitem').fi
 
 /** A calendar day as the Ukrainian UI prints it (short date, no time zone shift). */
 const shortDayUk = (isoDay: string) =>
-  new Intl.DateTimeFormat('uk', { dateStyle: 'short', timeZone: 'UTC' }).format(new Date(isoDay));
+  new Intl.DateTimeFormat('uk', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    timeZone: 'UTC',
+  }).format(new Date(isoDay));
 
 async function signInInUkrainian(page: Page, email: string): Promise<void> {
   await page.addInitScript(() => {

@@ -69,6 +69,7 @@ describe('isWhole / formatShare', () => {
 
   it('formats a server share in lowest terms and leaves other text alone', () => {
     expect(formatShare('2/4')).toBe('1/2');
+    expect(formatShare('1')).toBe('1/1');
     expect(formatShare('n/a')).toBe('n/a');
   });
 });

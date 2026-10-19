@@ -49,3 +49,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `a53200c..7f6b386` | PASS | — | minor: role-names spec hard-codes 9 permissions; an `.or()` locator in the guard test could hit strict mode; a duplicate assertion; the 18/20 counts depend on page size and on no active leftovers from a killed run; plots README dependency line omits `settings` and no module README links ADR 0011 |
+
+## Slice 8 — Feature Testing & Regression
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `7f6b386..cc47d11` | PASS | — | minor: limited-card test accepts `"owners": []` (contract says absent; no leak — follow-up); a silent skip if plot 9 is not on the `q=9` page; a duplicated assertion; settings audit cleanup can leave rows in the test DB; exact demo counts are fragile to leftovers; RED validation not recorded in the log (now recorded) |

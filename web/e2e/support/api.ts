@@ -35,9 +35,14 @@ export function kyivDay(offsetDays = 0): string {
   return day.toISOString().slice(0, 10);
 }
 
-/** A day as the English UI prints it in the ownership lists (short date, no time zone shift). */
+/** A day as the English UI prints it in the ownership lists (dd.MM.yyyy-style short date with a four-digit year, no time zone shift). */
 export function shortDay(isoDay: string): string {
-  return new Intl.DateTimeFormat('en-US', { dateStyle: 'short', timeZone: 'UTC' }).format(new Date(isoDay));
+  return new Intl.DateTimeFormat('en-US', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    timeZone: 'UTC',
+  }).format(new Date(isoDay));
 }
 
 /** Parses a JSON response that must have the given status, or throws with the body for a readable failure. */

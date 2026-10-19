@@ -1,14 +1,9 @@
 import type { Ownership, PlotOwnerships } from '@nadel/api-client';
-import { format, formatShare } from '@nadel/shared';
+import { format, formatDay, formatShare } from '@nadel/shared';
 import { Link } from 'react-router';
 import { useLocale, useT } from '../../i18n';
 import { useCan } from '../../me';
 import { Button } from '../ui';
-
-/** Date-only values ("2015-06-01") are calendar days, so they are formatted in UTC to avoid a shifted day. */
-function formatDay(value: string, locale: string): string {
-  return new Intl.DateTimeFormat(locale, { dateStyle: 'short', timeZone: 'UTC' }).format(new Date(value));
-}
 
 function OwnerName({ ownership }: { ownership: Ownership }) {
   const t = useT();

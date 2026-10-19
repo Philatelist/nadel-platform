@@ -64,8 +64,10 @@ export function formatFraction(f: Fraction): string {
   return r.denominator === 1n ? String(r.numerator) : `${r.numerator}/${r.denominator}`;
 }
 
-/** Formats a share string such as "2/4" in lowest terms; text that is not a share is returned as it is. */
+/** Formats a share string such as "2/4" in lowest terms, always as a fraction ("1/1" when whole); other text is returned as it is. */
 export function formatShare(text: string): string {
   const f = parseFraction(text);
-  return f ? formatFraction(f) : text;
+  if (!f) return text;
+  const r = reduceFraction(f);
+  return `${r.numerator}/${r.denominator}`;
 }

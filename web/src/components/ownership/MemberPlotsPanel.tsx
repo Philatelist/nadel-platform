@@ -1,15 +1,10 @@
 import { useListMemberOwnerships, type MemberOwnershipItem } from '@nadel/api-client';
-import { format, formatShare } from '@nadel/shared';
+import { format, formatDay, formatShare } from '@nadel/shared';
 import { Link } from 'react-router';
 import { useLocale, useT } from '../../i18n';
 import { useCan, useMe } from '../../me';
 import { QueryBoundary } from '../QueryBoundary';
 import { Panel } from '../ui';
-
-/** Date-only values are calendar days, formatted in UTC to avoid a shifted day. */
-function formatDay(value: string, locale: string): string {
-  return new Intl.DateTimeFormat(locale, { dateStyle: 'short', timeZone: 'UTC' }).format(new Date(value));
-}
 
 function PlotRow({ item, past }: { item: MemberOwnershipItem; past: boolean }) {
   const t = useT();
