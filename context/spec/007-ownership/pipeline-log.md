@@ -1,12 +1,12 @@
 # Pipeline log — 007 Ownership
 
-- Status: running
+- Status: finished
 - Phase: 6 — review run
 - Branch: 007-ownership · Base: main (= origin/main) @ 0af7859
 - Requirement: docs/features/007-ownership.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
 - Publish: pr+checks · PR: https://github.com/Philatelist/nadel-platform/pull/26 · Checks: green (run 39336701013)
-- Review run: on (pending)
+- Review run: running at http://localhost:5173 (API :8080, Keycloak :8180; PIDs in backend/target/review-run.pids)
 
 ## Project facts
 
@@ -106,3 +106,5 @@ Same as 004–006 (see `context/spec/005-ui-preferences/pipeline-log.md`). Re-ch
 - Left for the owner: review and merge; follow-ups listed in the PR.
 
 ## Phase 6 — review run
+- Started `make up` detached from `007-ownership` @ eb57562; ready after 30 s; `/plots` and `/actuator/health` answer 200. Log: `backend/target/review-run.log`; PIDs `21007 21170 21210` in `backend/target/review-run.pids`. Stop: `kill 21007 21170 21210`, then `make down`.
+- Try (password `nadel`): treasurer@demo.local → owners column, search "Moroz", plot 9 history; chairman@demo.local → Change owner on a plot (1/2 + 1/3 blocked at 5/6), Correct with a reason, Cooperative settings; member@demo.local → My account "My plots" (7 with Moroz, 15), neutral marks on other plots, plot 7 full card.
