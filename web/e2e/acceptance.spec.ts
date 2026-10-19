@@ -76,7 +76,7 @@ test.describe('§2.10 / §2.11 landing page and navigation', () => {
     await expectNavigation(
       page,
       ['Plots', 'My account', 'Members', 'Audit log'],
-      ['Roles', 'Cooperative settings'],
+      ['Import', 'Roles', 'Cooperative settings'],
     );
   });
 
@@ -88,7 +88,7 @@ test.describe('§2.10 / §2.11 landing page and navigation', () => {
     await expect(page).toHaveURL(/\/plots$/);
     await expectNavigation(
       page,
-      ['Plots', 'My account', 'Members', 'Roles', 'Audit log', 'Cooperative settings'],
+      ['Plots', 'My account', 'Members', 'Import', 'Roles', 'Audit log', 'Cooperative settings'],
       [],
     );
     await accountLink(page).click();
@@ -645,7 +645,7 @@ test.describe('chairman journeys that change data', () => {
     await expectNavigation(
       again,
       ['Plots', 'My account', 'Members', 'Audit log'],
-      ['Roles', 'Cooperative settings'],
+      ['Import', 'Roles', 'Cooperative settings'],
     );
     await again.context().close();
   });

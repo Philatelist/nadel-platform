@@ -28,6 +28,8 @@ tags:
     description: Owners of plots, their shares and history
   - name: settings
     description: Cooperative settings
+  - name: imports
+    description: Excel import of plots, members and ownership
 
 paths:
   /me:
@@ -1080,6 +1082,29 @@ paths:
                 $ref: '#/components/schemas/CooperativeSettings'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /imports/template:
+    get:
+      tags: [imports]
+      operationId: downloadImportTemplate
+      summary: Download the import template
+      description: |
+        Returns the Excel template (`.xlsx`, file name `nadel-import-template.xlsx`) with the sheets `Plots`, `Members`
+        and `Ownership`: English column headers, one instruction row and one example row per sheet (both start with
+        `#` and are ignored by the import). Requires the `IMPORT_RUN` permission; the platform operator has no
+        cooperative data: 403.
+      responses:
+        '200':
+          description: The template workbook, sent as an attachment
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':

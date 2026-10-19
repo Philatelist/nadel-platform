@@ -11,6 +11,7 @@ export const en = {
     plots: 'Plots',
     account: 'My account',
     members: 'Members',
+    imports: 'Import',
     roles: 'Roles',
     audit: 'Audit log',
     settings: 'Cooperative settings',
@@ -283,6 +284,15 @@ export const en = {
     MEMBER_NOT_FOUND: 'This member was not found.',
     OWNERSHIP_NOT_FOUND: 'This ownership record was not found. Reload the page.',
     DUPLICATE_OWNER: 'This member is already chosen.',
+  },
+  import: {
+    title: 'Import',
+    description: 'Bring plots, members and owners over from an Excel file.',
+    templateTitle: 'Template',
+    templateHint: 'Download the Excel template, fill it in with the cooperative data and save the file.',
+    downloadTemplate: 'Download template',
+    downloading: 'Downloading…',
+    templateFileName: 'nadel-import-template.xlsx',
   },
   settings: {
     title: 'Cooperative settings',

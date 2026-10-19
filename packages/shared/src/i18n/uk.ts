@@ -13,6 +13,7 @@ export const uk: Messages = {
     plots: 'Ділянки',
     account: 'Мій кабінет',
     members: 'Члени кооперативу',
+    imports: 'Імпорт',
     roles: 'Ролі',
     audit: 'Журнал змін',
     settings: 'Налаштування кооперативу',
@@ -295,6 +296,15 @@ export const uk: Messages = {
     MEMBER_NOT_FOUND: 'Цього члена не знайдено.',
     OWNERSHIP_NOT_FOUND: 'Запис про володіння не знайдено. Перезавантажте сторінку.',
     DUPLICATE_OWNER: 'Цей член уже вибраний.',
+  },
+  import: {
+    title: 'Імпорт',
+    description: 'Перенесіть ділянки, членів кооперативу та власників з Excel-файлу.',
+    templateTitle: 'Шаблон',
+    templateHint: 'Завантажте шаблон Excel, заповніть його даними кооперативу та збережіть файл.',
+    downloadTemplate: 'Завантажити шаблон',
+    downloading: 'Завантажуємо…',
+    templateFileName: 'nadel-import-template.xlsx',
   },
   settings: {
     title: 'Налаштування кооперативу',

@@ -21,6 +21,7 @@
         <java.version>25</java.version>
         <spring-modulith.version>2.1.1</spring-modulith.version>
         <openapi-generator.version>7.26.0</openapi-generator.version>
+        <fastexcel.version>0.20.2</fastexcel.version>
         <!-- Minimum line coverage enforced by `verify`. Raise it as features land; never lower it. -->
         <coverage.minimum>0.96</coverage.minimum>
     </properties>
@@ -82,6 +83,17 @@
         <dependency>
             <groupId>jakarta.annotation</groupId>
             <artifactId>jakarta.annotation-api</artifactId>
+        </dependency>
+        <!-- Excel import: fastexcel writes the template, fastexcel-reader streams uploaded workbooks (same version) -->
+        <dependency>
+            <groupId>org.dhatim</groupId>
+            <artifactId>fastexcel</artifactId>
+            <version>${fastexcel.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.dhatim</groupId>
+            <artifactId>fastexcel-reader</artifactId>
+            <version>${fastexcel.version}</version>
         </dependency>
         <dependency>
             <groupId>org.postgresql</groupId>
