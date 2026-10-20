@@ -107,7 +107,7 @@ describe('ImportPage', () => {
       const user = userEvent.setup();
       await user.upload(screen.getByLabelText('Choose file'), xlsx());
       await user.click(screen.getByRole('button', { name: 'Check file' }));
-      expect(await screen.findByRole('alert')).toHaveTextContent('larger than 10 MB');
+      expect(await screen.findByRole('alert')).toHaveTextContent('too large — the maximum is 10 MB');
     });
   });
 });

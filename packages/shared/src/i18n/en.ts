@@ -324,7 +324,7 @@ export const en = {
     chooseAnother: 'Choose another file',
   },
   importError: {
-    FILE_TOO_LARGE: 'The file is larger than 10 MB. Split it into several files.',
+    FILE_TOO_LARGE: 'The file is too large — the maximum is 10 MB',
     FILE_NOT_XLSX: 'This is not an Excel file. Choose a file with the .xlsx extension.',
     IMPORT_LIMIT_EXCEEDED: 'The file has too many rows: up to 2,000 plots and 3,000 members.',
   },

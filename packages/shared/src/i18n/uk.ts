@@ -337,7 +337,7 @@ export const uk: Messages = {
     chooseAnother: 'Вибрати інший файл',
   },
   importError: {
-    FILE_TOO_LARGE: 'Файл більший за 10 МБ. Розділіть його на кілька файлів.',
+    FILE_TOO_LARGE: 'Файл завеликий — максимум 10 МБ',
     FILE_NOT_XLSX: 'Це не файл Excel. Оберіть файл з розширенням .xlsx.',
     IMPORT_LIMIT_EXCEEDED: 'У файлі забагато рядків: до 2 000 ділянок і 3 000 членів кооперативу.',
   },
