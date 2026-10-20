@@ -56,3 +56,10 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `bd9b231..b7b8235` | PASS | — | minor: owner count `>= 28` instead of 30; §2.1 #1 mapping overstated; §2.3 #2–#4 lack own rows in list-of-tests; uploader name not asserted; new phone not read back; bad-email problem not tied to its column; audit check `contains("30")`; conflict row number not asserted; other-cooperative changes only counted; indentation; package placement; e2e leftover if lookup fails |
+
+## Verification and CI fixes
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| verify 1 | `b7b8235..d0bdc25` | PASS | — | minor: §2.1 #1 evidence should cite `TemplateWriterTests`; screenshot history full of test runs; duplicated `equals("INVALID")` |
+| CI 1 | `d0bdc25..9ec0e24` | PASS | — | minor: PR note for the overrides (added to the PR body); Jackson 2 left at the Boot default; comment casing |

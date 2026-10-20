@@ -1,12 +1,12 @@
 # Pipeline log — 008 Excel import
 
-- Status: running
-- Phase: 5 — publish (push, PR, checks)
+- Status: finished
+- Phase: 6 — done (review run started)
 - Branch: 008-excel-import · Base: main (= origin/main) @ bcddbbb
 - Requirement: docs/features/008-excel-import.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
-- Publish: pr+checks · PR: https://github.com/Philatelist/nadel-platform/pull/27 · Checks: red: Backend, Security
-- Review run: on (pending)
+- Publish: pr+checks · PR: https://github.com/Philatelist/nadel-platform/pull/27 · Checks: green
+- Review run: running at http://localhost:5173 (web), http://localhost:8080 (API), http://localhost:8180 (Keycloak) (PIDs in backend/target/review-run.pids: make 73987, java 74256, node 74150)
 
 ## Project facts
 
@@ -107,3 +107,6 @@ Same as 004–007 (see `context/spec/005-ui-preferences/pipeline-log.md`). Re-ch
 - Verification commit d0bdc25 review: PASS (minor: §2.1 #1 evidence should cite TemplateWriterTests; screenshot history full of test runs).
 - CI run 39418849494 on PR #27: Clients, E2E, Semgrep green; Backend red (`AuditReadTests.theDemoTreasurerHoldsAuditView` 403 MEMBER_NOT_LINKED — same failure on main's run 39338526236 after the 007 merge: test-order pollution of the demo treasurer link); Security red (OSV: tomcat-embed-core 11.0.24 and jackson 3.1.5 from the Spring Boot 4.1.1 BOM, new advisories, patched 11.0.25 / 3.1.7). Neither caused by 008. Fix attempt 1 started (spring-backend): fix the leaking test, pin patched versions; no check weakened.
 - CI fix attempt 1 returned: polluter SettingsTests (fixed subject, never unlinked) → cleanUp unlinks the four demo members; AuditReadTests unlinks before signing in. Repro: SettingsTests then AuditReadTests failed before, passes after (orchestrator re-ran: exit 0). pom: tomcat.version 11.0.25, jackson-bom.version 3.1.7 (no Boot 4.1.x patch yet); dependency:tree confirms. Agent verify 1031 green, coverage met.
+- CI fix review: PASS. Review log updated (uncommitted, goes with the next commit or the hand-off).
+- CI on 9ec0e24: all five checks green (Backend, Clients, E2E, Semgrep, Security). Phase 5 end.
+- Phase 6: `make up` from the spec branch (9ec0e24), detached; PIDs make 73987, java 74256, node 74150 in backend/target/review-run.pids. Run finished.
