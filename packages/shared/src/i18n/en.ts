@@ -341,7 +341,7 @@ export const en = {
       notes: 'Notes',
     },
     members: {
-      external_id: 'Member ID',
+      external_id: 'Member key',
       last_name: 'Last name',
       first_name: 'First name',
       middle_name: 'Middle name',
@@ -351,6 +351,12 @@ export const en = {
       delivery_channel: 'Delivery channel',
       telegram_username: 'Telegram username',
       viber_phone: 'Viber phone',
+    },
+    ownership: {
+      plot_number: 'Plot number',
+      member_external_id: 'Member key',
+      share: 'Share',
+      valid_from: 'Owner since',
     },
   },
   importProblem: {
@@ -374,6 +380,16 @@ export const en = {
     MEMBER_AMBIGUOUS: 'The name and first phone match more than one member.',
     NUMBER_INVALID: 'The value is not a number.',
     YES_NO_INVALID: 'Write yes or no.',
+    UNKNOWN_MEMBER_KEY: 'The Members sheet has no row with this member key.',
+    UNKNOWN_PLOT: 'There is no such plot in the file or among the active plots.',
+    OWNERSHIP_CONFLICT: 'Plot {plot} already has different owners — use Change owner on the plot card.',
+    OWNERSHIP_DATE_MISMATCH: 'All owners of one plot need the same date.',
+    SHARE_INVALID: 'Give the share as a fraction, for example 1/2 or 2/3 (1 for the whole plot).',
+    SHARES_NOT_ONE: 'The shares of all owners of one plot must add up to exactly 1.',
+    DUPLICATE_OWNER: 'This member is listed more than once for this plot.',
+    OWNERSHIP_DATE_INVALID:
+      'The ownership start date cannot be in the future and must be after the previous owners’ period.',
+    PLOT_COMMON_LAND: 'Common land cannot have owners.',
   },
   settings: {
     title: 'Cooperative settings',

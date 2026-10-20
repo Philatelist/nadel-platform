@@ -16,6 +16,7 @@ export function ImportPreviewPanel({ preview, onReset }: { preview: ImportPrevie
   const columnLabels: Readonly<Record<string, Readonly<Record<string, string>>>> = {
     PLOTS: t.importColumns.plots,
     MEMBERS: t.importColumns.members,
+    OWNERSHIP: t.importColumns.ownership,
   };
   const messages: Readonly<Record<string, string>> = t.importProblem;
 

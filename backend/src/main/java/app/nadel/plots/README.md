@@ -18,6 +18,21 @@ with ownership history cannot become common land (`PLOT_HAS_OWNERSHIP_HISTORY`).
 values per `IN` list). The id of a new plot is derived from the import id and the number, so planning the same import again
 gives the same ids. Applying a plan comes with a later slice.
 
+`PlotImport.planOwnership(tenantId, plotRows, plotPlan, rows)` plans the rows of the Ownership sheet (`OwnershipImportRow`,
+`OwnershipImportItem`, `OwnershipImportPlan`, `OwnershipImportOutcome`, `OwnershipImportProblem`) and writes nothing.
+The rows of a plot (same number, ignoring case) are a group. The plot is a plot of the file whose plan has no problem
+(new ones included, with the id they will get) or an active plot (an archived plot is never matched); otherwise
+`UNKNOWN_PLOT`; common land is `PLOT_COMMON_LAND`; a plot of the file whose own row has a problem is not checked at all.
+Per row: `REQUIRED` (plot, share, date), `SHARE_INVALID` (`n/d` as for a change of owner; a bare `1` is the whole plot)
+and `OWNERSHIP_DATE_INVALID` for a date after today (Europe/Kyiv clock). Per group, when no row has a problem and every
+member is resolved: `DUPLICATE_OWNER` (later row), `OWNERSHIP_DATE_MISMATCH` (rows that differ from the first row's date)
+and `SHARES_NOT_ONE` (the file's own shares, `OwnershipRules.checkTimeline`, on the first row). Then against the recorded
+ownership: no current owner is `FIRST_OWNERS` (the date must be later than the end of every past owner,
+`OwnershipRules.checkChangeDate`, else `OWNERSHIP_DATE_INVALID`); current owners equal to the file's members and shares,
+dates ignored, are `SKIP`; anything else is `OWNERSHIP_CONFLICT` (with the plot in the params) - the import never
+changes existing ownership. A row has an outcome and a plot id only when its whole plot has no problem. The recorded
+ownership of all matched plots is read with one bulk query per 500 plots.
+
 `plots` also implements the SPIs `members.MemberArchiveGuard` (see Guards) and `identity.OwnedPlotsSource` (`GET /me` ownedPlots), and uses `members.MemberDirectory` and `settings.CooperativeSettings`.
 
 ## Endpoints

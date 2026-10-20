@@ -29,12 +29,12 @@ dependency versions; no mobile changes). Do not commit; report every file create
   - [x] Web: member column labels and member problem messages in i18n; unit test that member problems render. **[Agent: react-frontend]**
   - [x] Verify: `cd backend && ./mvnw -B test -Dtest='MemberImportPlanTests,ImportPreviewMembersTests,ImportPreviewPlotsTests,ModularityTests'` green; `pnpm -r test && pnpm -r typecheck && pnpm -r lint && pnpm format:check` green. **[Agent: spring-backend]**
 
-- [ ] **Slice 4: Ownership sheet in the preview**
+- [x] **Slice 4: Ownership sheet in the preview**
 
   > The preview checks owners per plot — shares add up to 1, members and plots exist, no conflict with recorded owners.
-  - [ ] Backend: `OwnershipSheet`; `PlotImport.plan` for ownership rows (member keys resolved by the planner; plots from the file or active plots; `UNKNOWN_PLOT`, `UNKNOWN_MEMBER_KEY`, `PLOT_COMMON_LAND`, `SHARE_INVALID`, `DUPLICATE_OWNER`, `OWNERSHIP_DATE_MISMATCH`, `OWNERSHIP_DATE_INVALID` (Kyiv clock), `SHARES_NOT_ONE` via `OwnershipRules`; outcome FIRST_OWNERS / SKIP (member + share, date ignored) / `OWNERSHIP_CONFLICT`); `PlanDigest` over the whole plan; preview stores plan + digest. Tests: `OwnershipImportPlanTests`, `ImportPreviewOwnershipTests` (incl. demo plot 9 conflict), `PlanDigestTests`. **[Agent: spring-backend]**
-  - [ ] Web: ownership column labels and problem messages; unit test. **[Agent: react-frontend]**
-  - [ ] Verify: `cd backend && ./mvnw -B test -Dtest='OwnershipImportPlanTests,ImportPreviewOwnershipTests,PlanDigestTests,ImportPreviewMembersTests,ImportPreviewPlotsTests,ModularityTests'` green; `pnpm -r test && pnpm -r typecheck && pnpm -r lint && pnpm format:check` green. **[Agent: spring-backend]**
+  - [x] Backend: `OwnershipSheet`; `PlotImport.plan` for ownership rows (member keys resolved by the planner; plots from the file or active plots; `UNKNOWN_PLOT`, `UNKNOWN_MEMBER_KEY`, `PLOT_COMMON_LAND`, `SHARE_INVALID`, `DUPLICATE_OWNER`, `OWNERSHIP_DATE_MISMATCH`, `OWNERSHIP_DATE_INVALID` (Kyiv clock), `SHARES_NOT_ONE` via `OwnershipRules`; outcome FIRST_OWNERS / SKIP (member + share, date ignored) / `OWNERSHIP_CONFLICT`); `PlanDigest` over the whole plan; preview stores plan + digest. Tests: `OwnershipImportPlanTests`, `ImportPreviewOwnershipTests` (incl. demo plot 9 conflict), `PlanDigestTests`. **[Agent: spring-backend]**
+  - [x] Web: ownership column labels and problem messages; unit test. **[Agent: react-frontend]**
+  - [x] Verify: `cd backend && ./mvnw -B test -Dtest='OwnershipImportPlanTests,ImportPreviewOwnershipTests,PlanDigestTests,ImportPreviewMembersTests,ImportPreviewPlotsTests,ModularityTests'` green; `pnpm -r test && pnpm -r typecheck && pnpm -r lint && pnpm format:check` green. **[Agent: spring-backend]**
 
 - [ ] **Slice 5: Commit**
 

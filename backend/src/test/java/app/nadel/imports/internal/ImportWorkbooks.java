@@ -28,7 +28,19 @@ final class ImportWorkbooks {
     static final List<String> MEMBER_HEADER = List.of("external_id", "last_name", "first_name", "middle_name", "phones",
             "email", "postal_address", "delivery_channel", "telegram_username", "viber_phone");
 
+    static final List<String> OWNERSHIP_HEADER = List.of("plot_number", "member_external_id", "share", "valid_from");
+
     private ImportWorkbooks() {
+    }
+
+    /** A row of the Ownership sheet in {@link #OWNERSHIP_HEADER} order; the date is a date, or text like 01.03.2020. */
+    static List<Object> owner(Object plotNumber, Object memberKey, Object share, Object validFrom) {
+        List<Object> row = new ArrayList<>();
+        row.add(plotNumber);
+        row.add(memberKey);
+        row.add(share);
+        row.add(validFrom);
+        return row;
     }
 
     /** A row of the Members sheet in {@link #MEMBER_HEADER} order. */

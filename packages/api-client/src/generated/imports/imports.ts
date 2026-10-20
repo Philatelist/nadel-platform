@@ -172,19 +172,20 @@ export const getUploadImportUrl = () => {
 }
 
 /**
- * Parses and checks an Excel workbook (`.xlsx`, at most 10 MB, at most 2,000 plots and 3,000 members) and
+ * Parses and checks an Excel workbook (`.xlsx`, at most 10 MB, at most 2,000 plots, 3,000 members and 6,000 ownership rows) and
  * returns a preview. Nothing is saved except the record of the upload itself. The preview can be committed for
  * 30 minutes (`expiresAt`) when `committable` is true, that is when there are no problems and something would be
  * created or updated. Requires the `IMPORT_RUN` permission; the platform operator has no cooperative data: 403.
  *
- * The `Plots` and `Members` sheets are checked in this version; the third sheet is read in a later version. A
- * workbook without a `Members` sheet is accepted (a file may hold plots only).
+ * All three sheets are checked. The `Members` and `Ownership` sheets may be missing (a file may hold plots only, or
+ * plots and members); the `Plots` sheet is required.
  * Rows whose first cell starts with `#` and empty rows are skipped. `problems` lists at most 1,000 problems
  * (`problemCount` is the total) in sheet and row order. `row` is the Excel row number (1 is the header row);
  * 0 means the problem is about the file or the whole sheet. `column` is the canonical column key
  * (Plots: `number`, `street`, `kind`, `area_m2`, `area_sotky`, `cadastral_number`, `has_building`, `notes`;
  * Members: `external_id`, `last_name`, `first_name`, `middle_name`, `phones`, `email`, `postal_address`,
- * `delivery_channel`, `telegram_username`, `viber_phone`).
+ * `delivery_channel`, `telegram_username`, `viber_phone`;
+ * Ownership: `plot_number`, `member_external_id`, `share`, `valid_from`).
  * `code` is one of:
  *
  * - file and sheet level: `SHEET_MISSING` (no sheet of that name), `HEADER_MISSING` (a required column is not in
@@ -208,6 +209,30 @@ export const getUploadImportUrl = () => {
  * Members are matched among the active members: by e-mail when the row has one, otherwise by last name, first
  * name and first phone (phones are compared in international format). A blank cell leaves the existing value
  * unchanged; a filled `phones` cell replaces the phones. At most 3,000 member rows.
+ *
+ * The `Ownership` sheet lists the current owners of plots: all four columns are required, one row per owner, all
+ * rows of one plot carry the same `valid_from` (owner since). `member_external_id` is the `external_id` of a row
+ * of the `Members` sheet (ignoring case); `plot_number` is a plot of the `Plots` sheet or an active plot of the
+ * cooperative; `share` is a fraction `n/d` (`1/2`, `2/3`; a bare `1` is the whole plot). Ownership codes:
+ *
+ * - `UNKNOWN_MEMBER_KEY` (`member_external_id`: no row of the `Members` sheet has this key). A key whose
+ *   `Members` row has a problem is not reported again; fix the `Members` row first;
+ * - `UNKNOWN_PLOT` (`plot_number`: neither a plot of the `Plots` sheet nor an active plot);
+ * - `PLOT_COMMON_LAND` (`plot_number`: common land has no owners);
+ * - `REQUIRED` (`plot_number`, `member_external_id`, `share`, `valid_from`), `SHARE_INVALID` (`share`),
+ *   `DATE_INVALID` (`valid_from` is not an Excel date or `DD.MM.YYYY`);
+ * - `OWNERSHIP_DATE_INVALID` (`valid_from`: after today in Europe/Kyiv, or not later than the end of a previous
+ *   owner of the plot);
+ * - `OWNERSHIP_DATE_MISMATCH` (`valid_from`: differs from the date of the plot's first row);
+ * - `DUPLICATE_OWNER` (`member_external_id`: the same member twice on one plot, reported on the later row);
+ * - `SHARES_NOT_ONE` (`share`, first row of the plot: the shares do not add up to exactly 1);
+ * - `OWNERSHIP_CONFLICT` (`plot_number`, first row of the plot, `params.plot`: the plot already has other current
+ *   owners than the file's; the import never changes existing ownership, use "Change owner").
+ *
+ * A plot without a current owner gets the file's owners (counted as created ownership rows). A plot whose current
+ * owners are exactly the file's members and shares, the dates ignored, is skipped (counted as unchanged). A plot
+ * whose own `Plots` row has a problem, and a plot with a row whose member has a problem, is not checked further.
+ * Ownership is never updated, so `ownerships.updated` is always 0. At most 6,000 ownership rows.
  *
  * A file that cannot be read at all is refused with 400 `FILE_NOT_XLSX` (not an `.xlsx` workbook, corrupt,
  * encrypted, or unpacking to an unreasonable size) or 400 `IMPORT_LIMIT_EXCEEDED` (too many rows); a file over

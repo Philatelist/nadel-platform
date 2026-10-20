@@ -354,7 +354,7 @@ export const uk: Messages = {
       notes: 'Примітки',
     },
     members: {
-      external_id: 'Код члена',
+      external_id: 'Ключ члена',
       last_name: 'Прізвище',
       first_name: 'Ім’я',
       middle_name: 'По батькові',
@@ -364,6 +364,12 @@ export const uk: Messages = {
       delivery_channel: 'Канал доставки',
       telegram_username: 'Telegram',
       viber_phone: 'Телефон Viber',
+    },
+    ownership: {
+      plot_number: 'Номер ділянки',
+      member_external_id: 'Ключ члена',
+      share: 'Частка',
+      valid_from: 'Володіє з',
     },
   },
   importProblem: {
@@ -387,6 +393,16 @@ export const uk: Messages = {
     MEMBER_AMBIGUOUS: 'Ім’я та перший телефон збігаються з кількома членами кооперативу.',
     NUMBER_INVALID: 'Значення не є числом.',
     YES_NO_INVALID: 'Напишіть «так» або «ні».',
+    UNKNOWN_MEMBER_KEY: 'У аркуші «Члени» немає рядка з таким ключем члена.',
+    UNKNOWN_PLOT: 'Такої ділянки немає ні у файлі, ні серед активних ділянок.',
+    OWNERSHIP_CONFLICT: 'Ділянка {plot} уже має інших власників — змініть власника на картці ділянки.',
+    OWNERSHIP_DATE_MISMATCH: 'Усі власники однієї ділянки мають мати однакову дату.',
+    SHARE_INVALID: 'Вкажіть частку дробом, наприклад 1/2 або 2/3 (1 — уся ділянка).',
+    SHARES_NOT_ONE: 'Частки всіх власників однієї ділянки мають давати в сумі рівно 1.',
+    DUPLICATE_OWNER: 'Цього члена кооперативу вказано кілька разів для цієї ділянки.',
+    OWNERSHIP_DATE_INVALID:
+      'Дата початку володіння не може бути в майбутньому і має бути пізнішою за період попередніх власників.',
+    PLOT_COMMON_LAND: 'Ділянка спільного користування не може мати власників.',
   },
   settings: {
     title: 'Налаштування кооперативу',

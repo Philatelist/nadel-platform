@@ -72,6 +72,11 @@ final class WorkbookReader implements AutoCloseable {
         return true;
     }
 
+    /** Whether dates are counted from 1904 (the old Mac default) instead of 1900; the serial numbers of dates differ. */
+    boolean date1904() {
+        return workbook.isDate1904();
+    }
+
     @Override
     public void close() {
         try {

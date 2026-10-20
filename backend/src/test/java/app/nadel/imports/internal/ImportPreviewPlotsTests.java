@@ -79,7 +79,7 @@ class ImportPreviewPlotsTests extends ImportsIntegrationTest {
         assertThat(run.get("created_by_subject")).isEqualTo("sub-chairman@demo.local");
         assertThat(run.get("created_by_member_id")).isNotNull();
         assertThat(run.get("created_by_name")).isNotNull();
-        assertThat(run.get("plan_digest")).isNull();
+        assertThat((String) run.get("plan_digest")).matches("[0-9a-f]{64}");
         JsonNode counts = JSON.readTree(run.get("counts").toString());
         assertThat(counts.get("plots").get("created").asInt()).isEqualTo(2);
         JsonNode plan = JSON.readTree(run.get("plan").toString());
@@ -273,18 +273,6 @@ class ImportPreviewPlotsTests extends ImportsIntegrationTest {
                 .andExpect(jsonPath("$.problemCount").value(1))
                 .andExpect(jsonPath("$.problems[0].row").value(6))
                 .andExpect(jsonPath("$.problems[0].code").value("AREA_BOTH_OR_NONE"));
-    }
-
-    @Test
-    void theOwnershipSheetIsNotReadYet() throws Exception {
-        byte[] file = ImportWorkbooks.builder()
-                .sheet("Plots", PLOT_HEADER, plot(unique(), 600))
-                .sheet("Ownership", List.of("nonsense"), List.of("whatever"))
-                .build();
-
-        upload(file).andExpect(status().isCreated())
-                .andExpect(jsonPath("$.problemCount").value(0))
-                .andExpect(jsonPath("$.counts.plots.created").value(1));
     }
 
     @Test

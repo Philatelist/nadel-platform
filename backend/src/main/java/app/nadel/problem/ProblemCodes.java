@@ -59,6 +59,15 @@ public final class ProblemCodes {
     /** The name and first phone of a member row match two or more members of the cooperative. */
     public static final String MEMBER_AMBIGUOUS = "MEMBER_AMBIGUOUS";
 
+    /** An Ownership row names a member key that no usable row of the Members sheet has. */
+    public static final String UNKNOWN_MEMBER_KEY = "UNKNOWN_MEMBER_KEY";
+    /** An Ownership row names a plot that is neither in the Plots sheet nor an active plot of the cooperative. */
+    public static final String UNKNOWN_PLOT = "UNKNOWN_PLOT";
+    /** The plot has current owners other than the file's: they are changed with a change of owner, not an import. */
+    public static final String OWNERSHIP_CONFLICT = "OWNERSHIP_CONFLICT";
+    /** The rows of one plot do not all have the same owner-since date. */
+    public static final String OWNERSHIP_DATE_MISMATCH = "OWNERSHIP_DATE_MISMATCH";
+
     private ProblemCodes() {
     }
 }

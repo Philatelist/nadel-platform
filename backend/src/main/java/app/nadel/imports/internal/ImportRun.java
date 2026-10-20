@@ -75,11 +75,13 @@ class ImportRun {
     /**
      * A new run.
      *
-     * @param plan the normalised rows of a preview without problems; null for a run with problems
+     * @param plan       the normalised rows of a preview without problems; null for a run with problems
+     * @param planDigest the digest of the whole plan (see {@code PlanDigest}); null for a run with problems
      */
     static ImportRun create(UUID id, UUID tenantId, String fileName, @Nullable UUID createdByMemberId,
             String createdBySubject, String createdByName, Instant createdAt, Instant expiresAt, ImportStatus status,
-            Map<String, Object> counts, int problemCount, @Nullable Map<String, Object> plan) {
+            Map<String, Object> counts, int problemCount, @Nullable Map<String, Object> plan,
+            @Nullable String planDigest) {
         ImportRun run = new ImportRun();
         run.id = id;
         run.tenantId = tenantId;
@@ -93,6 +95,7 @@ class ImportRun {
         run.counts = counts;
         run.problemCount = problemCount;
         run.plan = plan;
+        run.planDigest = planDigest;
         return run;
     }
 

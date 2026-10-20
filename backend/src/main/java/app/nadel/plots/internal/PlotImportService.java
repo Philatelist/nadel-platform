@@ -1,6 +1,8 @@
 package app.nadel.plots.internal;
 
 import app.nadel.audit.FieldChange;
+import app.nadel.plots.OwnershipImportPlan;
+import app.nadel.plots.OwnershipImportRow;
 import app.nadel.plots.PlotImport;
 import app.nadel.plots.PlotImportAction;
 import app.nadel.plots.PlotImportItem;
@@ -42,10 +44,19 @@ class PlotImportService implements PlotImport {
 
     private final PlotRepository plots;
     private final OwnershipRepository ownerships;
+    private final OwnershipImportPlanner ownershipPlanner;
 
-    PlotImportService(PlotRepository plots, OwnershipRepository ownerships) {
+    PlotImportService(PlotRepository plots, OwnershipRepository ownerships, OwnershipImportPlanner ownershipPlanner) {
         this.plots = plots;
         this.ownerships = ownerships;
+        this.ownershipPlanner = ownershipPlanner;
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public OwnershipImportPlan planOwnership(UUID tenantId, List<PlotImportRow> plotRows, PlotImportPlan plotPlan,
+            List<OwnershipImportRow> rows) {
+        return ownershipPlanner.plan(tenantId, plotRows, plotPlan, rows);
     }
 
     @Override
@@ -216,7 +227,7 @@ class PlotImportService implements PlotImport {
         return problems.stream().filter(problem -> fields.add(problem.field())).toList();
     }
 
-    private static @Nullable PlotKind parseKind(String text) {
+    static @Nullable PlotKind parseKind(String text) {
         return switch (text.toUpperCase(Locale.ROOT)) {
             case "PLOT" -> PlotKind.PLOT;
             case "COMMON" -> PlotKind.COMMON;

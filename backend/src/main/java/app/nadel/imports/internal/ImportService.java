@@ -73,20 +73,22 @@ class ImportService {
         zipGuard.check(fileName, content);
         PlotsSheet.Parsed plots;
         MembersSheet.Parsed members;
+        OwnershipSheet.Parsed ownership;
         try (WorkbookReader reader = WorkbookReader.open(content)) {
             plots = PlotsSheet.parse(reader);
             members = MembersSheet.parse(reader);
+            ownership = OwnershipSheet.parse(reader);
         }
 
         UUID importId = UUID.randomUUID();
         return transaction.execute(status -> {
             Instant now = clock.instant();
             runs.clearExpiredPlans(actor.tenantId(), now);
-            ImportPlan plan = planner.plan(actor.tenantId(), importId, plots, members);
+            ImportPlan plan = planner.plan(actor.tenantId(), importId, plots, members, ownership);
             ImportRun run = runs.save(ImportRun.create(importId, actor.tenantId(), fileName, actor.memberId(),
                     actor.subject(), actor.displayName(), now, now.plus(PREVIEW_VALID_FOR),
                     plan.hasProblems() ? ImportStatus.HAS_ERRORS : ImportStatus.PREVIEW, plan.counts().toMap(),
-                    plan.problems().size(), plan.hasProblems() ? null : plan.rows()));
+                    plan.problems().size(), plan.hasProblems() ? null : plan.rows(), plan.digest()));
             return toPreview(run, plan);
         });
     }

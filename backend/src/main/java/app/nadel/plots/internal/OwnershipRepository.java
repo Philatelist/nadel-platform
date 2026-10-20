@@ -36,6 +36,10 @@ interface OwnershipRepository extends JpaRepository<Ownership, UUID> {
     @Query("select distinct o.plotId from Ownership o where o.plotId in :plotIds")
     List<UUID> findPlotIdsWithOwnership(@Param("plotIds") Collection<UUID> plotIds);
 
+    /** Every ownership row, current and past, of several plots in one query (the Excel import). */
+    @Query("select o from Ownership o where o.plotId in :plotIds order by o.plotId, o.validFrom, o.id")
+    List<Ownership> findAllByPlotIds(@Param("plotIds") Collection<UUID> plotIds);
+
     /** The current owners of several plots in one query, for a page of the plots list. */
     @Query("select o from Ownership o where o.plotId in :plotIds and o.validTo is null")
     List<Ownership> findCurrentByPlotIds(@Param("plotIds") Collection<UUID> plotIds);

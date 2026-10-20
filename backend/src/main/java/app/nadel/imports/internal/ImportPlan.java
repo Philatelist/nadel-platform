@@ -3,6 +3,7 @@ package app.nadel.imports.internal;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * What an uploaded file would do.
@@ -12,9 +13,10 @@ import java.util.UUID;
  * @param rows      the normalised rows to store with a preview that can be committed; empty when there are problems
  * @param memberIds the member of every Members row that can be imported, by its {@code external_id} in lower case: an
  *                  existing member or the id a new one will get. Recomputed from the stored rows, never stored.
+ * @param digest    the {@link PlanDigest} of the whole plan; null when there are problems (nothing to commit)
  */
 record ImportPlan(PlanCounts counts, List<RowProblem> problems, Map<String, Object> rows,
-        Map<String, UUID> memberIds) {
+        Map<String, UUID> memberIds, @Nullable String digest) {
 
     boolean hasProblems() {
         return !problems.isEmpty();

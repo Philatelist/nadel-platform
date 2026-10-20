@@ -54,6 +54,41 @@ describe('ImportPreviewPanel', () => {
     expect(row).toHaveTextContent('A member with this email already exists.');
   });
 
+  it('labels an ownership problem with the ownership column label', () => {
+    renderPanel(
+      preview({
+        committable: false,
+        problemCount: 1,
+        problems: [
+          problem(2, { sheet: 'OWNERSHIP', column: 'member_external_id', code: 'UNKNOWN_MEMBER_KEY' }),
+        ],
+      }),
+    );
+    const row = screen.getAllByRole('row').slice(-1)[0];
+    expect(row).toHaveTextContent('Ownership2Member key');
+    expect(row).toHaveTextContent('no row with this member key');
+  });
+
+  it('interpolates the plot number into the ownership conflict message', () => {
+    renderPanel(
+      preview({
+        committable: false,
+        problemCount: 1,
+        problems: [
+          problem(4, {
+            sheet: 'OWNERSHIP',
+            column: 'plot_number',
+            code: 'OWNERSHIP_CONFLICT',
+            params: { plot: '17-A' },
+          }),
+        ],
+      }),
+    );
+    expect(screen.getAllByRole('row').slice(-1)[0]).toHaveTextContent(
+      'Plot 17-A already has different owners — use Change owner on the plot card.',
+    );
+  });
+
   it('shows problems with sheet, row, column label and message', () => {
     renderPanel(
       preview({

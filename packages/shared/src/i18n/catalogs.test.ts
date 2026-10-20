@@ -34,6 +34,15 @@ describe('import problem codes', () => {
     'MEMBER_AMBIGUOUS',
     'NUMBER_INVALID',
     'YES_NO_INVALID',
+    'UNKNOWN_MEMBER_KEY',
+    'UNKNOWN_PLOT',
+    'OWNERSHIP_CONFLICT',
+    'OWNERSHIP_DATE_MISMATCH',
+    'SHARE_INVALID',
+    'SHARES_NOT_ONE',
+    'DUPLICATE_OWNER',
+    'OWNERSHIP_DATE_INVALID',
+    'PLOT_COMMON_LAND',
     'UNKNOWN',
   ];
 
