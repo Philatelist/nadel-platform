@@ -1,7 +1,8 @@
-# 009. Deployment: staging and production
+# Deployment: staging and production (backlog, gets its number when scheduled)
 
-Infrastructure feature. Input for `/feature-pipeline`. Runs after 008 (Excel import), so staging can be loaded with the
-real data of the first cooperative. Requires ADR 0010 (read it first).
+Infrastructure feature, deliberately last: the owner first finishes the product on the local machine and only then
+moves to servers (decision of 20.10.2026). Before running it through `/feature-pipeline`, move it to
+`docs/features/NNN-deployment.md` with the next free number. Requires ADR 0010 (read it first).
 
 ## 1. Goal
 
@@ -14,7 +15,7 @@ owner can follow alone. No product feature changes.
 Read together with `CLAUDE.md`, `context/product/architecture.md`, ADRs 0001, 0002, 0003 and 0010, `infra/README.md`,
 `infra/docker-compose.yml`, `.github/workflows/`, and `backend/src/main/resources/application.yml`.
 
-Feature sequence: … → `008 Excel import` → `009 Deployment`.
+Feature sequence: runs after the local product is complete (see `docs/roadmap.md`).
 
 Changes to `.github/` and `.claude/` are proposed by agents and committed by the owner (CLAUDE.md); the PR description
 lists them. Agents never connect to real servers and never hold real secrets: everything is verified locally with a

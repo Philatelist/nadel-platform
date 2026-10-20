@@ -17,7 +17,7 @@ Read together with `CLAUDE.md`, `docs/features/003-ui-design-system.md` (tokens,
 `docs/features/004-role-names.md` (how base role names are shown), `docs/design/screens/` and ADR 0009.
 
 Feature sequence: `003 UI design system` → `004 Role names` → `005 UI preferences` → `006 Plots registry` →
-`007 Ownership` → `008 Excel import` → `009 Deployment`.
+`007 Ownership` → `008 Excel import`.
 
 ## 2. Theme switch
 
