@@ -9,13 +9,14 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 
 /**
- * Publishes the audit event of a change to a charge type (and, later, to a tariff). The publication is stored by the
+ * Publishes the audit event of a change to a charge type or a tariff. The publication is stored by the
  * Spring Modulith outbox in the transaction of the change, so a committed change always has its audit entry owed.
  */
 @Component
 class TariffAuditPublisher {
 
     static final String CHARGE_TYPE = "CHARGE_TYPE";
+    static final String TARIFF = "TARIFF";
 
     private final ApplicationEventPublisher events;
 

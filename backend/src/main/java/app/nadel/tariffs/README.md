@@ -1,19 +1,18 @@
 # tariffs
 
-What the cooperative charges for and how much (feature 009). Slice 1 delivers **charge types**; tariffs, versions, scopes
-and the expected amount of a plot follow in later slices.
+What the cooperative charges for and how much (feature 009). Delivered so far: **charge types** (slice 1) and
+**tariffs with versions** (slice 2); scopes and the expected amount of a plot follow in later slices.
 
 Tables (all under RLS `tenant_isolation`, an index on `tenant_id`, composite foreign keys on `(tenant_id, id)`; V10):
 
 | Table | What it holds |
 |---|---|
 | `charge_type` | What is charged for: the four seeded types (`code` MEMBERSHIP, ELECTRICITY, LAND_TAX, WATER) and custom ones |
-| `tariff` | A tariff of one charge type, with its `scope_kind` (`ALL_PLOTS` or `SELECTED_PLOTS`). Not built yet |
-| `tariff_version` | Append-only rates by date (`valid_from`, basis, frequency, `rate numeric(14,4)`, due date, note). Not built yet |
-| `tariff_scope_plot` | Selected plots, or exclusions with a reason; cascades when a plot is deleted. Not built yet |
+| `tariff` | A tariff of one charge type, with its `scope_kind` (`ALL_PLOTS` or `SELECTED_PLOTS`; new tariffs are `ALL_PLOTS`) |
+| `tariff_version` | Append-only rates by date (`valid_from`, basis, frequency, `rate numeric(14,4)`, due date, note) |
+| `tariff_scope_plot` | Selected plots, or exclusions with a reason; cascades when a plot is deleted. Only read so far (the plot count of a selected-plots tariff); written by the scope endpoint of slice 3 |
 
-`tariff`, `tariff_version` and `tariff_scope_plot` exist in V10 already (one migration, one isolation test), but nothing
-reads or writes them until the next slices. `nadel_app` has no `DELETE`/`TRUNCATE` on `charge_type` and `tariff`, and
+All four tables exist in V10 (one migration, one isolation test). `nadel_app` has no `DELETE`/`TRUNCATE` on `charge_type` and `tariff`, and
 no `UPDATE`/`DELETE`/`TRUNCATE` on `tariff_version`.
 
 ## Charge types
@@ -32,6 +31,8 @@ no `UPDATE`/`DELETE`/`TRUNCATE` on `tariff_version`.
 
 ## Endpoints
 
+Tag `charge-types`:
+
 | Endpoint | Operation | Who |
 |---|---|---|
 | `GET /charge-types` | `listChargeTypes` | `TARIFFS_VIEW` |
@@ -39,6 +40,15 @@ no `UPDATE`/`DELETE`/`TRUNCATE` on `tariff_version`.
 | `PUT /charge-types/{id}` | `updateChargeType` | `TARIFFS_VIEW` and `TARIFFS_MANAGE` |
 | `POST /charge-types/{id}/archive` | `archiveChargeType` | `TARIFFS_VIEW` and `TARIFFS_MANAGE` |
 | `PUT /charge-types/order` | `reorderChargeTypes` | `TARIFFS_VIEW` and `TARIFFS_MANAGE` |
+
+Tag `tariffs` (`TariffsController`):
+
+| Endpoint | Operation | Who |
+|---|---|---|
+| `GET /tariffs` | `listTariffs` | `TARIFFS_VIEW` |
+| `POST /tariffs` | `createTariff` | `TARIFFS_VIEW` and `TARIFFS_MANAGE` |
+| `GET /tariffs/{id}` | `getTariff` | `TARIFFS_VIEW` |
+| `POST /tariffs/{id}/versions` | `addTariffVersion` | `TARIFFS_VIEW` and `TARIFFS_MANAGE` |
 
 The platform operator has no permissions and gets 403 `PERMISSION_DENIED`; a member without the permissions gets 403.
 The cooperative always comes from the token. A type of another cooperative or an unknown id is 404 (RLS).
@@ -59,9 +69,43 @@ Writes (`ChargeTypeCommands`, one transaction each, the audit event is published
   `CHARGE_TYPE_ORDER_STALE` and nothing changes. Positions are renumbered from 1; the current order again changes
   nothing. Changing or archiving one type locks its row `FOR UPDATE`.
 
+## Tariffs and versions
+
+- A tariff is created together with its first version (`TariffCommands.create`, one transaction) and applies to all
+  plots until its scope is changed. Tariffs are never renamed or deleted; versions are never edited or deleted (the
+  entity is `@Immutable`, the application role has no `UPDATE` on `tariff_version`). A change of rate is a new version.
+- `VersionTerms` (module root) holds the terms of a version and enforces `FIXED_ONE_TIME` iff `ONE_OFF` iff a due date.
+  The controller maps its violations to field codes of `400 VALIDATION_FAILED`: `frequency` `FREQUENCY_BASIS_MISMATCH`,
+  `dueDate` `REQUIRED` (a one-time amount without a due date) and `dueDate` `INVALID` (a due date with any other
+  basis). A rate that is not `^\d{1,10}(\.\d{1,4})?$` is `rate` `RATE_INVALID`: on the API by the contract's pattern
+  (`ValidationProblems` maps a pattern on a field called `rate` or `firstVersion.rate`), in the service by `Rate.parse`.
+  The rate is never rounded (ADR 0013), stored as `numeric(14,4)` and returned with four decimals (`"4.3200"`). Fields
+  of a new tariff's first version are prefixed `firstVersion.`. Bean validation runs first, so a bad rate is reported alone;
+  the service then reports the frequency and due date problems together.
+- The charge type is locked `FOR SHARE` when a tariff or a version is added; an archived one is 409
+  `CHARGE_TYPE_ARCHIVED`, an unknown or foreign one is 404. A second version on the same date violates
+  `tariff_version_valid_from_uq`, which `problem.ConstraintViolations` maps to 409 `TARIFF_VERSION_DATE_TAKEN`
+  (`errors[{field: validFrom}]`).
+- Reading: `validTo` of a version is the day before the next version starts (derived on every read, never stored);
+  `pastDated` is `validFrom` before today on the Kyiv `Clock`. A version dated before an existing later one is fine:
+  the answer to `POST .../versions` carries the `validTo` derived from the versions after it.
+- The list (`GET /tariffs`) holds the tariffs of non-archived charge types ordered by charge type position, then name
+  (ignoring case), each with the version valid today, else the earliest future one. `plotCount` for `ALL_PLOTS` is
+  `plots.PlotCatalog.countChargeable()`; for `SELECTED_PLOTS` the selected rows whose plots are active and not common
+  land (plots are read through `PlotCatalog.findAll`, never from the plot table). It is absent when the shown version is
+  `PER_KWH` or `PER_M3` (such a tariff applies to the plots with a meter). Exclusions are subtracted from `ALL_PLOTS`
+  counts when the scope endpoint arrives.
+- `GET /tariffs/{id}` returns the tariff with its charge type (an archived one too, so the history stays readable).
+  A tariff of another cooperative or an unknown id is 404 (RLS).
+
 ## Audit
 
-Entity type `CHARGE_TYPE` (the entity type `TARIFF` is in the contract for the next slices), label = the stored name:
+`TARIFF_CREATED` and `TARIFF_VERSION_ADDED` (entity type `TARIFF`, label "charge type name / tariff name"). The first
+lists `name`, `chargeType` and the version fields; the second `validFrom`, `basis`, `frequency`, `rate` (four decimals),
+`dueDate` and `note` (the last two only when set). The note text is part of the audit entry (like plot notes) but is never
+written to the application log.
+
+Entity type `CHARGE_TYPE` label = the stored name:
 `CHARGE_TYPE_CREATED` (`name`, `description`, `active`), `CHARGE_TYPE_UPDATED` (changed fields among `name`,
 `description`, `active`), `CHARGE_TYPE_REORDERED` (one entry per type whose position changed, field `position` with the
 old and new number), `CHARGE_TYPE_ARCHIVED` (`archived` false to true). Published through `TariffAuditPublisher`.
@@ -77,4 +121,5 @@ narrow exception to "everything in the repository is English", of the same kind 
 
 ## Dependencies
 
-`identity` (`CurrentUser`, `AccessProfile`), `audit` (events) and `problem`. Nothing depends on this module yet.
+`identity` (`CurrentUser`, `AccessProfile`), `audit` (events), `problem`, `money` (`Rate`) and `plots` (the public
+`PlotCatalog` only). The module root exports `Basis`, `Frequency` and `VersionTerms`. Nothing depends on this module yet.

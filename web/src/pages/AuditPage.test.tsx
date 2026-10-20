@@ -170,3 +170,52 @@ describe('AuditPage charge type and tariff entries', () => {
     expect(screen.getByRole('link', { name: 'Per sotka' })).toHaveAttribute('href', '/tariffs/t9');
   });
 });
+
+describe('AuditPage tariff version entries', () => {
+  it('labels the tariff actions and fields and formats rate, basis, frequency and dates', () => {
+    entry = {
+      id: 'a8',
+      occurredAt: '2026-10-06T10:00:00Z',
+      action: 'TARIFF_VERSION_ADDED',
+      entityType: 'TARIFF',
+      entityId: 't1',
+      entityLabel: 'Per sotka',
+      changes: [
+        { field: 'validFrom', newValue: '2026-11-01' },
+        { field: 'basis', newValue: 'PER_AREA_SOTKA' },
+        { field: 'frequency', newValue: 'MONTHLY' },
+        { field: 'rate', oldValue: '4.3200', newValue: '5.5' },
+        { field: 'dueDate', newValue: '2026-12-01' },
+        { field: 'note', newValue: 'Meeting' },
+        { field: 'chargeType', newValue: 'Membership fee' },
+      ],
+    };
+    renderWithApp(<AuditPage />);
+    expect(screen.getByText('Tariff version added')).toBeInTheDocument();
+    expect(screen.getByText(/Valid from:/)).toBeInTheDocument();
+    expect(screen.getByText(/11\/01\/2026/)).toBeInTheDocument();
+    expect(screen.getByText(/Basis:/)).toBeInTheDocument();
+    expect(screen.getByText(/Per sotka$/, { selector: 'li' })).toBeInTheDocument();
+    expect(screen.getByText(/Frequency:/)).toBeInTheDocument();
+    expect(screen.getByText(/Monthly/)).toBeInTheDocument();
+    expect(screen.getByText(/Rate:/)).toBeInTheDocument();
+    expect(screen.getByText(/4\.3200 ₴ → 5\.5 ₴|4\.3200 ₴ → 5\.5000 ₴/)).toBeInTheDocument();
+    expect(screen.getByText(/Due date:/)).toBeInTheDocument();
+    expect(screen.getByText(/Note:/)).toBeInTheDocument();
+    expect(screen.getByText(/Charge type:/)).toBeInTheDocument();
+  });
+
+  it('labels a created tariff', () => {
+    entry = {
+      id: 'a9',
+      occurredAt: '2026-10-06T10:00:00Z',
+      action: 'TARIFF_CREATED',
+      entityType: 'TARIFF',
+      entityId: 't1',
+      entityLabel: 'Per sotka',
+      changes: [],
+    };
+    renderWithApp(<AuditPage />);
+    expect(screen.getByText('Tariff created')).toBeInTheDocument();
+  });
+});

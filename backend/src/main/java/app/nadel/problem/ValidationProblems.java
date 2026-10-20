@@ -16,7 +16,8 @@ public final class ValidationProblems {
     /**
      * {@code NotNull}, {@code NotBlank} and {@code NotEmpty} are {@code REQUIRED}; {@code Size}, {@code Max} and
      * {@code Length} are {@code TOO_LONG}, or {@code REQUIRED} when the rejected value is an empty string;
-     * a {@code Pattern} on a share is {@code SHARE_INVALID}; everything else is {@code INVALID}.
+     * a {@code Pattern} on a share is {@code SHARE_INVALID}, on a tariff rate {@code RATE_INVALID}; everything else is
+     * {@code INVALID}.
      */
     public static FieldProblem fieldProblem(FieldError error) {
         String constraint = error.getCode() == null ? "" : error.getCode();
@@ -25,10 +26,16 @@ public final class ValidationProblems {
             case "Size", "Max", "Length" -> isEmptyText(error.getRejectedValue())
                     ? ProblemCodes.REQUIRED : ProblemCodes.TOO_LONG;
             // a share that does not look like n/d is the same mistake as one outside the bounds: SHARE_INVALID
-            case "Pattern" -> error.getField().endsWith("share") ? ProblemCodes.SHARE_INVALID : ProblemCodes.INVALID;
+            case "Pattern" -> error.getField().endsWith("share") ? ProblemCodes.SHARE_INVALID
+                    : isRate(error.getField()) ? ProblemCodes.RATE_INVALID : ProblemCodes.INVALID;
             default -> ProblemCodes.INVALID;
         };
         return new FieldProblem(error.getField(), code);
+    }
+
+    /** Whether the field is a tariff rate: {@code rate}, or {@code firstVersion.rate} of a new tariff. */
+    private static boolean isRate(String field) {
+        return field.equals("rate") || field.endsWith(".rate");
     }
 
     /** An empty string that violates a minimum length is a missing value, not a short one. */

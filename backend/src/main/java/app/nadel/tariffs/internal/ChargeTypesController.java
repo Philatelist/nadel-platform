@@ -4,7 +4,7 @@ import app.nadel.identity.CurrentUser;
 import java.net.URI;
 import java.util.List;
 import java.util.UUID;
-import nadel.contract.api.TariffsApi;
+import nadel.contract.api.ChargeTypesApi;
 import nadel.contract.model.ChargeType;
 import nadel.contract.model.ChargeTypeCreate;
 import nadel.contract.model.ChargeTypeOrder;
@@ -15,13 +15,13 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * The charge type endpoints of tag {@code tariffs}. Reading needs {@code TARIFFS_VIEW}; every write needs
+ * The charge type endpoints of tag {@code charge-types}. Reading needs {@code TARIFFS_VIEW}; every write needs
  * {@code TARIFFS_VIEW} and {@code TARIFFS_MANAGE}, so a manager can always see what they change. The platform operator
  * has no permissions and gets 403.
  */
 @RestController
 @RequestMapping("/api/v1")
-class ChargeTypesController implements TariffsApi {
+class ChargeTypesController implements ChargeTypesApi {
 
     private final CurrentUser currentUser;
     private final ChargeTypeQueries queries;

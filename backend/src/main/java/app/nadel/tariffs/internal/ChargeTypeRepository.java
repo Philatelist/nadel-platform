@@ -29,6 +29,14 @@ interface ChargeTypeRepository extends JpaRepository<ChargeTypeRecord, UUID> {
     @Query("select c from ChargeTypeRecord c where c.id = :id")
     Optional<ChargeTypeRecord> findByIdForUpdate(@Param("id") UUID id);
 
+    /**
+     * The charge type, archived or not, with a shared row lock ({@code FOR SHARE}) until the end of the transaction:
+     * adding a tariff or a version runs after a concurrent archive has committed (or the archive waits for it).
+     */
+    @Lock(LockModeType.PESSIMISTIC_READ)
+    @Query("select c from ChargeTypeRecord c where c.id = :id")
+    Optional<ChargeTypeRecord> findByIdForShare(@Param("id") UUID id);
+
     /** The highest position of any charge type, archived ones included; empty while there is none. */
     @Query("select max(c.position) from ChargeTypeRecord c")
     Optional<Integer> findMaxPosition();

@@ -30,13 +30,14 @@ import type {
 
 import type {
   BadRequestResponse,
-  ChargeType,
-  ChargeTypeCreate,
-  ChargeTypeOrder,
-  ChargeTypeUpdate,
   ConflictResponse,
   ForbiddenResponse,
   NotFoundResponse,
+  Tariff,
+  TariffCreate,
+  TariffSummary,
+  TariffVersion,
+  TariffVersionCreate,
   UnauthorizedResponse
 } from '../model';
 
@@ -62,24 +63,26 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   return result;
 };
 
-export const getListChargeTypesUrl = () => {
+export const getListTariffsUrl = () => {
 
 
 
 
-  return `/api/v1/charge-types`
+  return `/api/v1/tariffs`
 }
 
 /**
- * Returns the non-archived charge types of the current cooperative ordered by `position` (then by id). Every
- * cooperative starts with four (see `ChargeTypeCode`): membership fee, electricity, land and water (inactive). A type that was
- * never renamed has `nameCustomized: false` and its `name` is the English default; clients show their own
- * localised default name for it. Requires `TARIFFS_VIEW`.
- * @summary List the charge types of the cooperative
+ * Returns the tariffs of the non-archived charge types, ordered like the charge types (by position), then by name.
+ * Each tariff shows one version: the one valid today (Europe/Kyiv), otherwise the earliest future one.
+ * `plotCount` is the number of plots the tariff applies to: for `ALL_PLOTS` the active plots that are not
+ * common land, for `SELECTED_PLOTS` the active selected plots that are not common land. It is absent when the
+ * shown version is meter-based (`PER_KWH`, `PER_M3`): such a tariff applies to the plots with a meter. Requires
+ * `TARIFFS_VIEW`.
+ * @summary List the tariffs of the cooperative
  */
-export const listChargeTypes = async ( options?: Parameters<typeof nadelFetch>[1]): Promise<ChargeType[]> => {
+export const listTariffs = async ( options?: Parameters<typeof nadelFetch>[1]): Promise<TariffSummary[]> => {
 
-  return nadelFetch<ChargeType[]>(getListChargeTypesUrl(),
+  return nadelFetch<TariffSummary[]>(getListTariffsUrl(),
   {
     ...options,
     method: 'GET'
@@ -92,69 +95,69 @@ export const listChargeTypes = async ( options?: Parameters<typeof nadelFetch>[1
 
 
 
-export const getListChargeTypesQueryKey = () => {
+export const getListTariffsQueryKey = () => {
     return [
-    `/api/v1/charge-types`
+    `/api/v1/tariffs`
     ] as const;
     }
 
 
-export const getListChargeTypesQueryOptions = <TData = Awaited<ReturnType<typeof listChargeTypes>>, TError = UnauthorizedResponse | ForbiddenResponse>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listChargeTypes>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+export const getListTariffsQueryOptions = <TData = Awaited<ReturnType<typeof listTariffs>>, TError = UnauthorizedResponse | ForbiddenResponse>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listTariffs>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getListChargeTypesQueryKey();
+  const queryKey =  queryOptions?.queryKey ?? getListTariffsQueryKey();
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listChargeTypes>>> = ({ signal }) => listChargeTypes({ signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listTariffs>>> = ({ signal }) => listTariffs({ signal, ...requestOptions });
 
 
 
 
 
-   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listChargeTypes>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listTariffs>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
 }
 
-export type ListChargeTypesQueryResult = NonNullable<Awaited<ReturnType<typeof listChargeTypes>>>
-export type ListChargeTypesQueryError = UnauthorizedResponse | ForbiddenResponse
+export type ListTariffsQueryResult = NonNullable<Awaited<ReturnType<typeof listTariffs>>>
+export type ListTariffsQueryError = UnauthorizedResponse | ForbiddenResponse
 
 
-export function useListChargeTypes<TData = Awaited<ReturnType<typeof listChargeTypes>>, TError = UnauthorizedResponse | ForbiddenResponse>(
-  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listChargeTypes>>, TError, TData>> & Pick<
+export function useListTariffs<TData = Awaited<ReturnType<typeof listTariffs>>, TError = UnauthorizedResponse | ForbiddenResponse>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listTariffs>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof listChargeTypes>>,
+          Awaited<ReturnType<typeof listTariffs>>,
           TError,
-          Awaited<ReturnType<typeof listChargeTypes>>
+          Awaited<ReturnType<typeof listTariffs>>
         > , 'initialData'
       >, request?: SecondParameter<typeof nadelFetch>}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListChargeTypes<TData = Awaited<ReturnType<typeof listChargeTypes>>, TError = UnauthorizedResponse | ForbiddenResponse>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listChargeTypes>>, TError, TData>> & Pick<
+export function useListTariffs<TData = Awaited<ReturnType<typeof listTariffs>>, TError = UnauthorizedResponse | ForbiddenResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listTariffs>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof listChargeTypes>>,
+          Awaited<ReturnType<typeof listTariffs>>,
           TError,
-          Awaited<ReturnType<typeof listChargeTypes>>
+          Awaited<ReturnType<typeof listTariffs>>
         > , 'initialData'
       >, request?: SecondParameter<typeof nadelFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListChargeTypes<TData = Awaited<ReturnType<typeof listChargeTypes>>, TError = UnauthorizedResponse | ForbiddenResponse>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listChargeTypes>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+export function useListTariffs<TData = Awaited<ReturnType<typeof listTariffs>>, TError = UnauthorizedResponse | ForbiddenResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listTariffs>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
- * @summary List the charge types of the cooperative
+ * @summary List the tariffs of the cooperative
  */
 
-export function useListChargeTypes<TData = Awaited<ReturnType<typeof listChargeTypes>>, TError = UnauthorizedResponse | ForbiddenResponse>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listChargeTypes>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+export function useListTariffs<TData = Awaited<ReturnType<typeof listTariffs>>, TError = UnauthorizedResponse | ForbiddenResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listTariffs>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
-  const queryOptions = getListChargeTypesQueryOptions(options)
+  const queryOptions = getListTariffsQueryOptions(options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 
@@ -166,22 +169,23 @@ export function useListChargeTypes<TData = Awaited<ReturnType<typeof listChargeT
 
 
 
-export const getCreateChargeTypeUrl = () => {
+export const getCreateTariffUrl = () => {
 
 
 
 
-  return `/api/v1/charge-types`
+  return `/api/v1/tariffs`
 }
 
 /**
- * Adds a custom charge type at the end of the list, active. The name is trimmed and must be unique among the
- * non-archived charge types, ignoring letter case; it must also differ from the Ukrainian and English default
- * names of the starting types that were not renamed (409 `CHARGE_TYPE_NAME_TAKEN`). Requires `TARIFFS_VIEW`
- * and `TARIFFS_MANAGE`; the change is written to the audit log.
- * @summary Add a charge type
+ * Creates a tariff of a charge type together with its first version; the tariff applies to all plots until its
+ * scope is changed. The charge type must exist (404 otherwise) and not be archived (409
+ * `CHARGE_TYPE_ARCHIVED`). The version rules are those of `POST /tariffs/{id}/versions` (400
+ * `VALIDATION_FAILED`, with field names prefixed by `firstVersion.`). A version dated in the past is accepted.
+ * Requires `TARIFFS_VIEW` and `TARIFFS_MANAGE`; the change is written to the audit log.
+ * @summary Create a tariff with its first version
  */
-export const createChargeType = async (chargeTypeCreate: ChargeTypeCreate, options?: Parameters<typeof nadelFetch>[1]): Promise<ChargeType> => {
+export const createTariff = async (tariffCreate: TariffCreate, options?: Parameters<typeof nadelFetch>[1]): Promise<Tariff> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -197,12 +201,12 @@ export const createChargeType = async (chargeTypeCreate: ChargeTypeCreate, optio
     }
     return headers;
   };
-return nadelFetch<ChargeType>(getCreateChargeTypeUrl(),
+return nadelFetch<Tariff>(getCreateTariffUrl(),
   {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(chargeTypeCreate)
+    body: JSON.stringify(tariffCreate)
   }
 );}
 
@@ -210,13 +214,13 @@ return nadelFetch<ChargeType>(getCreateChargeTypeUrl(),
 
 
 
-export const getCreateChargeTypeMutationKey = () => ['createChargeType'] as const;
+export const getCreateTariffMutationKey = () => ['createTariff'] as const;
 
-export const getCreateChargeTypeMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createChargeType>>, TError,CreateChargeTypeMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof createChargeType>>, TError,CreateChargeTypeMutationVariables, TContext> => {
+export const getCreateTariffMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createTariff>>, TError,CreateTariffMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createTariff>>, TError,CreateTariffMutationVariables, TContext> => {
 
-const mutationKey = getCreateChargeTypeMutationKey();
+const mutationKey = getCreateTariffMutationKey();
 const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
@@ -226,10 +230,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createChargeType>>, CreateChargeTypeMutationVariables> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createTariff>>, CreateTariffMutationVariables> = (props) => {
           const {data} = props ?? {};
 
-          return  createChargeType(data,requestOptions)
+          return  createTariff(data,requestOptions)
         }
 
 
@@ -239,40 +243,150 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
   return  { mutationFn, ...mutationOptions }}
 
-    export type CreateChargeTypeMutationResult = NonNullable<Awaited<ReturnType<typeof createChargeType>>>
-    export type CreateChargeTypeMutationBody = ChargeTypeCreate
-    export type CreateChargeTypeMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse
-    export type CreateChargeTypeMutationVariables = {data: ChargeTypeCreate}
+    export type CreateTariffMutationResult = NonNullable<Awaited<ReturnType<typeof createTariff>>>
+    export type CreateTariffMutationBody = TariffCreate
+    export type CreateTariffMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse
+    export type CreateTariffMutationVariables = {data: TariffCreate}
 
     /**
- * @summary Add a charge type
+ * @summary Create a tariff with its first version
  */
-export const useCreateChargeType = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createChargeType>>, TError,CreateChargeTypeMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+export const useCreateTariff = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createTariff>>, TError,CreateTariffMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
  , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof createChargeType>>,
+        Awaited<ReturnType<typeof createTariff>>,
         TError,
-        CreateChargeTypeMutationVariables,
+        CreateTariffMutationVariables,
         TContext
       > => {
-      return useMutation(getCreateChargeTypeMutationOptions(options), queryClient);
+      return useMutation(getCreateTariffMutationOptions(options), queryClient);
     }
-    export const getReorderChargeTypesUrl = () => {
+    export const getGetTariffUrl = (id: string,) => {
 
 
 
 
-  return `/api/v1/charge-types/order`
+  return `/api/v1/tariffs/${id}`
 }
 
 /**
- * Sets the order of the list. `ids` must be exactly the ids of the non-archived charge types of the
- * cooperative, each once, in the new order; otherwise (the list changed since the client read it) the answer is
- * 409 `CHARGE_TYPE_ORDER_STALE` and nothing changes. Requires `TARIFFS_VIEW` and `TARIFFS_MANAGE`; one audit
- * entry is written for every type whose position changed.
- * @summary Change the order of the charge types
+ * Returns the tariff, its charge type (also an archived one) and every version, newest first. `validTo` of a
+ * version is the day before the next version starts; the last version has none. `pastDated` marks a version
+ * whose `validFrom` is before today (Europe/Kyiv). A tariff of another cooperative or an unknown id is 404.
+ * Requires `TARIFFS_VIEW`.
+ * @summary A tariff with its versions
  */
-export const reorderChargeTypes = async (chargeTypeOrder: ChargeTypeOrder, options?: Parameters<typeof nadelFetch>[1]): Promise<void> => {
+export const getTariff = async (id: string, options?: Parameters<typeof nadelFetch>[1]): Promise<Tariff> => {
+
+  return nadelFetch<Tariff>(getGetTariffUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetTariffQueryKey = (id: string,) => {
+    return [
+    `/api/v1/tariffs/${id}`
+    ] as const;
+    }
+
+
+export const getGetTariffQueryOptions = <TData = Awaited<ReturnType<typeof getTariff>>, TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getTariff>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetTariffQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getTariff>>> = ({ signal }) => getTariff(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getTariff>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetTariffQueryResult = NonNullable<Awaited<ReturnType<typeof getTariff>>>
+export type GetTariffQueryError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse
+
+
+export function useGetTariff<TData = Awaited<ReturnType<typeof getTariff>>, TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getTariff>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getTariff>>,
+          TError,
+          Awaited<ReturnType<typeof getTariff>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetTariff<TData = Awaited<ReturnType<typeof getTariff>>, TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getTariff>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getTariff>>,
+          TError,
+          Awaited<ReturnType<typeof getTariff>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetTariff<TData = Awaited<ReturnType<typeof getTariff>>, TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getTariff>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary A tariff with its versions
+ */
+
+export function useGetTariff<TData = Awaited<ReturnType<typeof getTariff>>, TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getTariff>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetTariffQueryOptions(id,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export const getAddTariffVersionUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/tariffs/${id}/versions`
+}
+
+/**
+ * Adds a version that applies from `validFrom`. Versions are never edited or deleted; a change of rate is a new
+ * version. Two versions of one tariff cannot start on the same date (409 `TARIFF_VERSION_DATE_TAKEN`,
+ * `errors[{field: validFrom}]`). The charge type must not be archived (409 `CHARGE_TYPE_ARCHIVED`). A date in the
+ * past is accepted (`pastDated: true` in the answer). Field codes of 400 `VALIDATION_FAILED`: `rate`
+ * `RATE_INVALID`; `frequency` `FREQUENCY_BASIS_MISMATCH` (`ONE_OFF` goes only with `FIXED_ONE_TIME` and
+ * `FIXED_ONE_TIME` only with `ONE_OFF`); `dueDate` `REQUIRED` (a one-time amount has a due date) or `INVALID`
+ * (a due date for a basis other than `FIXED_ONE_TIME`). The answer is the new version with `validTo` derived
+ * from the versions that follow it. Requires `TARIFFS_VIEW` and `TARIFFS_MANAGE`; the change is written to the
+ * audit log.
+ * @summary Add a version to a tariff
+ */
+export const addTariffVersion = async (id: string,
+    tariffVersionCreate: TariffVersionCreate, options?: Parameters<typeof nadelFetch>[1]): Promise<TariffVersion> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -288,12 +402,12 @@ export const reorderChargeTypes = async (chargeTypeOrder: ChargeTypeOrder, optio
     }
     return headers;
   };
-return nadelFetch<void>(getReorderChargeTypesUrl(),
+return nadelFetch<TariffVersion>(getAddTariffVersionUrl(id),
   {
     ...options,
-    method: 'PUT',
+    method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(chargeTypeOrder)
+    body: JSON.stringify(tariffVersionCreate)
   }
 );}
 
@@ -301,13 +415,13 @@ return nadelFetch<void>(getReorderChargeTypesUrl(),
 
 
 
-export const getReorderChargeTypesMutationKey = () => ['reorderChargeTypes'] as const;
+export const getAddTariffVersionMutationKey = () => ['addTariffVersion'] as const;
 
-export const getReorderChargeTypesMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reorderChargeTypes>>, TError,ReorderChargeTypesMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof reorderChargeTypes>>, TError,ReorderChargeTypesMutationVariables, TContext> => {
+export const getAddTariffVersionMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof addTariffVersion>>, TError,AddTariffVersionMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof addTariffVersion>>, TError,AddTariffVersionMutationVariables, TContext> => {
 
-const mutationKey = getReorderChargeTypesMutationKey();
+const mutationKey = getAddTariffVersionMutationKey();
 const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
@@ -317,102 +431,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reorderChargeTypes>>, ReorderChargeTypesMutationVariables> = (props) => {
-          const {data} = props ?? {};
-
-          return  reorderChargeTypes(data,requestOptions)
-        }
-
-
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type ReorderChargeTypesMutationResult = NonNullable<Awaited<ReturnType<typeof reorderChargeTypes>>>
-    export type ReorderChargeTypesMutationBody = ChargeTypeOrder
-    export type ReorderChargeTypesMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse
-    export type ReorderChargeTypesMutationVariables = {data: ChargeTypeOrder}
-
-    /**
- * @summary Change the order of the charge types
- */
-export const useReorderChargeTypes = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reorderChargeTypes>>, TError,ReorderChargeTypesMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof reorderChargeTypes>>,
-        TError,
-        ReorderChargeTypesMutationVariables,
-        TContext
-      > => {
-      return useMutation(getReorderChargeTypesMutationOptions(options), queryClient);
-    }
-    export const getUpdateChargeTypeUrl = (id: string,) => {
-
-
-
-
-  return `/api/v1/charge-types/${id}`
-}
-
-/**
- * Replaces the name, description and active mark. Renaming one of the four starting types marks it as
- * customised (`nameCustomized: true`) for good. The name rules are those of creation (409
- * `CHARGE_TYPE_NAME_TAKEN`). An archived type cannot be changed (409 `CHARGE_TYPE_ARCHIVED`). Saving the current
- * values changes nothing and writes no audit entry. Requires `TARIFFS_VIEW` and `TARIFFS_MANAGE`.
- * @summary Change a charge type
- */
-export const updateChargeType = async (id: string,
-    chargeTypeUpdate: ChargeTypeUpdate, options?: Parameters<typeof nadelFetch>[1]): Promise<ChargeType> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return nadelFetch<ChargeType>(getUpdateChargeTypeUrl(id),
-  {
-    ...options,
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(chargeTypeUpdate)
-  }
-);}
-
-
-
-
-
-export const getUpdateChargeTypeMutationKey = () => ['updateChargeType'] as const;
-
-export const getUpdateChargeTypeMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateChargeType>>, TError,UpdateChargeTypeMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof updateChargeType>>, TError,UpdateChargeTypeMutationVariables, TContext> => {
-
-const mutationKey = getUpdateChargeTypeMutationKey();
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateChargeType>>, UpdateChargeTypeMutationVariables> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof addTariffVersion>>, AddTariffVersionMutationVariables> = (props) => {
           const {id,data} = props ?? {};
 
-          return  updateChargeType(id,data,requestOptions)
+          return  addTariffVersion(id,data,requestOptions)
         }
 
 
@@ -422,97 +444,21 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
   return  { mutationFn, ...mutationOptions }}
 
-    export type UpdateChargeTypeMutationResult = NonNullable<Awaited<ReturnType<typeof updateChargeType>>>
-    export type UpdateChargeTypeMutationBody = ChargeTypeUpdate
-    export type UpdateChargeTypeMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse
-    export type UpdateChargeTypeMutationVariables = {id: string;data: ChargeTypeUpdate}
+    export type AddTariffVersionMutationResult = NonNullable<Awaited<ReturnType<typeof addTariffVersion>>>
+    export type AddTariffVersionMutationBody = TariffVersionCreate
+    export type AddTariffVersionMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse
+    export type AddTariffVersionMutationVariables = {id: string;data: TariffVersionCreate}
 
     /**
- * @summary Change a charge type
+ * @summary Add a version to a tariff
  */
-export const useUpdateChargeType = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateChargeType>>, TError,UpdateChargeTypeMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+export const useAddTariffVersion = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof addTariffVersion>>, TError,AddTariffVersionMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
  , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof updateChargeType>>,
+        Awaited<ReturnType<typeof addTariffVersion>>,
         TError,
-        UpdateChargeTypeMutationVariables,
+        AddTariffVersionMutationVariables,
         TContext
       > => {
-      return useMutation(getUpdateChargeTypeMutationOptions(options), queryClient);
-    }
-    export const getArchiveChargeTypeUrl = (id: string,) => {
-
-
-
-
-  return `/api/v1/charge-types/${id}/archive`
-}
-
-/**
- * Archives the charge type: it disappears from the list, frees its name and can no longer get tariffs. A charge
- * type is never deleted. Archiving an archived type is 409 `CHARGE_TYPE_ARCHIVED`. Requires `TARIFFS_VIEW` and
- * `TARIFFS_MANAGE`; the change is written to the audit log.
- * @summary Archive a charge type
- */
-export const archiveChargeType = async (id: string, options?: Parameters<typeof nadelFetch>[1]): Promise<void> => {
-
-  return nadelFetch<void>(getArchiveChargeTypeUrl(id),
-  {
-    ...options,
-    method: 'POST'
-
-
-  }
-);}
-
-
-
-
-
-export const getArchiveChargeTypeMutationKey = () => ['archiveChargeType'] as const;
-
-export const getArchiveChargeTypeMutationOptions = <TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof archiveChargeType>>, TError,ArchiveChargeTypeMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof archiveChargeType>>, TError,ArchiveChargeTypeMutationVariables, TContext> => {
-
-const mutationKey = getArchiveChargeTypeMutationKey();
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof archiveChargeType>>, ArchiveChargeTypeMutationVariables> = (props) => {
-          const {id} = props ?? {};
-
-          return  archiveChargeType(id,requestOptions)
-        }
-
-
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type ArchiveChargeTypeMutationResult = NonNullable<Awaited<ReturnType<typeof archiveChargeType>>>
-
-    export type ArchiveChargeTypeMutationError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse
-    export type ArchiveChargeTypeMutationVariables = {id: string}
-
-    /**
- * @summary Archive a charge type
- */
-export const useArchiveChargeType = <TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof archiveChargeType>>, TError,ArchiveChargeTypeMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof archiveChargeType>>,
-        TError,
-        ArchiveChargeTypeMutationVariables,
-        TContext
-      > => {
-      return useMutation(getArchiveChargeTypeMutationOptions(options), queryClient);
+      return useMutation(getAddTariffVersionMutationOptions(options), queryClient);
     }

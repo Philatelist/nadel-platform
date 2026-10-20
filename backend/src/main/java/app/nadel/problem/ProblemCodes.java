@@ -33,6 +33,8 @@ public final class ProblemCodes {
     public static final String CHARGE_TYPE_ARCHIVED = "CHARGE_TYPE_ARCHIVED";
     /** 409: the submitted order is not the current set of non-archived charge types. */
     public static final String CHARGE_TYPE_ORDER_STALE = "CHARGE_TYPE_ORDER_STALE";
+    /** 409: another version of the tariff starts on the same date. */
+    public static final String TARIFF_VERSION_DATE_TAKEN = "TARIFF_VERSION_DATE_TAKEN";
     /** 413: the uploaded file is over the size limit. */
     public static final String FILE_TOO_LARGE = "FILE_TOO_LARGE";
     /** 400: the upload is not an {@code .xlsx} workbook (also a corrupt, encrypted or oversized-when-unpacked one). */
@@ -59,6 +61,10 @@ public final class ProblemCodes {
     public static final String CADASTRAL_INVALID = "CADASTRAL_INVALID";
     public static final String AREA_INVALID = "AREA_INVALID";
     public static final String SHARE_INVALID = "SHARE_INVALID";
+    /** A tariff rate that is not a non-negative number with at most 10 integer and 4 decimal digits. */
+    public static final String RATE_INVALID = "RATE_INVALID";
+    /** One-off without a fixed one-time amount, or a fixed one-time amount without one-off. */
+    public static final String FREQUENCY_BASIS_MISMATCH = "FREQUENCY_BASIS_MISMATCH";
     public static final String MEMBER_NOT_FOUND = "MEMBER_NOT_FOUND";
     public static final String OWNERSHIP_NOT_FOUND = "OWNERSHIP_NOT_FOUND";
 

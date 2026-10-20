@@ -1,0 +1,62 @@
+package app.nadel.tariffs.internal;
+
+import app.nadel.identity.CurrentUser;
+import java.net.URI;
+import java.util.List;
+import java.util.UUID;
+import nadel.contract.api.TariffsApi;
+import nadel.contract.model.Tariff;
+import nadel.contract.model.TariffCreate;
+import nadel.contract.model.TariffSummary;
+import nadel.contract.model.TariffVersion;
+import nadel.contract.model.TariffVersionCreate;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+/**
+ * The tariff endpoints of tag {@code tariffs}. Reading needs {@code TARIFFS_VIEW}; every write needs
+ * {@code TARIFFS_VIEW} and {@code TARIFFS_MANAGE}, so a manager can always see what they change. The platform operator
+ * has no permissions and gets 403.
+ */
+@RestController
+@RequestMapping("/api/v1")
+class TariffsController implements TariffsApi {
+
+    private final CurrentUser currentUser;
+    private final TariffQueries queries;
+    private final TariffCommands commands;
+
+    TariffsController(CurrentUser currentUser, TariffQueries queries, TariffCommands commands) {
+        this.currentUser = currentUser;
+        this.queries = queries;
+        this.commands = commands;
+    }
+
+    @Override
+    @PreAuthorize("hasAuthority('PERM_TARIFFS_VIEW')")
+    public ResponseEntity<List<TariffSummary>> listTariffs() {
+        return ResponseEntity.ok(queries.list());
+    }
+
+    @Override
+    @PreAuthorize("hasAuthority('PERM_TARIFFS_VIEW')")
+    public ResponseEntity<Tariff> getTariff(UUID id) {
+        return ResponseEntity.ok(queries.get(id));
+    }
+
+    @Override
+    @PreAuthorize("hasAuthority('PERM_TARIFFS_VIEW') and hasAuthority('PERM_TARIFFS_MANAGE')")
+    public ResponseEntity<Tariff> createTariff(TariffCreate tariffCreate) {
+        Tariff created = commands.create(tariffCreate, currentUser.profile());
+        return ResponseEntity.created(URI.create("/api/v1/tariffs/" + created.getId())).body(created);
+    }
+
+    @Override
+    @PreAuthorize("hasAuthority('PERM_TARIFFS_VIEW') and hasAuthority('PERM_TARIFFS_MANAGE')")
+    public ResponseEntity<TariffVersion> addTariffVersion(UUID id, TariffVersionCreate tariffVersionCreate) {
+        TariffVersion created = commands.addVersion(id, tariffVersionCreate, currentUser.profile());
+        return ResponseEntity.created(URI.create("/api/v1/tariffs/" + id)).body(created);
+    }
+}
