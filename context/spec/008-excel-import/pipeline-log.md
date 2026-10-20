@@ -96,3 +96,5 @@ Same as 004–007 (see `context/spec/005-ui-preferences/pipeline-log.md`). Re-ch
 - Ignored the agent's suggestion to git-ignore docs/screenshots/ (the pipeline commits screenshots there).
 - Slice 7 orchestrator verify: make check exit 0 (backend 1020 tests, coverage checks met at floor 0.97); make e2e 77 passed (2.5m); ports 8080/5173 free afterwards.
 - Slice 7 r1: PASS. All implementation slices 1–7 PASS. Doc minors fixed by the orchestrator. Starting Slice 8 (Feature Testing & Regression, testing-expert).
+- Slice 8 returned (testing-expert): `ImportAcceptanceTests` (11, `@Tag("regression")`), `web/e2e/imports-acceptance.spec.ts` (3 Ukrainian-UI specs), `context/qa/list-of-tests.md` entries; every acceptance criterion mapped to tests; RED checked by 7 backend mutations and 2 e2e message mutations. Agent: verify 1031 tests, e2e 80/80 (before Prettier reformatted the new spec), client green (web 238). Orchestrator re-running make check and make e2e on the formatted tree.
+- Slice 8 orchestrator verify: make check exit 0 (backend 1031, coverage met at 0.97; web 238, shared 67, api-client 7, ui-tokens 56); make e2e 80 passed (2.6m).
