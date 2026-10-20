@@ -1,7 +1,8 @@
 # tariffs
 
-What the cooperative charges for and how much (feature 009). Delivered so far: **charge types** (slice 1) and
-**tariffs with versions** (slice 2) and **scopes** (slice 3); the expected amount of a plot follows in a later slice.
+What the cooperative charges for and how much (feature 009): **charge types**, **tariffs with versions**, **scopes** and
+the **expected amount** of a plot for a month. Nothing is charged here; charges arrive with feature 011, which reuses
+`ChargeCalculator`.
 
 Tables (all under RLS `tenant_isolation`, an index on `tenant_id`, composite foreign keys on `(tenant_id, id)`; V10):
 
@@ -50,6 +51,7 @@ Tag `tariffs` (`TariffsController`):
 | `GET /tariffs/{id}` | `getTariff` | `TARIFFS_VIEW` |
 | `POST /tariffs/{id}/versions` | `addTariffVersion` | `TARIFFS_VIEW` and `TARIFFS_MANAGE` |
 | `PUT /tariffs/{id}/scope` | `updateTariffScope` | `TARIFFS_VIEW` and `TARIFFS_MANAGE` |
+| `GET /plots/{id}/tariffs?month=YYYY-MM` | `getPlotTariffs` | `TARIFFS_VIEW` for any plot; otherwise a member for a plot they own now (no `@PreAuthorize`) |
 
 The platform operator has no permissions and gets 403 `PERMISSION_DENIED`; a member without the permissions gets 403.
 The cooperative always comes from the token. A type of another cooperative or an unknown id is 404 (RLS).
@@ -120,6 +122,35 @@ Writes (`ChargeTypeCommands`, one transaction each, the audit event is published
   are deleted, new ones inserted (an exclusion with a new reason is deleted and inserted), the tariff's `scope_kind`
   and `updated_at` change. A save that changes nothing touches nothing and writes no audit entry.
 
+## Expected amount of a plot
+
+`GET /plots/{id}/tariffs?month=YYYY-MM` (`ExpectedAmountQueries`, `TariffsController.getPlotTariffs`) answers what the plot
+*would* be charged in the month. The arithmetic lives once in the public, pure `ChargeCalculator` (rule in
+`docs/domain/money-rules.md` section 4.1); the query only picks the tariffs and the scope.
+
+- **Calculator.** `ChargeCalculator.calculate(List<VersionTerms>, areaM2, YearMonth)` returns an
+  `Optional<ExpectedCharge>`: empty when no version overlaps the month, `ExpectedCharge.ByReadings` when a `PER_KWH`
+  or `PER_M3` version overlaps it, else `ExpectedCharge.Amount(Money)`. Versions are sorted by `validFrom`, each counts
+  for its days in the month over `D`; everything is summed as one exact fraction over `D x 12` and rounded once with
+  `Money.ofQuotient`. A one-time fee counts in its due month only (never split). `ChargeCalculator.shownVersion` says
+  which version's basis, frequency and rate to display.
+- **Who may ask.** No `@PreAuthorize`: a caller with `TARIFFS_VIEW` may ask for any plot of the cooperative; anyone else
+  only for a plot in `OwnedPlotsSource.currentPlotsOf(memberId)`. Every other case (another member's plot, an unknown id,
+  a plot of another cooperative under RLS) is the same 404 `NOT_FOUND`; the platform operator is 403. Common land and an
+  archived plot answer 200 with no items and a total of `0.00`.
+- **Month.** Optional, `YYYY-MM` (contract pattern; anything else is 400 `VALIDATION_FAILED` with field `month`);
+  default is the current month on the Kyiv `Clock`.
+- **Which tariffs.** Tariffs of non-archived and active charge types only. `ALL_PLOTS` applies unless the plot is
+  excluded (item status `EXCLUDED` with the reason, no amount, only when the tariff is listed for the month at all);
+  `SELECTED_PLOTS` applies only to selected plots. A tariff that no version of covers the month is not listed. Items
+  are ordered by charge type position, then tariff name (ignoring case); `total` is the sum of the `AMOUNT` items.
+- **Queries.** The active charge types, their tariffs, all their versions and the scope rows that name this plot are
+  loaded in four queries, whatever the number of tariffs. Plots are read through `PlotCatalog`, ownership through
+  `OwnedPlotsSource`.
+- **Demo data.** `R__demo_data.sql` adds membership (50.0000 per sotka yearly, plot 28 excluded), land tax (35.0000
+  per sotka yearly), electricity (4.3200 per kWh monthly) and a custom "Road repair" type with a fixed one-time fee of
+  1200.0000 due 2026-12-01, all from 2026-01-01 for the demo cooperative.
+
 ## Audit
 
 `TARIFF_CREATED` and `TARIFF_VERSION_ADDED` (entity type `TARIFF`, label "charge type name / tariff name"). The first
@@ -151,5 +182,6 @@ narrow exception to "everything in the repository is English", of the same kind 
 
 ## Dependencies
 
-`identity` (`CurrentUser`, `AccessProfile`), `audit` (events), `problem`, `money` (`Rate`) and `plots` (the public
-`PlotCatalog` only: `find`, `findAll`, `inNaturalOrder`, `countChargeable`). The module root exports `Basis`, `Frequency` and `VersionTerms`. Nothing depends on this module yet.
+`identity` (`CurrentUser`, `AccessProfile`, `OwnedPlotsSource`), `audit` (events), `problem`, `money` (`Rate`, `Money`) and
+`plots` (the public `PlotCatalog` only: `find`, `findAll`, `inNaturalOrder`, `countChargeable`). The module root exports
+`Basis`, `Frequency`, `VersionTerms`, `ExpectedCharge` and `ChargeCalculator`. Nothing depends on this module yet.

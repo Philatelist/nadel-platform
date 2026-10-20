@@ -6,6 +6,7 @@ export { ErrorState } from './ErrorState';
 export { Field, type ControlProps } from './Field';
 export { LoadingState } from './LoadingState';
 export { Money, type MoneyTone } from './Money';
+export { MonthField } from './MonthField';
 export { Notice, type NoticeTone } from './Notice';
 export { PageHeader } from './PageHeader';
 export { Panel } from './Panel';

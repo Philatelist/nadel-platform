@@ -483,6 +483,17 @@ export const uk: Messages = {
       FIXED_ONE_TIME: 'Фіксована разова сума',
     },
     frequency: { MONTHLY: 'Щомісяця', QUARTERLY: 'Щокварталу', YEARLY: 'Щороку', ONE_OFF: 'Одноразово' },
+    expected: {
+      panelTitle: 'Тарифи',
+      month: 'Місяць',
+      empty: 'На цей місяць тарифів немає',
+      total: 'Разом',
+      byReadings: 'за показаннями',
+      notCharged: 'не нараховується',
+      rate: '{rate} ₴ · {basis} · {frequency}',
+      myTitle: 'Що мені нараховуватимуть',
+      forMonth: 'За {month}',
+    },
     form: {
       title: 'Новий тариф',
       chargeType: 'Вид нарахування',

@@ -18,3 +18,9 @@
 |---|---|---|---|---|
 | 1 | `1b100ae..70bad53` | MAJOR_ISSUES | M1 TariffsPage ignored the tariffs query's loading/error state and showed "No tariffs yet" | minor: audit `chargeType` value/label of an unrenamed seeded type is the stored English default; create form offers only active charge types (server refuses only archived); `Instant.now()` instead of the injected `Clock` for `createdAt`; list vs card plotCount when versions switch between meter-based and other bases; rate shown with the locale comma ("50,0000") while the spec quotes "50.0000" |
 | 2 | + `ec4e615` | PASS | M1 resolved (nested QueryBoundary; pending and error tests) | minor: two separate error states if both lists fail |
+
+## Slice 3 — Which plots a tariff applies to
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `ec4e615..6ed5b5b` | PASS | — | minor: ScopeEditor shows nothing for list-level field errors (`plotIds`/`exclusions` INVALID or TOO_LONG — the UI never sends such requests); unknown field codes fall back to the INVALID text; row-indexed server errors shift when a row is removed after a failed save; a fully-qualified `Basis` in TariffDtoMapper; a memoised count in a `long[]` in TariffAssembler |

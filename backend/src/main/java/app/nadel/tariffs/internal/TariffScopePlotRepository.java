@@ -16,4 +16,7 @@ interface TariffScopePlotRepository extends JpaRepository<TariffScopePlotRecord,
     /** The selected-plot and exclusion rows of these tariffs. */
     @Query("select s from TariffScopePlotRecord s where s.tariffId in :tariffIds")
     List<TariffScopePlotRecord> findOf(@Param("tariffIds") Collection<UUID> tariffIds);
+
+    /** The selected-plot or exclusion rows that name the plot, one per tariff. */
+    List<TariffScopePlotRecord> findByPlotId(UUID plotId);
 }

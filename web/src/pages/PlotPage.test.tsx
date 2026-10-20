@@ -28,6 +28,13 @@ vi.mock('@nadel/api-client', async (importOriginal) => ({
     deleteOptions = options;
     return { mutate: vi.fn(), isPending: false };
   },
+  useGetPlotTariffs: () => ({
+    data: { month: '2026-10', total: '0.00', items: [] },
+    error: null,
+    isPending: false,
+    isError: false,
+    refetch: vi.fn(),
+  }),
   useGetPlot: () => ({ data: plot, error: null, isPending: false, isError: false, refetch: vi.fn() }),
   useListPlotOwnerships: () => ({
     data: { plotId: 'p1', current: [], history: [] },
@@ -165,5 +172,23 @@ describe('PlotPage refused actions', () => {
     renderCard();
     act(() => deleteOptions.mutation.onError(new ApiError(409, { code: 'PLOT_HAS_OWNERSHIP_HISTORY' })));
     expect(screen.getByText('A plot with ownership history cannot be deleted')).toBeInTheDocument();
+  });
+});
+
+describe('PlotPage tariffs panel', () => {
+  beforeEach(() => {
+    permissions = ['PLOTS_VIEW'];
+    plot = active;
+  });
+
+  it('shows the tariffs panel on a plot card', () => {
+    renderCard();
+    expect(screen.getByRole('heading', { name: 'Tariffs' })).toBeInTheDocument();
+  });
+
+  it('does not show it for common land', () => {
+    plot = { ...active, kind: 'COMMON' };
+    renderCard();
+    expect(screen.queryByRole('heading', { name: 'Tariffs' })).toBeNull();
   });
 });

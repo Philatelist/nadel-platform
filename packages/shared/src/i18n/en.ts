@@ -471,6 +471,17 @@ export const en = {
       FIXED_ONE_TIME: 'Fixed one-time amount',
     },
     frequency: { MONTHLY: 'Monthly', QUARTERLY: 'Quarterly', YEARLY: 'Yearly', ONE_OFF: 'One-off' },
+    expected: {
+      panelTitle: 'Tariffs',
+      month: 'Month',
+      empty: 'No tariffs for this month',
+      total: 'Total',
+      byReadings: 'by meter readings',
+      notCharged: 'not charged',
+      rate: '{rate} ₴ · {basis} · {frequency}',
+      myTitle: 'What I will be charged',
+      forMonth: 'For {month}',
+    },
     form: {
       title: 'New tariff',
       chargeType: 'Charge type',

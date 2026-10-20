@@ -246,3 +246,45 @@ SET status = CASE WHEN p.kind = 'PLOT' AND EXISTS (
     debt = 0, oldest_debt_date = NULL, updated_at = now()
 FROM plot p
 WHERE p.id = s.plot_id;
+
+-- BEGIN demo tariffs
+-- Charge types and tariffs (spec 009), demo cooperative only. The four starting charge types come from
+-- seed_charge_types (called by seed_base_roles above); "Road repair" is a custom one. Ids are fixed and every insert is
+-- DO NOTHING, so re-running never duplicates or overwrites what the chairman changed. Nothing is charged yet: these
+-- rows only feed the expected amounts of GET /plots/{id}/tariffs (a 600 m2 plot: membership 25.00, land tax 17.50 a month).
+-- Tests that need a clean tariffs state remove these rows and put them back by running this block (see DemoTariffData).
+INSERT INTO charge_type (id, tenant_id, code, name, name_customized, description, active, position)
+VALUES ('eeeeeeee-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111', NULL, 'Road repair', true,
+        'Special-purpose fee for repairing the main road', true, 5)
+ON CONFLICT DO NOTHING;
+
+INSERT INTO tariff (id, tenant_id, charge_type_id, name, scope_kind)
+SELECT v.id, c.tenant_id, c.id, v.name, 'ALL_PLOTS'
+FROM (VALUES
+    ('ffffffff-0000-0000-0000-000000000001'::uuid, md5('11111111-1111-1111-1111-111111111111:CHARGE_TYPE:MEMBERSHIP')::uuid, 'For members'),
+    ('ffffffff-0000-0000-0000-000000000002'::uuid, md5('11111111-1111-1111-1111-111111111111:CHARGE_TYPE:LAND_TAX')::uuid, 'Land tax'),
+    ('ffffffff-0000-0000-0000-000000000003'::uuid, md5('11111111-1111-1111-1111-111111111111:CHARGE_TYPE:ELECTRICITY')::uuid, 'Electricity by meter'),
+    ('ffffffff-0000-0000-0000-000000000004'::uuid, 'eeeeeeee-0000-0000-0000-000000000001'::uuid, 'Road repair fee')
+) AS v(id, charge_type_id, name)
+JOIN charge_type c ON c.id = v.charge_type_id AND c.tenant_id = '11111111-1111-1111-1111-111111111111'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO tariff_version (id, tenant_id, tariff_id, valid_from, basis, frequency, rate, due_date, note)
+SELECT v.id, t.tenant_id, t.id, v.valid_from, v.basis, v.frequency, v.rate, v.due_date, v.note
+FROM (VALUES
+    ('ffffffff-0000-0000-0001-000000000001'::uuid, 'ffffffff-0000-0000-0000-000000000001'::uuid, DATE '2026-01-01', 'PER_AREA_SOTKA', 'YEARLY', 50.0000, NULL::date, 'General meeting of 2025-12-14'),
+    ('ffffffff-0000-0000-0001-000000000002'::uuid, 'ffffffff-0000-0000-0000-000000000002'::uuid, DATE '2026-01-01', 'PER_AREA_SOTKA', 'YEARLY', 35.0000, NULL, NULL),
+    ('ffffffff-0000-0000-0001-000000000003'::uuid, 'ffffffff-0000-0000-0000-000000000003'::uuid, DATE '2026-01-01', 'PER_KWH', 'MONTHLY', 4.3200, NULL, NULL),
+    ('ffffffff-0000-0000-0001-000000000004'::uuid, 'ffffffff-0000-0000-0000-000000000004'::uuid, DATE '2026-01-01', 'FIXED_ONE_TIME', 'ONE_OFF', 1200.0000, DATE '2026-12-01', 'Repair of the main road')
+) AS v(id, tariff_id, valid_from, basis, frequency, rate, due_date, note)
+JOIN tariff t ON t.id = v.tariff_id AND t.tenant_id = '11111111-1111-1111-1111-111111111111'
+ON CONFLICT DO NOTHING;
+
+-- One exclusion on the membership tariff: plot 28 has no owner (plots 25-29 are free).
+INSERT INTO tariff_scope_plot (tenant_id, tariff_id, plot_id, kind, reason)
+SELECT p.tenant_id, 'ffffffff-0000-0000-0000-000000000001', p.id, 'EXCLUDED', 'Exempted by the general meeting'
+FROM plot p
+WHERE p.tenant_id = '11111111-1111-1111-1111-111111111111' AND p.number = '28' AND p.archived_at IS NULL
+  AND EXISTS (SELECT 1 FROM tariff t WHERE t.id = 'ffffffff-0000-0000-0000-000000000001')
+ON CONFLICT DO NOTHING;
+-- END demo tariffs

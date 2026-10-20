@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import app.nadel.DemoTariffData;
 import app.nadel.IntegrationTest;
 import app.nadel.TestTokens;
 import java.util.ArrayList;
@@ -45,13 +46,21 @@ class ChargeTypesTests extends IntegrationTest {
     private final List<UUID> roles = new ArrayList<>();
 
     @BeforeEach
+    void startFromTheSeededState() {
+        restoreTheSeededState();
+    }
+
     @AfterEach
-    void restoreTheSeededState() {
-        // Types are archived, never deleted, so the owner role puts the two cooperatives back to "just seeded".
+    void putTheDemoTariffsBack() {
+        restoreTheSeededState();
+        DemoTariffData.restore(ownerJdbc());
+    }
+
+    private void restoreTheSeededState() {
+        // Types are archived, never deleted, so the owner role puts the two cooperatives back to "just seeded" (no
+        // tariffs, so the demo tariffs and the Road repair type are removed here and restored after the test).
         JdbcTemplate owner = ownerJdbc();
-        owner.update("delete from charge_type where tenant_id in (?, ?)", DEMO_TENANT, OTHER_TENANT);
-        owner.queryForList("select seed_charge_types(?)", DEMO_TENANT);
-        owner.queryForList("select seed_charge_types(?)", OTHER_TENANT);
+        DemoTariffData.clear(owner);
         for (UUID role : roles) {
             inTenant(DEMO_TENANT, sql -> {
                 sql.update("delete from member_role where role_id = ?", role);

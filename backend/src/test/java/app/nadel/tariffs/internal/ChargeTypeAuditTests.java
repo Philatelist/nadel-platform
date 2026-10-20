@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import app.nadel.DemoTariffData;
 import app.nadel.IntegrationTest;
 import app.nadel.TestTokens;
 import java.time.Duration;
@@ -41,12 +42,19 @@ class ChargeTypeAuditTests extends IntegrationTest {
     JsonMapper json;
 
     @BeforeEach
+    void startFromTheSeededState() {
+        restoreTheSeededState();
+    }
+
     @AfterEach
-    void restoreTheSeededState() {
-        JdbcTemplate owner = ownerJdbc();
-        owner.update("delete from charge_type where tenant_id in (?, ?)", DEMO_TENANT, OTHER_TENANT);
-        owner.queryForList("select seed_charge_types(?)", DEMO_TENANT);
-        owner.queryForList("select seed_charge_types(?)", OTHER_TENANT);
+    void putTheDemoTariffsBack() {
+        restoreTheSeededState();
+        DemoTariffData.restore(ownerJdbc());
+    }
+
+    private void restoreTheSeededState() {
+        // no tariffs and no Road repair type here: the demo tariffs are removed and restored after the test
+        DemoTariffData.clear(ownerJdbc());
         // a first sign-in links the demo members to a subject; other tests expect them unlinked (their own subject)
         inTenant(DEMO_TENANT, sql -> sql.update("update member set keycloak_subject = null where email in "
                 + "('chairman@demo.local', 'treasurer@demo.local', 'member@demo.local', 'electrician@demo.local')"));

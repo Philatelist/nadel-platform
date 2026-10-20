@@ -32,7 +32,9 @@ import type {
   BadRequestResponse,
   ConflictResponse,
   ForbiddenResponse,
+  GetPlotTariffsParams,
   NotFoundResponse,
+  PlotTariffs,
   Tariff,
   TariffCreate,
   TariffScopeUpdate,
@@ -566,3 +568,131 @@ export const useUpdateTariffScope = <TError = BadRequestResponse | UnauthorizedR
       > => {
       return useMutation(getUpdateTariffScopeMutationOptions(options), queryClient);
     }
+    export const getGetPlotTariffsUrl = (id: string,
+    params?: GetPlotTariffsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/v1/plots/${id}/tariffs?${stringifiedParams}` : `/api/v1/plots/${id}/tariffs`
+}
+
+/**
+ * Returns the tariffs that apply to the plot in the month and the amount the plot would be charged for each,
+ * calculated by the server (nothing is charged yet). `month` is `YYYY-MM` and defaults to the current month in
+ * Europe/Kyiv; anything else is 400 `VALIDATION_FAILED`. No permission annotation: a caller with `TARIFFS_VIEW`
+ * may ask for any plot of the cooperative, anyone else only for a plot they currently own. Any other plot, an
+ * unknown id and a plot of another cooperative are 404 `NOT_FOUND`; the platform operator has no cooperative data:
+ * 403. Common land and archived plots answer 200 with no items and a total of `0.00`.
+ * Tariffs of archived or inactive charge types are left out, and so is a tariff none of whose versions overlaps
+ * the month. A tariff of all plots that excludes the plot is listed with status `EXCLUDED` and the reason, without
+ * an amount. A tariff with a per-kWh or per-m3 version in the month is `BY_READINGS` without an amount. Every
+ * other tariff is `AMOUNT`, rounded once to kopecks (a one-time fee is 0.00 outside its due month). The rate,
+ * basis and frequency are those of the version valid on the last day of the month that the tariff covers (for a
+ * one-time fee, the version valid on its due date). Items are ordered by charge type position, then tariff name.
+ * `total` is the sum of the `AMOUNT` items. The co-ownership share does not change the amount.
+ * @summary Expected amounts of a plot for a month
+ */
+export const getPlotTariffs = async (id: string,
+    params?: GetPlotTariffsParams, options?: Parameters<typeof nadelFetch>[1]): Promise<PlotTariffs> => {
+
+  return nadelFetch<PlotTariffs>(getGetPlotTariffsUrl(id,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPlotTariffsQueryKey = (id: string,
+    params?: GetPlotTariffsParams,) => {
+    return [
+    `/api/v1/plots/${id}/tariffs`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetPlotTariffsQueryOptions = <TData = Awaited<ReturnType<typeof getPlotTariffs>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(id: string,
+    params?: GetPlotTariffsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPlotTariffs>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPlotTariffsQueryKey(id,params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPlotTariffs>>> = ({ signal }) => getPlotTariffs(id,params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPlotTariffs>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetPlotTariffsQueryResult = NonNullable<Awaited<ReturnType<typeof getPlotTariffs>>>
+export type GetPlotTariffsQueryError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse
+
+
+export function useGetPlotTariffs<TData = Awaited<ReturnType<typeof getPlotTariffs>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string,
+    params: undefined |  GetPlotTariffsParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPlotTariffs>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getPlotTariffs>>,
+          TError,
+          Awaited<ReturnType<typeof getPlotTariffs>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetPlotTariffs<TData = Awaited<ReturnType<typeof getPlotTariffs>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string,
+    params?: GetPlotTariffsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPlotTariffs>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getPlotTariffs>>,
+          TError,
+          Awaited<ReturnType<typeof getPlotTariffs>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetPlotTariffs<TData = Awaited<ReturnType<typeof getPlotTariffs>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string,
+    params?: GetPlotTariffsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPlotTariffs>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Expected amounts of a plot for a month
+ */
+
+export function useGetPlotTariffs<TData = Awaited<ReturnType<typeof getPlotTariffs>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string,
+    params?: GetPlotTariffsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPlotTariffs>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetPlotTariffsQueryOptions(id,params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+

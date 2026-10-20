@@ -1689,6 +1689,55 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
 
+  /plots/{id}/tariffs:
+    get:
+      tags: [tariffs]
+      operationId: getPlotTariffs
+      summary: Expected amounts of a plot for a month
+      description: |
+        Returns the tariffs that apply to the plot in the month and the amount the plot would be charged for each,
+        calculated by the server (nothing is charged yet). `month` is `YYYY-MM` and defaults to the current month in
+        Europe/Kyiv; anything else is 400 `VALIDATION_FAILED`. No permission annotation: a caller with `TARIFFS_VIEW`
+        may ask for any plot of the cooperative, anyone else only for a plot they currently own. Any other plot, an
+        unknown id and a plot of another cooperative are 404 `NOT_FOUND`; the platform operator has no cooperative data:
+        403. Common land and archived plots answer 200 with no items and a total of `0.00`.
+        Tariffs of archived or inactive charge types are left out, and so is a tariff none of whose versions overlaps
+        the month. A tariff of all plots that excludes the plot is listed with status `EXCLUDED` and the reason, without
+        an amount. A tariff with a per-kWh or per-m3 version in the month is `BY_READINGS` without an amount. Every
+        other tariff is `AMOUNT`, rounded once to kopecks (a one-time fee is 0.00 outside its due month). The rate,
+        basis and frequency are those of the version valid on the last day of the month that the tariff covers (for a
+        one-time fee, the version valid on its due date). Items are ordered by charge type position, then tariff name.
+        `total` is the sum of the `AMOUNT` items. The co-ownership share does not change the amount.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: month
+          in: query
+          required: false
+          description: The billing month, `YYYY-MM`; defaults to the current month (Europe/Kyiv)
+          schema:
+            type: string
+            pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlotTariffs'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -3155,3 +3204,71 @@ components:
             Number of plots the tariff applies to, as in the list (exclusions subtracted, archived plots and common
             land never counted); absent when the shown version (the one valid today, else the earliest future one) is
             meter-based
+
+    ExpectedChargeStatus:
+      type: string
+      description: >-
+        `AMOUNT` the plot is charged `amount`; `BY_READINGS` the amount depends on meter readings and is not known here;
+        `EXCLUDED` the tariff does not apply to the plot (see `reason`)
+      enum: [AMOUNT, BY_READINGS, EXCLUDED]
+
+    PlotTariffItem:
+      type: object
+      description: One tariff that applies to a plot in a month, with the expected amount
+      required:
+        [
+          tariffId,
+          tariffName,
+          chargeTypeId,
+          chargeTypeName,
+          chargeTypeNameCustomized,
+          basis,
+          frequency,
+          rate,
+          status,
+        ]
+      properties:
+        tariffId:
+          type: string
+          format: uuid
+        tariffName:
+          type: string
+        chargeTypeId:
+          type: string
+          format: uuid
+        chargeTypeCode:
+          $ref: '#/components/schemas/ChargeTypeCode'
+        chargeTypeName:
+          type: string
+          description: The stored name; clients show their own default name while `chargeTypeNameCustomized` is false
+        chargeTypeNameCustomized:
+          type: boolean
+        basis:
+          $ref: '#/components/schemas/Basis'
+        frequency:
+          $ref: '#/components/schemas/Frequency'
+        rate:
+          $ref: '#/components/schemas/Rate'
+        status:
+          $ref: '#/components/schemas/ExpectedChargeStatus'
+        amount:
+          $ref: '#/components/schemas/Money'
+        reason:
+          type: string
+          description: Why the plot is excluded; only with status `EXCLUDED`
+
+    PlotTariffs:
+      type: object
+      description: The tariffs that apply to a plot in a month and the expected amounts
+      required: [month, items, total]
+      properties:
+        month:
+          type: string
+          pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+          description: The month the amounts are for, `YYYY-MM`
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlotTariffItem'
+        total:
+          $ref: '#/components/schemas/Money'

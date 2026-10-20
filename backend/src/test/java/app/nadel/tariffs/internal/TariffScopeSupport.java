@@ -3,6 +3,7 @@ package app.nadel.tariffs.internal;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import app.nadel.DemoTariffData;
 import app.nadel.IntegrationTest;
 import app.nadel.TestTokens;
 import java.math.BigDecimal;
@@ -38,19 +39,23 @@ abstract class TariffScopeSupport extends IntegrationTest {
     private final List<UUID> plots = new ArrayList<>();
 
     @BeforeEach
+    void startFromTheSeededState() {
+        restoreTheSeededState();
+    }
+
     @AfterEach
-    void restoreTheSeededState() {
+    void putTheDemoTariffsBack() {
+        restoreTheSeededState();
+        DemoTariffData.restore(ownerJdbc());
+    }
+
+    private void restoreTheSeededState() {
         JdbcTemplate owner = ownerJdbc();
         for (UUID plot : plots) {
             owner.update("delete from plot where id = ?", plot); // scope rows cascade
         }
         plots.clear();
-        owner.update("delete from tariff_scope_plot where tenant_id in (?, ?)", DEMO_TENANT, OTHER_TENANT);
-        owner.update("delete from tariff_version where tenant_id in (?, ?)", DEMO_TENANT, OTHER_TENANT);
-        owner.update("delete from tariff where tenant_id in (?, ?)", DEMO_TENANT, OTHER_TENANT);
-        owner.update("delete from charge_type where tenant_id in (?, ?)", DEMO_TENANT, OTHER_TENANT);
-        owner.queryForList("select seed_charge_types(?)", DEMO_TENANT);
-        owner.queryForList("select seed_charge_types(?)", OTHER_TENANT);
+        DemoTariffData.clear(owner); // no demo tariffs during the test; they are restored afterwards
         for (UUID role : roles) {
             inTenant(DEMO_TENANT, sql -> {
                 sql.update("delete from member_role where role_id = ?", role);

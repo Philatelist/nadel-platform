@@ -1,6 +1,7 @@
 package app.nadel.tariffs.internal;
 
 import jakarta.persistence.LockModeType;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -27,4 +28,7 @@ interface TariffRepository extends JpaRepository<TariffRecord, UUID> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select t from TariffRecord t where t.id = :id")
     Optional<TariffRecord> findByIdForUpdate(@Param("id") UUID id);
+
+    /** The tariffs of these charge types, in no particular order. */
+    List<TariffRecord> findByChargeTypeIdIn(Collection<UUID> chargeTypeIds);
 }

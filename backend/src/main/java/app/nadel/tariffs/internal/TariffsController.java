@@ -5,6 +5,7 @@ import java.net.URI;
 import java.util.List;
 import java.util.UUID;
 import nadel.contract.api.TariffsApi;
+import nadel.contract.model.PlotTariffs;
 import nadel.contract.model.Tariff;
 import nadel.contract.model.TariffCreate;
 import nadel.contract.model.TariffScopeUpdate;
@@ -19,7 +20,8 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * The tariff endpoints of tag {@code tariffs}. Reading needs {@code TARIFFS_VIEW}; every write needs
  * {@code TARIFFS_VIEW} and {@code TARIFFS_MANAGE}, so a manager can always see what they change. The platform operator
- * has no permissions and gets 403.
+ * has no permissions and gets 403. {@code GET /plots/{id}/tariffs} is the exception: it is open to every member for the
+ * plots they own.
  */
 @RestController
 @RequestMapping("/api/v1")
@@ -28,11 +30,14 @@ class TariffsController implements TariffsApi {
     private final CurrentUser currentUser;
     private final TariffQueries queries;
     private final TariffCommands commands;
+    private final ExpectedAmountQueries expectedAmounts;
 
-    TariffsController(CurrentUser currentUser, TariffQueries queries, TariffCommands commands) {
+    TariffsController(CurrentUser currentUser, TariffQueries queries, TariffCommands commands,
+            ExpectedAmountQueries expectedAmounts) {
         this.currentUser = currentUser;
         this.queries = queries;
         this.commands = commands;
+        this.expectedAmounts = expectedAmounts;
     }
 
     @Override
@@ -65,5 +70,14 @@ class TariffsController implements TariffsApi {
     @PreAuthorize("hasAuthority('PERM_TARIFFS_VIEW') and hasAuthority('PERM_TARIFFS_MANAGE')")
     public ResponseEntity<Tariff> updateTariffScope(UUID id, TariffScopeUpdate tariffScopeUpdate) {
         return ResponseEntity.ok(commands.updateScope(id, tariffScopeUpdate, currentUser.profile()));
+    }
+
+    /**
+     * No {@code @PreAuthorize}: a member may ask for the plots they own, so the check is in
+     * {@link ExpectedAmountQueries} (anyone else gets 404, the platform operator 403).
+     */
+    @Override
+    public ResponseEntity<PlotTariffs> getPlotTariffs(UUID id, String month) {
+        return ResponseEntity.ok(expectedAmounts.forPlot(id, month, currentUser.profile()));
     }
 }

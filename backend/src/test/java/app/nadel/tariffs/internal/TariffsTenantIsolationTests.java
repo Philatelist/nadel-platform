@@ -3,6 +3,7 @@ package app.nadel.tariffs.internal;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import app.nadel.DemoTariffData;
 import app.nadel.IntegrationTest;
 import java.math.BigDecimal;
 import java.sql.SQLException;
@@ -38,7 +39,7 @@ class TariffsTenantIsolationTests extends IntegrationTest {
 
     @BeforeEach
     void createFixtures() {
-        cleanUp();
+        clearTariffs();
         JdbcTemplate owner = ownerJdbc();
         demoPlot = owner.queryForObject("select id from plot where tenant_id = ? and kind = 'PLOT' order by number "
                 + "limit 1", UUID.class, DEMO_TENANT);
@@ -59,19 +60,18 @@ class TariffsTenantIsolationTests extends IntegrationTest {
 
     @AfterEach
     void cleanUp() {
+        clearTariffs();
+        DemoTariffData.restore(ownerJdbc());
+    }
+
+    /** No tariffs and exactly the four seeded types in both cooperatives: the demo tariffs are restored afterwards. */
+    private void clearTariffs() {
         JdbcTemplate owner = ownerJdbc();
         for (UUID plot : tempPlots) {
             owner.update("delete from plot where id = ?", plot);
         }
         tempPlots.clear();
-        // only this test's rows: the demo cooperative may have tariffs of its own
-        String mine = "(select id from tariff where name like 'ISOTEST%')";
-        owner.update("delete from tariff_scope_plot where tariff_id in " + mine);
-        owner.update("delete from tariff_version where tariff_id in " + mine);
-        owner.update("delete from tariff where name like 'ISOTEST%'");
-        owner.update("delete from charge_type where code is null and tenant_id in (?, ?)", DEMO_TENANT, OTHER_TENANT);
-        owner.queryForList("select seed_charge_types(?)", DEMO_TENANT);
-        owner.queryForList("select seed_charge_types(?)", OTHER_TENANT);
+        DemoTariffData.clear(owner);
     }
 
     // ---- row level security

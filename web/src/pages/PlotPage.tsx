@@ -14,6 +14,7 @@ import { useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { QueryBoundary } from '../components/QueryBoundary';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { PlotTariffsPanel } from '../components/tariffs/PlotTariffsPanel';
 import { OwnersPanel } from '../components/ownership/OwnersPanel';
 import { Badge, Button, Notice, PageHeader, Panel, StatusDot } from '../components/ui';
 import { useLocale, useT } from '../i18n';
@@ -163,6 +164,7 @@ function PlotView({ plot }: { plot: PlotDetails }) {
         ) : (
           <OwnersPanel plotId={plot.id} kind={plot.kind} archived={plot.archived} />
         ))}
+      {plot.kind !== 'COMMON' && <PlotTariffsPanel plotId={plot.id} />}
       {confirmingDelete && (
         <ConfirmDialog
           title={t.plot.deleteTitle}

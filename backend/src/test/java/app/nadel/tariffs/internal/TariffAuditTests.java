@@ -5,6 +5,7 @@ import static org.awaitility.Awaitility.await;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import app.nadel.DemoTariffData;
 import app.nadel.IntegrationTest;
 import app.nadel.TestTokens;
 import java.time.Duration;
@@ -19,7 +20,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
@@ -38,11 +38,18 @@ class TariffAuditTests extends IntegrationTest {
     JsonMapper json;
 
     @BeforeEach
+    void startFromTheSeededState() {
+        restoreTheSeededState();
+    }
+
     @AfterEach
-    void restoreTheSeededState() {
-        JdbcTemplate owner = ownerJdbc();
-        owner.update("delete from tariff_version where tenant_id in (?, ?)", DEMO_TENANT, OTHER_TENANT);
-        owner.update("delete from tariff where tenant_id in (?, ?)", DEMO_TENANT, OTHER_TENANT);
+    void putTheDemoTariffsBack() {
+        restoreTheSeededState();
+        DemoTariffData.restore(ownerJdbc());
+    }
+
+    private void restoreTheSeededState() {
+        DemoTariffData.clear(ownerJdbc()); // no demo tariffs during the test; they are restored afterwards
         // a first sign-in links the demo members to a subject; other tests expect them unlinked (their own subject)
         inTenant(DEMO_TENANT, sql -> sql.update("update member set keycloak_subject = null where email in "
                 + "('chairman@demo.local', 'treasurer@demo.local', 'member@demo.local', 'electrician@demo.local')"));
