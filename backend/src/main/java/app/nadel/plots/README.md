@@ -7,7 +7,18 @@ soft archive (`archived_at`). Owners are described below; polygons are imported 
 
 ## Public API
 
-None. `plots` implements the SPIs `members.MemberArchiveGuard` (see Guards) and `identity.OwnedPlotsSource` (`GET /me` ownedPlots), and uses `members.MemberDirectory` and `settings.CooperativeSettings`.
+`PlotImport` (feature 008, the Excel import): `plan(tenantId, importId, rows)` checks the rows of the Plots sheet against the
+cooperative's plots and returns, for each row, `NEW`, `UPDATE` or `UNCHANGED` with the plot id and the changed fields, or
+the problems of the row (`PlotImportRow`, `PlotImportItem`, `PlotImportPlan`, `PlotImportAction`). It writes nothing.
+Plots are matched by number among the active plots, ignoring case; a blank value leaves the existing value unchanged and a
+matched plot keeps its stored spelling of the number; a new plot needs a kind and, unless it is common land (area 0), an
+area. Besides the rules of `PlotData`: a number repeated in the file is `DUPLICATE_IN_FILE` on the later rows, a cadastral
+number held by another plot (archived ones included) or claimed by an earlier row is `CADASTRAL_NUMBER_TAKEN`, and a plot
+with ownership history cannot become common land (`PLOT_HAS_OWNERSHIP_HISTORY`). The lookups are bulk queries (500
+values per `IN` list). The id of a new plot is derived from the import id and the number, so planning the same import again
+gives the same ids. Applying a plan comes with a later slice.
+
+`plots` also implements the SPIs `members.MemberArchiveGuard` (see Guards) and `identity.OwnedPlotsSource` (`GET /me` ownedPlots), and uses `members.MemberDirectory` and `settings.CooperativeSettings`.
 
 ## Endpoints
 

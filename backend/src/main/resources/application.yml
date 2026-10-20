@@ -31,9 +31,21 @@ spring:
       republish-outstanding-events-on-restart: true
       # Completed publications are deleted: event payloads can contain personal data and the table has no RLS
       completion-mode: delete
+  servlet:
+    multipart:
+      # Excel import: one workbook of at most 10 MB per request. The service checks the size again for clients that
+      # bypass the container, and ZipGuard limits what the archive unpacks to.
+      max-file-size: 10MB
+      max-request-size: 11MB
   jackson:
     # The contract has no nullable properties: an unset optional property is absent, never null
     default-property-inclusion: non_null
+
+server:
+  tomcat:
+    # An upload over the limit is read to the end (up to this size) so that the client receives the 413 answer
+    # instead of a broken connection
+    max-swallow-size: 20MB
 
 management:
   endpoints:

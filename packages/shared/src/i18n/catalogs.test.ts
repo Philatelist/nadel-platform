@@ -12,3 +12,31 @@ describe('i18n catalogs', () => {
     expect(leafPaths(uk).sort()).toEqual(leafPaths(en).sort());
   });
 });
+
+describe('import problem codes', () => {
+  const codes = [
+    'REQUIRED',
+    'TOO_LONG',
+    'INVALID',
+    'CADASTRAL_INVALID',
+    'CADASTRAL_NUMBER_TAKEN',
+    'AREA_INVALID',
+    'PLOT_HAS_OWNERSHIP_HISTORY',
+    'SHEET_MISSING',
+    'HEADER_MISSING',
+    'DUPLICATE_IN_FILE',
+    'AREA_BOTH_OR_NONE',
+    'DATE_INVALID',
+    'NUMBER_INVALID',
+    'YES_NO_INVALID',
+    'UNKNOWN',
+  ];
+
+  it.each([
+    ['uk', uk],
+    ['en', en],
+  ])('%s has a message for every row code', (_name, catalog) => {
+    const messages: Record<string, string> = catalog.importProblem;
+    for (const code of codes) expect(messages[code], code).toBeTruthy();
+  });
+});

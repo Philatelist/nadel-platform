@@ -1,0 +1,256 @@
+package app.nadel.plots.internal;
+
+import app.nadel.audit.FieldChange;
+import app.nadel.plots.PlotImport;
+import app.nadel.plots.PlotImportAction;
+import app.nadel.plots.PlotImportItem;
+import app.nadel.plots.PlotImportPlan;
+import app.nadel.plots.PlotImportRow;
+import app.nadel.problem.FieldProblem;
+import app.nadel.problem.ProblemCodes;
+import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+import org.jspecify.annotations.Nullable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+
+/**
+ * Plans the plot rows of an Excel import. Reads with a handful of bulk queries (plots by number, plots by cadastral
+ * number, plots with ownership history), never one query per row, and writes nothing.
+ * <p>
+ * Rules, in addition to those of {@link PlotData}: a number that appears twice in the file is a problem on the later
+ * row; a cadastral number held by another plot (archived ones included) or claimed by an earlier row is taken; a plot
+ * with ownership history cannot become common land. A blank value leaves the value of the matched plot unchanged; the
+ * number of a matched plot keeps its stored spelling.
+ */
+@Service
+class PlotImportService implements PlotImport {
+
+    /** Upper bound of one {@code IN (...)} list. */
+    private static final int CHUNK = 500;
+
+    private final PlotRepository plots;
+    private final OwnershipRepository ownerships;
+
+    PlotImportService(PlotRepository plots, OwnershipRepository ownerships) {
+        this.plots = plots;
+        this.ownerships = ownerships;
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public PlotImportPlan plan(UUID tenantId, UUID importId, List<PlotImportRow> rows) {
+        Map<String, Plot> existingByNumber = activePlotsByNumber(tenantId, rows);
+        Map<String, UUID> cadastralHolders = cadastralHolders(tenantId, rows);
+        Set<UUID> withHistory = plotsWithHistory(rows, existingByNumber);
+
+        Set<String> seenNumbers = new HashSet<>();
+        Set<String> claimedCadastral = new HashSet<>();
+        List<PlotImportItem> items = new ArrayList<>(rows.size());
+        for (PlotImportRow row : rows) {
+            items.add(planRow(row, importId, existingByNumber, cadastralHolders, withHistory, seenNumbers,
+                    claimedCadastral));
+        }
+        return new PlotImportPlan(items);
+    }
+
+    private PlotImportItem planRow(PlotImportRow row, UUID importId, Map<String, Plot> existingByNumber,
+            Map<String, UUID> cadastralHolders, Set<UUID> withHistory, Set<String> seenNumbers,
+            Set<String> claimedCadastral) {
+        String number = blankToNull(row.number());
+        String key = number == null ? null : lower(number);
+        if (key != null && !seenNumbers.add(key)) {
+            return problem(row, List.of(new FieldProblem("number", ProblemCodes.DUPLICATE_IN_FILE)));
+        }
+        Plot existing = key == null ? null : existingByNumber.get(key);
+
+        List<FieldProblem> problems = new ArrayList<>();
+        PlotKind kind = null;
+        String kindText = blankToNull(row.kind());
+        if (kindText != null) {
+            kind = parseKind(kindText);
+            if (kind == null) {
+                problems.add(new FieldProblem("kind", ProblemCodes.INVALID));
+            }
+        }
+        boolean kindGiven = kindText != null;
+        if (!kindGiven && existing != null) {
+            kind = existing.getKind();
+        }
+
+        BigDecimal area = row.areaM2();
+        if (area == null) {
+            if (existing != null) {
+                area = existing.getAreaM2();
+            } else if (kind == PlotKind.COMMON) {
+                area = BigDecimal.ZERO;
+            } else {
+                problems.add(new FieldProblem("areaM2", ProblemCodes.AREA_BOTH_OR_NONE));
+            }
+        }
+
+        String street = firstNonBlank(row.street(), existing == null ? null : existing.getStreet());
+        String cadastral = firstNonBlank(row.cadastralNumber(), existing == null ? null : existing.getCadastralNumber());
+        String notes = firstNonBlank(row.notes(), existing == null ? null : existing.getNotes());
+        boolean hasBuilding = row.hasBuilding() != null ? row.hasBuilding()
+                : existing != null && existing.hasBuilding();
+        // a matched plot keeps its stored spelling of the number
+        String effectiveNumber = existing != null ? existing.getNumber() : number;
+
+        PlotData.Validation validation = PlotData.tryFrom(effectiveNumber, street, kind, area, cadastral,
+                hasBuilding, notes);
+        problems.addAll(validation.problems());
+
+        checkCadastral(row, existing, cadastralHolders, claimedCadastral, problems);
+        if (existing != null && existing.getKind() == PlotKind.PLOT && kind == PlotKind.COMMON
+                && withHistory.contains(existing.getId())) {
+            problems.add(new FieldProblem("kind", ProblemCodes.PLOT_HAS_OWNERSHIP_HISTORY));
+        }
+
+        List<FieldProblem> distinct = onePerField(problems);
+        if (!distinct.isEmpty()) {
+            return problem(row, distinct);
+        }
+        PlotData data = validation.data();
+        if (existing == null) {
+            return new PlotImportItem(row.row(), PlotImportAction.NEW, newId(importId, key), List.of(), List.of());
+        }
+        List<String> changed = PlotSnapshot.diff(PlotSnapshot.of(existing), PlotSnapshot.of(data)).stream()
+                .map(FieldChange::field)
+                .toList();
+        return new PlotImportItem(row.row(),
+                changed.isEmpty() ? PlotImportAction.UNCHANGED : PlotImportAction.UPDATE,
+                existing.getId(), changed, List.of());
+    }
+
+    /**
+     * A cadastral number the row gives must not belong to another plot: not in the database (archived plots keep
+     * theirs) and not to an earlier row of the file.
+     */
+    private static void checkCadastral(PlotImportRow row, @Nullable Plot existing,
+            Map<String, UUID> cadastralHolders, Set<String> claimedCadastral, List<FieldProblem> problems) {
+        Optional<CadastralNumber> parsed = parseCadastral(row.cadastralNumber());
+        if (parsed.isEmpty()) {
+            return;
+        }
+        String cadastral = parsed.get().value();
+        UUID holder = cadastralHolders.get(cadastral);
+        boolean heldByAnother = holder != null && (existing == null || !holder.equals(existing.getId()));
+        // a row with the same plot number never gets here twice (duplicates stop earlier), so a repeat is another plot
+        boolean claimedByEarlierRow = !claimedCadastral.add(cadastral);
+        if (heldByAnother || claimedByEarlierRow) {
+            problems.add(new FieldProblem("cadastralNumber", ProblemCodes.CADASTRAL_NUMBER_TAKEN));
+        }
+    }
+
+    private Map<String, Plot> activePlotsByNumber(UUID tenantId, List<PlotImportRow> rows) {
+        List<String> numbers = rows.stream()
+                .map(row -> blankToNull(row.number()))
+                .filter(Objects::nonNull)
+                .map(PlotImportService::lower)
+                .distinct()
+                .toList();
+        Map<String, Plot> byNumber = new HashMap<>();
+        for (List<String> chunk : chunks(numbers)) {
+            for (Plot plot : plots.findActiveByLowerNumbers(tenantId, chunk)) {
+                byNumber.put(lower(plot.getNumber()), plot);
+            }
+        }
+        return byNumber;
+    }
+
+    private Map<String, UUID> cadastralHolders(UUID tenantId, List<PlotImportRow> rows) {
+        List<String> numbers = rows.stream()
+                .map(row -> parseCadastral(row.cadastralNumber()))
+                .flatMap(Optional::stream)
+                .map(CadastralNumber::value)
+                .distinct()
+                .toList();
+        Map<String, UUID> holders = new HashMap<>();
+        for (List<String> chunk : chunks(numbers)) {
+            for (Plot plot : plots.findByCadastralNumbers(tenantId, chunk)) {
+                holders.put(plot.getCadastralNumber(), plot.getId());
+            }
+        }
+        return holders;
+    }
+
+    /** Ids of the matched plots that have ever had an owner: only needed for a plot that might become common land. */
+    private Set<UUID> plotsWithHistory(List<PlotImportRow> rows, Map<String, Plot> existingByNumber) {
+        List<UUID> candidates = rows.stream()
+                .filter(row -> row.kind() != null && parseKind(row.kind().strip()) == PlotKind.COMMON)
+                .map(row -> row.number() == null ? null : existingByNumber.get(lower(row.number().strip())))
+                .filter(plot -> plot != null && plot.getKind() == PlotKind.PLOT)
+                .map(Plot::getId)
+                .distinct()
+                .toList();
+        Set<UUID> withHistory = new HashSet<>();
+        for (List<UUID> chunk : chunks(candidates)) {
+            withHistory.addAll(ownerships.findPlotIdsWithOwnership(chunk));
+        }
+        return withHistory;
+    }
+
+    private static Optional<CadastralNumber> parseCadastral(@Nullable String text) {
+        return text == null ? Optional.empty() : CadastralNumber.parse(text);
+    }
+
+    private static PlotImportItem problem(PlotImportRow row, List<FieldProblem> problems) {
+        return new PlotImportItem(row.row(), null, null, List.of(), problems);
+    }
+
+    /** One problem per field, the first one found: a field reported twice (say a missing area) shows once. */
+    private static List<FieldProblem> onePerField(List<FieldProblem> problems) {
+        Set<String> fields = new HashSet<>();
+        return problems.stream().filter(problem -> fields.add(problem.field())).toList();
+    }
+
+    private static @Nullable PlotKind parseKind(String text) {
+        return switch (text.toUpperCase(Locale.ROOT)) {
+            case "PLOT" -> PlotKind.PLOT;
+            case "COMMON" -> PlotKind.COMMON;
+            default -> null;
+        };
+    }
+
+    /** A new plot gets the same id on every planning of the same import, so a re-plan equals the preview. */
+    private static UUID newId(UUID importId, String key) {
+        return UUID.nameUUIDFromBytes((importId + "/plot/" + key).getBytes(StandardCharsets.UTF_8));
+    }
+
+    private static String lower(String text) {
+        return text.toLowerCase(Locale.ROOT);
+    }
+
+    private static @Nullable String firstNonBlank(@Nullable String preferred, @Nullable String fallback) {
+        String value = blankToNull(preferred);
+        return value != null ? value : fallback;
+    }
+
+    private static @Nullable String blankToNull(@Nullable String text) {
+        if (text == null) {
+            return null;
+        }
+        String stripped = text.strip();
+        return stripped.isEmpty() ? null : stripped;
+    }
+
+    private static <T> List<List<T>> chunks(List<T> list) {
+        List<List<T>> chunks = new ArrayList<>();
+        for (int from = 0; from < list.size(); from += CHUNK) {
+            chunks.add(list.subList(from, Math.min(list.size(), from + CHUNK)));
+        }
+        return chunks;
+    }
+}

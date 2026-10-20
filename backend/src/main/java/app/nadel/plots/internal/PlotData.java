@@ -37,37 +37,59 @@ record PlotData(
      * @throws ApiProblemException 400 {@code VALIDATION_FAILED} listing every invalid field
      */
     static PlotData from(PlotInput input) {
+        PlotKind kind = input.getKind() == null ? null : PlotKind.valueOf(input.getKind().name());
+        Validation result = tryFrom(input.getNumber(), input.getStreet(), kind, input.getAreaM2(),
+                input.getCadastralNumber(), Boolean.TRUE.equals(input.getHasBuilding()), input.getNotes());
+        if (result.data() == null) {
+            throw new ApiProblemException(HttpStatus.BAD_REQUEST, ProblemCodes.VALIDATION_FAILED,
+                    "The request is not valid.", result.problems());
+        }
+        return result.data();
+    }
+
+    /**
+     * The outcome of {@link #tryFrom}: the data when every field is valid, otherwise the problems of every invalid
+     * field (never both).
+     */
+    record Validation(@Nullable PlotData data, List<FieldProblem> problems) {
+    }
+
+    /**
+     * The same checks and normalisation as {@link #from}, for callers that collect the problems of many records
+     * instead of failing on the first one (the Excel import). Field names are those of {@code PlotInput}.
+     */
+    static Validation tryFrom(@Nullable String rawNumber, @Nullable String rawStreet, @Nullable PlotKind rawKind,
+            @Nullable BigDecimal rawArea, @Nullable String rawCadastral, boolean hasBuilding,
+            @Nullable String rawNotes) {
         List<FieldProblem> errors = new ArrayList<>();
 
-        String number = blankToNull(input.getNumber());
+        String number = blankToNull(rawNumber);
         if (number == null) {
             errors.add(new FieldProblem("number", ProblemCodes.REQUIRED));
         } else if (tooLong(number, NUMBER_MAX)) {
             errors.add(new FieldProblem("number", ProblemCodes.TOO_LONG));
         }
 
-        String street = blankToNull(input.getStreet());
+        String street = blankToNull(rawStreet);
         if (street != null && tooLong(street, STREET_MAX)) {
             errors.add(new FieldProblem("street", ProblemCodes.TOO_LONG));
         }
 
-        PlotKind kind = null;
-        if (input.getKind() == null) {
+        PlotKind kind = rawKind;
+        if (kind == null) {
             errors.add(new FieldProblem("kind", ProblemCodes.REQUIRED));
-        } else {
-            kind = PlotKind.valueOf(input.getKind().name());
         }
 
         BigDecimal area = null;
-        if (input.getAreaM2() == null) {
+        if (rawArea == null) {
             errors.add(new FieldProblem("areaM2", ProblemCodes.REQUIRED));
-        } else if (areaIsValid(input.getAreaM2(), kind)) {
-            area = input.getAreaM2().setScale(AREA_SCALE); // only adds zeros: validated to need no rounding
+        } else if (areaIsValid(rawArea, kind)) {
+            area = rawArea.setScale(AREA_SCALE); // only adds zeros: validated to need no rounding
         } else {
             errors.add(new FieldProblem("areaM2", ProblemCodes.AREA_INVALID));
         }
 
-        String cadastral = blankToNull(input.getCadastralNumber());
+        String cadastral = blankToNull(rawCadastral);
         if (cadastral != null) {
             var parsed = CadastralNumber.parse(cadastral);
             if (parsed.isPresent()) {
@@ -77,16 +99,15 @@ record PlotData(
             }
         }
 
-        String notes = blankToNull(input.getNotes());
+        String notes = blankToNull(rawNotes);
         if (notes != null && tooLong(notes, NOTES_MAX)) {
             errors.add(new FieldProblem("notes", ProblemCodes.TOO_LONG));
         }
 
         if (!errors.isEmpty()) {
-            throw new ApiProblemException(HttpStatus.BAD_REQUEST, ProblemCodes.VALIDATION_FAILED,
-                    "The request is not valid.", errors);
+            return new Validation(null, List.copyOf(errors));
         }
-        return new PlotData(number, street, kind, area, cadastral, Boolean.TRUE.equals(input.getHasBuilding()), notes);
+        return new Validation(new PlotData(number, street, kind, area, cadastral, hasBuilding, notes), List.of());
     }
 
     /**

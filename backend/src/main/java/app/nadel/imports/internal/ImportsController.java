@@ -1,6 +1,9 @@
 package app.nadel.imports.internal;
 
+import app.nadel.identity.CurrentUser;
+import java.net.URI;
 import nadel.contract.api.ImportsApi;
+import nadel.contract.model.ImportPreview;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.ContentDisposition;
@@ -10,6 +13,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 /**
  * Endpoints of the Excel import. All of them need {@code IMPORT_RUN}; the platform operator holds no cooperative
@@ -24,6 +28,13 @@ class ImportsController implements ImportsApi {
     static final String TEMPLATE_FILE_NAME = "nadel-import-template.xlsx";
 
     private final TemplateWriter templateWriter = new TemplateWriter();
+    private final CurrentUser currentUser;
+    private final ImportService service;
+
+    ImportsController(CurrentUser currentUser, ImportService service) {
+        this.currentUser = currentUser;
+        this.service = service;
+    }
 
     @Override
     @PreAuthorize("hasAuthority('PERM_IMPORT_RUN')")
@@ -35,5 +46,12 @@ class ImportsController implements ImportsApi {
                 .header(HttpHeaders.CONTENT_DISPOSITION,
                         ContentDisposition.attachment().filename(TEMPLATE_FILE_NAME).build().toString())
                 .body(new ByteArrayResource(template));
+    }
+
+    @Override
+    @PreAuthorize("hasAuthority('PERM_IMPORT_RUN')")
+    public ResponseEntity<ImportPreview> uploadImport(MultipartFile file) {
+        ImportPreview preview = service.preview(file, currentUser.profile());
+        return ResponseEntity.created(URI.create("/api/v1/imports/" + preview.getId())).body(preview);
     }
 }

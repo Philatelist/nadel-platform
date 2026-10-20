@@ -8,10 +8,12 @@ import { ImportPage } from './ImportPage';
 
 const downloadImportTemplate = vi.fn();
 const downloadBlob = vi.fn();
+const uploadImport = vi.fn();
 
 vi.mock('@nadel/api-client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@nadel/api-client')>()),
   downloadImportTemplate: (...args: unknown[]) => downloadImportTemplate(...args),
+  uploadImport: (...args: unknown[]) => uploadImport(...args),
 }));
 vi.mock('../downloadBlob', () => ({ downloadBlob: (...args: unknown[]) => downloadBlob(...args) }));
 vi.mock('../me', () => ({ useOptionalMe: () => null }));
@@ -28,6 +30,7 @@ describe('ImportPage', () => {
   beforeEach(() => {
     downloadImportTemplate.mockReset();
     downloadBlob.mockReset();
+    uploadImport.mockReset();
   });
 
   it('downloads the template and saves the blob', async () => {
@@ -53,5 +56,58 @@ describe('ImportPage', () => {
     await userEvent.setup().click(screen.getByRole('button', { name: 'Download template' }));
     expect(await screen.findByRole('alert')).toBeInTheDocument();
     expect(downloadBlob).not.toHaveBeenCalled();
+  });
+
+  describe('upload', () => {
+    const preview = {
+      id: 'i1',
+      fileName: 'plots.xlsx',
+      expiresAt: '2026-10-20T12:30:00Z',
+      counts: {
+        plots: { created: 2, updated: 1, unchanged: 0 },
+        members: { created: 0, updated: 0, unchanged: 0 },
+        ownerships: { created: 0, updated: 0, unchanged: 0 },
+      },
+      problems: [],
+      problemCount: 0,
+      committable: true,
+    };
+    const xlsx = (name = 'plots.xlsx') => new File(['x'], name);
+
+    it('disables the check button until a file is chosen', () => {
+      renderPage();
+      expect(screen.getByText('No file chosen')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Check file' })).toBeDisabled();
+    });
+
+    it('rejects a non-xlsx file on the client without a request', async () => {
+      renderPage();
+      await userEvent
+        .setup({ applyAccept: false })
+        .upload(screen.getByLabelText('Choose file'), xlsx('a.csv'));
+      expect(await screen.findByRole('alert')).toHaveTextContent('not an Excel file');
+      expect(screen.getByRole('button', { name: 'Check file' })).toBeDisabled();
+      expect(uploadImport).not.toHaveBeenCalled();
+    });
+
+    it('uploads the file and shows the preview', async () => {
+      uploadImport.mockResolvedValue(preview);
+      renderPage();
+      const user = userEvent.setup();
+      await user.upload(screen.getByLabelText('Choose file'), xlsx());
+      expect(screen.getByText('plots.xlsx')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Check file' }));
+      expect(await screen.findByRole('heading', { name: 'Check result' })).toBeInTheDocument();
+      expect(uploadImport).toHaveBeenCalledWith({ file: expect.objectContaining({ name: 'plots.xlsx' }) });
+    });
+
+    it('shows the size message on HTTP 413', async () => {
+      uploadImport.mockRejectedValue(new ApiError(413, undefined));
+      renderPage();
+      const user = userEvent.setup();
+      await user.upload(screen.getByLabelText('Choose file'), xlsx());
+      await user.click(screen.getByRole('button', { name: 'Check file' }));
+      expect(await screen.findByRole('alert')).toHaveTextContent('larger than 10 MB');
+    });
   });
 });

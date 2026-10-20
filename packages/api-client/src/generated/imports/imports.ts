@@ -10,23 +10,31 @@
  * OpenAPI spec version: 0.1.0
  */
 import {
+  useMutation,
   useQuery
 } from '@tanstack/react-query';
 import type {
   DataTag,
   DefinedInitialDataOptions,
   DefinedUseQueryResult,
+  MutationFunction,
   QueryClient,
   QueryFunction,
   QueryKey,
   UndefinedInitialDataOptions,
+  UseMutationOptions,
+  UseMutationResult,
   UseQueryOptions,
   UseQueryResult
 } from '@tanstack/react-query';
 
 import type {
+  BadRequestResponse,
   ForbiddenResponse,
-  UnauthorizedResponse
+  ImportPreview,
+  PayloadTooLargeResponse,
+  UnauthorizedResponse,
+  UploadImportBody
 } from '../model';
 
 import { nadelFetch } from '../../http';
@@ -155,3 +163,101 @@ export function useDownloadImportTemplate<TData = Awaited<ReturnType<typeof down
 
 
 
+export const getUploadImportUrl = () => {
+
+
+
+
+  return `/api/v1/imports`
+}
+
+/**
+ * Parses and checks an Excel workbook (`.xlsx`, at most 10 MB, at most 2,000 plots and 3,000 members) and
+ * returns a preview. Nothing is saved except the record of the upload itself. The preview can be committed for
+ * 30 minutes (`expiresAt`) when `committable` is true, that is when there are no problems and something would be
+ * created or updated. Requires the `IMPORT_RUN` permission; the platform operator has no cooperative data: 403.
+ *
+ * The `Plots` sheet is checked in this version; the other two sheets are read in later versions.
+ * Rows whose first cell starts with `#` and empty rows are skipped. `problems` lists at most 1,000 problems
+ * (`problemCount` is the total) in sheet and row order. `row` is the Excel row number (1 is the header row);
+ * 0 means the problem is about the file or the whole sheet. `column` is the canonical column key
+ * (`number`, `street`, `kind`, `area_m2`, `area_sotky`, `cadastral_number`, `has_building`, `notes`).
+ * `code` is one of:
+ *
+ * - file and sheet level: `SHEET_MISSING` (no sheet of that name), `HEADER_MISSING` (a required column is not in
+ *   the header row; `column` names it);
+ * - cell level: `DATE_INVALID`, `NUMBER_INVALID`, `YES_NO_INVALID`, `AREA_BOTH_OR_NONE` (exactly one of
+ *   `area_m2` and `area_sotky` must be filled for a new plot);
+ * - plot rules, as when a plot is entered by hand: `REQUIRED`, `TOO_LONG`, `INVALID`, `AREA_INVALID`,
+ *   `CADASTRAL_INVALID`, `CADASTRAL_NUMBER_TAKEN`, `PLOT_HAS_OWNERSHIP_HISTORY`;
+ * - `DUPLICATE_IN_FILE`: the plot number (ignoring case) appears in an earlier row of the same sheet.
+ *
+ * A file that cannot be read at all is refused with 400 `FILE_NOT_XLSX` (not an `.xlsx` workbook, corrupt,
+ * encrypted, or unpacking to an unreasonable size) or 400 `IMPORT_LIMIT_EXCEEDED` (too many rows); a file over
+ * the size limit with 413 `FILE_TOO_LARGE`.
+ * @summary Upload an import file and get its preview
+ */
+export const uploadImport = async (uploadImportBody: UploadImportBody, options?: Parameters<typeof nadelFetch>[1]): Promise<ImportPreview> => {
+    const formData = new FormData();
+formData.append(`file`, uploadImportBody.file);
+
+  return nadelFetch<ImportPreview>(getUploadImportUrl(),
+  {
+    ...options,
+    method: 'POST'
+    ,
+    body: formData
+  }
+);}
+
+
+
+
+
+export const getUploadImportMutationKey = () => ['uploadImport'] as const;
+
+export const getUploadImportMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | PayloadTooLargeResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof uploadImport>>, TError,UploadImportMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof uploadImport>>, TError,UploadImportMutationVariables, TContext> => {
+
+const mutationKey = getUploadImportMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof uploadImport>>, UploadImportMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  uploadImport(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UploadImportMutationResult = NonNullable<Awaited<ReturnType<typeof uploadImport>>>
+    export type UploadImportMutationBody = UploadImportBody
+    export type UploadImportMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | PayloadTooLargeResponse
+    export type UploadImportMutationVariables = {data: UploadImportBody}
+
+    /**
+ * @summary Upload an import file and get its preview
+ */
+export const useUploadImport = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | PayloadTooLargeResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof uploadImport>>, TError,UploadImportMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof uploadImport>>,
+        TError,
+        UploadImportMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUploadImportMutationOptions(options), queryClient);
+    }

@@ -1110,6 +1110,63 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
 
+  /imports:
+    post:
+      tags: [imports]
+      operationId: uploadImport
+      summary: Upload an import file and get its preview
+      description: |
+        Parses and checks an Excel workbook (`.xlsx`, at most 10 MB, at most 2,000 plots and 3,000 members) and
+        returns a preview. Nothing is saved except the record of the upload itself. The preview can be committed for
+        30 minutes (`expiresAt`) when `committable` is true, that is when there are no problems and something would be
+        created or updated. Requires the `IMPORT_RUN` permission; the platform operator has no cooperative data: 403.
+
+        The `Plots` sheet is checked in this version; the other two sheets are read in later versions.
+        Rows whose first cell starts with `#` and empty rows are skipped. `problems` lists at most 1,000 problems
+        (`problemCount` is the total) in sheet and row order. `row` is the Excel row number (1 is the header row);
+        0 means the problem is about the file or the whole sheet. `column` is the canonical column key
+        (`number`, `street`, `kind`, `area_m2`, `area_sotky`, `cadastral_number`, `has_building`, `notes`).
+        `code` is one of:
+
+        - file and sheet level: `SHEET_MISSING` (no sheet of that name), `HEADER_MISSING` (a required column is not in
+          the header row; `column` names it);
+        - cell level: `DATE_INVALID`, `NUMBER_INVALID`, `YES_NO_INVALID`, `AREA_BOTH_OR_NONE` (exactly one of
+          `area_m2` and `area_sotky` must be filled for a new plot);
+        - plot rules, as when a plot is entered by hand: `REQUIRED`, `TOO_LONG`, `INVALID`, `AREA_INVALID`,
+          `CADASTRAL_INVALID`, `CADASTRAL_NUMBER_TAKEN`, `PLOT_HAS_OWNERSHIP_HISTORY`;
+        - `DUPLICATE_IN_FILE`: the plot number (ignoring case) appears in an earlier row of the same sheet.
+
+        A file that cannot be read at all is refused with 400 `FILE_NOT_XLSX` (not an `.xlsx` workbook, corrupt,
+        encrypted, or unpacking to an unreasonable size) or 400 `IMPORT_LIMIT_EXCEEDED` (too many rows); a file over
+        the size limit with 413 `FILE_TOO_LARGE`.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: The workbook (`.xlsx`)
+      responses:
+        '201':
+          description: The preview of the file
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportPreview'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1149,6 +1206,15 @@ components:
             $ref: '#/components/schemas/Problem'
     NotFound:
       description: The resource does not exist or is not visible to the caller (code `NOT_FOUND`)
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    PayloadTooLarge:
+      description: The uploaded file is over the size limit of 10 MB (code `FILE_TOO_LARGE`)
       content:
         application/problem+json:
           schema:
@@ -2054,6 +2120,86 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PlotFeature'
+
+    ImportPreview:
+      type: object
+      description: >-
+        What an uploaded file would do. Nothing is saved by the preview itself. The preview can be committed until
+        `expiresAt` when `committable` is true.
+      required: [id, fileName, expiresAt, counts, problems, problemCount, committable]
+      properties:
+        id:
+          type: string
+          format: uuid
+        fileName:
+          type: string
+          description: Base name of the uploaded file, sanitised
+        expiresAt:
+          type: string
+          format: date-time
+        counts:
+          $ref: '#/components/schemas/ImportCounts'
+        problems:
+          type: array
+          description: At most 1,000 problems, in sheet and row order; `problemCount` is the total
+          maxItems: 1000
+          items:
+            $ref: '#/components/schemas/ImportProblem'
+        problemCount:
+          type: integer
+          minimum: 0
+        committable:
+          type: boolean
+          description: True when there are no problems and at least one record would be created or updated
+
+    ImportCounts:
+      type: object
+      description: Records per sheet. Rows with a problem are not counted.
+      required: [plots, members, ownerships]
+      properties:
+        plots:
+          $ref: '#/components/schemas/ImportEntityCounts'
+        members:
+          $ref: '#/components/schemas/ImportEntityCounts'
+        ownerships:
+          $ref: '#/components/schemas/ImportEntityCounts'
+
+    ImportEntityCounts:
+      type: object
+      required: [created, updated, unchanged]
+      properties:
+        created:
+          type: integer
+          minimum: 0
+        updated:
+          type: integer
+          minimum: 0
+        unchanged:
+          type: integer
+          minimum: 0
+
+    ImportProblem:
+      type: object
+      required: [sheet, row, code]
+      properties:
+        sheet:
+          type: string
+          enum: [FILE, PLOTS, MEMBERS, OWNERSHIP]
+        row:
+          type: integer
+          minimum: 0
+          description: Excel row number; 0 when the problem is about the file or the whole sheet
+        column:
+          type: string
+          description: Canonical column key, for example `area_m2`; absent when the problem is about the whole row
+        code:
+          type: string
+          description: Stable machine-readable code, see `uploadImport`
+        params:
+          type: object
+          description: Values for the message, for example the name of a missing column
+          additionalProperties:
+            type: string
 
     Problem:
       type: object

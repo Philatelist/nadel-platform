@@ -27,6 +27,12 @@ public final class ProblemCodes {
     public static final String MEMBER_OWNS_PLOT = "MEMBER_OWNS_PLOT";
     public static final String PLOT_HAS_OWNERS = "PLOT_HAS_OWNERS";
     public static final String PLOT_HAS_OWNERSHIP_HISTORY = "PLOT_HAS_OWNERSHIP_HISTORY";
+    /** 413: the uploaded file is over the size limit. */
+    public static final String FILE_TOO_LARGE = "FILE_TOO_LARGE";
+    /** 400: the upload is not an {@code .xlsx} workbook (also a corrupt, encrypted or oversized-when-unpacked one). */
+    public static final String FILE_NOT_XLSX = "FILE_NOT_XLSX";
+    /** 400: the workbook has more rows than one import accepts. */
+    public static final String IMPORT_LIMIT_EXCEEDED = "IMPORT_LIMIT_EXCEEDED";
 
     /** Codes of single fields in {@code errors[]}. */
     public static final String REQUIRED = "REQUIRED";
@@ -39,6 +45,15 @@ public final class ProblemCodes {
     public static final String SHARE_INVALID = "SHARE_INVALID";
     public static final String MEMBER_NOT_FOUND = "MEMBER_NOT_FOUND";
     public static final String OWNERSHIP_NOT_FOUND = "OWNERSHIP_NOT_FOUND";
+
+    /** Codes of the rows of an import file (see {@code ImportProblem} in the API contract). */
+    public static final String SHEET_MISSING = "SHEET_MISSING";
+    public static final String HEADER_MISSING = "HEADER_MISSING";
+    public static final String DUPLICATE_IN_FILE = "DUPLICATE_IN_FILE";
+    public static final String AREA_BOTH_OR_NONE = "AREA_BOTH_OR_NONE";
+    public static final String DATE_INVALID = "DATE_INVALID";
+    public static final String NUMBER_INVALID = "NUMBER_INVALID";
+    public static final String YES_NO_INVALID = "YES_NO_INVALID";
 
     private ProblemCodes() {
     }
