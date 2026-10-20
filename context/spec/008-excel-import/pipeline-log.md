@@ -5,7 +5,7 @@
 - Branch: 008-excel-import · Base: main (= origin/main) @ bcddbbb
 - Requirement: docs/features/008-excel-import.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
-- Publish: pr+checks · PR: — · Checks: —
+- Publish: pr+checks · PR: https://github.com/Philatelist/nadel-platform/pull/27 · Checks: red: Backend, Security
 - Review run: on (pending)
 
 ## Project facts
@@ -103,3 +103,7 @@ Same as 004–007 (see `context/spec/005-ui-preferences/pipeline-log.md`). Re-ch
 - Slice 8 review minors tightened (testing-expert): exact owner counts, real template layout check, uploader name, phone read back, email column, audit value, conflict row, javadoc, robust e2e cleanup, list-of-tests rows for §2.3 #2–#4.
 - Phase 4 verify: all 24 criteria marked with evidence in functional-spec.md, Status Completed. Final run on the full tree: make check exit 0 (backend 1031, coverage met at 0.97; web 238, shared 67, api-client 7, ui-tokens 56); make e2e 80 passed (2.6m).
 - Phase 4 end. Phase 5 start: push the spec branch, open the PR.
+- Pushed 008-excel-import (d0bdc25, no force); opened PR #27 (no AI attribution). Review of the verification commit d0bdc25 started.
+- Verification commit d0bdc25 review: PASS (minor: §2.1 #1 evidence should cite TemplateWriterTests; screenshot history full of test runs).
+- CI run 39418849494 on PR #27: Clients, E2E, Semgrep green; Backend red (`AuditReadTests.theDemoTreasurerHoldsAuditView` 403 MEMBER_NOT_LINKED — same failure on main's run 39338526236 after the 007 merge: test-order pollution of the demo treasurer link); Security red (OSV: tomcat-embed-core 11.0.24 and jackson 3.1.5 from the Spring Boot 4.1.1 BOM, new advisories, patched 11.0.25 / 3.1.7). Neither caused by 008. Fix attempt 1 started (spring-backend): fix the leaking test, pin patched versions; no check weakened.
+- CI fix attempt 1 returned: polluter SettingsTests (fixed subject, never unlinked) → cleanUp unlinks the four demo members; AuditReadTests unlinks before signing in. Repro: SettingsTests then AuditReadTests failed before, passes after (orchestrator re-ran: exit 0). pom: tomcat.version 11.0.25, jackson-bom.version 3.1.7 (no Boot 4.1.x patch yet); dependency:tree confirms. Agent verify 1031 green, coverage met.

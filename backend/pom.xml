@@ -22,6 +22,10 @@
         <spring-modulith.version>2.1.1</spring-modulith.version>
         <openapi-generator.version>7.26.0</openapi-generator.version>
         <fastexcel.version>0.20.2</fastexcel.version>
+        <!-- Security overrides of versions managed by Spring Boot 4.1.1 (OSV advisories fixed in the patch releases below).
+             Remove them once the Spring Boot parent manages these versions or newer. -->
+        <tomcat.version>11.0.25</tomcat.version>
+        <jackson-bom.version>3.1.7</jackson-bom.version>
         <!-- Minimum line coverage enforced by `verify`. Raise it as features land; never lower it. -->
         <coverage.minimum>0.97</coverage.minimum>
     </properties>

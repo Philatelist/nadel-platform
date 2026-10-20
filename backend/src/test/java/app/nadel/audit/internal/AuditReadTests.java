@@ -72,6 +72,9 @@ class AuditReadTests extends IntegrationTest {
     @Test
     void theDemoTreasurerHoldsAuditView() throws Exception {
         // Demo data: the treasurer base role carries AUDIT_VIEW.
+        // the token carries a random subject, so the treasurer must start unlinked whatever ran before
+        inTenant(DEMO_TENANT, sql -> sql.update(
+                "update member set keycloak_subject = null where email = 'treasurer@demo.local'"));
         String token = TestTokens.bearer(DEMO_TENANT, UUID.randomUUID().toString(), "treasurer@demo.local");
         try {
             getAs(token, "/api/v1/audit?size=1").andExpect(status().isOk());
