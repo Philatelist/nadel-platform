@@ -6,7 +6,7 @@ The map comes late on purpose: plots exist as data from phase 1 (number, street,
 |---|---|---|
 | 0. Foundation | Monorepo, CI, Keycloak, RLS, web and mobile shells, CLAUDE.md, ADRs, AWOS product and architecture | done |
 | 1. Plots and members | Plots as data without polygons (number, street, area, cadastral number), members, co-owners with shares, ownership history, configurable admin roles, Excel import of plots and members | done |
-| 2. Tariffs and charges | Charge types, tariff versions, meters, transformer losses, period closing, ledger, recalculation | — |
+| 2. Tariffs and charges | 009 charge types and tariffs (chairman sets tariffs, start dates, bases, which plots they apply to); 010 meters and readings (meter tree, replacement, electrician screen on the web); 011 ledger, charges and period closing (losses per node, common consumers split); 012 retroactive recalculation; 013 reports for the board and report templates (tax report placeholder) | — |
 | 3. Payments | Manual entry, cash desk receipts, bank statement import (CSV/XLSX), matching hints, allocation, prepayments, debt status in the plots list | — |
 | 4. Invoices and delivery | PDF + NBU QR, debt certificate, email, Telegram, Viber, delivery statuses | — |
 | 5. Member account | Web account, mobile apps, meter reading submission with photo, push | — |
