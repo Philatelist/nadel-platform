@@ -4,6 +4,7 @@ import app.nadel.identity.CurrentUser;
 import java.net.URI;
 import java.util.UUID;
 import nadel.contract.api.ImportsApi;
+import nadel.contract.model.ImportPage;
 import nadel.contract.model.ImportPreview;
 import nadel.contract.model.ImportResult;
 import org.springframework.core.io.ByteArrayResource;
@@ -33,11 +34,14 @@ class ImportsController implements ImportsApi {
     private final CurrentUser currentUser;
     private final ImportService service;
     private final ImportCommitter committer;
+    private final ImportHistory history;
 
-    ImportsController(CurrentUser currentUser, ImportService service, ImportCommitter committer) {
+    ImportsController(CurrentUser currentUser, ImportService service, ImportCommitter committer,
+            ImportHistory history) {
         this.currentUser = currentUser;
         this.service = service;
         this.committer = committer;
+        this.history = history;
     }
 
     @Override
@@ -63,5 +67,12 @@ class ImportsController implements ImportsApi {
     @PreAuthorize("hasAuthority('PERM_IMPORT_RUN')")
     public ResponseEntity<ImportResult> commitImport(UUID id) {
         return ResponseEntity.ok(committer.commit(id, currentUser.profile()));
+    }
+
+    @Override
+    @PreAuthorize("hasAuthority('PERM_IMPORT_RUN')")
+    public ResponseEntity<ImportPage> listImports(Integer page, Integer size) {
+        // The cooperative comes from the caller's profile (the token), never from the request.
+        return ResponseEntity.ok(history.list(currentUser.profile().tenantId(), page, size));
     }
 }

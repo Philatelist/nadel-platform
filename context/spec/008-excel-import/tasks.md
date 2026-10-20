@@ -43,12 +43,12 @@ dependency versions; no mobile changes). Do not commit; report every file create
   - [x] Web: Import button commits when committable; `ImportResultPanel` (counts, links to /plots and /members — the latter with MEMBERS_VIEW); notices for `IMPORT_HAS_ERRORS`, `IMPORT_STALE`/`IMPORT_EXPIRED` with "Завантажте файл ще раз"/"Upload the file again" (resets the page), `IMPORT_ALREADY_COMMITTED`; "Choose another file"; AuditPage labels for `IMPORT_COMMITTED`/`IMPORT` and count fields; unit tests. **[Agent: react-frontend]**
   - [x] Verify: `cd backend && ./mvnw -B test -Dtest='ImportCommitTests,ImportPreviewOwnershipTests,ImportPreviewMembersTests,ImportPreviewPlotsTests,AuditReadTests,ModularityTests'` green; `pnpm -r test && pnpm -r typecheck && pnpm -r lint && pnpm format:check` green. **[Agent: spring-backend]**
 
-- [ ] **Slice 6: Import history**
+- [x] **Slice 6: Import history**
 
   > The chairman sees every upload: who, when, file, counts and status.
-  - [ ] Backend: `GET /imports` (`listImports`, page/size like the audit list, newest first) → `ImportSummary` (status EXPIRED derived for an uncommitted preview past expiry; never returns the plan); `make gen`. Tests: `ImportHistoryTests` (order, statuses incl. expired/stale/has errors, paging, isolation, 403s). **[Agent: spring-backend]**
-  - [ ] Web: `ImportHistory` panel on the import page (QueryBoundary, DataTable — date, file, who, status badge, counts; Pagination; empty state), refreshed after upload/commit; i18n `importHistory.*`; unit tests. **[Agent: react-frontend]**
-  - [ ] Verify: `cd backend && ./mvnw -B test -Dtest='ImportHistoryTests,ModularityTests'` green; `pnpm -r test && pnpm -r typecheck && pnpm -r lint && pnpm format:check` green. **[Agent: spring-backend]**
+  - [x] Backend: `GET /imports` (`listImports`, page/size like the audit list, newest first) → `ImportSummary` (status EXPIRED derived for an uncommitted preview past expiry; never returns the plan); `make gen`. Tests: `ImportHistoryTests` (order, statuses incl. expired/stale/has errors, paging, isolation, 403s). **[Agent: spring-backend]**
+  - [x] Web: `ImportHistory` panel on the import page (QueryBoundary, DataTable — date, file, who, status badge, counts; Pagination; empty state), refreshed after upload/commit; i18n `importHistory.*`; unit tests. **[Agent: react-frontend]**
+  - [x] Verify: `cd backend && ./mvnw -B test -Dtest='ImportHistoryTests,ModularityTests'` green; `pnpm -r test && pnpm -r typecheck && pnpm -r lint && pnpm format:check` green. **[Agent: spring-backend]**
 
 - [ ] **Slice 7: End-to-end flows, docs and coverage floor**
 

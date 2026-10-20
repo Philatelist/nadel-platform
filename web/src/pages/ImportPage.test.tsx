@@ -10,6 +10,7 @@ const downloadImportTemplate = vi.fn();
 const downloadBlob = vi.fn();
 const uploadImport = vi.fn();
 const commitImport = vi.fn();
+const listImports = vi.fn();
 let canViewMembers = true;
 
 vi.mock('@nadel/api-client', async (importOriginal) => ({
@@ -17,6 +18,7 @@ vi.mock('@nadel/api-client', async (importOriginal) => ({
   downloadImportTemplate: (...args: unknown[]) => downloadImportTemplate(...args),
   uploadImport: (...args: unknown[]) => uploadImport(...args),
   commitImport: (...args: unknown[]) => commitImport(...args),
+  listImports: (...args: unknown[]) => listImports(...args),
 }));
 vi.mock('../downloadBlob', () => ({ downloadBlob: (...args: unknown[]) => downloadBlob(...args) }));
 vi.mock('../me', () => ({ useOptionalMe: () => null, useCan: () => canViewMembers }));
@@ -35,6 +37,8 @@ describe('ImportPage', () => {
     downloadBlob.mockReset();
     uploadImport.mockReset();
     commitImport.mockReset();
+    listImports.mockReset();
+    listImports.mockResolvedValue({ items: [], page: 0, size: 20, totalItems: 0, totalPages: 0 });
     canViewMembers = true;
   });
 
@@ -125,6 +129,14 @@ describe('ImportPage', () => {
       expect(screen.getByRole('link', { name: 'Go to plots' })).toHaveAttribute('href', '/plots');
       expect(screen.getByRole('link', { name: 'Go to members' })).toHaveAttribute('href', '/members');
       expect(screen.queryByRole('heading', { name: 'Check result' })).not.toBeInTheDocument();
+    });
+
+    it('refreshes the history after the upload and after the commit', async () => {
+      commitImport.mockResolvedValue({ id: 'i1', counts: preview.counts });
+      const user = await toPreview();
+      await vi.waitFor(() => expect(listImports).toHaveBeenCalledTimes(2));
+      await user.click(screen.getByRole('button', { name: 'Import' }));
+      await vi.waitFor(() => expect(listImports).toHaveBeenCalledTimes(3));
     });
 
     it('hides the members link without MEMBERS_VIEW', async () => {

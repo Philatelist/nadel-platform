@@ -351,6 +351,24 @@ export const uk: Messages = {
     IMPORT_EXPIRED: 'Перевірка файлу застаріла. Завантажте файл ще раз.',
     IMPORT_ALREADY_COMMITTED: 'Цей файл уже імпортовано.',
   },
+  importHistory: {
+    title: 'Історія імпорту',
+    empty: 'Файли ще не завантажували.',
+    colDate: 'Дата',
+    colFile: 'Файл',
+    colBy: 'Хто',
+    colStatus: 'Стан',
+    colCounts: 'Що зроблено',
+    colProblems: 'Проблеми',
+    counts: '{label}: нових {created}, змінено {updated}',
+    status: {
+      PREVIEW: 'Перевірено, не імпортовано',
+      HAS_ERRORS: 'З помилками',
+      COMMITTED: 'Імпортовано',
+      STALE: 'Відхилено: дані змінилися',
+      EXPIRED: 'Не імпортовано, термін минув',
+    },
+  },
   importSheets: { FILE: 'Файл', PLOTS: 'Ділянки', MEMBERS: 'Члени кооперативу', OWNERSHIP: 'Власники' },
   importColumns: {
     plots: {

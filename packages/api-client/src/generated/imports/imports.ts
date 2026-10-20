@@ -31,8 +31,10 @@ import type {
 import type {
   BadRequestResponse,
   ForbiddenResponse,
+  ImportPage,
   ImportPreview,
   ImportResult,
+  ListImportsParams,
   NotFoundResponse,
   PayloadTooLargeResponse,
   Problem,
@@ -155,6 +157,122 @@ export function useDownloadImportTemplate<TData = Awaited<ReturnType<typeof down
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getDownloadImportTemplateQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export const getListImportsUrl = (params?: ListImportsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/v1/imports?${stringifiedParams}` : `/api/v1/imports`
+}
+
+/**
+ * Returns a page of the uploads of the current cooperative, newest first (by upload time). Requires the
+ * `IMPORT_RUN` permission; the platform operator has no cooperative data: 403. Every upload is listed: a
+ * preview that was never committed, a file with problems, a stale one and a committed one. The stored rows of
+ * a preview (the plan, which holds personal data) are never returned.
+ *
+ * `status` is one of `PREVIEW` (checked without problems, can still be committed), `HAS_ERRORS` (checked with
+ * problems, cannot be committed), `COMMITTED`, `STALE` (the data of the cooperative changed after the preview
+ * and a commit was refused) and `EXPIRED`. `EXPIRED` is derived, not stored: it is a `PREVIEW` that was not
+ * committed within 30 minutes (compared with the current time in the Europe/Kyiv zone).
+ * @summary List the import history
+ */
+export const listImports = async (params?: ListImportsParams, options?: Parameters<typeof nadelFetch>[1]): Promise<ImportPage> => {
+
+  return nadelFetch<ImportPage>(getListImportsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListImportsQueryKey = (params?: ListImportsParams,) => {
+    return [
+    `/api/v1/imports`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListImportsQueryOptions = <TData = Awaited<ReturnType<typeof listImports>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>(params?: ListImportsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listImports>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListImportsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listImports>>> = ({ signal }) => listImports(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listImports>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListImportsQueryResult = NonNullable<Awaited<ReturnType<typeof listImports>>>
+export type ListImportsQueryError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse
+
+
+export function useListImports<TData = Awaited<ReturnType<typeof listImports>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>(
+ params: undefined |  ListImportsParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listImports>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listImports>>,
+          TError,
+          Awaited<ReturnType<typeof listImports>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListImports<TData = Awaited<ReturnType<typeof listImports>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>(
+ params?: ListImportsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listImports>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listImports>>,
+          TError,
+          Awaited<ReturnType<typeof listImports>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListImports<TData = Awaited<ReturnType<typeof listImports>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>(
+ params?: ListImportsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listImports>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List the import history
+ */
+
+export function useListImports<TData = Awaited<ReturnType<typeof listImports>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>(
+ params?: ListImportsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listImports>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListImportsQueryOptions(params,options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 

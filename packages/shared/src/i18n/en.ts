@@ -338,6 +338,24 @@ export const en = {
     IMPORT_EXPIRED: 'The file check has expired. Upload the file again.',
     IMPORT_ALREADY_COMMITTED: 'This file has already been imported.',
   },
+  importHistory: {
+    title: 'Import history',
+    empty: 'No files have been uploaded yet.',
+    colDate: 'Date',
+    colFile: 'File',
+    colBy: 'By',
+    colStatus: 'Status',
+    colCounts: 'What it did',
+    colProblems: 'Problems',
+    counts: '{label}: {created} new, {updated} updated',
+    status: {
+      PREVIEW: 'Checked, not imported',
+      HAS_ERRORS: 'Has errors',
+      COMMITTED: 'Imported',
+      STALE: 'Refused: data changed',
+      EXPIRED: 'Never imported, expired',
+    },
+  },
   importSheets: { FILE: 'File', PLOTS: 'Plots', MEMBERS: 'Members', OWNERSHIP: 'Ownership' },
   importColumns: {
     plots: {

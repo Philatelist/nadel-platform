@@ -4,6 +4,8 @@ import jakarta.persistence.LockModeType;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
@@ -55,4 +57,14 @@ interface ImportRunRepository extends JpaRepository<ImportRun, UUID> {
     @Query("update ImportRun r set r.plan = null, r.planDigest = null where r.id = :id "
             + "and r.status = app.nadel.imports.internal.ImportStatus.PREVIEW")
     int dropPlan(@Param("id") UUID id);
+
+    /**
+     * One page of the history, newest first. Selects only the history columns: the plan (personal data) is never
+     * loaded. The id breaks ties between uploads of the same instant, so pages never overlap.
+     */
+    @Query(value = "select new app.nadel.imports.internal.ImportHistoryRow(r.id, r.fileName, r.createdByMemberId, "
+            + "r.createdByName, r.createdAt, r.committedAt, r.expiresAt, r.status, r.counts, r.problemCount) "
+            + "from ImportRun r where r.tenantId = :tenantId order by r.createdAt desc, r.id desc",
+            countQuery = "select count(r) from ImportRun r where r.tenantId = :tenantId")
+    Page<ImportHistoryRow> history(@Param("tenantId") UUID tenantId, Pageable pageable);
 }

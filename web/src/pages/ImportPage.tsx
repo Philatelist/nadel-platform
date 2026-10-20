@@ -1,6 +1,7 @@
 import {
   downloadImportTemplate,
   getListAuditEntriesQueryKey,
+  getListImportsQueryKey,
   getListMembersQueryKey,
   getListPlotsQueryKey,
   uploadImport,
@@ -10,6 +11,7 @@ import {
 } from '@nadel/api-client';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, type ChangeEvent } from 'react';
+import { ImportHistory } from '../components/import/ImportHistory';
 import { ImportPreviewPanel } from '../components/import/ImportPreviewPanel';
 import { ImportResultPanel } from '../components/import/ImportResultPanel';
 import { Button, buttonClass, Notice, PageHeader, Panel } from '../components/ui';
@@ -44,12 +46,16 @@ export function ImportPage() {
       void queryClient.invalidateQueries({ queryKey: getListPlotsQueryKey() });
       void queryClient.invalidateQueries({ queryKey: getListMembersQueryKey() });
       void queryClient.invalidateQueries({ queryKey: getListAuditEntriesQueryKey() });
+      void queryClient.invalidateQueries({ queryKey: getListImportsQueryKey() });
     },
   });
 
   const upload = useMutation({
     mutationFn: (chosen: File) => uploadImport({ file: chosen }),
-    onSuccess: setPreview,
+    onSuccess: (done) => {
+      setPreview(done);
+      void queryClient.invalidateQueries({ queryKey: getListImportsQueryKey() });
+    },
   });
 
   function onChoose(event: ChangeEvent<HTMLInputElement>) {
@@ -127,6 +133,7 @@ export function ImportPage() {
         />
       )}
       {result && <ImportResultPanel result={result} onReset={reset} />}
+      <ImportHistory />
     </div>
   );
 }
