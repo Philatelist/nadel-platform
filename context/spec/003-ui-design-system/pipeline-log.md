@@ -1,6 +1,6 @@
 # Pipeline log — 003 UI design system
 
-- Status: running
+- Status: finished
 - Phase: 6 — review run
 - Branch: 003-ui-design-system · Base: main @ e85f746
 - Requirement: docs/features/003-ui-design-system.md

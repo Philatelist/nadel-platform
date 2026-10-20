@@ -1,6 +1,6 @@
 # Pipeline log — 006 Plots registry
 
-- Status: running
+- Status: finished
 - Phase: 6 — review run
 - Branch: 006-plots-registry · Base: origin/main @ 48cd8e0
 - Requirement: docs/features/006-plots-registry.md
