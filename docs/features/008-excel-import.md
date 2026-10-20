@@ -13,7 +13,7 @@ Read together with `CLAUDE.md`, `context/product/product-definition.md`, `contex
 `docs/domain/glossary.md`, `docs/domain/money-rules.md` and ADRs 0002, 0003, 0004, 0007, 0008, 0009.
 
 Feature sequence in roadmap phase 1 (each one builds on the previous and leaves `main` working):
-`002 Members and access control` → `003 UI design system` → `004 Role names` → `005 UI preferences` → `006 Plots registry` → `007 Ownership` → `008 Excel import` → `009 Deployment`.
+`002 Members and access control` → `003 UI design system` → `004 Role names` → `005 UI preferences` → `006 Plots registry` → `007 Ownership` → `008 Excel import`.
 The map is not part of phase 1 (roadmap phase 6): plots are records without polygons.
 
 General rules for every feature in this sequence:
