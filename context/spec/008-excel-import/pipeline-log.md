@@ -87,3 +87,7 @@ Same as 004–007 (see `context/spec/005-ui-preferences/pipeline-log.md`). Re-ch
 - AUTO: accept the `org.hibernate.orm.jdbc.error` logger set to OFF (rule: personal data is never logged; the exception still propagates and is mapped). PR follow-up: owner may prefer a filtered appender instead.
 - AUTO: `imports/README.md` holds both the Slice 5 fix and the Slice 6 notes; it goes into the Slice 5 fix commit as one file (no partial staging).
 - Orchestrator verify (one run): ImportConstraintViolationTests 6, ConstraintViolationsTests 7, UuidOrderTests 2+2, ImportCommitTests 20, ImportHistoryTests 17, ImportFixturesTests 3, OwnershipChange 28, MembersWrite 22, PlotsWrite 42, AuditRead 24, Modularity 2 — all green; client green (web 237).
+- Committed c12a3dd (Slice 5 r1 fixes) and fc3f9f6 (Slice 6). Reviews started: Slice 5 r2 (fbf589b..c12a3dd), Slice 6 r1 (c12a3dd..fc3f9f6). Slice 7 (testing-expert) started; its commit waits for Slice 5 PASS (gate).
+- Slice 5 r2: PASS. Owner follow-up for the PR: app-wide OFF of `org.hibernate.orm.jdbc.error`.
+- Slice 6 r1: PASS. Slices 1–6 all PASS.
+- Slice 6 r1 minor fixed by the orchestrator: history refreshed after a refused commit (ImportPage onError + test; RED checked: without the fix the new test fails). Other Slice 6 minors left for the PR follow-ups.

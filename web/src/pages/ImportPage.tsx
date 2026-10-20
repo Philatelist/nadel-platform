@@ -48,6 +48,10 @@ export function ImportPage() {
       void queryClient.invalidateQueries({ queryKey: getListAuditEntriesQueryKey() });
       void queryClient.invalidateQueries({ queryKey: getListImportsQueryKey() });
     },
+    // A refused commit can change the run's status (for example to STALE), so refresh the history too.
+    onError: () => {
+      void queryClient.invalidateQueries({ queryKey: getListImportsQueryKey() });
+    },
   });
 
   const upload = useMutation({

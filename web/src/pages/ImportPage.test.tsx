@@ -139,6 +139,14 @@ describe('ImportPage', () => {
       await vi.waitFor(() => expect(listImports).toHaveBeenCalledTimes(3));
     });
 
+    it('refreshes the history after a refused commit', async () => {
+      commitImport.mockRejectedValue(new ApiError(409, { code: 'IMPORT_STALE' }));
+      const user = await toPreview();
+      await vi.waitFor(() => expect(listImports).toHaveBeenCalledTimes(2));
+      await user.click(screen.getByRole('button', { name: 'Import' }));
+      await vi.waitFor(() => expect(listImports).toHaveBeenCalledTimes(3));
+    });
+
     it('hides the members link without MEMBERS_VIEW', async () => {
       canViewMembers = false;
       commitImport.mockResolvedValue({ id: 'i1', counts: preview.counts });
