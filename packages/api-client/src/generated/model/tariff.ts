@@ -10,11 +10,13 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ChargeType } from './chargeType';
+import type { TariffExclusion } from './tariffExclusion';
 import type { TariffScopeKind } from './tariffScopeKind';
+import type { TariffScopePlot } from './tariffScopePlot';
 import type { TariffVersion } from './tariffVersion';
 
 /**
- * A tariff with its charge type and all versions
+ * A tariff with its charge type, all versions and its scope
  */
 export interface Tariff {
   id: string;
@@ -23,4 +25,10 @@ export interface Tariff {
   scopeKind: TariffScopeKind;
   /** Newest first (by `validFrom`) */
   versions: TariffVersion[];
+  /** With `SELECTED_PLOTS`, the selected plots in natural order of the number (archived ones marked); empty otherwise */
+  selectedPlots: TariffScopePlot[];
+  /** With `ALL_PLOTS`, the excluded plots in natural order of the number (archived ones marked); empty otherwise */
+  exclusions: TariffExclusion[];
+  /** Number of plots the tariff applies to, as in the list (exclusions subtracted, archived plots and common land never counted); absent when the shown version (the one valid today, else the earliest future one) is meter-based */
+  plotCount?: number;
 }

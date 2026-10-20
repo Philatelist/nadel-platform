@@ -221,6 +221,10 @@ function AuditChanges({ entry }: { entry: AuditEntry }) {
   const bases: Readonly<Record<string, string>> = t.tariffs.basis;
   const frequencies: Readonly<Record<string, string>> = t.tariffs.frequency;
   const fieldNames: Readonly<Record<string, string>> = { ...t.member.fields, ...a.fields };
+  const scopes: Readonly<Record<string, string>> = {
+    ALL_PLOTS: t.tariffs.scope.all,
+    SELECTED_PLOTS: t.tariffs.scope.selected,
+  };
   const kinds: Readonly<Record<string, string>> = t.plot.kind;
   const visibilities: Readonly<Record<string, { label: string } | undefined>> = t.settings.visibility;
   const value = (field: string, raw: string | undefined): string => {
@@ -229,6 +233,7 @@ function AuditChanges({ entry }: { entry: AuditEntry }) {
       return raw === 'true' ? a.yes : a.no;
     if (field === 'kind') return kinds[raw] ?? raw;
     if (field === 'rate') return normalizeRateInput(raw) === raw ? `${formatRate(raw, locale)} ₴` : raw;
+    if (field === 'scope') return scopes[raw] ?? raw;
     if (field === 'frequency') return frequencies[raw] ?? raw;
     if (field === 'basis' && entry.entityType === 'TARIFF') return bases[raw] ?? raw;
     if ((field === 'validFrom' || field === 'dueDate') && /^\d{4}-\d{2}-\d{2}$/.test(raw)) {

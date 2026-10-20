@@ -7,8 +7,11 @@ import java.util.List;
 import nadel.contract.model.Basis;
 import nadel.contract.model.Frequency;
 import nadel.contract.model.Tariff;
+import nadel.contract.model.TariffExclusion;
 import nadel.contract.model.TariffScopeKind;
+import nadel.contract.model.TariffScopePlot;
 import nadel.contract.model.TariffVersion;
+import org.jspecify.annotations.Nullable;
 
 /** Turns tariffs and their versions into API output. */
 final class TariffDtoMapper {
@@ -16,11 +19,34 @@ final class TariffDtoMapper {
     private TariffDtoMapper() {
     }
 
-    /** The tariff with all versions, newest first; {@code versionsOldestFirst} is every version of the tariff. */
+    /**
+     * The tariff with all versions, newest first; {@code versionsOldestFirst} is every version of the tariff. The
+     * scope lists and the plot count come ready from the caller; the count is null for a meter-based tariff.
+     */
     static Tariff toDto(TariffRecord tariff, ChargeTypeRecord chargeType, List<TariffVersionRecord> versionsOldestFirst,
-            LocalDate today) {
-        return new Tariff(tariff.getId(), tariff.getName(), ChargeTypeDtoMapper.toDto(chargeType),
-                scopeKind(tariff), versionsNewestFirst(versionsOldestFirst, today));
+            LocalDate today, List<TariffScopePlot> selectedPlots, List<TariffExclusion> exclusions,
+            @Nullable Long plotCount) {
+        var dto = new Tariff(tariff.getId(), tariff.getName(), ChargeTypeDtoMapper.toDto(chargeType),
+                scopeKind(tariff), versionsNewestFirst(versionsOldestFirst, today), selectedPlots, exclusions);
+        dto.setPlotCount(plotCount);
+        return dto;
+    }
+
+    /** Index of the version valid on {@code today}, else of the earliest later one. {@code oldestFirst} is not empty. */
+    static int shownIndex(List<TariffVersionRecord> oldestFirst, LocalDate today) {
+        int current = -1;
+        for (int i = 0; i < oldestFirst.size(); i++) {
+            if (!oldestFirst.get(i).getValidFrom().isAfter(today)) {
+                current = i;
+            }
+        }
+        return current >= 0 ? current : 0;
+    }
+
+    /** Whether the version is paid by meter readings; such a tariff applies to the plots with a meter. */
+    static boolean meterBased(TariffVersionRecord version) {
+        return version.getBasis() == app.nadel.tariffs.Basis.PER_KWH
+                || version.getBasis() == app.nadel.tariffs.Basis.PER_M3;
     }
 
     static TariffScopeKind scopeKind(TariffRecord tariff) {

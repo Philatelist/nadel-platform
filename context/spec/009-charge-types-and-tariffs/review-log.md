@@ -11,3 +11,10 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `a6cdf22..1b100ae` | PASS | — | minor: audit label/old name of an unrenamed seeded type is the stored English default; concurrent creates may share a position (harmless, ordered by position, id); `ChargeTypeAuditTests` counts all CHARGE_TYPE entries after a sleep (could flake on a slow machine); test cleanup `delete from charge_type` will hit the RESTRICT FK once Slice 4 adds demo tariffs; Ukrainian literals in Java tests fall under the default-names exception (name it in the CLAUDE.md proposal); Treasurer description not mentioning tariffs (kept unchanged by design) |
+
+## Slice 2 — Tariffs and versions
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `1b100ae..70bad53` | MAJOR_ISSUES | M1 TariffsPage ignored the tariffs query's loading/error state and showed "No tariffs yet" | minor: audit `chargeType` value/label of an unrenamed seeded type is the stored English default; create form offers only active charge types (server refuses only archived); `Instant.now()` instead of the injected `Clock` for `createdAt`; list vs card plotCount when versions switch between meter-based and other bases; rate shown with the locale comma ("50,0000") while the spec quotes "50.0000" |
+| 2 | + `ec4e615` | PASS | M1 resolved (nested QueryBoundary; pending and error tests) | minor: two separate error states if both lists fail |

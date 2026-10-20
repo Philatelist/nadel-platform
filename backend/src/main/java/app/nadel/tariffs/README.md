@@ -1,7 +1,7 @@
 # tariffs
 
 What the cooperative charges for and how much (feature 009). Delivered so far: **charge types** (slice 1) and
-**tariffs with versions** (slice 2); scopes and the expected amount of a plot follow in later slices.
+**tariffs with versions** (slice 2) and **scopes** (slice 3); the expected amount of a plot follows in a later slice.
 
 Tables (all under RLS `tenant_isolation`, an index on `tenant_id`, composite foreign keys on `(tenant_id, id)`; V10):
 
@@ -10,7 +10,7 @@ Tables (all under RLS `tenant_isolation`, an index on `tenant_id`, composite for
 | `charge_type` | What is charged for: the four seeded types (`code` MEMBERSHIP, ELECTRICITY, LAND_TAX, WATER) and custom ones |
 | `tariff` | A tariff of one charge type, with its `scope_kind` (`ALL_PLOTS` or `SELECTED_PLOTS`; new tariffs are `ALL_PLOTS`) |
 | `tariff_version` | Append-only rates by date (`valid_from`, basis, frequency, `rate numeric(14,4)`, due date, note) |
-| `tariff_scope_plot` | Selected plots, or exclusions with a reason; cascades when a plot is deleted. Only read so far (the plot count of a selected-plots tariff); written by the scope endpoint of slice 3 |
+| `tariff_scope_plot` | Selected plots (`SELECTED`), or exclusions with a reason (`EXCLUDED`); written by `PUT /tariffs/{id}/scope`; cascades when a plot is deleted |
 
 All four tables exist in V10 (one migration, one isolation test). `nadel_app` has no `DELETE`/`TRUNCATE` on `charge_type` and `tariff`, and
 no `UPDATE`/`DELETE`/`TRUNCATE` on `tariff_version`.
@@ -49,6 +49,7 @@ Tag `tariffs` (`TariffsController`):
 | `POST /tariffs` | `createTariff` | `TARIFFS_VIEW` and `TARIFFS_MANAGE` |
 | `GET /tariffs/{id}` | `getTariff` | `TARIFFS_VIEW` |
 | `POST /tariffs/{id}/versions` | `addTariffVersion` | `TARIFFS_VIEW` and `TARIFFS_MANAGE` |
+| `PUT /tariffs/{id}/scope` | `updateTariffScope` | `TARIFFS_VIEW` and `TARIFFS_MANAGE` |
 
 The platform operator has no permissions and gets 403 `PERMISSION_DENIED`; a member without the permissions gets 403.
 The cooperative always comes from the token. A type of another cooperative or an unknown id is 404 (RLS).
@@ -93,10 +94,31 @@ Writes (`ChargeTypeCommands`, one transaction each, the audit event is published
   (ignoring case), each with the version valid today, else the earliest future one. `plotCount` for `ALL_PLOTS` is
   `plots.PlotCatalog.countChargeable()`; for `SELECTED_PLOTS` the selected rows whose plots are active and not common
   land (plots are read through `PlotCatalog.findAll`, never from the plot table). It is absent when the shown version is
-  `PER_KWH` or `PER_M3` (such a tariff applies to the plots with a meter). Exclusions are subtracted from `ALL_PLOTS`
-  counts when the scope endpoint arrives.
-- `GET /tariffs/{id}` returns the tariff with its charge type (an archived one too, so the history stays readable).
-  A tariff of another cooperative or an unknown id is 404 (RLS).
+  `PER_KWH` or `PER_M3` (such a tariff applies to the plots with a meter). For `ALL_PLOTS` the active, non-common
+  plots among the exclusions are subtracted.
+- `GET /tariffs/{id}` returns the tariff with its charge type (an archived one too, so the history stays readable),
+  its scope (`selectedPlots`, `exclusions` with plot number, `archived` and reason, in natural order of the number) and
+  the same `plotCount` as the list. A tariff of another cooperative or an unknown id is 404 (RLS). `TariffAssembler`
+  builds the card (also the answer of `POST /tariffs` and `PUT .../scope`) and the counts; plots are read only through
+  `PlotCatalog`.
+
+## Scopes
+
+- A new tariff is `ALL_PLOTS` without exclusions. `PUT /tariffs/{id}/scope` replaces the whole scope in one
+  transaction: `{kind, plotIds[], exclusions[{plotId, reason}]}`. `plotIds` goes only with `SELECTED_PLOTS` and
+  `exclusions` only with `ALL_PLOTS` (the other list present and not empty is field code `INVALID` on `plotIds` or
+  `exclusions`); each list holds at most 5000 entries (`TOO_LONG`). Switching the kind removes the rows of the other
+  kind.
+- Order of checks: the tariff row is locked `FOR UPDATE` (404 when missing or foreign), then its charge type
+  `FOR SHARE` (409 `CHARGE_TYPE_ARCHIVED`), then all field problems are collected into one 400 `VALIDATION_FAILED`:
+  `plotIds[i]` or `exclusions[i].plotId` is `UNKNOWN_PLOT` (no such plot in the cooperative, which includes other
+  cooperatives' plots), `TARIFF_COMMON_LAND`, `PLOT_ARCHIVED` or `DUPLICATE` (the later of two equal ids);
+  `exclusions[i].reason` is `REQUIRED` when blank after trimming and `TOO_LONG` over 500 characters. A plot that is
+  already in the stored scope with the same kind may stay although it was archived since, so the card can be saved
+  again unchanged; a newly added archived plot is refused.
+- Stored rows are never edited. `TariffScopeChange` diffs the stored rows against the request: rows that no longer hold
+  are deleted, new ones inserted (an exclusion with a new reason is deleted and inserted), the tariff's `scope_kind`
+  and `updated_at` change. A save that changes nothing touches nothing and writes no audit entry.
 
 ## Audit
 
@@ -104,6 +126,14 @@ Writes (`ChargeTypeCommands`, one transaction each, the audit event is published
 lists `name`, `chargeType` and the version fields; the second `validFrom`, `basis`, `frequency`, `rate` (four decimals),
 `dueDate` and `note` (the last two only when set). The note text is part of the audit entry (like plot notes) but is never
 written to the application log.
+
+A change of scope writes (entity type `TARIFF`, same label), in this order:
+`TARIFF_SCOPE_CHANGED` when the kind or the selected plots changed, with `scope` (old to new kind, only when it
+changed) and `selectedPlots` (the plot numbers in natural order joined by ", ", empty is none; only when the set
+changed); then one `TARIFF_EXCLUSION_REMOVED` per exclusion that is gone (`plot` = the number, `reason` = the old one)
+and one `TARIFF_EXCLUSION_ADDED` per new exclusion (`plot`, `reason`), each in the order of the plot numbers. A new
+reason for an excluded plot is a removal plus an addition. Switching to selected plots therefore audits every
+removed exclusion. The reasons are in the audit entries only, never in the application log.
 
 Entity type `CHARGE_TYPE` label = the stored name:
 `CHARGE_TYPE_CREATED` (`name`, `description`, `active`), `CHARGE_TYPE_UPDATED` (changed fields among `name`,
@@ -122,4 +152,4 @@ narrow exception to "everything in the repository is English", of the same kind 
 ## Dependencies
 
 `identity` (`CurrentUser`, `AccessProfile`), `audit` (events), `problem`, `money` (`Rate`) and `plots` (the public
-`PlotCatalog` only). The module root exports `Basis`, `Frequency` and `VersionTerms`. Nothing depends on this module yet.
+`PlotCatalog` only: `find`, `findAll`, `inNaturalOrder`, `countChargeable`). The module root exports `Basis`, `Frequency` and `VersionTerms`. Nothing depends on this module yet.

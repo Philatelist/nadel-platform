@@ -35,6 +35,7 @@ import type {
   NotFoundResponse,
   Tariff,
   TariffCreate,
+  TariffScopeUpdate,
   TariffSummary,
   TariffVersion,
   TariffVersionCreate,
@@ -75,7 +76,8 @@ export const getListTariffsUrl = () => {
  * Returns the tariffs of the non-archived charge types, ordered like the charge types (by position), then by name.
  * Each tariff shows one version: the one valid today (Europe/Kyiv), otherwise the earliest future one.
  * `plotCount` is the number of plots the tariff applies to: for `ALL_PLOTS` the active plots that are not
- * common land, for `SELECTED_PLOTS` the active selected plots that are not common land. It is absent when the
+ * common land minus the excluded active ones, for `SELECTED_PLOTS` the active selected plots that are not
+ * common land. It is absent when the
  * shown version is meter-based (`PER_KWH`, `PER_M3`): such a tariff applies to the plots with a meter. Requires
  * `TARIFFS_VIEW`.
  * @summary List the tariffs of the cooperative
@@ -273,7 +275,9 @@ export const useCreateTariff = <TError = BadRequestResponse | UnauthorizedRespon
  * Returns the tariff, its charge type (also an archived one) and every version, newest first. `validTo` of a
  * version is the day before the next version starts; the last version has none. `pastDated` marks a version
  * whose `validFrom` is before today (Europe/Kyiv). A tariff of another cooperative or an unknown id is 404.
- * Requires `TARIFFS_VIEW`.
+ * `selectedPlots` and `exclusions` hold the scope with plot numbers (and the reason of each exclusion) in natural
+ * order of the number; a plot archived after it was added is still listed, marked `archived`, and not counted
+ * in `plotCount`. Requires `TARIFFS_VIEW`.
  * @summary A tariff with its versions
  */
 export const getTariff = async (id: string, options?: Parameters<typeof nadelFetch>[1]): Promise<Tariff> => {
@@ -461,4 +465,104 @@ export const useAddTariffVersion = <TError = BadRequestResponse | UnauthorizedRe
         TContext
       > => {
       return useMutation(getAddTariffVersionMutationOptions(options), queryClient);
+    }
+    export const getUpdateTariffScopeUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/tariffs/${id}/scope`
+}
+
+/**
+ * Replaces the scope of the tariff in one transaction. `ALL_PLOTS` applies the tariff to every active plot that
+ * is not common land, minus the `exclusions` (each with a reason); `plotIds` must then be empty. `SELECTED_PLOTS`
+ * applies it to the plots in `plotIds`; `exclusions` must then be empty. Switching the kind removes the rows of
+ * the other kind. Saving the scope the tariff already has changes nothing and writes no audit entry.
+ * Field codes of 400 `VALIDATION_FAILED`: `plotIds` or `exclusions` `INVALID` (the list does not go with the
+ * kind); `plotIds[i]` or `exclusions[i].plotId` `TARIFF_COMMON_LAND` (common land has no tariffs),
+ * `PLOT_ARCHIVED` (an archived plot cannot be added; one already in the scope may stay), `UNKNOWN_PLOT` (no such
+ * plot in the cooperative) or `DUPLICATE` (the plot is listed twice); `exclusions[i].reason` `REQUIRED` (blank)
+ * or `TOO_LONG`. At most 5000 plots per list (`TOO_LONG`). The charge type must not be archived (409
+ * `CHARGE_TYPE_ARCHIVED`). The answer is the updated tariff. Requires `TARIFFS_VIEW` and `TARIFFS_MANAGE`; a
+ * change of kind or of the selected plots is written to the audit log as `TARIFF_SCOPE_CHANGED`, and each
+ * exclusion added or removed as `TARIFF_EXCLUSION_ADDED` or `TARIFF_EXCLUSION_REMOVED`.
+ * @summary Choose the plots a tariff applies to
+ */
+export const updateTariffScope = async (id: string,
+    tariffScopeUpdate: TariffScopeUpdate, options?: Parameters<typeof nadelFetch>[1]): Promise<Tariff> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return nadelFetch<Tariff>(getUpdateTariffScopeUrl(id),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(tariffScopeUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateTariffScopeMutationKey = () => ['updateTariffScope'] as const;
+
+export const getUpdateTariffScopeMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateTariffScope>>, TError,UpdateTariffScopeMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateTariffScope>>, TError,UpdateTariffScopeMutationVariables, TContext> => {
+
+const mutationKey = getUpdateTariffScopeMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateTariffScope>>, UpdateTariffScopeMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateTariffScope(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateTariffScopeMutationResult = NonNullable<Awaited<ReturnType<typeof updateTariffScope>>>
+    export type UpdateTariffScopeMutationBody = TariffScopeUpdate
+    export type UpdateTariffScopeMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse
+    export type UpdateTariffScopeMutationVariables = {id: string;data: TariffScopeUpdate}
+
+    /**
+ * @summary Choose the plots a tariff applies to
+ */
+export const useUpdateTariffScope = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateTariffScope>>, TError,UpdateTariffScopeMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof updateTariffScope>>,
+        TError,
+        UpdateTariffScopeMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateTariffScopeMutationOptions(options), queryClient);
     }

@@ -65,6 +65,10 @@ public final class ProblemCodes {
     public static final String RATE_INVALID = "RATE_INVALID";
     /** One-off without a fixed one-time amount, or a fixed one-time amount without one-off. */
     public static final String FREQUENCY_BASIS_MISMATCH = "FREQUENCY_BASIS_MISMATCH";
+    /** Common land named in the scope of a tariff (selected plots or exclusions); it has no tariffs. */
+    public static final String TARIFF_COMMON_LAND = "TARIFF_COMMON_LAND";
+    /** The same plot listed twice in one list of a request. */
+    public static final String DUPLICATE = "DUPLICATE";
     public static final String MEMBER_NOT_FOUND = "MEMBER_NOT_FOUND";
     public static final String OWNERSHIP_NOT_FOUND = "OWNERSHIP_NOT_FOUND";
 

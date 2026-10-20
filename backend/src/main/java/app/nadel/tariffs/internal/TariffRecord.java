@@ -55,6 +55,12 @@ class TariffRecord {
         return tariff;
     }
 
+    /** Switches the kind of scope; the scope rows are replaced by the caller. */
+    void changeScope(ScopeKind kind, Instant now) {
+        this.scopeKind = kind;
+        this.updatedAt = now;
+    }
+
     UUID getId() {
         return id;
     }

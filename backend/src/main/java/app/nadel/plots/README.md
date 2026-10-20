@@ -47,7 +47,7 @@ status refresh, `OWNERSHIP_CHANGED` event and its texts) is `OwnershipRecorder`,
 import. A violation of the plot number, cadastral number or ownership overlap constraint at a flush, or a plan that no
 longer holds, is 409 `IMPORT_STALE`.
 
-`plots` also implements the SPIs `members.MemberArchiveGuard` (see Guards) and `identity.OwnedPlotsSource` (`GET /me` ownedPlots), serves the public read facade `PlotCatalog` (`JpaPlotCatalog`: `find`, `findAll`, `countChargeable`; plain `PlotFacts` records with number, common land, archived and area, used by `tariffs`; runs in the caller's transaction under RLS), and uses `members.MemberDirectory` and `settings.CooperativeSettings`.
+`plots` also implements the SPIs `members.MemberArchiveGuard` (see Guards) and `identity.OwnedPlotsSource` (`GET /me` ownedPlots), serves the public read facade `PlotCatalog` (`JpaPlotCatalog`: `find`, `findAll`, `inNaturalOrder` (ids sorted by the natural order of the number, as in the plots list), `countChargeable`; plain `PlotFacts` records with number, common land, archived and area, used by `tariffs`; runs in the caller's transaction under RLS), and uses `members.MemberDirectory` and `settings.CooperativeSettings`.
 
 ## Endpoints
 

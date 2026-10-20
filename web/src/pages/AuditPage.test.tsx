@@ -219,3 +219,47 @@ describe('AuditPage tariff version entries', () => {
     expect(screen.getByText('Tariff created')).toBeInTheDocument();
   });
 });
+
+describe('AuditPage tariff scope entries', () => {
+  it('labels the scope actions and fields, with the scope value as a label', () => {
+    entry = {
+      id: 'a10',
+      occurredAt: '2026-10-07T10:00:00Z',
+      action: 'TARIFF_SCOPE_CHANGED',
+      entityType: 'TARIFF',
+      entityId: 't1',
+      entityLabel: 'Per sotka',
+      changes: [
+        { field: 'scope', oldValue: 'ALL_PLOTS', newValue: 'SELECTED_PLOTS' },
+        { field: 'selectedPlots', newValue: '12, 14' },
+      ],
+    };
+    renderWithApp(<AuditPage />);
+    expect(screen.getByText('Tariff plots changed')).toBeInTheDocument();
+    expect(screen.getByText(/Applies to:/)).toBeInTheDocument();
+    expect(screen.getByText(/All plots → Selected plots/)).toBeInTheDocument();
+    expect(screen.getByText(/Selected plots:/)).toBeInTheDocument();
+  });
+
+  it.each([
+    ['TARIFF_EXCLUSION_ADDED', 'Tariff exclusion added'],
+    ['TARIFF_EXCLUSION_REMOVED', 'Tariff exclusion removed'],
+  ] as const)('labels %s with the plot and reason fields', (action, label) => {
+    entry = {
+      id: 'a11',
+      occurredAt: '2026-10-07T10:00:00Z',
+      action,
+      entityType: 'TARIFF',
+      entityId: 't1',
+      entityLabel: 'Per sotka',
+      changes: [
+        { field: 'plot', newValue: '12' },
+        { field: 'reason', newValue: 'Vacant' },
+      ],
+    };
+    renderWithApp(<AuditPage />);
+    expect(screen.getByText(label)).toBeInTheDocument();
+    expect(screen.getByText(/Plot:/)).toBeInTheDocument();
+    expect(screen.getByText(/Reason:/)).toBeInTheDocument();
+  });
+});

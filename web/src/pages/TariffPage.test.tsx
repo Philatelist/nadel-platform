@@ -16,6 +16,8 @@ let tariff: Tariff;
 vi.mock('@nadel/api-client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@nadel/api-client')>()),
   useGetTariff: () => ({ data: tariff, error: null, isPending: false, isError: false, refetch: vi.fn() }),
+  useListPlots: () => ({ data: { items: [] } }),
+  useUpdateTariffScope: () => ({ mutate: vi.fn(), isPending: false }),
   useAddTariffVersion: (o: typeof options) => {
     options = o;
     return { mutate, isPending: false };
@@ -45,6 +47,8 @@ describe('TariffPage', () => {
       id: 't1',
       name: 'Per sotka',
       scopeKind: 'ALL_PLOTS',
+      selectedPlots: [],
+      exclusions: [],
       chargeType: {
         id: 'c1',
         code: 'MEMBERSHIP',

@@ -2,6 +2,7 @@ package app.nadel.plots.internal;
 
 import app.nadel.plots.PlotCatalog;
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -34,6 +35,12 @@ class JpaPlotCatalog implements PlotCatalog {
         }
         return plots.findAllById(ids).stream().map(JpaPlotCatalog::facts)
                 .collect(Collectors.toMap(PlotFacts::id, Function.identity()));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<UUID> inNaturalOrder(Collection<UUID> ids) {
+        return ids.isEmpty() ? List.of() : plots.findIdsInNaturalOrder(ids);
     }
 
     @Override

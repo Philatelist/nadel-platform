@@ -5,6 +5,8 @@ import app.nadel.audit.FieldChange;
 import app.nadel.identity.AccessProfile;
 import app.nadel.money.InvalidRateException;
 import app.nadel.money.Rate;
+import app.nadel.plots.PlotCatalog;
+import app.nadel.plots.PlotCatalog.PlotFacts;
 import app.nadel.problem.ApiProblemException;
 import app.nadel.problem.ConstraintViolations;
 import app.nadel.problem.FieldProblem;
@@ -13,15 +15,25 @@ import app.nadel.tariffs.Basis;
 import app.nadel.tariffs.Frequency;
 import app.nadel.tariffs.VersionTerms;
 import app.nadel.tariffs.VersionTerms.Violation;
+import jakarta.persistence.EntityManager;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import nadel.contract.model.Tariff;
 import nadel.contract.model.TariffCreate;
+import nadel.contract.model.TariffExclusionUpdate;
+import nadel.contract.model.TariffScopeUpdate;
 import nadel.contract.model.TariffVersion;
 import nadel.contract.model.TariffVersionCreate;
 import org.jspecify.annotations.Nullable;
@@ -46,16 +58,25 @@ class TariffCommands {
 
     private final TariffRepository tariffs;
     private final TariffVersionRepository versions;
+    private final TariffScopePlotRepository scopePlots;
     private final ChargeTypeRepository chargeTypes;
+    private final PlotCatalog plots;
+    private final TariffAssembler assembler;
     private final TariffAuditPublisher audit;
+    private final EntityManager entityManager;
     private final Clock clock;
 
-    TariffCommands(TariffRepository tariffs, TariffVersionRepository versions, ChargeTypeRepository chargeTypes,
-            TariffAuditPublisher audit, Clock clock) {
+    TariffCommands(TariffRepository tariffs, TariffVersionRepository versions, TariffScopePlotRepository scopePlots,
+            ChargeTypeRepository chargeTypes, PlotCatalog plots, TariffAssembler assembler,
+            TariffAuditPublisher audit, EntityManager entityManager, Clock clock) {
         this.tariffs = tariffs;
         this.versions = versions;
+        this.scopePlots = scopePlots;
         this.chargeTypes = chargeTypes;
+        this.plots = plots;
+        this.assembler = assembler;
         this.audit = audit;
+        this.entityManager = entityManager;
         this.clock = clock;
     }
 
@@ -82,7 +103,7 @@ class TariffCommands {
         changes.add(new FieldChange("chargeType", null, chargeType.getName()));
         changes.addAll(versionFields(version));
         publish(actor, "TARIFF_CREATED", tariff, chargeType, changes);
-        return TariffDtoMapper.toDto(tariff, chargeType, List.of(version), LocalDate.now(clock));
+        return assembler.assemble(tariff, chargeType);
     }
 
     @Transactional
@@ -104,6 +125,152 @@ class TariffCommands {
         List<TariffVersion> all = TariffDtoMapper.versionsNewestFirst(
                 versions.findByTariffIdOrderByValidFromAsc(tariff.getId()), LocalDate.now(clock));
         return all.stream().filter(v -> v.getId().equals(version.getId())).findFirst().orElseThrow();
+    }
+
+    /**
+     * Replaces the scope of the tariff. The tariff row is locked {@code FOR UPDATE} first (two scope changes of one
+     * tariff run one after another) and its charge type {@code FOR SHARE}. The stored rows that no longer hold are
+     * deleted and the new ones inserted; a save that changes nothing writes nothing, not even an audit entry. Reasons
+     * go to the audit log only, never to the application log.
+     */
+    @Transactional
+    Tariff updateScope(UUID id, TariffScopeUpdate input, AccessProfile actor) {
+        UUID tenantId = Objects.requireNonNull(actor.tenantId());
+        TariffRecord tariff = tariffs.findByIdForUpdate(id).filter(t -> t.getTenantId().equals(tenantId))
+                .orElseThrow(ApiProblemException::notFound);
+        ChargeTypeRecord chargeType = lockChargeType(tariff.getChargeTypeId(), actor);
+        List<TariffScopePlotRecord> stored = scopePlots.findByTariffId(id);
+
+        ScopeKind kind = ScopeKind.valueOf(input.getKind().name());
+        List<UUID> selectedIds = input.getPlotIds() == null ? List.of() : input.getPlotIds();
+        List<TariffExclusionUpdate> exclusionInputs = input.getExclusions() == null ? List.of()
+                : input.getExclusions();
+        Set<UUID> requested = new HashSet<>(selectedIds);
+        exclusionInputs.forEach(e -> requested.add(e.getPlotId()));
+        stored.forEach(row -> requested.add(row.getPlotId()));
+        Map<UUID, PlotFacts> facts = plots.findAll(requested);
+        Set<UUID> storedSelected = storedPlots(stored, TariffScopePlotRecord.Kind.SELECTED);
+        Set<UUID> storedExcluded = storedPlots(stored, TariffScopePlotRecord.Kind.EXCLUDED);
+
+        List<FieldProblem> problems = new ArrayList<>();
+        Set<UUID> newSelected = new LinkedHashSet<>();
+        Map<UUID, String> newExcluded = new LinkedHashMap<>();
+        if (kind == ScopeKind.ALL_PLOTS && !selectedIds.isEmpty()) {
+            problems.add(new FieldProblem("plotIds", ProblemCodes.INVALID));
+        } else {
+            for (int i = 0; i < selectedIds.size(); i++) {
+                UUID plotId = selectedIds.get(i);
+                String field = "plotIds[" + i + "]";
+                if (!newSelected.add(plotId)) {
+                    problems.add(new FieldProblem(field, ProblemCodes.DUPLICATE));
+                } else {
+                    checkPlot(facts.get(plotId), storedSelected.contains(plotId), field,
+                            problems);
+                }
+            }
+        }
+        if (kind == ScopeKind.SELECTED_PLOTS && !exclusionInputs.isEmpty()) {
+            problems.add(new FieldProblem("exclusions", ProblemCodes.INVALID));
+        } else {
+            for (int i = 0; i < exclusionInputs.size(); i++) {
+                TariffExclusionUpdate exclusion = exclusionInputs.get(i);
+                UUID plotId = exclusion.getPlotId();
+                String field = "exclusions[" + i + "]";
+                String reason = exclusion.getReason() == null ? "" : exclusion.getReason().strip();
+                if (reason.isEmpty()) {
+                    problems.add(new FieldProblem(field + ".reason", ProblemCodes.REQUIRED));
+                }
+                if (newExcluded.containsKey(plotId)) {
+                    problems.add(new FieldProblem(field + ".plotId", ProblemCodes.DUPLICATE));
+                } else {
+                    newExcluded.put(plotId, reason);
+                    checkPlot(facts.get(plotId), storedExcluded.contains(plotId),
+                            field + ".plotId", problems);
+                }
+            }
+        }
+        if (!problems.isEmpty()) {
+            throw invalid(problems);
+        }
+
+        TariffScopeChange change = new TariffScopeChange(tariff.getScopeKind(), stored, kind, newSelected,
+                newExcluded);
+        if (!change.isChange()) {
+            return assembler.assemble(tariff, chargeType);
+        }
+
+        Instant now = Instant.now();
+        scopePlots.deleteAll(stored.stream().filter(row -> !change.keeps(row)).toList());
+        scopePlots.flush(); // a row with a new reason is deleted and inserted under the same key
+        tariff.changeScope(kind, now);
+        change.addedSelected().forEach(plotId -> entityManager
+                .persist(TariffScopePlotRecord.selected(tenantId, id, plotId, now)));
+        change.addedExclusions().forEach((plotId, reason) -> entityManager
+                .persist(TariffScopePlotRecord.excluded(tenantId, id, plotId, reason, now)));
+        entityManager.flush();
+
+        publishScopeAudit(actor, tariff, chargeType, change, facts);
+        return assembler.assemble(tariff, chargeType);
+    }
+
+    /** A plot of the scope must exist, must not be common land, and must not be archived unless it was there already. */
+    private static void checkPlot(@Nullable PlotFacts plot, boolean alreadyInScope, String field,
+            List<FieldProblem> problems) {
+        if (plot == null) {
+            problems.add(new FieldProblem(field, ProblemCodes.UNKNOWN_PLOT));
+        } else if (plot.commonLand()) {
+            problems.add(new FieldProblem(field, ProblemCodes.TARIFF_COMMON_LAND));
+        } else if (plot.archived() && !alreadyInScope) {
+            problems.add(new FieldProblem(field, ProblemCodes.PLOT_ARCHIVED));
+        }
+    }
+
+    private static Set<UUID> storedPlots(List<TariffScopePlotRecord> stored, TariffScopePlotRecord.Kind kind) {
+        return stored.stream().filter(row -> row.getKind() == kind).map(TariffScopePlotRecord::getPlotId)
+                .collect(Collectors.toSet());
+    }
+
+    /**
+     * {@code TARIFF_SCOPE_CHANGED} when the kind or the selected plots changed (the kind, and the selected plot
+     * numbers in natural order), then one {@code TARIFF_EXCLUSION_REMOVED} and one {@code TARIFF_EXCLUSION_ADDED}
+     * per exclusion, in the order of the plot numbers. A new reason is a removal of the old exclusion plus an addition.
+     */
+    private void publishScopeAudit(AccessProfile actor, TariffRecord tariff, ChargeTypeRecord chargeType,
+            TariffScopeChange change, Map<UUID, PlotFacts> facts) {
+        List<UUID> order = plots.inNaturalOrder(change.plots());
+        Function<Set<UUID>, String> numbers = ids -> {
+            String joined = order.stream().filter(ids::contains).map(plot -> facts.get(plot).number())
+                    .collect(Collectors.joining(", "));
+            return joined.isEmpty() ? null : joined;
+        };
+
+        if (change.kindChanged() || change.selectedChanged()) {
+            List<FieldChange> changes = new ArrayList<>();
+            if (change.kindChanged()) {
+                changes.add(new FieldChange("scope", change.oldKind().name(), change.newKind().name()));
+            }
+            if (change.selectedChanged()) {
+                changes.add(new FieldChange("selectedPlots", numbers.apply(change.oldSelected()),
+                        numbers.apply(change.newSelected())));
+            }
+            publish(actor, "TARIFF_SCOPE_CHANGED", tariff, chargeType, changes);
+        }
+        Map<UUID, String> removed = change.removedExclusions();
+        Map<UUID, String> added = change.addedExclusions();
+        for (UUID plot : order) {
+            if (removed.containsKey(plot)) {
+                publish(actor, "TARIFF_EXCLUSION_REMOVED", tariff, chargeType, List.of(
+                        new FieldChange("plot", facts.get(plot).number(), null),
+                        new FieldChange("reason", removed.get(plot), null)));
+            }
+        }
+        for (UUID plot : order) {
+            if (added.containsKey(plot)) {
+                publish(actor, "TARIFF_EXCLUSION_ADDED", tariff, chargeType, List.of(
+                        new FieldChange("plot", null, facts.get(plot).number()),
+                        new FieldChange("reason", null, added.get(plot))));
+            }
+        }
     }
 
     /** The charge type of the caller's cooperative, locked {@code FOR SHARE}; 404 when missing, 409 when archived. */

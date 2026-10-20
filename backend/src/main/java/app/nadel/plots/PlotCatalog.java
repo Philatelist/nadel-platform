@@ -2,6 +2,7 @@ package app.nadel.plots;
 
 import java.math.BigDecimal;
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -29,6 +30,12 @@ public interface PlotCatalog {
 
     /** The given plots, archived ones included. Ids that do not exist in the cooperative are absent from the map. */
     Map<UUID, PlotFacts> findAll(Collection<UUID> ids);
+
+    /**
+     * The given plots' ids in natural order of the plot number (12, 12а, 12б, 100), the order of the plots list. Ids
+     * that do not exist in the cooperative are left out.
+     */
+    List<UUID> inNaturalOrder(Collection<UUID> ids);
 
     /** The number of plots a tariff for all plots applies to: active (not archived) and not common land. */
     long countChargeable();

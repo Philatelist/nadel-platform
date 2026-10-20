@@ -78,6 +78,21 @@ class PlotCatalogTests extends IntegrationTest {
     }
 
     @Test
+    void inNaturalOrderSortsByTheNumberAndSkipsUnknownPlotsAndOtherCooperatives() {
+        UUID hundred = plot(DEMO_TENANT, "PN-100", "PLOT", "100.00", false);
+        UUID tenB = plot(DEMO_TENANT, "PN-10б", "PLOT", "100.00", false);
+        UUID nine = plot(DEMO_TENANT, "PN-9", "PLOT", "100.00", false);
+        UUID tenA = plot(DEMO_TENANT, "PN-10а", "PLOT", "100.00", true);
+        UUID theirs = plot(OTHER_TENANT, "PN-1", "PLOT", "100.00", false);
+
+        List<UUID> ordered = as(DEMO_TENANT, () -> catalog.inNaturalOrder(
+                List.of(hundred, tenB, nine, tenA, theirs, UUID.randomUUID())));
+
+        assertThat(ordered).containsExactly(nine, tenA, tenB, hundred);
+        assertThat(as(DEMO_TENANT, () -> catalog.inNaturalOrder(List.of()))).isEmpty();
+    }
+
+    @Test
     void countChargeableCountsActivePlotsWithoutCommonLand() {
         long before = expectedChargeable(DEMO_TENANT);
         plot(DEMO_TENANT, "PC-5", "PLOT", "100.00", false);

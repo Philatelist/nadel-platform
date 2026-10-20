@@ -10,7 +10,10 @@ import org.springframework.data.repository.query.Param;
 // no tenant_id filter needed: RLS hides other cooperatives' rows
 interface TariffScopePlotRepository extends JpaRepository<TariffScopePlotRecord, ScopePlotKey> {
 
-    /** The selected-plot rows of these tariffs. */
-    @Query("select s from TariffScopePlotRecord s where s.kind = 'SELECTED' and s.tariffId in :tariffIds")
-    List<TariffScopePlotRecord> findSelectedOf(@Param("tariffIds") Collection<UUID> tariffIds);
+    /** Every selected-plot and exclusion row of the tariff. */
+    List<TariffScopePlotRecord> findByTariffId(UUID tariffId);
+
+    /** The selected-plot and exclusion rows of these tariffs. */
+    @Query("select s from TariffScopePlotRecord s where s.tariffId in :tariffIds")
+    List<TariffScopePlotRecord> findOf(@Param("tariffIds") Collection<UUID> tariffIds);
 }

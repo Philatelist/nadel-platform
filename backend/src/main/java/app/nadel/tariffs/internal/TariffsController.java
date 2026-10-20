@@ -7,6 +7,7 @@ import java.util.UUID;
 import nadel.contract.api.TariffsApi;
 import nadel.contract.model.Tariff;
 import nadel.contract.model.TariffCreate;
+import nadel.contract.model.TariffScopeUpdate;
 import nadel.contract.model.TariffSummary;
 import nadel.contract.model.TariffVersion;
 import nadel.contract.model.TariffVersionCreate;
@@ -58,5 +59,11 @@ class TariffsController implements TariffsApi {
     public ResponseEntity<TariffVersion> addTariffVersion(UUID id, TariffVersionCreate tariffVersionCreate) {
         TariffVersion created = commands.addVersion(id, tariffVersionCreate, currentUser.profile());
         return ResponseEntity.created(URI.create("/api/v1/tariffs/" + id)).body(created);
+    }
+
+    @Override
+    @PreAuthorize("hasAuthority('PERM_TARIFFS_VIEW') and hasAuthority('PERM_TARIFFS_MANAGE')")
+    public ResponseEntity<Tariff> updateTariffScope(UUID id, TariffScopeUpdate tariffScopeUpdate) {
+        return ResponseEntity.ok(commands.updateScope(id, tariffScopeUpdate, currentUser.profile()));
     }
 }
