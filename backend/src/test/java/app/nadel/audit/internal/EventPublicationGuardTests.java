@@ -3,7 +3,10 @@ package app.nadel.audit.internal;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import app.nadel.IntegrationTest;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -21,6 +24,20 @@ class EventPublicationGuardTests extends IntegrationTest {
     @Autowired
     JdbcTemplate jdbc;
 
+    private final List<UUID> insertedPublications = new ArrayList<>();
+
+    /**
+     * The registry deletes the publications it completes ({@code completion-mode: delete}), so a row completed by hand
+     * would stay in the shared table for the rest of the run. Tests that wait for the table to drain would then wait
+     * for ever.
+     */
+    @AfterEach
+    void removeInsertedPublications() {
+        for (UUID id : insertedPublications) {
+            ownerJdbc().update("delete from event_publication where id = ?", id);
+        }
+    }
+
     @Test
     void rowLevelSecurityIsOffForEventPublication() {
         Boolean rls = jdbc.queryForObject(
@@ -32,6 +49,7 @@ class EventPublicationGuardTests extends IntegrationTest {
     @Test
     void applicationRoleCompletesPublicationWithoutTenant() {
         UUID id = UUID.randomUUID();
+        insertedPublications.add(id);
 
         Integer inserted = tx.execute(s -> jdbc.update(
                 "insert into event_publication (id, listener_id, event_type, serialized_event, publication_date)"

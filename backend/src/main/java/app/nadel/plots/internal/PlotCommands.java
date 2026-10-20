@@ -1,7 +1,6 @@
 package app.nadel.plots.internal;
 
 import app.nadel.audit.Actor;
-import app.nadel.audit.AuditEvent;
 import app.nadel.audit.FieldChange;
 import app.nadel.identity.AccessProfile;
 import app.nadel.problem.ApiProblemException;
@@ -13,14 +12,13 @@ import java.util.Optional;
 import java.util.UUID;
 import nadel.contract.model.PlotDetails;
 import nadel.contract.model.PlotInput;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Creates, edits, archives, restores and deletes plots. Every method is one transaction that also publishes the {@link AuditEvent}: the outbox
+ * Creates, edits, archives, restores and deletes plots. Every method is one transaction that also publishes the audit event: the outbox
  * stores the publication in the same transaction, so a change is never committed without its audit entry being owed.
  * <p>
  * The cooperative always comes from the caller's {@link AccessProfile}, never from the request. The caller must hold
@@ -35,14 +33,14 @@ class PlotCommands {
     private final PlotRepository plots;
     private final PlotStatusRepository statuses;
     private final OwnershipRepository ownerships;
-    private final ApplicationEventPublisher events;
+    private final PlotAuditPublisher audit;
 
     PlotCommands(PlotRepository plots, PlotStatusRepository statuses, OwnershipRepository ownerships,
-            ApplicationEventPublisher events) {
+            PlotAuditPublisher audit) {
         this.plots = plots;
         this.statuses = statuses;
         this.ownerships = ownerships;
-        this.events = events;
+        this.audit = audit;
     }
 
     @Transactional
@@ -173,14 +171,8 @@ class PlotCommands {
     }
 
     private void publish(AccessProfile actor, String action, Plot plot, List<FieldChange> changes) {
-        events.publishEvent(AuditEvent.now(
-                actor.tenantId(),
-                new Actor(actor.memberId(), actor.subject(), actor.displayName()),
-                action,
-                "PLOT",
-                plot.getId(),
-                plot.getNumber(),
-                changes));
+        audit.publish(actor.tenantId(), new Actor(actor.memberId(), actor.subject(), actor.displayName()), action, plot,
+                changes);
     }
 
     private static ApiProblemException numberTaken() {

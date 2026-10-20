@@ -54,6 +54,9 @@ class SettingsTests extends IntegrationTest {
             });
         }
         roles.clear();
+        // a first sign-in links the demo members to a subject; other tests expect them unlinked (their own subject)
+        inTenant(DEMO_TENANT, sql -> sql.update("update member set keycloak_subject = null where email in "
+                + "('chairman@demo.local', 'treasurer@demo.local', 'member@demo.local', 'electrician@demo.local')"));
         // the demo cooperative goes back to "never saved", the default other tests rely on
         ownerJdbc().update("delete from cooperative_settings where tenant_id = ?", DEMO_TENANT);
     }

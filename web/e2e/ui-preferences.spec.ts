@@ -290,9 +290,12 @@ test.describe('base role descriptions (Ukrainian UI)', () => {
         await expect(treasurer).not.toContainText(STANDARD);
 
         // the changed text is shown in English too
-        await page.getByRole('group', { name: 'Мова' }).getByRole('button', { name: 'en' }).click();
+        await page.getByRole('group', { name: 'Мова' }).getByRole('button', { name: 'English' }).click();
         await expect(roleItems(page).filter({ hasText: /^Treasurer/ })).toContainText('Веде касу');
-        await page.getByRole('group', { name: 'Language' }).getByRole('button', { name: 'uk' }).click();
+        await page
+          .getByRole('group', { name: 'Language' })
+          .getByRole('button', { name: 'Українська' })
+          .click();
 
         await treasurer.getByRole('button', { name: 'Редагувати' }).click();
         await expect(restore).toBeVisible();
@@ -331,7 +334,7 @@ test.describe('base role descriptions (Ukrainian UI)', () => {
       await treasurer.getByRole('button', { name: 'Редагувати' }).click();
       await expect(page.getByRole('button', { name: 'Повернути стандартний опис' })).toHaveCount(0);
       await page.getByRole('button', { name: 'Скасувати' }).click();
-      await page.getByRole('group', { name: 'Мова' }).getByRole('button', { name: 'en' }).click();
+      await page.getByRole('group', { name: 'Мова' }).getByRole('button', { name: 'English' }).click();
       await expect(roleItems(page).filter({ hasText: /^Treasurer/ })).toContainText(
         'Read access to members, plots and audit',
       );

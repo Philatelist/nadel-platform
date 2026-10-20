@@ -36,6 +36,11 @@ General rules for every feature in this sequence:
 One `.xlsx` file with three sheets. Provide a downloadable template with headers, a short instruction row and one
 example row per sheet.
 
+The template follows the user's interface language. In the Ukrainian template everything a person reads is Ukrainian:
+sheet names (`Ділянки`, `Члени`, `Власність`), headers, the instruction row, the example row and value words
+(`ДІЛЯНКА`/`СПІЛЬНА ЗЕМЛЯ`, `так`/`ні`), with realistic Ukrainian examples. The English template uses the names below.
+On upload both languages are accepted for sheet names, headers and value words, also mixed in one file.
+
 | Sheet | Columns |
 |---|---|
 | `Plots` | number, street, kind (`PLOT`/`COMMON`), area_m2 or area_sotky (exactly one), cadastral_number, has_building (yes/no, optional, default no), notes |
@@ -44,6 +49,12 @@ example row per sheet.
 
 Header names are matched case-insensitively; Ukrainian header aliases are accepted (for example `Номер`, `Вулиця`,
 `Площа, сот.`). Dates in Excel date format or `DD.MM.YYYY`.
+
+Acceptance criteria for the template language:
+- With the interface in Ukrainian, the downloaded template (`nadel-import-template-uk.xlsx`) has Ukrainian sheet names,
+  headers, instruction and example rows; with the interface in English (`nadel-import-template-en.xlsx`) it is English.
+- A template downloaded in either language, with its example rows kept as data, uploads with no problems.
+- A file mixing Ukrainian and English sheet names, headers and value words is read correctly.
 
 ## 3. Flow
 
@@ -63,7 +74,8 @@ Only `.xlsx`; macros and external links are ignored. Parse with a streaming read
 
 ## 4. API
 
-- `GET /imports/template` (the `.xlsx` template).
+- `GET /imports/template?lang=uk|en` (the `.xlsx` template; without `lang` the `Accept-Language` header decides, then
+  Ukrainian).
 - `POST /imports` (multipart upload) → preview with import id.
 - `POST /imports/{id}/commit`.
 - `GET /imports` (history: who, when, file name, counts, status).
@@ -82,7 +94,7 @@ Only `.xlsx`; macros and external links are ignored. Parse with a streaming read
   one cooperative never touches another); limits.
 - Test fixtures: a valid file (30 plots, 35 members, co-owners), a file with typical errors, an oversized file.
 - Playwright: chairman downloads the template, uploads the valid fixture, sees the preview, commits, sees plots in the
-  list.
+  list; with the interface in Ukrainian the downloaded template has Ukrainian headers.
 
 ## 7. Out of scope
 

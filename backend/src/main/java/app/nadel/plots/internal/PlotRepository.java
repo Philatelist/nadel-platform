@@ -22,6 +22,14 @@ interface PlotRepository extends JpaRepository<Plot, UUID> {
     @Query("select p from Plot p where p.id = :id")
     Optional<Plot> findByIdForUpdate(@Param("id") UUID id);
 
+    /**
+     * The given plots with an exclusive row lock ({@code FOR UPDATE}), in id order, for the Excel import: the same
+     * lock a change of owner takes first, so the two serialise.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select p from Plot p where p.id in :ids order by p.id")
+    List<Plot> lockAllForUpdate(@Param("ids") Collection<UUID> ids);
+
     // no tenant_id filter needed: RLS hides other cooperatives' rows
     @Query("""
             select new app.nadel.plots.internal.PlotRow(p, s.status, s.debt)
@@ -54,6 +62,17 @@ interface PlotRepository extends JpaRepository<Plot, UUID> {
     @Query("select p from Plot p where p.tenantId = :tenantId and lower(p.number) = lower(:number) "
             + "and p.archivedAt is null")
     Optional<Plot> findActiveByNumber(@Param("tenantId") UUID tenantId, @Param("number") String number);
+
+    /** The active plots whose lower-cased number is among {@code numbers} (already lower-cased by the caller). */
+    @Query("select p from Plot p where p.tenantId = :tenantId and lower(p.number) in :numbers "
+            + "and p.archivedAt is null")
+    List<Plot> findActiveByLowerNumbers(@Param("tenantId") UUID tenantId,
+            @Param("numbers") Collection<String> numbers);
+
+    /** The plots, archived or not, that have one of these cadastral numbers. */
+    @Query("select p from Plot p where p.tenantId = :tenantId and p.cadastralNumber in :cadastralNumbers")
+    List<Plot> findByCadastralNumbers(@Param("tenantId") UUID tenantId,
+            @Param("cadastralNumbers") Collection<String> cadastralNumbers);
 
     /** The plot, archived or not, with this cadastral number; at most one (unique index {@code plot_tenant_cadastral_uq}). */
     @Query("select p from Plot p where p.tenantId = :tenantId and p.cadastralNumber = :cadastralNumber")

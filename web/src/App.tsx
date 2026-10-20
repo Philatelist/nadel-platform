@@ -57,6 +57,15 @@ const router = createBrowserRouter([
         ],
       },
       {
+        element: <RequirePermission permission="IMPORT_RUN" />,
+        children: [
+          {
+            path: 'imports',
+            lazy: () => import('./pages/ImportPage').then((m) => ({ Component: m.ImportPage })),
+          },
+        ],
+      },
+      {
         element: <RequirePermission permission="AUDIT_VIEW" />,
         children: [
           {

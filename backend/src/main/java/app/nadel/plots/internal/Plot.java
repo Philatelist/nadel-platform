@@ -60,8 +60,13 @@ class Plot {
 
     /** A new active plot of a cooperative. */
     static Plot create(UUID tenantId, PlotData data, Instant now) {
+        return create(UUID.randomUUID(), tenantId, data, now);
+    }
+
+    /** A new active plot with a given id: the Excel import derives the id from the import, so a re-plan agrees. */
+    static Plot create(UUID id, UUID tenantId, PlotData data, Instant now) {
         Plot plot = new Plot();
-        plot.id = UUID.randomUUID();
+        plot.id = id;
         plot.tenantId = tenantId;
         plot.createdAt = now;
         plot.apply(data);

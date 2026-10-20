@@ -15,6 +15,34 @@ the caller can refuse them (used by the change of owner, so a member cannot be a
 implementation is `JpaMemberDirectory` (internal); `plots` uses it for owners (feature 007). Feature 005 (import) will
 add more lookups here.
 
+`MemberImport` (feature 008) is what the Excel import may ask of this module: `plan(tenantId, importId, rows)` (the
+transaction is mandatory, nothing is saved) returns one `MemberImportItem` per `MemberImportRow` in the same order:
+`NEW` / `UPDATE` / `UNCHANGED`, the member id (an existing member, or for a new one
+`UUID.nameUUIDFromBytes(importId + "/member/" + lower(externalId))`, so a re-plan equals the preview), the changed fields
+and the field problems. The implementation is `MemberImportService` (internal), with bulk lookups only (active members by
+`lower(email)` and by phone, in chunks of 500):
+- Only active members are matched. A row with an e-mail matches by e-mail (case ignored); a row without one matches by
+  last name, first name (case ignored) and first phone (any phone of the member, compared in international format); no
+  e-mail and no phone is `MEMBER_KEY_MISSING` (reported on `email`), two or more members with that name and phone is
+  `MEMBER_AMBIGUOUS` (on `phones`). When the e-mail belongs to one member but the name and first phone identify another,
+  the row is `EMAIL_TAKEN` (on `email`).
+- Duplicates in the file are `DUPLICATE_IN_FILE` on the later row: the same `externalId`, e-mail, or last name + first
+  name + first phone (case ignored), and two rows that match the same existing member.
+
+`MemberImport.lock(plan)` takes the matched members (`UPDATE` and `UNCHANGED`) `FOR UPDATE` in id order, and
+`MemberImport.apply(tenantId, rows, plan, actor)` saves a plan: `NEW` members are persisted (not merged) with the ids of
+the plan, `UPDATE` members get the same overlay as the plan (blank keeps) and are updated, with `MEMBER_CREATED` /
+`MEMBER_UPDATED` audit events built by `MemberAuditPublisher.event`, the helper `MemberCommands` uses too (it publishes
+the same event at once). `apply` **returns** the events and publishes nothing: `imports` publishes them as `AuditBatch`es. Both need the
+caller's transaction (`MANDATORY`) and never start or commit one. A plan that no longer holds, or a violation of the
+e-mail index at the final flush, is 409 `IMPORT_STALE` (the import then asks for the file again).
+- A blank value keeps the stored value of a matched member (notes are never touched); a filled phone cell replaces the
+  phones; a blank channel keeps the stored channel (a new member gets `PAPER`). The rules are those of the member form:
+  `MemberData.tryFrom` (the non-throwing form of `from`) plus the constraints of the contract's `MemberInput` (lengths,
+  e-mail format) checked with the Bean Validation `Validator` and `problem.ValidationProblems`. One problem per field,
+  named without an index (`phones`). `UNCHANGED` is decided with `MemberSnapshot.diff`, the same comparison the audit uses,
+  so a different phone order or spelling is no change.
+
 `MemberArchiveGuard` is a synchronous veto SPI (feature 007): `ensureCanArchive(memberId)` is called by
 `MemberCommands.archive` on every guard bean of the application, inside the archive transaction, and throws a 409
 `ApiProblemException` to refuse. `plots` implements it (`OwnershipArchiveGuard`, 409 `MEMBER_OWNS_PLOT` while the member

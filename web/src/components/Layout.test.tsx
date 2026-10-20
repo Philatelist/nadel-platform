@@ -81,6 +81,20 @@ describe('Layout', () => {
     expect(hrefs()).not.toContain('/settings');
   });
 
+  it('shows Import after Members, only with IMPORT_RUN', () => {
+    me = meWith(['MEMBERS_VIEW', 'IMPORT_RUN', 'ROLES_MANAGE']);
+    const { unmount } = renderWithApp(<Layout />);
+    const hrefs = () =>
+      Array.from(screen.getByRole('navigation', { name: 'Main menu' }).querySelectorAll('a')).map((a) =>
+        a.getAttribute('href'),
+      );
+    expect(hrefs()).toEqual(['/plots', '/members', '/imports', '/roles']);
+    unmount();
+    me = meWith(['MEMBERS_VIEW', 'ROLES_MANAGE']);
+    renderWithApp(<Layout />);
+    expect(hrefs()).not.toContain('/imports');
+  });
+
   it('lists permitted sections and toggles the menu; Escape closes it', async () => {
     me = meWith(['MEMBERS_VIEW', 'ROLES_MANAGE', 'AUDIT_VIEW']);
     const user = userEvent.setup();

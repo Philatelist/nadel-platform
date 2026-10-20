@@ -7,7 +7,47 @@ soft archive (`archived_at`). Owners are described below; polygons are imported 
 
 ## Public API
 
-None. `plots` implements the SPIs `members.MemberArchiveGuard` (see Guards) and `identity.OwnedPlotsSource` (`GET /me` ownedPlots), and uses `members.MemberDirectory` and `settings.CooperativeSettings`.
+`PlotImport` (feature 008, the Excel import): `plan(tenantId, importId, rows)` checks the rows of the Plots sheet against the
+cooperative's plots and returns, for each row, `NEW`, `UPDATE` or `UNCHANGED` with the plot id and the changed fields, or
+the problems of the row (`PlotImportRow`, `PlotImportItem`, `PlotImportPlan`, `PlotImportAction`). It writes nothing.
+Plots are matched by number among the active plots, ignoring case; a blank value leaves the existing value unchanged and a
+matched plot keeps its stored spelling of the number; a new plot needs a kind and, unless it is common land (area 0), an
+area. Besides the rules of `PlotData`: a number repeated in the file is `DUPLICATE_IN_FILE` on the later rows, a cadastral
+number held by another plot (archived ones included) or claimed by an earlier row is `CADASTRAL_NUMBER_TAKEN`, and a plot
+with ownership history cannot become common land (`PLOT_HAS_OWNERSHIP_HISTORY`). The lookups are bulk queries (500
+values per `IN` list). The id of a new plot is derived from the import id and the number, so planning the same import again
+gives the same ids. Applying a plan comes with a later slice.
+
+`PlotImport.planOwnership(tenantId, plotRows, plotPlan, rows)` plans the rows of the Ownership sheet (`OwnershipImportRow`,
+`OwnershipImportItem`, `OwnershipImportPlan`, `OwnershipImportOutcome`, `OwnershipImportProblem`) and writes nothing.
+The rows of a plot (same number, ignoring case) are a group. The plot is a plot of the file whose plan has no problem
+(new ones included, with the id they will get) or an active plot (an archived plot is never matched); otherwise
+`UNKNOWN_PLOT`; common land is `PLOT_COMMON_LAND`; a plot of the file whose own row has a problem is not checked at all.
+Per row: `REQUIRED` (plot, share, date), `SHARE_INVALID` (`n/d` as for a change of owner; a bare `1` is the whole plot)
+and `OWNERSHIP_DATE_INVALID` for a date after today (Europe/Kyiv clock). Per group, when no row has a problem and every
+member is resolved: `DUPLICATE_OWNER` (later row), `OWNERSHIP_DATE_MISMATCH` (rows that differ from the first row's date)
+and `SHARES_NOT_ONE` (the file's own shares, `OwnershipRules.checkTimeline`, on the first row). Then against the recorded
+ownership: no current owner is `FIRST_OWNERS` (the date must be later than the end of every past owner,
+`OwnershipRules.checkChangeDate`, else `OWNERSHIP_DATE_INVALID`); current owners equal to the file's members and shares,
+dates ignored, are `SKIP`; anything else is `OWNERSHIP_CONFLICT` (with the plot in the params) - the import never
+changes existing ownership. A row has an outcome and a plot id only when its whole plot has no problem. The recorded
+ownership of all matched plots is read with one bulk query per 500 plots.
+
+`PlotImport.lock(plotPlan, ownershipPlan)` takes the existing plots a plan touches `FOR UPDATE` in id order (the lock a
+change of owner takes first). `PlotImport.apply(tenantId, plotRows, plotPlan, ownershipRows, ownershipPlan, actor)`
+saves the plans (`MANDATORY`, no transaction of its own): new plots are persisted with the ids of the plan, each with its
+GREY `plot_status` row, `UPDATE` plots are updated with the plan's overlay, then every `FIRST_OWNERS` group is recorded
+as current owners from its common date, the status follows the owners (GREEN for a plot with owners) and the audit
+events `PLOT_CREATED`, `PLOT_UPDATED` and `OWNERSHIP_CHANGED` are built (the first owners' event has no previous
+owners) and **returned**, not published: `imports` publishes them as `audit.AuditBatch`es. The endpoints still publish
+single events (`PlotAuditPublisher.publish`, `OwnershipRecorder.publishChange`; the import uses `event` and
+`changeEvent`, so both build identical events). `SKIP` groups are untouched. Plots, then ownership rows and status rows are flushed in stages so a row never
+reaches the database before the plot it refers to; the inserts are batched. The core of a change of owner (start rows,
+status refresh, `OWNERSHIP_CHANGED` event and its texts) is `OwnershipRecorder`, used by both `OwnershipCommands` and the
+import. A violation of the plot number, cadastral number or ownership overlap constraint at a flush, or a plan that no
+longer holds, is 409 `IMPORT_STALE`.
+
+`plots` also implements the SPIs `members.MemberArchiveGuard` (see Guards) and `identity.OwnedPlotsSource` (`GET /me` ownedPlots), and uses `members.MemberDirectory` and `settings.CooperativeSettings`.
 
 ## Endpoints
 

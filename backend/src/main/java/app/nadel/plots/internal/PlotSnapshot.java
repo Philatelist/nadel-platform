@@ -37,6 +37,12 @@ record PlotSnapshot(
                 plot.getArchivedAt() != null);
     }
 
+    /** The state a plot would have with this data: not archived, the area as its plain two-place text. */
+    static PlotSnapshot of(PlotData data) {
+        return new PlotSnapshot(data.number(), data.street(), data.kind().name(), areaText(data.areaM2()),
+                data.cadastralNumber(), data.hasBuilding(), data.notes(), false);
+    }
+
     /** The fields whose value differs, in a fixed order; empty when nothing changed. */
     static List<FieldChange> diff(PlotSnapshot before, PlotSnapshot after) {
         List<FieldChange> changes = new ArrayList<>();

@@ -1,5 +1,6 @@
 package app.nadel.audit.internal;
 
+import app.nadel.audit.AuditBatch;
 import app.nadel.audit.AuditEvent;
 import app.nadel.tenancy.TenantContext;
 import org.slf4j.Logger;
@@ -41,5 +42,18 @@ class AuditListener {
         if (!inserted) {
             log.debug("Audit event {} was already recorded", event.eventId());
         }
+    }
+
+    /**
+     * Writes a batch of entries (the Excel import) with one JDBC batch in one transaction. Same tenant binding as
+     * {@link #on(AuditEvent)}; a failure rolls the whole batch back and the publication is resubmitted, and entries
+     * written before are skipped by id.
+     */
+    @Async
+    @TransactionalEventListener
+    void on(AuditBatch batch) {
+        int inserted = TenantContext.runAs(batch.tenantId(),
+                () -> transaction.execute(status -> writer.writeAll(batch.entries())));
+        log.debug("Audit batch {}: {} of {} entries written", batch.batchId(), inserted, batch.entries().size());
     }
 }

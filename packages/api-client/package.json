@@ -10,7 +10,8 @@
   },
   "scripts": {
     "gen": "orval --config ./orval.config.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "peerDependencies": {
     "@tanstack/react-query": "^5.0.0",
@@ -21,6 +22,7 @@
     "@types/react": "19.3.0",
     "orval": "8.43.0",
     "react": "19.3.0",
-    "typescript": "6.0.3"
+    "typescript": "6.0.3",
+    "vitest": "5.0.5"
   }
 }

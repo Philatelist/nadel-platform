@@ -4,6 +4,7 @@ import app.nadel.problem.ApiProblemException;
 import app.nadel.problem.FieldProblem;
 import app.nadel.problem.ProblemCodes;
 import app.nadel.problem.ProblemWriter;
+import app.nadel.problem.ValidationProblems;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.Path;
@@ -18,11 +19,11 @@ import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
-import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
@@ -63,6 +64,18 @@ class ProblemExceptionHandler extends ResponseEntityExceptionHandler {
                 null);
     }
 
+    /**
+     * An upload over the configured multipart limit ({@code spring.servlet.multipart.max-file-size} and
+     * {@code max-request-size}): 413 with a code the client can switch on. Spring MVC would answer 413 as well, but
+     * with the generic {@code REQUEST_REJECTED} code.
+     */
+    @Override
+    protected @Nullable ResponseEntity<Object> handleMaxUploadSizeExceededException(MaxUploadSizeExceededException ex,
+            HttpHeaders headers, HttpStatusCode status, WebRequest request) {
+        return problem(HttpStatus.CONTENT_TOO_LARGE, ProblemCodes.FILE_TOO_LARGE,
+                "The uploaded file is too large.", List.of(), headers);
+    }
+
     @ExceptionHandler(Exception.class)
     ResponseEntity<Object> handleUnexpected(Exception ex) {
         // Only class names: messages of persistence exceptions can contain row values (personal data).
@@ -77,7 +90,7 @@ class ProblemExceptionHandler extends ResponseEntityExceptionHandler {
     protected @Nullable ResponseEntity<Object> handleMethodArgumentNotValid(MethodArgumentNotValidException ex,
             HttpHeaders headers, HttpStatusCode status, WebRequest request) {
         List<FieldProblem> errors = ex.getBindingResult().getFieldErrors().stream()
-                .map(ProblemExceptionHandler::fieldProblem)
+                .map(ValidationProblems::fieldProblem)
                 .toList();
         return problem(HttpStatus.BAD_REQUEST, ProblemCodes.VALIDATION_FAILED, "The request is not valid.", errors,
                 headers);
@@ -112,23 +125,6 @@ class ProblemExceptionHandler extends ResponseEntityExceptionHandler {
         }
         out.setContentType(MediaType.APPLICATION_PROBLEM_JSON);
         return new ResponseEntity<>(body, out, status);
-    }
-
-    private static FieldProblem fieldProblem(FieldError error) {
-        String constraint = error.getCode() == null ? "" : error.getCode();
-        String code = switch (constraint) {
-            case "NotNull", "NotBlank", "NotEmpty" -> "REQUIRED";
-            case "Size", "Max", "Length" -> isEmptyText(error.getRejectedValue()) ? "REQUIRED" : "TOO_LONG";
-            // a share that does not look like n/d is the same mistake as one outside the bounds: SHARE_INVALID
-            case "Pattern" -> error.getField().endsWith("share") ? ProblemCodes.SHARE_INVALID : "INVALID";
-            default -> "INVALID";
-        };
-        return new FieldProblem(error.getField(), code);
-    }
-
-    /** An empty string that violates a minimum length is a missing value, not a short one. */
-    private static boolean isEmptyText(@Nullable Object value) {
-        return value instanceof CharSequence text && text.isEmpty();
     }
 
     /** The last element of the property path, for example {@code size} of {@code listMembers.size}. */
