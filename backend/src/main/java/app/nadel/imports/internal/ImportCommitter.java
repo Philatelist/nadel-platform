@@ -1,6 +1,7 @@
 package app.nadel.imports.internal;
 
 import app.nadel.audit.Actor;
+import app.nadel.audit.AuditBatch;
 import app.nadel.audit.AuditEvent;
 import app.nadel.audit.FieldChange;
 import app.nadel.identity.AccessProfile;
@@ -39,8 +40,9 @@ import org.springframework.transaction.support.TransactionTemplate;
  *       problem is {@code IMPORT_STALE}. Without the clear in between, the second planning would read the first one's
  *       entities from the persistence context instead of the locked rows;</li>
  *   <li>members, then plots with their status rows, then first owners are saved (the facades' {@code apply}), each
- *       record audited as when entered by hand; then the {@code IMPORT_COMMITTED} summary; then the run is marked
- *       committed and its plan dropped.</li>
+ *       record audited as when entered by hand: the facades return the audit events and this class publishes them as
+ *       {@link AuditBatch}es of {@value AuditBatch#MAX_ENTRIES}, not one event per record; then the
+ *       {@code IMPORT_COMMITTED} summary; then the run is marked committed and its plan dropped.</li>
  * </ol>
  * Any failure rolls the whole transaction back, the audit events and the outbox rows included. A stale or an expired
  * refusal is also recorded on the run, in a short transaction of its own after that rollback (the rolled-back
@@ -122,9 +124,12 @@ class ImportCommitter {
         requireSamePlan(plan, digest);
         ImportPlan.Apply apply = plan.apply();
         Actor author = new Actor(profile.memberId(), profile.subject(), profile.displayName());
-        memberImport.apply(tenantId, apply.memberRows(), apply.memberPlan(), author);
-        plotImport.apply(tenantId, apply.plotRows(), apply.plotPlan(), apply.ownershipRows(), apply.ownershipPlan(),
-                author);
+        List<AuditEvent> entries = new ArrayList<>(
+                memberImport.apply(tenantId, apply.memberRows(), apply.memberPlan(), author));
+        entries.addAll(plotImport.apply(tenantId, apply.plotRows(), apply.plotPlan(), apply.ownershipRows(),
+                apply.ownershipPlan(), author));
+        // one batch event per AuditBatch.MAX_ENTRIES records, stored by the outbox in this transaction
+        AuditBatch.of(tenantId, entries).forEach(events::publishEvent);
         publishSummary(tenantId, author, importId, fileName, plan.counts());
         runs.markCommitted(importId, now);
         return new ImportResult().id(importId).counts(ImportService.toApi(plan.counts()));

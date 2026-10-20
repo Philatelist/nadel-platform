@@ -40,7 +40,7 @@ Questions that needed a decision:
   for **30 minutes** (the application `Clock`). Expired plans are cleared lazily on upload and on commit; `EXPIRED` is a derived status, never
   stored. The application role cannot delete `import_run` rows, so the history stays.
 - **Synchronous commit, no JobRunr.** The limits keep a run bounded (measured: 2,000 plots, 3,000 members and 2,000
-  ownership rows in about 7 seconds), JobRunr is not in the project yet and a half-finished background import would need
+  ownership rows in about 7 seconds, their audit entries written within about a second after the commit), JobRunr is not in the project yet and a half-finished background import would need
   its own state machine. The commit runs in the request, in one transaction.
 - **Two-pass locking commit.** 1) A per-tenant advisory lock (`pg_advisory_xact_lock` on the tenant and `/imports`) so two
   imports of one cooperative never interleave; 2) the run row `FOR UPDATE` and the status checks; 3) the stored rows are
@@ -48,8 +48,20 @@ Questions that needed a decision:
   id order, which is the order of a change of owner and of archiving, so no lock cycle exists); 4) the rows are
   **planned again under the locks** and the digest must equal the stored one, otherwise 409 `IMPORT_STALE`; 5) `apply`
   members, then plots with their owners, then one `IMPORT_COMMITTED` audit entry (file name and counts) next to the usual
-  per-record entries. Any other failure rolls everything back, audit events and outbox rows included, and the preview can
+  per-record entries, which are audited in batches (next bullet). Any other failure rolls everything back, audit events and outbox rows included, and the preview can
   be tried again.
+- **Audit in batches, not one event per record.** An import at the limits changes about 7,000 records. One `AuditEvent` each
+  meant 7,000 outbox publications and 7,000 listener transactions (one single-row insert each); on a slow runner the
+  outbox needed more than five minutes, a test timed out and later tests waited behind the backlog. The facades'
+  `apply` therefore **return** their audit events (built by the same publishers as the endpoints, so the entries are
+  identical: same action, entity type, id, label and field changes) and `ImportCommitter` publishes them as
+  `audit.AuditBatch` events of at most 500 entries inside the commit transaction (the outbox stores them atomically with
+  the data; 7,000 records are 14 publications). The audit listener writes a batch with one JDBC batch insert in one
+  transaction, idempotent by entry id (`on conflict (id) do nothing`), under the tenant bound with
+  `TenantContext.runAs` (ADR 0007). The `IMPORT_COMMITTED` summary stays a single `AuditEvent`. Single-record endpoints are
+  unchanged. A serialized batch can be a few hundred kilobytes of personal data in `event_publication` until it completes
+  (then it is deleted), as for single events. The test suite also gets a surefire `forkedProcessTimeoutInSeconds` of 900 so
+  a hung test JVM fails the build instead of blocking it.
 - **Error codes of the commit:** `IMPORT_HAS_ERRORS` (409), `IMPORT_ALREADY_COMMITTED` (409), `IMPORT_EXPIRED` (410) and
   `IMPORT_STALE` (409). A preview without problems that would create or update nothing is `committable: false`; trying to
   commit it anyway is **`IMPORT_NOTHING_TO_COMMIT`** (409), because `IMPORT_HAS_ERRORS` would be untrue and an empty commit would only

@@ -8,6 +8,8 @@ import static org.awaitility.Awaitility.await;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import app.nadel.audit.AuditBatch;
+import app.nadel.audit.AuditEvent;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -15,6 +17,9 @@ import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.test.context.event.ApplicationEvents;
+import org.springframework.test.context.event.RecordApplicationEvents;
 
 /**
  * A file at the limits (2,000 plots, 3,000 members, 2,000 ownership rows) is committed in one request. Tagged
@@ -22,14 +27,18 @@ import org.junit.jupiter.api.Test;
  * one. The size also shows that inserts are batched: one statement per row would be far slower.
  */
 @Tag("large")
+@RecordApplicationEvents
 class ImportLargeCommitTests extends ImportCommitSupport {
 
     private static final int PLOTS = 2000;
     private static final int MEMBERS = 3000;
 
+    @Autowired
+    ApplicationEvents applicationEvents;
+
     @AfterEach
     void waitForTheAuditEntriesBeforeTheCleanup() {
-        // about 7,000 entries are written one by one by the asynchronous listener
+        // about 7,000 entries are written by the asynchronous listener, 500 per transaction
         await().atMost(Duration.ofMinutes(5)).pollInterval(Duration.ofMillis(250)).until(
                 ImportCommitSupport::noPublicationIsOutstanding);
     }
@@ -67,6 +76,21 @@ class ImportLargeCommitTests extends ImportCommitSupport {
         long commitMillis = Duration.ofNanos(System.nanoTime() - commitStart).toMillis();
         System.out.printf("LARGE IMPORT: %d plots, %d members, %d ownership rows; file %d bytes; upload+preview %d ms;"
                 + " commit %d ms%n", PLOTS, MEMBERS, PLOTS, file.length, uploadMillis, commitMillis);
+
+        // 2,000 plots + 3,000 members + 2,000 owned plots = 7,000 records in 14 batches; no event per record
+        assertThat(applicationEvents.stream(AuditEvent.class).map(AuditEvent::action)).containsExactly("IMPORT_COMMITTED");
+        List<AuditBatch> batches = applicationEvents.stream(AuditBatch.class).toList();
+        assertThat(batches).hasSize(14).allSatisfy(b -> assertThat(b.entries().size()).isLessThanOrEqualTo(500));
+        assertThat(batches.stream().mapToInt(b -> b.entries().size()).sum()).isEqualTo(PLOTS + MEMBERS + PLOTS);
+        long auditStart = System.nanoTime();
+        await().atMost(Duration.ofMinutes(5)).pollInterval(Duration.ofMillis(250)).untilAsserted(() -> {
+            assertThat(auditLike("PLOT_CREATED", "LRG-")).isEqualTo(PLOTS);
+            assertThat(auditLike("MEMBER_CREATED", "Fixt")).isEqualTo(MEMBERS);
+            assertThat(auditLike("OWNERSHIP_CHANGED", "LRG-")).isEqualTo(PLOTS);
+            assertThat(auditLike("IMPORT_COMMITTED", "plots.xlsx")).isEqualTo(1);
+        });
+        System.out.printf("LARGE IMPORT: all %d audit entries written %d ms after the commit%n",
+                PLOTS + MEMBERS + PLOTS + 1, Duration.ofNanos(System.nanoTime() - auditStart).toMillis());
 
         assertThat(plotsLike("LRG-")).isEqualTo(PLOTS);
         assertThat(membersLike("Fixt")).isEqualTo(MEMBERS);

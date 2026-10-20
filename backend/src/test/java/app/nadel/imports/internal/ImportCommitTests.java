@@ -12,6 +12,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import app.nadel.TestTokens;
+import app.nadel.audit.AuditBatch;
+import app.nadel.audit.AuditEvent;
 import app.nadel.plots.PlotImport;
 import java.time.Duration;
 import java.time.LocalDate;
@@ -29,6 +31,8 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import org.springframework.test.context.event.ApplicationEvents;
+import org.springframework.test.context.event.RecordApplicationEvents;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
@@ -37,6 +41,7 @@ import tools.jackson.databind.JsonNode;
  * POST /imports/{id}/commit: everything the preview announced is saved in one transaction or nothing is; a changed
  * cooperative, an expired preview, a repeated commit and a failure half-way are refused or rolled back whole.
  */
+@RecordApplicationEvents
 class ImportCommitTests extends ImportCommitSupport {
 
     private static final LocalDate SINCE = LocalDate.of(2020, 3, 1);
@@ -53,6 +58,9 @@ class ImportCommitTests extends ImportCommitSupport {
 
     @Autowired
     MutableClock clock;
+
+    @Autowired
+    ApplicationEvents applicationEvents;
 
     @Autowired
     PlatformTransactionManager transactions;
@@ -149,6 +157,22 @@ class ImportCommitTests extends ImportCommitSupport {
                 + "where action = 'OWNERSHIP_CHANGED' and entity_label = ?", String.class, plotNo("a"));
         assertThat(owners).contains("effectiveFrom").contains("2020-03-01").contains("Fixt" + tag + "One Person 1/2")
                 .contains("Fixt" + tag + "Two Person 1/2");
+    }
+
+    @Test
+    void theRecordsAreAuditedAsOneBatchAndOnlyTheSummaryIsASingleEvent() throws Exception {
+        String id = preview(threePlots()).get("id").asString();
+
+        commit(id).andExpect(status().isOk());
+
+        List<AuditEvent> singles = applicationEvents.stream(AuditEvent.class).toList();
+        assertThat(singles).extracting(AuditEvent::action).containsExactly("IMPORT_COMMITTED");
+        List<AuditBatch> batches = applicationEvents.stream(AuditBatch.class).toList();
+        assertThat(batches).hasSize(1);
+        // 3 plots + 4 members + 2 owned plots
+        assertThat(batches.getFirst().entries()).hasSize(9)
+                .extracting(AuditEvent::action).containsOnly("PLOT_CREATED", "MEMBER_CREATED", "OWNERSHIP_CHANGED");
+        assertThat(batches.getFirst().tenantId()).isEqualTo(DEMO_TENANT);
     }
 
     private static String field(JsonNode changes, String name) {

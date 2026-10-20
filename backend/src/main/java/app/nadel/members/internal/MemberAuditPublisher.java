@@ -23,13 +23,21 @@ class MemberAuditPublisher {
     }
 
     void publish(UUID tenantId, Actor actor, String action, Member member, List<FieldChange> changes) {
-        events.publishEvent(AuditEvent.now(
+        events.publishEvent(event(tenantId, actor, action, member, changes));
+    }
+
+    /**
+     * The audit event of a change, not yet published: the Excel import collects thousands of them and publishes them
+     * as batches.
+     */
+    AuditEvent event(UUID tenantId, Actor actor, String action, Member member, List<FieldChange> changes) {
+        return AuditEvent.now(
                 tenantId,
                 actor,
                 action,
                 "MEMBER",
                 member.getId(),
                 member.getLastName() + " " + member.getFirstName(),
-                changes));
+                changes);
     }
 }

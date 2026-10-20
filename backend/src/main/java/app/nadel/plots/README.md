@@ -38,8 +38,10 @@ change of owner takes first). `PlotImport.apply(tenantId, plotRows, plotPlan, ow
 saves the plans (`MANDATORY`, no transaction of its own): new plots are persisted with the ids of the plan, each with its
 GREY `plot_status` row, `UPDATE` plots are updated with the plan's overlay, then every `FIRST_OWNERS` group is recorded
 as current owners from its common date, the status follows the owners (GREEN for a plot with owners) and the audit
-events `PLOT_CREATED`, `PLOT_UPDATED` and `OWNERSHIP_CHANGED` are published (the first owners' event has no previous
-owners). `SKIP` groups are untouched. Plots, then ownership rows and status rows are flushed in stages so a row never
+events `PLOT_CREATED`, `PLOT_UPDATED` and `OWNERSHIP_CHANGED` are built (the first owners' event has no previous
+owners) and **returned**, not published: `imports` publishes them as `audit.AuditBatch`es. The endpoints still publish
+single events (`PlotAuditPublisher.publish`, `OwnershipRecorder.publishChange`; the import uses `event` and
+`changeEvent`, so both build identical events). `SKIP` groups are untouched. Plots, then ownership rows and status rows are flushed in stages so a row never
 reaches the database before the plot it refers to; the inserts are batched. The core of a change of owner (start rows,
 status refresh, `OWNERSHIP_CHANGED` event and its texts) is `OwnershipRecorder`, used by both `OwnershipCommands` and the
 import. A violation of the plot number, cadastral number or ownership overlap constraint at a flush, or a plan that no

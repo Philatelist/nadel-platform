@@ -22,13 +22,21 @@ class PlotAuditPublisher {
     }
 
     void publish(UUID tenantId, Actor actor, String action, Plot plot, List<FieldChange> changes) {
-        events.publishEvent(AuditEvent.now(
+        events.publishEvent(event(tenantId, actor, action, plot, changes));
+    }
+
+    /**
+     * The audit event of a change, not yet published: the Excel import collects thousands of them and publishes them
+     * as batches.
+     */
+    AuditEvent event(UUID tenantId, Actor actor, String action, Plot plot, List<FieldChange> changes) {
+        return AuditEvent.now(
                 tenantId,
                 actor,
                 action,
                 "PLOT",
                 plot.getId(),
                 plot.getNumber(),
-                changes));
+                changes);
     }
 }

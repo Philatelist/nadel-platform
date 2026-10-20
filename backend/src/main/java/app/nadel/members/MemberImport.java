@@ -1,6 +1,7 @@
 package app.nadel.members;
 
 import app.nadel.audit.Actor;
+import app.nadel.audit.AuditEvent;
 import java.util.List;
 import java.util.UUID;
 
@@ -39,8 +40,9 @@ public interface MemberImport {
     /**
      * Saves what a plan says: creates the {@code NEW} members with the ids the plan gave them and updates the
      * {@code UPDATE} members, with the same rules as when a member is entered by hand (a blank cell leaves the stored
-     * value). One {@code MEMBER_CREATED} or {@code MEMBER_UPDATED} audit event is published per changed member, by
-     * {@code actor}. Rows are inserted in batches. Must run in the caller's transaction, which this method never
+     * value). One {@code MEMBER_CREATED} or {@code MEMBER_UPDATED} audit event is built per changed member, credited
+     * to {@code actor}, and <b>returned, not published</b>: the caller publishes them (the import as
+     * {@link app.nadel.audit.AuditBatch}es) in the same transaction. Rows are inserted in batches. Must run in the caller's transaction, which this method never
      * starts or commits.
      * <p>
      * The plan must be the one computed in the same transaction after {@link #lock}; a row that no longer matches
@@ -50,6 +52,7 @@ public interface MemberImport {
      * @param rows     the rows the plan was computed from
      * @param plan     the plan of {@code rows}, item for item
      * @param actor    who is credited in the audit log
+     * @return the audit events of the changed members, in row order; the caller must publish them
      */
-    void apply(UUID tenantId, List<MemberImportRow> rows, MemberImportPlan plan, Actor actor);
+    List<AuditEvent> apply(UUID tenantId, List<MemberImportRow> rows, MemberImportPlan plan, Actor actor);
 }

@@ -1,6 +1,7 @@
 package app.nadel.plots;
 
 import app.nadel.audit.Actor;
+import app.nadel.audit.AuditEvent;
 import java.util.List;
 import java.util.UUID;
 
@@ -65,8 +66,9 @@ public interface PlotImport {
      * Saves what the plans say: creates the {@code NEW} plots with the ids the plan gave them (each with its GREY
      * status row), updates the {@code UPDATE} plots, then records the owners of every {@code FIRST_OWNERS} group as
      * current owners from their common date, refreshes the cached status (a plot with owners and no debt turns GREEN)
-     * and publishes {@code PLOT_CREATED}, {@code PLOT_UPDATED} and {@code OWNERSHIP_CHANGED} audit events by
-     * {@code actor}, as when the same is done by hand. {@code SKIP} groups are not touched. Rows are inserted in
+     * and builds {@code PLOT_CREATED}, {@code PLOT_UPDATED} and {@code OWNERSHIP_CHANGED} audit events credited to
+     * {@code actor}, as when the same is done by hand. The events are <b>returned, not published</b>: the caller
+     * publishes them (the import as {@link app.nadel.audit.AuditBatch}es) in the same transaction. {@code SKIP} groups are not touched. Rows are inserted in
      * batches. Must run in the caller's transaction, which this method never starts or commits; the members the
      * ownership rows name must exist in it (they may have been created by the same transaction).
      * <p>
@@ -80,7 +82,8 @@ public interface PlotImport {
      * @param ownershipRows the rows of the Ownership sheet, with the members resolved
      * @param ownershipPlan their plan, item for item
      * @param actor         who is credited in the audit log
+     * @return the audit events, in the order the changes were made; the caller must publish them
      */
-    void apply(UUID tenantId, List<PlotImportRow> plotRows, PlotImportPlan plotPlan,
+    List<AuditEvent> apply(UUID tenantId, List<PlotImportRow> plotRows, PlotImportPlan plotPlan,
             List<OwnershipImportRow> ownershipRows, OwnershipImportPlan ownershipPlan, Actor actor);
 }

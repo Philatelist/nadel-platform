@@ -189,6 +189,16 @@
                 </executions>
             </plugin>
 
+            <!-- A hung test JVM is killed after 15 minutes instead of blocking CI until its job timeout. The whole
+                 suite takes a few minutes; the JaCoCo agent comes through the argLine property, which is left alone. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <forkedProcessTimeoutInSeconds>900</forkedProcessTimeoutInSeconds>
+                </configuration>
+            </plugin>
+
             <!-- Coverage report and floor; generated contract code is excluded -->
             <plugin>
                 <groupId>org.jacoco</groupId>

@@ -1,6 +1,7 @@
 package app.nadel.plots.internal;
 
 import app.nadel.audit.Actor;
+import app.nadel.audit.AuditEvent;
 import app.nadel.audit.FieldChange;
 import app.nadel.members.MemberDirectory;
 import app.nadel.members.MemberRef;
@@ -67,7 +68,7 @@ class PlotImportService implements PlotImport {
     private final OwnershipRepository ownerships;
     private final OwnershipImportPlanner ownershipPlanner;
     private final OwnershipRecorder recorder;
-    private final PlotAuditPublisher audit;
+    private final PlotAuditPublisher auditPublisher;
     private final MemberDirectory members;
     private final Clock clock;
 
@@ -82,7 +83,7 @@ class PlotImportService implements PlotImport {
         this.ownerships = ownerships;
         this.ownershipPlanner = ownershipPlanner;
         this.recorder = recorder;
-        this.audit = audit;
+        this.auditPublisher = audit;
         this.members = members;
         this.clock = clock;
     }
@@ -129,9 +130,10 @@ class PlotImportService implements PlotImport {
      */
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
-    public void apply(UUID tenantId, List<PlotImportRow> plotRows, PlotImportPlan plotPlan,
+    public List<AuditEvent> apply(UUID tenantId, List<PlotImportRow> plotRows, PlotImportPlan plotPlan,
             List<OwnershipImportRow> ownershipRows, OwnershipImportPlan ownershipPlan, Actor actor) {
         Instant now = clock.instant();
+        List<AuditEvent> auditEntries = new ArrayList<>();
         Set<UUID> createdIds = createdIds(plotPlan);
         Map<UUID, Plot> existing = loadPlots(existingIds(plotPlan, ownershipPlan, createdIds, false));
         Map<UUID, Plot> created = new LinkedHashMap<>();
@@ -142,8 +144,8 @@ class PlotImportService implements PlotImport {
                 Plot plot = Plot.create(item.plotId(), tenantId, dataOf(row, null), now);
                 entityManager.persist(plot);
                 created.put(plot.getId(), plot);
-                audit.publish(tenantId, actor, "PLOT_CREATED", plot,
-                        PlotSnapshot.diff(PlotSnapshot.NONE, PlotSnapshot.of(plot)));
+                auditEntries.add(auditPublisher.event(tenantId, actor, "PLOT_CREATED", plot,
+                        PlotSnapshot.diff(PlotSnapshot.NONE, PlotSnapshot.of(plot))));
             } else if (item.action() == PlotImportAction.UPDATE) {
                 Plot plot = existing.get(item.plotId());
                 if (plot == null || plot.getArchivedAt() != null) {
@@ -154,18 +156,19 @@ class PlotImportService implements PlotImport {
                 List<FieldChange> changes = PlotSnapshot.diff(before, PlotSnapshot.of(plot));
                 if (!changes.isEmpty()) {
                     plot.touch(now);
-                    audit.publish(tenantId, actor, "PLOT_UPDATED", plot, changes);
+                    auditEntries.add(auditPublisher.event(tenantId, actor, "PLOT_UPDATED", plot, changes));
                 }
             }
         }
         // the plots reach the database before the rows that refer to them
         flush(plots::flush);
-        applyOwnership(tenantId, ownershipRows, ownershipPlan, actor, now, created, existing);
+        applyOwnership(tenantId, ownershipRows, ownershipPlan, actor, now, created, existing, auditEntries);
+        return auditEntries;
     }
 
-    /** Records the owners of every FIRST_OWNERS group, the status rows of the new plots and the audit events. */
+    /** Records the owners of every FIRST_OWNERS group and the status rows of the new plots; adds the audit events to {@code auditEntries}. */
     private void applyOwnership(UUID tenantId, List<OwnershipImportRow> rows, OwnershipImportPlan plan, Actor actor,
-            Instant now, Map<UUID, Plot> created, Map<UUID, Plot> existing) {
+            Instant now, Map<UUID, Plot> created, Map<UUID, Plot> existing, List<AuditEvent> auditEntries) {
         Map<UUID, List<OwnershipImportRow>> groups = new LinkedHashMap<>();
         for (int index = 0; index < rows.size(); index++) {
             OwnershipImportItem item = plan.items().get(index);
@@ -216,7 +219,7 @@ class PlotImportService implements PlotImport {
             recorder.refreshStatus(entry, true, now);
             String newOwners = OwnershipRecorder.ownersText(owners.stream()
                     .map(o -> OwnershipRecorder.text(names.get(o.memberId()), o.share())));
-            recorder.publishChange(tenantId, actor, plot, from, null, newOwners, null);
+            auditEntries.add(recorder.changeEvent(tenantId, actor, plot, from, null, newOwners, null));
         }
         inserted.forEach(entityManager::persist);
         flush(ownerships::flush);

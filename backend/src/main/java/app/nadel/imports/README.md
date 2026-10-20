@@ -127,7 +127,11 @@ or saves nothing. In this order:
    archived, ...).
 5. `MemberImport.apply` (members), then `PlotImport.apply` (plots with their GREY status rows, plot updates, then first
    owners with the status refresh), each record audited as when entered by hand (`MEMBER_CREATED`/`MEMBER_UPDATED`,
-   `PLOT_CREATED`/`PLOT_UPDATED`, `OWNERSHIP_CHANGED`); then one `IMPORT_COMMITTED` event (entity type `IMPORT`, entity
+   `PLOT_CREATED`/`PLOT_UPDATED`, `OWNERSHIP_CHANGED`). The facades **return** their audit events instead of publishing
+   them; `ImportCommitter` publishes them as `audit.AuditBatch` events of at most 500 entries (members first, then plots
+   and owners), in the commit transaction, so the outbox stores them atomically with the data. 7,000 records are 14
+   batches, not 7,000 events: the audit listener writes a batch with one JDBC batch insert in one transaction (see the
+   `audit` README). Then one `IMPORT_COMMITTED` event (a normal single `AuditEvent`, exactly one per import) (entity type `IMPORT`, entity
    id = import id, label = file name, fields `plotsCreated`, `plotsUpdated`, `plotsUnchanged`, `membersCreated`, ...,
    `ownershipsCreated`, `ownershipsUnchanged` as text). New rows are persisted (no SELECT per row) with Hibernate
    batching (`jdbc.batch_size: 50`, `order_inserts`, `order_updates`). Finally the run becomes `COMMITTED` with

@@ -57,6 +57,12 @@ class OwnershipRecorder {
 
     void publishChange(UUID tenantId, Actor actor, Plot plot, LocalDate effectiveFrom, @Nullable String previousOwners,
             @Nullable String newOwners, @Nullable String basis) {
+        events.publishEvent(changeEvent(tenantId, actor, plot, effectiveFrom, previousOwners, newOwners, basis));
+    }
+
+    /** The {@code OWNERSHIP_CHANGED} event, not yet published: the Excel import publishes its events as batches. */
+    AuditEvent changeEvent(UUID tenantId, Actor actor, Plot plot, LocalDate effectiveFrom,
+            @Nullable String previousOwners, @Nullable String newOwners, @Nullable String basis) {
         List<FieldChange> changes = new ArrayList<>();
         changes.add(new FieldChange("effectiveFrom", null, effectiveFrom.toString()));
         if (previousOwners != null || newOwners != null) {
@@ -65,14 +71,14 @@ class OwnershipRecorder {
         if (basis != null) {
             changes.add(new FieldChange("basis", null, basis));
         }
-        events.publishEvent(AuditEvent.now(
+        return AuditEvent.now(
                 tenantId,
                 actor,
                 "OWNERSHIP_CHANGED",
                 "OWNERSHIP",
                 plot.getId(),
                 plot.getNumber(),
-                changes));
+                changes);
     }
 
     /** "Last First 1/2": the audit text of one owner. Personal data: never logged. */

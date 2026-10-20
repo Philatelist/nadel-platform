@@ -1,6 +1,7 @@
 package app.nadel.members.internal;
 
 import app.nadel.audit.Actor;
+import app.nadel.audit.AuditEvent;
 import app.nadel.audit.FieldChange;
 import app.nadel.members.MemberImport;
 import app.nadel.members.MemberImportAction;
@@ -64,7 +65,7 @@ class MemberImportService implements MemberImport {
 
     private final MemberRepository members;
     private final SpringValidatorAdapter validator;
-    private final MemberAuditPublisher audit;
+    private final MemberAuditPublisher auditPublisher;
     private final Clock clock;
 
     @PersistenceContext
@@ -73,7 +74,7 @@ class MemberImportService implements MemberImport {
     MemberImportService(MemberRepository members, Validator validator, MemberAuditPublisher audit, Clock clock) {
         this.members = members;
         this.validator = new SpringValidatorAdapter(validator);
-        this.audit = audit;
+        this.auditPublisher = audit;
         this.clock = clock;
     }
 
@@ -116,8 +117,9 @@ class MemberImportService implements MemberImport {
      */
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
-    public void apply(UUID tenantId, List<MemberImportRow> rows, MemberImportPlan plan, Actor actor) {
+    public List<AuditEvent> apply(UUID tenantId, List<MemberImportRow> rows, MemberImportPlan plan, Actor actor) {
         Instant now = clock.instant();
+        List<AuditEvent> entries = new ArrayList<>();
         Map<UUID, Member> matched = loadMatched(plan);
         for (int index = 0; index < rows.size(); index++) {
             MemberImportItem item = plan.items().get(index);
@@ -126,8 +128,8 @@ class MemberImportService implements MemberImport {
                 MemberData data = dataOf(rows.get(index), null);
                 Member member = Member.create(item.memberId(), tenantId, data, now);
                 entityManager.persist(member);
-                audit.publish(tenantId, actor, "MEMBER_CREATED", member,
-                        MemberSnapshot.diff(MemberSnapshot.NONE, MemberSnapshot.of(member)));
+                entries.add(auditPublisher.event(tenantId, actor, "MEMBER_CREATED", member,
+                        MemberSnapshot.diff(MemberSnapshot.NONE, MemberSnapshot.of(member))));
             } else if (action == MemberImportAction.UPDATE) {
                 Member member = matched.get(item.memberId());
                 if (member == null || member.isArchived()) {
@@ -139,7 +141,7 @@ class MemberImportService implements MemberImport {
                 List<FieldChange> changes = MemberSnapshot.diff(before, MemberSnapshot.of(member));
                 if (!changes.isEmpty()) {
                     member.touch(now);
-                    audit.publish(tenantId, actor, "MEMBER_UPDATED", member, changes);
+                    entries.add(auditPublisher.event(tenantId, actor, "MEMBER_UPDATED", member, changes));
                 }
             }
         }
@@ -151,6 +153,7 @@ class MemberImportService implements MemberImport {
             }
             throw e;
         }
+        return entries;
     }
 
     /** The members the plan updates, in one bulk query per chunk (already managed when they were locked). */

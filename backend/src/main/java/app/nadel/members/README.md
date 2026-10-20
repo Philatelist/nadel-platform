@@ -32,7 +32,8 @@ and the field problems. The implementation is `MemberImportService` (internal), 
 `MemberImport.lock(plan)` takes the matched members (`UPDATE` and `UNCHANGED`) `FOR UPDATE` in id order, and
 `MemberImport.apply(tenantId, rows, plan, actor)` saves a plan: `NEW` members are persisted (not merged) with the ids of
 the plan, `UPDATE` members get the same overlay as the plan (blank keeps) and are updated, with `MEMBER_CREATED` /
-`MEMBER_UPDATED` audit events published by `MemberAuditPublisher`, the helper `MemberCommands` uses too. Both need the
+`MEMBER_UPDATED` audit events built by `MemberAuditPublisher.event`, the helper `MemberCommands` uses too (it publishes
+the same event at once). `apply` **returns** the events and publishes nothing: `imports` publishes them as `AuditBatch`es. Both need the
 caller's transaction (`MANDATORY`) and never start or commit one. A plan that no longer holds, or a violation of the
 e-mail index at the final flush, is 409 `IMPORT_STALE` (the import then asks for the file again).
 - A blank value keeps the stored value of a matched member (notes are never touched); a filled phone cell replaces the

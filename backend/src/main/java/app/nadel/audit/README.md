@@ -9,6 +9,7 @@ removed). Read with `GET /audit` (below).
 | Type | Use |
 |---|---|
 | `AuditEvent` | A change to record: event id, tenant, time, actor, action, entity type/id/label and the list of changes. `AuditEvent.now(...)` fills a fresh id and the time |
+| `AuditBatch` | Up to 500 `AuditEvent`s of one cooperative recorded together (`batchId`, `tenantId`, `entries`); `AuditBatch.of(tenantId, events)` splits a list into batches. Used by the Excel import |
 | `Actor` | Member id (nullable), Keycloak subject and display name of whoever made the change |
 | `ActorNames` | SPI implemented by `members`: current display names of acting members, so `audit` never depends on `members` |
 | `FieldChange` | `field`, `oldValue`, `newValue` as strings. Multi-valued fields (phones, role names) are sorted and joined by the publisher |
@@ -16,6 +17,10 @@ removed). Read with `GET /audit` (below).
 A module records a change by publishing an `AuditEvent` with `ApplicationEventPublisher` **inside the transaction that
 makes the change**. The Spring Modulith event publication registry (table `event_publication`, `completion-mode: delete`)
 stores the publication in that same transaction, so a committed change always has an audit entry owed.
+
+Changes that touch thousands of records at once (the Excel import: about 7,000 at the limits) publish **`AuditBatch`**
+events instead of one `AuditEvent` each: one batch per 500 entries, published inside the same transaction as the data. Each
+entry keeps its own event id as the id of its audit entry. Single-record changes (endpoints) keep publishing `AuditEvent`.
 
 ## How an entry is written
 
@@ -25,6 +30,18 @@ publishing transaction commits it runs on another thread, binds the event's coop
 `TenantAwareTransactionManager` sets `app.tenant_id` for it. `AuditWriter` inserts the row with a parameterised native
 query `insert ... on conflict (id) do nothing`; `audit_entry.id` is the event id, so a redelivered event cannot create a
 second entry. `changes` is a JSON array `[{"field", "old", "new"}]` written with Jackson.
+
+### How a batch is written
+
+`AuditListener.on(AuditBatch)` has the same shape (`@Async @TransactionalEventListener`, `TenantContext.runAs(batch.tenantId(),
+...)`, then a `TransactionTemplate`). `AuditWriter.writeAll` runs one parameterised JDBC batch
+(`PreparedStatement.addBatch` / `executeBatch` on the connection of the tenant-aware transaction through
+`Session.doWork`), so the whole batch is **one transaction**: row level security applies, and a failure writes nothing
+and leaves the publication incomplete for resubmission. The statement is the same `insert ... on conflict (id) do nothing`,
+so a redelivered batch (or a batch redelivered after another one half-failed) creates no duplicate. Why batching: one
+transaction and one insert per entry made a 7,000-entry import take minutes on a slow runner and starved later events; a
+batch of 500 takes tens of milliseconds. The record refuses an empty batch, more than 500 entries and an entry of another
+cooperative; `AuditBatchWriteTests` covers the writer, the listener tenant binding, idempotency and redelivery.
 
 ### Decision: option A, verified
 
@@ -59,7 +76,7 @@ profile (the token) and is an explicit `tenant_id` condition on top of RLS.
 
 ## Things to remember
 
-- Event payloads contain names and contact details. They are never logged: the listener logs the event id only. Completed
+- Event payloads contain names and contact details. They are never logged: the listener logs the event id (or the batch id) only. Completed
   publications are deleted so personal data does not linger in `event_publication`, which has no `tenant_id` and no RLS on
   purpose (startup resubmission has no tenant); `EventPublicationGuardTests` guards that.
 - Listeners and the writer are idempotent; keep it so when adding a listener.
