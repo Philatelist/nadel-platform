@@ -1,11 +1,11 @@
 # Pipeline log — 008 Excel import
 
-- Status: finished
-- Phase: 6 — done (review run started)
+- Status: running
+- Phase: 5 — CI fix attempt 2 (order-dependent audit-drain stall)
 - Branch: 008-excel-import · Base: main (= origin/main) @ bcddbbb
 - Requirement: docs/features/008-excel-import.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
-- Publish: pr+checks · PR: https://github.com/Philatelist/nadel-platform/pull/27 · Checks: green
+- Publish: pr+checks · PR: https://github.com/Philatelist/nadel-platform/pull/27 · Checks: red: Backend (hung, cancelled)
 - Review run: running at http://localhost:5173 (web), http://localhost:8080 (API), http://localhost:8180 (Keycloak) (PIDs in backend/target/review-run.pids: make 73987, java 74256, node 74150)
 
 ## Project facts
@@ -110,3 +110,5 @@ Same as 004–007 (see `context/spec/005-ui-preferences/pipeline-log.md`). Re-ch
 - CI fix review: PASS. Review log updated (uncommitted, goes with the next commit or the hand-off).
 - CI on 9ec0e24: all five checks green (Backend, Clients, E2E, Semgrep, Security). Phase 5 end.
 - Phase 6: `make up` from the spec branch (9ec0e24), detached; PIDs make 73987, java 74256, node 74150 in backend/target/review-run.pids. Run finished.
+- CI run 39422315773 on a3e2fdb (log-only commit): Backend hung — after AuditOutboxTests (simulated audit failure) the import tests' audit/outbox waits stalled (ImportAcceptanceTests 333 s, ImportLargeCommitTests timed out after 5 min, ImportHistoryTests 512 s), then ImportCommitTests hung; cancelled after 30+ min to read the log. Same code passed on 9ec0e24, so order/timing dependent. Fix attempt 2 started (spring-backend). Review run keeps running from 9ec0e24.
+- CI fix attempt 2 returned: root cause EventPublicationGuardTests left a hand-completed event_publication row (completion-mode delete never removes it); the import tests' drain waits counted all rows, so each waited its full timeout. Fix: the guard test deletes its row; ImportCommitSupport/ImportLargeCommitTests wait only for incomplete publications. Repro before: stall (killed at 560 s); after (orchestrator re-ran EventPublicationGuardTests, AuditOutboxTests, ImportCommitTests alphabetical): 64 s, ImportCommitTests 33.8 s. Agent full verify 1031 green, coverage met.

@@ -128,12 +128,22 @@ abstract class ImportCommitSupport extends ImportsIntegrationTest {
                 org.assertj.core.api.Assertions.assertThat(auditLike(action, labelPrefix)).isEqualTo(expected));
     }
 
+    /**
+     * No event publication is waiting for its listener. Only incomplete publications count: with completion mode
+     * {@code delete} a finished publication is gone, and a row that is already completed (left by a test that wrote
+     * one by hand) is not owed to anyone and never disappears, so waiting for an empty table would never end.
+     */
+    protected static boolean noPublicationIsOutstanding() {
+        return ownerJdbc().queryForObject("select count(*) from event_publication where completion_date is null",
+                Integer.class) == 0;
+    }
+
     @AfterEach
     void removeImportedRecords() {
         try {
             // every audit entry still owed is written first, so none appears after the cleanup
-            await().atMost(Duration.ofSeconds(30)).pollInterval(Duration.ofMillis(100)).until(() ->
-                    ownerJdbc().queryForObject("select count(*) from event_publication", Integer.class) == 0);
+            await().atMost(Duration.ofSeconds(30)).pollInterval(Duration.ofMillis(100)).until(
+                    ImportCommitSupport::noPublicationIsOutstanding);
         } catch (ConditionTimeoutException e) {
             // clean up anyway
         }

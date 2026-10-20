@@ -30,8 +30,8 @@ class ImportLargeCommitTests extends ImportCommitSupport {
     @AfterEach
     void waitForTheAuditEntriesBeforeTheCleanup() {
         // about 7,000 entries are written one by one by the asynchronous listener
-        await().atMost(Duration.ofMinutes(5)).pollInterval(Duration.ofMillis(250)).until(() ->
-                ownerJdbc().queryForObject("select count(*) from event_publication", Integer.class) == 0);
+        await().atMost(Duration.ofMinutes(5)).pollInterval(Duration.ofMillis(250)).until(
+                ImportCommitSupport::noPublicationIsOutstanding);
     }
 
     @Test
