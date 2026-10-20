@@ -1,16 +1,22 @@
 package app.nadel.members.internal;
 
+import app.nadel.audit.Actor;
 import app.nadel.audit.FieldChange;
 import app.nadel.members.MemberImport;
 import app.nadel.members.MemberImportAction;
 import app.nadel.members.MemberImportItem;
 import app.nadel.members.MemberImportPlan;
 import app.nadel.members.MemberImportRow;
+import app.nadel.problem.ApiProblemException;
 import app.nadel.problem.FieldProblem;
 import app.nadel.problem.ProblemCodes;
 import app.nadel.problem.ValidationProblems;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import jakarta.validation.Validator;
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -24,6 +30,8 @@ import java.util.Set;
 import java.util.UUID;
 import nadel.contract.model.MemberInput;
 import org.jspecify.annotations.Nullable;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -51,12 +59,21 @@ class MemberImportService implements MemberImport {
     /** Upper bound of one {@code IN (...)} list. */
     private static final int CHUNK = 500;
 
+    private static final String EMAIL_INDEX = "member_tenant_email_uq";
+
     private final MemberRepository members;
     private final SpringValidatorAdapter validator;
+    private final MemberAuditPublisher audit;
+    private final Clock clock;
 
-    MemberImportService(MemberRepository members, Validator validator) {
+    @PersistenceContext
+    private EntityManager entityManager;
+
+    MemberImportService(MemberRepository members, Validator validator, MemberAuditPublisher audit, Clock clock) {
         this.members = members;
         this.validator = new SpringValidatorAdapter(validator);
+        this.audit = audit;
+        this.clock = clock;
     }
 
     /** What is known while the rows are walked in file order. */
@@ -74,6 +91,108 @@ class MemberImportService implements MemberImport {
             items.add(planRow(row, importId, context));
         }
         return new MemberImportPlan(items);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void lock(MemberImportPlan plan) {
+        List<UUID> ids = plan.items().stream()
+                .filter(item -> item.action() == MemberImportAction.UPDATE
+                        || item.action() == MemberImportAction.UNCHANGED)
+                .map(MemberImportItem::memberId)
+                .sorted()
+                .toList();
+        // ids are sorted as a whole and each chunk is read in id order, so rows are locked in id order
+        for (List<UUID> chunk : chunks(ids)) {
+            members.lockAllForUpdate(chunk);
+        }
+    }
+
+    /**
+     * New members are persisted with the ids of the plan (no SELECT per row, inserts batched by Hibernate); matched
+     * members are loaded with a few bulk queries. A row whose outcome differs from the plan, or a unique violation of
+     * the e-mail index at the final flush, means the data changed since the plan: 409 {@code IMPORT_STALE}.
+     */
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void apply(UUID tenantId, List<MemberImportRow> rows, MemberImportPlan plan, Actor actor) {
+        Instant now = clock.instant();
+        Map<UUID, Member> matched = loadMatched(plan);
+        for (int index = 0; index < rows.size(); index++) {
+            MemberImportItem item = plan.items().get(index);
+            MemberImportAction action = item.action();
+            if (action == MemberImportAction.NEW) {
+                MemberData data = dataOf(rows.get(index), null);
+                Member member = Member.create(item.memberId(), tenantId, data, now);
+                entityManager.persist(member);
+                audit.publish(tenantId, actor, "MEMBER_CREATED", member,
+                        MemberSnapshot.diff(MemberSnapshot.NONE, MemberSnapshot.of(member)));
+            } else if (action == MemberImportAction.UPDATE) {
+                Member member = matched.get(item.memberId());
+                if (member == null || member.isArchived()) {
+                    throw stale();
+                }
+                MemberData data = dataOf(rows.get(index), member);
+                MemberSnapshot before = MemberSnapshot.of(member);
+                member.apply(data);
+                List<FieldChange> changes = MemberSnapshot.diff(before, MemberSnapshot.of(member));
+                if (!changes.isEmpty()) {
+                    member.touch(now);
+                    audit.publish(tenantId, actor, "MEMBER_UPDATED", member, changes);
+                }
+            }
+        }
+        try {
+            members.flush();
+        } catch (DataIntegrityViolationException e) {
+            if (mentions(e, EMAIL_INDEX)) {
+                throw stale();
+            }
+            throw e;
+        }
+    }
+
+    /** The members the plan updates, in one bulk query per chunk (already managed when they were locked). */
+    private Map<UUID, Member> loadMatched(MemberImportPlan plan) {
+        List<UUID> ids = plan.items().stream()
+                .filter(item -> item.action() == MemberImportAction.UPDATE)
+                .map(MemberImportItem::memberId)
+                .toList();
+        Map<UUID, Member> byId = new HashMap<>();
+        for (List<UUID> chunk : chunks(ids)) {
+            for (Member member : members.findAllById(chunk)) {
+                byId.put(member.getId(), member);
+            }
+        }
+        return byId;
+    }
+
+    /** The member data of a row, with the same overlay and rules as the plan; a problem here means the plan is stale. */
+    private MemberData dataOf(MemberImportRow row, @Nullable Member existing) {
+        List<FieldProblem> problems = new ArrayList<>();
+        MemberData.Validation validation = validate(row, existing, problems);
+        if (!onePerField(problems).isEmpty() || validation.data() == null) {
+            throw stale();
+        }
+        return validation.data();
+    }
+
+    private static ApiProblemException stale() {
+        return new ApiProblemException(HttpStatus.CONFLICT, ProblemCodes.IMPORT_STALE,
+                "The members changed after the preview; upload the file again.");
+    }
+
+    private static boolean mentions(Throwable e, String constraint) {
+        for (Throwable t = e; t != null; t = t.getCause() == t ? null : t.getCause()) {
+            if (t instanceof org.hibernate.exception.ConstraintViolationException cve
+                    && constraint.equals(cve.getConstraintName())) {
+                return true;
+            }
+            if (t.getMessage() != null && t.getMessage().contains(constraint)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private MemberImportItem planRow(MemberImportRow row, UUID importId, Context context) {

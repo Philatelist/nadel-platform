@@ -135,4 +135,12 @@ interface MemberRepository extends JpaRepository<Member, UUID> {
     @Lock(LockModeType.PESSIMISTIC_READ)
     @Query("select m from Member m where m.id in :ids order by m.id")
     List<Member> lockAllById(@Param("ids") Collection<UUID> ids);
+
+    /**
+     * The given members with an exclusive row lock ({@code FOR UPDATE}), in id order, for the Excel import. The lock
+     * conflicts with archiving (which takes the same lock) and with the shared lock of a change of owner.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select m from Member m where m.id in :ids order by m.id")
+    List<Member> lockAllForUpdate(@Param("ids") Collection<UUID> ids);
 }

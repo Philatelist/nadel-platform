@@ -111,4 +111,20 @@ class ImportRun {
         return expiresAt;
     }
 
+    ImportStatus getStatus() {
+        return status;
+    }
+
+    Map<String, Object> getCounts() {
+        return counts;
+    }
+
+    /** The stored rows of a preview that can still be committed; null once cleared. Personal data. */
+    @Nullable Map<String, Object> getPlan() {
+        return plan;
+    }
+
+    @Nullable String getPlanDigest() {
+        return planDigest;
+    }
 }

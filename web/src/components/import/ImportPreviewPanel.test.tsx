@@ -125,6 +125,18 @@ describe('ImportPreviewPanel', () => {
     expect(button).toHaveAccessibleDescription(/Fix the problems/);
   });
 
+  it('enables the import button when committable and calls onCommit', async () => {
+    const onCommit = vi.fn();
+    renderWithApp(<ImportPreviewPanel preview={preview()} onReset={vi.fn()} onCommit={onCommit} />);
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Import' }));
+    expect(onCommit).toHaveBeenCalledOnce();
+  });
+
+  it('disables the button while committing', () => {
+    renderWithApp(<ImportPreviewPanel preview={preview()} onReset={vi.fn()} committing />);
+    expect(screen.getByRole('button', { name: 'Importing…' })).toBeDisabled();
+  });
+
   it('tells that there is nothing to import', () => {
     renderPanel(preview({ committable: false }));
     expect(screen.getByRole('status')).toHaveTextContent('Nothing new or changed in the file');

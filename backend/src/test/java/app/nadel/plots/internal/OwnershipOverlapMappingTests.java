@@ -59,7 +59,8 @@ class OwnershipOverlapMappingTests {
     @BeforeEach
     void fixture() {
         commands = new OwnershipCommands(plots, mock(PlotStatusRepository.class), ownerships,
-                mock(OwnershipQueries.class), members, mock(ApplicationEventPublisher.class), CLOCK);
+                mock(OwnershipQueries.class), members, mock(ApplicationEventPublisher.class),
+                new OwnershipRecorder(mock(ApplicationEventPublisher.class)), CLOCK);
         Plot plot = Plot.create(TENANT, new PlotData("T-1", null, PlotKind.PLOT, new BigDecimal("600.00"), null, false,
                 null), CLOCK.instant());
         when(plots.findByIdForUpdate(PLOT_ID)).thenReturn(Optional.of(plot));

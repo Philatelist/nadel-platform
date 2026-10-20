@@ -74,8 +74,13 @@ class Member {
 
     /** A new active member of a cooperative. */
     static Member create(UUID tenantId, MemberData data, Instant now) {
+        return create(UUID.randomUUID(), tenantId, data, now);
+    }
+
+    /** A new active member with a given id: the Excel import derives the id from the import, so a re-plan agrees. */
+    static Member create(UUID id, UUID tenantId, MemberData data, Instant now) {
         Member member = new Member();
-        member.id = UUID.randomUUID();
+        member.id = id;
         member.tenantId = tenantId;
         member.createdAt = now;
         member.apply(data);

@@ -3,8 +3,8 @@
 Excel import of a whole cooperative in one go: plots, members and ownership from one `.xlsx` file with three sheets
 (`Plots`, `Members`, `Ownership`). Requirements: `docs/features/008-excel-import.md`; spec: `context/spec/008-excel-import/`.
 
-Today the module offers the template download and the upload with a preview of all three sheets. The commit and the
-history are added in later slices of the feature.
+Today the module offers the template download, the upload with a preview of all three sheets and the commit. The
+history is added in a later slice of the feature.
 
 ## Endpoints
 
@@ -12,6 +12,7 @@ history are added in later slices of the feature.
 |---|---|---|
 | `GET /imports/template` | `downloadImportTemplate` | `IMPORT_RUN` (the platform operator has no permission and gets 403) |
 | `POST /imports` | `uploadImport` | `IMPORT_RUN`; multipart, one `file` part; answers 201 `ImportPreview` |
+| `POST /imports/{id}/commit` | `commitImport` | `IMPORT_RUN`; answers 200 `ImportResult` (see Commit) |
 
 The template is returned as `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` with
 `Content-Disposition: attachment; filename="nadel-import-template.xlsx"`.
@@ -103,6 +104,45 @@ a comma as the decimal separator; yes/no accepts yes, no, так, ні, true and
 date (a number in a cell formatted as a date) or text `DD.MM.YYYY`. The area is given in exactly one of `area_m2` and
 `area_sotky` (1 sotka = 100 m2, computed exactly); both filled is `AREA_BOTH_OR_NONE`, and so is none for a new plot.
 
+## Commit
+
+`ImportCommitter.commit(id, actor)` saves a previewed import in ONE transaction (the tenant-aware transaction manager),
+or saves nothing. In this order:
+
+1. `pg_advisory_xact_lock(hashtextextended(tenant || '/imports', 0))`: two commits of one cooperative never interleave
+   (the key differs from the chairman lock of `members`).
+2. The run row `FOR UPDATE` (RLS hides other cooperatives' runs: 404), then the checks that need nothing from the
+   other modules: `COMMITTED` is 409 `IMPORT_ALREADY_COMMITTED`, `HAS_ERRORS` is 409 `IMPORT_HAS_ERRORS`, `STALE` is 409
+   `IMPORT_STALE`, a `PREVIEW` past `expires_at` (Kyiv `Clock`; also one whose plan was already dropped) is 410
+   `IMPORT_EXPIRED`, and a preview with nothing to create or update is 409 `IMPORT_NOTHING_TO_COMMIT` (an accurate code
+   of its own: a commit would only add a no-op audit entry; `IMPORT_HAS_ERRORS` would be false).
+3. The stored rows are read back (`StoredPlan`) and planned once to learn which existing plots and members they touch;
+   the persistence context is cleared; `PlotImport.lock` takes those plots `FOR UPDATE`, then `MemberImport.lock` those
+   members, each in id order. The order is that of a change of owner (plot first, then its owners) and of archiving
+   (member row), so no lock cycle exists; the advisory lock serialises two imports. The clear matters: without it the
+   second planning would read the first one's managed entities instead of the locked rows.
+4. The rows are planned again under the locks and the digest is compared with the stored one: a different digest, or any
+   problem, is `IMPORT_STALE` (a plot with one of the file's numbers created meanwhile, an owner changed, a member
+   archived, ...).
+5. `MemberImport.apply` (members), then `PlotImport.apply` (plots with their GREY status rows, plot updates, then first
+   owners with the status refresh), each record audited as when entered by hand (`MEMBER_CREATED`/`MEMBER_UPDATED`,
+   `PLOT_CREATED`/`PLOT_UPDATED`, `OWNERSHIP_CHANGED`); then one `IMPORT_COMMITTED` event (entity type `IMPORT`, entity
+   id = import id, label = file name, fields `plotsCreated`, `plotsUpdated`, `plotsUnchanged`, `membersCreated`, ...,
+   `ownershipsCreated`, `ownershipsUnchanged` as text). New rows are persisted (no SELECT per row) with Hibernate
+   batching (`jdbc.batch_size: 50`, `order_inserts`, `order_updates`). Finally the run becomes `COMMITTED` with
+   `committed_at` and its plan dropped.
+
+A unique or exclusion violation while saving (plot number, cadastral number, member e-mail, ownership overlap) is
+translated by the facades into 409 `IMPORT_STALE`. Any other exception rolls everything back, audit events and outbox
+rows included, and leaves the run as a `PREVIEW` that can be tried again.
+
+A stale or expired refusal is also recorded: after the main transaction rolled back, a short `REQUIRES_NEW`
+transaction marks a stale run `STALE` (plan and digest dropped) or drops the plan of an expired one (it stays `PREVIEW`
+and is derived as expired). The expired plans of the cooperative are also cleared lazily on every upload and every
+commit attempt (there is no scheduled job yet).
+
+Facade locking and apply contracts live in `members/README.md` and `plots/README.md`.
+
 ## Header aliases
 
 The template headers are English. Header matching compares headers after normalisation (lower case, only letters and
@@ -118,4 +158,4 @@ Table: `import_run` (V9, RLS `tenant_isolation`; the application role cannot del
 author as a snapshot (member id, Keycloak subject, display name), the counts, the problem count and, for a preview that
 can still be committed, the normalised rows (`plan`, personal data, cleared when no longer needed).
 
-Depends on `identity`, `problem`, `tenancy`, `plots` and `members` (a later slice also `audit`).
+Depends on `identity`, `problem`, `tenancy`, `plots`, `members` and `audit` (it publishes `IMPORT_COMMITTED`).

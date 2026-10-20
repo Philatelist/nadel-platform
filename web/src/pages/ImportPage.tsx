@@ -1,7 +1,17 @@
-import { downloadImportTemplate, uploadImport, type ImportPreview } from '@nadel/api-client';
-import { useMutation } from '@tanstack/react-query';
+import {
+  downloadImportTemplate,
+  getListAuditEntriesQueryKey,
+  getListMembersQueryKey,
+  getListPlotsQueryKey,
+  uploadImport,
+  commitImport,
+  type ImportPreview,
+  type ImportResult,
+} from '@nadel/api-client';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, type ChangeEvent } from 'react';
 import { ImportPreviewPanel } from '../components/import/ImportPreviewPanel';
+import { ImportResultPanel } from '../components/import/ImportResultPanel';
 import { Button, buttonClass, Notice, PageHeader, Panel } from '../components/ui';
 import { downloadBlob } from '../downloadBlob';
 import { importErrorMessage } from '../importError';
@@ -23,6 +33,19 @@ export function ImportPage() {
   const [file, setFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState<ImportFileError | null>(null);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
+  const [result, setResult] = useState<ImportResult | null>(null);
+  const queryClient = useQueryClient();
+
+  const commit = useMutation({
+    mutationFn: (id: string) => commitImport(id),
+    onSuccess: (done) => {
+      setResult(done);
+      setPreview(null);
+      void queryClient.invalidateQueries({ queryKey: getListPlotsQueryKey() });
+      void queryClient.invalidateQueries({ queryKey: getListMembersQueryKey() });
+      void queryClient.invalidateQueries({ queryKey: getListAuditEntriesQueryKey() });
+    },
+  });
 
   const upload = useMutation({
     mutationFn: (chosen: File) => uploadImport({ file: chosen }),
@@ -34,14 +57,18 @@ export function ImportPage() {
     // Reset the input so choosing the same file again fires change.
     event.target.value = '';
     upload.reset();
+    commit.reset();
     setPreview(null);
+    setResult(null);
     setFileError(chosen ? (validateImportFile(chosen) ?? null) : null);
     setFile(chosen);
   }
 
   function reset() {
     upload.reset();
+    commit.reset();
     setPreview(null);
+    setResult(null);
     setFile(null);
     setFileError(null);
   }
@@ -90,7 +117,16 @@ export function ImportPage() {
           </div>
         </div>
       </Panel>
-      {preview && <ImportPreviewPanel preview={preview} onReset={reset} />}
+      {preview && (
+        <ImportPreviewPanel
+          preview={preview}
+          onReset={reset}
+          onCommit={() => commit.mutate(preview.id)}
+          committing={commit.isPending}
+          commitError={commit.isError ? commit.error : undefined}
+        />
+      )}
+      {result && <ImportResultPanel result={result} onReset={reset} />}
     </div>
   );
 }

@@ -27,6 +27,7 @@ export * from './importPreview';
 export * from './importProblem';
 export * from './importProblemParams';
 export * from './importProblemSheet';
+export * from './importResult';
 export * from './listAuditEntriesParams';
 export * from './listMembersParams';
 export * from './listPlotsParams';

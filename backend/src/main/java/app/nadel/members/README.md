@@ -28,6 +28,13 @@ and the field problems. The implementation is `MemberImportService` (internal), 
   the row is `EMAIL_TAKEN` (on `email`).
 - Duplicates in the file are `DUPLICATE_IN_FILE` on the later row: the same `externalId`, e-mail, or last name + first
   name + first phone (case ignored), and two rows that match the same existing member.
+
+`MemberImport.lock(plan)` takes the matched members (`UPDATE` and `UNCHANGED`) `FOR UPDATE` in id order, and
+`MemberImport.apply(tenantId, rows, plan, actor)` saves a plan: `NEW` members are persisted (not merged) with the ids of
+the plan, `UPDATE` members get the same overlay as the plan (blank keeps) and are updated, with `MEMBER_CREATED` /
+`MEMBER_UPDATED` audit events published by `MemberAuditPublisher`, the helper `MemberCommands` uses too. Both need the
+caller's transaction (`MANDATORY`) and never start or commit one. A plan that no longer holds, or a violation of the
+e-mail index at the final flush, is 409 `IMPORT_STALE` (the import then asks for the file again).
 - A blank value keeps the stored value of a matched member (notes are never touched); a filled phone cell replaces the
   phones; a blank channel keeps the stored channel (a new member gets `PAPER`). The rules are those of the member form:
   `MemberData.tryFrom` (the non-throwing form of `from`) plus the constraints of the contract's `MemberInput` (lengths,

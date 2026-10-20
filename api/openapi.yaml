@@ -1209,6 +1209,74 @@ paths:
         '413':
           $ref: '#/components/responses/PayloadTooLarge'
 
+  /imports/{id}/commit:
+    post:
+      tags: [imports]
+      operationId: commitImport
+      summary: Commit a previewed import
+      description: |
+        Saves everything the preview announced, in one transaction: either all of it or nothing. Requires the
+        `IMPORT_RUN` permission; the platform operator has no cooperative data: 403. An unknown id, and the id of
+        another cooperative's import, is 404.
+
+        Before saving, the plan is computed again from the stored rows under locks on the plots and members it
+        touches and compared with the preview. Any difference (a plot with one of the file's numbers created
+        meanwhile, an owner changed, a member archived) refuses the commit with `IMPORT_STALE`, and so does a unique
+        or overlap rule broken while saving by a record created meanwhile; nothing is saved and the file has to be
+        uploaded again. Per-record audit entries are written as when the records are entered by hand, plus one
+        `IMPORT_COMMITTED` entry (entity type `IMPORT`, entity id = import id, label = file name, one field per
+        count, for example `plotsCreated`).
+
+        Refusals (nothing is saved):
+
+        - 409 `IMPORT_HAS_ERRORS`: the preview had problems;
+        - 409 `IMPORT_NOTHING_TO_COMMIT`: the preview had no problems but nothing to create or update (everything is
+          already as in the file);
+        - 409 `IMPORT_STALE`: see above; the run is recorded as stale and cannot be committed any more;
+        - 409 `IMPORT_ALREADY_COMMITTED`: the import was committed before; committing twice never saves twice;
+        - 410 `IMPORT_EXPIRED`: more than 30 minutes passed since the preview; its stored rows are dropped.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The import was saved; the counts are those of the preview
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: >-
+            The import cannot be committed: it has problems (code `IMPORT_HAS_ERRORS`), has nothing to create or
+            update (code `IMPORT_NOTHING_TO_COMMIT`), the data changed since the preview (code `IMPORT_STALE`), or it
+            was committed already (code `IMPORT_ALREADY_COMMITTED`)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '410':
+          description: The preview is older than 30 minutes (code `IMPORT_EXPIRED`); upload the file again
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1622,11 +1690,12 @@ components:
         - SETTINGS_UPDATED
         - OWNERSHIP_CHANGED
         - OWNERSHIP_CORRECTED
+        - IMPORT_COMMITTED
 
     AuditEntityType:
       type: string
       description: Kind of the entity an audit entry is about
-      enum: [MEMBER, ROLE, PLOT, SETTINGS, OWNERSHIP]
+      enum: [MEMBER, ROLE, PLOT, SETTINGS, OWNERSHIP, IMPORT]
 
     AuditFieldChange:
       type: object
@@ -2193,6 +2262,17 @@ components:
         committable:
           type: boolean
           description: True when there are no problems and at least one record would be created or updated
+
+    ImportResult:
+      type: object
+      description: What a committed import saved. The counts are those of the preview.
+      required: [id, counts]
+      properties:
+        id:
+          type: string
+          format: uuid
+        counts:
+          $ref: '#/components/schemas/ImportCounts'
 
     ImportCounts:
       type: object

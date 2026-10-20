@@ -57,16 +57,19 @@ class OwnershipCommands {
     private final OwnershipQueries queries;
     private final MemberDirectory members;
     private final ApplicationEventPublisher events;
+    private final OwnershipRecorder recorder;
     private final Clock clock;
 
     OwnershipCommands(PlotRepository plots, PlotStatusRepository statuses, OwnershipRepository ownerships,
-            OwnershipQueries queries, MemberDirectory members, ApplicationEventPublisher events, Clock clock) {
+            OwnershipQueries queries, MemberDirectory members, ApplicationEventPublisher events,
+            OwnershipRecorder recorder, Clock clock) {
         this.plots = plots;
         this.statuses = statuses;
         this.ownerships = ownerships;
         this.queries = queries;
         this.members = members;
         this.events = events;
+        this.recorder = recorder;
         this.clock = clock;
     }
 
@@ -119,13 +122,14 @@ class OwnershipCommands {
                 .map(o -> text(previousMembers.get(o.getMemberId()), o.getShare())));
 
         String basis = blankToNull(request.getBasis());
-        saveChange(current, lastDay, now, owners.stream()
-                .map(o -> Ownership.start(actor.tenantId(), plotId, o.memberId(), o.share(), effectiveFrom, basis, now))
-                .toList());
+        saveChange(current, lastDay, now, recorder.start(actor.tenantId(), plotId, owners.stream()
+                .map(o -> new OwnershipRecorder.Owner(o.memberId(), o.share()))
+                .toList(), effectiveFrom, basis, now));
         refreshStatus(plot, !owners.isEmpty(), now);
 
         String newOwners = ownersText(owners.stream().map(o -> text(newMembers.get(o.memberId()), o.share())));
-        publish(actor, plot, effectiveFrom, previousOwners, newOwners, basis);
+        recorder.publishChange(actor.tenantId(), new Actor(actor.memberId(), actor.subject(), actor.displayName()),
+                plot, effectiveFrom, previousOwners, newOwners, basis);
         return queries.ofPlot(plotId).orElseThrow(ApiProblemException::notFound);
     }
 
@@ -462,46 +466,21 @@ class OwnershipCommands {
     private void refreshStatus(Plot plot, boolean hasCurrentOwners, Instant now) {
         PlotStatusEntry entry = statuses.findById(plot.getId())
                 .orElseGet(() -> statuses.save(PlotStatusEntry.initial(plot.getId(), plot.getTenantId())));
-        PlotStatusCode after = PlotStatusPolicy.afterOwnershipChange(hasCurrentOwners, entry.getStatus());
-        if (after != entry.getStatus()) {
-            entry.changeStatus(after, now);
+        if (recorder.refreshStatus(entry, hasCurrentOwners, now)) {
             statuses.saveAndFlush(entry);
         }
-    }
-
-    private void publish(AccessProfile actor, Plot plot, LocalDate effectiveFrom, @Nullable String previousOwners,
-            @Nullable String newOwners, @Nullable String basis) {
-        List<FieldChange> changes = new ArrayList<>();
-        changes.add(new FieldChange("effectiveFrom", null, effectiveFrom.toString()));
-        if (previousOwners != null || newOwners != null) {
-            changes.add(new FieldChange("owners", previousOwners, newOwners));
-        }
-        if (basis != null) {
-            changes.add(new FieldChange("basis", null, basis));
-        }
-        events.publishEvent(AuditEvent.now(
-                actor.tenantId(),
-                new Actor(actor.memberId(), actor.subject(), actor.displayName()),
-                "OWNERSHIP_CHANGED",
-                "OWNERSHIP",
-                plot.getId(),
-                plot.getNumber(),
-                changes));
     }
 
     private static Period periodOf(Ownership o) {
         return new Period(o.getId(), o.getMemberId(), o.getShare(), o.getValidFrom(), o.getValidTo());
     }
 
-    /** "Last First 1/2": the audit text of one owner. Personal data: never logged. */
     private static String text(MemberRef member, Share share) {
-        return member.shortName() + " " + share;
+        return OwnershipRecorder.text(member, share);
     }
 
-    /** The owners sorted and joined by ", "; null when there are none. */
     private static @Nullable String ownersText(Stream<String> owners) {
-        List<String> sorted = owners.sorted(String.CASE_INSENSITIVE_ORDER.thenComparing(String::compareTo)).toList();
-        return sorted.isEmpty() ? null : String.join(", ", sorted);
+        return OwnershipRecorder.ownersText(owners);
     }
 
     private static @Nullable String blankToNull(@Nullable String text) {

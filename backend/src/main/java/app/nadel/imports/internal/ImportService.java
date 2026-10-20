@@ -139,7 +139,7 @@ class ImportService {
         return api;
     }
 
-    private static ImportCounts toApi(PlanCounts counts) {
+    static ImportCounts toApi(PlanCounts counts) {
         return new ImportCounts()
                 .plots(toApi(counts.plots()))
                 .members(toApi(counts.members()))

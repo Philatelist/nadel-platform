@@ -1,5 +1,6 @@
 package app.nadel.plots;
 
+import app.nadel.audit.Actor;
 import java.util.List;
 import java.util.UUID;
 
@@ -50,4 +51,36 @@ public interface PlotImport {
      */
     OwnershipImportPlan planOwnership(UUID tenantId, List<PlotImportRow> plotRows, PlotImportPlan plotPlan,
             List<OwnershipImportRow> rows);
+
+    /**
+     * Locks the existing plots a plan touches with an exclusive row lock ({@code FOR UPDATE}), in id order, until the
+     * end of the caller's transaction: the plots to be updated, the plots that get first owners and the unchanged ones
+     * they share a group with. A concurrent change of owner, edit or archiving of one of them waits. This is the lock
+     * a change of owner takes first (the plot, then its owners), so the caller locks plots, then members. Must run in
+     * the caller's transaction.
+     */
+    void lock(PlotImportPlan plotPlan, OwnershipImportPlan ownershipPlan);
+
+    /**
+     * Saves what the plans say: creates the {@code NEW} plots with the ids the plan gave them (each with its GREY
+     * status row), updates the {@code UPDATE} plots, then records the owners of every {@code FIRST_OWNERS} group as
+     * current owners from their common date, refreshes the cached status (a plot with owners and no debt turns GREEN)
+     * and publishes {@code PLOT_CREATED}, {@code PLOT_UPDATED} and {@code OWNERSHIP_CHANGED} audit events by
+     * {@code actor}, as when the same is done by hand. {@code SKIP} groups are not touched. Rows are inserted in
+     * batches. Must run in the caller's transaction, which this method never starts or commits; the members the
+     * ownership rows name must exist in it (they may have been created by the same transaction).
+     * <p>
+     * The plans must be the ones computed in the same transaction after {@link #lock}. A plot that is gone, a number
+     * or cadastral number that was taken meanwhile, or owners that now overlap are refused with 409
+     * {@code IMPORT_STALE}.
+     *
+     * @param tenantId      the cooperative of the caller
+     * @param plotRows      the rows of the Plots sheet the plan was computed from
+     * @param plotPlan      their plan, item for item
+     * @param ownershipRows the rows of the Ownership sheet, with the members resolved
+     * @param ownershipPlan their plan, item for item
+     * @param actor         who is credited in the audit log
+     */
+    void apply(UUID tenantId, List<PlotImportRow> plotRows, PlotImportPlan plotPlan,
+            List<OwnershipImportRow> ownershipRows, OwnershipImportPlan ownershipPlan, Actor actor);
 }

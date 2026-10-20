@@ -32,7 +32,10 @@ import type {
   BadRequestResponse,
   ForbiddenResponse,
   ImportPreview,
+  ImportResult,
+  NotFoundResponse,
   PayloadTooLargeResponse,
+  Problem,
   UnauthorizedResponse,
   UploadImportBody
 } from '../model';
@@ -302,4 +305,97 @@ export const useUploadImport = <TError = BadRequestResponse | UnauthorizedRespon
         TContext
       > => {
       return useMutation(getUploadImportMutationOptions(options), queryClient);
+    }
+    export const getCommitImportUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/imports/${id}/commit`
+}
+
+/**
+ * Saves everything the preview announced, in one transaction: either all of it or nothing. Requires the
+ * `IMPORT_RUN` permission; the platform operator has no cooperative data: 403. An unknown id, and the id of
+ * another cooperative's import, is 404.
+ *
+ * Before saving, the plan is computed again from the stored rows under locks on the plots and members it
+ * touches and compared with the preview. Any difference (a plot with one of the file's numbers created
+ * meanwhile, an owner changed, a member archived) refuses the commit with `IMPORT_STALE`, and so does a unique
+ * or overlap rule broken while saving by a record created meanwhile; nothing is saved and the file has to be
+ * uploaded again. Per-record audit entries are written as when the records are entered by hand, plus one
+ * `IMPORT_COMMITTED` entry (entity type `IMPORT`, entity id = import id, label = file name, one field per
+ * count, for example `plotsCreated`).
+ *
+ * Refusals (nothing is saved):
+ *
+ * - 409 `IMPORT_HAS_ERRORS`: the preview had problems;
+ * - 409 `IMPORT_NOTHING_TO_COMMIT`: the preview had no problems but nothing to create or update (everything is
+ *   already as in the file);
+ * - 409 `IMPORT_STALE`: see above; the run is recorded as stale and cannot be committed any more;
+ * - 409 `IMPORT_ALREADY_COMMITTED`: the import was committed before; committing twice never saves twice;
+ * - 410 `IMPORT_EXPIRED`: more than 30 minutes passed since the preview; its stored rows are dropped.
+ * @summary Commit a previewed import
+ */
+export const commitImport = async (id: string, options?: Parameters<typeof nadelFetch>[1]): Promise<ImportResult> => {
+
+  return nadelFetch<ImportResult>(getCommitImportUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getCommitImportMutationKey = () => ['commitImport'] as const;
+
+export const getCommitImportMutationOptions = <TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | Problem,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof commitImport>>, TError,CommitImportMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof commitImport>>, TError,CommitImportMutationVariables, TContext> => {
+
+const mutationKey = getCommitImportMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof commitImport>>, CommitImportMutationVariables> = (props) => {
+          const {id} = props ?? {};
+
+          return  commitImport(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CommitImportMutationResult = NonNullable<Awaited<ReturnType<typeof commitImport>>>
+
+    export type CommitImportMutationError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | Problem
+    export type CommitImportMutationVariables = {id: string}
+
+    /**
+ * @summary Commit a previewed import
+ */
+export const useCommitImport = <TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | Problem,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof commitImport>>, TError,CommitImportMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof commitImport>>,
+        TError,
+        CommitImportMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCommitImportMutationOptions(options), queryClient);
     }

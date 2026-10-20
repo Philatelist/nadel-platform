@@ -317,7 +317,7 @@ class OwnershipImportPlanner {
     // ---- helpers
 
     /** {@code n/d} as for a change of owner; a bare {@code 1} is the whole plot, as the template says. */
-    private static Share parseShare(String text) {
+    static Share parseShare(String text) {
         return Share.parse(WHOLE_NUMBER.matcher(text).matches() ? text + "/1" : text);
     }
 

@@ -22,6 +22,14 @@ interface PlotRepository extends JpaRepository<Plot, UUID> {
     @Query("select p from Plot p where p.id = :id")
     Optional<Plot> findByIdForUpdate(@Param("id") UUID id);
 
+    /**
+     * The given plots with an exclusive row lock ({@code FOR UPDATE}), in id order, for the Excel import: the same
+     * lock a change of owner takes first, so the two serialise.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select p from Plot p where p.id in :ids order by p.id")
+    List<Plot> lockAllForUpdate(@Param("ids") Collection<UUID> ids);
+
     // no tenant_id filter needed: RLS hides other cooperatives' rows
     @Query("""
             select new app.nadel.plots.internal.PlotRow(p, s.status, s.debt)

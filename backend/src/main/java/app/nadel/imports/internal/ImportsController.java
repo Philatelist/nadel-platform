@@ -2,8 +2,10 @@ package app.nadel.imports.internal;
 
 import app.nadel.identity.CurrentUser;
 import java.net.URI;
+import java.util.UUID;
 import nadel.contract.api.ImportsApi;
 import nadel.contract.model.ImportPreview;
+import nadel.contract.model.ImportResult;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.ContentDisposition;
@@ -30,10 +32,12 @@ class ImportsController implements ImportsApi {
     private final TemplateWriter templateWriter = new TemplateWriter();
     private final CurrentUser currentUser;
     private final ImportService service;
+    private final ImportCommitter committer;
 
-    ImportsController(CurrentUser currentUser, ImportService service) {
+    ImportsController(CurrentUser currentUser, ImportService service, ImportCommitter committer) {
         this.currentUser = currentUser;
         this.service = service;
+        this.committer = committer;
     }
 
     @Override
@@ -53,5 +57,11 @@ class ImportsController implements ImportsApi {
     public ResponseEntity<ImportPreview> uploadImport(MultipartFile file) {
         ImportPreview preview = service.preview(file, currentUser.profile());
         return ResponseEntity.created(URI.create("/api/v1/imports/" + preview.getId())).body(preview);
+    }
+
+    @Override
+    @PreAuthorize("hasAuthority('PERM_IMPORT_RUN')")
+    public ResponseEntity<ImportResult> commitImport(UUID id) {
+        return ResponseEntity.ok(committer.commit(id, currentUser.profile()));
     }
 }

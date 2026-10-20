@@ -1,7 +1,6 @@
 package app.nadel.members.internal;
 
 import app.nadel.audit.Actor;
-import app.nadel.audit.AuditEvent;
 import app.nadel.audit.FieldChange;
 import app.nadel.identity.AccessProfile;
 import app.nadel.identity.Permission;
@@ -14,7 +13,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import nadel.contract.model.MemberInput;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -22,7 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Creates, edits, archives and restores members. Every method is one transaction that also publishes the
- * {@link AuditEvent}: the outbox stores the publication in the same transaction, so a change is never committed
+ * audit event: the outbox stores the publication in the same transaction, so a change is never committed
  * without its audit entry being owed.
  * <p>
  * The cooperative always comes from the caller's {@link AccessProfile}, never from the request. The caller must hold
@@ -37,15 +35,15 @@ class MemberCommands {
     private final RoleGrantReader grants;
     private final LastChairmanGuard lastChairman;
     private final List<MemberArchiveGuard> archiveGuards;
-    private final ApplicationEventPublisher events;
+    private final MemberAuditPublisher audit;
 
     MemberCommands(MemberRepository members, RoleGrantReader grants, LastChairmanGuard lastChairman,
-            List<MemberArchiveGuard> archiveGuards, ApplicationEventPublisher events) {
+            List<MemberArchiveGuard> archiveGuards, MemberAuditPublisher audit) {
         this.members = members;
         this.grants = grants;
         this.lastChairman = lastChairman;
         this.archiveGuards = archiveGuards;
-        this.events = events;
+        this.audit = audit;
     }
 
     @Transactional
@@ -145,14 +143,8 @@ class MemberCommands {
     }
 
     private void publish(AccessProfile actor, String action, Member member, List<FieldChange> changes) {
-        events.publishEvent(AuditEvent.now(
-                actor.tenantId(),
-                new Actor(actor.memberId(), actor.subject(), actor.displayName()),
-                action,
-                "MEMBER",
-                member.getId(),
-                member.getLastName() + " " + member.getFirstName(),
-                changes));
+        audit.publish(actor.tenantId(), new Actor(actor.memberId(), actor.subject(), actor.displayName()), action,
+                member, changes);
     }
 
     private nadel.contract.model.Member card(Member member, AccessProfile viewer) {

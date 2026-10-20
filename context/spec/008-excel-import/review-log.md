@@ -30,3 +30,4 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `3e5c601..40e76e8` | MAJOR_ISSUES | M1 the template's Ownership `share` column is not text-formatted, so "1/2" typed in Excel becomes a date and the import reports SHARE_INVALID — every co-owned plot from the template fails | minor: no Kyiv-vs-UTC day-boundary test; one long line in OwnershipImportPlanner; README paragraph not re-wrapped; PlanDigest ownership line relies on member lines for the key→id link (comment suggested) |
+| 2 | + `45e9bd3` | PASS | M1 resolved (share column text-formatted, tested) | minor: the new test overlaps the updated one; commit subject format |

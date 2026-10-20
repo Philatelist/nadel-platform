@@ -1,5 +1,6 @@
 package app.nadel.members;
 
+import app.nadel.audit.Actor;
 import java.util.List;
 import java.util.UUID;
 
@@ -25,4 +26,30 @@ public interface MemberImport {
      * @return one item per row, in the same order
      */
     MemberImportPlan plan(UUID tenantId, UUID importId, List<MemberImportRow> rows);
+
+    /**
+     * Locks the existing members a plan matches ({@code UPDATE} and {@code UNCHANGED} items) with an exclusive row
+     * lock ({@code FOR UPDATE}), in id order, until the end of the caller's transaction. A concurrent archiving or
+     * edit of one of them waits, so a plan computed after this call stays true until the caller commits. The plots
+     * module locks its rows first (a change of owner takes the plot, then its owners), so the caller locks plots,
+     * then members. Must run in the caller's transaction.
+     */
+    void lock(MemberImportPlan plan);
+
+    /**
+     * Saves what a plan says: creates the {@code NEW} members with the ids the plan gave them and updates the
+     * {@code UPDATE} members, with the same rules as when a member is entered by hand (a blank cell leaves the stored
+     * value). One {@code MEMBER_CREATED} or {@code MEMBER_UPDATED} audit event is published per changed member, by
+     * {@code actor}. Rows are inserted in batches. Must run in the caller's transaction, which this method never
+     * starts or commits.
+     * <p>
+     * The plan must be the one computed in the same transaction after {@link #lock}; a row that no longer matches
+     * what the plan says, or an e-mail that was taken meanwhile, is refused with 409 {@code IMPORT_STALE}.
+     *
+     * @param tenantId the cooperative of the caller
+     * @param rows     the rows the plan was computed from
+     * @param plan     the plan of {@code rows}, item for item
+     * @param actor    who is credited in the audit log
+     */
+    void apply(UUID tenantId, List<MemberImportRow> rows, MemberImportPlan plan, Actor actor);
 }

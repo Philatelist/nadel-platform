@@ -33,6 +33,18 @@ dates ignored, are `SKIP`; anything else is `OWNERSHIP_CONFLICT` (with the plot 
 changes existing ownership. A row has an outcome and a plot id only when its whole plot has no problem. The recorded
 ownership of all matched plots is read with one bulk query per 500 plots.
 
+`PlotImport.lock(plotPlan, ownershipPlan)` takes the existing plots a plan touches `FOR UPDATE` in id order (the lock a
+change of owner takes first). `PlotImport.apply(tenantId, plotRows, plotPlan, ownershipRows, ownershipPlan, actor)`
+saves the plans (`MANDATORY`, no transaction of its own): new plots are persisted with the ids of the plan, each with its
+GREY `plot_status` row, `UPDATE` plots are updated with the plan's overlay, then every `FIRST_OWNERS` group is recorded
+as current owners from its common date, the status follows the owners (GREEN for a plot with owners) and the audit
+events `PLOT_CREATED`, `PLOT_UPDATED` and `OWNERSHIP_CHANGED` are published (the first owners' event has no previous
+owners). `SKIP` groups are untouched. Plots, then ownership rows and status rows are flushed in stages so a row never
+reaches the database before the plot it refers to; the inserts are batched. The core of a change of owner (start rows,
+status refresh, `OWNERSHIP_CHANGED` event and its texts) is `OwnershipRecorder`, used by both `OwnershipCommands` and the
+import. A violation of the plot number, cadastral number or ownership overlap constraint at a flush, or a plan that no
+longer holds, is 409 `IMPORT_STALE`.
+
 `plots` also implements the SPIs `members.MemberArchiveGuard` (see Guards) and `identity.OwnedPlotsSource` (`GET /me` ownedPlots), and uses `members.MemberDirectory` and `settings.CooperativeSettings`.
 
 ## Endpoints

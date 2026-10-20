@@ -33,6 +33,16 @@ public final class ProblemCodes {
     public static final String FILE_NOT_XLSX = "FILE_NOT_XLSX";
     /** 400: the workbook has more rows than one import accepts. */
     public static final String IMPORT_LIMIT_EXCEEDED = "IMPORT_LIMIT_EXCEEDED";
+    /** 409: the preview has problems and cannot be committed. */
+    public static final String IMPORT_HAS_ERRORS = "IMPORT_HAS_ERRORS";
+    /** 409: the preview has no problems but nothing to create or update, so a commit would only add a no-op entry. */
+    public static final String IMPORT_NOTHING_TO_COMMIT = "IMPORT_NOTHING_TO_COMMIT";
+    /** 409: the data of the cooperative changed after the preview (or a rule broke while saving); upload again. */
+    public static final String IMPORT_STALE = "IMPORT_STALE";
+    /** 409: the import was committed before. */
+    public static final String IMPORT_ALREADY_COMMITTED = "IMPORT_ALREADY_COMMITTED";
+    /** 410: the preview is older than 30 minutes. */
+    public static final String IMPORT_EXPIRED = "IMPORT_EXPIRED";
 
     /** Codes of single fields in {@code errors[]}. */
     public static final String REQUIRED = "REQUIRED";

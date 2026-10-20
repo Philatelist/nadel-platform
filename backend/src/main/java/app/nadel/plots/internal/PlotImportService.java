@@ -1,6 +1,11 @@
 package app.nadel.plots.internal;
 
+import app.nadel.audit.Actor;
 import app.nadel.audit.FieldChange;
+import app.nadel.members.MemberDirectory;
+import app.nadel.members.MemberRef;
+import app.nadel.plots.OwnershipImportItem;
+import app.nadel.plots.OwnershipImportOutcome;
 import app.nadel.plots.OwnershipImportPlan;
 import app.nadel.plots.OwnershipImportRow;
 import app.nadel.plots.PlotImport;
@@ -8,13 +13,20 @@ import app.nadel.plots.PlotImportAction;
 import app.nadel.plots.PlotImportItem;
 import app.nadel.plots.PlotImportPlan;
 import app.nadel.plots.PlotImportRow;
+import app.nadel.problem.ApiProblemException;
 import app.nadel.problem.FieldProblem;
 import app.nadel.problem.ProblemCodes;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -22,7 +34,10 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.TreeSet;
 import org.jspecify.annotations.Nullable;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,14 +57,33 @@ class PlotImportService implements PlotImport {
     /** Upper bound of one {@code IN (...)} list. */
     private static final int CHUNK = 500;
 
+    private static final String NUMBER_INDEX = "plot_tenant_number_uq";
+    private static final String CADASTRAL_INDEX = "plot_tenant_cadastral_uq";
+    private static final String OVERLAP_CONSTRAINT = "ownership_no_overlap_ex";
+
     private final PlotRepository plots;
+    private final PlotStatusRepository statuses;
     private final OwnershipRepository ownerships;
     private final OwnershipImportPlanner ownershipPlanner;
+    private final OwnershipRecorder recorder;
+    private final PlotAuditPublisher audit;
+    private final MemberDirectory members;
+    private final Clock clock;
 
-    PlotImportService(PlotRepository plots, OwnershipRepository ownerships, OwnershipImportPlanner ownershipPlanner) {
+    @PersistenceContext
+    private EntityManager entityManager;
+
+    PlotImportService(PlotRepository plots, PlotStatusRepository statuses, OwnershipRepository ownerships,
+            OwnershipImportPlanner ownershipPlanner, OwnershipRecorder recorder, PlotAuditPublisher audit,
+            MemberDirectory members, Clock clock) {
         this.plots = plots;
+        this.statuses = statuses;
         this.ownerships = ownerships;
         this.ownershipPlanner = ownershipPlanner;
+        this.recorder = recorder;
+        this.audit = audit;
+        this.members = members;
+        this.clock = clock;
     }
 
     @Override
@@ -76,6 +110,195 @@ class PlotImportService implements PlotImport {
         return new PlotImportPlan(items);
     }
 
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void lock(PlotImportPlan plotPlan, OwnershipImportPlan ownershipPlan) {
+        Set<UUID> created = createdIds(plotPlan);
+        Set<UUID> ids = new TreeSet<>(existingIds(plotPlan, ownershipPlan, created, true));
+        for (List<UUID> chunk : chunks(List.copyOf(ids))) {
+            plots.lockAllForUpdate(chunk);
+        }
+    }
+
+    /**
+     * New plots are persisted with the ids of the plan (no SELECT per row, inserts batched by Hibernate); matched
+     * plots and their status rows are loaded with a few bulk queries. A plan that no longer holds, or a unique or
+     * overlap violation at a flush, means the data changed since the plan: 409 {@code IMPORT_STALE}.
+     */
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void apply(UUID tenantId, List<PlotImportRow> plotRows, PlotImportPlan plotPlan,
+            List<OwnershipImportRow> ownershipRows, OwnershipImportPlan ownershipPlan, Actor actor) {
+        Instant now = clock.instant();
+        Set<UUID> createdIds = createdIds(plotPlan);
+        Map<UUID, Plot> existing = loadPlots(existingIds(plotPlan, ownershipPlan, createdIds, false));
+        Map<UUID, Plot> created = new LinkedHashMap<>();
+        for (int index = 0; index < plotRows.size(); index++) {
+            PlotImportItem item = plotPlan.items().get(index);
+            PlotImportRow row = plotRows.get(index);
+            if (item.action() == PlotImportAction.NEW) {
+                Plot plot = Plot.create(item.plotId(), tenantId, dataOf(row, null), now);
+                entityManager.persist(plot);
+                created.put(plot.getId(), plot);
+                audit.publish(tenantId, actor, "PLOT_CREATED", plot,
+                        PlotSnapshot.diff(PlotSnapshot.NONE, PlotSnapshot.of(plot)));
+            } else if (item.action() == PlotImportAction.UPDATE) {
+                Plot plot = existing.get(item.plotId());
+                if (plot == null || plot.getArchivedAt() != null) {
+                    throw stale();
+                }
+                PlotSnapshot before = PlotSnapshot.of(plot);
+                plot.apply(dataOf(row, plot));
+                List<FieldChange> changes = PlotSnapshot.diff(before, PlotSnapshot.of(plot));
+                if (!changes.isEmpty()) {
+                    plot.touch(now);
+                    audit.publish(tenantId, actor, "PLOT_UPDATED", plot, changes);
+                }
+            }
+        }
+        // the plots reach the database before the rows that refer to them
+        flush(plots::flush);
+        applyOwnership(tenantId, ownershipRows, ownershipPlan, actor, now, created, existing);
+    }
+
+    /** Records the owners of every FIRST_OWNERS group, the status rows of the new plots and the audit events. */
+    private void applyOwnership(UUID tenantId, List<OwnershipImportRow> rows, OwnershipImportPlan plan, Actor actor,
+            Instant now, Map<UUID, Plot> created, Map<UUID, Plot> existing) {
+        Map<UUID, List<OwnershipImportRow>> groups = new LinkedHashMap<>();
+        for (int index = 0; index < rows.size(); index++) {
+            OwnershipImportItem item = plan.items().get(index);
+            if (item.outcome() == OwnershipImportOutcome.FIRST_OWNERS) {
+                groups.computeIfAbsent(item.plotId(), id -> new ArrayList<>()).add(rows.get(index));
+            }
+        }
+
+        Map<UUID, PlotStatusEntry> entries = new HashMap<>();
+        statuses.findAllById(existing.keySet()).forEach(entry -> entries.put(entry.getPlotId(), entry));
+        List<PlotStatusEntry> inserted = new ArrayList<>();
+        for (Plot plot : created.values()) {
+            PlotStatusEntry entry = PlotStatusEntry.initial(plot.getId(), tenantId);
+            entries.put(plot.getId(), entry);
+            inserted.add(entry);
+        }
+        Map<UUID, MemberRef> names = members.find(groups.values().stream()
+                .flatMap(List::stream)
+                .map(OwnershipImportRow::memberId)
+                .distinct()
+                .toList());
+
+        for (Map.Entry<UUID, List<OwnershipImportRow>> group : groups.entrySet()) {
+            Plot plot = created.containsKey(group.getKey()) ? created.get(group.getKey())
+                    : existing.get(group.getKey());
+            if (plot == null || plot.getArchivedAt() != null || plot.getKind() != PlotKind.PLOT) {
+                throw stale();
+            }
+            List<OwnershipRecorder.Owner> owners = new ArrayList<>();
+            for (OwnershipImportRow row : group.getValue()) {
+                MemberRef member = names.get(row.memberId());
+                if (member == null || member.archived()) {
+                    throw stale();
+                }
+                owners.add(new OwnershipRecorder.Owner(row.memberId(),
+                        OwnershipImportPlanner.parseShare(row.share().strip())));
+            }
+            // every row of a plot carries one date (checked by the plan)
+            LocalDate from = group.getValue().getFirst().validFrom();
+            recorder.start(tenantId, plot.getId(), owners, from, null, now).forEach(entityManager::persist);
+
+            PlotStatusEntry entry = entries.get(plot.getId());
+            if (entry == null) {
+                entry = PlotStatusEntry.initial(plot.getId(), tenantId);
+                entries.put(plot.getId(), entry);
+                inserted.add(entry);
+            }
+            recorder.refreshStatus(entry, true, now);
+            String newOwners = OwnershipRecorder.ownersText(owners.stream()
+                    .map(o -> OwnershipRecorder.text(names.get(o.memberId()), o.share())));
+            recorder.publishChange(tenantId, actor, plot, from, null, newOwners, null);
+        }
+        inserted.forEach(entityManager::persist);
+        flush(ownerships::flush);
+    }
+
+    /** The plot data of a row, with the same overlay and rules as the plan; a problem means the plan is stale. */
+    private static PlotData dataOf(PlotImportRow row, @Nullable Plot existing) {
+        Resolved resolved = resolve(row, existing, blankToNull(row.number()));
+        if (!resolved.problems().isEmpty() || resolved.validation().data() == null) {
+            throw stale();
+        }
+        return resolved.validation().data();
+    }
+
+    /** The ids of the plots the plan creates. */
+    private static Set<UUID> createdIds(PlotImportPlan plan) {
+        Set<UUID> ids = new HashSet<>();
+        plan.items().stream()
+                .filter(item -> item.action() == PlotImportAction.NEW)
+                .forEach(item -> ids.add(item.plotId()));
+        return ids;
+    }
+
+    /**
+     * The stored plots a plan touches: those it updates (also the unchanged ones when {@code withUnchanged}) and those
+     * that get first owners.
+     */
+    private static Set<UUID> existingIds(PlotImportPlan plotPlan, OwnershipImportPlan ownershipPlan,
+            Set<UUID> created, boolean withUnchanged) {
+        Set<UUID> ids = new HashSet<>();
+        for (PlotImportItem item : plotPlan.items()) {
+            if (item.action() == PlotImportAction.UPDATE
+                    || withUnchanged && item.action() == PlotImportAction.UNCHANGED) {
+                ids.add(item.plotId());
+            }
+        }
+        for (OwnershipImportItem item : ownershipPlan.items()) {
+            if (item.outcome() == OwnershipImportOutcome.FIRST_OWNERS && !created.contains(item.plotId())) {
+                ids.add(item.plotId());
+            }
+        }
+        return ids;
+    }
+
+    private Map<UUID, Plot> loadPlots(Set<UUID> ids) {
+        Map<UUID, Plot> byId = new HashMap<>();
+        for (List<UUID> chunk : chunks(List.copyOf(ids))) {
+            for (Plot plot : plots.findAllById(chunk)) {
+                byId.put(plot.getId(), plot);
+            }
+        }
+        return byId;
+    }
+
+    /** Runs a flush; a rule broken by a record created meanwhile (number, cadastral number, overlap) is stale. */
+    private static void flush(Runnable flush) {
+        try {
+            flush.run();
+        } catch (DataIntegrityViolationException e) {
+            if (violates(e, NUMBER_INDEX) || violates(e, CADASTRAL_INDEX) || violates(e, OVERLAP_CONSTRAINT)) {
+                throw stale();
+            }
+            throw e;
+        }
+    }
+
+    private static ApiProblemException stale() {
+        return new ApiProblemException(HttpStatus.CONFLICT, ProblemCodes.IMPORT_STALE,
+                "The plots or owners changed after the preview; upload the file again.");
+    }
+
+    private static boolean violates(Throwable e, String constraint) {
+        for (Throwable t = e; t != null; t = t.getCause() == t ? null : t.getCause()) {
+            if (t instanceof org.hibernate.exception.ConstraintViolationException cve
+                    && constraint.equals(cve.getConstraintName())) {
+                return true;
+            }
+            if (t.getMessage() != null && t.getMessage().contains(constraint)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private PlotImportItem planRow(PlotImportRow row, UUID importId, Map<String, Plot> existingByNumber,
             Map<String, UUID> cadastralHolders, Set<UUID> withHistory, Set<String> seenNumbers,
             Set<String> claimedCadastral) {
@@ -86,6 +309,44 @@ class PlotImportService implements PlotImport {
         }
         Plot existing = key == null ? null : existingByNumber.get(key);
 
+        Resolved resolved = resolve(row, existing, number);
+        List<FieldProblem> problems = resolved.problems();
+        PlotKind kind = resolved.kind();
+        PlotData.Validation validation = resolved.validation();
+
+        checkCadastral(row, existing, cadastralHolders, claimedCadastral, problems);
+        if (existing != null && existing.getKind() == PlotKind.PLOT && kind == PlotKind.COMMON
+                && withHistory.contains(existing.getId())) {
+            problems.add(new FieldProblem("kind", ProblemCodes.PLOT_HAS_OWNERSHIP_HISTORY));
+        }
+
+        List<FieldProblem> distinct = onePerField(problems);
+        if (!distinct.isEmpty()) {
+            return problem(row, distinct);
+        }
+        PlotData data = validation.data();
+        if (existing == null) {
+            return new PlotImportItem(row.row(), PlotImportAction.NEW, newId(importId, key), List.of(), List.of());
+        }
+        List<String> changed = PlotSnapshot.diff(PlotSnapshot.of(existing), PlotSnapshot.of(data)).stream()
+                .map(FieldChange::field)
+                .toList();
+        return new PlotImportItem(row.row(),
+                changed.isEmpty() ? PlotImportAction.UNCHANGED : PlotImportAction.UPDATE,
+                existing.getId(), changed, List.of());
+    }
+
+
+    /** What the row says about a plot, with a blank cell keeping the stored value of {@code existing}. */
+    private record Resolved(PlotData.Validation validation, @Nullable PlotKind kind, List<FieldProblem> problems) {
+    }
+
+    /**
+     * Applies the blank-keeps-existing rule to a row, then the rules of {@link PlotData}. The problems found are
+     * returned together with the validation (data present only when there are none). Shared by the plan and by the
+     * apply, so both read a row the same way.
+     */
+    private static Resolved resolve(PlotImportRow row, @Nullable Plot existing, @Nullable String number) {
         List<FieldProblem> problems = new ArrayList<>();
         PlotKind kind = null;
         String kindText = blankToNull(row.kind());
@@ -122,27 +383,7 @@ class PlotImportService implements PlotImport {
         PlotData.Validation validation = PlotData.tryFrom(effectiveNumber, street, kind, area, cadastral,
                 hasBuilding, notes);
         problems.addAll(validation.problems());
-
-        checkCadastral(row, existing, cadastralHolders, claimedCadastral, problems);
-        if (existing != null && existing.getKind() == PlotKind.PLOT && kind == PlotKind.COMMON
-                && withHistory.contains(existing.getId())) {
-            problems.add(new FieldProblem("kind", ProblemCodes.PLOT_HAS_OWNERSHIP_HISTORY));
-        }
-
-        List<FieldProblem> distinct = onePerField(problems);
-        if (!distinct.isEmpty()) {
-            return problem(row, distinct);
-        }
-        PlotData data = validation.data();
-        if (existing == null) {
-            return new PlotImportItem(row.row(), PlotImportAction.NEW, newId(importId, key), List.of(), List.of());
-        }
-        List<String> changed = PlotSnapshot.diff(PlotSnapshot.of(existing), PlotSnapshot.of(data)).stream()
-                .map(FieldChange::field)
-                .toList();
-        return new PlotImportItem(row.row(),
-                changed.isEmpty() ? PlotImportAction.UNCHANGED : PlotImportAction.UPDATE,
-                existing.getId(), changed, List.of());
+        return new Resolved(validation, kind, problems);
     }
 
     /**

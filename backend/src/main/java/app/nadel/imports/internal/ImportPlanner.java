@@ -96,7 +96,9 @@ class ImportPlanner {
                 clean ? storedRows(plotInput, memberInput, ownership.rows()) : Map.of(),
                 clean ? membersPlanned.ids() : Map.of(),
                 clean ? PlanDigest.of(plotInput, plotsPlanned.plan(), memberInput, membersPlanned.plan(),
-                        ownership.rows(), ownershipPlanned.plan()) : null);
+                        ownership.rows(), ownershipPlanned.plan()) : null,
+                clean ? new ImportPlan.Apply(plotInput, plotsPlanned.plan(), memberInput, membersPlanned.plan(),
+                        ownershipPlanned.input(), ownershipPlanned.plan()) : null);
     }
 
     private record PlotsPlanned(PlanCounts.EntityCounts counts, PlotImportPlan plan, PlotImportPlan effective) {
@@ -107,7 +109,8 @@ class ImportPlanner {
             Set<String> invalidKeys) {
     }
 
-    private record OwnershipPlanned(PlanCounts.EntityCounts counts, OwnershipImportPlan plan) {
+    private record OwnershipPlanned(PlanCounts.EntityCounts counts, OwnershipImportPlan plan,
+            List<OwnershipImportRow> input) {
     }
 
     /**
@@ -203,7 +206,7 @@ class ImportPlanner {
     private OwnershipPlanned planOwnership(UUID tenantId, List<PlotImportRow> plotInput, PlotImportPlan plotPlan,
             OwnershipSheet.Parsed sheet, MembersPlanned members, List<RowProblem> problems) {
         if (sheet.rows().isEmpty()) {
-            return new OwnershipPlanned(PlanCounts.EntityCounts.NONE, new OwnershipImportPlan(List.of()));
+            return new OwnershipPlanned(PlanCounts.EntityCounts.NONE, new OwnershipImportPlan(List.of()), List.of());
         }
         Set<String> reported = new HashSet<>();
         for (RowProblem problem : sheet.problems()) {
@@ -243,7 +246,7 @@ class ImportPlanner {
                 unchanged++;
             }
         }
-        return new OwnershipPlanned(new PlanCounts.EntityCounts(created, 0, unchanged), plan);
+        return new OwnershipPlanned(new PlanCounts.EntityCounts(created, 0, unchanged), plan, input);
     }
 
     /** The key of a Members row or an Ownership row: trimmed, lower case; null when empty. */

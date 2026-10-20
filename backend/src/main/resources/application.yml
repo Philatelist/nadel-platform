@@ -20,6 +20,13 @@ spring:
     open-in-view: false
     hibernate:
       ddl-auto: validate
+    properties:
+      hibernate:
+        # The Excel import saves thousands of rows in one transaction: group the statements into batches
+        jdbc:
+          batch_size: 50
+        order_inserts: true
+        order_updates: true
   security:
     oauth2:
       resourceserver:

@@ -104,4 +104,26 @@ describe('AuditPage ownership entries', () => {
     expect(screen.getByText(/Reason:/)).toBeInTheDocument();
     expect(screen.getByText(/Typo in the contract/)).toBeInTheDocument();
   });
+
+  it('labels an import summary entry and its count fields', () => {
+    entry = {
+      id: 'a5',
+      occurredAt: '2026-10-03T10:00:00Z',
+      action: 'IMPORT_COMMITTED',
+      entityType: 'IMPORT',
+      entityId: 'i1',
+      entityLabel: 'plots.xlsx',
+      changes: [
+        { field: 'plotsCreated', newValue: '5' },
+        { field: 'membersUpdated', newValue: '2' },
+        { field: 'ownershipsUnchanged', newValue: '1' },
+      ],
+    };
+    renderWithApp(<AuditPage />);
+    expect(screen.getByText('Excel import completed')).toBeInTheDocument();
+    expect(screen.getByText('plots.xlsx')).toBeInTheDocument();
+    expect(screen.getByText(/Plots created:/)).toBeInTheDocument();
+    expect(screen.getByText(/Members updated:/)).toBeInTheDocument();
+    expect(screen.getByText(/Owners unchanged:/)).toBeInTheDocument();
+  });
 });

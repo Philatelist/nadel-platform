@@ -69,3 +69,12 @@ Same as 004–007 (see `context/spec/005-ui-preferences/pipeline-log.md`). Re-ch
 - Slice 3 review r1 PASS. Owner follow-up: a hand-entered member without email is duplicated when a file adds their email (literal matching rule).
 - Slice 4 backend: verify 961 tests, coverage 0.9766. AUTO: a bare whole number share "1" reads as 1/1 (rule: the template instruction promises "1, 1/2 or 1/3"); a member or plot row with problems suppresses its ownership group checks (rule: no cascading problems); the plan digest is order-independent and excludes ids of records the import creates.
 - Slice 4 committed (backend targeted 116 green, verify 961 / coverage 0.9766; api-client 7, shared 67, web 207, ui-tokens 56; typecheck/lint/format green). Review r1 started.
+- Slice 4 review r1 MAJOR_ISSUES (M1 template share column not text → "1/2" became a date) → fix 45e9bd3 → r2 PASS.
+
+### Slice 5 backend returned
+- Agent report: backend `verify` 986 tests green, line coverage 0.9718 (floor 0.96). Large-file test: 2,000 plots / 3,000 members / 2,000 ownership rows, commit 7.3 s, tagged `large`. RED checks: digest skipped, atomicity removed and expiry skipped each made a test fail; the code was restored.
+- AUTO: new code `IMPORT_NOTHING_TO_COMMIT` (409) for an error-free preview with nothing to create or update, instead of reusing `IMPORT_HAS_ERRORS`, which would be inaccurate (rule: conservative choice; the spec already says such a preview is not committable).
+- AUTO: facade signatures take the validated rows too (`MemberImport.apply(tenantId, rows, plan, actor)`, `PlotImport.apply(tenantId, plotRows, plotPlan, ownershipRows, ownershipPlan, actor)`), plus `lock` methods; the commit plans twice (find rows to lock, then re-plan on the locked rows) and compares the digest.
+- AUTO: constraint violations are mapped to `IMPORT_STALE` inside the owning modules instead of in `ImportService` (module boundaries).
+- Slice 5 web returned: `ImportResultPanel`, commit button, error notices (NOTHING_TO_COMMIT as a warning), AuditPage labels. AUTO: plain `useMutation({ mutationFn: commitImport })` instead of the generated hook so page tests can mock the client.
+- Slice 5 verify (orchestrator): targeted backend classes green (ImportCommitTests 20, ImportFixturesTests 3, preview, ownership, members, plots, audit, ModularityTests); client: ui-tokens 56, shared 67, api-client 7, web 221; typecheck, lint, format green.
