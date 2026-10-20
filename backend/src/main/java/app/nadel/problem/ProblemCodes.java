@@ -27,6 +27,12 @@ public final class ProblemCodes {
     public static final String MEMBER_OWNS_PLOT = "MEMBER_OWNS_PLOT";
     public static final String PLOT_HAS_OWNERS = "PLOT_HAS_OWNERS";
     public static final String PLOT_HAS_OWNERSHIP_HISTORY = "PLOT_HAS_OWNERSHIP_HISTORY";
+    /** 409: another non-archived charge type has the name, or it is the default name of a seeded type not renamed. */
+    public static final String CHARGE_TYPE_NAME_TAKEN = "CHARGE_TYPE_NAME_TAKEN";
+    /** 409: the charge type is archived and can be neither changed nor archived again. */
+    public static final String CHARGE_TYPE_ARCHIVED = "CHARGE_TYPE_ARCHIVED";
+    /** 409: the submitted order is not the current set of non-archived charge types. */
+    public static final String CHARGE_TYPE_ORDER_STALE = "CHARGE_TYPE_ORDER_STALE";
     /** 413: the uploaded file is over the size limit. */
     public static final String FILE_TOO_LARGE = "FILE_TOO_LARGE";
     /** 400: the upload is not an {@code .xlsx} workbook (also a corrupt, encrypted or oversized-when-unpacked one). */

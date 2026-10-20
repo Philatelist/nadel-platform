@@ -11,7 +11,7 @@ import { Button } from './ui';
 
 interface NavItem {
   to: string;
-  label: 'plots' | 'members' | 'imports' | 'roles' | 'audit' | 'settings';
+  label: 'plots' | 'members' | 'tariffs' | 'imports' | 'roles' | 'audit' | 'settings';
   /** Omitted: shown to every signed-in member (the server decides what they may see). */
   permission?: Permission;
 }
@@ -19,6 +19,7 @@ interface NavItem {
 const NAV_ITEMS: readonly NavItem[] = [
   { to: '/plots', label: 'plots' },
   { to: '/members', label: 'members', permission: 'MEMBERS_VIEW' },
+  { to: '/tariffs', label: 'tariffs', permission: 'TARIFFS_VIEW' },
   { to: '/imports', label: 'imports', permission: 'IMPORT_RUN' },
   { to: '/roles', label: 'roles', permission: 'ROLES_MANAGE' },
   { to: '/audit', label: 'audit', permission: 'AUDIT_VIEW' },

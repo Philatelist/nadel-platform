@@ -127,3 +127,46 @@ describe('AuditPage ownership entries', () => {
     expect(screen.getByText(/Owners unchanged:/)).toBeInTheDocument();
   });
 });
+
+describe('AuditPage charge type and tariff entries', () => {
+  it('links a charge type entry to the charge types page with readable labels and booleans', () => {
+    entry = {
+      id: 'a6',
+      occurredAt: '2026-10-04T10:00:00Z',
+      action: 'CHARGE_TYPE_UPDATED',
+      entityType: 'CHARGE_TYPE',
+      entityId: 'c1',
+      entityLabel: 'Road repair',
+      changes: [
+        { field: 'name', oldValue: 'Roads', newValue: 'Road repair' },
+        { field: 'description', oldValue: '', newValue: 'One-off' },
+        { field: 'active', oldValue: 'false', newValue: 'true' },
+        { field: 'position', oldValue: '2', newValue: '1' },
+      ],
+    };
+    renderWithApp(<AuditPage />);
+    expect(screen.getByText('Charge type changed')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Road repair' })).toHaveAttribute('href', '/charge-types');
+    expect(screen.getByText(/Description:/)).toBeInTheDocument();
+    expect(screen.getByText(/Active:/)).toBeInTheDocument();
+    expect(screen.getByText(/No → Yes/)).toBeInTheDocument();
+    expect(screen.getByText(/Position:/)).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Charge type' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Tariff' })).toBeInTheDocument();
+  });
+
+  it('links a tariff entry to the tariff by id and labels the other actions', () => {
+    entry = {
+      id: 'a7',
+      occurredAt: '2026-10-05T10:00:00Z',
+      action: 'CHARGE_TYPE_ARCHIVED',
+      entityType: 'TARIFF',
+      entityId: 't9',
+      entityLabel: 'Per sotka',
+      changes: [{ field: 'archived', oldValue: 'false', newValue: 'true' }],
+    };
+    renderWithApp(<AuditPage />);
+    expect(screen.getByText('Charge type archived')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Per sotka' })).toHaveAttribute('href', '/tariffs/t9');
+  });
+});

@@ -96,6 +96,7 @@ class SettingsTests extends IntegrationTest {
         } finally {
             owner.update("delete from member_role where tenant_id = ?", tenant);
             owner.update("delete from member where tenant_id = ?", tenant);
+            owner.update("delete from charge_type where tenant_id = ?", tenant);
             owner.update("delete from role_permission where tenant_id = ?", tenant);
             owner.update("delete from role where tenant_id = ?", tenant);
             owner.update("delete from cooperative_settings where tenant_id = ?", tenant);

@@ -1,4 +1,4 @@
-import { useListAuditEntries, type AuditEntry } from '@nadel/api-client';
+import { useListAuditEntries, type AuditEntityType, type AuditEntry } from '@nadel/api-client';
 import { keepPreviousData } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router';
 import { Pagination } from '../components/Pagination';
@@ -11,7 +11,16 @@ import { useDocumentTitle } from '../useDocumentTitle';
 
 const PAGE_SIZE = 50;
 const TIME_ZONE = 'Europe/Kyiv';
-const ENTITY_TYPES = ['MEMBER', 'ROLE', 'PLOT', 'SETTINGS', 'OWNERSHIP'] as const;
+const ENTITY_TYPES = ['MEMBER', 'ROLE', 'PLOT', 'SETTINGS', 'OWNERSHIP', 'CHARGE_TYPE', 'TARIFF'] as const;
+
+/** Where a record of an entity type is shown; absent for types without a page of their own. */
+const entityHref: Readonly<Partial<Record<AuditEntityType, (entityId: string) => string>>> = {
+  MEMBER: (id) => `/members/${id}`,
+  PLOT: (id) => `/plots/${id}`,
+  OWNERSHIP: (id) => `/plots/${id}`,
+  CHARGE_TYPE: () => '/charge-types',
+  TARIFF: (id) => `/tariffs/${id}`,
+};
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 function isEntityType(value: string | null): value is (typeof ENTITY_TYPES)[number] {
@@ -189,14 +198,12 @@ function AuditRecord({ entry }: { entry: AuditEntry }) {
         ? t.settings.title
         : entry.entityLabel
     : a.unlabelled;
+  const href = entityHref[entry.entityType]?.(entry.entityId);
   return (
     <>
       <span className="text-ink-muted">{a.entityType[entry.entityType]}: </span>
-      {entry.entityType === 'MEMBER' || entry.entityType === 'PLOT' || entry.entityType === 'OWNERSHIP' ? (
-        <Link
-          to={`${entry.entityType === 'MEMBER' ? '/members' : '/plots'}/${entry.entityId}`}
-          className="text-accent underline"
-        >
+      {href ? (
+        <Link to={href} className="text-accent underline">
           {label}
         </Link>
       ) : (
@@ -214,7 +221,8 @@ function AuditChanges({ entry }: { entry: AuditEntry }) {
   const visibilities: Readonly<Record<string, { label: string } | undefined>> = t.settings.visibility;
   const value = (field: string, raw: string | undefined): string => {
     if (raw === undefined || raw === '') return a.noValue;
-    if (field === 'archived' || field === 'hasBuilding') return raw === 'true' ? a.yes : a.no;
+    if (field === 'archived' || field === 'hasBuilding' || field === 'active')
+      return raw === 'true' ? a.yes : a.no;
     if (field === 'kind') return kinds[raw] ?? raw;
     if (field === 'memberPlotStatusVisibility') return visibilities[raw]?.label ?? raw;
     return field === 'name' || field === 'roles' || field === 'description'

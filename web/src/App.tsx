@@ -57,6 +57,19 @@ const router = createBrowserRouter([
         ],
       },
       {
+        element: <RequirePermission permission="TARIFFS_VIEW" />,
+        children: [
+          {
+            path: 'tariffs',
+            lazy: () => import('./pages/TariffsPage').then((m) => ({ Component: m.TariffsPage })),
+          },
+          {
+            path: 'charge-types',
+            lazy: () => import('./pages/ChargeTypesPage').then((m) => ({ Component: m.ChargeTypesPage })),
+          },
+        ],
+      },
+      {
         element: <RequirePermission permission="IMPORT_RUN" />,
         children: [
           {

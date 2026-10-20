@@ -68,6 +68,7 @@ class BaseRolesMatrixTests extends IntegrationTest {
                     .as("base-role matrix of seed_base_roles (database) vs BaseRoles (Java)")
                     .isEqualTo(java);
         } finally {
+            owner.update("delete from charge_type where tenant_id = ?", tenant);
             owner.update("delete from role_permission where tenant_id = ?", tenant);
             owner.update("delete from role where tenant_id = ?", tenant);
             owner.update("delete from tenant where id = ?", tenant);

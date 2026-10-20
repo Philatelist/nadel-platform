@@ -81,7 +81,7 @@ class RoleDescriptionsAcceptanceTests extends IntegrationTest {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("name", "Treasurer");
         body.put("description", description);
-        body.put("permissions", List.of("MEMBERS_VIEW", "PLOTS_VIEW", "AUDIT_VIEW"));
+        body.put("permissions", List.of("MEMBERS_VIEW", "PLOTS_VIEW", "AUDIT_VIEW", "TARIFFS_VIEW"));
         if (restore) body.put("useDefaultDescription", true);
         return body;
     }

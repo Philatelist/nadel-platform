@@ -30,6 +30,8 @@ tags:
     description: Cooperative settings
   - name: imports
     description: Excel import of plots, members and ownership
+  - name: tariffs
+    description: Charge types and tariffs (what the cooperative charges for and how much)
 
 paths:
   /me:
@@ -1344,6 +1346,158 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
 
+  /charge-types:
+    get:
+      tags: [tariffs]
+      operationId: listChargeTypes
+      summary: List the charge types of the cooperative
+      description: |
+        Returns the non-archived charge types of the current cooperative ordered by `position` (then by id). Every
+        cooperative starts with four (see `ChargeTypeCode`): membership fee, electricity, land and water (inactive). A type that was
+        never renamed has `nameCustomized: false` and its `name` is the English default; clients show their own
+        localised default name for it. Requires `TARIFFS_VIEW`.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ChargeType'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      tags: [tariffs]
+      operationId: createChargeType
+      summary: Add a charge type
+      description: |
+        Adds a custom charge type at the end of the list, active. The name is trimmed and must be unique among the
+        non-archived charge types, ignoring letter case; it must also differ from the Ukrainian and English default
+        names of the starting types that were not renamed (409 `CHARGE_TYPE_NAME_TAKEN`). Requires `TARIFFS_VIEW`
+        and `TARIFFS_MANAGE`; the change is written to the audit log.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChargeTypeCreate'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChargeType'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /charge-types/order:
+    put:
+      tags: [tariffs]
+      operationId: reorderChargeTypes
+      summary: Change the order of the charge types
+      description: |
+        Sets the order of the list. `ids` must be exactly the ids of the non-archived charge types of the
+        cooperative, each once, in the new order; otherwise (the list changed since the client read it) the answer is
+        409 `CHARGE_TYPE_ORDER_STALE` and nothing changes. Requires `TARIFFS_VIEW` and `TARIFFS_MANAGE`; one audit
+        entry is written for every type whose position changed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChargeTypeOrder'
+      responses:
+        '204':
+          description: The new order is saved
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /charge-types/{id}:
+    put:
+      tags: [tariffs]
+      operationId: updateChargeType
+      summary: Change a charge type
+      description: |
+        Replaces the name, description and active mark. Renaming one of the four starting types marks it as
+        customised (`nameCustomized: true`) for good. The name rules are those of creation (409
+        `CHARGE_TYPE_NAME_TAKEN`). An archived type cannot be changed (409 `CHARGE_TYPE_ARCHIVED`). Saving the current
+        values changes nothing and writes no audit entry. Requires `TARIFFS_VIEW` and `TARIFFS_MANAGE`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChargeTypeUpdate'
+      responses:
+        '200':
+          description: The saved charge type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChargeType'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /charge-types/{id}/archive:
+    post:
+      tags: [tariffs]
+      operationId: archiveChargeType
+      summary: Archive a charge type
+      description: |
+        Archives the charge type: it disappears from the list, frees its name and can no longer get tariffs. A charge
+        type is never deleted. Archiving an archived type is 409 `CHARGE_TYPE_ARCHIVED`. Requires `TARIFFS_VIEW` and
+        `TARIFFS_MANAGE`; the change is written to the audit log.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Archived
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1419,7 +1573,10 @@ components:
         `OWNERSHIP_OVERLAP` and `OWNERSHIP_DATE_INVALID` on `validFrom` or `validTo`, `MEMBER_ARCHIVED` on `memberId`), or the member currently owns a plot and is archived (code
         `MEMBER_OWNS_PLOT`), or a plot with a current owner is archived (code `PLOT_HAS_OWNERS`), or a plot with
         ownership history is deleted or turned into common land (code `PLOT_HAS_OWNERSHIP_HISTORY`, with
-        `errors[{field: kind}]` for the update)
+        `errors[{field: kind}]` for the update), or a charge type name is taken (code `CHARGE_TYPE_NAME_TAKEN`, with
+        `errors[{field: name}]`), a charge type is archived and cannot be changed or archived again (code
+        `CHARGE_TYPE_ARCHIVED`), or the submitted order of charge types is not the current list (code
+        `CHARGE_TYPE_ORDER_STALE`)
       content:
         application/problem+json:
           schema:
@@ -1448,6 +1605,8 @@ components:
         - OWNERSHIP_EDIT
         - IMPORT_RUN
         - SETTINGS_MANAGE
+        - TARIFFS_VIEW
+        - TARIFFS_MANAGE
 
     PlotStatusVisibility:
       type: string
@@ -1758,11 +1917,15 @@ components:
         - OWNERSHIP_CHANGED
         - OWNERSHIP_CORRECTED
         - IMPORT_COMMITTED
+        - CHARGE_TYPE_CREATED
+        - CHARGE_TYPE_UPDATED
+        - CHARGE_TYPE_REORDERED
+        - CHARGE_TYPE_ARCHIVED
 
     AuditEntityType:
       type: string
       description: Kind of the entity an audit entry is about
-      enum: [MEMBER, ROLE, PLOT, SETTINGS, OWNERSHIP, IMPORT]
+      enum: [MEMBER, ROLE, PLOT, SETTINGS, OWNERSHIP, IMPORT, CHARGE_TYPE, TARIFF]
 
     AuditFieldChange:
       type: object
@@ -2494,3 +2657,80 @@ components:
             such owner record in the same plot, or the record being corrected)
         message:
           type: string
+
+    ChargeTypeCode:
+      type: string
+      description: Code of one of the four charge types every cooperative starts with; custom types have no code
+      enum: [MEMBERSHIP, ELECTRICITY, LAND_TAX, WATER]
+
+    ChargeType:
+      type: object
+      description: What the cooperative charges for
+      required: [id, name, nameCustomized, active, position]
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          $ref: '#/components/schemas/ChargeTypeCode'
+        name:
+          type: string
+          description: >-
+            The stored name. While `nameCustomized` is false it is the English default of a starting type and clients
+            show their own localised default name instead
+        nameCustomized:
+          type: boolean
+          description: True for custom types and for starting types that were renamed
+        description:
+          type: string
+        active:
+          type: boolean
+          description: An inactive type stays in the list but its tariffs give no expected amount
+        position:
+          type: integer
+          format: int32
+          description: Place in the list; ties are ordered by id
+
+    ChargeTypeCreate:
+      type: object
+      description: A new custom charge type
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: 1 to 100 characters; surrounding whitespace is trimmed; unique among non-archived types, ignoring case
+        description:
+          type: string
+          maxLength: 500
+
+    ChargeTypeUpdate:
+      type: object
+      description: Editable fields of a charge type (full replacement)
+      required: [name, active]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: 1 to 100 characters; surrounding whitespace is trimmed; unique among non-archived types, ignoring case
+        description:
+          type: string
+          maxLength: 500
+          description: Blank text clears the description
+        active:
+          type: boolean
+
+    ChargeTypeOrder:
+      type: object
+      description: The full new order of the non-archived charge types
+      required: [ids]
+      properties:
+        ids:
+          type: array
+          maxItems: 500
+          description: Every non-archived charge type id exactly once, in the new order
+          items:
+            type: string
+            format: uuid

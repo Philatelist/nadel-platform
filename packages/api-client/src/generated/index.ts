@@ -7,3 +7,4 @@ export * from './permissions/permissions';
 export * from './plots/plots';
 export * from './roles/roles';
 export * from './settings/settings';
+export * from './tariffs/tariffs';

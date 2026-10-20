@@ -8,7 +8,7 @@ and whether they are the `PLATFORM_OPERATOR`; everything else is data in the dat
 
 | Type | Use |
 |---|---|
-| `Permission` | The fixed list of nine permissions; `authority()` is `PERM_<name>`. Check them with `@PreAuthorize("hasAuthority('PERM_...')")`, never role names |
+| `Permission` | The fixed list of eleven permissions; `authority()` is `PERM_<name>`. Check them with `@PreAuthorize("hasAuthority('PERM_...')")`, never role names |
 | `AccessProfile` | Tenant, member id, Keycloak subject, display name, permissions, roles, operator flag |
 | `RoleRef` | A role of a member (`baseCode` is set for Chairman, Treasurer, Member; `nameCustomized` is false while a base role still has its standard name, so clients show the catalog name, and true for a renamed base role and every custom role) |
 | `CurrentUser` | Inject into controllers and services: `profile()`, `memberId()`, `can(permission)` |

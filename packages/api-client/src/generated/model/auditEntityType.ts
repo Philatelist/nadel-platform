@@ -23,4 +23,6 @@ export const AuditEntityType = {
   SETTINGS: 'SETTINGS',
   OWNERSHIP: 'OWNERSHIP',
   IMPORT: 'IMPORT',
+  CHARGE_TYPE: 'CHARGE_TYPE',
+  TARIFF: 'TARIFF',
 } as const;
