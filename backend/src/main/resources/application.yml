@@ -11,6 +11,10 @@ spring:
     url: ${NADEL_DB_URL:jdbc:postgresql://localhost:5432/nadel}
     username: ${NADEL_DB_APP_USER:nadel_app}
     password: ${NADEL_DB_APP_PASSWORD:nadel_app}
+    hikari:
+      data-source-properties:
+        # The server's "Detail:" line of a constraint error holds the offending values (an e-mail address, a name)
+        logServerErrorDetail: false
   flyway:
     # Migrations run as the schema owner
     user: ${NADEL_DB_OWNER_USER:nadel_owner}
@@ -53,6 +57,12 @@ server:
     # An upload over the limit is read to the end (up to this size) so that the client receives the 413 answer
     # instead of a broken connection
     max-swallow-size: 20MB
+
+logging:
+  level:
+    # Hibernate logs a failed JDBC batch with the values of the row ("Batch entry 3 insert into member (...) values
+    # ('a.b@example.com', ...)"), which is personal data. The failure itself is still thrown and mapped.
+    org.hibernate.orm.jdbc.error: "OFF"
 
 management:
   endpoints:

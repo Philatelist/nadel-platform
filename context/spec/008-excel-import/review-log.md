@@ -31,3 +31,9 @@
 |---|---|---|---|---|
 | 1 | `3e5c601..40e76e8` | MAJOR_ISSUES | M1 the template's Ownership `share` column is not text-formatted, so "1/2" typed in Excel becomes a date and the import reports SHARE_INVALID — every co-owned plot from the template fails | minor: no Kyiv-vs-UTC day-boundary test; one long line in OwnershipImportPlanner; README paragraph not re-wrapped; PlanDigest ownership line relies on member lines for the key→id link (comment suggested) |
 | 2 | + `45e9bd3` | PASS | M1 resolved (share column text-formatted, tested) | minor: the new test overlaps the updated one; commit subject format |
+
+## Slice 5 — Commit of an import preview
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `45e9bd3..fbf589b` | MAJOR_ISSUES | M1 no test covers the unique/exclusion violation → `IMPORT_STALE` mapping in `PlotImportService`/`MemberImportService` (now under JDBC batching, the exception shape differs) | minor: Java `UUID` order ≠ Postgres order across 500-id lock chunks; batched constraint errors may log whole rows (pgjdbc `logServerErrorDetail`); `clearExpiredPlans` rolled back on refusals; Import button stays enabled after a final refusal; `import_run` rows left by test cleanup; `large` tag not excluded anywhere |

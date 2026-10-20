@@ -14,6 +14,7 @@ import app.nadel.plots.PlotImportItem;
 import app.nadel.plots.PlotImportPlan;
 import app.nadel.plots.PlotImportRow;
 import app.nadel.problem.ApiProblemException;
+import app.nadel.problem.ConstraintViolations;
 import app.nadel.problem.FieldProblem;
 import app.nadel.problem.ProblemCodes;
 import jakarta.persistence.EntityManager;
@@ -114,7 +115,8 @@ class PlotImportService implements PlotImport {
     @Transactional(propagation = Propagation.MANDATORY)
     public void lock(PlotImportPlan plotPlan, OwnershipImportPlan ownershipPlan) {
         Set<UUID> created = createdIds(plotPlan);
-        Set<UUID> ids = new TreeSet<>(existingIds(plotPlan, ownershipPlan, created, true));
+        Set<UUID> ids = new TreeSet<>(UuidOrder.POSTGRES);
+        ids.addAll(existingIds(plotPlan, ownershipPlan, created, true));
         for (List<UUID> chunk : chunks(List.copyOf(ids))) {
             plots.lockAllForUpdate(chunk);
         }
@@ -274,7 +276,8 @@ class PlotImportService implements PlotImport {
         try {
             flush.run();
         } catch (DataIntegrityViolationException e) {
-            if (violates(e, NUMBER_INDEX) || violates(e, CADASTRAL_INDEX) || violates(e, OVERLAP_CONSTRAINT)) {
+            if (ConstraintViolations.violates(e, NUMBER_INDEX) || ConstraintViolations.violates(e, CADASTRAL_INDEX)
+                    || ConstraintViolations.violates(e, OVERLAP_CONSTRAINT)) {
                 throw stale();
             }
             throw e;
@@ -284,19 +287,6 @@ class PlotImportService implements PlotImport {
     private static ApiProblemException stale() {
         return new ApiProblemException(HttpStatus.CONFLICT, ProblemCodes.IMPORT_STALE,
                 "The plots or owners changed after the preview; upload the file again.");
-    }
-
-    private static boolean violates(Throwable e, String constraint) {
-        for (Throwable t = e; t != null; t = t.getCause() == t ? null : t.getCause()) {
-            if (t instanceof org.hibernate.exception.ConstraintViolationException cve
-                    && constraint.equals(cve.getConstraintName())) {
-                return true;
-            }
-            if (t.getMessage() != null && t.getMessage().contains(constraint)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private PlotImportItem planRow(PlotImportRow row, UUID importId, Map<String, Plot> existingByNumber,

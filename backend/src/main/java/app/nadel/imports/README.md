@@ -3,8 +3,8 @@
 Excel import of a whole cooperative in one go: plots, members and ownership from one `.xlsx` file with three sheets
 (`Plots`, `Members`, `Ownership`). Requirements: `docs/features/008-excel-import.md`; spec: `context/spec/008-excel-import/`.
 
-Today the module offers the template download, the upload with a preview of all three sheets and the commit. The
-history is added in a later slice of the feature.
+The module offers the template download, the upload with a preview of all three sheets, the commit and the history of
+the uploads.
 
 ## Endpoints
 
@@ -13,6 +13,7 @@ history is added in a later slice of the feature.
 | `GET /imports/template` | `downloadImportTemplate` | `IMPORT_RUN` (the platform operator has no permission and gets 403) |
 | `POST /imports` | `uploadImport` | `IMPORT_RUN`; multipart, one `file` part; answers 201 `ImportPreview` |
 | `POST /imports/{id}/commit` | `commitImport` | `IMPORT_RUN`; answers 200 `ImportResult` (see Commit) |
+| `GET /imports` | `listImports` | `IMPORT_RUN`; `page` (from 0) and `size` (1 to 100, default 50) as the audit list; answers 200 `ImportPage` of `ImportSummary` (see History) |
 
 The template is returned as `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` with
 `Content-Disposition: attachment; filename="nadel-import-template.xlsx"`.
@@ -138,10 +139,32 @@ rows included, and leaves the run as a `PREVIEW` that can be tried again.
 
 A stale or expired refusal is also recorded: after the main transaction rolled back, a short `REQUIRES_NEW`
 transaction marks a stale run `STALE` (plan and digest dropped) or drops the plan of an expired one (it stays `PREVIEW`
-and is derived as expired). The expired plans of the cooperative are also cleared lazily on every upload and every
-commit attempt (there is no scheduled job yet).
+and is derived as expired). The expired plans of the cooperative are also cleared lazily on every upload, on every
+successful commit and in the outcome transaction of a stale or expired refusal. The clearing at the start of a commit
+that is refused any other way is rolled back with it (there is no scheduled job yet).
 
 Facade locking and apply contracts live in `members/README.md` and `plots/README.md`.
+
+Hibernate would log a failed batch with the values of the row, so `application.yml` turns the `org.hibernate.orm.jdbc.error`
+logger off and sets the driver property `logServerErrorDetail=false` (the constraint name is still in the message).
+
+Tests: `ImportCommitTests` and `ImportConstraintViolationTests` (a rule broken between the plan and the flush is 409
+`IMPORT_STALE`, for each of the four constraints, through the batched flush). `ImportLargeCommitTests` (a file at the
+limits) is tagged `large`; it runs in `make test` by default and can be skipped with `-DexcludedGroups=large`.
+
+## History
+
+`ImportHistory.list` returns the uploads of the caller's cooperative (tenant from the token, RLS as well), newest first
+(`created_at desc`, then `id desc`, so equal instants page stably; the index `import_run_tenant_created_idx` of V9 serves
+the order). The query selects only the history columns (`ImportHistoryRow`): the stored plan, which holds personal data,
+is never loaded or returned. An `ImportSummary` has the id, file name, `uploadedBy`, `uploadedAt`, `committedAt` (only
+for a committed import), `status`, `counts` and `problemCount`.
+
+- `uploadedBy` is the member's current display name, resolved as in the audit log (`audit.ActorNames`); a member that no
+  longer exists keeps the name saved with the upload.
+- `status` is `PREVIEW`, `HAS_ERRORS`, `COMMITTED`, `STALE` or `EXPIRED`. `EXPIRED` is derived, never stored: a stored
+  `PREVIEW` is shown as `EXPIRED` once the Kyiv `Clock` is after its `expires_at` (the rule of the commit), whether or not
+  its plan has been cleared yet.
 
 ## Header aliases
 

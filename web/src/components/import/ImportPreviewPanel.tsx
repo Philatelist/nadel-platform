@@ -19,6 +19,13 @@ interface ImportPreviewPanelProps {
 }
 
 const reuploadCodes = new Set(['IMPORT_STALE', 'IMPORT_EXPIRED']);
+/** Refusals that repeating the commit of this preview cannot change. */
+const finalCommitCodes = new Set([
+  ...reuploadCodes,
+  'IMPORT_ALREADY_COMMITTED',
+  'IMPORT_NOTHING_TO_COMMIT',
+  'IMPORT_HAS_ERRORS',
+]);
 
 export function ImportPreviewPanel({
   preview,
@@ -73,6 +80,7 @@ export function ImportPreviewPanel({
   const hasProblems = preview.problemCount > 0;
   const errorCode =
     commitError === undefined || commitError === null ? undefined : importErrorCode(commitError);
+  const commitFinal = errorCode !== undefined && finalCommitCodes.has(errorCode);
   const known: Readonly<Record<string, string>> = t.importError;
   const commitMessage = errorCode === undefined ? undefined : (known[errorCode] ?? t.problem.UNKNOWN);
 
@@ -112,7 +120,7 @@ export function ImportPreviewPanel({
         )}
         <div className="flex flex-wrap items-center gap-3">
           <Button
-            disabled={!preview.committable || committing}
+            disabled={!preview.committable || committing || commitFinal}
             aria-describedby={preview.committable ? undefined : hintId}
             onClick={onCommit}
           >

@@ -98,6 +98,8 @@ class ImportCommitter {
         runs.lockImports(tenantId);
         ImportRun run = runs.findByIdForUpdate(importId).orElseThrow(ApiProblemException::notFound);
         Instant now = clock.instant();
+        // Lazy cleanup, kept only when this commit succeeds: a refusal rolls it back with the transaction. Stale and
+        // expired refusals repeat it in recordOutcome, in a transaction that survives the rollback.
         runs.clearExpiredPlans(tenantId, now);
         checkCommittable(run, now);
 

@@ -8,6 +8,7 @@ import app.nadel.members.MemberImportItem;
 import app.nadel.members.MemberImportPlan;
 import app.nadel.members.MemberImportRow;
 import app.nadel.problem.ApiProblemException;
+import app.nadel.problem.ConstraintViolations;
 import app.nadel.problem.FieldProblem;
 import app.nadel.problem.ProblemCodes;
 import app.nadel.problem.ValidationProblems;
@@ -100,7 +101,7 @@ class MemberImportService implements MemberImport {
                 .filter(item -> item.action() == MemberImportAction.UPDATE
                         || item.action() == MemberImportAction.UNCHANGED)
                 .map(MemberImportItem::memberId)
-                .sorted()
+                .sorted(UuidOrder.POSTGRES)
                 .toList();
         // ids are sorted as a whole and each chunk is read in id order, so rows are locked in id order
         for (List<UUID> chunk : chunks(ids)) {
@@ -145,7 +146,7 @@ class MemberImportService implements MemberImport {
         try {
             members.flush();
         } catch (DataIntegrityViolationException e) {
-            if (mentions(e, EMAIL_INDEX)) {
+            if (ConstraintViolations.violates(e, EMAIL_INDEX)) {
                 throw stale();
             }
             throw e;
@@ -180,19 +181,6 @@ class MemberImportService implements MemberImport {
     private static ApiProblemException stale() {
         return new ApiProblemException(HttpStatus.CONFLICT, ProblemCodes.IMPORT_STALE,
                 "The members changed after the preview; upload the file again.");
-    }
-
-    private static boolean mentions(Throwable e, String constraint) {
-        for (Throwable t = e; t != null; t = t.getCause() == t ? null : t.getCause()) {
-            if (t instanceof org.hibernate.exception.ConstraintViolationException cve
-                    && constraint.equals(cve.getConstraintName())) {
-                return true;
-            }
-            if (t.getMessage() != null && t.getMessage().contains(constraint)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private MemberImportItem planRow(MemberImportRow row, UUID importId, Context context) {

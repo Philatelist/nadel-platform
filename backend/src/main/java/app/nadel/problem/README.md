@@ -12,6 +12,7 @@ Texts are fixed English sentences and never contain personal data, exception mes
 | `FieldProblem(field, code, message)` | One invalid field in `errors` |
 | `ProblemCodes` | Problem codes (`VALIDATION_FAILED`, `MALFORMED_REQUEST`, `UNAUTHENTICATED`, `MEMBER_NOT_LINKED`, `PERMISSION_DENIED`, `NOT_FOUND`, `INTERNAL_ERROR` and the 409 codes) and field codes (`REQUIRED`, `TOO_LONG`, `INVALID`, `PHONE_INVALID`, `CHANNEL_CONTACT_MISSING`). Clients translate them by code; add new codes here and to the i18n catalogs |
 | `ValidationProblems.fieldProblem(FieldError)` | Maps a Bean Validation violation to its field code (`NotNull`/`NotBlank`/`NotEmpty` to `REQUIRED`, `Size`/`Max`/`Length` to `TOO_LONG`, a `Pattern` on a share to `SHARE_INVALID`, anything else `INVALID`). The exception handler uses it, and other modules use it to validate a value exactly as the API does |
+| `ConstraintViolations.violates(failure, constraint)` | Whether a persistence failure is a unique (23505) or exclusion (23P01) violation of the named constraint, also when it is the failure of a flushed JDBC batch (the error is then the `getNextException()` of a `BatchUpdateException`, not its cause) |
 | `ProblemWriter` | Writes a problem straight to a servlet response. For security handlers and filters, which run before Spring MVC and cannot throw |
 
 ## Internal

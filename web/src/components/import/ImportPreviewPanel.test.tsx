@@ -1,6 +1,6 @@
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { ImportPreview, ImportProblem } from '@nadel/api-client';
+import { ApiError, type ImportPreview, type ImportProblem } from '@nadel/api-client';
 import { describe, expect, it, vi } from 'vitest';
 import { renderWithApp } from '../../test/render';
 import { ImportPreviewPanel, maxShownProblems } from './ImportPreviewPanel';
@@ -146,5 +146,35 @@ describe('ImportPreviewPanel', () => {
     const onReset = renderPanel(preview());
     await userEvent.setup().click(screen.getByRole('button', { name: 'Choose another file' }));
     expect(onReset).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    [409, 'IMPORT_STALE'],
+    [410, 'IMPORT_EXPIRED'],
+    [409, 'IMPORT_ALREADY_COMMITTED'],
+    [409, 'IMPORT_NOTHING_TO_COMMIT'],
+    [409, 'IMPORT_HAS_ERRORS'],
+  ])('disables the import button after the final refusal %s %s', (status, code) => {
+    renderWithApp(
+      <ImportPreviewPanel
+        preview={preview()}
+        onReset={vi.fn()}
+        onCommit={vi.fn()}
+        commitError={new ApiError(status, { code })}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Import' })).toBeDisabled();
+  });
+
+  it('keeps the import button enabled after a retryable commit error', () => {
+    renderWithApp(
+      <ImportPreviewPanel
+        preview={preview()}
+        onReset={vi.fn()}
+        onCommit={vi.fn()}
+        commitError={new ApiError(500, { code: 'INTERNAL' })}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Import' })).toBeEnabled();
   });
 });
