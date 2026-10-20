@@ -1,47 +1,27 @@
 package app.nadel.imports.internal;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.UncheckedIOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
-import java.util.Properties;
 import org.jspecify.annotations.Nullable;
-import org.springframework.core.io.ClassPathResource;
 
 /**
  * Finds the columns of a sheet from its header row. A header matches a column when the two are equal after
  * normalisation: lower case, everything but letters and digits dropped. The canonical key of the column and the
- * aliases from {@code imports/header-aliases.properties} (Ukrainian names among them) are accepted. Columns may come
+ * aliases of {@link ImportVocabulary} ({@code imports/header-aliases.properties}, Ukrainian names among them) are
+ * accepted. Columns may come
  * in any order; unknown headers are ignored; when two headers match the same column the first one wins.
  */
 final class HeaderMatcher {
-
-    private static final String ALIASES_RESOURCE = "imports/header-aliases.properties";
-    private static final String ALIAS_SEPARATOR = "\\|";
-
-    /** Aliases by sheet name ({@code plots}) and then by normalised header. */
-    private static final Map<String, Map<String, String>> ALIASES = loadAliases();
 
     private HeaderMatcher() {
     }
 
     /** The header text reduced to lower-case letters and digits. */
     static String normalise(@Nullable String header) {
-        if (header == null) {
-            return "";
-        }
-        StringBuilder out = new StringBuilder(header.length());
-        header.toLowerCase(Locale.ROOT).codePoints()
-                .filter(Character::isLetterOrDigit)
-                .forEach(out::appendCodePoint);
-        return out.toString();
+        return ImportVocabulary.normaliseHeader(header);
     }
 
     /**
@@ -54,7 +34,7 @@ final class HeaderMatcher {
      */
     static <C extends Enum<C> & SheetColumn> Match<C> match(String sheet, Class<C> columns, RawRow header) {
         Map<String, C> byHeader = new HashMap<>();
-        Map<String, String> aliases = ALIASES.getOrDefault(sheet, Map.of());
+        Map<String, String> aliases = ImportVocabulary.get().columnAliases(sheet);
         for (C column : columns.getEnumConstants()) {
             byHeader.put(normalise(column.key()), column);
         }
@@ -109,24 +89,5 @@ final class HeaderMatcher {
         boolean has(C column) {
             return indexes.containsKey(column);
         }
-    }
-
-    private static Map<String, Map<String, String>> loadAliases() {
-        Properties properties = new Properties();
-        try (InputStream stream = new ClassPathResource(ALIASES_RESOURCE).getInputStream()) {
-            properties.load(new InputStreamReader(stream, StandardCharsets.UTF_8));
-        } catch (IOException e) {
-            throw new UncheckedIOException("Cannot read " + ALIASES_RESOURCE, e);
-        }
-        Map<String, Map<String, String>> bySheet = new HashMap<>();
-        for (String name : properties.stringPropertyNames()) {
-            int dot = name.indexOf('.');
-            String sheet = name.substring(0, dot);
-            String key = name.substring(dot + 1);
-            for (String alias : properties.getProperty(name).split(ALIAS_SEPARATOR)) {
-                bySheet.computeIfAbsent(sheet, s -> new HashMap<>()).putIfAbsent(normalise(alias), key);
-            }
-        }
-        return bySheet;
     }
 }

@@ -30,6 +30,7 @@ import type {
 
 import type {
   BadRequestResponse,
+  DownloadImportTemplateParams,
   ForbiddenResponse,
   ImportPage,
   ImportPreview,
@@ -64,24 +65,40 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   return result;
 };
 
-export const getDownloadImportTemplateUrl = () => {
+export const getDownloadImportTemplateUrl = (params?: DownloadImportTemplateParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/v1/imports/template`
+  return stringifiedParams.length > 0 ? `/api/v1/imports/template?${stringifiedParams}` : `/api/v1/imports/template`
 }
 
 /**
- * Returns the Excel template (`.xlsx`, file name `nadel-import-template.xlsx`) with the sheets `Plots`, `Members`
- * and `Ownership`: English column headers, one instruction row and one example row per sheet (both start with
- * `#` and are ignored by the import). Requires the `IMPORT_RUN` permission; the platform operator has no
- * cooperative data: 403.
+ * Returns the Excel template (`.xlsx`) with three sheets, one instruction row and one example row per sheet
+ * (both rows start with `#` and are ignored by the import). It comes in two languages. The Ukrainian template
+ * (`nadel-import-template-uk.xlsx`) has the sheets `Ділянки`, `Члени` and `Власність`, and everything a person
+ * reads is Ukrainian: headers, instructions, example row and value words (`ДІЛЯНКА`, `так`). The English
+ * template (`nadel-import-template-en.xlsx`) has the sheets `Plots`, `Members` and `Ownership` with the
+ * canonical column names. The file name is always ASCII, in the `Content-Disposition` header.
+ *
+ * The language is the `lang` query parameter. Without it the best match of `uk` and `en` in the
+ * `Accept-Language` header is used (`uk-UA` is `uk`, `en-US` is `en`), and without a match (`de`, no header)
+ * the default `uk`. A `lang` other than `uk` and `en` is 400 `VALIDATION_FAILED`.
+ *
+ * An upload accepts both languages for sheet names, headers and value words, also mixed in one file.
+ * Requires the `IMPORT_RUN` permission; the platform operator has no cooperative data: 403.
  * @summary Download the import template
  */
-export const downloadImportTemplate = async ( options?: Parameters<typeof nadelFetch>[1]): Promise<Blob> => {
+export const downloadImportTemplate = async (params?: DownloadImportTemplateParams, options?: Parameters<typeof nadelFetch>[1]): Promise<Blob> => {
 
-  return nadelFetch<Blob>(getDownloadImportTemplateUrl(),
+  return nadelFetch<Blob>(getDownloadImportTemplateUrl(params),
   {
     ...options,
     method: 'GET'
@@ -94,23 +111,23 @@ export const downloadImportTemplate = async ( options?: Parameters<typeof nadelF
 
 
 
-export const getDownloadImportTemplateQueryKey = () => {
+export const getDownloadImportTemplateQueryKey = (params?: DownloadImportTemplateParams,) => {
     return [
-    `/api/v1/imports/template`
+    `/api/v1/imports/template`, ...(params ? [params] : [])
     ] as const;
     }
 
 
-export const getDownloadImportTemplateQueryOptions = <TData = Awaited<ReturnType<typeof downloadImportTemplate>>, TError = UnauthorizedResponse | ForbiddenResponse>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadImportTemplate>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+export const getDownloadImportTemplateQueryOptions = <TData = Awaited<ReturnType<typeof downloadImportTemplate>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>(params?: DownloadImportTemplateParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadImportTemplate>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getDownloadImportTemplateQueryKey();
+  const queryKey =  queryOptions?.queryKey ?? getDownloadImportTemplateQueryKey(params);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof downloadImportTemplate>>> = ({ signal }) => downloadImportTemplate({ signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof downloadImportTemplate>>> = ({ signal }) => downloadImportTemplate(params, { signal, ...requestOptions });
 
 
 
@@ -120,11 +137,11 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 }
 
 export type DownloadImportTemplateQueryResult = NonNullable<Awaited<ReturnType<typeof downloadImportTemplate>>>
-export type DownloadImportTemplateQueryError = UnauthorizedResponse | ForbiddenResponse
+export type DownloadImportTemplateQueryError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse
 
 
-export function useDownloadImportTemplate<TData = Awaited<ReturnType<typeof downloadImportTemplate>>, TError = UnauthorizedResponse | ForbiddenResponse>(
-  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadImportTemplate>>, TError, TData>> & Pick<
+export function useDownloadImportTemplate<TData = Awaited<ReturnType<typeof downloadImportTemplate>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>(
+ params: undefined |  DownloadImportTemplateParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadImportTemplate>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
           Awaited<ReturnType<typeof downloadImportTemplate>>,
           TError,
@@ -133,8 +150,8 @@ export function useDownloadImportTemplate<TData = Awaited<ReturnType<typeof down
       >, request?: SecondParameter<typeof nadelFetch>}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useDownloadImportTemplate<TData = Awaited<ReturnType<typeof downloadImportTemplate>>, TError = UnauthorizedResponse | ForbiddenResponse>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadImportTemplate>>, TError, TData>> & Pick<
+export function useDownloadImportTemplate<TData = Awaited<ReturnType<typeof downloadImportTemplate>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>(
+ params?: DownloadImportTemplateParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadImportTemplate>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
           Awaited<ReturnType<typeof downloadImportTemplate>>,
           TError,
@@ -143,20 +160,20 @@ export function useDownloadImportTemplate<TData = Awaited<ReturnType<typeof down
       >, request?: SecondParameter<typeof nadelFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useDownloadImportTemplate<TData = Awaited<ReturnType<typeof downloadImportTemplate>>, TError = UnauthorizedResponse | ForbiddenResponse>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadImportTemplate>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+export function useDownloadImportTemplate<TData = Awaited<ReturnType<typeof downloadImportTemplate>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>(
+ params?: DownloadImportTemplateParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadImportTemplate>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
  * @summary Download the import template
  */
 
-export function useDownloadImportTemplate<TData = Awaited<ReturnType<typeof downloadImportTemplate>>, TError = UnauthorizedResponse | ForbiddenResponse>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadImportTemplate>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+export function useDownloadImportTemplate<TData = Awaited<ReturnType<typeof downloadImportTemplate>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>(
+ params?: DownloadImportTemplateParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadImportTemplate>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
-  const queryOptions = getDownloadImportTemplateQueryOptions(options)
+  const queryOptions = getDownloadImportTemplateQueryOptions(params,options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 

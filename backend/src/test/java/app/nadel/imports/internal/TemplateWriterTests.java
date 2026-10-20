@@ -17,106 +17,217 @@ import org.dhatim.fastexcel.reader.ReadableWorkbook;
 import org.dhatim.fastexcel.reader.Row;
 import org.dhatim.fastexcel.reader.Sheet;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
-/** The generated import template, read back with the same library the import will use. */
+/** The generated import templates in both languages, read back with the same library the import will use. */
 class TemplateWriterTests {
 
-    private final byte[] template = new TemplateWriter().write();
+    private final byte[] uk = new TemplateWriter().write(TemplateLanguage.UK);
+    private final byte[] en = new TemplateWriter().write(TemplateLanguage.EN);
+
+    // ---- English: unchanged content
 
     @Test
-    void hasThePlotsMembersAndOwnershipSheetsInThatOrder() throws IOException {
-        try (ReadableWorkbook workbook = open()) {
+    void englishHasThePlotsMembersAndOwnershipSheetsInThatOrder() throws IOException {
+        try (ReadableWorkbook workbook = open(en)) {
             assertThat(workbook.getSheets().map(Sheet::getName)).containsExactly("Plots", "Members", "Ownership");
         }
     }
 
     @Test
-    void headersAreTheEnglishCanonicalColumnNames() throws IOException {
-        assertThat(headers("Plots")).containsExactly(
+    void englishHeadersAreTheCanonicalColumnNames() throws IOException {
+        assertThat(headers(en, "Plots")).containsExactly(
                 "number", "street", "kind", "area_m2", "area_sotky", "cadastral_number", "has_building", "notes");
-        assertThat(headers("Members")).containsExactly(
+        assertThat(headers(en, "Members")).containsExactly(
                 "external_id", "last_name", "first_name", "middle_name", "phones", "email", "postal_address",
                 "delivery_channel", "telegram_username", "viber_phone");
-        assertThat(headers("Ownership")).containsExactly(
+        assertThat(headers(en, "Ownership")).containsExactly(
                 "plot_number", "member_external_id", "share", "valid_from");
     }
 
     @Test
-    void secondAndThirdRowsAreCommentRowsThatStartWithAHash() throws IOException {
-        try (ReadableWorkbook workbook = open()) {
-            for (String name : List.of("Plots", "Members", "Ownership")) {
-                List<Row> rows = workbook.findSheet(name).orElseThrow().read();
-                assertThat(rows).as(name).hasSize(3);
-                assertThat(rows.get(1).getCellText(0)).as(name + " instruction row").startsWith("#");
-                assertThat(rows.get(2).getCellText(0)).as(name + " example row").startsWith("#");
-            }
+    void englishInstructionAndExampleRowsAreAsTheyAlwaysWere() throws IOException {
+        try (ReadableWorkbook workbook = open(en)) {
+            assertThat(rowTexts(workbook, "Plots", 1)).containsExactly(
+                    "# Required. Plot number, unique in the cooperative", "Street name",
+                    "PLOT or COMMON (common land). Required for a new plot",
+                    "Area in square metres. Fill exactly one of area_m2 and area_sotky",
+                    "Area in sotky (1 sotka = 100 m2). Fill exactly one of the two",
+                    "Optional. Format 1234567890:12:345:6789", "yes or no. Default no", "Free text");
+            assertThat(rowTexts(workbook, "Plots", 2)).containsExactly(
+                    "# example: 12a", "Garden street", "PLOT", "600", "", "1234567890:12:345:6789", "yes",
+                    "Corner plot");
+            assertThat(rowTexts(workbook, "Members", 1)).containsExactly(
+                    "# Required. Any key unique within this file, used by the Ownership sheet", "Required", "Required",
+                    "Optional", "Comma-separated, international format",
+                    "Optional. Used to match an existing member on re-import", "Optional",
+                    "EMAIL, TELEGRAM, VIBER or PAPER. The channel needs its contact",
+                    "Needed for the TELEGRAM channel", "Needed for the VIBER channel");
+            assertThat(rowTexts(workbook, "Members", 2)).containsExactly(
+                    "# example: M-001", "Shevchenko", "Taras", "Hryhorovych", "+380501234567, +380671234567",
+                    "taras@example.com", "1 Garden street, Kyiv", "EMAIL", "", "");
+            assertThat(rowTexts(workbook, "Ownership", 1)).containsExactly(
+                    "# Required. Number of a plot from the Plots sheet or an existing plot",
+                    "Required. external_id from the Members sheet",
+                    "Share of the plot, for example 1, 1/2 or 1/3. Shares of a plot add up to 1",
+                    "Owner since, DD.MM.YYYY. The same date for every owner of a plot");
+            assertThat(rowTexts(workbook, "Ownership", 2)).containsExactly(
+                    "# example: 12a", "M-001", "1", "01.03.2020");
         }
     }
 
     @Test
-    void everyInstructionCellIsFilledAndTheExampleRowCarriesRealisticValues() throws IOException {
-        try (ReadableWorkbook workbook = open()) {
-            List<Row> plots = workbook.findSheet("Plots").orElseThrow().read();
-            for (int column = 0; column < 8; column++) {
-                assertThat(plots.get(1).getCellText(column)).as("instruction " + column).isNotBlank();
-            }
-            Row example = plots.get(2);
-            assertThat(example.getCellText(0)).isEqualTo("# example: 12a");
-            assertThat(example.getCellText(1)).isEqualTo("Garden street");
-            assertThat(example.getCellText(2)).isEqualTo("PLOT");
-            assertThat(example.getCellText(3)).isEqualTo("600");
-            assertThat(example.getCellText(5)).isEqualTo("1234567890:12:345:6789");
+    void englishContainsNoCyrillicText() throws IOException {
+        for (String text : allTexts(en)) {
+            assertThat(text).doesNotContainPattern("[\\u0400-\\u04FF]");
+        }
+    }
 
-            Row member = workbook.findSheet("Members").orElseThrow().read().get(2);
-            assertThat(member.getCellText(0)).isEqualTo("# example: M-001");
-            assertThat(member.getCellText(4)).isEqualTo("+380501234567, +380671234567");
-            assertThat(member.getCellText(7)).isEqualTo("EMAIL");
+    // ---- Ukrainian
 
-            Row ownership = workbook.findSheet("Ownership").orElseThrow().read().get(2);
-            assertThat(ownership.getCellText(0)).isEqualTo("# example: 12a");
-            assertThat(ownership.getCellText(1)).isEqualTo("M-001");
-            assertThat(ownership.getCellText(2)).isEqualTo("1");
-            assertThat(ownership.getCellText(3)).isEqualTo("01.03.2020");
+    @Test
+    void ukrainianHasTheUkrainianSheetNamesInThatOrder() throws IOException {
+        try (ReadableWorkbook workbook = open(uk)) {
+            assertThat(workbook.getSheets().map(Sheet::getName)).containsExactly("Ділянки", "Члени", "Власність");
         }
     }
 
     @Test
-    void identifierAndPhoneColumnsHaveTheTextFormat() throws IOException {
-        // text columns: Plots number and cadastral_number; Members external_id, phones, viber_phone;
-        // Ownership plot_number, member_external_id and share
-        assertThat(textColumns(1)).containsExactly(1, 6);
-        assertThat(textColumns(2)).containsExactly(1, 5, 10);
-        assertThat(textColumns(3)).containsExactly(1, 2, 3);
-        assertThat(entry("xl/styles.xml")).contains("formatCode=\"@\"");
+    void ukrainianHeadersAreTheFirstWordsOfTheVocabulary() throws IOException {
+        assertThat(headers(uk, "Ділянки")).containsExactly(
+                "Номер ділянки", "Вулиця", "Тип ділянки", "Площа, м²", "Площа, сот.", "Кадастровий номер",
+                "Є будівля", "Примітки");
+        assertThat(headers(uk, "Члени")).containsExactly(
+                "Ключ члена", "Прізвище", "Ім'я", "По батькові", "Телефони", "Електронна пошта", "Поштова адреса",
+                "Канал доставки", "Нік у Telegram", "Телефон Viber");
+        assertThat(headers(uk, "Власність")).containsExactly("Номер ділянки", "Ключ члена", "Частка", "Власник з");
     }
 
     @Test
-    void ownershipShareColumnHasTheTextFormatSoThatSpreadsheetsKeepOneHalfAsTyped() throws IOException {
-        // "1/2" typed into a General cell is turned into a date by Excel and LibreOffice
-        assertThat(headers("Ownership").get(2)).isEqualTo("share");
-        assertThat(textColumns(3)).contains(3);
-        assertThat(entry("xl/styles.xml")).contains("formatCode=\"@\"");
+    void ukrainianInstructionRowsAreUkrainianAndFilledForEveryColumn() throws IOException {
+        try (ReadableWorkbook workbook = open(uk)) {
+            assertThat(rowTexts(workbook, "Ділянки", 1)).containsExactly(
+                    "# Обов'язково. Номер ділянки, унікальний у кооперативі", "Назва вулиці",
+                    "ДІЛЯНКА або СПІЛЬНА ЗЕМЛЯ. Обов'язково для нової ділянки",
+                    "Площа в квадратних метрах. Заповніть рівно одну з колонок «Площа, м²» і «Площа, сот.»",
+                    "Площа в сотках (1 сотка = 100 м²). Заповніть рівно одну з двох колонок",
+                    "Необов'язково. Формат 1234567890:12:345:6789", "так або ні. За замовчуванням ні",
+                    "Довільний текст");
+            assertThat(rowTexts(workbook, "Члени", 1)).hasSize(10).allSatisfy(text -> assertThat(text).isNotBlank());
+            assertThat(rowTexts(workbook, "Члени", 1).get(0)).contains("«Власність»");
+            assertThat(rowTexts(workbook, "Члени", 1).get(7))
+                    .isEqualTo("ЕЛ. ПОШТА, ТЕЛЕГРАМ, ВАЙБЕР або ПАПЕР. Для каналу потрібен його контакт");
+            assertThat(rowTexts(workbook, "Власність", 1).get(1))
+                    .isEqualTo("Обов'язково. Ключ із колонки «Ключ члена» аркуша «Члени»");
+        }
     }
 
     @Test
-    void containsNoCyrillicText() throws IOException {
-        try (ReadableWorkbook workbook = open()) {
+    void ukrainianExampleRowsCarryRealisticUkrainianValues() throws IOException {
+        try (ReadableWorkbook workbook = open(uk)) {
+            assertThat(rowTexts(workbook, "Ділянки", 2)).containsExactly(
+                    "# приклад: 31а", "вулиця Садова", "ДІЛЯНКА", "600", "", "1234567890:12:345:6789", "так",
+                    "Кутова ділянка");
+            assertThat(rowTexts(workbook, "Члени", 2)).containsExactly(
+                    "# приклад: Ч-001", "Шевченко", "Тарас", "Григорович", "+380 67 123 45 67",
+                    "taras.shevchenko@example.com", "вулиця Садова, 1, Київ", "ЕЛ. ПОШТА", "", "");
+            assertThat(rowTexts(workbook, "Власність", 2)).containsExactly(
+                    "# приклад: 31а", "Ч-001", "1", "01.03.2020");
+        }
+    }
+
+    @Test
+    void ukrainianMemberExampleKeyIsTheOneTheOwnershipExampleUses() throws IOException {
+        try (ReadableWorkbook workbook = open(uk)) {
+            String memberKey = rowTexts(workbook, "Члени", 2).get(0).replaceFirst("^# приклад: ", "");
+            String ownerKey = rowTexts(workbook, "Власність", 2).get(1);
+            assertThat(ownerKey).isEqualTo(memberKey);
+            String plot = rowTexts(workbook, "Ділянки", 2).get(0).replaceFirst("^# приклад: ", "");
+            assertThat(rowTexts(workbook, "Власність", 2).get(0).replaceFirst("^# приклад: ", "")).isEqualTo(plot);
+        }
+    }
+
+    // ---- both languages
+
+    @ParameterizedTest
+    @EnumSource(TemplateLanguage.class)
+    void everySheetHasHeaderInstructionAndExampleRowsAndTheLastTwoStartWithAHash(TemplateLanguage language)
+            throws IOException {
+        try (ReadableWorkbook workbook = open(language)) {
             for (Sheet sheet : workbook.getSheets().toList()) {
+                List<Row> rows = sheet.read();
+                assertThat(rows).as(sheet.getName()).hasSize(3);
+                assertThat(rows.get(0).getCellText(0)).doesNotStartWith("#");
+                assertThat(rows.get(1).getCellText(0)).as(sheet.getName() + " instruction row").startsWith("#");
+                assertThat(rows.get(2).getCellText(0)).as(sheet.getName() + " example row").startsWith("#");
+            }
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(TemplateLanguage.class)
+    void identifierAndPhoneColumnsHaveTheTextFormat(TemplateLanguage language) throws IOException {
+        // text columns: Plots number and cadastral_number; Members external_id, phones, viber_phone;
+        // Ownership plot_number, member_external_id and share ("1/2" typed into a General cell becomes a date)
+        byte[] template = language == TemplateLanguage.UK ? uk : en;
+        assertThat(textColumns(template, 1)).containsExactly(1, 6);
+        assertThat(textColumns(template, 2)).containsExactly(1, 5, 10);
+        assertThat(textColumns(template, 3)).containsExactly(1, 2, 3);
+        assertThat(entry(template, "xl/styles.xml")).contains("formatCode=\"@\"");
+    }
+
+    @ParameterizedTest
+    @EnumSource(TemplateLanguage.class)
+    void everyTextOfTheTemplateIsResolved(TemplateLanguage language) throws IOException {
+        for (String text : allTexts(language == TemplateLanguage.UK ? uk : en)) {
+            assertThat(text).doesNotContain("{").doesNotContain("}");
+        }
+    }
+
+    // ---- helpers
+
+    private ReadableWorkbook open(TemplateLanguage language) throws IOException {
+        return open(language == TemplateLanguage.UK ? uk : en);
+    }
+
+    private static ReadableWorkbook open(byte[] template) throws IOException {
+        return new ReadableWorkbook(new ByteArrayInputStream(template));
+    }
+
+    /** The texts of every cell of the workbook. */
+    private static List<String> allTexts(byte[] template) throws IOException {
+        List<String> texts = new ArrayList<>();
+        try (ReadableWorkbook workbook = open(template)) {
+            for (Sheet sheet : workbook.getSheets().toList()) {
+                texts.add(sheet.getName());
                 for (Row row : sheet.read()) {
                     for (int column = 0; column < row.getCellCount(); column++) {
-                        assertThat(row.getCellText(column)).doesNotContainPattern("[\\u0400-\\u04FF]");
+                        texts.add(row.getCellText(column));
                     }
                 }
             }
         }
+        return texts;
     }
 
-    private ReadableWorkbook open() throws IOException {
-        return new ReadableWorkbook(new ByteArrayInputStream(template));
+    /** The texts of the cells of a row (0 header, 1 instruction, 2 example), empty cells as empty text. */
+    private static List<String> rowTexts(ReadableWorkbook workbook, String sheet, int row) throws IOException {
+        Row cells = workbook.findSheet(sheet).orElseThrow().read().get(row);
+        List<String> texts = new ArrayList<>();
+        int count = switch (sheet) {
+            case "Plots", "Ділянки" -> 8;
+            case "Members", "Члени" -> 10;
+            default -> 4;
+        };
+        for (int column = 0; column < count; column++) {
+            texts.add(cells.getCellText(column));
+        }
+        return texts;
     }
 
-    private List<String> headers(String sheet) throws IOException {
-        try (ReadableWorkbook workbook = open()) {
+    private static List<String> headers(byte[] template, String sheet) throws IOException {
+        try (ReadableWorkbook workbook = open(template)) {
             Row header = workbook.findSheet(sheet).orElseThrow().read().get(0);
             List<String> names = new ArrayList<>();
             for (int column = 0; column < header.getCellCount(); column++) {
@@ -127,9 +238,9 @@ class TemplateWriterTests {
     }
 
     /** 1-based indexes of the columns that carry a column-level style in the given worksheet part. */
-    private List<Integer> textColumns(int sheetNumber) throws IOException {
+    private static List<Integer> textColumns(byte[] template, int sheetNumber) throws IOException {
         Matcher cols = Pattern.compile("<col [^>]*min=\"(\\d+)\"[^>]*style=\"\\d+\"")
-                .matcher(entry("xl/worksheets/sheet" + sheetNumber + ".xml"));
+                .matcher(entry(template, "xl/worksheets/sheet" + sheetNumber + ".xml"));
         List<Integer> indexes = new ArrayList<>();
         while (cols.find()) {
             indexes.add(Integer.parseInt(cols.group(1)));
@@ -138,7 +249,7 @@ class TemplateWriterTests {
     }
 
     /** A part of the package as text. A temp file and ZipFile, because the writer's entries use data descriptors. */
-    private String entry(String name) throws IOException {
+    private static String entry(byte[] template, String name) throws IOException {
         Path file = Files.createTempFile("nadel-template", ".xlsx");
         try {
             Files.write(file, template);

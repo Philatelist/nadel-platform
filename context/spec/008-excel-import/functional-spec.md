@@ -30,6 +30,11 @@ duplicates after a second upload.
 - The import screen offers a template file to download. It has three sheets — "Plots", "Members" and "Ownership" —
   each with column headers, a short instruction row and one example row. Instruction and example rows begin with "#"
   and are never imported; any row whose first cell begins with "#" is skipped.
+- The template follows the interface language chosen by the person downloading it. In the Ukrainian template
+  everything a person reads is Ukrainian: the sheet names "Ділянки", "Члени" and "Власність", the headers, the
+  instruction and example rows, and value words ("ДІЛЯНКА" / "СПІЛЬНА ЗЕМЛЯ", "так" / "ні"), with realistic Ukrainian
+  examples. The English template keeps the English names. The file is named `nadel-import-template-uk.xlsx` or
+  `nadel-import-template-en.xlsx`.
 - **Plots:** number, street, kind ("PLOT" or "COMMON"), area in square metres **or** in sotkas (exactly one of the two),
   cadastral number, building (yes/no, default no), notes.
 - **Members:** a member key (any text that is unique within the file and used only to link owners to members), last
@@ -37,7 +42,8 @@ duplicates after a second upload.
   Telegram username, Viber phone.
 - **Ownership:** plot number, member key, share (for example "1/2"), owner since.
 - Column headers are matched regardless of letter case, and Ukrainian header names are accepted as well (for example
-  "Номер", "Вулиця", "Площа, сот."). Columns may appear in any order; unknown columns are ignored.
+  "Номер", "Вулиця", "Площа, сот."). Sheet names, headers and value words are accepted in either language, also mixed
+  in one file. Columns may appear in any order; unknown columns are ignored.
 - Dates may be Excel dates or text in the form DD.MM.YYYY. "Yes/no" accepts yes/no, так/ні and true/false in any case.
 - The same rules apply as when entering records by hand: plot number required and unique, cadastral number format,
   area greater than zero for a plot, a valid email and phone, shares as exact fractions that add up to exactly one per
@@ -52,6 +58,12 @@ duplicates after a second upload.
     - [x] When a plot row gives both an area in square metres and an area in sotkas, or neither, then the preview shows
       an error on that row's area column. _Evidence: `ImportAcceptanceTests` §2.1 (both or neither → AREA_BOTH_OR_NONE on the area column); `ImportFixturesTests` (errors.xlsx); screenshot `008-excel-import-preview-errors.png`._
     - [x] When a plot gives its area as 6 sotkas, then after the import the plot shows "6 соток (600 м²)". _Evidence: `ImportAcceptanceTests` §2.1 (600 m² read back via `/plots`); e2e `imports-acceptance.spec.ts` ("6 соток (600 м²)" on the plot page); `CellsTests`._
+    - [x] When the chairman's interface is in Ukrainian and they download the template, then its sheet names, headers,
+      instruction and example rows are Ukrainian; with the interface in English they are English. _Evidence: `TemplateWriterTests` (both languages: sheet names, headers, hint and example rows, value words; en verbatim, no Cyrillic); `ImportsTemplateTests` (`lang`, Accept-Language fallback, default uk, unknown lang → 400, file names); `ImportPage.test.tsx` (the page passes the UI locale); e2e `imports.spec.ts` (Ukrainian UI → `nadel-import-template-uk.xlsx` with sheet "Ділянки" and header "Номер ділянки"; English UI → `-en.xlsx` with `number`)._
+    - [x] When the chairman downloads the template in either language, keeps the example rows as data (removes their
+      leading "#") and uploads it, then the preview shows the example plot, member and owner as new with no problems. _Evidence: `ImportTemplateLanguageTests` (per language: unchanged → nothing to import; example rows kept → one new plot, member and ownership, no problems, committable)._
+    - [x] When a file mixes Ukrainian and English sheet names, headers and value words, then the preview reads it
+      correctly. _Evidence: `ImportVocabularyTests` and `ImportTemplateLanguageTests` (Ukrainian sheet names with English headers and the reverse, mixed headers in one sheet, ДІЛЯНКА / Спільна земля, так / ні, Ukrainian channel words)._
 
 ### 2.2 Upload and preview
 
@@ -163,7 +175,8 @@ duplicates after a second upload.
 - A preview can be committed within 30 minutes; any change in the cooperative's data that would alter the preview
   makes it stale.
 - Problems are shown in the interface language chosen by the person viewing the preview.
-- The template's headers and instruction row are in English; Ukrainian header names are accepted on upload.
+- The template follows the interface language (Ukrainian or English, Ukrainian when unknown); both languages are
+  accepted on upload for sheet names, headers and value words.
 - A member row with neither an email nor a phone is a problem, because such a member could not be recognised on a
   later import; a row whose name and first phone match two existing members is a problem too.
 - When comparing a file's owners with the recorded ones, only the members and their shares count, not the owner-since
@@ -174,4 +187,7 @@ duplicates after a second upload.
 
 ## Change Log
 
+- Change request (owner, after the first review run): the template follows the interface language; the Ukrainian
+  template is fully Ukrainian; upload accepts both languages for sheet names, headers and value words. Verified:
+  `make check` and `make e2e` green, the three new criteria marked with evidence.
 - Verified (pipeline Phase 4): every acceptance criterion marked with its evidence; `make check` and `make e2e` green.

@@ -6,8 +6,6 @@ import java.math.MathContext;
 import java.math.RoundingMode;
 import java.time.DateTimeException;
 import java.time.LocalDate;
-import java.util.Locale;
-import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
@@ -22,8 +20,6 @@ final class Cells {
     private static final MathContext EXCEL_PRECISION = new MathContext(15, RoundingMode.HALF_UP);
     private static final Pattern DECIMAL = Pattern.compile("-?(\\d+([.]\\d+)?|[.]\\d+)");
     private static final Pattern DOTTED_DATE = Pattern.compile("(\\d{1,2})[.](\\d{1,2})[.](\\d{4})");
-    private static final Set<String> YES = Set.of("yes", "true", "так");
-    private static final Set<String> NO = Set.of("no", "false", "ні");
     /** Excel's day 0 in the 1900 date system, which counts the non-existent 29 February 1900 as day 60. */
     private static final LocalDate EPOCH_1900 = LocalDate.of(1899, 12, 30);
     private static final LocalDate EPOCH_1904 = LocalDate.of(1904, 1, 1);
@@ -62,6 +58,22 @@ final class Cells {
         return Result.of(text == null || text.isEmpty() ? null : text);
     }
 
+    /**
+     * A value word of either language ({@code ДІЛЯНКА}, {@code ЕЛ. ПОШТА}) as the canonical English word the other
+     * modules know ({@code PLOT}, {@code EMAIL}); a word that is not in the vocabulary is returned as typed, so the
+     * owning module reports it.
+     *
+     * @param kind one of {@link ImportVocabulary#KIND} and {@link ImportVocabulary#CHANNEL}
+     */
+    static Result<String> word(@Nullable RawCell cell, String kind) {
+        String text = text(cell).value();
+        if (text == null) {
+            return Result.of(null);
+        }
+        String canonical = ImportVocabulary.get().canonicalValue(kind, text);
+        return Result.of(canonical == null ? text : canonical);
+    }
+
     /** Yes or no: yes/no, так/ні, true/false in any letter case, or a boolean cell. */
     static Result<Boolean> yesNo(@Nullable RawCell cell) {
         if (cell instanceof RawCell.Bool bool) {
@@ -74,11 +86,11 @@ final class Cells {
         if (text == null) {
             return Result.of(null);
         }
-        String word = text.toLowerCase(Locale.ROOT);
-        if (YES.contains(word)) {
-            return Result.of(true);
+        String canonical = ImportVocabulary.get().canonicalValue(ImportVocabulary.YES_NO, text);
+        if (canonical == null) {
+            return Result.problem(ProblemCodes.YES_NO_INVALID);
         }
-        return NO.contains(word) ? Result.of(false) : Result.problem(ProblemCodes.YES_NO_INVALID);
+        return Result.of(Boolean.valueOf(canonical));
     }
 
     /**

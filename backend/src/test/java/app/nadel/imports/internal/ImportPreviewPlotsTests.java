@@ -110,7 +110,7 @@ class ImportPreviewPlotsTests extends ImportsIntegrationTest {
 
     @Test
     void theUnchangedTemplateHasNothingToImport() throws Exception {
-        upload(new TemplateWriter().write())
+        upload(new TemplateWriter().write(TemplateLanguage.UK))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.counts.plots.created").value(0))
                 .andExpect(jsonPath("$.counts.plots.updated").value(0))

@@ -22,6 +22,7 @@ export const uk: Messages = {
     menu: 'Меню',
     main: 'Головне меню',
   },
+  language: { short: 'УКР', name: 'Українська' },
   theme: { system: 'Системна', light: 'Світла', dark: 'Темна' },
   state: {
     loading: 'Завантаження…',
@@ -304,7 +305,6 @@ export const uk: Messages = {
     templateHint: 'Завантажте шаблон Excel, заповніть його даними кооперативу та збережіть файл.',
     downloadTemplate: 'Завантажити шаблон',
     downloading: 'Завантажуємо…',
-    templateFileName: 'nadel-import-template.xlsx',
     uploadTitle: 'Завантажити файл',
     uploadHint:
       'Оберіть заповнений файл Excel (.xlsx, до 10 МБ). Поки ви не підтвердите, нічого не зберігається.',

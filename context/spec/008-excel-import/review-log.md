@@ -64,3 +64,4 @@
 | verify 1 | `b7b8235..d0bdc25` | PASS | — | minor: §2.1 #1 evidence should cite `TemplateWriterTests`; screenshot history full of test runs; duplicated `equals("INVALID")` |
 | CI 1 | `d0bdc25..9ec0e24` | PASS | — | minor: PR note for the overrides (added to the PR body); Jackson 2 left at the Boot default; comment casing |
 | CI 2 | `a3e2fdb..b560009` | PASS | — | minor: AuditOutboxTests could leak a failed publication if it fails mid-test (pre-existing; follow-up: delete its own publication in @AfterEach); comment wording |
+| CI 3 (audit batching) | `b560009..cfb90bd` | PASS | — | minor: `setTimestamp` vs explicit UTC offset; AuditBatchWriteTests could leak an incomplete publication if it fails mid-test (same follow-up as AuditOutboxTests); demo audit entries left by the test; line widths |

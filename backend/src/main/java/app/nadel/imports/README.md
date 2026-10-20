@@ -1,7 +1,7 @@
 # imports
 
 Excel import of a whole cooperative in one go: plots, members and ownership from one `.xlsx` file with three sheets
-(`Plots`, `Members`, `Ownership`). Requirements: `docs/features/008-excel-import.md`; spec: `context/spec/008-excel-import/`.
+(`Plots`, `Members`, `Ownership`; in the Ukrainian template `Ділянки`, `Члени`, `Власність`). Requirements: `docs/features/008-excel-import.md`; spec: `context/spec/008-excel-import/`.
 
 The module offers the template download, the upload with a preview of all three sheets, the commit and the history of
 the uploads.
@@ -10,28 +10,67 @@ the uploads.
 
 | Endpoint | Operation | Who |
 |---|---|---|
-| `GET /imports/template` | `downloadImportTemplate` | `IMPORT_RUN` (the platform operator has no permission and gets 403) |
+| `GET /imports/template?lang=uk\|en` | `downloadImportTemplate` | `IMPORT_RUN` (the platform operator has no permission and gets 403); the language is `lang`, else `Accept-Language`, else `uk` (see The template) |
 | `POST /imports` | `uploadImport` | `IMPORT_RUN`; multipart, one `file` part; answers 201 `ImportPreview` |
 | `POST /imports/{id}/commit` | `commitImport` | `IMPORT_RUN`; answers 200 `ImportResult` (see Commit) |
 | `GET /imports` | `listImports` | `IMPORT_RUN`; `page` (from 0) and `size` (1 to 100, default 50) as the audit list; answers 200 `ImportPage` of `ImportSummary` (see History) |
 
 The template is returned as `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` with
-`Content-Disposition: attachment; filename="nadel-import-template.xlsx"`.
+`Content-Disposition: attachment; filename="nadel-import-template-uk.xlsx"` (or `-en.xlsx`; the name is always ASCII) and
+`Vary: Accept-Language`.
 
 ## The template
 
-`TemplateWriter` (fastexcel writer) builds it in memory. Each sheet has the English canonical header row, then an
-instruction row, then an example row. Both of those rows start with `#`; the import ignores every row whose first cell
-starts with `#`.
+`TemplateWriter` (fastexcel writer) builds it in memory, in one of two languages (`TemplateLanguage`). The language is the
+optional `lang` query parameter (`uk` or `en`; any other value is 400 `VALIDATION_FAILED` through the contract's `enum` and
+`pattern`); without it the best match of `uk` and `en` in the `Accept-Language` header (`uk-UA` is `uk`, `en-US` is `en`,
+`q` weights respected, `q=0` and malformed headers ignored); without a match (`de`, no header) the default `uk`.
 
-| Sheet | Columns |
+Each sheet has the header row, then an instruction row, then an example row. Both of those rows start with `#`; the import
+ignores every row whose first cell starts with `#`, so an unchanged template imports nothing. The first cell of the example
+row reads `# example: 12a` (`# приклад: 31а`); to keep the example as data, delete that whole marker (`# example: `) from
+the first cell and the row is imported. Deleting only the `#` leaves the label in the plot number.
+
+| Sheet (English) | Columns |
 |---|---|
 | `Plots` | number, street, kind, area_m2, area_sotky, cadastral_number, has_building, notes |
 | `Members` | external_id, last_name, first_name, middle_name, phones, email, postal_address, delivery_channel, telegram_username, viber_phone |
 | `Ownership` | plot_number, member_external_id, share, valid_from |
 
+**English template:** the sheet names above, the canonical column keys as headers, English hints and examples
+(`imports/template_en.properties`).
+
+**Ukrainian template:** everything a person reads is Ukrainian. Sheet names (`Ділянки`, `Члени`, `Власність`), headers
+(`Номер ділянки`, `Вулиця`, `Тип ділянки`, `Площа, м²`, ...) and value words (`ДІЛЯНКА`, `так`, `ЕЛ. ПОШТА`) are the **first
+word of each line of `imports/header-aliases.properties`**, the same vocabulary the readers accept, so the template cannot
+show a word the upload refuses. The hint sentences and the example values are in `imports/template_uk.properties`; they
+reach the vocabulary's words through placeholders (`{sheet.members}`, `{col.plots.area_m2}`, `{value.kind.PLOT}`). The
+example is a consistent set: plot `31а` (not `12а`: the demo cooperative already has a plot `12а`), street `вулиця Садова`,
+kind `ДІЛЯНКА`, 600 m2, building `так`; member key `Ч-001`, `Шевченко Тарас Григорович`, `+380 67 123 45 67`; ownership of
+plot `31а` by `Ч-001`, share `1` (a single owner must hold the whole plot, rules in `plots/README.md`), since 01.03.2020.
+Missing texts or placeholders fail the build's tests, not a download.
+
 Columns that hold identifiers or phone numbers (`number`, `phones`, `viber_phone`, `external_id`, `plot_number`,
-`member_external_id`, `cadastral_number`) have the text format, so Excel keeps leading zeros and long digit strings.
+`member_external_id`, `cadastral_number`) and the `share` have the text format, so Excel keeps leading zeros, long digit
+strings and `1/2`.
+
+## The vocabulary
+
+`ImportVocabulary` loads `imports/header-aliases.properties` once. One line per item, words separated by `|`; the first
+word is the Ukrainian label the template shows:
+
+| Line | Meaning |
+|---|---|
+| `<sheet>.<column key> = label \| alias ...` | column headers of `plots`, `members`, `ownership` |
+| `sheet.<plots\|members\|ownership> = label \| alias ...` | sheet names |
+| `value.kind.<PLOT\|COMMON>`, `value.channel.<EMAIL\|TELEGRAM\|VIBER\|PAPER>`, `value.yesno.<true\|false>` | value words |
+
+The upload accepts **both languages, also mixed in one file**, for all three: a sheet is found by its English name or any
+listed name (case-insensitive, `WorkbookReader.readSheet(List, ...)`); headers are matched by `HeaderMatcher` after
+normalisation; value words are matched ignoring case and extra spaces. `PlotsSheet` and `MembersSheet` turn a Ukrainian kind
+or delivery channel word into its canonical English word (`ДІЛЯНКА` -> `PLOT`) before the row goes to the plots and members
+modules, which only know the English words; a word that is not in the vocabulary is passed on as typed and reported by
+the owning module (`INVALID`). Yes and no (`так`/`ні`, `yes`/`no`, `true`/`false`) come from the same file (`Cells.yesNo`).
 
 ## Upload and preview
 
@@ -170,12 +209,12 @@ for a committed import), `status`, `counts` and `problemCount`.
   `PREVIEW` is shown as `EXPIRED` once the Kyiv `Clock` is after its `expires_at` (the rule of the commit), whether or not
   its plan has been cleared yet.
 
-## Header aliases
+## Header aliases and the Ukrainian exception
 
-The template headers are English. Header matching compares headers after normalisation (lower case, only letters and
-digits kept) and also accepts aliases of the column names, Ukrainian ones among them (`Номер`, `Вулиця`, `Площа, сот.`);
-they live in one backend resource file, `src/main/resources/imports/header-aliases.properties`. This is the one exception to the "everything in the
-repository is English" rule; it is recorded in ADR 0012 (Slice 7 of the feature).
+Headers (and now sheet names and value words) of either language are accepted; see The vocabulary above. The two resource
+files `imports/header-aliases.properties` (the vocabulary) and `imports/template_uk.properties` (the hint sentences and the
+examples of the Ukrainian template) are the exceptions to the "everything in the repository is English" rule, next to the
+UI catalogs; recorded in ADR 0012. `template_en.properties` is English like the rest.
 
 ## Libraries
 

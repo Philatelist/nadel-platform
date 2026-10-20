@@ -362,7 +362,7 @@ test.describe('§2.2 / §2.13 roles screen', () => {
     }
 
     // switching to English turns the permission names, labels and navigation into English
-    await page.getByRole('group', { name: 'Мова' }).getByRole('button', { name: 'en' }).click();
+    await page.getByRole('group', { name: 'Мова' }).getByRole('button', { name: 'English' }).click();
     await expect(page.getByRole('heading', { level: 1, name: 'Roles' })).toBeVisible();
     for (const name of ALL_PERMISSIONS) await expect(page.getByText(name, { exact: true })).toBeVisible();
     await expect(page.getByLabel('Name', { exact: true })).toBeVisible();

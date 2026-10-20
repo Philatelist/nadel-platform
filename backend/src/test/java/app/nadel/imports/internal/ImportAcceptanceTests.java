@@ -60,29 +60,35 @@ class ImportAcceptanceTests extends ImportCommitSupport {
     // ---- 2.1 template and file format
 
     /** Opens the downloaded file: three sheets, each with the headers, an instruction row and an example row. */
-    private static void assertTemplateLayout(byte[] file) throws Exception {
-        List<String> firstHeaders = List.of("number", "external_id", "plot_number");
+    private static void assertTemplateLayout(byte[] file, List<String> sheetNames, List<String> firstHeaders)
+            throws Exception {
         try (ReadableWorkbook workbook = new ReadableWorkbook(new ByteArrayInputStream(file))) {
             List<Sheet> sheets = workbook.getSheets().toList();
-            assertThat(sheets.stream().map(Sheet::getName)).containsExactly("Plots", "Members", "Ownership");
+            assertThat(sheets.stream().map(Sheet::getName)).containsExactlyElementsOf(sheetNames);
             for (int i = 0; i < sheets.size(); i++) {
                 List<Row> rows = sheets.get(i).read();
                 assertThat(rows).as(sheets.get(i).getName()).hasSize(3);
                 assertThat(rows.get(0).getCellText(0)).isEqualTo(firstHeaders.get(i));
                 assertThat(rows.get(0).getCellCount()).isGreaterThan(3);
                 assertThat(rows.get(1).getCellText(0)).startsWith("#");
-                assertThat(rows.get(2).getCellText(0)).startsWith("#").contains("example");
+                assertThat(rows.get(2).getCellText(0)).startsWith("#").containsAnyOf("example", "приклад");
             }
         }
     }
 
     @Test
     void section21_theDownloadedTemplateUploadsAsNothingToImportWithoutErrors() throws Exception {
-        // #1 the template is a file with the three sheets; #2 uploaded unchanged it has nothing to import
+        // #1 the template is a file with the three sheets (Ukrainian by default, English with lang=en);
+        // #2 uploaded unchanged it has nothing to import
         MvcResult template = mvc.perform(get(TEMPLATE).header(HttpHeaders.AUTHORIZATION, chairman()))
                 .andExpect(status().isOk()).andReturn();
         byte[] file = template.getResponse().getContentAsByteArray();
-        assertTemplateLayout(file);
+        assertTemplateLayout(file, List.of("Ділянки", "Члени", "Власність"),
+                List.of("Номер ділянки", "Ключ члена", "Номер ділянки"));
+        byte[] english = mvc.perform(get(TEMPLATE + "?lang=en").header(HttpHeaders.AUTHORIZATION, chairman()))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+        assertTemplateLayout(english, List.of("Plots", "Members", "Ownership"),
+                List.of("number", "external_id", "plot_number"));
         int plotsBefore = count("plot");
 
         upload(file)

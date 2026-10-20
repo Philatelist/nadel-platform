@@ -61,3 +61,11 @@ dependency versions; no mobile changes). Do not commit; report every file create
   > Verifies the whole feature end-to-end against functional-spec.md, run after all implementation slices are complete.
   - [x] Read functional-spec.md acceptance criteria in full. Generate acceptance-level tests that verify the entire feature as a whole — not individual slices. Cover applicable layers (unit for pure logic, integration for service interactions, e2e for user flows) based on the project's testing stack. Write tests with RED validation (must fail before implementation is confirmed done). Annotate each test with `@spec: 008-excel-import` and `@regression` if suitable for long-term regression. **[Agent: testing-expert]**
   - [x] Run all generated tests. All must pass. Fix any failures before proceeding. **[Agent: testing-expert]**
+
+- [x] **Slice 9: Template in the interface language (change request)**
+
+  > The downloaded template follows the UI language; the Ukrainian template is fully Ukrainian; upload accepts both languages.
+  - [x] Backend: `GET /imports/template?lang=uk|en` (else Accept-Language, else uk; unknown → 400); uk template with Ukrainian sheet names, headers, hint, example and value words from one vocabulary (alias resource) plus a template message bundle; ASCII file names `nadel-import-template-uk.xlsx` / `-en.xlsx`; upload accepts both languages and mixes; ADR 0012 and README; `make gen`. Tests: download in both languages, round trip with the example rows kept, Accept-Language fallback, unknown lang 400, mixed file. **[Agent: spring-backend]**
+  - [x] Web: the import page passes the current UI locale as `lang`; unit test; e2e: with the UI in Ukrainian the downloaded template has Ukrainian headers. **[Agent: react-frontend]**
+  - [x] Web: the header language switch shows "УКР" / "ENG" (locale codes stay uk/en) with aria-labels "Українська" / "English"; each label from its own language's catalog; update the e2e selectors that click the switch; unit test. **[Agent: react-frontend]**
+  - [x] Verify: `make check` green; `make e2e` green. **[Agent: testing-expert]**

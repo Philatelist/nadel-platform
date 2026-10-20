@@ -48,8 +48,25 @@ describe('ImportPage', () => {
     renderPage();
     expect(screen.getByRole('heading', { level: 1, name: 'Import' })).toBeInTheDocument();
     await userEvent.setup().click(screen.getByRole('button', { name: 'Download template' }));
-    await vi.waitFor(() => expect(downloadBlob).toHaveBeenCalledWith(blob, 'nadel-import-template.xlsx'));
+    await vi.waitFor(() => expect(downloadBlob).toHaveBeenCalledWith(blob, 'nadel-import-template-en.xlsx'));
     expect(downloadImportTemplate).toHaveBeenCalledOnce();
+  });
+
+  it.each(['uk', 'en'] as const)('asks for the template in the UI language (%s)', async (lang) => {
+    window.localStorage.setItem('nadel.locale', lang);
+    try {
+      const blob = new Blob(['x']);
+      downloadImportTemplate.mockResolvedValue(blob);
+      renderPage();
+      const name = lang === 'uk' ? 'Завантажити шаблон' : 'Download template';
+      await userEvent.setup().click(screen.getByRole('button', { name }));
+      await vi.waitFor(() =>
+        expect(downloadBlob).toHaveBeenCalledWith(blob, `nadel-import-template-${lang}.xlsx`),
+      );
+      expect(downloadImportTemplate.mock.calls[0]?.[0]).toEqual({ lang });
+    } finally {
+      window.localStorage.removeItem('nadel.locale');
+    }
   });
 
   it('disables the button while downloading', async () => {

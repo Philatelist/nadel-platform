@@ -18,18 +18,19 @@ import { Button, buttonClass, Notice, PageHeader, Panel } from '../components/ui
 import { downloadBlob } from '../downloadBlob';
 import { importErrorMessage } from '../importError';
 import { validateImportFile, type ImportFileError } from '../importFile';
-import { useT } from '../i18n';
+import { useLocale, useT } from '../i18n';
 import { problemMessage } from '../problem';
 import { useDocumentTitle } from '../useDocumentTitle';
 
 export function ImportPage() {
   const t = useT();
   const s = t.import;
+  const { locale } = useLocale();
   useDocumentTitle(s.title);
 
   const template = useMutation({
-    mutationFn: () => downloadImportTemplate(),
-    onSuccess: (blob) => downloadBlob(blob, s.templateFileName),
+    mutationFn: () => downloadImportTemplate({ lang: locale }),
+    onSuccess: (blob) => downloadBlob(blob, `nadel-import-template-${locale}.xlsx`),
   });
 
   const [file, setFile] = useState<File | null>(null);

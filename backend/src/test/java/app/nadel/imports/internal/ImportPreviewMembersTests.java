@@ -98,7 +98,7 @@ class ImportPreviewMembersTests extends ImportsIntegrationTest {
 
     @Test
     void theUnchangedTemplateHasNoMembers() throws Exception {
-        upload(new TemplateWriter().write())
+        upload(new TemplateWriter().write(TemplateLanguage.UK))
                 .andExpect(jsonPath("$.counts.members.created").value(0))
                 .andExpect(jsonPath("$.counts.members.updated").value(0))
                 .andExpect(jsonPath("$.counts.members.unchanged").value(0))

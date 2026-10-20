@@ -20,6 +20,8 @@ export * from './baseRole';
 export * from './conflictResponse';
 export * from './cooperativeSettings';
 export * from './deliveryChannel';
+export * from './downloadImportTemplateLang';
+export * from './downloadImportTemplateParams';
 export * from './forbiddenResponse';
 export * from './importCounts';
 export * from './importEntityCounts';

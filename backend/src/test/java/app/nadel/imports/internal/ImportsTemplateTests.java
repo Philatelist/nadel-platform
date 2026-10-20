@@ -21,6 +21,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 /** GET /imports/template: who may download it and what comes back. */
 class ImportsTemplateTests extends IntegrationTest {
@@ -52,19 +53,81 @@ class ImportsTemplateTests extends IntegrationTest {
         }
     }
 
+    private List<String> sheetNames(MvcResult result) throws Exception {
+        try (ReadableWorkbook workbook = new ReadableWorkbook(
+                new ByteArrayInputStream(result.getResponse().getContentAsByteArray()))) {
+            return workbook.getSheets().map(Sheet::getName).toList();
+        }
+    }
+
+    private MvcResult download(String query, String acceptLanguage) throws Exception {
+        MockHttpServletRequestBuilder request = get(TEMPLATE + query)
+                .header(HttpHeaders.AUTHORIZATION, demo("chairman@demo.local"));
+        if (acceptLanguage != null) {
+            request.header(HttpHeaders.ACCEPT_LANGUAGE, acceptLanguage);
+        }
+        return mvc.perform(request).andExpect(status().isOk()).andReturn();
+    }
+
+    private static final List<String> UK_SHEETS = List.of("Ділянки", "Члени", "Власність");
+    private static final List<String> EN_SHEETS = List.of("Plots", "Members", "Ownership");
+
     @Test
-    void theChairmanDownloadsAnXlsxAttachmentWithThreeSheets() throws Exception {
+    void theChairmanDownloadsAnXlsxAttachmentWithThreeSheetsInUkrainianByDefault() throws Exception {
         MvcResult result = mvc.perform(get(TEMPLATE).header(HttpHeaders.AUTHORIZATION, demo("chairman@demo.local")))
                 .andExpect(status().isOk())
                 .andExpect(header().string(HttpHeaders.CONTENT_TYPE, XLSX))
                 .andExpect(header().string(HttpHeaders.CONTENT_DISPOSITION,
-                        "attachment; filename=\"nadel-import-template.xlsx\""))
+                        "attachment; filename=\"nadel-import-template-uk.xlsx\""))
+                .andExpect(header().string(HttpHeaders.VARY, HttpHeaders.ACCEPT_LANGUAGE))
                 .andReturn();
 
         byte[] body = result.getResponse().getContentAsByteArray();
         assertThat(result.getResponse().getContentLength()).isEqualTo(body.length);
-        try (ReadableWorkbook workbook = new ReadableWorkbook(new ByteArrayInputStream(body))) {
-            assertThat(workbook.getSheets().map(Sheet::getName)).containsExactly("Plots", "Members", "Ownership");
+        assertThat(sheetNames(result)).containsExactlyElementsOf(UK_SHEETS);
+    }
+
+    @Test
+    void theLangParameterPicksTheLanguageAndTheAsciiFileName() throws Exception {
+        MvcResult uk = download("?lang=uk", null);
+        assertThat(uk.getResponse().getHeader(HttpHeaders.CONTENT_DISPOSITION))
+                .isEqualTo("attachment; filename=\"nadel-import-template-uk.xlsx\"");
+        assertThat(sheetNames(uk)).containsExactlyElementsOf(UK_SHEETS);
+
+        MvcResult en = download("?lang=en", null);
+        assertThat(en.getResponse().getHeader(HttpHeaders.CONTENT_DISPOSITION))
+                .isEqualTo("attachment; filename=\"nadel-import-template-en.xlsx\"");
+        assertThat(sheetNames(en)).containsExactlyElementsOf(EN_SHEETS);
+    }
+
+    @Test
+    void withoutLangTheAcceptLanguageHeaderDecides() throws Exception {
+        assertThat(sheetNames(download("", "uk-UA"))).containsExactlyElementsOf(UK_SHEETS);
+        assertThat(sheetNames(download("", "en-US"))).containsExactlyElementsOf(EN_SHEETS);
+        assertThat(sheetNames(download("", "en-US,en;q=0.9,uk;q=0.8"))).containsExactlyElementsOf(EN_SHEETS);
+        assertThat(sheetNames(download("", "uk;q=0.3, en;q=0.9"))).containsExactlyElementsOf(EN_SHEETS);
+        MvcResult german = download("", "de");
+        assertThat(sheetNames(german)).containsExactlyElementsOf(UK_SHEETS);
+        assertThat(german.getResponse().getHeader(HttpHeaders.CONTENT_DISPOSITION)).contains("-uk.xlsx");
+        assertThat(sheetNames(download("", null))).containsExactlyElementsOf(UK_SHEETS);
+        assertThat(sheetNames(download("", "garbage;;;"))).containsExactlyElementsOf(UK_SHEETS);
+    }
+
+    @Test
+    void theLangParameterWinsOverAcceptLanguage() throws Exception {
+        MvcResult en = download("?lang=en", "uk-UA");
+        assertThat(sheetNames(en)).containsExactlyElementsOf(EN_SHEETS);
+        assertThat(en.getResponse().getHeader(HttpHeaders.CONTENT_DISPOSITION)).contains("-en.xlsx");
+        assertThat(sheetNames(download("?lang=uk", "en-US"))).containsExactlyElementsOf(UK_SHEETS);
+    }
+
+    @Test
+    void anUnknownLangIsAValidationFailure() throws Exception {
+        for (String lang : List.of("de", "UK", "ukr", "en-US", "")) {
+            mvc.perform(get(TEMPLATE + "?lang=" + lang).header(HttpHeaders.AUTHORIZATION, demo("chairman@demo.local")))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                    .andExpect(jsonPath("$.errors[0].field").value("lang"));
         }
     }
 

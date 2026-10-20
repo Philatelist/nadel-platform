@@ -1093,10 +1093,29 @@ paths:
       operationId: downloadImportTemplate
       summary: Download the import template
       description: |
-        Returns the Excel template (`.xlsx`, file name `nadel-import-template.xlsx`) with the sheets `Plots`, `Members`
-        and `Ownership`: English column headers, one instruction row and one example row per sheet (both start with
-        `#` and are ignored by the import). Requires the `IMPORT_RUN` permission; the platform operator has no
-        cooperative data: 403.
+        Returns the Excel template (`.xlsx`) with three sheets, one instruction row and one example row per sheet
+        (both rows start with `#` and are ignored by the import). It comes in two languages. The Ukrainian template
+        (`nadel-import-template-uk.xlsx`) has the sheets `Ділянки`, `Члени` and `Власність`, and everything a person
+        reads is Ukrainian: headers, instructions, example row and value words (`ДІЛЯНКА`, `так`). The English
+        template (`nadel-import-template-en.xlsx`) has the sheets `Plots`, `Members` and `Ownership` with the
+        canonical column names. The file name is always ASCII, in the `Content-Disposition` header.
+
+        The language is the `lang` query parameter. Without it the best match of `uk` and `en` in the
+        `Accept-Language` header is used (`uk-UA` is `uk`, `en-US` is `en`), and without a match (`de`, no header)
+        the default `uk`. A `lang` other than `uk` and `en` is 400 `VALIDATION_FAILED`.
+
+        An upload accepts both languages for sheet names, headers and value words, also mixed in one file.
+        Requires the `IMPORT_RUN` permission; the platform operator has no cooperative data: 403.
+      parameters:
+        - name: lang
+          in: query
+          required: false
+          description: >-
+            Template language, `uk` or `en`. Without it the `Accept-Language` header decides, then `uk`.
+          schema:
+            type: string
+            enum: [uk, en]
+            pattern: '^(uk|en)$'
       responses:
         '200':
           description: The template workbook, sent as an attachment
@@ -1105,6 +1124,8 @@ paths:
               schema:
                 type: string
                 format: binary
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':

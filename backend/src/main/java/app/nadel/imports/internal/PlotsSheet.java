@@ -20,11 +20,14 @@ import org.springframework.http.HttpStatus;
  */
 final class PlotsSheet {
 
+    /** The canonical (English) sheet name; the Ukrainian names come from {@link ImportVocabulary}. */
     static final String NAME = "Plots";
+    /** Every name the sheet may have in a file. */
+    static final List<String> NAMES = ImportVocabulary.get().sheetNames(ImportVocabulary.COLUMNS_PLOTS, NAME);
     /** More plot rows than this are refused, before the rest of the file is read. */
     static final int MAX_ROWS = 2000;
 
-    private static final String ALIASES_KEY = "plots";
+    private static final String ALIASES_KEY = ImportVocabulary.COLUMNS_PLOTS;
 
     private PlotsSheet() {
     }
@@ -45,7 +48,7 @@ final class PlotsSheet {
      */
     static Parsed parse(WorkbookReader reader) {
         Collector collector = new Collector();
-        boolean present = reader.readSheet(NAME, collector);
+        boolean present = reader.readSheet(NAMES, collector);
         List<RowProblem> problems = collector.problems;
         if (!present) {
             problems.add(new RowProblem(ImportSheet.PLOTS, 0, null, ProblemCodes.SHEET_MISSING));
@@ -103,7 +106,7 @@ final class PlotsSheet {
         PlotImportRow row = new PlotImportRow(raw.number(),
                 text(raw, header, PlotColumn.NUMBER),
                 text(raw, header, PlotColumn.STREET),
-                text(raw, header, PlotColumn.KIND),
+                word(raw, header, PlotColumn.KIND, ImportVocabulary.KIND),
                 squareMetres,
                 text(raw, header, PlotColumn.CADASTRAL_NUMBER),
                 building.value(),
@@ -113,5 +116,11 @@ final class PlotsSheet {
 
     private static @Nullable String text(RawRow raw, HeaderMatcher.Match<PlotColumn> header, PlotColumn column) {
         return Cells.text(header.cell(raw, column)).value();
+    }
+
+    /** A value word of either language as its canonical English word; an unknown word stays as typed. */
+    private static @Nullable String word(RawRow raw, HeaderMatcher.Match<PlotColumn> header, PlotColumn column,
+            String kind) {
+        return Cells.word(header.cell(raw, column), kind).value();
     }
 }

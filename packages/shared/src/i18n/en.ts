@@ -20,6 +20,7 @@ export const en = {
     menu: 'Menu',
     main: 'Main menu',
   },
+  language: { short: 'ENG', name: 'English' },
   theme: { system: 'System', light: 'Light', dark: 'Dark' },
   state: { loading: 'Loading…', empty: 'Nothing here yet.', error: 'Could not load data. Please try again.' },
   access: {
@@ -292,7 +293,6 @@ export const en = {
     templateHint: 'Download the Excel template, fill it in with the cooperative data and save the file.',
     downloadTemplate: 'Download template',
     downloading: 'Downloading…',
-    templateFileName: 'nadel-import-template.xlsx',
     uploadTitle: 'Upload file',
     uploadHint: 'Choose the filled-in Excel file (.xlsx, up to 10 MB). Nothing is saved until you confirm.',
     chooseFile: 'Choose file',

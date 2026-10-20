@@ -48,16 +48,23 @@ final class WorkbookReader implements AutoCloseable {
         }
     }
 
+    /** {@link #readSheet(List, Consumer)} for a sheet that has one name. */
+    boolean readSheet(String name, Consumer<RawRow> consumer) {
+        return readSheet(List.of(name), consumer);
+    }
+
     /**
-     * Streams the rows of the sheet with this name (ignoring case and surrounding spaces) to {@code consumer}, in file
-     * order, skipping rows with no cells. The consumer may throw an {@link ApiProblemException} to stop reading.
+     * Streams the rows of the sheet that has one of these names (ignoring case and surrounding spaces; the first sheet
+     * of the workbook that matches) to {@code consumer}, in file order, skipping rows with no cells. The consumer may
+     * throw an {@link ApiProblemException} to stop reading.
      *
+     * @param names the names the sheet may have, for example its English name and its Ukrainian one
      * @return false when there is no such sheet
      * @throws ApiProblemException {@code FILE_NOT_XLSX} when the sheet cannot be read
      */
-    boolean readSheet(String name, Consumer<RawRow> consumer) {
+    boolean readSheet(List<String> names, Consumer<RawRow> consumer) {
         Optional<Sheet> sheet = workbook.getSheets()
-                .filter(candidate -> candidate.getName().strip().equalsIgnoreCase(name))
+                .filter(candidate -> names.stream().anyMatch(name -> candidate.getName().strip().equalsIgnoreCase(name)))
                 .findFirst();
         if (sheet.isEmpty()) {
             return false;

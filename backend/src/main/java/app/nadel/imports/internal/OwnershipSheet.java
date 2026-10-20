@@ -19,11 +19,14 @@ import org.springframework.http.HttpStatus;
  */
 final class OwnershipSheet {
 
+    /** The canonical (English) sheet name; the Ukrainian names come from {@link ImportVocabulary}. */
     static final String NAME = "Ownership";
+    /** Every name the sheet may have in a file. */
+    static final List<String> NAMES = ImportVocabulary.get().sheetNames(ImportVocabulary.COLUMNS_OWNERSHIP, NAME);
     /** More ownership rows than this are refused, before the rest of the file is read. */
     static final int MAX_ROWS = 6000;
 
-    private static final String ALIASES_KEY = "ownership";
+    private static final String ALIASES_KEY = ImportVocabulary.COLUMNS_OWNERSHIP;
 
     private OwnershipSheet() {
     }
@@ -47,7 +50,7 @@ final class OwnershipSheet {
      */
     static Parsed parse(WorkbookReader reader) {
         Collector collector = new Collector(reader.date1904());
-        if (!reader.readSheet(NAME, collector)) {
+        if (!reader.readSheet(NAMES, collector)) {
             return Parsed.EMPTY;
         }
         if (collector.header == null) {

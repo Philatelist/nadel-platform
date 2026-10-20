@@ -99,7 +99,7 @@ test.describe('Role names in Ukrainian', () => {
       await expect(treasurer).toBeVisible();
 
       // switching to English shows the English standard name
-      await page.getByRole('group', { name: 'Мова' }).getByRole('button', { name: 'en' }).click();
+      await page.getByRole('group', { name: 'Мова' }).getByRole('button', { name: 'English' }).click();
       await expect(roleItems(page).filter({ hasText: /^Treasurer/ })).toBeVisible();
     } finally {
       await page.context().close();
@@ -138,9 +138,9 @@ test.describe('Role names in Ukrainian', () => {
       await expect(treasurer).toHaveCount(0);
 
       // a renamed role shows the same name in English
-      await page.getByRole('group', { name: 'Мова' }).getByRole('button', { name: 'en' }).click();
+      await page.getByRole('group', { name: 'Мова' }).getByRole('button', { name: 'English' }).click();
       await expect(roleItems(page).filter({ hasText: /^Бухгалтер/ })).toBeVisible();
-      await page.getByRole('group', { name: 'Language' }).getByRole('button', { name: 'uk' }).click();
+      await page.getByRole('group', { name: 'Language' }).getByRole('button', { name: 'Українська' }).click();
 
       // members list and the treasurer's member page, as the chairman sees them
       await menuLink(page, 'Члени кооперативу').click();
@@ -182,7 +182,7 @@ test.describe('Role names in Ukrainian', () => {
       await expectAuditRow(page, /Казначей → Бухгалтер/);
       await expectAuditRow(page, /Бухгалтер → Казначей/);
       expect(await page.getByRole('main').innerText()).not.toContain('base:');
-      await page.getByRole('group', { name: 'Мова' }).getByRole('button', { name: 'en' }).click();
+      await page.getByRole('group', { name: 'Мова' }).getByRole('button', { name: 'English' }).click();
       await expect(
         page
           .getByRole('row')

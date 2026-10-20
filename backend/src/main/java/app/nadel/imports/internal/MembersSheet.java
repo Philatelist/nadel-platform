@@ -22,11 +22,14 @@ import org.springframework.http.HttpStatus;
  */
 final class MembersSheet {
 
+    /** The canonical (English) sheet name; the Ukrainian names come from {@link ImportVocabulary}. */
     static final String NAME = "Members";
+    /** Every name the sheet may have in a file. */
+    static final List<String> NAMES = ImportVocabulary.get().sheetNames(ImportVocabulary.COLUMNS_MEMBERS, NAME);
     /** More member rows than this are refused, before the rest of the file is read. */
     static final int MAX_ROWS = 3000;
 
-    private static final String ALIASES_KEY = "members";
+    private static final String ALIASES_KEY = ImportVocabulary.COLUMNS_MEMBERS;
     private static final Pattern PHONE_SEPARATOR = Pattern.compile("[,;\\n]");
     /** Digits of a Ukrainian mobile number without its leading zero, as Excel stores {@code 0671234567} in a number cell. */
     private static final int NATIONAL_DIGITS_WITHOUT_ZERO = 9;
@@ -45,7 +48,7 @@ final class MembersSheet {
      */
     static Parsed parse(WorkbookReader reader) {
         Collector collector = new Collector();
-        if (!reader.readSheet(NAME, collector)) {
+        if (!reader.readSheet(NAMES, collector)) {
             return Parsed.EMPTY;
         }
         if (collector.header == null) {
@@ -97,7 +100,7 @@ final class MembersSheet {
                 phones(phoneText(header.cell(raw, MemberColumn.PHONES))),
                 text(raw, header, MemberColumn.EMAIL),
                 text(raw, header, MemberColumn.POSTAL_ADDRESS),
-                text(raw, header, MemberColumn.DELIVERY_CHANNEL),
+                Cells.word(header.cell(raw, MemberColumn.DELIVERY_CHANNEL), ImportVocabulary.CHANNEL).value(),
                 text(raw, header, MemberColumn.TELEGRAM_USERNAME),
                 phoneText(header.cell(raw, MemberColumn.VIBER_PHONE)));
     }

@@ -13,8 +13,8 @@ Questions that needed a decision:
 3. Where does the previewed data wait between the preview and the commit, and how does the commit know that the
    cooperative data did not change in between?
 4. Does the commit run as a background job (ADR 0007 names JobRunr for long work)?
-5. Users upload files from Ukrainian spreadsheets. The rule "everything in the repository is English" meets column
-   headers such as `Площа, сот.`.
+5. Users upload files from Ukrainian spreadsheets and expect a template in their language. The rule "everything in the
+   repository is English" meets column headers such as `Площа, сот.` and a template with Ukrainian sheets, hints and examples.
 
 ## Decision
 - **A new module `imports`** (`app.nadel.imports`) owns the template, the parsing, the preview, the commit orchestration, the
@@ -76,11 +76,24 @@ Questions that needed a decision:
   row, which are personal data (CLAUDE.md), so `org.hibernate.orm.jdbc.error` is switched OFF and the driver property
   `logServerErrorDetail=false` is set; the exception still propagates and is mapped. A filtered appender is the alternative
   if the owner wants the log line without the values.
-- **Ukrainian header aliases are an exception to the English-only rule.** The template and the API are English, but people
-  fill spreadsheets with Ukrainian headers. The aliases live in **one** file,
-  `backend/src/main/resources/imports/header-aliases.properties` (UTF-8, headers compared after normalisation: lower
-  case, letters and digits only). It is the only place outside the UI catalogs (`packages/shared/src/i18n`) where
-  non-English text is allowed. Error messages stay codes with parameters; the client translates them.
+- **Ukrainian words are an exception to the English-only rule, in two resource files.** People fill spreadsheets in
+  Ukrainian and the template follows the user's UI language, so the import has a Ukrainian vocabulary. (1)
+  `backend/src/main/resources/imports/header-aliases.properties` is the **vocabulary**, the single source of truth for
+  sheet names, column headers and value words (plot kinds, delivery channels, yes and no) in both languages: the readers
+  accept every word listed there, and the Ukrainian template shows the **first word of each line** as its label, so the
+  template cannot contain a word the upload refuses and no word list is duplicated in Java. Headers are compared after
+  normalisation (lower case, letters and digits only), value words ignoring case and extra spaces. (2)
+  `imports/template_uk.properties` holds the Ukrainian texts that are not vocabulary: the hint sentences and the example
+  values of the template (they reach the vocabulary's words through placeholders such as `{sheet.members}` and
+  `{value.kind.PLOT}`); `template_en.properties` holds the English ones. Both files are UTF-8. The two Ukrainian files are
+  the only places outside the UI catalogs (`packages/shared/src/i18n`) where non-English text is allowed. Error messages
+  stay codes with parameters; the client translates them.
+- **Template language.** `GET /imports/template` takes an optional `lang` (`uk` or `en`; an unknown value is 400
+  `VALIDATION_FAILED`, enforced by the contract's `enum` and `pattern`), otherwise the best match of the `Accept-Language`
+  header, otherwise `uk`. The file name is ASCII (`nadel-import-template-uk.xlsx`, `-en.xlsx`). An upload accepts both
+  languages for sheet names, headers and value words, also mixed in one file; the Ukrainian kind and channel words are
+  turned into the canonical English words in `imports` before the plots and members facades see them, so those modules
+  stay English-only. The `#` comment rows are unchanged: an untouched template of either language imports nothing.
 - **No scheduled purge of old runs until JobRunr is used.** Plans (the only personal data in a run) are cleared lazily as
   above; the run rows themselves are the history and stay. When JobRunr arrives (ADR 0007), a job with
   `TenantContext.runAs` can drop old runs and move long commits to the background.
@@ -97,5 +110,7 @@ Questions that needed a decision:
   stale refusal); a cooperative that never uploads again keeps an expired plan until its next upload or commit.
 - A bump of `fastexcel` must re-check `commons-compress` and the OSV report; the supply-chain check never gets an ignore for
   this feature.
-- `CLAUDE.md` says that everything is English except `uk.ts`; the alias file is a second exception and the owner should
-  add one sentence to that rule (proposed wording in the report of the pipeline).
+- `CLAUDE.md` says that everything is English except `uk.ts`; the vocabulary file and `template_uk.properties` are further
+  exceptions and the owner should add one sentence to that rule (proposed wording: "The only exceptions are end-user UI
+  translations inside `packages/shared/src/i18n` and the Ukrainian vocabulary and template texts of the import in
+  `backend/src/main/resources/imports`, see ADR 0012").

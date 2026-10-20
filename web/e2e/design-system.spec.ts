@@ -216,7 +216,7 @@ test.describe('page frame (2.6)', () => {
     await expect(header).toContainText('Голова');
     await expect(header.getByRole('button', { name: 'Вийти' })).toBeVisible();
     const language = header.getByRole('group', { name: 'Мова' });
-    await expect(language.getByRole('button', { pressed: true })).toHaveText(/uk/i);
+    await expect(language.getByRole('button', { pressed: true })).toHaveText('УКР');
     await expect(language.getByRole('button')).toHaveCount(2);
 
     const menu = page.locator('#app-menu nav');

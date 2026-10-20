@@ -5,11 +5,12 @@
 // file, the size limit, the history and the people who may not import. Workbooks are generated at test time with
 // unique plot numbers, member keys and emails per run; plots and members the import creates are archived through the
 // API in `finally` (their ownership is ended first), so the demo counts of the other specs stay as they were.
-import { stat } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { expect, test, type Page } from '@playwright/test';
 import { api, archiveLeftovers, kyivDay, type CreatedMember, type CreatedPlot } from './support/api';
 import { loginAs } from './support/login';
 import { xlsx } from './support/xlsx';
+import { readWorkbookText } from './support/xlsxRead';
 
 const XLSX_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 const main = (page: Page) => page.getByRole('main');
@@ -131,17 +132,33 @@ async function findLeftovers(
 test.describe('excel import', () => {
   test('chairman downloads the template', async ({ page }) => {
     await loginAs(page, 'chairman@demo.local');
-    await menuLink(page, 'Import').click();
-    await expect(page.getByRole('heading', { level: 1, name: 'Import' })).toBeVisible();
+    // loginAs forces English on every page load, so switch to Ukrainian after opening the page.
+    await page.goto('/imports');
+    await page.getByRole('group', { name: 'Language' }).getByRole('button', { name: 'Українська' }).click();
 
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      page.getByRole('button', { name: 'Завантажити шаблон' }).click(),
+    ]);
+    expect(download.suggestedFilename()).toBe('nadel-import-template-uk.xlsx');
+    const path = await download.path();
+    const { size } = await stat(path);
+    expect(size).toBeGreaterThan(0);
+    const { workbook, strings } = readWorkbookText(await readFile(path));
+    expect(workbook).toContain('Ділянки');
+    expect(strings).toContain('Номер ділянки');
+  });
+
+  test('the template follows the UI language', async ({ page }) => {
+    await loginAs(page, 'chairman@demo.local');
+    await page.goto('/imports');
     const [download] = await Promise.all([
       page.waitForEvent('download'),
       page.getByRole('button', { name: 'Download template' }).click(),
     ]);
-    expect(download.suggestedFilename()).toBe('nadel-import-template.xlsx');
-    const path = await download.path();
-    const { size } = await stat(path);
-    expect(size).toBeGreaterThan(0);
+    expect(download.suggestedFilename()).toBe('nadel-import-template-en.xlsx');
+    const { strings } = readWorkbookText(await readFile(await download.path()));
+    expect(strings).toMatch(/>number</);
   });
 
   test('chairman checks, imports and re-imports a workbook; an invalid file and the history', async ({

@@ -1,6 +1,7 @@
 package app.nadel.imports.internal;
 
 import app.nadel.identity.CurrentUser;
+import jakarta.servlet.http.HttpServletRequest;
 import java.net.URI;
 import java.util.UUID;
 import nadel.contract.api.ImportsApi;
@@ -28,16 +29,17 @@ class ImportsController implements ImportsApi {
 
     static final MediaType XLSX = MediaType.parseMediaType(
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-    static final String TEMPLATE_FILE_NAME = "nadel-import-template.xlsx";
 
     private final TemplateWriter templateWriter = new TemplateWriter();
     private final CurrentUser currentUser;
     private final ImportService service;
     private final ImportCommitter committer;
     private final ImportHistory history;
+    private final HttpServletRequest request;
 
     ImportsController(CurrentUser currentUser, ImportService service, ImportCommitter committer,
-            ImportHistory history) {
+            ImportHistory history, HttpServletRequest request) {
+        this.request = request;
         this.currentUser = currentUser;
         this.service = service;
         this.committer = committer;
@@ -46,13 +48,15 @@ class ImportsController implements ImportsApi {
 
     @Override
     @PreAuthorize("hasAuthority('PERM_IMPORT_RUN')")
-    public ResponseEntity<Resource> downloadImportTemplate() {
-        byte[] template = templateWriter.write();
+    public ResponseEntity<Resource> downloadImportTemplate(String lang) {
+        TemplateLanguage language = TemplateLanguage.resolve(lang, request.getHeader(HttpHeaders.ACCEPT_LANGUAGE));
+        byte[] template = templateWriter.write(language);
         return ResponseEntity.ok()
                 .contentType(XLSX)
                 .contentLength(template.length)
+                .varyBy(HttpHeaders.ACCEPT_LANGUAGE)
                 .header(HttpHeaders.CONTENT_DISPOSITION,
-                        ContentDisposition.attachment().filename(TEMPLATE_FILE_NAME).build().toString())
+                        ContentDisposition.attachment().filename(language.fileName()).build().toString())
                 .body(new ByteArrayResource(template));
     }
 

@@ -349,7 +349,7 @@ class ImportPreviewOwnershipTests extends ImportsIntegrationTest {
 
     @Test
     void theUnchangedTemplateHasNoOwnership() throws Exception {
-        upload(new TemplateWriter().write())
+        upload(new TemplateWriter().write(TemplateLanguage.UK))
                 .andExpect(jsonPath("$.counts.ownerships.created").value(0))
                 .andExpect(jsonPath("$.counts.ownerships.unchanged").value(0))
                 .andExpect(jsonPath("$.problemCount").value(0));
