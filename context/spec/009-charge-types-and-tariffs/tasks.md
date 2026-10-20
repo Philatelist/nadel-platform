@@ -37,12 +37,12 @@ commit; report every file created or changed.
   - [x] Web: `components/ui/MonthField`; `PlotTariffsPanel` on PlotPage (not for common land; month picker, rows, total; hidden on 404); `MyChargesPanel` on AccountPage ("Що мені нараховуватимуть", current month per owned plot); i18n; unit tests. **[Agent: react-frontend]**
   - [x] Verify: `cd backend && ./mvnw -B test -Dtest='ChargeCalculatorTests,PlotTariffsTests,TariffScopeTests,ModularityTests'` green; `pnpm gen:api` leaves no diff; `pnpm -r test && pnpm -r typecheck && pnpm -r lint && pnpm format:check` green. **[Agent: spring-backend]**
 
-- [ ] **Slice 5: End-to-end flow, docs and coverage**
+- [x] **Slice 5: End-to-end flow, docs and coverage**
 
   > A browser run proves the main flows; the product docs describe the module; the coverage floor follows the measured level.
-  - [ ] e2e: `web/e2e/tariffs.spec.ts` (`@spec: 009-charge-types-and-tariffs`): the chairman creates a unique custom charge type and a per-sotka tariff, sees the expected amount on a per-run 600 m² plot card; the treasurer sees no actions; a member has no "Тарифи" menu, direct URL shows no access, the account page shows only own plot amounts; cleanup archives the run's charge type and plots in `finally`; uk and en checks where cheap. Adjust other specs only if they break because of the new menu item or demo tariffs. **[Agent: react-frontend]**
-  - [ ] Docs and build: `context/product/architecture.md` (tariffs and money modules, permissions), `docs/domain/glossary.md` (charge type, rate, scope, exclusion, expected amount), `tariffs/README.md` final; run `./mvnw verify` and raise `coverage.minimum` in `backend/pom.xml` to the measured level (rounded down to 2 decimals, never lower). **[Agent: spring-backend]**
-  - [ ] Verify: `make check` green; `make e2e` green. **[Agent: spring-backend]**
+  - [x] e2e: `web/e2e/tariffs.spec.ts` (`@spec: 009-charge-types-and-tariffs`): the chairman creates a unique custom charge type and a per-sotka tariff, sees the expected amount on a per-run 600 m² plot card; the treasurer sees no actions; a member has no "Тарифи" menu, direct URL shows no access, the account page shows only own plot amounts; cleanup archives the run's charge type and plots in `finally`; uk and en checks where cheap. Adjust other specs only if they break because of the new menu item or demo tariffs. **[Agent: react-frontend]**
+  - [x] Docs and build: `context/product/architecture.md` (tariffs and money modules, permissions), `docs/domain/glossary.md` (charge type, rate, scope, exclusion, expected amount), `tariffs/README.md` final; run `./mvnw verify` and raise `coverage.minimum` in `backend/pom.xml` to the measured level (rounded down to 2 decimals, never lower). **[Agent: spring-backend]**
+  - [x] Verify: `make check` green; `make e2e` green. **[Agent: spring-backend]**
 
 - [ ] **Slice 6: Feature Testing & Regression**
 

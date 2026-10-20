@@ -220,7 +220,7 @@ test.describe('page frame (2.6)', () => {
     await expect(language.getByRole('button')).toHaveCount(2);
 
     const menu = page.locator('#app-menu nav');
-    await expect(menu.getByRole('link')).toHaveCount(6); // Plots, Members, Import, Roles, Audit log, Cooperative settings
+    await expect(menu.getByRole('link')).toHaveCount(7); // Plots, Members, Tariffs, Import, Roles, Audit log, Cooperative settings
     await page.goto('/members');
     await expect(menu.locator('a[aria-current="page"]')).toHaveCount(1);
     expect(
@@ -300,6 +300,7 @@ test.describe('keyboard (2.8)', () => {
     expect(visited.filter((v) => v.inMenu).map((v) => v.name)).toEqual([
       'Plots',
       'Members',
+      'Tariffs',
       'Import',
       'Roles',
       'Audit log',

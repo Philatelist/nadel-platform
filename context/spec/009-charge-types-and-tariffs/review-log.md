@@ -24,3 +24,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `ec4e615..6ed5b5b` | PASS | — | minor: ScopeEditor shows nothing for list-level field errors (`plotIds`/`exclusions` INVALID or TOO_LONG — the UI never sends such requests); unknown field codes fall back to the INVALID text; row-indexed server errors shift when a row is removed after a failed save; a fully-qualified `Basis` in TariffDtoMapper; a memoised count in a `long[]` in TariffAssembler |
+
+## Slice 4 — Expected amount on the plot card and in "My account"
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `6ed5b5b..96d1698` | PASS | — | minor: the demo exclusion of plot 28 returns on a rerun of the repeatable demo script if the chairman removed it (demo data only); the account title key is `tariffs.expected.myTitle` instead of the tech spec's `account.myCharges`; `DemoTariffData` gives a bare NPE if its resource is missing; fully-qualified `java.util.Objects` in `ExpectedCharge`; a dynamic `fireEvent` import and a no-op `userEvent.tab()` in a panel test; slice commit subjects are not Conventional Commits (the squash title is); the panel shows the empty state on archived plots |

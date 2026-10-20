@@ -16,6 +16,17 @@ Tables (all under RLS `tenant_isolation`, an index on `tenant_id`, composite for
 All four tables exist in V10 (one migration, one isolation test). `nadel_app` has no `DELETE`/`TRUNCATE` on `charge_type` and `tariff`, and
 no `UPDATE`/`DELETE`/`TRUNCATE` on `tariff_version`.
 
+## Public API and permissions
+
+The module root exports `ChargeCalculator` (pure, no Spring, no database), `VersionTerms` (with `InvalidVersionTermsException`),
+`Basis`, `Frequency` and `ExpectedCharge` (`Amount` or `ByReadings`); everything else is in `internal`. Feature 011 (the
+ledger) calls the same `ChargeCalculator`, so the preview and the real charge never diverge.
+
+Permissions (ADR 0009, defined in `identity.Permission`, seeded for the Chairman by `seed_base_roles`; the Treasurer gets
+only `TARIFFS_VIEW`): `TARIFFS_VIEW` reads charge types, tariffs and the expected amount of any plot. `TARIFFS_MANAGE`
+changes them, and every write checks `TARIFFS_VIEW` and `TARIFFS_MANAGE` together. A member without these permissions may read only the expected amount of a plot they
+currently own. Every change is written to the audit log (see Audit).
+
 ## Charge types
 
 - `seed_charge_types(tenant)` writes the four types with deterministic ids `md5(tenant || ':CHARGE_TYPE:' || code)::uuid`,
@@ -175,8 +186,8 @@ old and new number), `CHARGE_TYPE_ARCHIVED` (`archived` false to true). Publishe
 
 The Ukrainian default names of the four seeded types ("Членський внесок", "Електроенергія", "Земельний податок",
 "Вода") are needed on the server for the name check above. They live in one UTF-8 resource file,
-`src/main/resources/tariffs/charge-type-default-names.properties` (next to the English ones), read by
-`DefaultChargeTypeNames`. The file mirrors `chargeTypes.defaultNames` in the web catalog
+`src/main/resources/tariffs/charge-type-default-names.properties` (the English and Ukrainian default names side by
+side, keys like `MEMBERSHIP.en` and `MEMBERSHIP.uk`), read by `DefaultChargeTypeNames`. The file mirrors `chargeTypes.defaultNames` in the web catalog
 (`packages/shared/src/i18n/uk.ts`), which is the source of the texts users see; keep the two in step. This is a
 narrow exception to "everything in the repository is English", of the same kind as the import vocabulary (ADR 0012).
 
