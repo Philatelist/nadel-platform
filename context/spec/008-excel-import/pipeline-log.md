@@ -95,3 +95,4 @@ Same as 004–007 (see `context/spec/005-ui-preferences/pipeline-log.md`). Re-ch
 - Proposed CLAUDE.md change (owner commits; not made by the pipeline): Language exception line → "The only exceptions are end-user UI translations inside `packages/shared/src/i18n` (Ukrainian catalog `uk.ts`) and the Ukrainian column-header aliases of the Excel import in `backend/src/main/resources/imports/header-aliases.properties` (ADR 0012)."
 - Ignored the agent's suggestion to git-ignore docs/screenshots/ (the pipeline commits screenshots there).
 - Slice 7 orchestrator verify: make check exit 0 (backend 1020 tests, coverage checks met at floor 0.97); make e2e 77 passed (2.5m); ports 8080/5173 free afterwards.
+- Slice 7 r1: PASS. All implementation slices 1–7 PASS. Doc minors fixed by the orchestrator. Starting Slice 8 (Feature Testing & Regression, testing-expert).

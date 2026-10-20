@@ -23,7 +23,7 @@ Questions that needed a decision:
   nothing; a transaction is mandatory), `lock` (take the touched rows `FOR UPDATE` in id order) and `apply` (save a plan,
   audited like a hand-made change). The business rules stay where they were (`MemberData`, `PlotData`, `OwnershipRules`,
   ...); they are reused by the facades, not copied into `imports`. Dependencies: `imports` -> `plots`, `members`,
-  `identity`, `problem`, `tenancy`, `audit` (it publishes `IMPORT_COMMITTED`).
+  `identity`, `problem`, `audit` (it publishes `IMPORT_COMMITTED`); `tenancy` only implicitly, through the transaction manager.
 - **Library:** `org.dhatim:fastexcel` 0.20.2 (writer for the template) and `fastexcel-reader` 0.20.2 (a streaming reader),
   pinned to one exact version. The reader's StAX parser (aalto-xml) has DTDs off. `commons-compress` 1.28.0 arrives
   transitively with the reader; `ZipGuard` uses it **directly** (its `ZipFile` over the bytes in memory) because the JDK's
@@ -37,7 +37,7 @@ Questions that needed a decision:
 - **Preview storage:** a preview inserts one `import_run` row (V9, tenant column, RLS `tenant_isolation`) holding the
   normalised rows (`plan`, personal data), the counts, the problem count and a **plan digest** (SHA-256 of a canonical,
   order-independent text of the whole plan; ids of records the import itself creates are left out). A previewed plan is valid
-  for **30 minutes** (Kyiv clock). Expired plans are cleared lazily on upload and on commit; `EXPIRED` is a derived status, never
+  for **30 minutes** (the application `Clock`). Expired plans are cleared lazily on upload and on commit; `EXPIRED` is a derived status, never
   stored. The application role cannot delete `import_run` rows, so the history stays.
 - **Synchronous commit, no JobRunr.** The limits keep a run bounded (measured: 2,000 plots, 3,000 members and 2,000
   ownership rows in about 7 seconds), JobRunr is not in the project yet and a half-finished background import would need

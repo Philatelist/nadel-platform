@@ -44,3 +44,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `c12a3dd..fc3f9f6` | PASS | — | minor: history not refreshed after a refused (STALE) commit; `GET /imports` doesn't clear expired plans (tech doc says "any import call"); a fully qualified hamcrest matcher; HAS_ERRORS and STALE share a badge tone |
+
+## Slice 7 — End-to-end flows, docs and coverage floor
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `fc3f9f6..dbdbb0e` (incl. `cc2c008`) | PASS | — | minor: `tenancy` listed as an `imports` dependency though only implicit; "Kyiv clock" wording for a fixed duration; glossary Preview omits the no-problems / changes-something conditions (all three fixed in docs by the orchestrator); e2e history row matched by `/Imported/` regex; e2e parses a response without asserting 200 |
