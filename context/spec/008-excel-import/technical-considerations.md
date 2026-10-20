@@ -119,9 +119,11 @@ Error codes:
   OSV-Scanner and Semgrep in CI. Any advisory fails the build. The versions are checked in Slice 1, and an advisory is
   reported, never ignored.
 - **Language rule:**
-  - The Ukrainian header aliases are input vocabulary required by the feature doc. They live in one backend resource
-    file, and the exception is recorded in ADR 0012.
-  - The template's headers and instruction row are English.
+  - The Ukrainian vocabulary (sheet names, headers, value words) and the Ukrainian template texts are required by the
+    feature doc. They live in `backend/src/main/resources/imports/` (`header-aliases.properties`,
+    `template_uk.properties`), and the exception is recorded in ADR 0012.
+  - The template follows the interface language (`lang`, else `Accept-Language`, else Ukrainian); see change request
+    Slice 9 in `tasks.md`.
   - A CLAUDE.md wording change is a follow-up for the owner.
 - **Transaction size:** up to 2,000 plots, 3,000 members and about 2,000 ownership groups, with 5,000–8,000 audit
   events and outbox rows. Mitigation: bulk lookups, batched inserts, and a large integration test that measures it.
@@ -181,7 +183,8 @@ Error codes:
 
 ## Assumptions (pipeline)
 
-- The template is in English (headers, instruction and example rows); Ukrainian headers are accepted on upload.
+- The template follows the interface language (Ukrainian or English; Ukrainian when unknown); both languages are
+  accepted on upload for sheet names, headers and value words, also mixed (change request, Slice 9).
 - A member row with neither email nor phone is an error (`MEMBER_KEY_MISSING`), because it could not be matched on a
   re-import; 2 or more members matching name + first phone is `MEMBER_AMBIGUOUS`.
 - Comparing ownership with the file uses member + share only; the owner-since date is ignored. Every row of one plot

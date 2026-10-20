@@ -65,3 +65,9 @@
 | CI 1 | `d0bdc25..9ec0e24` | PASS | — | minor: PR note for the overrides (added to the PR body); Jackson 2 left at the Boot default; comment casing |
 | CI 2 | `a3e2fdb..b560009` | PASS | — | minor: AuditOutboxTests could leak a failed publication if it fails mid-test (pre-existing; follow-up: delete its own publication in @AfterEach); comment wording |
 | CI 3 (audit batching) | `b560009..cfb90bd` | PASS | — | minor: `setTimestamp` vs explicit UTC offset; AuditBatchWriteTests could leak an incomplete publication if it fails mid-test (same follow-up as AuditOutboxTests); demo audit entries left by the test; line widths |
+
+## Slice 9 — Template in the interface language (change request)
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `cfb90bd..ce3cfa6` | PASS | — | minor: a file with both "Plots" and "Ділянки" uses the first (follow-up: a duplicate-sheet problem); technical-considerations still said the template is English and the new criterion said "leading #" (both fixed in docs by the orchestrator); client builds the file name; `lang` attribute on the switch buttons; unused `readSheet` overload; "file order" Javadoc; bundle re-read per download |
