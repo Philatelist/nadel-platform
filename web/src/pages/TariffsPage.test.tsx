@@ -7,6 +7,7 @@ import { TariffsPage } from './TariffsPage';
 let types: ChargeType[];
 let permissions: Permission[];
 let tariffs: TariffSummary[];
+let tariffsState: { isPending: boolean; isError: boolean };
 
 vi.mock('@nadel/api-client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@nadel/api-client')>()),
@@ -18,10 +19,9 @@ vi.mock('@nadel/api-client', async (importOriginal) => ({
     refetch: vi.fn(),
   }),
   useListTariffs: () => ({
-    data: tariffs,
+    data: tariffsState.isPending || tariffsState.isError ? undefined : tariffs,
     error: null,
-    isPending: false,
-    isError: false,
+    ...tariffsState,
     refetch: vi.fn(),
   }),
 }));
@@ -34,6 +34,7 @@ describe('TariffsPage', () => {
   beforeEach(() => {
     permissions = ['TARIFFS_VIEW', 'TARIFFS_MANAGE'];
     tariffs = [];
+    tariffsState = { isPending: false, isError: false };
     localStorage.removeItem('nadel.locale');
     types = [
       {
@@ -56,6 +57,20 @@ describe('TariffsPage', () => {
     expect(names).toEqual(['Membership fee', 'Road repair', 'Water']);
     expect(screen.getAllByText('No tariffs yet')).toHaveLength(3);
     expect(screen.getAllByText('Inactive')).toHaveLength(1);
+  });
+
+  it('shows loading, not "No tariffs yet", while the tariffs are pending', () => {
+    tariffsState = { isPending: true, isError: false };
+    renderWithApp(<TariffsPage />);
+    expect(screen.queryByText('No tariffs yet')).toBeNull();
+    expect(screen.getByText('Loading…')).toBeInTheDocument();
+  });
+
+  it('shows the error state, not "No tariffs yet", when the tariffs fail to load', () => {
+    tariffsState = { isPending: false, isError: true };
+    renderWithApp(<TariffsPage />);
+    expect(screen.queryByText('No tariffs yet')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
   });
 
   it('links to the charge types only with TARIFFS_MANAGE', () => {

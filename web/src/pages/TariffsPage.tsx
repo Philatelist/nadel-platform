@@ -33,31 +33,35 @@ export function TariffsPage() {
       />
       <QueryBoundary query={query} isEmpty={(data) => data.length === 0} emptyMessage={t.tariffs.empty}>
         {(types) => (
-          <ul className="flex flex-col gap-3">
-            {types.map((type) => {
-              const own = (tariffs.data ?? []).filter((tariff) => tariff.chargeTypeId === type.id);
-              return (
-                <li key={type.id}>
-                  <Panel title={chargeTypeName(type, t)}>
-                    {!type.active && (
-                      <div>
-                        <Badge tone="neutral">{t.tariffs.inactive}</Badge>
-                      </div>
-                    )}
-                    {own.length === 0 ? (
-                      <p className="text-ink-muted">{t.tariffs.noTariffs}</p>
-                    ) : (
-                      <ul className="flex flex-col">
-                        {own.map((tariff) => (
-                          <TariffRow key={tariff.id} tariff={tariff} />
-                        ))}
-                      </ul>
-                    )}
-                  </Panel>
-                </li>
-              );
-            })}
-          </ul>
+          <QueryBoundary query={tariffs}>
+            {(allTariffs) => (
+              <ul className="flex flex-col gap-3">
+                {types.map((type) => {
+                  const own = allTariffs.filter((tariff) => tariff.chargeTypeId === type.id);
+                  return (
+                    <li key={type.id}>
+                      <Panel title={chargeTypeName(type, t)}>
+                        {!type.active && (
+                          <div>
+                            <Badge tone="neutral">{t.tariffs.inactive}</Badge>
+                          </div>
+                        )}
+                        {own.length === 0 ? (
+                          <p className="text-ink-muted">{t.tariffs.noTariffs}</p>
+                        ) : (
+                          <ul className="flex flex-col">
+                            {own.map((tariff) => (
+                              <TariffRow key={tariff.id} tariff={tariff} />
+                            ))}
+                          </ul>
+                        )}
+                      </Panel>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </QueryBoundary>
         )}
       </QueryBoundary>
     </div>
