@@ -1,7 +1,7 @@
 # Pipeline log — 008 Excel import
 
-- Status: running
-- Phase: change request 1 — localized template
+- Status: finished
+- Phase: 6 — done (change request 1 delivered, review run started)
 - Branch: 008-excel-import · Base: main (= origin/main) @ bcddbbb
 - Requirement: docs/features/008-excel-import.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
@@ -132,3 +132,4 @@ Same as 004–007 (see `context/spec/005-ui-preferences/pipeline-log.md`). Re-ch
 - Slice 9 verify (orchestrator): make check exit 0 (backend 1096, coverage met at 0.97; web 241, shared 67, api-client 7, ui-tokens 56). make e2e first run 2 failed (design-system expected "uk" on the switch; the template test switched language before `goto`, which loginAs resets) — fixed in the specs; second run 1 failed (FastExcel writes sheet names as XML character references) — the e2e reader now decodes entities; third run 81 passed. Criteria marked with evidence; spec Completed.
 - Slice 9 r1: PASS. Doc minors fixed (technical-considerations template language, criterion wording). Code minors left as follow-ups.
 - CI on ce3cfa6: all five checks green.
+- CI on 13dcbbc: all five checks green. Review run restarted from 13dcbbc (PIDs 48958 49164 49118). Run finished; this log edit is left uncommitted locally.

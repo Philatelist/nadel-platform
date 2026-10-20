@@ -1,6 +1,6 @@
 # Pipeline log — 004 Role names
 
-- Status: running
+- Status: finished
 - Phase: 6 — review run
 - Branch: 004-role-names · Base: main @ 23451fb
 - Requirement: docs/features/004-role-names.md

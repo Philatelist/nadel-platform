@@ -1,6 +1,6 @@
 # Pipeline log — 005 UI preferences
 
-- Status: running
+- Status: finished
 - Phase: 6 — review run
 - Branch: 005-ui-preferences · Base: main @ 5999343
 - Requirement: docs/features/005-ui-preferences.md (the run was first started with the stale path `docs/features/005-plots-registry.md`; the user re-ran it with this document)
