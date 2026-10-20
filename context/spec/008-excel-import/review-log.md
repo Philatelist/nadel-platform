@@ -50,3 +50,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `fc3f9f6..dbdbb0e` (incl. `cc2c008`) | PASS | — | minor: `tenancy` listed as an `imports` dependency though only implicit; "Kyiv clock" wording for a fixed duration; glossary Preview omits the no-problems / changes-something conditions (all three fixed in docs by the orchestrator); e2e history row matched by `/Imported/` regex; e2e parses a response without asserting 200 |
+
+## Slice 8 — Feature testing and regression
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `bd9b231..b7b8235` | PASS | — | minor: owner count `>= 28` instead of 30; §2.1 #1 mapping overstated; §2.3 #2–#4 lack own rows in list-of-tests; uploader name not asserted; new phone not read back; bad-email problem not tied to its column; audit check `contains("30")`; conflict row number not asserted; other-cooperative changes only counted; indentation; package placement; e2e leftover if lookup fails |

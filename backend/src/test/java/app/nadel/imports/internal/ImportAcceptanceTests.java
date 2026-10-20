@@ -9,9 +9,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import app.nadel.TestTokens;
+import java.io.ByteArrayInputStream;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import org.dhatim.fastexcel.reader.ReadableWorkbook;
+import org.dhatim.fastexcel.reader.Row;
+import org.dhatim.fastexcel.reader.Sheet;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
@@ -23,7 +27,8 @@ import tools.jackson.databind.JsonNode;
  * demo people would drive it: one test per journey over sections 2.1-2.5, reading the result back through the plots,
  * audit and history endpoints (not only the database). Per-case rules stay in the {@code Import*Tests} of this
  * package. Criteria are named {@code §2.x #n} in the order of the spec. Everything the journeys create is removed by
- * {@link ImportCommitSupport}.
+ * {@link ImportCommitSupport}. The class lives in {@code app.nadel.imports.internal} because it reuses the
+ * package-private {@link ImportCommitSupport} and {@link ImportWorkbooks}.
  * <pre>
  * @layer: integration
  * @spec: 008-excel-import
@@ -54,12 +59,30 @@ class ImportAcceptanceTests extends ImportCommitSupport {
 
     // ---- 2.1 template and file format
 
+    /** Opens the downloaded file: three sheets, each with the headers, an instruction row and an example row. */
+    private static void assertTemplateLayout(byte[] file) throws Exception {
+        List<String> firstHeaders = List.of("number", "external_id", "plot_number");
+        try (ReadableWorkbook workbook = new ReadableWorkbook(new ByteArrayInputStream(file))) {
+            List<Sheet> sheets = workbook.getSheets().toList();
+            assertThat(sheets.stream().map(Sheet::getName)).containsExactly("Plots", "Members", "Ownership");
+            for (int i = 0; i < sheets.size(); i++) {
+                List<Row> rows = sheets.get(i).read();
+                assertThat(rows).as(sheets.get(i).getName()).hasSize(3);
+                assertThat(rows.get(0).getCellText(0)).isEqualTo(firstHeaders.get(i));
+                assertThat(rows.get(0).getCellCount()).isGreaterThan(3);
+                assertThat(rows.get(1).getCellText(0)).startsWith("#");
+                assertThat(rows.get(2).getCellText(0)).startsWith("#").contains("example");
+            }
+        }
+    }
+
     @Test
     void section21_theDownloadedTemplateUploadsAsNothingToImportWithoutErrors() throws Exception {
         // #1 the template is a file with the three sheets; #2 uploaded unchanged it has nothing to import
         MvcResult template = mvc.perform(get(TEMPLATE).header(HttpHeaders.AUTHORIZATION, chairman()))
                 .andExpect(status().isOk()).andReturn();
         byte[] file = template.getResponse().getContentAsByteArray();
+        assertTemplateLayout(file);
         int plotsBefore = count("plot");
 
         upload(file)
@@ -136,15 +159,21 @@ class ImportAcceptanceTests extends ImportCommitSupport {
         MvcResult result = upload(errors).andExpect(status().isCreated())
                 .andExpect(jsonPath("$.committable").value(false)).andReturn();
         JsonNode preview = body(result);
-                List<String> codes = new ArrayList<>();
+        List<String> codes = new ArrayList<>();
+        boolean invalidEmail = false;
         for (JsonNode problem : preview.get("problems")) {
             assertThat(problem.get("sheet").asString()).isIn("PLOTS", "MEMBERS", "OWNERSHIP");
             assertThat(problem.get("row").asInt()).isPositive();
             assertThat(problem.get("column").asString()).isNotBlank();
             codes.add(problem.get("code").asString());
+            if (problem.get("code").asString().equals("INVALID") && problem.get("sheet").asString().equals("MEMBERS")) {
+                assertThat(problem.get("column").asString()).isEqualTo("email");
+                invalidEmail = true;
+            }
         }
         assertThat(codes).contains("DUPLICATE_IN_FILE", "CADASTRAL_INVALID", "INVALID",
                 "SHARES_NOT_ONE", "UNKNOWN_MEMBER_KEY");
+        assertThat(invalidEmail).as("the bad e-mail is an INVALID problem on the email column").isTrue();
         assertThat(preview.get("problemCount").asInt()).isEqualTo(11);
         commit(preview.get("id").asString()).andExpect(status().isConflict());
         assertThat(plotsLike("IMP-")).isZero();
@@ -201,19 +230,22 @@ class ImportAcceptanceTests extends ImportCommitSupport {
         JsonNode plots = plotsMatching("IMP-");
         assertThat(plots).hasSize(30);
         int owned = 0;
+        int ownerEntries = 0;
         for (JsonNode listed : plots) {
             if (listed.has("owners") && listed.get("owners").size() > 0) {
                 owned++;
+                ownerEntries += listed.get("owners").size();
             }
         }
-        assertThat(owned).isGreaterThanOrEqualTo(28);
+        assertThat(owned).isEqualTo(30);
+        assertThat(ownerEntries).isEqualTo(35);
 
         // 2.5 #1 the history lists the import with the author, time, file name and counts
         JsonNode history = getJson(IMPORTS, chairman()).get("items");
         assertThat(history).hasSize(1);
         JsonNode item = history.get(0);
         assertThat(item.get("status").asString()).isEqualTo("COMMITTED");
-        assertThat(item.get("uploadedBy").asString()).isNotBlank();
+        assertThat(item.get("uploadedBy").asString()).isEqualTo("Kovalenko Oleksandr Petrovych");
         assertThat(item.get("uploadedAt").asString()).isNotBlank();
         assertThat(item.get("committedAt").asString()).isNotBlank();
         assertThat(item.get("fileName").asString()).isEqualTo("plots.xlsx");
@@ -227,7 +259,15 @@ class ImportAcceptanceTests extends ImportCommitSupport {
         assertThat(entries).hasSize(1);
         assertThat(entries.get(0).get("action").asString()).isEqualTo("IMPORT_COMMITTED");
         assertThat(entries.get(0).get("entityLabel").asString()).isEqualTo("plots.xlsx");
-        assertThat(entries.get(0).get("changes").toString()).contains("plotsCreated").contains("30");
+        JsonNode plotsCreated = null;
+        for (JsonNode change : entries.get(0).get("changes")) {
+            if (change.toString().contains("plotsCreated")) {
+                plotsCreated = change;
+            }
+        }
+        assertThat(plotsCreated).as("the plotsCreated change").isNotNull();
+        assertThat(plotsCreated.get("field").asString()).isEqualTo("plotsCreated");
+        assertThat(plotsCreated.get("newValue").asString()).isEqualTo("30");
         assertThat(getJson(AUDIT + "?entityType=PLOT&size=100", chairman()).get("items").toString())
                 .contains("PLOT_CREATED");
     }
@@ -273,6 +313,9 @@ class ImportAcceptanceTests extends ImportCommitSupport {
         JsonNode card = getJson(PLOTS + "/" + listed.get(0).get("id").asString(), chairman());
         assertThat(card.get("notes").asString()).isEqualTo("Keep me");
         assertThat(membersLike("Fixt" + tag)).isEqualTo(1);
+        JsonNode members = getJson("/api/v1/members?size=100&q=Fixt" + tag, chairman()).get("items");
+        assertThat(members).hasSize(1);
+        assertThat(members.get(0).get("phones").toString()).contains("+380501112233");
     }
 
     @Test
@@ -290,6 +333,7 @@ class ImportAcceptanceTests extends ImportCommitSupport {
         JsonNode problem = preview.get("problems").get(0);
         assertThat(problem.get("sheet").asString()).isEqualTo("OWNERSHIP");
         assertThat(problem.get("code").asString()).isEqualTo("OWNERSHIP_CONFLICT");
+        assertThat(problem.get("row").asInt()).isEqualTo(2);
         assertThat(problem.get("params").get("plot").asString()).isEqualTo("9");
         commit(preview.get("id").asString()).andExpect(status().isConflict());
         assertThat(membersLike("Fixt" + tag)).isZero();

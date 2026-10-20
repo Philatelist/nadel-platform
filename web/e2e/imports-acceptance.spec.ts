@@ -84,6 +84,17 @@ test.describe('excel import: acceptance', () => {
       await expect(main(page).getByText('Orchard St')).toBeVisible();
       await expect(main(page).getByText('Garden St')).toHaveCount(0);
     } finally {
+      if (leftovers.length === 0) {
+        // the lookup above may have failed after the commit: find the plot by its unique number
+        const found = await api(page, 'GET', `/plots?q=${encodeURIComponent(number)}`).catch(() => undefined);
+        try {
+          const items =
+            (JSON.parse(found?.body ?? '{}') as { items?: { id: string; number: string }[] }).items ?? [];
+          leftovers.push(...items.filter((item) => item.number === number).map(({ id }) => ({ id, number })));
+        } catch {
+          // nothing to find: the import may not have created the plot
+        }
+      }
       await archiveLeftovers(page, leftovers, [], kyivDay());
     }
   });

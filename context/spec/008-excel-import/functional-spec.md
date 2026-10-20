@@ -2,7 +2,7 @@
 
 - **Topic:** Loading a whole cooperative — plots, members and ownership — from one Excel file, with a preview that
   saves nothing and a commit that saves everything or nothing; repeatable without creating duplicates.
-- **Status:** Draft
+- **Status:** Completed
 - **Author:** Alex Usov
 - **Source:** `docs/features/008-excel-import.md` (roadmap phase 1, feature 4 of 4)
 
@@ -43,15 +43,15 @@ duplicates after a second upload.
   area greater than zero for a plot, a valid email and phone, shares as exact fractions that add up to exactly one per
   plot, an owner-since date not in the future, common land never has owners.
   - **Acceptance Criteria:**
-    - [ ] When the chairman opens the import screen and clicks "Завантажити шаблон" / "Download template", then a file
-      with the three sheets, their headers, an instruction row and an example row is downloaded.
-    - [ ] When the chairman uploads the unchanged template, then the preview shows nothing to import (the instruction
-      and example rows are skipped) and no errors.
-    - [ ] When a file uses Ukrainian headers ("Номер", "Вулиця", "Площа, сот.") in a different order and different
-      letter case, then the preview reads the columns correctly.
-    - [ ] When a plot row gives both an area in square metres and an area in sotkas, or neither, then the preview shows
-      an error on that row's area column.
-    - [ ] When a plot gives its area as 6 sotkas, then after the import the plot shows "6 соток (600 м²)".
+    - [x] When the chairman opens the import screen and clicks "Завантажити шаблон" / "Download template", then a file
+      with the three sheets, their headers, an instruction row and an example row is downloaded. _Evidence: `ImportsTemplateTests` (three sheets, headers, instruction and example rows); `ImportAcceptanceTests` §2.1 (downloads and re-uploads the template); e2e `imports.spec.ts` (download event, size > 0); screenshot `docs/screenshots/008-excel-import-page.png`._
+    - [x] When the chairman uploads the unchanged template, then the preview shows nothing to import (the instruction
+      and example rows are skipped) and no errors. _Evidence: `ImportAcceptanceTests` §2.1 (downloaded template → nothing to import, no problems); `ImportPreviewPlotsTests`/`ImportPreviewMembersTests`/`ImportPreviewOwnershipTests` (unchanged template)._
+    - [x] When a file uses Ukrainian headers ("Номер", "Вулиця", "Площа, сот.") in a different order and different
+      letter case, then the preview reads the columns correctly. _Evidence: `ImportAcceptanceTests` §2.1 (Ukrainian headers, other order and case); `ImportPreview*Tests.ukrainianHeadersInAnyOrderAndCaseAreRead`; `HeaderMatcherTests`; e2e `imports-acceptance.spec.ts`._
+    - [x] When a plot row gives both an area in square metres and an area in sotkas, or neither, then the preview shows
+      an error on that row's area column. _Evidence: `ImportAcceptanceTests` §2.1 (both or neither → AREA_BOTH_OR_NONE on the area column); `ImportFixturesTests` (errors.xlsx); screenshot `008-excel-import-preview-errors.png`._
+    - [x] When a plot gives its area as 6 sotkas, then after the import the plot shows "6 соток (600 м²)". _Evidence: `ImportAcceptanceTests` §2.1 (600 m² read back via `/plots`); e2e `imports-acceptance.spec.ts` ("6 соток (600 м²)" on the plot page); `CellsTests`._
 
 ### 2.2 Upload and preview
 
@@ -62,19 +62,19 @@ duplicates after a second upload.
   clear message, before any preview.
 - Macros and links to other files inside the workbook are ignored.
   - **Acceptance Criteria:**
-    - [ ] When the chairman uploads the valid example file (30 plots, 35 members, co-owned plots), then the preview
-      shows 30 new plots, 35 new members and the ownership rows, and no errors.
-    - [ ] When the chairman uploads a file with typical mistakes (a duplicate plot number, a wrong cadastral number, a
+    - [x] When the chairman uploads the valid example file (30 plots, 35 members, co-owned plots), then the preview
+      shows 30 new plots, 35 new members and the ownership rows, and no errors. _Evidence: `ImportAcceptanceTests` §2.2 and `ImportFixturesTests` (valid.xlsx → 30/35/35, no problems); screenshot `008-excel-import-preview-valid.png`._
+    - [x] When the chairman uploads a file with typical mistakes (a duplicate plot number, a wrong cadastral number, a
       bad email, shares 1/2 + 1/3 on one plot, an owner key that is not in the Members sheet), then the preview lists each
-      problem with its sheet, row, column and a message, and the commit button is disabled.
-    - [ ] When the chairman uploads a file larger than 10 MB, then they see "Файл завеликий — максимум 10 МБ" / "The file
-      is too large — the maximum is 10 MB" and no preview.
-    - [ ] When the chairman uploads a file that is not an Excel workbook (for example a CSV or a PDF), then they see that
-      only `.xlsx` files are accepted.
-    - [ ] When the chairman uploads a file with more than 2,000 plots, then they see that the limit is 2,000 plots and
-      3,000 members.
-    - [ ] When the chairman uploads a file and then opens the plots list without committing, then nothing from the file
-      appears.
+      problem with its sheet, row, column and a message, and the commit button is disabled. _Evidence: `ImportAcceptanceTests` §2.2 and `ImportFixturesTests` (errors.xlsx → 11 problems with sheet, row, column, code); `ImportCommitTests.aPreviewWithProblemsCannotBeCommitted`; e2e `imports.spec.ts` (problems listed, Import disabled); screenshot `008-excel-import-preview-errors.png`._
+    - [x] When the chairman uploads a file larger than 10 MB, then they see "Файл завеликий — максимум 10 МБ" / "The file
+      is too large — the maximum is 10 MB" and no preview. _Evidence: `ImportAcceptanceTests` §2.2; `ImportUploadLimitTests`; e2e `imports.spec.ts` (10 MB + 1 → exact message, no preview); `importFile.test.ts`._
+    - [x] When the chairman uploads a file that is not an Excel workbook (for example a CSV or a PDF), then they see that
+      only `.xlsx` files are accepted. _Evidence: `ImportAcceptanceTests` §2.2; `ImportPreviewPlotsTests.aCsvOrAPdfIsNotAWorkbook`; e2e `imports-acceptance.spec.ts` (CSV refused); `importFile.test.ts`._
+    - [x] When the chairman uploads a file with more than 2,000 plots, then they see that the limit is 2,000 plots and
+      3,000 members. _Evidence: `ImportAcceptanceTests` §2.2; `ImportPreviewPlotsTests.moreThanTwoThousandPlotRowsAreRefused`; e2e `imports-acceptance.spec.ts` (2,001 plots → uk limit message)._
+    - [x] When the chairman uploads a file and then opens the plots list without committing, then nothing from the file
+      appears. _Evidence: `ImportAcceptanceTests` §2.2 (plots list unchanged after the preview); `ImportPreview*Tests` (preview saves nothing, no audit); e2e `imports.spec.ts` (API check after the preview)._
 
 ### 2.3 Commit
 
@@ -85,15 +85,15 @@ duplicates after a second upload.
 - After a successful commit the screen shows a summary of what was created and updated, with links to the plots and
   members lists.
   - **Acceptance Criteria:**
-    - [ ] When the chairman commits the valid example file, then the summary shows the counts from the preview, and the
-      plots list shows the 30 plots with their owners.
-    - [ ] Given a preview older than 30 minutes, when the chairman clicks "Import", then the import is refused with a
-      message to upload the file again, and nothing is saved.
-    - [ ] Given another person added a plot with one of the file's plot numbers after the preview, when the chairman
+    - [x] When the chairman commits the valid example file, then the summary shows the counts from the preview, and the
+      plots list shows the 30 plots with their owners. _Evidence: `ImportAcceptanceTests` §2.3/§2.5 (summary counts, 30 plots with owners via `/plots`); `ImportCommitTests.theCommittedValidWorkbookShowsEveryPlotWithItsOwners`; e2e `imports.spec.ts` (commit, summary, plots with owners)._
+    - [x] Given a preview older than 30 minutes, when the chairman clicks "Import", then the import is refused with a
+      message to upload the file again, and nothing is saved. _Evidence: `ImportCommitTests.aPreviewOlderThanThirtyMinutesIsRefusedAndItsPlanIsDropped` (410 IMPORT_EXPIRED, nothing saved) and the 29-minute counterpart; `ImportPage.test.tsx` ("Upload the file again")._
+    - [x] Given another person added a plot with one of the file's plot numbers after the preview, when the chairman
       commits, then the import is refused with a message that the data changed and the file must be uploaded again, and
-      nothing is saved.
-    - [ ] When saving fails part-way (for example a rule is broken by a record created meanwhile), then nothing from
-      the file is saved.
+      nothing is saved. _Evidence: `ImportCommitTests.aPlotCreatedAfterThePreviewMakesTheCommitStale` (409 IMPORT_STALE, nothing saved), `aMemberArchivedAfterThePreview…`; `PlanDigestTests`; RED-checked by skipping the digest comparison._
+    - [x] When saving fails part-way (for example a rule is broken by a record created meanwhile), then nothing from
+      the file is saved. _Evidence: `ImportCommitTests.aFailureAfterTheMembersWereSavedRollsEverythingBack` (members, plots, ownership and audit unchanged; RED-checked by removing atomicity); `ImportConstraintViolationTests` (four constraints at a batched flush → IMPORT_STALE, nothing persisted)._
 
 ### 2.4 Repeating an import
 
@@ -104,17 +104,17 @@ duplicates after a second upload.
   the file. A plot whose current owners differ from the file is an error: the chairman uses "Change owner" for it
   instead.
   - **Acceptance Criteria:**
-    - [ ] Given the valid example file was imported, when the chairman uploads the same file again, then the preview
-      shows everything as unchanged and committing it changes nothing.
-    - [ ] Given a plot was imported with street "Garden St", when the chairman uploads a file where the same plot number
+    - [x] Given the valid example file was imported, when the chairman uploads the same file again, then the preview
+      shows everything as unchanged and committing it changes nothing. _Evidence: `ImportAcceptanceTests` §2.4 (second upload all unchanged, nothing to commit); `ImportCommitTests.aSecondUploadOfTheSameFileHasNothingToCommit…`; e2e `imports.spec.ts` (re-import, Import disabled)._
+    - [x] Given a plot was imported with street "Garden St", when the chairman uploads a file where the same plot number
       has street "Orchard St", then the preview counts one updated plot and, after the commit, the plot shows "Orchard
-      St".
-    - [ ] Given a member exists with the email in the file, when the file has a new phone for that member, then the
-      member is updated, not added a second time.
-    - [ ] Given plot 9 is owned by one member, when a file gives plot 9 a different owner, then the preview shows an
-      error on that ownership row saying to use "Change owner" instead.
-    - [ ] Given a plot has notes, when the file leaves the notes cell empty for that plot, then the notes stay as they
-      were.
+      St". _Evidence: `ImportAcceptanceTests` §2.4 (one updated plot, street read back); e2e `imports-acceptance.spec.ts`; `ImportCommitTests.anUpdateChangesThePlotAndTheMemberFoundByEmail`._
+    - [x] Given a member exists with the email in the file, when the file has a new phone for that member, then the
+      member is updated, not added a second time. _Evidence: `ImportAcceptanceTests` §2.4 (member updated, not duplicated; new phone read back); `ImportCommitTests.anUpdateChangesThePlotAndTheMemberFoundByEmail`._
+    - [x] Given plot 9 is owned by one member, when a file gives plot 9 a different owner, then the preview shows an
+      error on that ownership row saying to use "Change owner" instead. _Evidence: `ImportAcceptanceTests` §2.4 (OWNERSHIP_CONFLICT on the ownership row); `ImportPreviewOwnershipTests.aDifferentOwnerOfDemoPlot9IsAConflict…`; e2e `imports-acceptance.spec.ts` (uk message to change the owner on the plot card); screenshot `008-excel-import-preview-errors.png`._
+    - [x] Given a plot has notes, when the file leaves the notes cell empty for that plot, then the notes stay as they
+      were. _Evidence: `ImportAcceptanceTests` §2.4 (notes kept, read back through the plot card); `ImportCommitTests.anUpdate…` (database check); RED-checked._
 
 ### 2.5 History and audit
 
@@ -125,14 +125,14 @@ duplicates after a second upload.
 - Only people allowed to run imports (the chairman by default) see the import screen and the history; others get "You
   don't have access".
   - **Acceptance Criteria:**
-    - [ ] When the chairman commits an import and opens the import history, then the import is listed with their name,
-      the time, the file name and the counts.
-    - [ ] When the chairman commits an import and opens the audit log, then there is one import entry with the file name
-      and counts, plus entries for the created plots and members.
-    - [ ] When the treasurer or a member signs in, then the menu has no import item, the import address shows "You don't
-      have access", and an upload sent anyway is refused.
-    - [ ] When the chairman of one cooperative imports a file, then no plot, member or owner of another cooperative is
-      created or changed.
+    - [x] When the chairman commits an import and opens the import history, then the import is listed with their name,
+      the time, the file name and the counts. _Evidence: `ImportAcceptanceTests` §2.5 (history row with the chairman's name, time, file, counts); `ImportHistoryTests`; e2e `imports.spec.ts` (history table); `ImportHistory.test.tsx`._
+    - [x] When the chairman commits an import and opens the audit log, then there is one import entry with the file name
+      and counts, plus entries for the created plots and members. _Evidence: `ImportAcceptanceTests` §2.5 (one IMPORT_COMMITTED entry with file name and counts plus PLOT_CREATED/MEMBER_CREATED entries via `/audit`); `ImportCommitTests.theImportAndEveryRecordAreAudited`._
+    - [x] When the treasurer or a member signs in, then the menu has no import item, the import address shows "You don't
+      have access", and an upload sent anyway is refused. _Evidence: `ImportAcceptanceTests` §2.5 (upload, template and history → 403 for treasurer and member); `ImportCommitTests.onlyThoseWithImportRunMayCommit`; e2e `imports.spec.ts` (no menu item, no access); screenshot `008-excel-import-no-access-treasurer.png`._
+    - [x] When the chairman of one cooperative imports a file, then no plot, member or owner of another cooperative is
+      created or changed. _Evidence: `ImportAcceptanceTests` §2.5; `ImportCommitTests.committingInOneCooperativeNeverChangesAnother`; `ImportRunTenantIsolationTests`; `ImportHistoryTests.anotherCooperativesRunsAreNeverListed`._
 
 ---
 
@@ -174,4 +174,4 @@ duplicates after a second upload.
 
 ## Change Log
 
-- (none yet)
+- Verified (pipeline Phase 4): every acceptance criterion marked with its evidence; `make check` and `make e2e` green.

@@ -1,7 +1,7 @@
 # Pipeline log — 008 Excel import
 
 - Status: running
-- Phase: 1 — analysis
+- Phase: 5 — publish (push, PR, checks)
 - Branch: 008-excel-import · Base: main (= origin/main) @ bcddbbb
 - Requirement: docs/features/008-excel-import.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
@@ -98,3 +98,8 @@ Same as 004–007 (see `context/spec/005-ui-preferences/pipeline-log.md`). Re-ch
 - Slice 7 r1: PASS. All implementation slices 1–7 PASS. Doc minors fixed by the orchestrator. Starting Slice 8 (Feature Testing & Regression, testing-expert).
 - Slice 8 returned (testing-expert): `ImportAcceptanceTests` (11, `@Tag("regression")`), `web/e2e/imports-acceptance.spec.ts` (3 Ukrainian-UI specs), `context/qa/list-of-tests.md` entries; every acceptance criterion mapped to tests; RED checked by 7 backend mutations and 2 e2e message mutations. Agent: verify 1031 tests, e2e 80/80 (before Prettier reformatted the new spec), client green (web 238). Orchestrator re-running make check and make e2e on the formatted tree.
 - Slice 8 orchestrator verify: make check exit 0 (backend 1031, coverage met at 0.97; web 238, shared 67, api-client 7, ui-tokens 56); make e2e 80 passed (2.6m).
+- Phase 4 started: make up running (detached, log in scratchpad makeup008.log); screenshots docs/screenshots/008-excel-import-{page,preview-errors,preview-valid,no-access-treasurer}.png captured (preview only, nothing committed in the dev DB). Note for follow-ups: an error preview still shows "Можна імпортувати до …".
+- Slice 8 r1: PASS. All slices 1–8 PASS. Stack from Phase 4 screenshots stopped (PIDs 54124 54022 53853). AUTO: tighten the Slice 8 acceptance assertions (review minors 1–8, 10–12) before the PR — they are the evidence for the criteria.
+- Slice 8 review minors tightened (testing-expert): exact owner counts, real template layout check, uploader name, phone read back, email column, audit value, conflict row, javadoc, robust e2e cleanup, list-of-tests rows for §2.3 #2–#4.
+- Phase 4 verify: all 24 criteria marked with evidence in functional-spec.md, Status Completed. Final run on the full tree: make check exit 0 (backend 1031, coverage met at 0.97; web 238, shared 67, api-client 7, ui-tokens 56); make e2e 80 passed (2.6m).
+- Phase 4 end. Phase 5 start: push the spec branch, open the PR.
