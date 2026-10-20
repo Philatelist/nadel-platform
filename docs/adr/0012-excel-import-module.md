@@ -1,0 +1,89 @@
+# 0012. Excel import module: facades in members and plots, preview stored in the database, synchronous two-pass commit
+
+**Status:** accepted; implemented in phase 1 by spec 008 (`context/spec/008-excel-import/`)
+
+## Context
+Feature 008 loads a whole cooperative from one `.xlsx` file with three sheets (Plots, Members, Ownership): upload, a preview
+that saves nothing, a commit in one transaction, an idempotent re-import, a template download and a history of uploads.
+Questions that needed a decision:
+
+1. Where does the code live, given that it writes plots, members and ownership, and each of those modules guards its own
+   rules (`internal` packages are closed, ADR 0001; no cross-module table reads)?
+2. How is an `.xlsx` read safely and within memory limits (10 MB, 2,000 plots, 3,000 members)?
+3. Where does the previewed data wait between the preview and the commit, and how does the commit know that the
+   cooperative data did not change in between?
+4. Does the commit run as a background job (ADR 0007 names JobRunr for long work)?
+5. Users upload files from Ukrainian spreadsheets. The rule "everything in the repository is English" meets column
+   headers such as `Площа, сот.`.
+
+## Decision
+- **A new module `imports`** (`app.nadel.imports`) owns the template, the parsing, the preview, the commit orchestration, the
+  history and the endpoints. It has no public API. It changes data only through two **public facades** with plain records:
+  `members.MemberImport` and `plots.PlotImport`. Each facade offers `plan` (validate and collect row errors, save
+  nothing; a transaction is mandatory), `lock` (take the touched rows `FOR UPDATE` in id order) and `apply` (save a plan,
+  audited like a hand-made change). The business rules stay where they were (`MemberData`, `PlotData`, `OwnershipRules`,
+  ...); they are reused by the facades, not copied into `imports`. Dependencies: `imports` -> `plots`, `members`,
+  `identity`, `problem`, `tenancy`, `audit` (it publishes `IMPORT_COMMITTED`).
+- **Library:** `org.dhatim:fastexcel` 0.20.2 (writer for the template) and `fastexcel-reader` 0.20.2 (a streaming reader),
+  pinned to one exact version. The reader's StAX parser (aalto-xml) has DTDs off. `commons-compress` 1.28.0 arrives
+  transitively with the reader; `ZipGuard` uses it **directly** (its `ZipFile` over the bytes in memory) because the JDK's
+  `ZipInputStream` cannot read archives written with data descriptors, as fastexcel does. A transitive dependency used
+  directly is a conscious exception: its version follows `fastexcel-reader`, so a bump of the library re-checks it, and
+  OSV-Scanner covers it as it covers every dependency.
+- **`ZipGuard` before any parser:** extension `.xlsx`, a zip signature (so old `.xls` and encrypted workbooks, which are OLE2
+  files, are refused), `[Content_Types].xml` and `xl/workbook.xml` present, at most 200 entries, 50 MB per entry and
+  100 MB in total counted from the bytes decompression really produces, never from the sizes the archive declares.
+  Anything the library throws becomes 400 `FILE_NOT_XLSX`. File names, sheet names and cell values are never logged.
+- **Preview storage:** a preview inserts one `import_run` row (V9, tenant column, RLS `tenant_isolation`) holding the
+  normalised rows (`plan`, personal data), the counts, the problem count and a **plan digest** (SHA-256 of a canonical,
+  order-independent text of the whole plan; ids of records the import itself creates are left out). A previewed plan is valid
+  for **30 minutes** (Kyiv clock). Expired plans are cleared lazily on upload and on commit; `EXPIRED` is a derived status, never
+  stored. The application role cannot delete `import_run` rows, so the history stays.
+- **Synchronous commit, no JobRunr.** The limits keep a run bounded (measured: 2,000 plots, 3,000 members and 2,000
+  ownership rows in about 7 seconds), JobRunr is not in the project yet and a half-finished background import would need
+  its own state machine. The commit runs in the request, in one transaction.
+- **Two-pass locking commit.** 1) A per-tenant advisory lock (`pg_advisory_xact_lock` on the tenant and `/imports`) so two
+  imports of one cooperative never interleave; 2) the run row `FOR UPDATE` and the status checks; 3) the stored rows are
+  planned once to find the existing plots and members they touch, those are locked (plots first, then members, each in
+  id order, which is the order of a change of owner and of archiving, so no lock cycle exists); 4) the rows are
+  **planned again under the locks** and the digest must equal the stored one, otherwise 409 `IMPORT_STALE`; 5) `apply`
+  members, then plots with their owners, then one `IMPORT_COMMITTED` audit entry (file name and counts) next to the usual
+  per-record entries. Any other failure rolls everything back, audit events and outbox rows included, and the preview can
+  be tried again.
+- **Error codes of the commit:** `IMPORT_HAS_ERRORS` (409), `IMPORT_ALREADY_COMMITTED` (409), `IMPORT_EXPIRED` (410) and
+  `IMPORT_STALE` (409). A preview without problems that would create or update nothing is `committable: false`; trying to
+  commit it anyway is **`IMPORT_NOTHING_TO_COMMIT`** (409), because `IMPORT_HAS_ERRORS` would be untrue and an empty commit would only
+  add a no-op audit entry.
+- **Constraint to `IMPORT_STALE`.** A unique or exclusion violation while saving (plot number, cadastral number, member
+  e-mail, ownership overlap) means that someone changed the data between the plan and the flush. The facades translate it
+  (shared matcher `problem.ConstraintViolations`: SQLState `23505` or `23P01` plus the constraint name, walking the cause
+  chain and `getNextException`) into 409 `IMPORT_STALE` inside the owning module, so `imports` knows nothing about
+  tables.
+- **Batching and personal data in logs.** New rows are persisted, not merged (no SELECT per row), with Hibernate batching
+  (`jdbc.batch_size: 50`, ordered inserts and updates). A failed batch would be logged by Hibernate with the values of the
+  row, which are personal data (CLAUDE.md), so `org.hibernate.orm.jdbc.error` is switched OFF and the driver property
+  `logServerErrorDetail=false` is set; the exception still propagates and is mapped. A filtered appender is the alternative
+  if the owner wants the log line without the values.
+- **Ukrainian header aliases are an exception to the English-only rule.** The template and the API are English, but people
+  fill spreadsheets with Ukrainian headers. The aliases live in **one** file,
+  `backend/src/main/resources/imports/header-aliases.properties` (UTF-8, headers compared after normalisation: lower
+  case, letters and digits only). It is the only place outside the UI catalogs (`packages/shared/src/i18n`) where
+  non-English text is allowed. Error messages stay codes with parameters; the client translates them.
+- **No scheduled purge of old runs until JobRunr is used.** Plans (the only personal data in a run) are cleared lazily as
+  above; the run rows themselves are the history and stay. When JobRunr arrives (ADR 0007), a job with
+  `TenantContext.runAs` can drop old runs and move long commits to the background.
+
+## Consequences
+- Plots and members get new public write surface (`PlotImport`, `MemberImport`); `ModularityTests` still passes and the
+  facades are documented in the module READMEs. A future import of another entity adds a facade to its module and a sheet to
+  `imports`.
+- A preview can be committed only if nothing it touched changed; a busy cooperative may have to upload again (a clear
+  message and a re-upload button in the UI).
+- A commit holds row locks on every touched plot and member for its duration (seconds at the limits) and one advisory lock per
+  cooperative; ordinary edits of those rows wait, other cooperatives are not affected.
+- The preview stores personal data in `import_run.plan` for up to 30 minutes (RLS protected, cleared on commit, expiry and
+  stale refusal); a cooperative that never uploads again keeps an expired plan until its next upload or commit.
+- A bump of `fastexcel` must re-check `commons-compress` and the OSV report; the supply-chain check never gets an ignore for
+  this feature.
+- `CLAUDE.md` says that everything is English except `uk.ts`; the alias file is a second exception and the owner should
+  add one sentence to that rule (proposed wording in the report of the pipeline).

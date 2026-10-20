@@ -91,3 +91,7 @@ Same as 004–007 (see `context/spec/005-ui-preferences/pipeline-log.md`). Re-ch
 - Slice 5 r2: PASS. Owner follow-up for the PR: app-wide OFF of `org.hibernate.orm.jdbc.error`.
 - Slice 6 r1: PASS. Slices 1–6 all PASS.
 - Slice 6 r1 minor fixed by the orchestrator: history refreshed after a refused commit (ImportPage onError + test; RED checked: without the fix the new test fails). Other Slice 6 minors left for the PR follow-ups.
+- Slice 7 returned (testing-expert): `web/e2e/imports.spec.ts` (5 tests) + `web/e2e/support/xlsx.ts` (writes a minimal styles part — the reader needs it), ADR 0012 + index, architecture.md, glossary (Import, Preview). Agent: make check green, backend 1020 tests, coverage 0.9785 → floor 0.96 → 0.97, make e2e 77/77. Orchestrator re-running make check and make e2e.
+- Proposed CLAUDE.md change (owner commits; not made by the pipeline): Language exception line → "The only exceptions are end-user UI translations inside `packages/shared/src/i18n` (Ukrainian catalog `uk.ts`) and the Ukrainian column-header aliases of the Excel import in `backend/src/main/resources/imports/header-aliases.properties` (ADR 0012)."
+- Ignored the agent's suggestion to git-ignore docs/screenshots/ (the pipeline commits screenshots there).
+- Slice 7 orchestrator verify: make check exit 0 (backend 1020 tests, coverage checks met at floor 0.97); make e2e 77 passed (2.5m); ports 8080/5173 free afterwards.

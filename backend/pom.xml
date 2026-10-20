@@ -23,7 +23,7 @@
         <openapi-generator.version>7.26.0</openapi-generator.version>
         <fastexcel.version>0.20.2</fastexcel.version>
         <!-- Minimum line coverage enforced by `verify`. Raise it as features land; never lower it. -->
-        <coverage.minimum>0.96</coverage.minimum>
+        <coverage.minimum>0.97</coverage.minimum>
     </properties>
 
     <dependencyManagement>

@@ -15,3 +15,4 @@ Format: context → decision → consequences. A new decision is a new file `NNN
 | 0009 | Configurable roles as permission sets per cooperative | accepted, implemented (spec 002) |
 | 0010 | Hosting: one EU virtual server with Docker Compose, deployed from GitHub Actions | accepted |
 | 0011 | Cooperative settings module; ownership inside plots; synchronous veto and read SPIs instead of events | accepted, implemented (spec 007) |
+| 0012 | Excel import module: facades in members and plots, preview stored in the database, synchronous two-pass commit | accepted, implemented (spec 008) |
