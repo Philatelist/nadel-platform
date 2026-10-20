@@ -67,7 +67,7 @@ final class TemplateWriter {
                             "12a", true),
                     new Column("member_external_id", "Required. external_id from the Members sheet", "M-001", true),
                     new Column("share", "Share of the plot, for example 1, 1/2 or 1/3. Shares of a plot add up to 1",
-                            "1", false),
+                            "1", true),
                     new Column("valid_from", "Owner since, DD.MM.YYYY. The same date for every owner of a plot",
                             "01.03.2020", false))));
 

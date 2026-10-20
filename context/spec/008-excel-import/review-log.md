@@ -24,3 +24,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `974bb6a..3e5c601` | PASS | — | minor: a member entered by hand without an email is duplicated when a file adds their email (follows the literal matching rule — owner to confirm); phones also split at newlines (docs say commas/semicolons); no length limit on the member key; label "Код члена"/"Member ID" vs "Ключ"/"Member key" in the template; an invalid row still blocks a later row as a duplicate; HEADER_MISSING row 1 vs row 0 docs |
+
+## Slice 4 — Ownership sheet in the preview
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `3e5c601..40e76e8` | MAJOR_ISSUES | M1 the template's Ownership `share` column is not text-formatted, so "1/2" typed in Excel becomes a date and the import reports SHARE_INVALID — every co-owned plot from the template fails | minor: no Kyiv-vs-UTC day-boundary test; one long line in OwnershipImportPlanner; README paragraph not re-wrapped; PlanDigest ownership line relies on member lines for the key→id link (comment suggested) |

@@ -83,10 +83,18 @@ class TemplateWriterTests {
     @Test
     void identifierAndPhoneColumnsHaveTheTextFormat() throws IOException {
         // text columns: Plots number and cadastral_number; Members external_id, phones, viber_phone;
-        // Ownership plot_number and member_external_id
+        // Ownership plot_number, member_external_id and share
         assertThat(textColumns(1)).containsExactly(1, 6);
         assertThat(textColumns(2)).containsExactly(1, 5, 10);
-        assertThat(textColumns(3)).containsExactly(1, 2);
+        assertThat(textColumns(3)).containsExactly(1, 2, 3);
+        assertThat(entry("xl/styles.xml")).contains("formatCode=\"@\"");
+    }
+
+    @Test
+    void ownershipShareColumnHasTheTextFormatSoThatSpreadsheetsKeepOneHalfAsTyped() throws IOException {
+        // "1/2" typed into a General cell is turned into a date by Excel and LibreOffice
+        assertThat(headers("Ownership").get(2)).isEqualTo("share");
+        assertThat(textColumns(3)).contains(3);
         assertThat(entry("xl/styles.xml")).contains("formatCode=\"@\"");
     }
 
