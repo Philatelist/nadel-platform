@@ -13,7 +13,10 @@ export function ImportPreviewPanel({ preview, onReset }: { preview: ImportPrevie
   const { locale } = useLocale();
   const s = t.import;
   const sheets: Readonly<Record<string, string>> = t.importSheets;
-  const plotColumns: Readonly<Record<string, string>> = t.importColumns.plots;
+  const columnLabels: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+    PLOTS: t.importColumns.plots,
+    MEMBERS: t.importColumns.members,
+  };
   const messages: Readonly<Record<string, string>> = t.importProblem;
 
   const countRows = entities.map((key) => ({ key, label: s.entity[key], counts: preview.counts[key] }));
@@ -35,7 +38,7 @@ export function ImportPreviewPanel({ preview, onReset }: { preview: ImportPrevie
     {
       key: 'column',
       header: s.colColumn,
-      cell: (p) => (p.column ? (plotColumns[p.column] ?? p.column) : '—'),
+      cell: (p) => (p.column ? (columnLabels[p.sheet]?.[p.column] ?? p.column) : '—'),
     },
     {
       key: 'message',

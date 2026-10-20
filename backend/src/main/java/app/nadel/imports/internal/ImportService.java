@@ -72,15 +72,17 @@ class ImportService {
         byte[] content = read(file);
         zipGuard.check(fileName, content);
         PlotsSheet.Parsed plots;
+        MembersSheet.Parsed members;
         try (WorkbookReader reader = WorkbookReader.open(content)) {
             plots = PlotsSheet.parse(reader);
+            members = MembersSheet.parse(reader);
         }
 
         UUID importId = UUID.randomUUID();
         return transaction.execute(status -> {
             Instant now = clock.instant();
             runs.clearExpiredPlans(actor.tenantId(), now);
-            ImportPlan plan = planner.plan(actor.tenantId(), importId, plots);
+            ImportPlan plan = planner.plan(actor.tenantId(), importId, plots, members);
             ImportRun run = runs.save(ImportRun.create(importId, actor.tenantId(), fileName, actor.memberId(),
                     actor.subject(), actor.displayName(), now, now.plus(PREVIEW_VALID_FOR),
                     plan.hasProblems() ? ImportStatus.HAS_ERRORS : ImportStatus.PREVIEW, plan.counts().toMap(),

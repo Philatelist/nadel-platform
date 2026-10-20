@@ -276,10 +276,9 @@ class ImportPreviewPlotsTests extends ImportsIntegrationTest {
     }
 
     @Test
-    void theOtherSheetsAreNotReadYet() throws Exception {
+    void theOwnershipSheetIsNotReadYet() throws Exception {
         byte[] file = ImportWorkbooks.builder()
                 .sheet("Plots", PLOT_HEADER, plot(unique(), 600))
-                .sheet("Members", List.of("nonsense"), List.of("whatever"))
                 .sheet("Ownership", List.of("nonsense"), List.of("whatever"))
                 .build();
 

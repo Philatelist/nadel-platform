@@ -17,3 +17,4 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `2eb0635..f51d542` | MAJOR_ISSUES | M1 the size-limit message differs from the spec's required wording ("Файл завеликий — максимум 10 МБ" / "The file is too large — the maximum is 10 MB") | minor: DATE_INVALID hint says 2015-06-01 though only DD.MM.YYYY is accepted (picked up in Slice 4 web); commons-compress used directly but only transitive (declare it or record in ADR 0012); plot numbers lowered in Java vs SQL lower(); HEADER_MISSING row 1 vs "sheet level = row 0" docs; `save` instead of `persist` for the run row; slice commit subjects are not Conventional Commits (squash title is) |
+| 2 | + `974bb6a` | PASS | M1 resolved (size message exactly as in the spec) | earlier minor notes still open (non-blocking) |

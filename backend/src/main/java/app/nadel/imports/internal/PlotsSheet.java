@@ -25,7 +25,6 @@ final class PlotsSheet {
     static final int MAX_ROWS = 2000;
 
     private static final String ALIASES_KEY = "plots";
-    private static final String COMMENT_PREFIX = TemplateWriter.COMMENT_PREFIX;
 
     private PlotsSheet() {
     }
@@ -70,7 +69,7 @@ final class PlotsSheet {
 
         @Override
         public void accept(RawRow raw) {
-            if (isEmpty(raw) || isComment(raw)) {
+            if (SheetRows.isEmpty(raw) || SheetRows.isComment(raw)) {
                 return;
             }
             if (header == null) {
@@ -114,16 +113,5 @@ final class PlotsSheet {
 
     private static @Nullable String text(RawRow raw, HeaderMatcher.Match<PlotColumn> header, PlotColumn column) {
         return Cells.text(header.cell(raw, column)).value();
-    }
-
-    /** True when every cell of the row is empty or only spaces. */
-    private static boolean isEmpty(RawRow row) {
-        return row.cells().stream().allMatch(cell -> Cells.text(cell).value() == null);
-    }
-
-    /** True when the first cell (column A) starts with {@code #}. */
-    private static boolean isComment(RawRow row) {
-        RawCell first = row.cell(0);
-        return first instanceof RawCell.Text text && text.value().stripLeading().startsWith(COMMENT_PREFIX);
     }
 }

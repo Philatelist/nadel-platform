@@ -33,19 +33,48 @@ record MemberData(
      * @throws ApiProblemException 400 {@code VALIDATION_FAILED} listing every invalid field
      */
     static MemberData from(MemberInput input) {
+        DeliveryChannel channel = input.getDeliveryChannel() == null
+                ? DeliveryChannel.PAPER
+                : DeliveryChannel.valueOf(input.getDeliveryChannel().name());
+        Validation result = tryFrom(input.getLastName(), input.getFirstName(), input.getMiddleName(),
+                input.getPhones() == null ? List.of() : input.getPhones(), input.getEmail(),
+                input.getPostalAddress(), channel, input.getTelegramUsername(), input.getViberPhone(),
+                input.getNotes());
+        if (result.data() == null) {
+            throw new ApiProblemException(HttpStatus.BAD_REQUEST, ProblemCodes.VALIDATION_FAILED,
+                    "The request is not valid.", result.problems());
+        }
+        return result.data();
+    }
+
+    /**
+     * The outcome of {@link #tryFrom}: the data when every field is valid, otherwise the problems of every invalid
+     * field (never both).
+     */
+    record Validation(@Nullable MemberData data, List<FieldProblem> problems) {
+    }
+
+    /**
+     * The same checks and normalisation as {@link #from}, for callers that collect the problems of many records
+     * instead of failing on the first one (the Excel import). Field names are those of {@code MemberInput}; a
+     * phone is reported as {@code phones[i]}.
+     */
+    static Validation tryFrom(@Nullable String rawLastName, @Nullable String rawFirstName,
+            @Nullable String rawMiddleName, List<String> rawPhones, @Nullable String rawEmail,
+            @Nullable String rawPostalAddress, DeliveryChannel channel, @Nullable String rawTelegram,
+            @Nullable String rawViber, @Nullable String rawNotes) {
         List<FieldProblem> errors = new ArrayList<>();
 
-        String lastName = blankToNull(input.getLastName());
+        String lastName = blankToNull(rawLastName);
         if (lastName == null) {
             errors.add(new FieldProblem("lastName", ProblemCodes.REQUIRED));
         }
-        String firstName = blankToNull(input.getFirstName());
+        String firstName = blankToNull(rawFirstName);
         if (firstName == null) {
             errors.add(new FieldProblem("firstName", ProblemCodes.REQUIRED));
         }
 
         LinkedHashSet<String> phones = new LinkedHashSet<>();
-        List<String> rawPhones = input.getPhones() == null ? List.of() : input.getPhones();
         for (int i = 0; i < rawPhones.size(); i++) {
             var phone = PhoneNumber.parse(rawPhones.get(i));
             if (phone.isPresent()) {
@@ -55,7 +84,7 @@ record MemberData(
             }
         }
 
-        String viber = blankToNull(input.getViberPhone());
+        String viber = blankToNull(rawViber);
         if (viber != null) {
             var parsed = PhoneNumber.parse(viber);
             if (parsed.isPresent()) {
@@ -65,20 +94,16 @@ record MemberData(
             }
         }
 
-        String email = blankToNull(input.getEmail());
+        String email = blankToNull(rawEmail);
         email = email == null ? null : email.toLowerCase(Locale.ROOT);
-        String telegram = blankToNull(input.getTelegramUsername());
-        DeliveryChannel channel = input.getDeliveryChannel() == null
-                ? DeliveryChannel.PAPER
-                : DeliveryChannel.valueOf(input.getDeliveryChannel().name());
+        String telegram = blankToNull(rawTelegram);
         channel.check(email, telegram, viber).ifPresent(errors::add);
 
         if (!errors.isEmpty()) {
-            throw new ApiProblemException(HttpStatus.BAD_REQUEST, ProblemCodes.VALIDATION_FAILED,
-                    "The request is not valid.", errors);
+            return new Validation(null, List.copyOf(errors));
         }
-        return new MemberData(lastName, firstName, blankToNull(input.getMiddleName()), List.copyOf(phones), email,
-                blankToNull(input.getPostalAddress()), channel, telegram, viber, blankToNull(input.getNotes()));
+        return new Validation(new MemberData(lastName, firstName, blankToNull(rawMiddleName), List.copyOf(phones),
+                email, blankToNull(rawPostalAddress), channel, telegram, viber, blankToNull(rawNotes)), List.of());
     }
 
     private static @Nullable String blankToNull(@Nullable String text) {

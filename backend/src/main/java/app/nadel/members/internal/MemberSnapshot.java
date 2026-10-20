@@ -43,6 +43,13 @@ record MemberSnapshot(
                 member.isArchived());
     }
 
+    /** The state a member would have with this data: active, phones sorted and joined as in {@link #of(Member)}. */
+    static MemberSnapshot of(MemberData data) {
+        return new MemberSnapshot(data.lastName(), data.firstName(), data.middleName(), join(data.phones()),
+                data.email(), data.postalAddress(), data.deliveryChannel().name(), data.telegramUsername(),
+                data.viberPhone(), data.notes(), false);
+    }
+
     /** The fields whose value differs, in a fixed order; empty when nothing changed. */
     static List<FieldChange> diff(MemberSnapshot before, MemberSnapshot after) {
         List<FieldChange> changes = new ArrayList<>();

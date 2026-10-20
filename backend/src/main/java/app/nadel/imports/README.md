@@ -3,8 +3,8 @@
 Excel import of a whole cooperative in one go: plots, members and ownership from one `.xlsx` file with three sheets
 (`Plots`, `Members`, `Ownership`). Requirements: `docs/features/008-excel-import.md`; spec: `context/spec/008-excel-import/`.
 
-Today the module offers the template download and the upload with a preview of the Plots sheet. The Members and Ownership
-sheets, the commit and the history are added in later slices of the feature.
+Today the module offers the template download and the upload with a preview of the Plots and Members sheets. The
+Ownership sheet, the commit and the history are added in later slices of the feature.
 
 ## Endpoints
 
@@ -43,12 +43,15 @@ Columns that hold identifiers or phone numbers (`number`, `phones`, `viber_phone
    unpacked. Unpacked sizes are counted from the bytes decompression really produces, never from the sizes the archive
    declares (a zip bomb declares what it likes). The archive is read with commons-compress, which the spreadsheet
    library brings along; the JDK's `ZipInputStream` cannot read files written with data descriptors (as fastexcel does).
-3. `WorkbookReader` (the only user of the spreadsheet library) streams the rows; `PlotsSheet` finds the columns with
-   `HeaderMatcher`, reads every cell with `Cells` and stops with 400 `IMPORT_LIMIT_EXCEEDED` at the 2,001st plot row.
+3. `WorkbookReader` (the only user of the spreadsheet library) streams the rows; `PlotsSheet` and `MembersSheet` find the
+   columns with `HeaderMatcher`, read every cell with `Cells` and stop with 400 `IMPORT_LIMIT_EXCEEDED` at the 2,001st
+   plot row or the 3,001st member row. A workbook without a `Members` sheet is fine (plots only); a `Members` sheet needs
+   its header (`external_id`, `last_name` and `first_name` are required columns). `phones` is split at commas and
+   semicolons; a phone cell that Excel stored as a number has lost its leading zero, so nine digits get the `0` back.
    Anything the library throws on a damaged file, a DOCTYPE included (DTDs are off), becomes `FILE_NOT_XLSX`. File
    names, sheet names and cell values are never logged.
 4. In one transaction: the expired previews of the cooperative lose their plan (there is no scheduled job yet), the plots
-   module plans the rows (`plots.PlotImport`), and an `import_run` row is inserted. Nothing else is saved: a preview
+   and members modules plan the rows (`plots.PlotImport`, `members.MemberImport`), and an `import_run` row is inserted. Nothing else is saved: a preview
    creates no plot and no audit entry.
 
 The preview lists the problems found (at most 1,000; `problemCount` is the total) with sheet, Excel row (0 for the file or
@@ -56,6 +59,13 @@ the whole sheet), canonical column and code. A row with a problem is not counted
 problems and with something to create or update, so the unchanged template and a workbook that is already imported are
 not committable. The run is `PREVIEW` (with the normalised rows in `plan`, valid 30 minutes on the Kyiv clock) or
 `HAS_ERRORS` (no plan).
+
+Members are matched among the active members by e-mail when the row has one, otherwise by last name, first name and
+first phone; a blank cell keeps the stored value; `MEMBER_KEY_MISSING`, `MEMBER_AMBIGUOUS`, `EMAIL_TAKEN` and
+`DUPLICATE_IN_FILE` are described in `members/README.md` and in the contract (`uploadImport`). The planner maps the
+fields of the plan to canonical columns (`lastName` to `last_name`, `phones` to `phones`, ...) and keeps the member of
+every importable row by its `external_id` in lower case (an existing member or the deterministic id of a new one), for
+the ownership slice. The stored `plan` holds the normalised plot and member rows.
 
 Rules for reading a sheet: the header is the first row that is not empty and not a comment; a row whose first cell
 starts with `#` and an empty row are skipped; Excel row numbers are kept. Cells: text is trimmed; a number cell is
@@ -79,4 +89,4 @@ Table: `import_run` (V9, RLS `tenant_isolation`; the application role cannot del
 author as a snapshot (member id, Keycloak subject, display name), the counts, the problem count and, for a preview that
 can still be committed, the normalised rows (`plan`, personal data, cleared when no longer needed).
 
-Depends on `identity`, `problem`, `tenancy` and `plots` (later slices also `members` and `audit`).
+Depends on `identity`, `problem`, `tenancy`, `plots` and `members` (a later slice also `audit`).

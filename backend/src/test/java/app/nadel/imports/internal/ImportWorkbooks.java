@@ -25,7 +25,37 @@ final class ImportWorkbooks {
     static final List<String> PLOT_HEADER = List.of(
             "number", "street", "kind", "area_m2", "area_sotky", "cadastral_number", "has_building", "notes");
 
+    static final List<String> MEMBER_HEADER = List.of("external_id", "last_name", "first_name", "middle_name", "phones",
+            "email", "postal_address", "delivery_channel", "telegram_username", "viber_phone");
+
     private ImportWorkbooks() {
+    }
+
+    /** A row of the Members sheet in {@link #MEMBER_HEADER} order. */
+    static List<Object> member(Object externalId, Object lastName, Object firstName, Object middleName, Object phones,
+            Object email, Object address, Object channel, Object telegram, Object viber) {
+        List<Object> row = new ArrayList<>();
+        row.add(externalId);
+        row.add(lastName);
+        row.add(firstName);
+        row.add(middleName);
+        row.add(phones);
+        row.add(email);
+        row.add(address);
+        row.add(channel);
+        row.add(telegram);
+        row.add(viber);
+        return row;
+    }
+
+    /** A plain member: key, names and e-mail. */
+    static List<Object> member(String externalId, String lastName, String firstName, String email) {
+        return member(externalId, lastName, firstName, null, null, email, null, null, null, null);
+    }
+
+    /** A workbook with an empty Plots sheet (header only) and the Members sheet with the given rows. */
+    static byte[] members(List<?>... rows) {
+        return builder().sheet("Plots", PLOT_HEADER).sheet("Members", MEMBER_HEADER, rows).build();
     }
 
     /** A row of the Plots sheet in {@link #PLOT_HEADER} order. */

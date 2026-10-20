@@ -41,6 +41,19 @@ describe('ImportPreviewPanel', () => {
     expect(screen.getByRole('status')).toHaveTextContent('no problems');
   });
 
+  it('labels a member problem with the member column and message', () => {
+    renderPanel(
+      preview({
+        committable: false,
+        problemCount: 1,
+        problems: [problem(3, { sheet: 'MEMBERS', column: 'email', code: 'EMAIL_TAKEN' })],
+      }),
+    );
+    const row = screen.getAllByRole('row').slice(-1)[0];
+    expect(row).toHaveTextContent('Members3Email');
+    expect(row).toHaveTextContent('A member with this email already exists.');
+  });
+
   it('shows problems with sheet, row, column label and message', () => {
     renderPanel(
       preview({

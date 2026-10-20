@@ -54,6 +54,10 @@ public final class ProblemCodes {
     public static final String DATE_INVALID = "DATE_INVALID";
     public static final String NUMBER_INVALID = "NUMBER_INVALID";
     public static final String YES_NO_INVALID = "YES_NO_INVALID";
+    /** A member row with neither an e-mail nor a phone cannot be recognised on a later import. */
+    public static final String MEMBER_KEY_MISSING = "MEMBER_KEY_MISSING";
+    /** The name and first phone of a member row match two or more members of the cooperative. */
+    public static final String MEMBER_AMBIGUOUS = "MEMBER_AMBIGUOUS";
 
     private ProblemCodes() {
     }

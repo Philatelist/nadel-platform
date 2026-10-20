@@ -32,6 +32,20 @@ interface MemberRepository extends JpaRepository<Member, UUID> {
             + "and m.archivedAt is null")
     Optional<Member> findActiveByEmail(@Param("tenantId") UUID tenantId, @Param("email") String email);
 
+    /** The active members whose lower-cased e-mail is one of {@code emails} (lower-case), for the Excel import. */
+    @Query("select m from Member m where m.tenantId = :tenantId and lower(m.email) in :emails "
+            + "and m.archivedAt is null")
+    List<Member> findActiveByLowerEmails(@Param("tenantId") UUID tenantId,
+            @Param("emails") Collection<String> emails);
+
+    /** The active members that have at least one of {@code phones} (normalised), for the Excel import. */
+    @Query(value = """
+            select m.* from member m
+            where m.tenant_id = :tenantId and m.archived_at is null
+              and exists (select 1 from unnest(m.phones) as phone(value) where phone.value in (:phones))
+            """, nativeQuery = true)
+    List<Member> findActiveByAnyPhone(@Param("tenantId") UUID tenantId, @Param("phones") Collection<String> phones);
+
     /**
      * Binds the member to a Keycloak user only while it is still unbound, so concurrent first sign-ins cannot
      * overwrite each other. Returns the number of rows changed (0 when someone else linked it first).
