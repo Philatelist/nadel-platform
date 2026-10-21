@@ -77,7 +77,7 @@ class RoleNamesAcceptanceTests extends IntegrationTest {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("name", name);
         body.put("description", "Read access to members, plots and audit");
-        body.put("permissions", List.of("MEMBERS_VIEW", "PLOTS_VIEW", "AUDIT_VIEW"));
+        body.put("permissions", List.of("MEMBERS_VIEW", "PLOTS_VIEW", "AUDIT_VIEW", "TARIFFS_VIEW"));
         return body;
     }
 

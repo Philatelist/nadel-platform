@@ -95,6 +95,21 @@ describe('Layout', () => {
     expect(hrefs()).not.toContain('/imports');
   });
 
+  it('shows Tariffs before Import, only with TARIFFS_VIEW', () => {
+    me = meWith(['MEMBERS_VIEW', 'TARIFFS_VIEW', 'IMPORT_RUN']);
+    const { unmount } = renderWithApp(<Layout />);
+    const hrefs = () =>
+      Array.from(screen.getByRole('navigation', { name: 'Main menu' }).querySelectorAll('a')).map((a) =>
+        a.getAttribute('href'),
+      );
+    expect(hrefs()).toEqual(['/plots', '/members', '/tariffs', '/imports']);
+    expect(screen.getByRole('link', { name: 'Tariffs' })).toBeInTheDocument();
+    unmount();
+    me = meWith(['MEMBERS_VIEW', 'TARIFFS_MANAGE', 'IMPORT_RUN']);
+    renderWithApp(<Layout />);
+    expect(hrefs()).not.toContain('/tariffs');
+  });
+
   it('lists permitted sections and toggles the menu; Escape closes it', async () => {
     me = meWith(['MEMBERS_VIEW', 'ROLES_MANAGE', 'AUDIT_VIEW']);
     const user = userEvent.setup();

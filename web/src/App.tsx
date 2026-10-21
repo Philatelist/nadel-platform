@@ -57,6 +57,32 @@ const router = createBrowserRouter([
         ],
       },
       {
+        element: <RequirePermission permission={['TARIFFS_VIEW', 'TARIFFS_MANAGE']} />,
+        children: [
+          {
+            path: 'tariffs/new',
+            lazy: () => import('./pages/TariffFormPage').then((m) => ({ Component: m.TariffFormPage })),
+          },
+        ],
+      },
+      {
+        element: <RequirePermission permission="TARIFFS_VIEW" />,
+        children: [
+          {
+            path: 'tariffs/:id',
+            lazy: () => import('./pages/TariffPage').then((m) => ({ Component: m.TariffPage })),
+          },
+          {
+            path: 'tariffs',
+            lazy: () => import('./pages/TariffsPage').then((m) => ({ Component: m.TariffsPage })),
+          },
+          {
+            path: 'charge-types',
+            lazy: () => import('./pages/ChargeTypesPage').then((m) => ({ Component: m.ChargeTypesPage })),
+          },
+        ],
+      },
+      {
         element: <RequirePermission permission="IMPORT_RUN" />,
         children: [
           {

@@ -27,6 +27,14 @@ public final class ProblemCodes {
     public static final String MEMBER_OWNS_PLOT = "MEMBER_OWNS_PLOT";
     public static final String PLOT_HAS_OWNERS = "PLOT_HAS_OWNERS";
     public static final String PLOT_HAS_OWNERSHIP_HISTORY = "PLOT_HAS_OWNERSHIP_HISTORY";
+    /** 409: another non-archived charge type has the name, or it is the default name of a seeded type not renamed. */
+    public static final String CHARGE_TYPE_NAME_TAKEN = "CHARGE_TYPE_NAME_TAKEN";
+    /** 409: the charge type is archived and can be neither changed nor archived again. */
+    public static final String CHARGE_TYPE_ARCHIVED = "CHARGE_TYPE_ARCHIVED";
+    /** 409: the submitted order is not the current set of non-archived charge types. */
+    public static final String CHARGE_TYPE_ORDER_STALE = "CHARGE_TYPE_ORDER_STALE";
+    /** 409: another version of the tariff starts on the same date. */
+    public static final String TARIFF_VERSION_DATE_TAKEN = "TARIFF_VERSION_DATE_TAKEN";
     /** 413: the uploaded file is over the size limit. */
     public static final String FILE_TOO_LARGE = "FILE_TOO_LARGE";
     /** 400: the upload is not an {@code .xlsx} workbook (also a corrupt, encrypted or oversized-when-unpacked one). */
@@ -53,6 +61,14 @@ public final class ProblemCodes {
     public static final String CADASTRAL_INVALID = "CADASTRAL_INVALID";
     public static final String AREA_INVALID = "AREA_INVALID";
     public static final String SHARE_INVALID = "SHARE_INVALID";
+    /** A tariff rate that is not a non-negative number with at most 10 integer and 4 decimal digits. */
+    public static final String RATE_INVALID = "RATE_INVALID";
+    /** One-off without a fixed one-time amount, or a fixed one-time amount without one-off. */
+    public static final String FREQUENCY_BASIS_MISMATCH = "FREQUENCY_BASIS_MISMATCH";
+    /** Common land named in the scope of a tariff (selected plots or exclusions); it has no tariffs. */
+    public static final String TARIFF_COMMON_LAND = "TARIFF_COMMON_LAND";
+    /** The same plot listed twice in one list of a request. */
+    public static final String DUPLICATE = "DUPLICATE";
     public static final String MEMBER_NOT_FOUND = "MEMBER_NOT_FOUND";
     public static final String OWNERSHIP_NOT_FOUND = "OWNERSHIP_NOT_FOUND";
 

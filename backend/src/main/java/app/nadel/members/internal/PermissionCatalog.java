@@ -29,6 +29,10 @@ final class PermissionCatalog {
             case IMPORT_RUN -> new String[] {"Run import", "Run the Excel import"};
             case SETTINGS_MANAGE -> new String[] {"Manage cooperative settings",
                     "Change the settings of the cooperative, such as who sees the colour of plots"};
+            case TARIFFS_VIEW -> new String[] {"View tariffs",
+                    "See charge types, tariffs and what each plot would be charged"};
+            case TARIFFS_MANAGE -> new String[] {"Manage tariffs",
+                    "Add, rename, reorder and archive charge types; manage tariffs and their scope"};
         };
         return new PermissionInfo(nadel.contract.model.Permission.fromValue(permission.name()), text[0], text[1]);
     }

@@ -1,4 +1,5 @@
-import { useListAuditEntries, type AuditEntry } from '@nadel/api-client';
+import { useListAuditEntries, type AuditEntityType, type AuditEntry } from '@nadel/api-client';
+import { formatDay, formatRate, normalizeRateInput } from '@nadel/shared';
 import { keepPreviousData } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router';
 import { Pagination } from '../components/Pagination';
@@ -11,7 +12,16 @@ import { useDocumentTitle } from '../useDocumentTitle';
 
 const PAGE_SIZE = 50;
 const TIME_ZONE = 'Europe/Kyiv';
-const ENTITY_TYPES = ['MEMBER', 'ROLE', 'PLOT', 'SETTINGS', 'OWNERSHIP'] as const;
+const ENTITY_TYPES = ['MEMBER', 'ROLE', 'PLOT', 'SETTINGS', 'OWNERSHIP', 'CHARGE_TYPE', 'TARIFF'] as const;
+
+/** Where a record of an entity type is shown; absent for types without a page of their own. */
+const entityHref: Readonly<Partial<Record<AuditEntityType, (entityId: string) => string>>> = {
+  MEMBER: (id) => `/members/${id}`,
+  PLOT: (id) => `/plots/${id}`,
+  OWNERSHIP: (id) => `/plots/${id}`,
+  CHARGE_TYPE: () => '/charge-types',
+  TARIFF: (id) => `/tariffs/${id}`,
+};
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 function isEntityType(value: string | null): value is (typeof ENTITY_TYPES)[number] {
@@ -189,14 +199,12 @@ function AuditRecord({ entry }: { entry: AuditEntry }) {
         ? t.settings.title
         : entry.entityLabel
     : a.unlabelled;
+  const href = entityHref[entry.entityType]?.(entry.entityId);
   return (
     <>
       <span className="text-ink-muted">{a.entityType[entry.entityType]}: </span>
-      {entry.entityType === 'MEMBER' || entry.entityType === 'PLOT' || entry.entityType === 'OWNERSHIP' ? (
-        <Link
-          to={`${entry.entityType === 'MEMBER' ? '/members' : '/plots'}/${entry.entityId}`}
-          className="text-accent underline"
-        >
+      {href ? (
+        <Link to={href} className="text-accent underline">
           {label}
         </Link>
       ) : (
@@ -208,14 +216,29 @@ function AuditRecord({ entry }: { entry: AuditEntry }) {
 
 function AuditChanges({ entry }: { entry: AuditEntry }) {
   const t = useT();
+  const { locale } = useLocale();
   const a = t.audit;
+  const bases: Readonly<Record<string, string>> = t.tariffs.basis;
+  const frequencies: Readonly<Record<string, string>> = t.tariffs.frequency;
   const fieldNames: Readonly<Record<string, string>> = { ...t.member.fields, ...a.fields };
+  const scopes: Readonly<Record<string, string>> = {
+    ALL_PLOTS: t.tariffs.scope.all,
+    SELECTED_PLOTS: t.tariffs.scope.selected,
+  };
   const kinds: Readonly<Record<string, string>> = t.plot.kind;
   const visibilities: Readonly<Record<string, { label: string } | undefined>> = t.settings.visibility;
   const value = (field: string, raw: string | undefined): string => {
     if (raw === undefined || raw === '') return a.noValue;
-    if (field === 'archived' || field === 'hasBuilding') return raw === 'true' ? a.yes : a.no;
+    if (field === 'archived' || field === 'hasBuilding' || field === 'active')
+      return raw === 'true' ? a.yes : a.no;
     if (field === 'kind') return kinds[raw] ?? raw;
+    if (field === 'rate') return normalizeRateInput(raw) === raw ? `${formatRate(raw, locale)} ₴` : raw;
+    if (field === 'scope') return scopes[raw] ?? raw;
+    if (field === 'frequency') return frequencies[raw] ?? raw;
+    if (field === 'basis' && entry.entityType === 'TARIFF') return bases[raw] ?? raw;
+    if ((field === 'validFrom' || field === 'dueDate') && /^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+      return formatDay(raw, locale);
+    }
     if (field === 'memberPlotStatusVisibility') return visibilities[raw]?.label ?? raw;
     return field === 'name' || field === 'roles' || field === 'description'
       ? auditRoleValue(raw, t, field)

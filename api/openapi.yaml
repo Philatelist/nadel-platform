@@ -30,6 +30,10 @@ tags:
     description: Cooperative settings
   - name: imports
     description: Excel import of plots, members and ownership
+  - name: charge-types
+    description: Charge types (what the cooperative charges for)
+  - name: tariffs
+    description: Tariffs with dated versions (how much the cooperative charges)
 
 paths:
   /me:
@@ -1344,6 +1348,396 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
 
+  /charge-types:
+    get:
+      tags: [charge-types]
+      operationId: listChargeTypes
+      summary: List the charge types of the cooperative
+      description: |
+        Returns the non-archived charge types of the current cooperative ordered by `position` (then by id). Every
+        cooperative starts with four (see `ChargeTypeCode`): membership fee, electricity, land and water (inactive). A type that was
+        never renamed has `nameCustomized: false` and its `name` is the English default; clients show their own
+        localised default name for it. Requires `TARIFFS_VIEW`.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ChargeType'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      tags: [charge-types]
+      operationId: createChargeType
+      summary: Add a charge type
+      description: |
+        Adds a custom charge type at the end of the list, active. The name is trimmed and must be unique among the
+        non-archived charge types, ignoring letter case; it must also differ from the Ukrainian and English default
+        names of the starting types that were not renamed (409 `CHARGE_TYPE_NAME_TAKEN`). Requires `TARIFFS_VIEW`
+        and `TARIFFS_MANAGE`; the change is written to the audit log.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChargeTypeCreate'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChargeType'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /charge-types/order:
+    put:
+      tags: [charge-types]
+      operationId: reorderChargeTypes
+      summary: Change the order of the charge types
+      description: |
+        Sets the order of the list. `ids` must be exactly the ids of the non-archived charge types of the
+        cooperative, each once, in the new order; otherwise (the list changed since the client read it) the answer is
+        409 `CHARGE_TYPE_ORDER_STALE` and nothing changes. Requires `TARIFFS_VIEW` and `TARIFFS_MANAGE`; one audit
+        entry is written for every type whose position changed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChargeTypeOrder'
+      responses:
+        '204':
+          description: The new order is saved
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /charge-types/{id}:
+    put:
+      tags: [charge-types]
+      operationId: updateChargeType
+      summary: Change a charge type
+      description: |
+        Replaces the name, description and active mark. Renaming one of the four starting types marks it as
+        customised (`nameCustomized: true`) for good. The name rules are those of creation (409
+        `CHARGE_TYPE_NAME_TAKEN`). An archived type cannot be changed (409 `CHARGE_TYPE_ARCHIVED`). Saving the current
+        values changes nothing and writes no audit entry. Requires `TARIFFS_VIEW` and `TARIFFS_MANAGE`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChargeTypeUpdate'
+      responses:
+        '200':
+          description: The saved charge type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChargeType'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /charge-types/{id}/archive:
+    post:
+      tags: [charge-types]
+      operationId: archiveChargeType
+      summary: Archive a charge type
+      description: |
+        Archives the charge type: it disappears from the list, frees its name and can no longer get tariffs. A charge
+        type is never deleted. Archiving an archived type is 409 `CHARGE_TYPE_ARCHIVED`. Requires `TARIFFS_VIEW` and
+        `TARIFFS_MANAGE`; the change is written to the audit log.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Archived
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /tariffs:
+    get:
+      tags: [tariffs]
+      operationId: listTariffs
+      summary: List the tariffs of the cooperative
+      description: |
+        Returns the tariffs of the non-archived charge types, ordered like the charge types (by position), then by name.
+        Each tariff shows one version: the one valid today (Europe/Kyiv), otherwise the earliest future one.
+        `plotCount` is the number of plots the tariff applies to: for `ALL_PLOTS` the active plots that are not
+        common land minus the excluded active ones, for `SELECTED_PLOTS` the active selected plots that are not
+        common land. It is absent when the
+        shown version is meter-based (`PER_KWH`, `PER_M3`): such a tariff applies to the plots with a meter. Requires
+        `TARIFFS_VIEW`.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TariffSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      tags: [tariffs]
+      operationId: createTariff
+      summary: Create a tariff with its first version
+      description: |
+        Creates a tariff of a charge type together with its first version; the tariff applies to all plots until its
+        scope is changed. The charge type must exist (404 otherwise) and not be archived (409
+        `CHARGE_TYPE_ARCHIVED`). The version rules are those of `POST /tariffs/{id}/versions` (400
+        `VALIDATION_FAILED`, with field names prefixed by `firstVersion.`). A version dated in the past is accepted.
+        Requires `TARIFFS_VIEW` and `TARIFFS_MANAGE`; the change is written to the audit log.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TariffCreate'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tariff'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /tariffs/{id}:
+    get:
+      tags: [tariffs]
+      operationId: getTariff
+      summary: A tariff with its versions
+      description: |
+        Returns the tariff, its charge type (also an archived one) and every version, newest first. `validTo` of a
+        version is the day before the next version starts; the last version has none. `pastDated` marks a version
+        whose `validFrom` is before today (Europe/Kyiv). A tariff of another cooperative or an unknown id is 404.
+        `selectedPlots` and `exclusions` hold the scope with plot numbers (and the reason of each exclusion) in natural
+        order of the number; a plot archived after it was added is still listed, marked `archived`, and not counted
+        in `plotCount`. Requires `TARIFFS_VIEW`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tariff'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /tariffs/{id}/versions:
+    post:
+      tags: [tariffs]
+      operationId: addTariffVersion
+      summary: Add a version to a tariff
+      description: |
+        Adds a version that applies from `validFrom`. Versions are never edited or deleted; a change of rate is a new
+        version. Two versions of one tariff cannot start on the same date (409 `TARIFF_VERSION_DATE_TAKEN`,
+        `errors[{field: validFrom}]`). The charge type must not be archived (409 `CHARGE_TYPE_ARCHIVED`). A date in the
+        past is accepted (`pastDated: true` in the answer). Field codes of 400 `VALIDATION_FAILED`: `rate`
+        `RATE_INVALID`; `frequency` `FREQUENCY_BASIS_MISMATCH` (`ONE_OFF` goes only with `FIXED_ONE_TIME` and
+        `FIXED_ONE_TIME` only with `ONE_OFF`); `dueDate` `REQUIRED` (a one-time amount has a due date) or `INVALID`
+        (a due date for a basis other than `FIXED_ONE_TIME`). The answer is the new version with `validTo` derived
+        from the versions that follow it. Requires `TARIFFS_VIEW` and `TARIFFS_MANAGE`; the change is written to the
+        audit log.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TariffVersionCreate'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TariffVersion'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /tariffs/{id}/scope:
+    put:
+      tags: [tariffs]
+      operationId: updateTariffScope
+      summary: Choose the plots a tariff applies to
+      description: |
+        Replaces the scope of the tariff in one transaction. `ALL_PLOTS` applies the tariff to every active plot that
+        is not common land, minus the `exclusions` (each with a reason); `plotIds` must then be empty. `SELECTED_PLOTS`
+        applies it to the plots in `plotIds`; `exclusions` must then be empty. Switching the kind removes the rows of
+        the other kind. Saving the scope the tariff already has changes nothing and writes no audit entry.
+        Field codes of 400 `VALIDATION_FAILED`: `plotIds` or `exclusions` `INVALID` (the list does not go with the
+        kind); `plotIds[i]` or `exclusions[i].plotId` `TARIFF_COMMON_LAND` (common land has no tariffs),
+        `PLOT_ARCHIVED` (an archived plot cannot be added; one already in the scope may stay), `UNKNOWN_PLOT` (no such
+        plot in the cooperative) or `DUPLICATE` (the plot is listed twice); `exclusions[i].reason` `REQUIRED` (blank)
+        or `TOO_LONG`. At most 5000 plots per list (`TOO_LONG`). The charge type must not be archived (409
+        `CHARGE_TYPE_ARCHIVED`). The answer is the updated tariff. Requires `TARIFFS_VIEW` and `TARIFFS_MANAGE`; a
+        change of kind or of the selected plots is written to the audit log as `TARIFF_SCOPE_CHANGED`, and each
+        exclusion added or removed as `TARIFF_EXCLUSION_ADDED` or `TARIFF_EXCLUSION_REMOVED`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TariffScopeUpdate'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tariff'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /plots/{id}/tariffs:
+    get:
+      tags: [tariffs]
+      operationId: getPlotTariffs
+      summary: Expected amounts of a plot for a month
+      description: |
+        Returns the tariffs that apply to the plot in the month and the amount the plot would be charged for each,
+        calculated by the server (nothing is charged yet). `month` is `YYYY-MM` and defaults to the current month in
+        Europe/Kyiv; anything else is 400 `VALIDATION_FAILED`. No permission annotation: a caller with `TARIFFS_VIEW`
+        may ask for any plot of the cooperative, anyone else only for a plot they currently own. Any other plot, an
+        unknown id and a plot of another cooperative are 404 `NOT_FOUND`; the platform operator has no cooperative data:
+        403. Common land and archived plots answer 200 with no items and a total of `0.00`.
+        Tariffs of archived or inactive charge types are left out, and so is a tariff none of whose versions overlaps
+        the month. A tariff of all plots that excludes the plot is listed with status `EXCLUDED` and the reason, without
+        an amount. A tariff with a per-kWh or per-m3 version in the month is `BY_READINGS` without an amount. Every
+        other tariff is `AMOUNT`, rounded once to kopecks (a one-time fee is 0.00 outside its due month). The rate,
+        basis and frequency are those of the version valid on the last day of the month that the tariff covers (for a
+        one-time fee, the version valid on its due date). Items are ordered by charge type position, then tariff name.
+        `total` is the sum of the `AMOUNT` items. The co-ownership share does not change the amount.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: month
+          in: query
+          required: false
+          description: The billing month, `YYYY-MM`; defaults to the current month (Europe/Kyiv)
+          schema:
+            type: string
+            pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlotTariffs'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1419,7 +1813,12 @@ components:
         `OWNERSHIP_OVERLAP` and `OWNERSHIP_DATE_INVALID` on `validFrom` or `validTo`, `MEMBER_ARCHIVED` on `memberId`), or the member currently owns a plot and is archived (code
         `MEMBER_OWNS_PLOT`), or a plot with a current owner is archived (code `PLOT_HAS_OWNERS`), or a plot with
         ownership history is deleted or turned into common land (code `PLOT_HAS_OWNERSHIP_HISTORY`, with
-        `errors[{field: kind}]` for the update)
+        `errors[{field: kind}]` for the update), or a charge type name is taken (code `CHARGE_TYPE_NAME_TAKEN`, with
+        `errors[{field: name}]`), a charge type is archived and cannot be changed or archived again (code
+        `CHARGE_TYPE_ARCHIVED`), or the submitted order of charge types is not the current list (code
+        `CHARGE_TYPE_ORDER_STALE`), a tariff version with the same start date exists (code
+        `TARIFF_VERSION_DATE_TAKEN`, with `errors[{field: validFrom}]`), or a tariff is added to, a version is added
+        to or the scope is changed of a tariff under an archived charge type (code `CHARGE_TYPE_ARCHIVED`)
       content:
         application/problem+json:
           schema:
@@ -1448,6 +1847,8 @@ components:
         - OWNERSHIP_EDIT
         - IMPORT_RUN
         - SETTINGS_MANAGE
+        - TARIFFS_VIEW
+        - TARIFFS_MANAGE
 
     PlotStatusVisibility:
       type: string
@@ -1758,11 +2159,20 @@ components:
         - OWNERSHIP_CHANGED
         - OWNERSHIP_CORRECTED
         - IMPORT_COMMITTED
+        - CHARGE_TYPE_CREATED
+        - CHARGE_TYPE_UPDATED
+        - CHARGE_TYPE_REORDERED
+        - CHARGE_TYPE_ARCHIVED
+        - TARIFF_CREATED
+        - TARIFF_VERSION_ADDED
+        - TARIFF_SCOPE_CHANGED
+        - TARIFF_EXCLUSION_ADDED
+        - TARIFF_EXCLUSION_REMOVED
 
     AuditEntityType:
       type: string
       description: Kind of the entity an audit entry is about
-      enum: [MEMBER, ROLE, PLOT, SETTINGS, OWNERSHIP, IMPORT]
+      enum: [MEMBER, ROLE, PLOT, SETTINGS, OWNERSHIP, IMPORT, CHARGE_TYPE, TARIFF]
 
     AuditFieldChange:
       type: object
@@ -2491,6 +2901,374 @@ components:
             `CADASTRAL_INVALID` (not of the form `NNNNNNNNNN:NN:NNN:NNNN`), `AREA_INVALID` (more than two decimal
             places, too large, or not greater than zero for a plot), `SHARE_INVALID` (not a fraction `n/d` with
             1 <= n <= d <= 1000), `MEMBER_NOT_FOUND` (no such member in the cooperative), `OWNERSHIP_NOT_FOUND` (no
-            such owner record in the same plot, or the record being corrected)
+            such owner record in the same plot, or the record being corrected), `RATE_INVALID` (a tariff rate that is
+            not a non-negative number with at most 10 integer and 4 decimal digits), `FREQUENCY_BASIS_MISMATCH`
+            (`ONE_OFF` without `FIXED_ONE_TIME`, or `FIXED_ONE_TIME` without `ONE_OFF`), `TARIFF_COMMON_LAND` (common
+            land cannot be in the scope of a tariff), `PLOT_ARCHIVED` (an archived plot), `UNKNOWN_PLOT` (no such plot
+            in the cooperative), `DUPLICATE` (the same plot listed twice)
         message:
           type: string
+
+    ChargeTypeCode:
+      type: string
+      description: Code of one of the four charge types every cooperative starts with; custom types have no code
+      enum: [MEMBERSHIP, ELECTRICITY, LAND_TAX, WATER]
+
+    ChargeType:
+      type: object
+      description: What the cooperative charges for
+      required: [id, name, nameCustomized, active, position]
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          $ref: '#/components/schemas/ChargeTypeCode'
+        name:
+          type: string
+          description: >-
+            The stored name. While `nameCustomized` is false it is the English default of a starting type and clients
+            show their own localised default name instead
+        nameCustomized:
+          type: boolean
+          description: True for custom types and for starting types that were renamed
+        description:
+          type: string
+        active:
+          type: boolean
+          description: An inactive type stays in the list but its tariffs give no expected amount
+        position:
+          type: integer
+          format: int32
+          description: Place in the list; ties are ordered by id
+
+    ChargeTypeCreate:
+      type: object
+      description: A new custom charge type
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: 1 to 100 characters; surrounding whitespace is trimmed; unique among non-archived types, ignoring case
+        description:
+          type: string
+          maxLength: 500
+
+    ChargeTypeUpdate:
+      type: object
+      description: Editable fields of a charge type (full replacement)
+      required: [name, active]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: 1 to 100 characters; surrounding whitespace is trimmed; unique among non-archived types, ignoring case
+        description:
+          type: string
+          maxLength: 500
+          description: Blank text clears the description
+        active:
+          type: boolean
+
+    ChargeTypeOrder:
+      type: object
+      description: The full new order of the non-archived charge types
+      required: [ids]
+      properties:
+        ids:
+          type: array
+          maxItems: 500
+          description: Every non-archived charge type id exactly once, in the new order
+          items:
+            type: string
+            format: uuid
+
+    Rate:
+      type: string
+      pattern: '^\d{1,10}(\.\d{1,4})?$'
+      description: >-
+        A tariff rate as a string: not negative, at most 10 integer digits and at most 4 digits after the decimal
+        point. It is never rounded; the server returns it with exactly four decimals (`"4.3200"`). Not a money amount:
+        a rate times a quantity becomes money only in the calculation.
+      examples: ['4.3200']
+
+    Basis:
+      type: string
+      description: What the rate applies to
+      enum: [PER_PLOT, PER_AREA_SOTKA, PER_KWH, PER_M3, FIXED_ONE_TIME]
+
+    Frequency:
+      type: string
+      description: How often the rate is meant. `ONE_OFF` goes only with `FIXED_ONE_TIME`.
+      enum: [MONTHLY, QUARTERLY, YEARLY, ONE_OFF]
+
+    TariffScopeKind:
+      type: string
+      description: Which plots a tariff applies to
+      enum: [ALL_PLOTS, SELECTED_PLOTS]
+
+    TariffExclusionUpdate:
+      type: object
+      description: A plot excluded from a tariff of all plots, with the reason
+      required: [plotId, reason]
+      properties:
+        plotId:
+          type: string
+          format: uuid
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+          description: Why the plot is exempt; 1 to 500 characters after trimming, never blank
+
+    TariffScopeUpdate:
+      type: object
+      description: The complete scope of a tariff; it replaces the stored one
+      required: [kind]
+      properties:
+        kind:
+          $ref: '#/components/schemas/TariffScopeKind'
+        plotIds:
+          type: array
+          maxItems: 5000
+          description: The selected plots; only with `SELECTED_PLOTS`; no plot twice, no common land
+          items:
+            type: string
+            format: uuid
+        exclusions:
+          type: array
+          maxItems: 5000
+          description: The excluded plots with reasons; only with `ALL_PLOTS`; no plot twice, no common land
+          items:
+            $ref: '#/components/schemas/TariffExclusionUpdate'
+
+    TariffScopePlot:
+      type: object
+      description: A plot named by the scope of a tariff
+      required: [plotId, number, archived]
+      properties:
+        plotId:
+          type: string
+          format: uuid
+        number:
+          type: string
+          description: The plot number as the cooperative writes it
+        archived:
+          type: boolean
+          description: True when the plot was archived after it was added; it is not counted
+
+    TariffExclusion:
+      type: object
+      description: A plot excluded from a tariff of all plots, with the reason
+      required: [plotId, number, archived, reason]
+      properties:
+        plotId:
+          type: string
+          format: uuid
+        number:
+          type: string
+        archived:
+          type: boolean
+          description: True when the plot was archived after it was excluded; it is not counted
+        reason:
+          type: string
+
+    TariffVersionCreate:
+      type: object
+      description: A new version of a tariff
+      required: [validFrom, basis, frequency, rate]
+      properties:
+        validFrom:
+          type: string
+          format: date
+          description: The date the version applies from; unique among the versions of the tariff
+        basis:
+          $ref: '#/components/schemas/Basis'
+        frequency:
+          $ref: '#/components/schemas/Frequency'
+        rate:
+          $ref: '#/components/schemas/Rate'
+        dueDate:
+          type: string
+          format: date
+          description: Required for `FIXED_ONE_TIME` (and only for it)
+        note:
+          type: string
+          maxLength: 500
+          description: Optional free text, for example the decision of the general meeting; blank text is not stored
+
+    TariffVersion:
+      type: object
+      description: One version of a tariff
+      required: [id, validFrom, basis, frequency, rate, pastDated]
+      properties:
+        id:
+          type: string
+          format: uuid
+        validFrom:
+          type: string
+          format: date
+        validTo:
+          type: string
+          format: date
+          description: The day before the next version starts; absent for the last version
+        basis:
+          $ref: '#/components/schemas/Basis'
+        frequency:
+          $ref: '#/components/schemas/Frequency'
+        rate:
+          $ref: '#/components/schemas/Rate'
+        dueDate:
+          type: string
+          format: date
+        note:
+          type: string
+        pastDated:
+          type: boolean
+          description: True when `validFrom` is before today (Europe/Kyiv); charges of past periods will be recalculated
+
+    TariffCreate:
+      type: object
+      description: A new tariff with its first version
+      required: [chargeTypeId, name, firstVersion]
+      properties:
+        chargeTypeId:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: 1 to 100 characters; surrounding whitespace is trimmed
+        firstVersion:
+          $ref: '#/components/schemas/TariffVersionCreate'
+
+    TariffSummary:
+      type: object
+      description: A tariff in the list, with the version that is shown
+      required: [id, name, chargeTypeId, scopeKind, version]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        chargeTypeId:
+          type: string
+          format: uuid
+        scopeKind:
+          $ref: '#/components/schemas/TariffScopeKind'
+        version:
+          $ref: '#/components/schemas/TariffVersion'
+        plotCount:
+          type: integer
+          format: int64
+          description: Number of plots the tariff applies to; absent for a meter-based version (`PER_KWH`, `PER_M3`)
+
+    Tariff:
+      type: object
+      description: A tariff with its charge type, all versions and its scope
+      required: [id, name, chargeType, scopeKind, versions, selectedPlots, exclusions]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        chargeType:
+          $ref: '#/components/schemas/ChargeType'
+        scopeKind:
+          $ref: '#/components/schemas/TariffScopeKind'
+        versions:
+          type: array
+          description: Newest first (by `validFrom`)
+          items:
+            $ref: '#/components/schemas/TariffVersion'
+        selectedPlots:
+          type: array
+          description: With `SELECTED_PLOTS`, the selected plots in natural order of the number (archived ones marked); empty otherwise
+          items:
+            $ref: '#/components/schemas/TariffScopePlot'
+        exclusions:
+          type: array
+          description: With `ALL_PLOTS`, the excluded plots in natural order of the number (archived ones marked); empty otherwise
+          items:
+            $ref: '#/components/schemas/TariffExclusion'
+        plotCount:
+          type: integer
+          format: int64
+          description: >-
+            Number of plots the tariff applies to, as in the list (exclusions subtracted, archived plots and common
+            land never counted); absent when the shown version (the one valid today, else the earliest future one) is
+            meter-based
+
+    ExpectedChargeStatus:
+      type: string
+      description: >-
+        `AMOUNT` the plot is charged `amount`; `BY_READINGS` the amount depends on meter readings and is not known here;
+        `EXCLUDED` the tariff does not apply to the plot (see `reason`)
+      enum: [AMOUNT, BY_READINGS, EXCLUDED]
+
+    PlotTariffItem:
+      type: object
+      description: One tariff that applies to a plot in a month, with the expected amount
+      required:
+        [
+          tariffId,
+          tariffName,
+          chargeTypeId,
+          chargeTypeName,
+          chargeTypeNameCustomized,
+          basis,
+          frequency,
+          rate,
+          status,
+        ]
+      properties:
+        tariffId:
+          type: string
+          format: uuid
+        tariffName:
+          type: string
+        chargeTypeId:
+          type: string
+          format: uuid
+        chargeTypeCode:
+          $ref: '#/components/schemas/ChargeTypeCode'
+        chargeTypeName:
+          type: string
+          description: The stored name; clients show their own default name while `chargeTypeNameCustomized` is false
+        chargeTypeNameCustomized:
+          type: boolean
+        basis:
+          $ref: '#/components/schemas/Basis'
+        frequency:
+          $ref: '#/components/schemas/Frequency'
+        rate:
+          $ref: '#/components/schemas/Rate'
+        status:
+          $ref: '#/components/schemas/ExpectedChargeStatus'
+        amount:
+          $ref: '#/components/schemas/Money'
+        reason:
+          type: string
+          description: Why the plot is excluded; only with status `EXCLUDED`
+
+    PlotTariffs:
+      type: object
+      description: The tariffs that apply to a plot in a month and the expected amounts
+      required: [month, items, total]
+      properties:
+        month:
+          type: string
+          pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+          description: The month the amounts are for, `YYYY-MM`
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlotTariffItem'
+        total:
+          $ref: '#/components/schemas/Money'

@@ -172,7 +172,7 @@ class MembersAccessAcceptanceTests extends IntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.memberId").value(member.toString()))
                 .andExpect(jsonPath("$.permissions", containsInAnyOrder(
-                        "MEMBERS_VIEW", "MEMBERS_EDIT", "AUDIT_VIEW", "PLOTS_VIEW")));
+                        "MEMBERS_VIEW", "MEMBERS_EDIT", "AUDIT_VIEW", "PLOTS_VIEW", "TARIFFS_VIEW")));
         mvc.perform(get("/api/v1/audit").header(HttpHeaders.AUTHORIZATION, person)).andExpect(status().isOk());
 
         // the new editor changes the postal address and the phone of the member
@@ -291,17 +291,18 @@ class MembersAccessAcceptanceTests extends IntegrationTest {
         try {
             doPut(chairman(), "/api/v1/roles/" + treasurerRole, Map.of("name", SEEDED_TREASURER_NAME,
                     "description", SEEDED_TREASURER_DESCRIPTION,
-                    "permissions", List.of("MEMBERS_VIEW", "PLOTS_VIEW"))).andExpect(status().isOk());
+                    "permissions", List.of("MEMBERS_VIEW", "PLOTS_VIEW", "TARIFFS_VIEW"))).andExpect(status().isOk());
 
             mvc.perform(get("/api/v1/me").header(HttpHeaders.AUTHORIZATION, treasurer))
-                    .andExpect(jsonPath("$.permissions", containsInAnyOrder("MEMBERS_VIEW", "PLOTS_VIEW")));
+                    .andExpect(jsonPath("$.permissions", containsInAnyOrder("MEMBERS_VIEW", "PLOTS_VIEW", "TARIFFS_VIEW")));
             mvc.perform(get("/api/v1/audit").header(HttpHeaders.AUTHORIZATION, treasurer))
                     .andExpect(status().isForbidden())
                     .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
         } finally {
             doPut(chairman(), "/api/v1/roles/" + treasurerRole, Map.of("name", SEEDED_TREASURER_NAME,
                     "description", SEEDED_TREASURER_DESCRIPTION,
-                    "permissions", List.of("MEMBERS_VIEW", "PLOTS_VIEW", "AUDIT_VIEW"))).andExpect(status().isOk());
+                    "permissions", List.of("MEMBERS_VIEW", "PLOTS_VIEW", "AUDIT_VIEW", "TARIFFS_VIEW")))
+                    .andExpect(status().isOk());
         }
         mvc.perform(get("/api/v1/audit").header(HttpHeaders.AUTHORIZATION, treasurer)).andExpect(status().isOk());
 
@@ -311,7 +312,7 @@ class MembersAccessAcceptanceTests extends IntegrationTest {
         assertThat(restored.path("description").asString()).isEqualTo(SEEDED_TREASURER_DESCRIPTION);
         List<String> permissions = new ArrayList<>();
         restored.get("permissions").forEach(node -> permissions.add(node.asString()));
-        assertThat(permissions).containsExactlyInAnyOrder("MEMBERS_VIEW", "PLOTS_VIEW", "AUDIT_VIEW");
+        assertThat(permissions).containsExactlyInAnyOrder("MEMBERS_VIEW", "PLOTS_VIEW", "AUDIT_VIEW", "TARIFFS_VIEW");
     }
 
     /**

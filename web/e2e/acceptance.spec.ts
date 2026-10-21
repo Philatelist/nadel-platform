@@ -21,6 +21,8 @@ const ALL_PERMISSIONS = [
   'Edit ownership',
   'Run import',
   'Manage cooperative settings',
+  'View tariffs',
+  'Manage tariffs',
 ];
 
 const nav = (page: Page) => page.locator('#app-menu nav');
@@ -88,7 +90,7 @@ test.describe('§2.10 / §2.11 landing page and navigation', () => {
     await expect(page).toHaveURL(/\/plots$/);
     await expectNavigation(
       page,
-      ['Plots', 'My account', 'Members', 'Import', 'Roles', 'Audit log', 'Cooperative settings'],
+      ['Plots', 'My account', 'Members', 'Tariffs', 'Import', 'Roles', 'Audit log', 'Cooperative settings'],
       [],
     );
     await accountLink(page).click();
@@ -210,7 +212,7 @@ test.describe('§2.7 / §2.8 members list and read-only card', () => {
 });
 
 test.describe('§2.2 / §2.13 roles screen', () => {
-  test('§2.2 #1, #2 and §2.13 #2: five roles, base role names are editable, Chairman has all nine permissions locked', async ({
+  test('§2.2 #1, #2 and §2.13 #2: five roles, base role names are editable, Chairman has all eleven permissions locked', async ({
     page,
   }) => {
     await loginAs(page, 'chairman@demo.local');
@@ -326,7 +328,7 @@ test.describe('§2.2 / §2.13 roles screen', () => {
     expect(await page.getByRole('main').innerText()).not.toContain('base:');
   });
 
-  test('§2.1 #1 and §2.11 #3: nine permissions with descriptions in Ukrainian by default, English on switch', async ({
+  test('§2.1 #1 and §2.11 #3: eleven permissions with descriptions in Ukrainian by default, English on switch', async ({
     browser,
   }) => {
     // a browser language that is not supported falls back to the default locale (Ukrainian)
@@ -353,6 +355,11 @@ test.describe('§2.2 / §2.13 roles screen', () => {
       [
         'Керування налаштуваннями кооперативу',
         'Змінювати налаштування всього кооперативу, наприклад, хто бачить кольори ділянок',
+      ],
+      ['Перегляд тарифів', 'Бачити види нарахувань, тарифи та їхні версії'],
+      [
+        'Керування тарифами',
+        'Додавати, змінювати, впорядковувати й архівувати види нарахувань, тарифи та їхні версії',
       ],
     ];
     await expect(page.getByRole('checkbox')).toHaveCount(ALL_PERMISSIONS.length);

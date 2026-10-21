@@ -127,3 +127,139 @@ describe('AuditPage ownership entries', () => {
     expect(screen.getByText(/Owners unchanged:/)).toBeInTheDocument();
   });
 });
+
+describe('AuditPage charge type and tariff entries', () => {
+  it('links a charge type entry to the charge types page with readable labels and booleans', () => {
+    entry = {
+      id: 'a6',
+      occurredAt: '2026-10-04T10:00:00Z',
+      action: 'CHARGE_TYPE_UPDATED',
+      entityType: 'CHARGE_TYPE',
+      entityId: 'c1',
+      entityLabel: 'Road repair',
+      changes: [
+        { field: 'name', oldValue: 'Roads', newValue: 'Road repair' },
+        { field: 'description', oldValue: '', newValue: 'One-off' },
+        { field: 'active', oldValue: 'false', newValue: 'true' },
+        { field: 'position', oldValue: '2', newValue: '1' },
+      ],
+    };
+    renderWithApp(<AuditPage />);
+    expect(screen.getByText('Charge type changed')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Road repair' })).toHaveAttribute('href', '/charge-types');
+    expect(screen.getByText(/Description:/)).toBeInTheDocument();
+    expect(screen.getByText(/Active:/)).toBeInTheDocument();
+    expect(screen.getByText(/No → Yes/)).toBeInTheDocument();
+    expect(screen.getByText(/Position:/)).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Charge type' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Tariff' })).toBeInTheDocument();
+  });
+
+  it('links a tariff entry to the tariff by id and labels the other actions', () => {
+    entry = {
+      id: 'a7',
+      occurredAt: '2026-10-05T10:00:00Z',
+      action: 'CHARGE_TYPE_ARCHIVED',
+      entityType: 'TARIFF',
+      entityId: 't9',
+      entityLabel: 'Per sotka',
+      changes: [{ field: 'archived', oldValue: 'false', newValue: 'true' }],
+    };
+    renderWithApp(<AuditPage />);
+    expect(screen.getByText('Charge type archived')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Per sotka' })).toHaveAttribute('href', '/tariffs/t9');
+  });
+});
+
+describe('AuditPage tariff version entries', () => {
+  it('labels the tariff actions and fields and formats rate, basis, frequency and dates', () => {
+    entry = {
+      id: 'a8',
+      occurredAt: '2026-10-06T10:00:00Z',
+      action: 'TARIFF_VERSION_ADDED',
+      entityType: 'TARIFF',
+      entityId: 't1',
+      entityLabel: 'Per sotka',
+      changes: [
+        { field: 'validFrom', newValue: '2026-11-01' },
+        { field: 'basis', newValue: 'PER_AREA_SOTKA' },
+        { field: 'frequency', newValue: 'MONTHLY' },
+        { field: 'rate', oldValue: '4.3200', newValue: '5.5' },
+        { field: 'dueDate', newValue: '2026-12-01' },
+        { field: 'note', newValue: 'Meeting' },
+        { field: 'chargeType', newValue: 'Membership fee' },
+      ],
+    };
+    renderWithApp(<AuditPage />);
+    expect(screen.getByText('Tariff version added')).toBeInTheDocument();
+    expect(screen.getByText(/Valid from:/)).toBeInTheDocument();
+    expect(screen.getByText(/11\/01\/2026/)).toBeInTheDocument();
+    expect(screen.getByText(/Basis:/)).toBeInTheDocument();
+    expect(screen.getByText(/Per sotka$/, { selector: 'li' })).toBeInTheDocument();
+    expect(screen.getByText(/Frequency:/)).toBeInTheDocument();
+    expect(screen.getByText(/Monthly/)).toBeInTheDocument();
+    expect(screen.getByText(/Rate:/)).toBeInTheDocument();
+    expect(screen.getByText(/4\.32 ₴ → 5\.50 ₴/)).toBeInTheDocument();
+    expect(screen.getByText(/Due date:/)).toBeInTheDocument();
+    expect(screen.getByText(/Note:/)).toBeInTheDocument();
+    expect(screen.getByText(/Charge type:/)).toBeInTheDocument();
+  });
+
+  it('labels a created tariff', () => {
+    entry = {
+      id: 'a9',
+      occurredAt: '2026-10-06T10:00:00Z',
+      action: 'TARIFF_CREATED',
+      entityType: 'TARIFF',
+      entityId: 't1',
+      entityLabel: 'Per sotka',
+      changes: [],
+    };
+    renderWithApp(<AuditPage />);
+    expect(screen.getByText('Tariff created')).toBeInTheDocument();
+  });
+});
+
+describe('AuditPage tariff scope entries', () => {
+  it('labels the scope actions and fields, with the scope value as a label', () => {
+    entry = {
+      id: 'a10',
+      occurredAt: '2026-10-07T10:00:00Z',
+      action: 'TARIFF_SCOPE_CHANGED',
+      entityType: 'TARIFF',
+      entityId: 't1',
+      entityLabel: 'Per sotka',
+      changes: [
+        { field: 'scope', oldValue: 'ALL_PLOTS', newValue: 'SELECTED_PLOTS' },
+        { field: 'selectedPlots', newValue: '12, 14' },
+      ],
+    };
+    renderWithApp(<AuditPage />);
+    expect(screen.getByText('Tariff plots changed')).toBeInTheDocument();
+    expect(screen.getByText(/Applies to:/)).toBeInTheDocument();
+    expect(screen.getByText(/All plots → Selected plots/)).toBeInTheDocument();
+    expect(screen.getByText(/Selected plots:/)).toBeInTheDocument();
+  });
+
+  it.each([
+    ['TARIFF_EXCLUSION_ADDED', 'Tariff exclusion added'],
+    ['TARIFF_EXCLUSION_REMOVED', 'Tariff exclusion removed'],
+  ] as const)('labels %s with the plot and reason fields', (action, label) => {
+    entry = {
+      id: 'a11',
+      occurredAt: '2026-10-07T10:00:00Z',
+      action,
+      entityType: 'TARIFF',
+      entityId: 't1',
+      entityLabel: 'Per sotka',
+      changes: [
+        { field: 'plot', newValue: '12' },
+        { field: 'reason', newValue: 'Vacant' },
+      ],
+    };
+    renderWithApp(<AuditPage />);
+    expect(screen.getByText(label)).toBeInTheDocument();
+    expect(screen.getByText(/Plot:/)).toBeInTheDocument();
+    expect(screen.getByText(/Reason:/)).toBeInTheDocument();
+  });
+});

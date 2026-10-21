@@ -39,6 +39,14 @@ class ValidationProblemsTests {
     }
 
     @Test
+    void aPatternOnATariffRateIsAnInvalidRate() {
+        assertThat(map("rate", "Pattern", "1.23456").code()).isEqualTo("RATE_INVALID");
+        assertThat(map("firstVersion.rate", "Pattern", "-1").code()).isEqualTo("RATE_INVALID");
+        assertThat(map("rate", "NotNull", null).code()).isEqualTo("REQUIRED");
+        assertThat(map("corporate", "Pattern", "x").code()).isEqualTo("INVALID");
+    }
+
+    @Test
     void aFieldErrorWithoutACodeIsInvalid() {
         FieldError error = new FieldError("input", "email", "x");
 

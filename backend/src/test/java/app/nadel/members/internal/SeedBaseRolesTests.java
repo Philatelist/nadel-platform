@@ -40,8 +40,9 @@ class SeedBaseRolesTests extends IntegrationTest {
 
         assertThat(matrix.get("CHAIRMAN")).containsExactlyInAnyOrder("MEMBERS_VIEW", "MEMBERS_EDIT", "ROLES_MANAGE",
                 "AUDIT_VIEW", "PLOTS_VIEW", "PLOTS_EDIT", "OWNERSHIP_EDIT", "IMPORT_RUN",
-                "SETTINGS_MANAGE");
-        assertThat(matrix.get("TREASURER")).containsExactlyInAnyOrder("MEMBERS_VIEW", "PLOTS_VIEW", "AUDIT_VIEW");
+                "SETTINGS_MANAGE", "TARIFFS_VIEW", "TARIFFS_MANAGE");
+        assertThat(matrix.get("TREASURER")).containsExactlyInAnyOrder("MEMBERS_VIEW", "PLOTS_VIEW", "AUDIT_VIEW",
+                "TARIFFS_VIEW");
         assertThat(matrix.get("MEMBER")).isEmpty();
     }
 
@@ -102,7 +103,8 @@ class SeedBaseRolesTests extends IntegrationTest {
         as(() -> jdbc.queryForList("select seed_base_roles(?)", DEMO));
 
         // Seeding only adds missing rows: the deleted permission comes back, customised names stay.
-        assertThat(matrix().get("TREASURER")).containsExactlyInAnyOrder("MEMBERS_VIEW", "PLOTS_VIEW", "AUDIT_VIEW");
+        assertThat(matrix().get("TREASURER")).containsExactlyInAnyOrder("MEMBERS_VIEW", "PLOTS_VIEW", "AUDIT_VIEW",
+                "TARIFFS_VIEW");
         assertThat(matrix().get("CHAIRMAN")).isEqualTo(before.get("CHAIRMAN"));
         assertThat(as(() -> jdbc.queryForObject("select name from role where base_code = 'CHAIRMAN'", String.class)))
                 .isEqualTo("Chair");

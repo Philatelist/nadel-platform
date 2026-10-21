@@ -6,8 +6,9 @@ Any rule change is made here first.
 ## 1. Representing amounts
 
 - Currency is the hryvnia (UAH), 2 decimal places.
-- Java: `BigDecimal` through the `Money` value object. DB: `numeric(14,2)`. JSON: string `"1250.50"`.
-- Rounding is `HALF_UP` to kopecks, done only by the `Money` value object and applied only when a charge is created (never in intermediate calculations).
+- Java: `BigDecimal` through the `Money` value object (module `app.nadel.money`). DB: `numeric(14,2)`. JSON: string `"1250.50"`.
+- Rounding is `HALF_UP` to kopecks, done only by the `Money` value object (`Money.of`, `Money.ofQuotient`) and applied only when an amount is produced (a charge, or the expected amount of a plot), never in intermediate calculations: those stay exact `BigDecimal`s.
+- A tariff rate is not money. It is the `Rate` value object (module `app.nadel.money`): not negative, at most 10 integer digits and at most 4 decimals, held with scale 4 (`numeric(14,4)`, JSON string `"4.3200"`). A rate is never rounded, not even to 4 places: a fifth decimal is rejected at the boundary, never cut.
 
 ## 2. Balance
 
@@ -26,10 +27,53 @@ prepayment           = Σ payments − Σ allocations
 
 ## 4. Tariffs
 
-- A tariff belongs to a charge type. A tariff has versions with `valid_from` (effective date).
-- Calculation basis: `PER_PLOT`, `PER_AREA_SOTKA`, `PER_KWH`, `FIXED_ONE_TIME` (one-off special-purpose fee).
-- Frequency: monthly, quarterly, yearly, one-off.
+- A tariff belongs to a charge type (membership fee, electricity, land tax, water, or a custom special-purpose fee). A charge type may have several tariffs. A tariff has versions, each with `valid_from` (effective date). A version applies until the day before the next version's `valid_from`, or without end; the end date is derived, never stored. Versions are never edited or deleted: a change of rate is a new version, and two versions of a tariff never start on the same date.
+- Calculation basis: `PER_PLOT`, `PER_AREA_SOTKA` (the rate per sotka, area in m² ÷ 100), `PER_KWH`, `PER_M3` (water, per cubic metre of a meter reading), `FIXED_ONE_TIME` (one-off special-purpose fee with a due date).
+- Frequency: `MONTHLY`, `QUARTERLY`, `YEARLY`, `ONE_OFF`. `ONE_OFF` goes with `FIXED_ONE_TIME` and only with it, and a one-off version has a due date.
+- Rate: a `Rate` with up to 4 decimals, never rounded on its own (section 1).
 - Example: membership fee 50 UAH per sotka per year, plot of 6 sotkas, charged monthly → 50 × 6 / 12 = 25.00 UAH per month.
+
+### 4.1 Expected amount of a plot for a month
+
+The cooperative bills monthly. The amount one tariff charges one plot for a month is calculated once, in `tariffs.ChargeCalculator` (pure code, public), and the expected-amount preview (`GET /plots/{id}/tariffs`) and the ledger (feature 011) both call it.
+
+```
+units          PER_PLOT 1 · PER_AREA_SOTKA area_m2 / 100 (exact)
+periods share  MONTHLY 1 · QUARTERLY 1/3 · YEARLY 1/12
+recurring      rate × units × periods share × (days the version is valid in the month) / (days in the month)
+FIXED_ONE_TIME its whole rate, in the month of its due date, if that version is valid on the due date; 0.00 in every other month
+PER_KWH/PER_M3 not calculated here: needs readings (features 010–011); the plot shows "by readings"
+```
+
+- **Month split by days.** When a version changes inside the month, or the first version starts inside it, each version counts for the days it is valid divided by the days in the month `D` (30 in November, 29 in February 2028). A version that does not overlap the month contributes nothing. A `FIXED_ONE_TIME` fee is never split by days.
+- **Not listed.** If no version of the tariff applies on any day of the month (the month is before the first version), the tariff is not listed for that month. A one-time fee whose version has started but whose due month is another month is listed with `0.00`.
+- **One rounding.** Every contribution is kept exact and added as one fraction over the common denominator `D × 12` (rates are never divided); the sum is divided once and rounded `HALF_UP` to kopecks by `Money.ofQuotient`. Rounding each version separately would give a different amount and is wrong (rate 0.05 for 15 + 15 days of 30 is 0.05, not 0.03 + 0.03).
+- **Meter-based tariffs.** A month in which any overlapping version is `PER_KWH` or `PER_M3` is "by readings" for the whole tariff, with no amount.
+- **Per plot, not per owner.** The amount is per plot; the ownership share of a co-owner does not change it (section 8).
+- **Month total** = the sum of the per-tariff amounts, each rounded once.
+
+Worked examples (each is a unit test of `ChargeCalculator`):
+
+| Case | Input | Expected |
+|---|---|---|
+| Membership per sotka, yearly rate, monthly billing | 50.0000 UAH/sotka/year, plot 600 m² | 50 × 6 / 12 = 25.00 |
+| Odd area | 50.0000 UAH/sotka/year, plot 612 m² | 50 × 6.12 / 12 = 25.50 |
+| Rounding once at the end | 33.3333 UAH/sotka/year, plot 700 m² | 33.3333 × 7 / 12 = 19.444425 → 19.44 |
+| Per plot, quarterly | 300.0000 UAH/plot/quarter | 100.00 per month |
+| Version change mid-month (30-day month) | 50.0000 until the 15th, 60.0000 from the 16th, yearly per sotka, 600 m² | (50 × 6 / 12 × 15/30) + (60 × 6 / 12 × 15/30) = 12.50 + 15.00 = 27.50 |
+| Special-purpose fee | FIXED_ONE_TIME 1 200.00, due 01.05.2026 | 1 200.00 in May 2026, 0.00 in other months |
+| Excluded plot | ALL_PLOTS with plot 17 excluded | plot 17: no amount, reason shown |
+| Land tax | 35.0000 UAH/sotka/year, plot 600 m² | 35 × 6 / 12 = 17.50 per month |
+| Common land | any tariff | never applies |
+
+### 4.2 Which plots a tariff applies to
+
+- A tariff has a scope. `ALL_PLOTS` (the default for a new tariff) applies to every active plot of kind `PLOT`, minus the **exclusions**: plots the general meeting freed from the fee, each with a mandatory reason. `SELECTED_PLOTS` applies only to the listed plots. Exclusions exist only with `ALL_PLOTS`; switching the kind removes the rows of the other kind.
+- **Common land never** has a tariff: it cannot be selected or excluded and gets no amount. **Archived plots** get nothing either.
+- An excluded plot shows the tariff as not charged, with the reason and no amount, but only for months in which the tariff would otherwise be listed.
+- Tariffs of an archived charge type never apply; tariffs of an inactive charge type give no expected amount until the type is active again.
+- `PER_KWH` and `PER_M3` tariffs apply to plots with an active meter of that resource; until the meter registry arrives (010) they show "by readings" for every plot in scope.
+- A member sees tariffs and expected amounts only for the plots they currently own; any other plot is "not found".
 
 ## 5. Retroactive recalculation
 

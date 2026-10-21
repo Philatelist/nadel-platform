@@ -26,7 +26,9 @@ export type FieldErrors = Readonly<Record<string, string>>;
  * its row and property (`owners[2].share`, `owners[2].memberId`); `coOwnerShares[0].share` likewise; `owners`,
  * `share`, `reason` and the dates stay as they are.
  */
-export function fieldKey(field: string): string {
+export function fieldKey(rawField: string): string {
+  // A tariff is created with its first version: the version's fields arrive as `firstVersion.rate` and so on.
+  const field = rawField.replace(/^firstVersion\./, '');
   const phone = /^phones\[(\d+)\]/.exec(field);
   if (phone) return `phones[${phone[1]}]`;
   const owner = /^owners\[(\d+)\]\.(memberId|share)$/.exec(field);

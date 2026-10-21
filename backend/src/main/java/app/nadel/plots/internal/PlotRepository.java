@@ -14,6 +14,9 @@ import org.springframework.data.repository.query.Param;
 
 interface PlotRepository extends JpaRepository<Plot, UUID> {
 
+    /** The number of active plots that are not of the given kind (RLS limits it to the cooperative). */
+    long countByArchivedAtIsNullAndKindNot(PlotKind kind);
+
     /**
      * The plot with an exclusive row lock ({@code FOR UPDATE}) until the end of the transaction. Every write that
      * depends on the plot's ownership takes this lock first, so such writes on one plot run one after another.
