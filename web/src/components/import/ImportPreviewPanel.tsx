@@ -1,6 +1,7 @@
 import type { ImportEntityCounts, ImportPreview, ImportProblem } from '@nadel/api-client';
 import { format, formatDateTime } from '@nadel/shared';
 import { importErrorCode } from '../../importError';
+import { UserContent, formatUser } from '../UserContent';
 import { Button, DataTable, Notice, Panel, type Column } from '../ui';
 import { useLocale, useT } from '../../i18n';
 
@@ -64,12 +65,16 @@ export function ImportPreviewPanel({
     {
       key: 'column',
       header: s.colColumn,
-      cell: (p) => (p.column ? (columnLabels[p.sheet]?.[p.column] ?? p.column) : '—'),
+      cell: (p) => {
+        if (!p.column) return '—';
+        const label = columnLabels[p.sheet]?.[p.column];
+        return label ?? <UserContent>{p.column}</UserContent>;
+      },
     },
     {
       key: 'message',
       header: s.colMessage,
-      cell: (p) => format(messages[p.code] ?? t.importProblem.UNKNOWN, p.params ?? {}),
+      cell: (p) => formatUser(messages[p.code] ?? t.importProblem.UNKNOWN, p.params ?? {}),
     },
   ];
 
@@ -86,7 +91,7 @@ export function ImportPreviewPanel({
     <Panel title={s.previewTitle}>
       <div className="flex flex-col gap-4">
         <div className="text-sm text-ink-muted">
-          <p>{format(s.fileName, { name: preview.fileName })}</p>
+          <p>{formatUser(s.fileName, { name: preview.fileName })}</p>
           <p>{format(s.validUntil, { time })}</p>
         </div>
         <DataTable

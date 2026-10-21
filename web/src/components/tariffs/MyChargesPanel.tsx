@@ -1,9 +1,9 @@
 import { ApiError, useGetPlotTariffs, type OwnedPlot } from '@nadel/api-client';
-import { format } from '@nadel/shared';
 import { useT } from '../../i18n';
 import { kyivToday } from '../../kyivToday';
 import { useMe } from '../../me';
 import { QueryBoundary } from '../QueryBoundary';
+import { formatUser } from '../UserContent';
 import { Panel } from '../ui';
 import { TariffAmountRows } from './TariffAmountRows';
 
@@ -12,7 +12,7 @@ function MyPlotCharges({ plot, month }: { plot: OwnedPlot; month: string }) {
   const tariffs = useGetPlotTariffs(plot.plotId, { month });
   if (tariffs.error instanceof ApiError && tariffs.error.status === 404) return null;
   return (
-    <Panel title={format(t.plot.cardTitlePlot, { number: plot.number })}>
+    <Panel title={formatUser(t.plot.cardTitlePlot, { number: plot.number })}>
       <QueryBoundary
         query={tariffs}
         isEmpty={(data) => data.items.length === 0}

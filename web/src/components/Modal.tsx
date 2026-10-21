@@ -9,7 +9,7 @@ export function Modal({
   size = 'sm',
   children,
 }: {
-  title: string;
+  title: ReactNode;
   onClose: () => void;
   size?: keyof typeof widths;
   children: ReactNode;

@@ -12,6 +12,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { Pagination } from '../components/Pagination';
 import { QueryBoundary } from '../components/QueryBoundary';
+import { UserContent } from '../components/UserContent';
 import {
   Badge,
   Button,
@@ -40,7 +41,12 @@ function OwnerNames({ owners }: { owners: PlotSummary['owners'] }) {
   const more = owners.length - MAX_OWNER_NAMES;
   return (
     <>
-      {names.join(', ')}
+      {names.map((name, index) => (
+        <span key={`${name}-${index}`}>
+          {index > 0 && ', '}
+          <UserContent>{name}</UserContent>
+        </span>
+      ))}
       {more > 0 && ` ${format(t.plots.ownersMore, { count: more })}`}
     </>
   );
@@ -114,14 +120,14 @@ export function PlotsPage() {
     header: c.number,
     cell: (p) => (
       <Link to={`/plots/${p.id}`} className="font-medium text-accent underline">
-        {p.number}
+        <UserContent>{p.number}</UserContent>
       </Link>
     ),
   };
   const streetColumn: Column<PlotSummary> = {
     key: 'street',
     header: c.street,
-    cell: (p) => p.street ?? t.plot.fields.none,
+    cell: (p) => (p.street ? <UserContent>{p.street}</UserContent> : t.plot.fields.none),
   };
   const kindColumn: Column<PlotSummary> = { key: 'kind', header: c.kind, cell: (p) => t.plot.kind[p.kind] };
   const statusColumn: Column<PlotSummary> = {
@@ -142,7 +148,8 @@ export function PlotsPage() {
         {
           key: 'cadastralNumber',
           header: c.cadastralNumber,
-          cell: (p) => p.cadastralNumber ?? t.plot.fields.none,
+          cell: (p) =>
+            p.cadastralNumber ? <UserContent>{p.cadastralNumber}</UserContent> : t.plot.fields.none,
         },
         kindColumn,
         statusColumn,

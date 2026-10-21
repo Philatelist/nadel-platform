@@ -6,9 +6,9 @@ export function PageHeader({
   description,
   actions,
 }: {
-  title: string;
+  title: ReactNode;
   badge?: ReactNode;
-  description?: string;
+  description?: ReactNode;
   actions?: ReactNode;
 }) {
   return (

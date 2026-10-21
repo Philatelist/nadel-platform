@@ -1,6 +1,7 @@
 import { ApiError, useGetTariff } from '@nadel/api-client';
 import { Link, useParams } from 'react-router';
-import { chargeTypeName } from '../chargeTypeName';
+import { ChargeTypeName } from '../components/ChargeTypeName';
+import { UserContent } from '../components/UserContent';
 import { QueryBoundary } from '../components/QueryBoundary';
 import { ScopeEditor } from '../components/tariffs/ScopeEditor';
 import { NewVersionForm } from '../components/tariffs/NewVersionForm';
@@ -29,8 +30,12 @@ export function TariffPage() {
         {(tariff) => (
           <>
             <PageHeader
-              title={tariff.name}
-              description={`${c.chargeType}: ${chargeTypeName(tariff.chargeType, t)}`}
+              title={<UserContent>{tariff.name}</UserContent>}
+              description={
+                <>
+                  {c.chargeType}: <ChargeTypeName type={tariff.chargeType} />
+                </>
+              }
               badge={!tariff.chargeType.active && <Badge tone="neutral">{t.tariffs.inactive}</Badge>}
             />
             <ScopeEditor tariff={tariff} />

@@ -2,6 +2,7 @@ import { ApiError, useGetPlot, type PlotDetails } from '@nadel/api-client';
 import { format } from '@nadel/shared';
 import { Link, useNavigate, useParams } from 'react-router';
 import { PlotForm } from '../components/PlotForm';
+import { formatUser } from '../components/UserContent';
 import { QueryBoundary } from '../components/QueryBoundary';
 import { PageHeader } from '../components/ui';
 import { useT } from '../i18n';
@@ -27,12 +28,15 @@ function PlotFormView({ plot }: { plot?: PlotDetails }) {
     ? format(t.plot.editTitle, { kind: t.plot.kind[plot.kind], number: plot.number })
     : t.plot.addTitle;
   useDocumentTitle(title);
+  const heading = plot
+    ? formatUser(t.plot.editTitle, { kind: <>{t.plot.kind[plot.kind]}</>, number: plot.number })
+    : title;
   return (
     <div className="flex flex-col gap-4 text-[15px]">
       <Link to="/plots" className="text-ink-muted hover:text-ink">
         {t.plot.back}
       </Link>
-      <PageHeader title={title} />
+      <PageHeader title={heading} />
       <PlotForm
         plot={plot}
         onSaved={(saved) => void navigate(`/plots/${saved.id}`)}

@@ -8,6 +8,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { chargeTypeName } from '../chargeTypeName';
+import { isChargeTypeNameUserContent } from '../components/ChargeTypeName';
 import { QueryBoundary } from '../components/QueryBoundary';
 import {
   emptyVersionValues,
@@ -94,7 +95,11 @@ function TariffForm({ types }: { types: readonly ChargeType[] }) {
         >
           <option value="" />
           {types.map((type) => (
-            <option key={type.id} value={type.id}>
+            <option
+              key={type.id}
+              value={type.id}
+              {...(isChargeTypeNameUserContent(type) ? { 'data-user-content': true } : {})}
+            >
               {chargeTypeName(type, t)}
             </option>
           ))}

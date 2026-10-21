@@ -3,6 +3,7 @@ import type { PlotPage, Permission } from '@nadel/api-client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderWithApp } from '../test/render';
 import { PlotsPage } from './PlotsPage';
+import { hasText } from '../test/hasText';
 
 let permissions: Permission[];
 let data: PlotPage;
@@ -91,8 +92,8 @@ describe('PlotsPage', () => {
     };
     renderWithApp(<PlotsPage />);
     expect(screen.getByRole('columnheader', { name: 'Owners' })).toBeInTheDocument();
-    expect(screen.getByText('Owner 1, Owner 2 +1')).toBeInTheDocument();
-    expect(screen.getByText('Owner 4, Owner 5')).toBeInTheDocument();
+    expect(screen.getByText(hasText('Owner 1, Owner 2 +1'))).toBeInTheDocument();
+    expect(screen.getByText(hasText('Owner 4, Owner 5'))).toBeInTheDocument();
     expect(screen.queryByText(/Owner 3/)).toBeNull();
   });
 

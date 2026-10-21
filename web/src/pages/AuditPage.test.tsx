@@ -1,6 +1,6 @@
 import { screen } from '@testing-library/react';
 import type { AuditEntry } from '@nadel/api-client';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { renderWithApp } from '../test/render';
 import { AuditPage } from './AuditPage';
 
@@ -261,5 +261,150 @@ describe('AuditPage tariff scope entries', () => {
     expect(screen.getByText(label)).toBeInTheDocument();
     expect(screen.getByText(/Plot:/)).toBeInTheDocument();
     expect(screen.getByText(/Reason:/)).toBeInTheDocument();
+  });
+});
+
+function show(partial: Partial<AuditEntry>, locale: 'uk' | 'en' = 'en') {
+  window.localStorage.setItem('nadel.locale', locale);
+  entry = {
+    id: 'x',
+    occurredAt: '2026-10-01T10:00:00Z',
+    action: 'PLOT_UPDATED',
+    entityType: 'PLOT',
+    entityId: 'p1',
+    entityLabel: '12',
+    changes: [],
+    ...partial,
+  };
+  renderWithApp(<AuditPage />);
+}
+
+describe('AuditPage stored codes', () => {
+  afterEach(() => window.localStorage.clear());
+
+  it.each([
+    ['uk', 'Членський внесок'],
+    ['en', 'Membership fee'],
+  ] as const)('shows a base: charge type token in the label, name and chargeType in %s', (locale, name) => {
+    show(
+      {
+        action: 'CHARGE_TYPE_UPDATED',
+        entityType: 'CHARGE_TYPE',
+        entityLabel: 'base:MEMBERSHIP',
+        changes: [
+          { field: 'name', oldValue: 'base:MEMBERSHIP', newValue: 'Roads' },
+          { field: 'chargeType', newValue: 'base:MEMBERSHIP' },
+        ],
+      },
+      locale,
+    );
+    expect(screen.getByRole('link', { name })).toHaveAttribute('href', '/charge-types');
+    expect(screen.getAllByText(new RegExp(name)).length).toBeGreaterThanOrEqual(3);
+    expect(screen.queryByText(/base:/)).not.toBeInTheDocument();
+    expect(screen.getByText('Roads')).toHaveAttribute('data-user-content');
+  });
+
+  it('shows an unknown token and a plain charge type name as stored, marked as user content', () => {
+    show({
+      entityType: 'CHARGE_TYPE',
+      entityLabel: 'base:NOPE',
+      changes: [{ field: 'name', oldValue: 'Roads', newValue: 'base:NOPE' }],
+    });
+    expect(screen.getByRole('link', { name: 'base:NOPE' })).toBeInTheDocument();
+    expect(screen.getByText('Roads')).toHaveAttribute('data-user-content');
+  });
+
+  it('shows the tariff name as the label, and a legacy "X / Y" label as stored', () => {
+    show({ entityType: 'TARIFF', entityId: 't1', entityLabel: 'Per sotka' });
+    expect(screen.getByText('Per sotka')).toHaveAttribute('data-user-content');
+    show({ entityType: 'TARIFF', entityId: 't1', entityLabel: 'Membership fee / Per sotka' });
+    expect(screen.getAllByRole('link', { name: 'Membership fee / Per sotka' }).length).toBeGreaterThan(0);
+  });
+
+  it.each([
+    ['en', 'Ivanenko Oleh 1/2, since 1 Jun 2015', 'Petrenko Ivan 1/2, 1 Jun 2015 – 5 Jul 2020'],
+    ['uk', 'Ivanenko Oleh 1/2, з 01.06.2015', 'Petrenko Ivan 1/2, 01.06.2015 – 05.07.2020'],
+  ] as const)('renders the owners JSON as a localized list in %s', (locale, open, closed) => {
+    show(
+      {
+        action: 'OWNERSHIP_CORRECTED',
+        entityType: 'OWNERSHIP',
+        entityLabel: '33',
+        changes: [
+          {
+            field: 'owners',
+            newValue: JSON.stringify([
+              { member: 'Ivanenko Oleh', share: '2/4', from: '2015-06-01' },
+              { member: 'Petrenko Ivan', share: '1/2', from: '2015-06-01', to: '2020-07-05' },
+            ]),
+          },
+        ],
+      },
+      locale,
+    );
+    const lines = Array.from(document.querySelectorAll('span.block')).map((line) => line.textContent);
+    expect(lines).toEqual([open, closed]);
+    expect(screen.getByText('Ivanenko Oleh')).toHaveAttribute('data-user-content');
+    expect(screen.queryByText(/\[\{/)).not.toBeInTheDocument();
+  });
+
+  it('shows invalid or legacy owners text as stored', () => {
+    show({
+      entityType: 'OWNERSHIP',
+      changes: [{ field: 'owners', oldValue: '[{"broken', newValue: 'Ivanenko Oleh 1/2, Petrenko Ivan 1/2' }],
+    });
+    expect(screen.getByText('[{"broken')).toBeInTheDocument();
+    expect(screen.getByText('Ivanenko Oleh 1/2, Petrenko Ivan 1/2')).toBeInTheDocument();
+  });
+
+  it.each([
+    ['en', 'View members, Edit plots', 'Email → Viber'],
+    ['uk', 'Перегляд членів, Редагування ділянок', 'Електронна пошта → Viber'],
+  ] as const)('maps permission codes and channel codes in %s', (locale, permissions, channels) => {
+    show(
+      {
+        action: 'ROLE_UPDATED',
+        entityType: 'ROLE',
+        entityLabel: 'base:TREASURER',
+        changes: [
+          { field: 'permissions', oldValue: 'MEMBERS_VIEW', newValue: 'MEMBERS_VIEW, PLOTS_EDIT' },
+          { field: 'deliveryChannel', oldValue: 'EMAIL', newValue: 'VIBER' },
+        ],
+      },
+      locale,
+    );
+    expect(screen.getByText(new RegExp(permissions.replace(/[()]/g, '')))).toBeInTheDocument();
+    expect(screen.getByText(channels, { exact: false })).toBeInTheDocument();
+  });
+
+  it('formats dates, area and position by locale and keeps legacy values', () => {
+    show(
+      {
+        changes: [
+          { field: 'effectiveFrom', oldValue: '2026-01-01', newValue: 'not a date' },
+          { field: 'areaM2', oldValue: '600.00', newValue: '1250.50' },
+          { field: 'position', oldValue: '2', newValue: '1' },
+        ],
+      },
+      'en',
+    );
+    expect(screen.getByText(/1 Jan 2026 → not a date/)).toBeInTheDocument();
+    expect(screen.getByText(/600\.00 → 1,250\.50/)).toBeInTheDocument();
+    expect(screen.getByText(/2 → 1/)).toBeInTheDocument();
+  });
+
+  it('formats the area with the Ukrainian separators', () => {
+    show({ changes: [{ field: 'areaM2', oldValue: '600.00', newValue: '1250.50' }] }, 'uk');
+    expect(screen.getByText(/600,00 → 1\s?250,50/)).toBeInTheDocument();
+  });
+
+  it('marks names, reasons and the author as user content', () => {
+    show({
+      actorName: 'Koval Anna',
+      changes: [{ field: 'reason', newValue: 'Typo' }],
+    });
+    expect(screen.getByText('Koval Anna')).toHaveAttribute('data-user-content');
+    expect(screen.getByText('Typo')).toHaveAttribute('data-user-content');
+    expect(screen.getByText('12')).toHaveAttribute('data-user-content');
   });
 });

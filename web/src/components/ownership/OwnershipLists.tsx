@@ -3,6 +3,7 @@ import { format, formatDay, formatShare } from '@nadel/shared';
 import { Link } from 'react-router';
 import { useLocale, useT } from '../../i18n';
 import { useCan } from '../../me';
+import { UserContent, formatUser } from '../UserContent';
 import { Button } from '../ui';
 
 function OwnerName({ ownership }: { ownership: Ownership }) {
@@ -12,10 +13,12 @@ function OwnerName({ ownership }: { ownership: Ownership }) {
     <>
       {canOpenMember ? (
         <Link to={`/members/${ownership.memberId}`} className="font-medium text-accent underline">
-          {ownership.memberName}
+          <UserContent>{ownership.memberName}</UserContent>
         </Link>
       ) : (
-        <span className="font-medium">{ownership.memberName}</span>
+        <span className="font-medium">
+          <UserContent>{ownership.memberName}</UserContent>
+        </span>
       )}
       {ownership.memberArchived && (
         <span className="ml-2 text-sm text-ink-muted">({t.ownership.archivedMember})</span>
@@ -59,7 +62,9 @@ function OwnershipRow({
         )}
       </div>
       {ownership.basis && (
-        <div className="text-sm text-ink-muted">{format(t.ownership.basis, { basis: ownership.basis })}</div>
+        <div className="text-sm text-ink-muted">
+          {formatUser(t.ownership.basis, { basis: ownership.basis })}
+        </div>
       )}
     </li>
   );

@@ -4,6 +4,7 @@ import { ApiError, type ImportPreview, type ImportProblem } from '@nadel/api-cli
 import { describe, expect, it, vi } from 'vitest';
 import { renderWithApp } from '../../test/render';
 import { ImportPreviewPanel, maxShownProblems } from './ImportPreviewPanel';
+import { hasText } from '../../test/hasText';
 
 function preview(over: Partial<ImportPreview> = {}): ImportPreview {
   return {
@@ -34,7 +35,7 @@ function renderPanel(p: ImportPreview, onReset = vi.fn()) {
 describe('ImportPreviewPanel', () => {
   it('shows the file name and the counts', () => {
     renderPanel(preview());
-    expect(screen.getByText('File: plots.xlsx')).toBeInTheDocument();
+    expect(screen.getByText(hasText('File: plots.xlsx'))).toBeInTheDocument();
     expect(screen.getByText(/Can be imported until/)).toBeInTheDocument();
     const row = within(screen.getByRole('row', { name: /Plots/ })).getAllByRole('cell');
     expect(row.map((c) => c.textContent)).toEqual(['Plots', '5', '3', '7']);

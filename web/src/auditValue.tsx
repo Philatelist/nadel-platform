@@ -1,0 +1,187 @@
+import type { AuditEntityType } from '@nadel/api-client';
+import {
+  formatDay,
+  formatRateWithCurrency,
+  formatShare,
+  normalizeRateInput,
+  type Messages,
+} from '@nadel/shared';
+import type { ReactNode } from 'react';
+import { UserContent } from './components/UserContent';
+
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+const BASE_PREFIX = 'base:';
+
+type Dictionary = Readonly<Record<string, string | undefined>>;
+
+function user(text: string): ReactNode {
+  return <UserContent>{text}</UserContent>;
+}
+
+/** `base:<CODE>` resolved through a catalog map; any other text is user content, shown as stored. */
+function baseToken(raw: string, names: Dictionary): ReactNode {
+  if (raw.startsWith(BASE_PREFIX)) {
+    const name = names[raw.slice(BASE_PREFIX.length)];
+    if (name !== undefined && Object.hasOwn(names, raw.slice(BASE_PREFIX.length))) return name;
+  }
+  return user(raw);
+}
+
+/** The name of a charge type in an audit entry: `base:<CODE>` for a never-renamed starting type. */
+export function auditChargeTypeName(raw: string, t: Messages): ReactNode {
+  return baseToken(raw, t.chargeTypes.defaultNames);
+}
+
+function roleNames(raw: string, names: Dictionary): ReactNode {
+  return raw.split(', ').map((part, index) => (
+    <span key={`${part}-${index}`}>
+      {index > 0 && ', '}
+      {baseToken(part, names)}
+    </span>
+  ));
+}
+
+interface OwnerLine {
+  member: string;
+  share?: string;
+  from?: string;
+  to?: string;
+}
+
+function parseOwners(raw: string): OwnerLine[] | undefined {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return undefined;
+  }
+  if (!Array.isArray(parsed)) return undefined;
+  const lines: OwnerLine[] = [];
+  for (const item of parsed as unknown[]) {
+    if (typeof item !== 'object' || item === null) return undefined;
+    const record = item as Record<string, unknown>;
+    if (typeof record.member !== 'string') return undefined;
+    const text = (key: string): string | undefined =>
+      typeof record[key] === 'string' ? (record[key] as string) : undefined;
+    lines.push({ member: record.member, share: text('share'), from: text('from'), to: text('to') });
+  }
+  return lines;
+}
+
+function day(value: string, locale: string): string {
+  return ISO_DAY.test(value) ? formatDay(value, locale) : value;
+}
+
+function ownersList(raw: string, t: Messages, locale: string): ReactNode {
+  const lines = parseOwners(raw);
+  if (!lines) return user(raw);
+  return lines.map((line, index) => {
+    let period = '';
+    if (line.from && line.to) {
+      period = t.ownership.period
+        .replace('{from}', day(line.from, locale))
+        .replace('{to}', day(line.to, locale));
+    } else if (line.from) {
+      period = t.ownership.since.replace('{date}', day(line.from, locale));
+    } else if (line.to) {
+      period = t.ownership.period.replace('{from}', '').replace('{to}', day(line.to, locale)).trim();
+    }
+    return (
+      <span key={`${line.member}-${index}`} className="block">
+        {user(line.member)}
+        {line.share ? ` ${formatShare(line.share)}` : ''}
+        {period ? `, ${period}` : ''}
+      </span>
+    );
+  });
+}
+
+const PLAIN_NUMBER = /^-?\d+(\.\d+)?$/;
+const NUMBER_FIELDS = new Set([
+  'areaM2',
+  'position',
+  'plotsCreated',
+  'plotsUpdated',
+  'plotsUnchanged',
+  'membersCreated',
+  'membersUpdated',
+  'membersUnchanged',
+  'ownershipsCreated',
+  'ownershipsUnchanged',
+]);
+
+function localeNumber(raw: string, locale: string): string {
+  const decimals = raw.split('.')[1]?.length ?? 0;
+  return new Intl.NumberFormat(locale, {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(raw as unknown as number);
+}
+
+/**
+ * One audit value as the user should read it: codes become catalog text, ISO dates and numbers follow the
+ * locale, and anything the client does not recognise (including entries written before the code format) is
+ * shown as stored. Text a person typed is wrapped in a user-content marker.
+ */
+export function auditValue(
+  entityType: AuditEntityType,
+  field: string,
+  raw: string | undefined,
+  t: Messages,
+  locale: string,
+): ReactNode {
+  const a = t.audit;
+  if (raw === undefined || raw === '') return a.noValue;
+  const catalog = (map: Dictionary): ReactNode => map[raw] ?? raw;
+  switch (field) {
+    case 'archived':
+    case 'hasBuilding':
+    case 'active':
+      return raw === 'true' ? a.yes : a.no;
+    case 'kind':
+      return catalog(t.plot.kind);
+    case 'rate':
+      return normalizeRateInput(raw) === raw ? formatRateWithCurrency(raw, locale) : raw;
+    case 'scope':
+      return catalog({ ALL_PLOTS: t.tariffs.scope.all, SELECTED_PLOTS: t.tariffs.scope.selected });
+    case 'frequency':
+      return catalog(t.tariffs.frequency);
+    case 'basis':
+      return entityType === 'TARIFF' ? catalog(t.tariffs.basis) : user(raw);
+    case 'deliveryChannel':
+      return catalog(t.channel);
+    case 'memberPlotStatusVisibility':
+      return t.settings.visibility[raw as keyof Messages['settings']['visibility']]?.label ?? raw;
+    case 'effectiveFrom':
+    case 'validFrom':
+    case 'dueDate':
+      return ISO_DAY.test(raw) ? formatDay(raw, locale) : raw;
+    case 'permissions':
+      return raw
+        .split(', ')
+        .map((code) => t.permission[code as keyof Messages['permission']]?.name ?? code)
+        .join(', ');
+    case 'owners':
+      return ownersList(raw, t, locale);
+    case 'roles':
+      return roleNames(raw, t.roles);
+    case 'chargeType':
+      return auditChargeTypeName(raw, t);
+    case 'name':
+      if (entityType === 'ROLE') return baseToken(raw, t.roles);
+      return entityType === 'CHARGE_TYPE' ? auditChargeTypeName(raw, t) : user(raw);
+    case 'description':
+      return entityType === 'ROLE' ? baseToken(raw, t.roleDescriptions) : user(raw);
+    default:
+      if (NUMBER_FIELDS.has(field) && PLAIN_NUMBER.test(raw)) return localeNumber(raw, locale);
+      return user(raw);
+  }
+}
+
+/** The label of the changed record in the "Record" column. */
+export function auditRecordLabel(entityType: AuditEntityType, label: string, t: Messages): ReactNode {
+  if (entityType === 'SETTINGS') return t.settings.title;
+  if (entityType === 'ROLE') return baseToken(label, t.roles);
+  if (entityType === 'CHARGE_TYPE') return auditChargeTypeName(label, t);
+  return user(label);
+}

@@ -4,6 +4,7 @@ import { Link } from 'react-router';
 import { useLocale, useT } from '../../i18n';
 import { useCan, useMe } from '../../me';
 import { QueryBoundary } from '../QueryBoundary';
+import { UserContent, formatUser } from '../UserContent';
 import { Panel } from '../ui';
 
 function PlotRow({ item, past }: { item: MemberOwnershipItem; past: boolean }) {
@@ -17,9 +18,13 @@ function PlotRow({ item, past }: { item: MemberOwnershipItem; past: boolean }) {
   return (
     <li className="flex flex-wrap items-baseline gap-x-3 border-b border-line pb-2 last:border-b-0 last:pb-0">
       <Link to={`/plots/${item.plotId}`} className="font-medium text-accent underline">
-        {format(t.plot.cardTitlePlot, { number: item.plotNumber })}
+        {formatUser(t.plot.cardTitlePlot, { number: item.plotNumber })}
       </Link>
-      {item.street && <span>{item.street}</span>}
+      {item.street && (
+        <span>
+          <UserContent>{item.street}</UserContent>
+        </span>
+      )}
       <span>{formatShare(item.share)}</span>
       <span className="text-ink-muted">{when}</span>
     </li>
