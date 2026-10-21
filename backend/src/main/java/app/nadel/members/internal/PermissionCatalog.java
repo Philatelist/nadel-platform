@@ -33,6 +33,14 @@ final class PermissionCatalog {
                     "See charge types, tariffs and what each plot would be charged"};
             case TARIFFS_MANAGE -> new String[] {"Manage tariffs",
                     "Add, rename, reorder and archive charge types; manage tariffs and their scope"};
+            case METERS_VIEW -> new String[] {"View meters",
+                    "See the meter register, the meter tree and the readings of every meter"};
+            case METERS_MANAGE -> new String[] {"Manage meters",
+                    "Register, change, replace, remove and delete meters; build the meter tree"};
+            case READINGS_ENTER -> new String[] {"Enter readings",
+                    "Enter, correct and delete meter readings, for example on a round"};
+            case READINGS_APPROVE -> new String[] {"Approve readings",
+                    "Approve or reject the readings that members submit"};
         };
         return new PermissionInfo(nadel.contract.model.Permission.fromValue(permission.name()), text[0], text[1]);
     }

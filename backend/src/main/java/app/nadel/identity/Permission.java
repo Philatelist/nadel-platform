@@ -15,7 +15,11 @@ public enum Permission {
     IMPORT_RUN,
     SETTINGS_MANAGE,
     TARIFFS_VIEW,
-    TARIFFS_MANAGE;
+    TARIFFS_MANAGE,
+    METERS_VIEW,
+    METERS_MANAGE,
+    READINGS_ENTER,
+    READINGS_APPROVE;
 
     public static final String AUTHORITY_PREFIX = "PERM_";
 

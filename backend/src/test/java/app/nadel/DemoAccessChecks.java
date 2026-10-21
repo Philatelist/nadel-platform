@@ -40,7 +40,8 @@ public final class DemoAccessChecks {
                 .andExpect(jsonPath("$.roles[0].baseCode").value("CHAIRMAN"))
                 .andExpect(jsonPath("$.permissions", containsInAnyOrder("MEMBERS_VIEW", "MEMBERS_EDIT",
                         "ROLES_MANAGE", "AUDIT_VIEW", "PLOTS_VIEW", "PLOTS_EDIT", "OWNERSHIP_EDIT", "IMPORT_RUN",
-                        "SETTINGS_MANAGE", "TARIFFS_VIEW", "TARIFFS_MANAGE")));
+                        "SETTINGS_MANAGE", "TARIFFS_VIEW", "TARIFFS_MANAGE", "METERS_VIEW", "METERS_MANAGE", "READINGS_ENTER",
+                        "READINGS_APPROVE")));
     }
 
     public static void treasurerHasReadPermissions(MockMvc mvc) throws Exception {
@@ -48,7 +49,8 @@ public final class DemoAccessChecks {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.roles[0].baseCode").value("TREASURER"))
                 .andExpect(jsonPath("$.permissions",
-                        containsInAnyOrder("MEMBERS_VIEW", "PLOTS_VIEW", "AUDIT_VIEW", "TARIFFS_VIEW")));
+                        containsInAnyOrder("MEMBERS_VIEW", "PLOTS_VIEW", "AUDIT_VIEW", "TARIFFS_VIEW",
+                                "METERS_VIEW")));
     }
 
     public static void memberHasNoPermissions(MockMvc mvc) throws Exception {

@@ -23,6 +23,10 @@ const ALL_PERMISSIONS = [
   'Manage cooperative settings',
   'View tariffs',
   'Manage tariffs',
+  'View meters',
+  'Manage meters',
+  'Enter readings',
+  'Approve readings',
 ];
 
 const nav = (page: Page) => page.locator('#app-menu nav');
@@ -212,7 +216,7 @@ test.describe('§2.7 / §2.8 members list and read-only card', () => {
 });
 
 test.describe('§2.2 / §2.13 roles screen', () => {
-  test('§2.2 #1, #2 and §2.13 #2: five roles, base role names are editable, Chairman has all eleven permissions locked', async ({
+  test('§2.2 #1, #2 and §2.13 #2: five roles, base role names are editable, Chairman has all fifteen permissions locked', async ({
     page,
   }) => {
     await loginAs(page, 'chairman@demo.local');
@@ -328,7 +332,7 @@ test.describe('§2.2 / §2.13 roles screen', () => {
     expect(await page.getByRole('main').innerText()).not.toContain('base:');
   });
 
-  test('§2.1 #1 and §2.11 #3: eleven permissions with descriptions in Ukrainian by default, English on switch', async ({
+  test('§2.1 #1 and §2.11 #3: fifteen permissions with descriptions in Ukrainian by default, English on switch', async ({
     browser,
   }) => {
     // a browser language that is not supported falls back to the default locale (Ukrainian)
@@ -361,6 +365,13 @@ test.describe('§2.2 / §2.13 roles screen', () => {
         'Керування тарифами',
         'Додавати, змінювати, впорядковувати й архівувати види нарахувань, тарифи та їхні версії',
       ],
+      ['Перегляд лічильників', 'Бачити реєстр лічильників, дерево лічильників і покази кожного лічильника'],
+      [
+        'Керування лічильниками',
+        'Реєструвати, змінювати, замінювати, знімати й видаляти лічильники; будувати дерево лічильників',
+      ],
+      ['Внесення показів', 'Вносити, виправляти й видаляти покази лічильників, наприклад, під час обходу'],
+      ['Підтвердження показів', 'Підтверджувати або відхиляти покази, які подають члени кооперативу'],
     ];
     await expect(page.getByRole('checkbox')).toHaveCount(ALL_PERMISSIONS.length);
     for (const [name, description] of ukrainian as [string, string][]) {

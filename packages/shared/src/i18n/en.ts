@@ -3,6 +3,8 @@ export const en = {
   app: { name: 'Nadel' },
   units: {
     sotka: { one: 'sotka', few: 'sotkas', many: 'sotkas', other: 'sotkas' },
+    kwh: 'kWh',
+    m3: 'm³',
   },
   auth: {
     signIn: 'Sign in',
@@ -89,6 +91,22 @@ export const en = {
     TARIFFS_MANAGE: {
       name: 'Manage tariffs',
       description: 'Add, change, reorder and archive charge types, tariffs and their versions',
+    },
+    METERS_VIEW: {
+      name: 'View meters',
+      description: 'See the meter register, the meter tree and the readings of every meter',
+    },
+    METERS_MANAGE: {
+      name: 'Manage meters',
+      description: 'Register, change, replace, remove and delete meters; build the meter tree',
+    },
+    READINGS_ENTER: {
+      name: 'Enter readings',
+      description: 'Enter, correct and delete meter readings, for example on a round',
+    },
+    READINGS_APPROVE: {
+      name: 'Approve readings',
+      description: 'Approve or reject the readings that members submit',
     },
   },
   roles: {

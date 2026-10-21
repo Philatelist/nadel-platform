@@ -15,7 +15,8 @@ import org.testcontainers.utility.DockerImageName;
  * V10 on a database that already has cooperatives: the new permissions are added by targeted inserts only (never by
  * re-running {@code seed_base_roles}, which would restore a permission a chairman removed), and every existing
  * cooperative gets its four charge types. Runs the migrations itself on a separate container: stop at V9, create the
- * cooperatives as the previous release did, then migrate to the latest version.
+ * cooperatives as the previous release did, then migrate to V10 (the later migrations add their own permission rows;
+ * {@code MetersMigrationTests} covers V12 the same way).
  */
 class ChargeTypesMigrationTests {
 
@@ -44,7 +45,7 @@ class ChargeTypesMigrationTests {
             assertThat(sql.queryForObject("select count(*) from information_schema.tables where table_name = "
                     + "'charge_type'", Integer.class)).isZero();
 
-            flyway(postgres, null).migrate();
+            flyway(postgres, "10").migrate();
 
             for (UUID tenant : List.of(first, second)) {
                 assertThat(permissions(sql, tenant, "CHAIRMAN")).hasSize(11)

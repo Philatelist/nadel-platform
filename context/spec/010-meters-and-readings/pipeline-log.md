@@ -61,3 +61,10 @@ Same as 004–009 (see `context/spec/009-charge-types-and-tariffs/pipeline-log.m
 - AUTO: a non-plot meter's replacement takes over its children; meter_parent as explicit ranges with an exclusion constraint (V8 pattern) (rule: the tree must not break on replacement).
 - AUTO: demo dates relative to CURRENT_DATE (rule: the 60-day "без показу" case must hold whenever the demo is loaded).
 - tasks.md written: 8 slices (model + permissions + calculation; register; readings and round; replacement and member flow; tree; tariffs + import; demo/docs/e2e/coverage; Feature Testing & Regression by testing-expert). No staffing gaps. No `not-user-reviewed` marker.
+- Baseline: make check green (1,380 backend, coverage 0.9795 vs floor 0.97; client 56/79/7/345). Recorded in review-log.md; baseline worktree removed.
+
+## Phase 3 — implement
+
+- Resumed (`/feature-pipeline resume`, 2026-10-21 20:34): Slice 1 backend task found written but uncommitted; web task not started. Re-running the slice's backend tests; web task delegated to react-frontend.
+- Found in the working tree, changed after the builder finished and not part of this run: `.claude/agents/spring-backend.md` (model sonnet → opus) and `backend/pom.xml` (surefire `forkedProcessTimeoutInSeconds` 900 → 4000). Treated as the owner's local edits: left as they are and never staged.
+- Slice 1: backend slice tests green (meters + roles + modularity; 0 failures); client test/typecheck/lint/format green (shared 97, web 345); `pnpm gen:api` no diff.

@@ -41,7 +41,7 @@
 | Treasurer | `TREASURER` | Base role. Admin who allocates payments; starts with View members, View plots and View audit log |
 | Chairman | `CHAIRMAN` | Base role. Head admin of the cooperative; always has every permission. A cooperative keeps at least one active chairman |
 | Member role | `MEMBER` | Base role every ordinary member holds; no permissions by default, sees only their own data |
-| Electrician | — | Admin who works only with meters. Not a base role: a custom role, given meter permissions when meters arrive |
+| Electrician | — | Admin who works only with meters. Not a base role: a custom role, given the meter permissions `METERS_VIEW` and `READINGS_ENTER` |
 | Platform operator | `PLATFORM_OPERATOR` | Owner of the SaaS. Manages cooperatives and subscriptions, cannot see their data |
 | Permission | `Permission` | A single allowed action from a fixed list, for example `PAYMENTS_ALLOCATE` or `MEMBERS_EDIT` |
 | Role | `Role` | A named set of permissions stored per cooperative. Base roles (Chairman, Treasurer, Member) exist in every cooperative and cannot be deleted, but can be renamed (feature 004; the code stays, `Role.nameCustomized` tells a renamed role from one that still has its standard name); custom roles are added by anyone with `ROLES_MANAGE`. A member may hold several roles (table `member_role`) and gets the union of their permissions |
