@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import app.nadel.TestTokens;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -375,17 +376,38 @@ class MeterTreeTests extends MeterTestSupport {
         UUID removedPlotMeter = plotMeter();
         move(chairman(), plotMeter, quarterA, INSTALLED).andExpect(status().isOk());
         move(chairman(), removedPlotMeter, quarterA, INSTALLED).andExpect(status().isOk());
+        // a child removed earlier does not hold the quarter
         send(chairman(), post(METERS + "/" + removedPlotMeter + "/remove"),
                 Map.of("removedOn", "2025-08-01", "finalReading", "0")).andExpect(status().isOk());
+        entered(plotMeter, "2025-10-01", "1000");
+        entered(plotMeter, "2025-10-31", "1300");
 
         expectHasChildren(send(chairman(), post(METERS + "/" + quarterA + "/remove"),
                 Map.of("removedOn", "2025-10-14", "finalReading", "0")));
         send(chairman(), get(METERS + "/" + quarterA), null).andExpect(jsonPath("$.active").value(true));
 
-        // once the plot meter is under another quarter from the next day, the quarter can go
+        // the plot meter is under another quarter from 15.10: under the quarter up to 14.10, so the quarter, which
+        // works in the tree only up to the day before its removal, still cannot go on 14.10, but can on 15.10
         move(chairman(), plotMeter, quarterB, "2025-10-15").andExpect(status().isOk());
+        expectHasChildren(send(chairman(), post(METERS + "/" + quarterA + "/remove"),
+                Map.of("removedOn", "2025-10-14", "finalReading", "0")));
+        send(chairman(), get(METERS + "/" + quarterA), null).andExpect(jsonPath("$.active").value(true));
         send(chairman(), post(METERS + "/" + quarterA + "/remove"),
-                Map.of("removedOn", "2025-10-14", "finalReading", "0")).andExpect(status().isOk());
+                Map.of("removedOn", "2025-10-15", "finalReading", "0")).andExpect(status().isOk());
+
+        // no day of the moved plot is lost: its slices under both quarters add up to its consumption over the range
+        JsonNode tree = tree("2025-10-01", "2025-10-31");
+        BigDecimal sliced = BigDecimal.ZERO;
+        for (UUID quarter : List.of(quarterA, quarterB)) {
+            for (JsonNode slice : place(tree, plotMeter, quarter).get("slices")) {
+                assertThat(slice.get("consumption").get("known").asBoolean()).isTrue();
+                sliced = sliced.add(new BigDecimal(slice.get("consumption").get("consumption").asString()));
+            }
+        }
+        JsonNode whole = body(send(chairman(), get(METERS + "/" + plotMeter + "/consumption")
+                .param("from", "2025-10-01").param("to", "2025-10-31"), null).andExpect(status().isOk()));
+        assertThat(whole.get("consumption").asString()).isEqualTo("300.000");
+        assertThat(sliced).isEqualByComparingTo(new BigDecimal(whole.get("consumption").asString()));
     }
 
     // ---- audit

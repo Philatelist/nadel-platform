@@ -65,7 +65,7 @@ class MeterParents {
         return parents.existsByParentMeterId(meterId);
     }
 
-    /** Whether a meter that still works after {@code day} is under the meter after that day. */
+    /** Whether a meter that still works on {@code day} is under the meter on that day or later. */
     boolean hasChildrenAfter(UUID meterId, LocalDate day) {
         return parents.hasChildrenAfter(meterId, day);
     }

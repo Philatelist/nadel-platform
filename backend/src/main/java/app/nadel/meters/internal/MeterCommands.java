@@ -165,8 +165,8 @@ class MeterCommands {
      * Ends the working period of the meter on {@code removedOn} with the final reading. The final reading is the last
      * point of the meter: not after today, not before the installation, not before a counted reading and not lower than
      * the counted reading before it (or the initial reading). A meter with readings waiting for approval is not removed
-     * until they are approved or rejected, and a meter with working meters under it in the tree after that day is not
-     * removed until they are moved ({@code METER_HAS_CHILDREN}; a replacement takes them over instead).
+     * until they are approved or rejected, and a meter with working meters under it in the tree on or after that day is
+     * not removed until they are moved ({@code METER_HAS_CHILDREN}; a replacement takes them over instead).
      */
     @Transactional
     Meter remove(UUID id, MeterRemoval input, AccessProfile actor) {
@@ -180,7 +180,7 @@ class MeterCommands {
         LocalDate removedOn = input.getRemovedOn();
         checkEnd(meter, removedOn, finalValue, "removedOn");
         if (parents.hasChildrenAfter(meter.getId(), removedOn)) {
-            throw hasChildren("The meter has working meters under it after the removal date; move them first.");
+            throw hasChildren("The meter has working meters under it on or after the removal date; move them first.");
         }
         MeterSnapshot before = MeterSnapshot.of(meter, null);
         meter.remove(removedOn, finalValue, clock.instant());

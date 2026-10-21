@@ -24,11 +24,12 @@ interface MeterParentRepository extends JpaRepository<MeterParentRecord, UUID> {
     boolean existsByParentMeterId(UUID parentMeterId);
 
     /**
-     * Whether a meter is under the parent after {@code day}: a period that lasts or ends after that day, of a meter that
-     * still works after it (a removed child's open period ends with the child).
+     * Whether a meter is under the parent on or after {@code day}: a period that reaches that day, of a meter that
+     * still works on it. A meter removed on a day works in the tree only up to the day before, so a parent removed on
+     * {@code day} must have no child period covering it; a child removed on {@code day} also ends the day before.
      */
     @Query("select count(p) > 0 from MeterParentRecord p, MeterRecord m where p.parentMeterId = :parentId "
-            + "and m.id = p.meterId and (p.validTo is null or p.validTo > :day) "
+            + "and m.id = p.meterId and (p.validTo is null or p.validTo >= :day) "
             + "and (m.removedOn is null or m.removedOn > :day)")
     boolean hasChildrenAfter(@Param("parentId") UUID parentId, @Param("day") LocalDate day);
 }
