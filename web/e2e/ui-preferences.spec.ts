@@ -169,9 +169,7 @@ test.describe('theme switch (phone)', () => {
     page,
   }) => {
     await loginAs(page, 'chairman@demo.local');
-    const title = page
-      .getByRole('banner')
-      .getByRole('link', { name: 'Demo Garden Cooperative', exact: true });
+    const title = page.getByRole('banner').getByRole('link', { name: 'СТ «Надія»', exact: true });
     const menuButton = page.getByRole('button', { name: 'Menu', exact: true });
     const titleBox = await title.boundingBox();
     const menuBox = await menuButton.boundingBox();
@@ -201,7 +199,7 @@ test.describe('cooperative name as the title (Ukrainian UI)', () => {
     try {
       await page.setViewportSize({ width: 1280, height: 800 });
       const header = page.getByRole('banner');
-      const title = header.getByRole('link', { name: 'Demo Garden Cooperative', exact: true });
+      const title = header.getByRole('link', { name: 'СТ «Надія»', exact: true });
       await expect(title).toHaveAttribute('href', '/');
       await expect(header.getByText('Наділ', { exact: true })).toBeVisible();
       const [titleSize, labelSize] = await Promise.all([
@@ -228,7 +226,7 @@ test.describe('cooperative name as the title (Ukrainian UI)', () => {
         .locator('#app-menu nav')
         .getByRole('link', { name: 'Члени кооперативу', exact: true })
         .click();
-      await expect(page).toHaveTitle('Члени кооперативу — Demo Garden Cooperative');
+      await expect(page).toHaveTitle('Члени кооперативу — СТ «Надія»');
     } finally {
       await page.context().close();
     }

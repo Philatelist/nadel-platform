@@ -127,7 +127,7 @@ test.describe('ownership', () => {
       ).toHaveCount(2);
       const latest = page.getByRole('row').filter({ hasText: plot.number }).first();
       await expect(latest).toContainText(c.name);
-      await expect(latest).toContainText(secondDay);
+      await expect(latest).toContainText(shortDay(secondDay));
     } finally {
       await archiveLeftovers(page, plots, members, kyivDay(0));
     }
@@ -187,21 +187,21 @@ test.describe('ownership', () => {
     const search = main(page).getByLabel('Search by number, street or cadastral number', { exact: true });
 
     // plot 7 lists both co-owners
-    await search.fill('Moroz');
-    await expect(rows(page).filter({ hasText: 'Bondarenko Andrii' })).toHaveCount(1);
+    await search.fill('Мороз');
+    await expect(rows(page).filter({ hasText: 'Бондаренко Андрій' })).toHaveCount(1);
     await expect(numbers(page)).toHaveText(['7']);
-    await expect(rows(page).first()).toContainText('Moroz Halyna');
+    await expect(rows(page).first()).toContainText('Мороз Галина');
 
     // the last name of a current owner finds plot 11
-    await search.fill('Kravchenko');
+    await search.fill('Кравченко');
     await expect(numbers(page)).toHaveText(['11']);
-    await expect(rows(page).first()).toContainText('Kravchenko Dmytro');
-    await expect(rows(page).first()).toContainText('Rudenko Bohdan');
+    await expect(rows(page).first()).toContainText('Кравченко Дмитро');
+    await expect(rows(page).first()).toContainText('Руденко Богдан');
 
     // plot 9: the current owner and the archived previous owner with the period; nothing to edit
     await openDemoPlot(page, '9', 'Search by number, street or cadastral number');
-    await expect(owners(page, 'Lytvynenko Svitlana')).toContainText(`since ${shortDay('2025-06-01')}`);
-    await expect(owners(page, 'Honcharenko Mykola')).toContainText(
+    await expect(owners(page, 'Литвиненко Світлана')).toContainText(`since ${shortDay('2025-06-01')}`);
+    await expect(owners(page, 'Гончаренко Микола')).toContainText(
       `${shortDay('2015-06-01')} – ${shortDay('2025-05-31')}`,
     );
     await expect(page.getByRole('button', { name: /^(Change owner|Correct)/ })).toHaveCount(0);
@@ -218,7 +218,7 @@ test.describe('ownership', () => {
     await expect(page.getByRole('link', { name: 'Plot 7', exact: true })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Plot 15', exact: true })).toBeVisible();
     await expect(page.getByText('My share: 1/2')).toBeVisible();
-    await expect(page.getByText('Moroz Halyna')).toBeVisible();
+    await expect(page.getByText('Мороз Галина')).toBeVisible();
 
     // a plot of someone else: number, street and kind only
     await openDemoPlot(page, '9', 'Search by number or street');
@@ -226,7 +226,7 @@ test.describe('ownership', () => {
       await expect(main(page).getByText(hidden, { exact: true })).toHaveCount(0);
     }
     await expect(main(page)).not.toContainText('sotka');
-    await expect(main(page)).not.toContainText('Lytvynenko');
+    await expect(main(page)).not.toContainText('Литвиненко');
     await expect(main(page)).not.toContainText('No debt');
 
     // the list: own plots 7 and 15 show "No debt", every other plot a neutral mark without a label
@@ -269,7 +269,7 @@ test.describe('ownership', () => {
       await openDemoPlot(member, '9', 'Search by number or street');
       await expect(main(member)).toContainText('No debt');
       await expect(main(member)).not.toContainText('sotka');
-      await expect(main(member)).not.toContainText('Lytvynenko');
+      await expect(main(member)).not.toContainText('Литвиненко');
       await expect(main(member).getByText('Owners', { exact: true })).toHaveCount(0);
 
       // the audit log keeps the old and the new value

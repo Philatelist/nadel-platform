@@ -181,9 +181,9 @@ test.describe('plots registry: acceptance', () => {
     // about 30 plots on two streets; the road (common land) lies on one of them
     const plotRows = everyRow.filter((r) => !r.startsWith('R-1'));
     expect(plotRows).toHaveLength(30);
-    expect(plotRows.every((r) => r.includes('Garden St') || r.includes('Orchard St'))).toBe(true);
-    expect(plotRows.filter((r) => r.includes('Garden St')).length).toBeGreaterThan(10);
-    expect(plotRows.filter((r) => r.includes('Orchard St')).length).toBeGreaterThan(10);
+    expect(plotRows.every((r) => r.includes('вул. Садова') || r.includes('вул. Вишнева'))).toBe(true);
+    expect(plotRows.filter((r) => r.includes('вул. Садова')).length).toBeGreaterThan(10);
+    expect(plotRows.filter((r) => r.includes('вул. Вишнева')).length).toBeGreaterThan(10);
     // owned plots are green ("No debt"), plots 25-29 have "No owner" and the road is "Common land"; no debt yet
     expect(everyRow.filter((r) => r.includes('No debt')).length).toBe(25);
     expect(everyRow.filter((r) => r.includes('No owner')).length).toBe(5);
@@ -236,12 +236,12 @@ test.describe('plots registry: acceptance', () => {
     await expect(page.getByRole('button', { name: 'Add plot' })).toHaveCount(0);
     await search(page, 'Search by number or street').fill('9');
     await rows(page)
-      .filter({ hasText: 'Garden St' })
+      .filter({ hasText: 'вул. Садова' })
       .first()
       .getByRole('link', { name: '9', exact: true })
       .click();
     await expect(page.getByRole('heading', { level: 1, name: 'Plot 9' })).toBeVisible();
-    await expect(page.getByRole('main')).not.toContainText('Corner plot next to the entrance gate');
+    await expect(page.getByRole('main')).not.toContainText("Кутова ділянка біля в'їзних воріт");
     await expect(page.getByRole('main')).not.toContainText('sotka');
     await expect(page.getByRole('main')).not.toContainText('4810136300');
     // the edit form is closed to them and the server refuses the same change

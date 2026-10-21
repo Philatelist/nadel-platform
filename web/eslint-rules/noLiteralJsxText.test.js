@@ -28,5 +28,8 @@ tester.run('no-literal-jsx-text', noLiteralJsxText, {
     { code: 'const a = <div>{`Total ${n}`}</div>;', errors: 1 },
     { code: 'const a = <div>{`${c ? "Inner" : ""}`}</div>;', errors: 1 },
     { code: 'const a = <div>{`${n}${a && "Done"}`}</div>;', errors: 1 },
+    { code: 'const a = <div>{x ?? "Fallback"}</div>;', errors: 1 },
+    { code: 'const a = <div>{"Total: " + n}</div>;', errors: 1 },
+    { code: 'const a = <div>{"Text" as string}</div>;', errors: 1 },
   ],
 });

@@ -42,13 +42,13 @@ test.describe('plots registry', () => {
     // plot 21 has a cadastral number and a building
     await field(page, 'Search by number, street or cadastral number').fill('21');
     await rows(page)
-      .filter({ hasText: 'Orchard St' })
+      .filter({ hasText: 'вул. Вишнева' })
       .first()
       .getByRole('link', { name: '21', exact: true })
       .click();
     const main = page.getByRole('main');
     await expect(page.getByRole('heading', { level: 1, name: 'Plot 21' })).toBeVisible();
-    await expect(main).toContainText('10 sotkas (1000 m²)');
+    await expect(main).toContainText('10 sotkas (1,000 m²)');
     await expect(main).toContainText('4810136300:02:002:0021');
     await expect(main.getByText('Building', { exact: true })).toBeVisible();
     await expect(main.getByText('Yes', { exact: true })).toBeVisible();
@@ -62,12 +62,12 @@ test.describe('plots registry', () => {
     await page.getByRole('link', { name: 'Back to plots' }).click();
     await field(page, 'Search by number, street or cadastral number').fill('9');
     await rows(page)
-      .filter({ hasText: 'Garden St' })
+      .filter({ hasText: 'вул. Садова' })
       .first()
       .getByRole('link', { name: '9', exact: true })
       .click();
     await expect(page.getByRole('heading', { level: 1, name: 'Plot 9' })).toBeVisible();
-    await expect(page.getByRole('main')).toContainText('Corner plot next to the entrance gate');
+    await expect(page.getByRole('main')).toContainText("Кутова ділянка біля в'їзних воріт");
   });
 
   test('member opens Plots from the menu and sees the restricted view only', async ({ page }) => {

@@ -279,7 +279,7 @@ test.describe('ownership: acceptance', () => {
     await rows(page).getByRole('link', { name: '9', exact: true }).first().click();
     await expect(page.getByRole('heading', { level: 1, name: 'Plot 9' })).toBeVisible();
     await expect(main(page).getByRole('heading', { name: 'Ownership history' })).toBeVisible();
-    await expect(owners(page, 'Honcharenko Mykola')).toContainText('Initial allocation');
-    await expect(owners(page, 'Lytvynenko Svitlana')).toContainText('Sale contract of 2025-05-20');
+    await expect(owners(page, 'Гончаренко Микола')).toContainText('Первісний розподіл');
+    await expect(owners(page, 'Литвиненко Світлана')).toContainText('Договір купівлі-продажу від 20.05.2025');
   });
 });

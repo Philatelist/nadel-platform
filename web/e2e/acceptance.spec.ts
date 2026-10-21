@@ -67,7 +67,7 @@ test.describe('§2.10 / §2.11 landing page and navigation', () => {
     await accountLink(page).click();
     await expect(page).toHaveURL(/\/account$/);
     await expect(page.getByRole('heading', { level: 1, name: 'My account' })).toBeVisible();
-    await expect(page.getByRole('main').getByText('Shevchenko Iryna Volodymyrivna')).toBeVisible();
+    await expect(page.getByRole('main').getByText('Шевченко Ірина Володимирівна')).toBeVisible();
     await expect(page.getByRole('listitem').filter({ hasText: /^Treasurer$/ })).toBeVisible();
     for (const permission of ['View members', 'View plots', 'View audit log']) {
       await expect(page.getByText(permission, { exact: true })).toBeVisible();
@@ -107,7 +107,7 @@ test.describe('§2.5 what an ordinary member sees', () => {
     await loginAs(page, 'member@demo.local');
 
     // own card: name, phones, email, postal address, channel; no edit buttons, no notes
-    await expect(page.getByRole('main').getByText('Bondarenko Andrii Mykolaiovych')).toBeVisible();
+    await expect(page.getByRole('main').getByText('Бондаренко Андрій Миколайович')).toBeVisible();
     await expect(page.getByText('+380501110003')).toBeVisible();
     await expect(page.getByText('member@demo.local')).toBeVisible();
     await expect(page.getByText('Postal address', { exact: true })).toBeVisible();
@@ -119,7 +119,7 @@ test.describe('§2.5 what an ordinary member sees', () => {
     // someone else's card looks exactly like a card that does not exist
     await page.goto(`/members/${CHAIRMAN_ID}`);
     await expect(page.getByRole('heading', { level: 1, name: 'Not found' })).toBeVisible();
-    await expect(page.getByText('Kovalenko')).toHaveCount(0);
+    await expect(page.getByText('Коваленко')).toHaveCount(0);
     await page.goto('/members/00000000-0000-0000-0000-00000000dead');
     await expect(page.getByRole('heading', { level: 1, name: 'Not found' })).toBeVisible();
 
@@ -127,7 +127,7 @@ test.describe('§2.5 what an ordinary member sees', () => {
     for (const path of ['/members', '/roles', '/audit']) {
       await page.goto(path);
       await expect(page.getByText("You don't have access to this page")).toBeVisible();
-      await expect(page.getByText('Kovalenko')).toHaveCount(0);
+      await expect(page.getByText('Коваленко')).toHaveCount(0);
     }
   });
 });
@@ -202,8 +202,8 @@ test.describe('§2.7 / §2.8 members list and read-only card', () => {
     await loginAs(page, 'treasurer@demo.local');
     await page.goto(`/members/${PAVLENKO_ID}`);
 
-    await expect(page.getByRole('heading', { level: 1, name: /Pavlenko/ })).toBeVisible();
-    await expect(page.getByText('Prefers phone calls in the evening')).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: /Павленко/ })).toBeVisible();
+    await expect(page.getByText('Краще телефонувати ввечері')).toBeVisible();
     await expect(page.getByText('+380672000014, +380933000014')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Edit', exact: true })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Archive' })).toHaveCount(0);
@@ -219,7 +219,7 @@ test.describe('§2.2 / §2.13 roles screen', () => {
     await navLink(page, 'Roles').click();
 
     const items = page.getByRole('main').getByRole('listitem');
-    for (const role of ['Chairman', 'Treasurer', 'Member', 'Secretary', 'Electrician']) {
+    for (const role of ['Chairman', 'Treasurer', 'Member', 'Секретар', 'Електрик']) {
       await expect(items.filter({ hasText: new RegExp(`^${role}`) }).first()).toBeVisible();
     }
     for (const role of ['Chairman', 'Treasurer', 'Member']) {
@@ -228,7 +228,7 @@ test.describe('§2.2 / §2.13 roles screen', () => {
       await expect(item.getByRole('button', { name: 'Delete' })).toHaveCount(0);
     }
     await expect(
-      items.filter({ hasText: /^Secretary/ }).getByRole('button', { name: 'Delete' }),
+      items.filter({ hasText: /^Секретар/ }).getByRole('button', { name: 'Delete' }),
     ).toBeVisible();
 
     // Chairman: name editable (since 004), every permission ticked and locked, Save enabled
@@ -282,9 +282,9 @@ test.describe('§2.2 / §2.13 roles screen', () => {
       await treasurerPage.goto('/account'); // the treasurer lands on Plots; the roles are on My account
       await expect(treasurerPage.getByRole('listitem').filter({ hasText: /^Bookkeeper$/ })).toBeVisible();
       await treasurerPage.goto('/members');
-      await treasurerPage.getByRole('searchbox').fill('Shevchenko');
+      await treasurerPage.getByRole('searchbox').fill('Шевченко');
       await expect(
-        treasurerPage.getByRole('row').filter({ hasText: 'Shevchenko' }).filter({ hasText: 'Bookkeeper' }),
+        treasurerPage.getByRole('row').filter({ hasText: 'Шевченко' }).filter({ hasText: 'Bookkeeper' }),
       ).toBeVisible();
       await treasurerPage.context().close();
 
@@ -539,14 +539,14 @@ test.describe('chairman journeys that change data', () => {
     await expect(page.getByText('5 Acceptance Street, Kyiv')).toBeVisible();
     await expect(page.getByText('+380501112233', { exact: true })).toBeVisible();
 
-    // roles: give Secretary
+    // roles: give Secretary (Секретар)
     await page.getByRole('button', { name: 'Edit roles' }).click();
-    await page.getByRole('checkbox', { name: 'Secretary' }).check();
+    await page.getByRole('checkbox', { name: 'Секретар' }).check();
     await page.getByRole('button', { name: 'Save' }).click();
     await expect(page.getByRole('status').filter({ hasText: 'Saved' })).toHaveText('Saved');
     await expect(
       page.locator('dt', { hasText: 'Roles' }).locator('xpath=following-sibling::dd[1]'),
-    ).toHaveText('Secretary');
+    ).toHaveText('Секретар');
 
     // archive: gone from the default list, present with "Show archived", marked archived
     await page.getByRole('button', { name: 'Archive' }).click();
@@ -590,12 +590,12 @@ test.describe('chairman journeys that change data', () => {
     }
     for (const text of await rows.allInnerTexts()) {
       expect(text).toContain(`${lastName} Ivan`);
-      expect(text).toContain('Kovalenko Oleksandr Petrovych');
+      expect(text).toContain('Коваленко Олександр Петрович');
     }
     const update = rows.filter({ hasText: 'Member updated' }).first();
     await expect(update).toContainText('+380671234567 → +380501112233');
     await expect(update).toContainText('5 Acceptance Street, Kyiv');
-    await expect(rows.filter({ hasText: 'Roles changed' }).first()).toContainText('Secretary');
+    await expect(rows.filter({ hasText: 'Roles changed' }).first()).toContainText('Секретар');
     // read-only: no edit or delete control anywhere on the log
     await expect(page.getByRole('main').getByRole('button', { name: /^(edit|delete)/i })).toHaveCount(0);
 
@@ -676,7 +676,7 @@ test.describe('chairman journeys that change data', () => {
           'Your account is not linked to a member of this cooperative. Please contact your chairman.',
         ),
       ).toBeVisible();
-      await expect(archived.getByText('Tkachenko')).toHaveCount(0);
+      await expect(archived.getByText('Ткаченко')).toHaveCount(0);
       await expect(archived.getByRole('navigation')).toHaveCount(0);
       await context.close();
     } finally {
@@ -693,7 +693,7 @@ test.describe('§2.4 / §2.12 other people', () => {
 
     await expect(page.getByRole('heading', { name: 'No cooperative' })).toBeVisible();
     await expect(page.getByText('you are the platform operator', { exact: false })).toBeVisible();
-    await expect(page.getByText('Kovalenko')).toHaveCount(0);
+    await expect(page.getByText('Коваленко')).toHaveCount(0);
     await expect(page.getByRole('link', { name: 'Members' })).toHaveCount(0);
   });
 
@@ -702,11 +702,11 @@ test.describe('§2.4 / §2.12 other people', () => {
   }) => {
     await loginAs(page, 'member@other.local');
 
-    await expect(page.getByRole('main').getByText('Melnyk Olena Stepanivna')).toBeVisible();
-    await expect(page.getByRole('main').getByText('Other Cooperative')).toBeVisible();
+    await expect(page.getByRole('main').getByText('Мельник Олена Степанівна')).toBeVisible();
+    await expect(page.getByRole('main').getByText('СТ «Світанок»')).toBeVisible();
     await page.goto(`/members/${CHAIRMAN_ID}`);
     await expect(page.getByRole('heading', { level: 1, name: 'Not found' })).toBeVisible();
-    await expect(page.getByText('Kovalenko')).toHaveCount(0);
+    await expect(page.getByText('Коваленко')).toHaveCount(0);
     await page.goto('/members');
     await expect(page.getByText("You don't have access to this page")).toBeVisible();
   });
@@ -716,12 +716,12 @@ test.describe('§2.7 #2 filters together', () => {
   test('§2.7 #2: "Show archived" can be switched on while a search is active', async ({ page }) => {
     await loginAs(page, 'chairman@demo.local');
     await page.goto('/members');
-    await page.getByRole('searchbox').fill('Kovalenko');
-    await expect(page).toHaveURL(/q=Kovalenko/);
+    await page.getByRole('searchbox').fill('Коваленко');
+    await expect(page).toHaveURL(/q=%D0%9A%D0%BE%D0%B2%D0%B0%D0%BB%D0%B5%D0%BD%D0%BA%D0%BE/);
     await page.getByLabel('Show archived').click(); // controlled by the URL: assert the state, not check()
     await expect(page.getByLabel('Show archived')).toBeChecked();
     await expect(page.getByLabel('Show archived')).toBeChecked();
     await expect(page).toHaveURL(/archived=true/);
-    await expect(tableRows(page).filter({ hasText: 'Kovalenko' })).toBeVisible();
+    await expect(tableRows(page).filter({ hasText: 'Коваленко' })).toBeVisible();
   });
 });

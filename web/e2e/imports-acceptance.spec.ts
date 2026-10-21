@@ -58,7 +58,7 @@ test.describe('excel import: acceptance', () => {
     await signInInUkrainian(page);
     try {
       await page.goto('/imports');
-      await chooseFile(page, `acc-${stamp}.xlsx`, xlsx(sheet('Garden St')));
+      await chooseFile(page, `acc-${stamp}.xlsx`, xlsx(sheet('вул. Садова')));
       await checkFile(page);
       await expect(main(page).getByText('У файлі немає проблем. Можна імпортувати.')).toBeVisible();
       await expect(countsRow(page, 'Ділянки').getByRole('cell')).toHaveText(['Ділянки', '1', '0', '0']);
@@ -71,18 +71,18 @@ test.describe('excel import: acceptance', () => {
       leftovers.push({ id: items[0]!.id, number });
       await page.goto(`/plots/${items[0]!.id}`);
       await expect(main(page).getByText(/6\s+соток\s+\(600\s+м²\)/)).toBeVisible();
-      await expect(main(page).getByText('Garden St')).toBeVisible();
+      await expect(main(page).getByText('вул. Садова')).toBeVisible();
 
       // the same plot number with another street: one updated plot, and the plot shows the new street
       await page.goto('/imports');
-      await chooseFile(page, `acc-${stamp}.xlsx`, xlsx(sheet('Orchard St')));
+      await chooseFile(page, `acc-${stamp}.xlsx`, xlsx(sheet('вул. Вишнева')));
       await checkFile(page);
       await expect(countsRow(page, 'Ділянки').getByRole('cell')).toHaveText(['Ділянки', '0', '1', '0']);
       await main(page).getByRole('button', { name: 'Імпортувати', exact: true }).click();
       await expect(main(page).getByRole('heading', { name: 'Імпорт завершено' })).toBeVisible();
       await page.goto(`/plots/${items[0]!.id}`);
-      await expect(main(page).getByText('Orchard St')).toBeVisible();
-      await expect(main(page).getByText('Garden St')).toHaveCount(0);
+      await expect(main(page).getByText('вул. Вишнева')).toBeVisible();
+      await expect(main(page).getByText('вул. Садова')).toHaveCount(0);
     } finally {
       if (leftovers.length === 0) {
         // the lookup above may have failed after the commit: find the plot by its unique number
