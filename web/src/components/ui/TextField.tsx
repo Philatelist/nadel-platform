@@ -1,9 +1,9 @@
-import type { ComponentProps } from 'react';
+import type { ComponentProps, ReactNode } from 'react';
 import { Field } from './Field';
 import { controlClass } from './fieldStyles';
 
 interface FieldProps {
-  label: string;
+  label: ReactNode;
   error?: string;
   hint?: string;
 }

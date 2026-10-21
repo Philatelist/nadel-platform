@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
 import type { AuditEntry } from '@nadel/api-client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { renderWithApp } from '../test/render';
@@ -375,6 +375,37 @@ describe('AuditPage stored codes', () => {
     );
     expect(screen.getByText(new RegExp(permissions.replace(/[()]/g, '')))).toBeInTheDocument();
     expect(screen.getByText(channels, { exact: false })).toBeInTheDocument();
+  });
+
+  it.each([
+    ['uk', 'Член кооперативу', 'Казначей', 'Повний доступ'],
+    ['en', 'Member', 'Treasurer', 'Full access'],
+  ] as const)('maps base: role tokens in roles and description in %s', (locale, member, treasurer, full) => {
+    show(
+      {
+        action: 'MEMBER_ROLES_CHANGED',
+        entityType: 'MEMBER',
+        changes: [{ field: 'roles', newValue: 'base:MEMBER, Electrician, base:TREASURER' }],
+      },
+      locale,
+    );
+    expect(document.body.textContent).toContain(`${member}, Electrician, ${treasurer}`);
+    expect(screen.queryByText(/base:/)).not.toBeInTheDocument();
+    expect(screen.getByText('Electrician')).toHaveAttribute('data-user-content');
+    expect(screen.queryByText('base:MEMBER')).not.toBeInTheDocument();
+    cleanup();
+    show(
+      {
+        action: 'ROLE_UPDATED',
+        entityType: 'ROLE',
+        entityLabel: 'base:TREASURER',
+        changes: [{ field: 'description', oldValue: 'base:CHAIRMAN', newValue: 'Meters' }],
+      },
+      locale,
+    );
+    expect(document.body.textContent).toContain(`${full} → Meters`);
+    expect(screen.queryByText(/base:/)).not.toBeInTheDocument();
+    expect(screen.getByText('Meters')).toHaveAttribute('data-user-content');
   });
 
   it('formats dates, area and position by locale and keeps legacy values', () => {

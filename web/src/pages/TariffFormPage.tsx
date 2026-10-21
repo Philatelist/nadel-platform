@@ -98,7 +98,7 @@ function TariffForm({ types }: { types: readonly ChargeType[] }) {
             <option
               key={type.id}
               value={type.id}
-              {...(isChargeTypeNameUserContent(type) ? { 'data-user-content': true } : {})}
+              {...(isChargeTypeNameUserContent(type) ? { 'data-user-content': '' } : {})}
             >
               {chargeTypeName(type, t)}
             </option>

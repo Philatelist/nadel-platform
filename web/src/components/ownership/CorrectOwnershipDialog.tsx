@@ -1,11 +1,12 @@
 import { useCreateOwnershipCorrection, type Ownership, type PlotOwnerships } from '@nadel/api-client';
-import { addFractions, format, isOne, parseFraction, type Fraction } from '@nadel/shared';
+import { addFractions, isOne, parseFraction, type Fraction } from '@nadel/shared';
 import { useState, type FormEvent } from 'react';
 import { useOwnershipInvalidation } from '../../hooks/useOwnershipInvalidation';
 import { useT } from '../../i18n';
 import { kyivToday } from '../../kyivToday';
 import { problemCode, problemFieldErrors, problemMessage, type FieldErrors } from '../../problem';
 import { Modal } from '../Modal';
+import { formatUser } from '../UserContent';
 import { Button, Notice, TextArea, TextField } from '../ui';
 import { MemberPicker, type PickedMember } from './MemberPicker';
 import { ShareTotal } from './ShareTotal';
@@ -161,7 +162,7 @@ export function CorrectOwnershipDialog({
             {coOwners.map((o, i) => (
               <TextField
                 key={o.id}
-                label={format(t.ownership.coOwnerShare, { name: o.memberName })}
+                label={formatUser(t.ownership.coOwnerShare, { name: o.memberName })}
                 value={coTexts[i] ?? ''}
                 error={
                   (coTexts[i] ?? '').trim() !== '' && coShares[i] === null

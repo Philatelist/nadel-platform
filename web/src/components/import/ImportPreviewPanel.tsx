@@ -1,7 +1,7 @@
 import type { ImportEntityCounts, ImportPreview, ImportProblem } from '@nadel/api-client';
 import { format, formatDateTime } from '@nadel/shared';
 import { importErrorCode } from '../../importError';
-import { UserContent, formatUser } from '../UserContent';
+import { formatUser } from '../UserContent';
 import { Button, DataTable, Notice, Panel, type Column } from '../ui';
 import { useLocale, useT } from '../../i18n';
 
@@ -68,7 +68,7 @@ export function ImportPreviewPanel({
       cell: (p) => {
         if (!p.column) return '—';
         const label = columnLabels[p.sheet]?.[p.column];
-        return label ?? <UserContent>{p.column}</UserContent>;
+        return label ?? p.column;
       },
     },
     {

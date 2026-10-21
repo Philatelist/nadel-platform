@@ -1,6 +1,6 @@
 import { messages } from '@nadel/shared';
 import { describe, expect, it } from 'vitest';
-import { auditRoleValue, roleDescription, roleDisplayName } from './roleName';
+import { roleDescription, roleDisplayName } from './roleName';
 
 describe('roleDisplayName', () => {
   it.each([
@@ -22,29 +22,6 @@ describe('roleDisplayName', () => {
   });
 });
 
-describe('auditRoleValue', () => {
-  it.each([
-    ['uk', 'Казначей'],
-    ['en', 'Treasurer'],
-  ] as const)('maps a base token to the catalog name (%s)', (locale, expected) => {
-    expect(auditRoleValue('base:TREASURER', messages(locale))).toBe(expected);
-  });
-
-  it('maps every part of a joined list', () => {
-    expect(auditRoleValue('base:MEMBER, Electrician, base:TREASURER', messages('en'))).toBe(
-      'Member, Electrician, Treasurer',
-    );
-  });
-
-  it('leaves an unknown code unchanged', () => {
-    expect(auditRoleValue('base:NOPE', messages('en'))).toBe('base:NOPE');
-  });
-
-  it('leaves a plain value unchanged', () => {
-    expect(auditRoleValue('Cashier', messages('en'))).toBe('Cashier');
-  });
-});
-
 describe('roleDescription', () => {
   const base = { baseCode: 'MEMBER', description: 'Own data only', descriptionCustomized: false } as const;
   it('shows the catalog text for a standard base description', () =>
@@ -55,17 +32,4 @@ describe('roleDescription', () => {
     ).toBe('Ours'));
   it('shows the stored text for a custom role, possibly none', () =>
     expect(roleDescription({ descriptionCustomized: true }, messages('uk'))).toBeUndefined());
-});
-
-describe('auditRoleValue for description', () => {
-  it.each([
-    ['uk', 'Повний доступ'],
-    ['en', 'Full access'],
-  ] as const)('maps base:CHAIRMAN (%s)', (locale, expected) =>
-    expect(auditRoleValue('base:CHAIRMAN', messages(locale), 'description')).toBe(expected),
-  );
-  it('leaves free text and unknown codes alone', () => {
-    expect(auditRoleValue('Meters', messages('en'), 'description')).toBe('Meters');
-    expect(auditRoleValue('base:NOPE', messages('en'), 'description')).toBe('base:NOPE');
-  });
 });
