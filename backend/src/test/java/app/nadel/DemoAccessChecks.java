@@ -29,7 +29,7 @@ public final class DemoAccessChecks {
         chairmanHasEveryPermission(mvc);
         treasurerHasReadPermissions(mvc);
         memberHasNoPermissions(mvc);
-        electricianHasNoPermissions(mvc);
+        electricianHasTheMeterPermissions(mvc);
         permissionsAreEnforcedFromTheMembersRoles(mvc);
     }
 
@@ -60,14 +60,14 @@ public final class DemoAccessChecks {
                 .andExpect(jsonPath("$.permissions").isEmpty());
     }
 
-    /** The electrician is a Member plus the custom role "Electrician", which has no permissions yet. */
-    public static void electricianHasNoPermissions(MockMvc mvc) throws Exception {
+    /** The electrician is a Member plus the custom role "Electrician", which views meters and enters readings. */
+    public static void electricianHasTheMeterPermissions(MockMvc mvc) throws Exception {
         getAs(mvc, demo("electrician@demo.local"), "/api/v1/me")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.roles", hasSize(2)))
                 .andExpect(jsonPath("$.roles[?(@.name == 'Електрик')].baseCode").isEmpty())
                 .andExpect(jsonPath("$.roles[?(@.baseCode == 'MEMBER')]", hasSize(1)))
-                .andExpect(jsonPath("$.permissions").isEmpty());
+                .andExpect(jsonPath("$.permissions", containsInAnyOrder("METERS_VIEW", "READINGS_ENTER")));
     }
 
     /** Representative allowed and denied endpoints: members, audit and roles, for the three kinds of caller. */

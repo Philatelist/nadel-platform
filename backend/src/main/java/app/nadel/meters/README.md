@@ -4,7 +4,7 @@ The cooperative's meters, the electricity meter tree, the readings taken on any 
 them (feature 010, ADR 0014). Nothing is charged here; electricity charges, losses and the split of common consumers arrive
 with feature 011, which reuses `ConsumptionCalculator` and feeds the exact `Quantity` to money.
 
-Status: slices 1 to 6 of spec 010 are in code: tables, permissions, the pure calculation, the `ReadingUsage` port, the
+Status: slices 1 to 7 of spec 010 are in code (slice 7 adds the demo data): tables, permissions, the pure calculation, the `ReadingUsage` port, the
 meter register (entity, commands, queries, endpoints, the plot guard, audit), readings with the round (entry, batch,
 superseding, correction, deletion, the unusual-consumption warning, the history with intervals), replacement, range
 consumption over a chain of meters, the member flow (submission, approval, rejection), the electricity tree (moves
@@ -320,3 +320,23 @@ Tests: `ImportPreviewMetersTests`, `ImportCommitTests` (in the imports module), 
 `METERS_VIEW` and `METERS_MANAGE`), `READINGS_ENTER`, `READINGS_APPROVE`. The Chairman has all four. Defined in
 `identity.Permission`, seeded by `seed_base_roles` (V12); existing cooperatives got the rows by targeted inserts (see
 `MetersMigrationTests`).
+
+## Demo data
+
+The repeatable script `db/demo/R__demo_data.sql` (block `-- BEGIN demo meters` ... `-- END demo meters`, Ukrainian text, fixed or
+derived ids, every insert `ON CONFLICT DO NOTHING`, dates relative to `CURRENT_DATE`) loads, for the demo cooperative:
+
+- 5 network meters: "Підстанція №1" (substation) with "Квартал А" and "Квартал Б" (quarters), "Свердловина №1" (a common consumer
+  under the substation) and "Освітлення вул. Вишнева" (a common consumer under quarter A);
+- 29 electricity plot meters in the tree (plots 1-14 and 12а under quarter A, 15-29 under quarter B; plots 25 and 28 have no
+  meter) and 4 water meters (plots 1, 7, 15, 22, outside the tree). Plot 9's meter was replaced 30 days ago (old meter removed
+  with a final value, the new one `replaces_meter_id`); plot 20's last reading is 75 days old;
+- 169 readings with irregular gaps of 6-55 days over about 120 days (any range that starts or ends between two readings is an
+  interpolation case): 165 approved, 2 pending (member@demo.local's plots 7 and 15, for the approvals screen), 1 rejected
+  (plot 1) and 1 superseded (plot 2, replaced by its correction);
+- the other cooperative: one meter and one reading (isolation checks);
+- the permissions `METERS_VIEW` and `READINGS_ENTER` for the custom role "Електрик" and its description
+  "Вносить покази лічильників на обході" (the earlier text is replaced only while the chairman has not edited it).
+
+`DemoMeterDataTests` asserts these numbers. Tests that need an empty meter state call `DemoMeterData.clear` and
+`DemoMeterData.restore` (like `DemoTariffData`); the rest of the meter tests use throw-away data (serials `MT-...`).

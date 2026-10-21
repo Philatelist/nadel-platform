@@ -87,7 +87,7 @@ A new tariff version or a corrected meter reading dated in the past:
 ## 6. Electricity
 
 ```
-plot consumption     = reading(end of period) − reading(start of period)
+plot consumption     = value(end of period) − value(start of period)      (range consumption, 6.4)
 losses               = common meter for the period − Σ plot consumption
 plot share of losses = losses × plot consumption / Σ consumption   (PROPORTIONAL mode)
                      = plot consumption × fixed %                    (FIXED_PERCENT mode)
@@ -95,8 +95,15 @@ charge               = (consumption + share of losses) × kWh tariff
 ```
 
 - The mode is configured per cooperative.
-- A reading submitted by a member is used only after an admin approves it.
-- If a reading is missing, no electricity charge is created for the period and the plot appears in the "missing readings" list when the period is closed.
+- A reading submitted by a member is used only after an admin approves it (status `PENDING` never counts).
+- If the value of a meter cannot be determined at the start or the end of the period, no electricity charge is created
+  for the period and the plot appears in the "missing readings" list when the period is closed.
+- A reading is a value on a date, not a value for a period: the start and the end of a billing period are dates, and
+  `value(date)` is defined below (6.4). A reading is not forced to fall on the first or the last day of a month.
+- Reading values (`MeterValue`) and consumption are quantities of a resource, not money: at most 3 decimals, stored as
+  `numeric(14,3)`, written as strings in JSON (`"8205.000"`). Consumption is calculated from exact values (a fraction
+  for an interpolated value); the only rounding is `HALF_UP` to 3 decimals for display (`Quantity.toMeterValue`, ADR 0014).
+  Money is calculated later from the exact quantity, never from a rounded display value, and is rounded once by `Money`.
 
 ### 6.1 Plots without a meter
 
@@ -156,6 +163,42 @@ substation (transformer) meter
 - Common consumers (well pumps, lighting): their consumption is a cooperative expense charged to plots. How it is split
   is a cooperative setting chosen by the chairman: equally per plot, only among plots marked as using the service, or
   not charged separately (covered by the membership fee).
+
+### 6.4 Readings, intervals and range consumption
+
+Feature 010 (`ConsumptionCalculator`, pure and tested without a database).
+
+- **A reading is a value on a date.** A meter has at most one approved reading per date. The points of a meter's history
+  are its initial value on the installation date, its approved readings and its final value on the removal date; a
+  reading on the installation or removal date takes the place of that boundary point. Values never decrease along the
+  dates of one meter (a lower value is refused, 409 `READING_OUT_OF_ORDER`); a lower value is valid only as the initial
+  value of a new meter (6.2).
+- **Statuses.** `APPROVED` readings count. `PENDING` (a member's submission waiting for the board) is never used.
+  `REJECTED` carries the reason the member sees and is never used. `SUPERSEDED` is a reading replaced by another entry
+  for the same date or by a correction; it keeps its place in the history and is never used. A correction is a new
+  reading that supersedes the old one; nothing is overwritten.
+- **Interval consumption** is the difference between a point and the previous point of the same meter, counted from the
+  installation (initial value) and up to the removal (final value). It is what the reading history shows per row.
+- **The value at a date** `valueAt(d)` is, in this order: the approved reading on `d` (real); else, when `d` lies between
+  two points `v0` on a date `a` and `v1` on a date `b`, the exact linear interpolation by days
+  `(v0 · N + (v1 − v0) · k) / N` with `N = b − a` and `k = d − a`, marked **calculated**; else unknown (no point after the
+  date, or none before it), with the date of the last reading so the board knows what to ask for.
+- **Range consumption** of a meter for `[from, to]` is `valueAt(to) − valueAt(from)`, clipped to the days the meter worked
+  (installation to removal, both included). The consumption of a plot is the sum over the plot's chain of meters (a
+  replacement, a wrapped-around counter; 6.2), each clipped to its own working period. It is calculated when any value
+  used was interpolated, and unknown when any part is unknown.
+- **Example (interpolation).** Readings 1 000.000 on 1 March and 1 310.000 on 1 April (N = 31 days). The value on
+  16 March (k = 15) is (1 000 · 31 + 310 · 15) / 31 = 1 150.000 (calculated). With a reading of 1 480.000 on
+  1 May, the range 16 March - 16 April is 1 310 + (1 480 − 1 310) · 15 / 30 − 1 150 = 1 395 − 1 150 = 245.000 kWh, calculated.
+- **Tree slices.** For a node of the tree (6.3) over `[from, to]` the range is split by the node's parent periods: one slice
+  per period that overlaps the range, from `max(from, valid_from)` to `min(to, valid_to + 1 day)`. Neighbouring slices
+  share their boundary day, so the slices add up to the whole range.
+- **Unusual consumption** (a warning only, never a refusal): a new interval is flagged when its consumption per day is
+  more than three times the average of the meter's earlier intervals that ended within the previous 180 days; no warning
+  without such an interval or when that average is zero.
+- **Plot meters (`PLOT` kind).** A meter of kind `PLOT` belongs to a plot of kind `PLOT` (never common land) and is the only
+  kind that may measure water; at most one active meter per plot and resource. The other kinds (`SUBSTATION`, `QUARTER`,
+  `COMMON_CONSUMER`) have a name instead of a plot and measure electricity only.
 
 ## 7. Allocation
 

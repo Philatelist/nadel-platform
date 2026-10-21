@@ -1,7 +1,7 @@
 # Pipeline log — 010 Meters and readings
 
 - Status: running
-- Phase: 3 — implement (Slice 6)
+- Phase: 3 — implement (Slice 7)
 - Branch: 010-meters-and-readings · Base: main (= origin/main) @ 063af9f
 - Requirement: docs/features/010-meters-and-readings.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
@@ -94,3 +94,7 @@ Same as 004–009 (see `context/spec/009-charge-types-and-tariffs/pipeline-log.m
 - Slice 5 review round 2: PASS.
 - Slice 6 backend (spring-backend): reported 672 tests green over tariffs/imports/meters, no V13. `ImportCounts.meters` kept required (the server always sends it); the 3 web fixtures that break typecheck are fixed in the web task. Import commit refused with `IMPORT_STALE` if meters changed after the preview; `IMPORT_COMMITTED` gains `metersCreated`/`metersUnchanged`. Web task delegated; backend re-verification running.
 - Slice 6 web (react-frontend): web 424 tests; I restored the functional-spec wording "за показаннями" / "by readings" for BY_READINGS (the agent wrote its own longer text). Verified: backend Slice 6 tests green (PlotTariffsTests 26, TariffsTests 25, TariffScopeTests 29, TariffsAcceptanceTests 24, ChargeCalculatorTests 30, ImportPreviewMetersTests 9, ImportCommitTests 25, ImportAcceptanceTests 11, TemplateWriterTests 17, PlanDigestTests 8, MeterCatalogTests 2, ModularityTests 2); client test/typecheck/lint/format green; `pnpm gen:api` no diff.
+- Slice 6 committed `acae94e` — tests green; review round 1 running. Slice 7 DB/docs task delegated.
+- Slice 6 review round 1: PASS.
+- Slice 7 DB/docs (postgres-database): demo meter network (38 meters, 169 readings, plot 9 replacement, plot 20 stale 75 days, 2 pending from member@demo.local, Електрик gets METERS_VIEW + READINGS_ENTER), money-rules §6 + new §6.4, glossary, architecture, meters README. Verified: `./mvnw -B verify` 1,688 tests, 0 failures; line coverage 0.97947 → floor stays 0.97 (rounded down; unchanged). Proposed CLAUDE.md edit for the owner: electrician line → 'Member plus the demo custom role "Електрик" (METERS_VIEW and READINGS_ENTER)'. e2e task delegated.
+- Slice 7 e2e (react-frontend): `make e2e` 99 passed / 0 failed (new meters.spec.ts, 5 tests; language-purity covers the new screens; design-system menu count; tariffs-acceptance now expects "немає лічильника" on a plot without a meter). Verified: `make check` green (backend 1,688 tests, 0 failures, coverage floor met; client 56/7/110/424).

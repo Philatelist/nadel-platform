@@ -85,7 +85,7 @@ class MeEndpointTests extends IntegrationTest {
                 .andExpect(jsonPath("$.roles[?(@.name == 'Електрик')].nameCustomized").value(true))
                 .andExpect(jsonPath("$.roles[?(@.name == 'Member')].baseCode").value("MEMBER"))
                 .andExpect(jsonPath("$.roles[?(@.name == 'Member')].nameCustomized").value(false));
-        DemoAccessChecks.electricianHasNoPermissions(mvc);
+        DemoAccessChecks.electricianHasTheMeterPermissions(mvc);
     }
 
     @Test

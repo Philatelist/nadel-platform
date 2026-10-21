@@ -115,14 +115,15 @@ class MembersAccessAcceptanceTests extends IntegrationTest {
                 .isEqualTo(first.get("totalItems").asInt());
     }
 
-    /** §2.13 #2 and §2.4 demo users: five roles; Secretary is given to exactly one member; Electrician has none. */
+    /** §2.13 #2 and §2.4 demo users: five roles; Secretary is given to exactly one member; Electrician has the meter permissions. */
     @Test
     void demoChairmanSeesTheFiveRolesAndSecretaryIsGivenToOneMember() throws Exception {
         mvc.perform(get("/api/v1/roles").header(HttpHeaders.AUTHORIZATION, chairman()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[*].name", hasItems("Chairman", "Treasurer", "Member", "Секретар", "Електрик")))
                 .andExpect(jsonPath("$[?(@.name == 'Секретар')].memberCount").value(1))
-                .andExpect(jsonPath("$[?(@.name == 'Електрик')].permissions[0]").isEmpty());
+                .andExpect(jsonPath("$[?(@.name == 'Електрик')].permissions[*]",
+                        containsInAnyOrder("METERS_VIEW", "READINGS_ENTER")));
         mvc.perform(get("/api/v1/members/" + DEMO_SECRETARY_HOLDER).header(HttpHeaders.AUTHORIZATION, chairman()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.roles[*].name", hasItem("Секретар")));

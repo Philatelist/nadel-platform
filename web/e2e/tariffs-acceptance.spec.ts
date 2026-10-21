@@ -380,8 +380,8 @@ test.describe('tariffs: acceptance', () => {
       await expect(row('E2E дорога')).toContainText(money('1200.00'));
       await month.fill('2026-06');
       await expect(row('E2E дорога')).toContainText(money('0.00'));
-      // §2.4 #4 a per-kWh tariff reads "за показаннями" without an amount
-      await expect(row('E2E лічильник')).toContainText('за показаннями');
+      // §2.4 #4 a per-kWh tariff reads "немає лічильника" (no meter on the plot) without an amount
+      await expect(row('E2E лічильник')).toContainText('немає лічильника');
       // §2.4 #6 before any version starts the tariff is not listed
       await month.fill('2025-12');
       await expect(row('E2E внески')).toHaveCount(0);

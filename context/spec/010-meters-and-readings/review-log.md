@@ -38,3 +38,9 @@
 |---|---|---|---|---|
 | 1 | `18f2ee9..76ab842` | MAJOR_ISSUES | M1 `MeterParentRepository.hasChildrenAfter` off by one: a parent can be removed on D while a child's period ends on D, so the child's D→D+1 consumption falls under no node | minor: `TREE_PARENT_INACTIVE` text says "already removed" but is also sent for a parent installed later; audit README lacks the `parent` value row; Settings visible with METERS_MANAGE alone but the tree needs METERS_VIEW too; move dialog may preselect an inactive (replaced) parent; reused READING_* field texts under "У дереві з" |
 | 2 | + `8c40cab` | PASS | M1 resolved (`>=` on the child period end; test covers 14.10 refused / 15.10 allowed and the slices sum) | minor: `hasChildrenAfter` now means "on or after" (name) |
+
+## Slice 6 — Tariffs meter presence and the import sheet
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `8c40cab..acae94e` | PASS | — | minor: the meters-sheet duplicate check runs before plot resolution, so a row with an unknown/common/suppressed plot still claims the key and a later row gets `DUPLICATE_IN_FILE`; `importProblem.METER_VALUE_INVALID` text omits the 11-integer-digit limit; `hasMeterBetween` checks the whole month even for a mid-month meter-based version (note for 011); long javadoc lines in ImportVocabulary/TemplateWriter |
