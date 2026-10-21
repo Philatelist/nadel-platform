@@ -17,8 +17,9 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- * The four tariff tables: cooperatives are isolated (RLS), links never cross them (composite foreign keys), versions are
- * append-only for the application role, and the tables keep their own rules (checks and unique indexes).
+ * The four tariff tables: cooperatives are isolated (RLS), links never cross them (composite foreign keys), a version
+ * can be updated and deleted by the application role (V11) but never truncated and never across cooperatives, and the
+ * tables keep their own rules (checks and unique indexes).
  */
 class TariffsTenantIsolationTests extends IntegrationTest {
 
@@ -131,6 +132,19 @@ class TariffsTenantIsolationTests extends IntegrationTest {
     }
 
     @Test
+    void cannotUpdateOrDeleteVersionsOfAnotherCooperative() {
+        Integer updated = inTenant(DEMO_TENANT, sql -> sql.update(
+                "update tariff_version set rate = 99, note = 'tampered' where tenant_id = ?", OTHER_TENANT));
+        Integer deleted = inTenant(DEMO_TENANT, sql -> sql.update("delete from tariff_version where tariff_id = ?",
+                OTHER_TARIFF));
+
+        assertThat(updated).isZero();
+        assertThat(deleted).isZero();
+        assertThat(ownerJdbc().queryForObject("select count(*) from tariff_version where tariff_id = ? "
+                + "and rate = 50 and note is null", Integer.class, OTHER_TARIFF)).isEqualTo(1);
+    }
+
+    @Test
     void cannotDeleteScopeRowsOfAnotherCooperative() {
         Integer deleted = inTenant(DEMO_TENANT, sql -> sql.update("delete from tariff_scope_plot where tariff_id = ?",
                 OTHER_TARIFF));
@@ -197,22 +211,37 @@ class TariffsTenantIsolationTests extends IntegrationTest {
     // ---- grants
 
     @Test
-    void theApplicationRoleCannotUpdateDeleteOrTruncateTariffVersions() {
-        assertDenied("tariff_version", sql -> sql.update("update tariff_version set rate = 1 where tariff_id = ?",
-                DEMO_TARIFF));
-        assertDenied("tariff_version", sql -> sql.update("delete from tariff_version where tariff_id = ?",
-                DEMO_TARIFF));
+    void theApplicationRoleMayUpdateAndDeleteTariffVersionsButNotTruncateThem() {
+        // V11: versions are corrected or deleted until a charge uses them; TRUNCATE stays revoked
         assertDenied("tariff_version", sql -> {
             sql.execute("truncate tariff_version");
             return null;
         });
+        assertThat(count(DEMO_TENANT, "tariff_version", "")).isEqualTo(1);
 
+        Integer updated = inTenant(DEMO_TENANT, sql -> sql.update("update tariff_version set rate = 60 "
+                + "where tariff_id = ?", DEMO_TARIFF));
+        assertThat(updated).isEqualTo(1);
         assertThat(ownerJdbc().queryForObject("select rate from tariff_version where tariff_id = ?",
-                BigDecimal.class, DEMO_TARIFF)).isEqualByComparingTo("50");
-        // appending and reading stay allowed
+                BigDecimal.class, DEMO_TARIFF)).isEqualByComparingTo("60");
+
         inTenant(DEMO_TENANT, sql -> sql.update(VERSION_INSERT, DEMO_TENANT, DEMO_TARIFF, "2027-01-01", "PER_PLOT",
                 "YEARLY", 1, null, null));
         assertThat(count(DEMO_TENANT, "tariff_version", "")).isEqualTo(2);
+        Integer deleted = inTenant(DEMO_TENANT, sql -> sql.update("delete from tariff_version where tariff_id = ? "
+                + "and valid_from = date '2027-01-01'", DEMO_TARIFF));
+        assertThat(deleted).isEqualTo(1);
+        assertThat(count(DEMO_TENANT, "tariff_version", "")).isEqualTo(1);
+    }
+
+    @Test
+    void theApplicationRoleCannotMoveAVersionToAnotherCooperative() {
+        // row level security checks the new row too: a version cannot be handed to another cooperative
+        assertRowSecurity(sql -> sql.update("update tariff_version set tenant_id = ? where tariff_id = ?",
+                OTHER_TENANT, DEMO_TARIFF));
+
+        assertThat(count(OTHER_TENANT, "tariff_version", "")).isEqualTo(1);
+        assertThat(count(DEMO_TENANT, "tariff_version", "")).isEqualTo(1);
     }
 
     @Test

@@ -439,3 +439,41 @@ describe('AuditPage stored codes', () => {
     expect(screen.getByText('12')).toHaveAttribute('data-user-content');
   });
 });
+
+describe('AuditPage tariff version correction entries', () => {
+  afterEach(() => window.localStorage.clear());
+
+  it.each([
+    ['uk', 'Версію тарифу виправлено', 'Версію тарифу видалено', /60,00.₴ → 50,00.₴/, 'Діє з:'],
+    ['en', 'Tariff version corrected', 'Tariff version deleted', /₴60\.00 → ₴50\.00/, 'Valid from:'],
+  ] as const)(
+    'labels the corrected and the deleted version in %s',
+    (locale, updated, deleted, rate, from) => {
+      show(
+        {
+          action: 'TARIFF_VERSION_UPDATED',
+          entityType: 'TARIFF',
+          entityId: 't1',
+          entityLabel: 'Per sotka',
+          changes: [{ field: 'rate', oldValue: '60.0000', newValue: '50.0000' }],
+        },
+        locale,
+      );
+      expect(screen.getByText(updated)).toBeInTheDocument();
+      expect(screen.getByText(rate)).toBeInTheDocument();
+      cleanup();
+      show(
+        {
+          action: 'TARIFF_VERSION_DELETED',
+          entityType: 'TARIFF',
+          entityId: 't1',
+          entityLabel: 'Per sotka',
+          changes: [{ field: 'validFrom', oldValue: '2026-11-01' }],
+        },
+        locale,
+      );
+      expect(screen.getByText(deleted)).toBeInTheDocument();
+      expect(screen.getByText(new RegExp(from))).toBeInTheDocument();
+    },
+  );
+});

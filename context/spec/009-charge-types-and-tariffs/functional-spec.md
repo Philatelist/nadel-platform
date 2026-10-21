@@ -73,7 +73,10 @@ nothing about anyone else's.
   - an optional note, for example "рішення загальних зборів від 12.04.2026".
 - A fixed one-time amount is always one-off and has a due date; "one-off" is only possible for a fixed one-time amount.
 - Two versions of the same tariff cannot start on the same date.
-- Versions are never edited or deleted; a change of rate is a new version.
+- A change of rate is a new version. A version can also be corrected (date, basis, frequency, rate, due date, note) or
+  deleted until a charge uses it; after that a correction goes through recalculation (feature 012). The same rules as for
+  a new version apply to a correction, and the end dates of the neighbouring versions follow. The only version of a
+  tariff cannot be deleted. In this feature no charge exists, so every version can be corrected or deleted.
 - A version dated in the past may be saved, with a warning that charges for past periods will be recalculated (the
   recalculation itself is feature 012).
 - A tariff is created together with its first version.
@@ -240,7 +243,7 @@ nothing about anyone else's.
 - Meters and readings (feature 010) and any amount for per-kWh or per-m³ tariffs.
 - Using the charge type order for payment allocation (phase 3).
 - Reports (feature 013).
-- Billing other than monthly; editing or deleting versions; restoring an archived charge type.
+- Billing other than monthly; correcting a version that a charge uses (feature 012); restoring an archived charge type.
 - The mobile app.
 
 ---
@@ -254,7 +257,7 @@ Decided by the pipeline (no blocking question; the requirement document is detai
 - The four starting charge types show their default name in the user's language until renamed (as base roles do).
 - Charge types are never deleted, only archived; an archived type cannot be restored in this feature.
 - Inactive charge types keep their tariffs, but those tariffs give no expected amount.
-- Versions cannot be edited or deleted; a mistake is corrected by a new version with a later date.
+- A version can be corrected or deleted until a charge uses it (a port that feature 011 implements; always "unused" here); after that a correction goes through recalculation (feature 012). The only version of a tariff is never deleted.
 - A tariff is created with its first version and applies to all plots until its scope is changed.
 - Exclusions exist only for "All plots"; switching a tariff to "Selected plots" removes its exclusions (audited).
 - Common land is never in a scope; archived plots get no amounts.
@@ -274,3 +277,4 @@ Decided by the pipeline (no blocking question; the requirement document is detai
 - 2026-10-20 — created by `/feature-pipeline` from `docs/features/009-charge-types-and-tariffs.md`.
 - 2026-10-21 — verification — wording aligned with the app: rates use the interface's decimal separator ("50,0000" in Ukrainian, "50.0000" in English), and a refused change and a closed page show the app-wide texts "У вас немає дозволу на цю дію." and "У вас немає доступу до цієї сторінки".
 - 2026-10-21 — change request from the owner — a rate is shown with its significant decimals but at least two ("50,00", "4,32", "1,4532", "0,35"; a dot in English) instead of four; storage and the API keep four decimals; money formatting unchanged.
+- 2026-10-21 — change request from the owner — tariff versions can be corrected (`PUT /tariffs/{id}/versions/{versionId}`) and deleted (`DELETE`, never the only version) until a charge uses them; "Versions are never edited or deleted" is replaced by this rule (§2.2, Assumptions & Decisions, Out-of-Scope); audited as `TARIFF_VERSION_UPDATED` and `TARIFF_VERSION_DELETED`; V11 grants `UPDATE` and `DELETE` on `tariff_version`.

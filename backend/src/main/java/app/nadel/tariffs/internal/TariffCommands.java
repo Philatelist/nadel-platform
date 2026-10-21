@@ -13,6 +13,7 @@ import app.nadel.problem.FieldProblem;
 import app.nadel.problem.ProblemCodes;
 import app.nadel.tariffs.Basis;
 import app.nadel.tariffs.Frequency;
+import app.nadel.tariffs.TariffVersionUsage;
 import app.nadel.tariffs.VersionTerms;
 import app.nadel.tariffs.VersionTerms.Violation;
 import jakarta.persistence.EntityManager;
@@ -43,18 +44,23 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Creates tariffs and adds versions. Every method is one transaction that also publishes the audit event. The
- * cooperative always comes from the caller's {@link AccessProfile}, never from the request; the caller must hold
- * {@code TARIFFS_VIEW} and {@code TARIFFS_MANAGE} (checked on the controller).
+ * Creates tariffs, adds versions and corrects or deletes them. Every method is one transaction that also publishes the
+ * audit event. The cooperative always comes from the caller's {@link AccessProfile}, never from the request; the caller
+ * must hold {@code TARIFFS_VIEW} and {@code TARIFFS_MANAGE} (checked on the controller).
  * <p>
  * The charge type is locked {@code FOR SHARE} first, so a concurrent archive of it waits for this transaction (or this
- * one sees it archived). Versions are append-only: nothing here updates or deletes one. The rate is never rounded;
- * {@link Rate#parse} refuses what does not fit, and the one-off rule is that of {@link VersionTerms}.
+ * one sees it archived). A version is corrected or deleted only while no charge uses it
+ * ({@link TariffVersionUsage}); the tariff row is locked {@code FOR UPDATE} first, so the use check and the change
+ * cannot interleave with another correction of the same tariff. The rate is never rounded; {@link Rate#parse} refuses
+ * what does not fit, and the one-off rule is that of {@link VersionTerms}.
  */
 @Service
 class TariffCommands {
 
     private static final String DATE_INDEX = "tariff_version_valid_from_uq";
+    /** The audited fields of a version, in the order they are written. */
+    private static final List<String> VERSION_FIELDS = List.of("validFrom", "basis", "frequency", "rate", "dueDate",
+            "note");
 
     private final TariffRepository tariffs;
     private final TariffVersionRepository versions;
@@ -65,10 +71,11 @@ class TariffCommands {
     private final TariffAuditPublisher audit;
     private final EntityManager entityManager;
     private final Clock clock;
+    private final List<TariffVersionUsage> usages;
 
     TariffCommands(TariffRepository tariffs, TariffVersionRepository versions, TariffScopePlotRepository scopePlots,
             ChargeTypeRepository chargeTypes, PlotCatalog plots, TariffAssembler assembler,
-            TariffAuditPublisher audit, EntityManager entityManager, Clock clock) {
+            TariffAuditPublisher audit, EntityManager entityManager, Clock clock, List<TariffVersionUsage> usages) {
         this.tariffs = tariffs;
         this.versions = versions;
         this.scopePlots = scopePlots;
@@ -78,6 +85,7 @@ class TariffCommands {
         this.audit = audit;
         this.entityManager = entityManager;
         this.clock = clock;
+        this.usages = usages;
     }
 
     @Transactional
@@ -101,7 +109,7 @@ class TariffCommands {
         List<FieldChange> changes = new ArrayList<>();
         changes.add(new FieldChange("name", null, name));
         changes.add(new FieldChange("chargeType", null, ChargeTypeSnapshot.auditName(chargeType)));
-        changes.addAll(versionFields(version));
+        changes.addAll(versionFields(version, true));
         publish(actor, "TARIFF_CREATED", tariff, changes);
         return assembler.assemble(tariff, chargeType);
     }
@@ -120,11 +128,104 @@ class TariffCommands {
         TariffVersionRecord version = saveVersion(TariffVersionRecord.create(Objects.requireNonNull(actor.tenantId()),
                 tariff.getId(), Objects.requireNonNull(terms), blankToNull(input.getNote()), Instant.now()));
 
-        publish(actor, "TARIFF_VERSION_ADDED", tariff, versionFields(version));
-        // the end of the new version depends on the versions that start after it
+        publish(actor, "TARIFF_VERSION_ADDED", tariff, versionFields(version, true));
+        return versionDto(tariff, version);
+    }
+
+    /**
+     * Replaces the terms of a version (the same fields and rules as a new version). Order: field problems (400); the
+     * tariff row {@code FOR UPDATE} and its charge type {@code FOR SHARE} (404, 409 {@code CHARGE_TYPE_ARCHIVED}); the
+     * version of that tariff (404); the use check (409 {@code TARIFF_VERSION_IN_USE}, also for a request that changes
+     * nothing); the write (409 {@code TARIFF_VERSION_DATE_TAKEN}). A request that changes nothing writes nothing and
+     * no audit entry. The end dates of the neighbours are derived on read, so nothing else is stored.
+     */
+    @Transactional
+    TariffVersion updateVersion(UUID tariffId, UUID versionId, TariffVersionCreate input, AccessProfile actor) {
+        List<FieldProblem> problems = new ArrayList<>();
+        VersionTerms terms = terms(input, "", problems);
+        if (!problems.isEmpty()) {
+            throw invalid(problems);
+        }
+
+        TariffRecord tariff = lockTariff(tariffId, actor);
+        lockChargeType(tariff.getChargeTypeId(), actor);
+        TariffVersionRecord version = lockedVersion(tariff, versionId, actor);
+
+        List<FieldChange> before = versionFields(version, false);
+        String note = blankToNull(input.getNote());
+        version.correct(Objects.requireNonNull(terms), note);
+        List<FieldChange> changes = changedFields(before, versionFields(version, false));
+        if (changes.isEmpty()) {
+            return versionDto(tariff, version);
+        }
+        flushVersion(version);
+
+        publish(actor, "TARIFF_VERSION_UPDATED", tariff, changes);
+        return versionDto(tariff, version);
+    }
+
+    /**
+     * Deletes a version. Same order as {@link #updateVersion}; the only version of a tariff is refused (409
+     * {@code TARIFF_LAST_VERSION}), because a tariff always has a version. The audit entry holds the old values.
+     */
+    @Transactional
+    void deleteVersion(UUID tariffId, UUID versionId, AccessProfile actor) {
+        TariffRecord tariff = lockTariff(tariffId, actor);
+        lockChargeType(tariff.getChargeTypeId(), actor);
+        TariffVersionRecord version = lockedVersion(tariff, versionId, actor);
+        if (versions.countByTariffId(tariff.getId()) <= 1) {
+            throw new ApiProblemException(HttpStatus.CONFLICT, ProblemCodes.TARIFF_LAST_VERSION,
+                    "The only version of a tariff cannot be deleted.");
+        }
+
+        List<FieldChange> old = versionFields(version, false);
+        versions.delete(version);
+        versions.flush();
+
+        publish(actor, "TARIFF_VERSION_DELETED", tariff, old.stream().filter(change -> change.newValue() != null)
+                .map(change -> new FieldChange(change.field(), change.newValue(), null)).toList());
+    }
+
+    /** The tariff of the caller's cooperative, locked {@code FOR UPDATE}; 404 when missing or foreign. */
+    private TariffRecord lockTariff(UUID id, AccessProfile actor) {
+        return tariffs.findByIdForUpdate(id).filter(t -> t.getTenantId().equals(actor.tenantId()))
+                .orElseThrow(ApiProblemException::notFound);
+    }
+
+    /** The version of that tariff (404 when it is missing or belongs to another tariff), refused when a charge uses it. */
+    private TariffVersionRecord lockedVersion(TariffRecord tariff, UUID versionId, AccessProfile actor) {
+        TariffVersionRecord version = versions.findById(versionId)
+                .filter(v -> v.getTariffId().equals(tariff.getId())).orElseThrow(ApiProblemException::notFound);
+        UUID tenantId = Objects.requireNonNull(actor.tenantId());
+        if (usages.stream().anyMatch(usage -> usage.isUsed(tenantId, version.getId()))) {
+            throw new ApiProblemException(HttpStatus.CONFLICT, ProblemCodes.TARIFF_VERSION_IN_USE,
+                    "A charge uses this version, so it can no longer be changed or deleted.");
+        }
+        return version;
+    }
+
+    /** The answer for a version: its end date is derived from the versions that start after it. */
+    private TariffVersion versionDto(TariffRecord tariff, TariffVersionRecord version) {
         List<TariffVersion> all = TariffDtoMapper.versionsNewestFirst(
                 versions.findByTariffIdOrderByValidFromAsc(tariff.getId()), LocalDate.now(clock));
         return all.stream().filter(v -> v.getId().equals(version.getId())).findFirst().orElseThrow();
+    }
+
+    /** Fields whose value differs, as old to new; {@code before} and {@code after} come from the same fields list. */
+    private static List<FieldChange> changedFields(List<FieldChange> before, List<FieldChange> after) {
+        Map<String, String> old = new LinkedHashMap<>();
+        before.forEach(change -> old.put(change.field(), change.newValue()));
+        Map<String, String> current = new LinkedHashMap<>();
+        after.forEach(change -> current.put(change.field(), change.newValue()));
+        List<FieldChange> changes = new ArrayList<>();
+        for (String field : VERSION_FIELDS) {
+            String was = old.get(field);
+            String is = current.get(field);
+            if (!Objects.equals(was, is)) {
+                changes.add(new FieldChange(field, was, is));
+            }
+        }
+        return changes;
     }
 
     /**
@@ -289,13 +390,27 @@ class TariffCommands {
         try {
             return versions.saveAndFlush(version);
         } catch (DataIntegrityViolationException e) {
-            if (ConstraintViolations.violates(e, DATE_INDEX)) {
-                throw new ApiProblemException(HttpStatus.CONFLICT, ProblemCodes.TARIFF_VERSION_DATE_TAKEN,
-                        "A version of this tariff starts on this date already.",
-                        List.of(new FieldProblem("validFrom", ProblemCodes.TARIFF_VERSION_DATE_TAKEN)));
-            }
-            throw e;
+            throw dateTakenOrRethrow(e);
         }
+    }
+
+    /** Flushes a corrected version, so a date that another version has taken surfaces here. */
+    private void flushVersion(TariffVersionRecord version) {
+        try {
+            versions.saveAndFlush(version);
+        } catch (DataIntegrityViolationException e) {
+            throw dateTakenOrRethrow(e);
+        }
+    }
+
+    /** The 409 of a date that another version of the tariff has taken, or the original exception. */
+    private static RuntimeException dateTakenOrRethrow(DataIntegrityViolationException e) {
+        if (ConstraintViolations.violates(e, DATE_INDEX)) {
+            return new ApiProblemException(HttpStatus.CONFLICT, ProblemCodes.TARIFF_VERSION_DATE_TAKEN,
+                    "A version of this tariff starts on this date already.",
+                    List.of(new FieldProblem("validFrom", ProblemCodes.TARIFF_VERSION_DATE_TAKEN)));
+        }
+        return e;
     }
 
     /**
@@ -327,16 +442,18 @@ class TariffCommands {
         return new VersionTerms(input.getValidFrom(), basis, frequency, rate, input.getDueDate());
     }
 
-    private static List<FieldChange> versionFields(TariffVersionRecord version) {
+    /** The fields of a version as new values; {@code setOnly} leaves out an unset due date and note (as on create). */
+    private static List<FieldChange> versionFields(TariffVersionRecord version, boolean setOnly) {
         List<FieldChange> changes = new ArrayList<>();
         changes.add(new FieldChange("validFrom", null, version.getValidFrom().toString()));
         changes.add(new FieldChange("basis", null, version.getBasis().name()));
         changes.add(new FieldChange("frequency", null, version.getFrequency().name()));
         changes.add(new FieldChange("rate", null, version.getRate().toString()));
-        if (version.getDueDate() != null) {
-            changes.add(new FieldChange("dueDate", null, version.getDueDate().toString()));
+        if (!setOnly || version.getDueDate() != null) {
+            changes.add(new FieldChange("dueDate", null,
+                    version.getDueDate() == null ? null : version.getDueDate().toString()));
         }
-        if (version.getNote() != null) {
+        if (!setOnly || version.getNote() != null) {
             changes.add(new FieldChange("note", null, version.getNote()));
         }
         return changes;

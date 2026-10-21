@@ -380,8 +380,9 @@ export const getAddTariffVersionUrl = (id: string,) => {
 }
 
 /**
- * Adds a version that applies from `validFrom`. Versions are never edited or deleted; a change of rate is a new
- * version. Two versions of one tariff cannot start on the same date (409 `TARIFF_VERSION_DATE_TAKEN`,
+ * Adds a version that applies from `validFrom`. A change of rate is a new version; a mistake in a version can be
+ * corrected or the version deleted until a charge uses it (`PUT` and `DELETE` of
+ * `/tariffs/{id}/versions/{versionId}`). Two versions of one tariff cannot start on the same date (409 `TARIFF_VERSION_DATE_TAKEN`,
  * `errors[{field: validFrom}]`). The charge type must not be archived (409 `CHARGE_TYPE_ARCHIVED`). A date in the
  * past is accepted (`pastDated: true` in the answer). Field codes of 400 `VALIDATION_FAILED`: `rate`
  * `RATE_INVALID`; `frequency` `FREQUENCY_BASIS_MISMATCH` (`ONE_OFF` goes only with `FIXED_ONE_TIME` and
@@ -467,6 +468,190 @@ export const useAddTariffVersion = <TError = BadRequestResponse | UnauthorizedRe
         TContext
       > => {
       return useMutation(getAddTariffVersionMutationOptions(options), queryClient);
+    }
+    export const getUpdateTariffVersionUrl = (id: string,
+    versionId: string,) => {
+
+
+
+
+  return `/api/v1/tariffs/${id}/versions/${versionId}`
+}
+
+/**
+ * Replaces the terms of a version (the same fields and rules as `POST /tariffs/{id}/versions`; `validFrom` may
+ * change too). A version can be corrected until a charge uses it: then 409 `TARIFF_VERSION_IN_USE` (a later
+ * correction goes through recalculation, feature 012). The tariff and the version are 404 when unknown or of
+ * another cooperative, and also when the version belongs to another tariff. Two versions of one tariff cannot
+ * start on the same date (409 `TARIFF_VERSION_DATE_TAKEN`, `errors[{field: validFrom}]`). The charge type must
+ * not be archived (409 `CHARGE_TYPE_ARCHIVED`). Field codes of 400 `VALIDATION_FAILED` are those of the create
+ * operation (`rate` `RATE_INVALID`, `frequency` `FREQUENCY_BASIS_MISMATCH`, `dueDate` `REQUIRED` or `INVALID`).
+ * A date in the past is accepted (`pastDated: true` in the answer). The answer is the version with `validTo`
+ * derived from the versions that follow it; the end dates of the neighbours are derived on every read, so they
+ * follow the new date. A request that changes nothing is accepted and writes nothing. Requires `TARIFFS_VIEW`
+ * and `TARIFFS_MANAGE`; the change is written to the audit log (`TARIFF_VERSION_UPDATED`, old and new values of
+ * the changed fields).
+ * @summary Correct a version of a tariff
+ */
+export const updateTariffVersion = async (id: string,
+    versionId: string,
+    tariffVersionCreate: TariffVersionCreate, options?: Parameters<typeof nadelFetch>[1]): Promise<TariffVersion> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return nadelFetch<TariffVersion>(getUpdateTariffVersionUrl(id,versionId),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(tariffVersionCreate)
+  }
+);}
+
+
+
+
+
+export const getUpdateTariffVersionMutationKey = () => ['updateTariffVersion'] as const;
+
+export const getUpdateTariffVersionMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateTariffVersion>>, TError,UpdateTariffVersionMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateTariffVersion>>, TError,UpdateTariffVersionMutationVariables, TContext> => {
+
+const mutationKey = getUpdateTariffVersionMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateTariffVersion>>, UpdateTariffVersionMutationVariables> = (props) => {
+          const {id,versionId,data} = props ?? {};
+
+          return  updateTariffVersion(id,versionId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateTariffVersionMutationResult = NonNullable<Awaited<ReturnType<typeof updateTariffVersion>>>
+    export type UpdateTariffVersionMutationBody = TariffVersionCreate
+    export type UpdateTariffVersionMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse
+    export type UpdateTariffVersionMutationVariables = {id: string;versionId: string;data: TariffVersionCreate}
+
+    /**
+ * @summary Correct a version of a tariff
+ */
+export const useUpdateTariffVersion = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateTariffVersion>>, TError,UpdateTariffVersionMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof updateTariffVersion>>,
+        TError,
+        UpdateTariffVersionMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateTariffVersionMutationOptions(options), queryClient);
+    }
+    export const getDeleteTariffVersionUrl = (id: string,
+    versionId: string,) => {
+
+
+
+
+  return `/api/v1/tariffs/${id}/versions/${versionId}`
+}
+
+/**
+ * Deletes a version until a charge uses it (409 `TARIFF_VERSION_IN_USE` afterwards). The only version of a tariff
+ * cannot be deleted (409 `TARIFF_LAST_VERSION`): archive the charge type or keep the tariff instead. The end
+ * dates of the neighbours are derived on every read, so the version before the deleted one then lasts until the
+ * next one starts. The tariff and the version are 404 when unknown or of another cooperative, and also when the
+ * version belongs to another tariff. The charge type must not be archived (409 `CHARGE_TYPE_ARCHIVED`). Requires
+ * `TARIFFS_VIEW` and `TARIFFS_MANAGE`; the change is written to the audit log (`TARIFF_VERSION_DELETED`, the old
+ * values).
+ * @summary Delete a version of a tariff
+ */
+export const deleteTariffVersion = async (id: string,
+    versionId: string, options?: Parameters<typeof nadelFetch>[1]): Promise<void> => {
+
+  return nadelFetch<void>(getDeleteTariffVersionUrl(id,versionId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteTariffVersionMutationKey = () => ['deleteTariffVersion'] as const;
+
+export const getDeleteTariffVersionMutationOptions = <TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTariffVersion>>, TError,DeleteTariffVersionMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteTariffVersion>>, TError,DeleteTariffVersionMutationVariables, TContext> => {
+
+const mutationKey = getDeleteTariffVersionMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteTariffVersion>>, DeleteTariffVersionMutationVariables> = (props) => {
+          const {id,versionId} = props ?? {};
+
+          return  deleteTariffVersion(id,versionId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteTariffVersionMutationResult = NonNullable<Awaited<ReturnType<typeof deleteTariffVersion>>>
+
+    export type DeleteTariffVersionMutationError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse
+    export type DeleteTariffVersionMutationVariables = {id: string;versionId: string}
+
+    /**
+ * @summary Delete a version of a tariff
+ */
+export const useDeleteTariffVersion = <TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTariffVersion>>, TError,DeleteTariffVersionMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof deleteTariffVersion>>,
+        TError,
+        DeleteTariffVersionMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeleteTariffVersionMutationOptions(options), queryClient);
     }
     export const getUpdateTariffScopeUrl = (id: string,) => {
 

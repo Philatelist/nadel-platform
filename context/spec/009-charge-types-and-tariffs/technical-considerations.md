@@ -41,7 +41,7 @@ with `now()` defaults.
 |---|---|
 | `charge_type` | `code` text null (MEMBERSHIP, ELECTRICITY, LAND_TAX, WATER — seeded only; unique `(tenant_id, code)` where not null); `name` text not null (seeded: English default), `name_customized` boolean (role pattern of V4); `description` text null ≤ 500; `active` boolean; `position` int (no unique, ordered by `(position, id)`); `archived_at` timestamptz null. Unique index `(tenant_id, lower(name)) WHERE archived_at IS NULL`. `REVOKE DELETE, TRUNCATE` from `nadel_app`. |
 | `tariff` | `charge_type_id` → `charge_type` (RESTRICT); `name` text 1–100; `scope_kind` text `ALL_PLOTS`/`SELECTED_PLOTS` default `ALL_PLOTS`. `REVOKE DELETE, TRUNCATE`. |
-| `tariff_version` | `tariff_id` → `tariff` (RESTRICT); `valid_from` date; `basis` (`PER_PLOT`, `PER_AREA_SOTKA`, `PER_KWH`, `PER_M3`, `FIXED_ONE_TIME`); `frequency` (`MONTHLY`, `QUARTERLY`, `YEARLY`, `ONE_OFF`); `rate numeric(14,4) >= 0`; `due_date` date null; `note` text null ≤ 500. `tariff_version_valid_from_uq UNIQUE (tenant_id, tariff_id, valid_from)`; `tariff_version_one_off_ck`: `(basis = FIXED_ONE_TIME) = (frequency = ONE_OFF)` and `(frequency = ONE_OFF) = (due_date IS NOT NULL)`. Append-only: `REVOKE UPDATE, DELETE, TRUNCATE` from `nadel_app` (V3 `audit_entry` pattern). |
+| `tariff_version` | `tariff_id` → `tariff` (RESTRICT); `valid_from` date; `basis` (`PER_PLOT`, `PER_AREA_SOTKA`, `PER_KWH`, `PER_M3`, `FIXED_ONE_TIME`); `frequency` (`MONTHLY`, `QUARTERLY`, `YEARLY`, `ONE_OFF`); `rate numeric(14,4) >= 0`; `due_date` date null; `note` text null ≤ 500. `tariff_version_valid_from_uq UNIQUE (tenant_id, tariff_id, valid_from)`; `tariff_version_one_off_ck`: `(basis = FIXED_ONE_TIME) = (frequency = ONE_OFF)` and `(frequency = ONE_OFF) = (due_date IS NOT NULL)`. V10 made it append-only (`REVOKE UPDATE, DELETE, TRUNCATE` from `nadel_app`, V3 `audit_entry` pattern); **amended 2026-10-21:** `V11__tariff_version_correction.sql` grants `UPDATE, DELETE` back (a version is corrected or deleted until a charge uses it; the use check guards it) and keeps `TRUNCATE` revoked; RLS still isolates both statements per cooperative. |
 | `tariff_scope_plot` | PK `(tariff_id, plot_id)`; `tariff_id` → `tariff`; `(tenant_id, plot_id)` → `plot(tenant_id, id)` **ON DELETE CASCADE** (a plot can be deleted only while it has no history — 006; a scope row must not block that); `kind` `SELECTED`/`EXCLUDED`; `reason` text: `(kind = EXCLUDED) = (reason IS NOT NULL)`, trimmed 1–500. Index `(tenant_id, plot_id)`. Rows are replaced on scope change (DELETE stays granted; the audit log keeps history). |
 
 Rules that span tables live in the service: entry kind matches `tariff.scope_kind`; no common land in a scope.
@@ -85,6 +85,15 @@ dueDate)` (constructor enforces the ONE_OFF/FIXED/due-date rule), `ExpectedCharg
 unknown or other-tenant plot) gets 404 `NOT_FOUND`; the platform operator 403 (`CooperativeCallers` pattern). Common land
 and archived plots return 200 with no items and total `0.00`.
 
+**Version correction (amendment 2026-10-21).** `TariffCommands.updateVersion` / `deleteVersion` lock the tariff row `FOR
+UPDATE` and its charge type `FOR SHARE`, load the version (it must be of that tariff), ask the use check, then write.
+The use check is the public port `app.nadel.tariffs.TariffVersionUsage.isUsed(tenantId, versionId)`; the tariffs module
+injects `List<TariffVersionUsage>` and the version is used when any bean says so. `internal/NoChargesYetUsage` is the
+default and answers `false`. Feature 011's ledger implements the port in its own module (ledger depends on tariffs, never
+the reverse) and locks the tariff row `FOR SHARE` when it writes a charge. `TariffVersionRecord` is no longer
+`@Immutable` (`correct(terms, note)`). An unchanged `PUT` writes nothing and no audit entry. `validTo` stays derived, so
+neighbours need no write.
+
 **Locks.** Creating a tariff or version locks its charge type `FOR SHARE`; archiving `FOR UPDATE`; reorder locks the
 tenant's non-archived charge types `FOR UPDATE` and requires the full id set (else 409 `CHARGE_TYPE_ORDER_STALE`).
 
@@ -95,7 +104,7 @@ Ukrainian or English default of a non-archived, non-customised seeded type → 4
 `CHARGE_TYPE_CREATED`, `CHARGE_TYPE_UPDATED` (changed fields among `name`, `description`, `active`),
 `CHARGE_TYPE_REORDERED` (one per type whose `position` changed), `CHARGE_TYPE_ARCHIVED`, `TARIFF_CREATED` (name, charge
 type, first version fields), `TARIFF_VERSION_ADDED` (`validFrom`, `basis`, `frequency`, `rate`, `dueDate`, `note`),
-`TARIFF_SCOPE_CHANGED` (`scope`, `selectedPlots` as sorted plot numbers), `TARIFF_EXCLUSION_ADDED`/`REMOVED` (`plot`,
+`TARIFF_VERSION_UPDATED` (changed fields only, old to new, among `validFrom`, `basis`, `frequency`, `rate`, `dueDate`, `note`), `TARIFF_VERSION_DELETED` (old values), `TARIFF_SCOPE_CHANGED` (`scope`, `selectedPlots` as sorted plot numbers), `TARIFF_EXCLUSION_ADDED`/`REMOVED` (`plot`,
 `reason`). Reasons and notes are never logged.
 
 ### 2.3 Calculation (`ChargeCalculator.calculate(List<VersionTerms>, BigDecimal areaM2, YearMonth month)`)
@@ -130,6 +139,10 @@ Kyiv month (`Clock`).
 - `POST /tariffs` (`chargeTypeId`, `name`, `firstVersion`) → 201 `Tariff`; `GET /tariffs/{id}` → `Tariff` (versions newest
   first with derived `validTo` and `pastDated`, scope with selected plots and exclusions with plot number and reason).
 - `POST /tariffs/{id}/versions` (`validFrom`, `basis`, `frequency`, `rate`, `dueDate?`, `note?`) → 201.
+- `PUT /tariffs/{id}/versions/{versionId}` (body `TariffVersionCreate`, the same fields and rules) → 200 `TariffVersion`
+  (with `validTo`, `pastDated`); `DELETE /tariffs/{id}/versions/{versionId}` → 204. Both `TARIFFS_VIEW` and `TARIFFS_MANAGE`.
+  409 `TARIFF_VERSION_IN_USE`, `TARIFF_LAST_VERSION` (delete of the only version), `TARIFF_VERSION_DATE_TAKEN`,
+  `CHARGE_TYPE_ARCHIVED`; 404 for an unknown or foreign tariff and a version of another tariff. Added 2026-10-21.
 - `PUT /tariffs/{id}/scope` (`kind`, `plotIds[]`, `exclusions[{plotId, reason}]`) → 200 `Tariff` (full replace).
 - `GET /plots/{id}/tariffs?month=YYYY-MM` → `PlotTariffs` (`month`, `items[]`: `tariffId`, `tariffName`, `chargeTypeId`,
   `chargeTypeCode?`, `chargeTypeName`, `chargeTypeNameCustomized`, `basis`, `frequency`, `rate`, `status`
@@ -171,7 +184,7 @@ Kyiv month (`Clock`).
 - **One rule for 011.** `ChargeCalculator` is public and documented in money-rules §4.
 - **Seeded-name collisions.** Service check against both default names.
 - **Plot deletion.** Scope rows cascade on plot delete (006 allows deleting a plot only without history).
-- **e2e on the shared dev DB.** Tariffs and versions cannot be deleted: specs use a unique custom charge type per run
+- **e2e on the shared dev DB.** Tariffs cannot be deleted (a version only until a charge uses it): specs use a unique custom charge type per run
   and archive it in `finally`, which removes its tariffs from every plot; assertions filter by their own names. Demo
   tariffs change no counts or statuses (nothing is charged).
 - **Coverage.** Floor 0.97; raised to the measured level at the end.
@@ -187,7 +200,7 @@ Kyiv month (`Clock`).
   collision, reorder, archive, active), tariffs and versions (duplicate date, ONE_OFF rules, past date, archived type),
   scopes (exclusions, selected, common land, switch clears rows), `GET /plots/{id}/tariffs` (amounts, excluded,
   by-readings, common land, archived plot, member own vs other plot, treasurer, operator 403), allowed and denied
-  tests for every endpoint, audit entries, isolation per table (RLS, cross-tenant FKs), grants (versions append-only),
+  tests for every endpoint, audit entries, isolation per table (RLS, cross-tenant FKs), grants (V11: versions may be updated and deleted, never truncated; RLS isolates both), version correction (`TariffVersionCorrectionTests`: edit, delete, use check through a test bean, last version, audit),
   `ModularityTests`, seed matrix tests.
 - **Web (vitest):** formatRate, rate check, past-date check, VersionFields, ScopeEditor, PlotTariffsPanel,
   MyChargesPanel, pages, Layout menu gating, AuditPage links, catalog parity.
@@ -207,6 +220,6 @@ Kyiv month (`Clock`).
 - Inactive or archived charge types' tariffs are omitted from expected amounts (not shown as "not charged").
 - A month where an overlapping version is meter-based shows "by readings" for the whole tariff.
 - Common land and archived plots: 200 with no items.
-- Tariff rename or edit is not in the requirement's API and is not built.
+- Tariff rename is not in the requirement's API and is not built. Version correction and deletion were added by the owner on 2026-10-21.
 - `GET /plots/{id}/tariffs` lives in the tariffs module (tag `tariffs`) to keep plots free of a tariffs dependency.
 - Scope rows cascade on plot delete.

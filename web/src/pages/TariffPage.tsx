@@ -40,7 +40,7 @@ export function TariffPage() {
             />
             <ScopeEditor tariff={tariff} />
             <Panel title={c.history}>
-              <VersionHistory versions={tariff.versions} />
+              <VersionHistory tariff={tariff} />
             </Panel>
             {canManage && (
               <Panel title={c.newVersion}>
