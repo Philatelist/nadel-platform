@@ -35,7 +35,7 @@ The cooperative always comes from the token, never from the request. An unknown 
 
 `SettingsService.update` is one transaction: it reads the current value, and when the requested value differs it upserts
 the row (`insert ... on conflict (tenant_id) do update`, so two first saves cannot collide) and publishes an
-`audit.AuditEvent` `SETTINGS_UPDATED` (entity `SETTINGS`, entity id = the cooperative id, label "Cooperative settings",
+`audit.AuditEvent` `SETTINGS_UPDATED` (entity `SETTINGS`, entity id = the cooperative id, label = the code `settings` (the client shows the name in the reader's language),
 field `memberPlotStatusVisibility` old and new; a never-saved cooperative reports `OWN_ONLY` as the old value). Saving the
 current value changes nothing and writes no audit entry.
 

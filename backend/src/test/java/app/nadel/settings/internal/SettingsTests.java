@@ -213,7 +213,7 @@ class SettingsTests extends IntegrationTest {
         Map<String, Object> first = entries.get(entries.size() - 2);
         Map<String, Object> second = entries.get(entries.size() - 1);
         assertThat(first.get("action")).isEqualTo("SETTINGS_UPDATED");
-        assertThat(first.get("entity_label")).isEqualTo("Cooperative settings");
+        assertThat(first.get("entity_label")).isEqualTo("settings");
         assertThat(first.get("actor_member_id")).isNotNull();
         JsonNode firstChange = json.readTree((String) first.get("changes"));
         assertThat(firstChange).hasSize(1);

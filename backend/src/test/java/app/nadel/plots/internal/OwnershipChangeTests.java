@@ -505,8 +505,9 @@ class OwnershipChangeTests extends OwnershipTestSupport {
         assertThat(changes).hasSize(3);
         assertThat(isNull(field(changes, "effectiveFrom"), "old")).isTrue();
         assertThat(field(changes, "effectiveFrom").get("new").asString()).isEqualTo("2026-03-01");
-        assertThat(field(changes, "owners").get("old").asString()).isEqualTo("Lytvynenko Svitlana 1/1");
-        assertThat(field(changes, "owners").get("new").asString()).isEqualTo("Alpha Anna 2/3, Beta Boris 1/3");
+        assertThat(field(changes, "owners").get("old").asString()).isEqualTo("[{\"member\":\"Lytvynenko Svitlana\",\"share\":\"1/1\"}]");
+        assertThat(field(changes, "owners").get("new").asString()).isEqualTo("[{\"member\":\"Alpha Anna\",\"share\":\"2/3\"},"
+                + "{\"member\":\"Beta Boris\",\"share\":\"1/3\"}]");
         assertThat(isNull(field(changes, "basis"), "old")).isTrue();
         assertThat(field(changes, "basis").get("new").asString()).isEqualTo("Inheritance");
         // and the audit log lists it under the new entity type
@@ -532,11 +533,13 @@ class OwnershipChangeTests extends OwnershipTestSupport {
 
         JsonNode endedChanges = json.readTree((String) awaitAudit(ended, 1).getFirst().get("changes"));
         assertThat(endedChanges).hasSize(2); // no basis was given
-        assertThat(field(endedChanges, "owners").get("old").asString()).isEqualTo("Alpha Anna 1/1");
+        assertThat(field(endedChanges, "owners").get("old").asString())
+                .isEqualTo("[{\"member\":\"Alpha Anna\",\"share\":\"1/1\"}]");
         assertThat(isNull(field(endedChanges, "owners"), "new")).isTrue();
         JsonNode firstChanges = json.readTree((String) awaitAudit(first, 1).getFirst().get("changes"));
         assertThat(isNull(field(firstChanges, "owners"), "old")).isTrue();
-        assertThat(field(firstChanges, "owners").get("new").asString()).isEqualTo("Beta Boris 1/1");
+        assertThat(field(firstChanges, "owners").get("new").asString())
+                .isEqualTo("[{\"member\":\"Beta Boris\",\"share\":\"1/1\"}]");
     }
 
     @Test

@@ -79,7 +79,7 @@ class ChargeTypeCommands {
         }
 
         List<FieldChange> changes = ChargeTypeSnapshot.diff(ChargeTypeSnapshot.of(type),
-                ChargeTypeSnapshot.of(name, description, active));
+                ChargeTypeSnapshot.of(type.getCode(), name, nameCustomized, description, active));
         if (!changes.isEmpty()) {
             type.apply(name, nameCustomized, description, active, Instant.now());
             save(type);
@@ -178,7 +178,7 @@ class ChargeTypeCommands {
     private void publish(AccessProfile actor, String action, ChargeTypeRecord type, List<FieldChange> changes) {
         audit.publish(Objects.requireNonNull(actor.tenantId()),
                 new Actor(actor.memberId(), actor.subject(), actor.displayName()), action,
-                TariffAuditPublisher.CHARGE_TYPE, type.getId(), type.getName(), changes);
+                TariffAuditPublisher.CHARGE_TYPE, type.getId(), ChargeTypeSnapshot.auditName(type), changes);
     }
 
     /**

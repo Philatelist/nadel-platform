@@ -84,12 +84,26 @@ class ChargeTypeAuditTests extends IntegrationTest {
 
         Map<String, Object> entry = newEntry(water, "CHARGE_TYPE_UPDATED", base);
         assertThat(entry.get("entity_label")).isEqualTo("Water supply");
-        assertThat(changes(entry)).containsExactly(new Change("name", "Water", "Water supply"),
+        assertThat(changes(entry)).containsExactly(new Change("name", "base:WATER", "Water supply"),
                 new Change("description", null, "For the meters"), new Change("active", "false", "true"));
 
         update(chairman, water, "Water supply", null, true).andExpect(status().isOk());
         assertThat(changes(newEntry(water, "CHARGE_TYPE_UPDATED", base + 1)))
                 .containsExactly(new Change("description", "For the meters", null));
+    }
+
+    @Test
+    void anUnrenamedSeededTypeIsAuditedAsATokenNotAsItsEnglishDefaultName() throws Exception {
+        String chairman = chairman();
+        UUID land = idOf("LAND_TAX");
+        int base = entries(land, "CHARGE_TYPE_UPDATED").size();
+
+        // only the description changes: the name stays the standard one and is written as a code
+        update(chairman, land, "Land tax", "Paid yearly", true).andExpect(status().isOk());
+
+        Map<String, Object> entry = newEntry(land, "CHARGE_TYPE_UPDATED", base);
+        assertThat(entry.get("entity_label")).isEqualTo("base:LAND_TAX");
+        assertThat(changes(entry)).containsExactly(new Change("description", null, "Paid yearly"));
     }
 
     @Test
@@ -125,7 +139,7 @@ class ChargeTypeAuditTests extends IntegrationTest {
 
         Map<String, Object> electricity = newEntry(ids.get(1), "CHARGE_TYPE_REORDERED", base[1]);
         assertThat(changes(electricity)).containsExactly(new Change("position", "2", "3"));
-        assertThat(electricity.get("entity_label")).isEqualTo("Electricity");
+        assertThat(electricity.get("entity_label")).isEqualTo("base:ELECTRICITY");
         Map<String, Object> landTax = newEntry(ids.get(2), "CHARGE_TYPE_REORDERED", base[2]);
         assertThat(changes(landTax)).containsExactly(new Change("position", "3", "2"));
         Thread.sleep(500);
@@ -142,7 +156,7 @@ class ChargeTypeAuditTests extends IntegrationTest {
 
         Map<String, Object> entry = newEntry(water, "CHARGE_TYPE_ARCHIVED", base);
         assertThat(changes(entry)).containsExactly(new Change("archived", "false", "true"));
-        assertThat(entry.get("entity_label")).isEqualTo("Water");
+        assertThat(entry.get("entity_label")).isEqualTo("base:WATER");
     }
 
     @Test

@@ -118,8 +118,8 @@ class OwnershipCommands {
         }
 
         Map<UUID, MemberRef> previousMembers = members.find(current.stream().map(Ownership::getMemberId).toList());
-        String previousOwners = ownersText(current.stream()
-                .map(o -> text(previousMembers.get(o.getMemberId()), o.getShare())));
+        String previousOwners = OwnersAudit.of(current.stream()
+                .map(o -> OwnersAudit.entry(previousMembers.get(o.getMemberId()), o.getShare())));
 
         String basis = blankToNull(request.getBasis());
         saveChange(current, lastDay, now, recorder.start(actor.tenantId(), plotId, owners.stream()
@@ -127,7 +127,8 @@ class OwnershipCommands {
                 .toList(), effectiveFrom, basis, now));
         refreshStatus(plot, !owners.isEmpty(), now);
 
-        String newOwners = ownersText(owners.stream().map(o -> text(newMembers.get(o.memberId()), o.share())));
+        String newOwners = OwnersAudit.of(owners.stream()
+                .map(o -> OwnersAudit.entry(newMembers.get(o.memberId()), o.share())));
         recorder.publishChange(actor.tenantId(), new Actor(actor.memberId(), actor.subject(), actor.displayName()),
                 plot, effectiveFrom, previousOwners, newOwners, basis);
         return queries.ofPlot(plotId).orElseThrow(ApiProblemException::notFound);
@@ -185,7 +186,7 @@ class OwnershipCommands {
         String basis = blankToNull(request.getBasis());
 
         List<Ownership> changed = new ArrayList<>();
-        Map<UUID, String> before = new LinkedHashMap<>();
+        Map<UUID, OwnersAudit.Entry> before = new LinkedHashMap<>();
         Map<UUID, Share> shareAfter = new LinkedHashMap<>();
         boolean targetChanged = !(target.getMemberId().equals(request.getMemberId())
                 && target.getShare().equals(share) && target.getValidFrom().equals(validFrom)
@@ -222,7 +223,7 @@ class OwnershipCommands {
         Map<UUID, MemberRef> names = new LinkedHashMap<>(members.find(rows.stream().map(Ownership::getMemberId)
                 .distinct().toList()));
         names.put(newMember.id(), newMember);
-        changed.forEach(o -> before.put(o.getId(), text(names.get(o.getMemberId()), o)));
+        changed.forEach(o -> before.put(o.getId(), ownerEntry(names.get(o.getMemberId()), o)));
         String basisBefore = target.getBasis();
 
         if (targetChanged) {
@@ -233,8 +234,9 @@ class OwnershipCommands {
         saveCorrection(changed);
         refreshStatus(plot, rows.stream().anyMatch(o -> o.getValidTo() == null), now);
 
-        String oldOwners = ownersText(changed.stream().map(o -> before.get(o.getId())));
-        String newOwners = ownersText(changed.stream().map(o -> text(names.get(o.getMemberId()), o)));
+        String oldOwners = OwnersAudit.of(changed.stream().map(o -> before.get(o.getId())));
+        String newOwners = OwnersAudit.of(changed.stream()
+                .map(o -> ownerEntry(names.get(o.getMemberId()), o)));
         publishCorrection(actor, plot, oldOwners, newOwners, targetChanged ? basisBefore : null,
                 targetChanged ? basis : null, reason);
         return queries.ofPlot(plotId).orElseThrow(ApiProblemException::notFound);
@@ -383,10 +385,9 @@ class OwnershipCommands {
                 changes));
     }
 
-    /** "Last First 1/2 (2020-01-01–2026-02-28)", the period open at the end while current. Never logged. */
-    private static String text(MemberRef member, Ownership o) {
-        return text(member, o.getShare()) + " (" + o.getValidFrom() + "\u2013"
-                + (o.getValidTo() == null ? "" : o.getValidTo()) + ")";
+    /** The owner with the period as it is now, for the audit value of a correction. Never logged. */
+    private static OwnersAudit.Entry ownerEntry(MemberRef member, Ownership o) {
+        return OwnersAudit.entry(member, o.getShare(), o.getValidFrom(), o.getValidTo());
     }
 
     /** Parses every share; every invalid one is reported at once as a 400. */
@@ -473,14 +474,6 @@ class OwnershipCommands {
 
     private static Period periodOf(Ownership o) {
         return new Period(o.getId(), o.getMemberId(), o.getShare(), o.getValidFrom(), o.getValidTo());
-    }
-
-    private static String text(MemberRef member, Share share) {
-        return OwnershipRecorder.text(member, share);
-    }
-
-    private static @Nullable String ownersText(Stream<String> owners) {
-        return OwnershipRecorder.ownersText(owners);
     }
 
     private static @Nullable String blankToNull(@Nullable String text) {

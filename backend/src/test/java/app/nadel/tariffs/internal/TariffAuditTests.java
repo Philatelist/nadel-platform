@@ -63,11 +63,11 @@ class TariffAuditTests extends IntegrationTest {
         Map<String, Object> entry = entries(tariff, "TARIFF_CREATED").getFirst();
         assertThat(entries(tariff, "TARIFF_CREATED")).hasSize(1);
         assertThat(entry.get("entity_type")).isEqualTo("TARIFF");
-        assertThat(entry.get("entity_label")).isEqualTo("Membership fee / For members");
+        assertThat(entry.get("entity_label")).isEqualTo("For members");
         assertThat(entry.get("actor_member_id")).isNotNull();
         assertThat(entry.get("tenant_id")).isEqualTo(DEMO_TENANT);
         assertThat(changes(entry)).containsExactly(new Change("name", null, "For members"),
-                new Change("chargeType", null, "Membership fee"), new Change("validFrom", null, "2027-01-01"),
+                new Change("chargeType", null, "base:MEMBERSHIP"), new Change("validFrom", null, "2027-01-01"),
                 new Change("basis", null, "PER_AREA_SOTKA"), new Change("frequency", null, "YEARLY"),
                 new Change("rate", null, "50.0000"), new Change("note", null, "General meeting"));
     }
@@ -92,7 +92,7 @@ class TariffAuditTests extends IntegrationTest {
         List<Map<String, Object>> added = awaitEntries(tariff, "TARIFF_VERSION_ADDED", 1);
         Map<String, Object> entry = added.getFirst();
         assertThat(entry.get("entity_type")).isEqualTo("TARIFF");
-        assertThat(entry.get("entity_label")).isEqualTo("Membership fee / For members");
+        assertThat(entry.get("entity_label")).isEqualTo("For members");
         assertThat(entry.get("actor_member_id")).isNotNull();
         assertThat(changes(entry)).containsExactly(new Change("validFrom", null, "2027-07-01"),
                 new Change("basis", null, "PER_PLOT"), new Change("frequency", null, "MONTHLY"),

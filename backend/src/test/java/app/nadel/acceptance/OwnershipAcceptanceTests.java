@@ -227,9 +227,9 @@ class OwnershipAcceptanceTests extends IntegrationTest {
         assertThat(newest.get("action").asString()).isEqualTo("OWNERSHIP_CHANGED");
         assertThat(newest.get("entityLabel").asString()).isEqualTo(numberOf(plot));
         assertThat(change(newest, "effectiveFrom").get("newValue").asString()).isEqualTo("2026-03-01");
-        assertThat(change(newest, "owners").get("newValue").asString())
-                .contains(name(boris) + " 1/2").contains(name(hanna) + " 1/2");
-        assertThat(change(newest, "owners").get("oldValue").asString()).contains(name(anna) + " 1/1");
+        assertThat(ownerTexts(change(newest, "owners").get("newValue").asString()))
+                .containsExactlyInAnyOrder(name(boris) + " 1/2", name(hanna) + " 1/2");
+        assertThat(ownerTexts(change(newest, "owners").get("oldValue").asString())).containsExactly(name(anna) + " 1/1");
     }
 
     /**
@@ -319,10 +319,10 @@ class OwnershipAcceptanceTests extends IntegrationTest {
                 assertThat(auditItems(treasurer, "OWNERSHIP", plot)).hasSize(2)); // the change and the correction
         JsonNode entry = auditItems(treasurer, "OWNERSHIP", plot).get(0);
         assertThat(entry.get("action").asString()).isEqualTo("OWNERSHIP_CORRECTED");
-        assertThat(change(entry, "owners").get("oldValue").asString())
-                .contains(name(anna) + " 1/2").contains(name(boris) + " 1/2");
-        assertThat(change(entry, "owners").get("newValue").asString())
-                .contains(name(anna) + " 2/3").contains(name(boris) + " 1/3");
+        assertThat(ownerTexts(change(entry, "owners").get("oldValue").asString()))
+                .containsExactlyInAnyOrder(name(anna) + " 1/2", name(boris) + " 1/2");
+        assertThat(ownerTexts(change(entry, "owners").get("newValue").asString()))
+                .containsExactlyInAnyOrder(name(anna) + " 2/3", name(boris) + " 1/3");
         assertThat(change(entry, "reason").get("newValue").asString()).isEqualTo(reason);
 
         // #4 the start date of the second owner moved before the end of the previous owner: refused on the date
@@ -817,6 +817,15 @@ class OwnershipAcceptanceTests extends IntegrationTest {
     private JsonNode auditItems(String bearer, String entityType, UUID entity) throws Exception {
         return body(get(URI.create("/api/v1/audit?entityType=" + entityType + "&entityId=" + entity + "&size=50")),
                 bearer).get("items");
+    }
+
+    /** The owners of an audit value (a JSON array of {member, share, ...}) as "member share" texts. */
+    private List<String> ownerTexts(String ownersValue) {
+        List<String> texts = new ArrayList<>();
+        for (JsonNode owner : json.readTree(ownersValue)) {
+            texts.add(owner.get("member").asString() + " " + owner.get("share").asString());
+        }
+        return texts;
     }
 
     private static JsonNode change(JsonNode auditEntry, String field) {

@@ -36,7 +36,7 @@ class TariffScopeAuditTests extends TariffScopeSupport {
         List<Map<String, Object>> entries = await(tariff, "TARIFF_SCOPE_CHANGED", 1);
         Map<String, Object> entry = entries.getFirst();
         assertThat(entry.get("entity_type")).isEqualTo("TARIFF");
-        assertThat(entry.get("entity_label")).isEqualTo("Membership fee / For members");
+        assertThat(entry.get("entity_label")).isEqualTo("For members");
         assertThat(entry.get("actor_member_id")).isNotNull();
         assertThat(entry.get("tenant_id")).isEqualTo(DEMO_TENANT);
         assertThat(changes(entry)).containsExactly(new Change("scope", "ALL_PLOTS", "SELECTED_PLOTS"),
@@ -69,7 +69,7 @@ class TariffScopeAuditTests extends TariffScopeSupport {
 
         List<Map<String, Object>> added = await(tariff, "TARIFF_EXCLUSION_ADDED", 1);
         assertThat(added.getFirst().get("entity_type")).isEqualTo("TARIFF");
-        assertThat(added.getFirst().get("entity_label")).isEqualTo("Membership fee / For members");
+        assertThat(added.getFirst().get("entity_label")).isEqualTo("For members");
         assertThat(changes(added.getFirst())).containsExactly(new Change("plot", null, "TA-17"),
                 new Change("reason", null, "Exempted by the general meeting"));
         assertThat(entries(tariff, "TARIFF_SCOPE_CHANGED")).as("the kind and selected plots are unchanged").isEmpty();

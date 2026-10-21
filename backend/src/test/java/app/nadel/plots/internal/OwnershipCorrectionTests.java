@@ -76,10 +76,13 @@ class OwnershipCorrectionTests extends OwnershipTestSupport {
         assertThat(entry.get("actor_member_id")).isNotNull();
         JsonNode changes = json.readTree((String) entry.get("changes"));
         assertThat(changes).hasSize(2);
-        assertThat(field(changes, "owners").get("old").asString())
-                .isEqualTo("Alpha Anna 1/2 (2020-01-01–), Beta Boris 1/2 (2020-01-01–)");
-        assertThat(field(changes, "owners").get("new").asString())
-                .isEqualTo("Alpha Anna 2/3 (2020-01-01–), Beta Boris 1/3 (2020-01-01–)");
+        // structured parameters, not a display phrase: the client builds the text in the user's language
+        assertThat(field(changes, "owners").get("old").asString()).isEqualTo("[{\"member\":\"Alpha Anna\","
+                + "\"share\":\"1/2\",\"from\":\"2020-01-01\"},{\"member\":\"Beta Boris\",\"share\":\"1/2\","
+                + "\"from\":\"2020-01-01\"}]");
+        assertThat(field(changes, "owners").get("new").asString()).isEqualTo("[{\"member\":\"Alpha Anna\","
+                + "\"share\":\"2/3\",\"from\":\"2020-01-01\"},{\"member\":\"Beta Boris\",\"share\":\"1/3\","
+                + "\"from\":\"2020-01-01\"}]");
         assertThat(isNull(field(changes, "reason"), "old")).isTrue();
         assertThat(field(changes, "reason").get("new").asString()).isEqualTo(REASON);
         // and the audit log lists it under the ownership entity type
@@ -105,10 +108,10 @@ class OwnershipCorrectionTests extends OwnershipTestSupport {
                 .andExpect(jsonPath("$.history[0].basis").value("Court decision"));
 
         JsonNode changes = json.readTree((String) awaitAudit(plot, 1).getFirst().get("changes"));
-        assertThat(field(changes, "owners").get("old").asString())
-                .isEqualTo("Alpha Anna 1/1 (2020-01-01–2022-12-31)");
-        assertThat(field(changes, "owners").get("new").asString())
-                .isEqualTo("Alpha Anna 1/1 (2020-02-01–2023-01-31)");
+        assertThat(field(changes, "owners").get("old").asString()).isEqualTo("[{\"member\":\"Alpha Anna\","
+                + "\"share\":\"1/1\",\"from\":\"2020-01-01\",\"to\":\"2022-12-31\"}]");
+        assertThat(field(changes, "owners").get("new").asString()).isEqualTo("[{\"member\":\"Alpha Anna\","
+                + "\"share\":\"1/1\",\"from\":\"2020-02-01\",\"to\":\"2023-01-31\"}]");
         assertThat(field(changes, "basis").get("old").asString()).isEqualTo("seeded");
         assertThat(field(changes, "basis").get("new").asString()).isEqualTo("Court decision");
     }
@@ -124,7 +127,7 @@ class OwnershipCorrectionTests extends OwnershipTestSupport {
                 .andExpect(jsonPath("$.current[0].basis").doesNotExist());
 
         JsonNode changes = json.readTree((String) awaitAudit(plot, 1).getFirst().get("changes"));
-        assertThat(changes).hasSize(2); // basis and reason: the owners text did not change
+        assertThat(changes).hasSize(2); // basis and reason: the owners did not change
         assertThat(field(changes, "basis").get("old").asString()).isEqualTo("seeded");
         assertThat(isNull(field(changes, "basis"), "new")).isTrue();
     }
@@ -143,8 +146,10 @@ class OwnershipCorrectionTests extends OwnershipTestSupport {
 
         assertThat(ownershipRows(plot)).extracting(row -> row.get("member_id")).containsExactly(boris);
         JsonNode changes = json.readTree((String) awaitAudit(plot, 1).getFirst().get("changes"));
-        assertThat(field(changes, "owners").get("old").asString()).isEqualTo("Alpha Anna 1/1 (2020-01-01–)");
-        assertThat(field(changes, "owners").get("new").asString()).isEqualTo("Beta Boris 1/1 (2020-01-01–)");
+        assertThat(field(changes, "owners").get("old").asString())
+                .isEqualTo("[{\"member\":\"Alpha Anna\",\"share\":\"1/1\",\"from\":\"2020-01-01\"}]");
+        assertThat(field(changes, "owners").get("new").asString())
+                .isEqualTo("[{\"member\":\"Beta Boris\",\"share\":\"1/1\",\"from\":\"2020-01-01\"}]");
     }
 
     @Test

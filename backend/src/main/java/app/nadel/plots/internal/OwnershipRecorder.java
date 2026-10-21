@@ -9,7 +9,6 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
@@ -79,16 +78,5 @@ class OwnershipRecorder {
                 plot.getId(),
                 plot.getNumber(),
                 changes);
-    }
-
-    /** "Last First 1/2": the audit text of one owner. Personal data: never logged. */
-    static String text(MemberRef member, Share share) {
-        return member.shortName() + " " + share;
-    }
-
-    /** The owners sorted and joined by ", "; null when there are none. */
-    static @Nullable String ownersText(Stream<String> owners) {
-        List<String> sorted = owners.sorted(String.CASE_INSENSITIVE_ORDER.thenComparing(String::compareTo)).toList();
-        return sorted.isEmpty() ? null : String.join(", ", sorted);
     }
 }

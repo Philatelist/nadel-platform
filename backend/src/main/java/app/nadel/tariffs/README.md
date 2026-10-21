@@ -164,12 +164,12 @@ Writes (`ChargeTypeCommands`, one transaction each, the audit event is published
 
 ## Audit
 
-`TARIFF_CREATED` and `TARIFF_VERSION_ADDED` (entity type `TARIFF`, label "charge type name / tariff name"). The first
-lists `name`, `chargeType` and the version fields; the second `validFrom`, `basis`, `frequency`, `rate` (four decimals),
+`TARIFF_CREATED` and `TARIFF_VERSION_ADDED` (entity type `TARIFF`, label = the tariff name, user content). The first
+lists `name`, `chargeType` (a charge type name token, see below) and the version fields; the second `validFrom`, `basis`, `frequency`, `rate` (four decimals),
 `dueDate` and `note` (the last two only when set). The note text is part of the audit entry (like plot notes) but is never
 written to the application log.
 
-A change of scope writes (entity type `TARIFF`, same label), in this order:
+A change of scope writes (entity type `TARIFF`, label = the tariff name), in this order:
 `TARIFF_SCOPE_CHANGED` when the kind or the selected plots changed, with `scope` (old to new kind, only when it
 changed) and `selectedPlots` (the plot numbers in natural order joined by ", ", empty is none; only when the set
 changed); then one `TARIFF_EXCLUSION_REMOVED` per exclusion that is gone (`plot` = the number, `reason` = the old one)
@@ -177,7 +177,13 @@ and one `TARIFF_EXCLUSION_ADDED` per new exclusion (`plot`, `reason`), each in t
 reason for an excluded plot is a removal plus an addition. Switching to selected plots therefore audits every
 removed exclusion. The reasons are in the audit entries only, never in the application log.
 
-Entity type `CHARGE_TYPE` label = the stored name:
+Charge type names in the audit log are tokens, never English display text (the pattern of the role names): a seeded type
+that was never renamed (`nameCustomized` false) is written as `base:<CODE>`, with `<CODE>` one of `MEMBERSHIP`,
+`ELECTRICITY`, `LAND_TAX`, `WATER`; a renamed seeded type and every custom type is written under its stored name
+(`ChargeTypeSnapshot.auditName`). This applies to the `CHARGE_TYPE` label and `name` old/new values and to the
+`chargeType` value of `TARIFF_CREATED`. The client shows the catalog name for `base:<CODE>` and the value as is otherwise.
+
+Entity type `CHARGE_TYPE` label = the name token above (after the change):
 `CHARGE_TYPE_CREATED` (`name`, `description`, `active`), `CHARGE_TYPE_UPDATED` (changed fields among `name`,
 `description`, `active`), `CHARGE_TYPE_REORDERED` (one entry per type whose position changed, field `position` with the
 old and new number), `CHARGE_TYPE_ARCHIVED` (`archived` false to true). Published through `TariffAuditPublisher`.

@@ -155,8 +155,10 @@ class ImportCommitTests extends ImportCommitSupport {
         assertThat(field(changes, "plotsUpdated")).isEqualTo("0");
         String owners = ownerJdbc().queryForObject("select cast(changes as text) from audit_entry "
                 + "where action = 'OWNERSHIP_CHANGED' and entity_label = ?", String.class, plotNo("a"));
-        assertThat(owners).contains("effectiveFrom").contains("2020-03-01").contains("Fixt" + tag + "One Person 1/2")
-                .contains("Fixt" + tag + "Two Person 1/2");
+        JsonNode ownersChange = JSON.readTree(owners);
+        assertThat(field(ownersChange, "effectiveFrom")).isEqualTo("2020-03-01");
+        assertThat(field(ownersChange, "owners")).isEqualTo("[{\"member\":\"Fixt" + tag
+                + "One Person\",\"share\":\"1/2\"},{\"member\":\"Fixt" + tag + "Two Person\",\"share\":\"1/2\"}]");
     }
 
     @Test

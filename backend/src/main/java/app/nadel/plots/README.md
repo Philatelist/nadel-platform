@@ -131,8 +131,8 @@ transaction in `OwnershipCommands.change`: it ends every current row on `effecti
 - `plot_status` is refreshed in the same transaction (`PlotStatusPolicy.afterOwnershipChange`): GREY with owners becomes
   GREEN, no owners becomes GREY, anything else is kept.
 - Audit `OWNERSHIP_CHANGED` (entity `OWNERSHIP`, entity id = the plot id, label = the plot number) with `effectiveFrom`,
-  `owners` (old and new, each "Last First 1/2", sorted, joined by ", ") and `basis` when given. Names are in the audit
-  payload only, never in logs.
+  `owners` (old and new: structured parameters, a JSON array `[{"member": "Last First", "share": "1/2"}, ...]` sorted by
+  member name, see `OwnersAudit`) and `basis` when given. Names are in the audit payload only, never in logs.
 
 ## Correction (feature 007)
 
@@ -162,8 +162,8 @@ member, share, dates and basis; `coOwnerShares` replaces the shares of other rec
   can meet the exclusion constraint, whose violation (SQLSTATE 23P01) is still mapped to 409 `OWNERSHIP_OVERLAP`.
   `plot_status` is refreshed in the same transaction from the current rows.
 - Audit `OWNERSHIP_CORRECTED` (entity `OWNERSHIP`, entity id = the plot id, label = the plot number) with `owners` (old and
-  new text of every changed record, "Last First 1/2 (2020-01-01–2026-02-28)", the period open at the end while the
-  record is current, sorted, joined by ", "), `basis` when it changed, and `reason`.
+  new value of every changed record: a JSON array `[{"member": "Last First", "share": "1/2", "from": "2020-01-01",
+  "to": "2026-02-28"}, ...]` sorted by member name, with `to` absent while the record is current), `basis` when it changed, and `reason`.
 
 ## Status
 
