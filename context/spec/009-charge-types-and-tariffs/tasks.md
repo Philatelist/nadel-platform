@@ -44,8 +44,8 @@ commit; report every file created or changed.
   - [x] Docs and build: `context/product/architecture.md` (tariffs and money modules, permissions), `docs/domain/glossary.md` (charge type, rate, scope, exclusion, expected amount), `tariffs/README.md` final; run `./mvnw verify` and raise `coverage.minimum` in `backend/pom.xml` to the measured level (rounded down to 2 decimals, never lower). **[Agent: spring-backend]**
   - [x] Verify: `make check` green; `make e2e` green. **[Agent: spring-backend]**
 
-- [ ] **Slice 6: Feature Testing & Regression**
+- [x] **Slice 6: Feature Testing & Regression**
 
   > Verifies the whole feature end-to-end against functional-spec.md, run after all implementation slices are complete.
-  - [ ] Read functional-spec.md acceptance criteria in full. Generate acceptance-level tests that verify the entire feature as a whole — not individual slices. Cover applicable layers (unit for pure logic, integration for service interactions, e2e for user flows) based on the project's testing stack. Write tests with RED validation (must fail before implementation is confirmed done). Annotate each test with `@spec: context/spec/009-charge-types-and-tariffs` and `@regression` if suitable for long-term regression. **[Agent: testing-expert]**
-  - [ ] Run all generated tests. All must pass. Fix any failures before proceeding. **[Agent: testing-expert]**
+  - [x] Read functional-spec.md acceptance criteria in full. Generate acceptance-level tests that verify the entire feature as a whole — not individual slices. Cover applicable layers (unit for pure logic, integration for service interactions, e2e for user flows) based on the project's testing stack. Write tests with RED validation (must fail before implementation is confirmed done). Annotate each test with `@spec: context/spec/009-charge-types-and-tariffs` and `@regression` if suitable for long-term regression. **[Agent: testing-expert]**
+  - [x] Run all generated tests. All must pass. Fix any failures before proceeding. **[Agent: testing-expert]**

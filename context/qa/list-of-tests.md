@@ -86,3 +86,34 @@
 | web/e2e/imports-acceptance.spec.ts | §2.2 #4, #5 CSV and 2,001 plots refused with the Ukrainian messages | e2e | negative | yes | OK | spec 008 |
 | web/e2e/imports-acceptance.spec.ts | §2.4 #4 owned plot 9 gives the "змініть власника" error, Import disabled | e2e | negative | yes | OK | spec 008 |
 | backend/src/test/java/app/nadel/imports/internal/*.java (other), web/e2e/imports.spec.ts, web/src/importFile.test.ts, web/src/pages/ImportPage.test.tsx, web/src/components/import/*.test.tsx | import slice tests (preview, commit, history, limits, template, isolation, UI) | unit+integration+e2e | positive+negative | yes | OK | spec 008-excel-import, slices 1-7, kept as is |
+| backend/src/test/java/app/nadel/acceptance/TariffsAcceptanceTests.java | section21_theFourStartingTypesAreThereWaterInactive | integration | positive+negative | yes | OK | spec 009-charge-types-and-tariffs, §2.1 #1 (Ukrainian default names are taken) |
+| backend/src/test/java/app/nadel/acceptance/TariffsAcceptanceTests.java | section21_aCustomTypeIsAddedAtTheEndActive | integration | positive | yes | OK | §2.1 #2 |
+| backend/src/test/java/app/nadel/acceptance/TariffsAcceptanceTests.java | section21_aRenamedTypeShowsTheNewNameEverywhere | integration | positive | yes | OK | §2.1 #3 |
+| backend/src/test/java/app/nadel/acceptance/TariffsAcceptanceTests.java | section21_aDuplicateNameIsRefusedOnAddAndOnRename | integration | negative | yes | OK | §2.1 #4 |
+| backend/src/test/java/app/nadel/acceptance/TariffsAcceptanceTests.java | section21_movingATypeUpChangesPlacesAndTheOrderIsKept | integration | positive+negative | yes | OK | §2.1 #5; stale order refused |
+| backend/src/test/java/app/nadel/acceptance/TariffsAcceptanceTests.java | section21_anArchivedTypeDisappearsGetsNoTariffsAndLeavesTheAmounts | integration | positive+negative | yes | OK | §2.1 #6 |
+| backend/src/test/java/app/nadel/acceptance/TariffsAcceptanceTests.java | section22_aTariffWithTwoVersionsListsThemNewestFirstWithFourDecimals | integration | positive | yes | OK | §2.2 #1, #2, #7 |
+| backend/src/test/java/app/nadel/acceptance/TariffsAcceptanceTests.java | section22_aPastDatedVersionIsSavedAndFlagged | integration | positive | yes | OK | §2.2 #3 (warning text in the e2e spec) |
+| backend/src/test/java/app/nadel/acceptance/TariffsAcceptanceTests.java | section22_theSameStartDateTwiceIsRefused | integration | negative | yes | OK | §2.2 #4 |
+| backend/src/test/java/app/nadel/acceptance/TariffsAcceptanceTests.java | section22_aBadRateIsRefused | integration | negative | yes | OK | §2.2 #5 |
+| backend/src/test/java/app/nadel/acceptance/TariffsAcceptanceTests.java | section22_aFixedOneTimeAmountIsOneOffWithADueDate | integration | positive+negative | yes | OK | §2.2 #6 |
+| backend/src/test/java/app/nadel/acceptance/TariffsAcceptanceTests.java | section23_anExclusionNeedsAReasonAndShowsOnThePlot | integration | positive+negative | yes | OK | §2.3 #1, #2 |
+| backend/src/test/java/app/nadel/acceptance/TariffsAcceptanceTests.java | section23_selectedPlotsAreCountedAndTheOnlyOnesWithTheTariff | integration | positive | yes | OK | §2.3 #3 |
+| backend/src/test/java/app/nadel/acceptance/TariffsAcceptanceTests.java | section23_commonLandIsNotOfferedAndIsRefused | integration | negative | yes | OK | §2.3 #4 |
+| backend/src/test/java/app/nadel/acceptance/TariffsAcceptanceTests.java | section23_aPerKwhTariffHasNoPlotCount | integration | positive | yes | OK | §2.3 #5 |
+| backend/src/test/java/app/nadel/acceptance/TariffsAcceptanceTests.java | section24_everyRowOfTheWorkedExamplesTable | integration | positive+negative | yes | OK | §2.4 #1, #2, #3, #5, #6, #8 (all table rows) |
+| backend/src/test/java/app/nadel/acceptance/TariffsAcceptanceTests.java | section24_landTaxAndMeterBasedTariffs | integration | positive | yes | OK | §2.4 land tax row, #4 |
+| backend/src/test/java/app/nadel/acceptance/TariffsAcceptanceTests.java | section24_coOwnersDoNotSplitTheAmount | integration | positive | yes | OK | §2.4 #7 |
+| backend/src/test/java/app/nadel/acceptance/TariffsAcceptanceTests.java | section25_theTreasurerReadsButCannotChange | integration | positive+negative | yes | OK | §2.5 #1, #2 |
+| backend/src/test/java/app/nadel/acceptance/TariffsAcceptanceTests.java | section25_aMemberHasNoTariffsPermissionAndNoAccess | integration | negative | yes | OK | §2.5 #3 (API side) |
+| backend/src/test/java/app/nadel/acceptance/TariffsAcceptanceTests.java | section25_aMemberSeesOnlyTheAmountsOfOwnPlots | integration | positive+negative | yes | OK | §2.5 #4, #5 |
+| backend/src/test/java/app/nadel/acceptance/TariffsAcceptanceTests.java | section25_anotherCooperativeSeesNothing | integration | negative | yes | OK | §2.5 #6 |
+| backend/src/test/java/app/nadel/acceptance/TariffsAcceptanceTests.java | section26_anEmptyListAndAMonthThatChangesTheAmounts | integration | positive | yes | OK | §2.6 #1, #2 (API side) |
+| backend/src/test/java/app/nadel/acceptance/TariffsAcceptanceTests.java | section27_renameVersionAndExclusionAreThreeAuditEntries | integration | positive+negative | yes | OK | §2.7 #1 |
+| web/e2e/tariffs-acceptance.spec.ts | §2.1 #1 the four starting types in Ukrainian and in English, Water inactive | e2e | positive | yes | OK | spec 009; per-run data archived in finally |
+| web/e2e/tariffs-acceptance.spec.ts | §2.1 #2, #4, #5, #6 add, duplicate refused, move up kept after reload, archive | e2e | positive+negative | yes | OK |  |
+| web/e2e/tariffs-acceptance.spec.ts | §2.2 #2, #3, #4, #5, #6 version form: past-date warning, duplicate date, bad rate, fixed amount needs a due date | e2e | positive+negative | yes | OK | Ukrainian messages |
+| web/e2e/tariffs-acceptance.spec.ts | §2.3 #1-#4, §2.4 #5 scope editor: reason required, exclusion shown on the card, two selected plots, common land never offered | e2e | positive+negative | yes | OK |  |
+| web/e2e/tariffs-acceptance.spec.ts | §2.1 empty list text and §2.4 #2, #3, #4, #6, §2.6 #2 the month picker changes the amounts | e2e | positive | yes | OK | §2.6 #1 too |
+| web/e2e/tariffs-acceptance.spec.ts | §2.5 #1-#5 in Ukrainian: the treasurer reads only, a member has no menu item and no page, "Що мені нараховуватимуть" shows own plots | e2e | positive+negative | yes | OK | spec wording "Недостатньо прав" differs from the product text, see report |
+| web/e2e/tariffs-acceptance.spec.ts | §2.7 #1 the audit log shows the rename, the new version and the exclusion with the author, old and new values and links | e2e | positive | yes | OK |  |

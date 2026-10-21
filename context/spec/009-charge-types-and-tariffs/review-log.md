@@ -30,3 +30,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `6ed5b5b..96d1698` | PASS | — | minor: the demo exclusion of plot 28 returns on a rerun of the repeatable demo script if the chairman removed it (demo data only); the account title key is `tariffs.expected.myTitle` instead of the tech spec's `account.myCharges`; `DemoTariffData` gives a bare NPE if its resource is missing; fully-qualified `java.util.Objects` in `ExpectedCharge`; a dynamic `fireEvent` import and a no-op `userEvent.tab()` in a panel test; slice commit subjects are not Conventional Commits (the squash title is); the panel shows the empty state on archived plots |
+
+## Slice 5 — End-to-end flow, docs and coverage
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `96d1698..f22d77f` | PASS | — | minor: the member "own plots only" check filters headings by name (counting all would be stricter); e2e checks English only; the charge type id is looked up after the UI shows it (a failure in between leaves a uniquely named row); two long README lines |
