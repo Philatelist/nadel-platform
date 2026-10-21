@@ -120,12 +120,12 @@ class MembersAccessAcceptanceTests extends IntegrationTest {
     void demoChairmanSeesTheFiveRolesAndSecretaryIsGivenToOneMember() throws Exception {
         mvc.perform(get("/api/v1/roles").header(HttpHeaders.AUTHORIZATION, chairman()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[*].name", hasItems("Chairman", "Treasurer", "Member", "Secretary", "Electrician")))
-                .andExpect(jsonPath("$[?(@.name == 'Secretary')].memberCount").value(1))
-                .andExpect(jsonPath("$[?(@.name == 'Electrician')].permissions[0]").isEmpty());
+                .andExpect(jsonPath("$[*].name", hasItems("Chairman", "Treasurer", "Member", "Секретар", "Електрик")))
+                .andExpect(jsonPath("$[?(@.name == 'Секретар')].memberCount").value(1))
+                .andExpect(jsonPath("$[?(@.name == 'Електрик')].permissions[0]").isEmpty());
         mvc.perform(get("/api/v1/members/" + DEMO_SECRETARY_HOLDER).header(HttpHeaders.AUTHORIZATION, chairman()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.roles[*].name", hasItem("Secretary")));
+                .andExpect(jsonPath("$.roles[*].name", hasItem("Секретар")));
     }
 
     // ---- the whole feature as one journey -----------------------------------------------------------------------
@@ -240,7 +240,7 @@ class MembersAccessAcceptanceTests extends IntegrationTest {
             assertThat(phone.get("newValue").asString()).isEqualTo("+380501112233");
             // the person who became an editor is the author of that change; the chairman created the member
             assertThat(find(memberLog.get("items"), "MEMBER_CREATED", "lastName").get("actorName").asString())
-                    .isEqualTo("Kovalenko Oleksandr Petrovych");
+                    .isEqualTo("Коваленко Олександр Петрович");
             JsonNode rolesChange = find(memberLog.get("items"), "MEMBER_ROLES_CHANGED", "roles");
             assertThat(field(rolesChange, "roles").get("oldValue").asString()).isNotBlank();
 
@@ -355,7 +355,7 @@ class MembersAccessAcceptanceTests extends IntegrationTest {
                     .andExpect(jsonPath("$.roles[0].nameCustomized").value(true));
             mvc.perform(get("/api/v1/me").header(HttpHeaders.AUTHORIZATION, demo("electrician@demo.local")))
                     .andExpect(jsonPath("$.roles[?(@.baseCode == 'MEMBER')].name").value(newNames.get("MEMBER")))
-                    .andExpect(jsonPath("$.roles[?(@.name == 'Electrician')].nameCustomized").value(true));
+                    .andExpect(jsonPath("$.roles[?(@.name == 'Електрик')].nameCustomized").value(true));
             // ... and nothing else changed
             DemoAccessChecks.all(mvc);
         } finally {
@@ -481,9 +481,9 @@ class MembersAccessAcceptanceTests extends IntegrationTest {
 
         // and the demo member is unchanged
         mvc.perform(get("/api/v1/members/" + demoMember).header(HttpHeaders.AUTHORIZATION, chairman()))
-                .andExpect(jsonPath("$.lastName").value("Polishchuk"))
+                .andExpect(jsonPath("$.lastName").value("Поліщук"))
                 .andExpect(jsonPath("$.archived").value(false))
-                .andExpect(jsonPath("$.roles[*].name", hasItem("Secretary")));
+                .andExpect(jsonPath("$.roles[*].name", hasItem("Секретар")));
     }
 
     // ---- §2.4 #5: platform operator --------------------------------------------------------------------------------------

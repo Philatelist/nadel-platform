@@ -194,14 +194,14 @@ class PlotsReadTests extends IntegrationTest {
 
         listAs(treasurer, "q=12%D0%90").andExpect(jsonPath("$.items[*].number", contains("12а")));
         listAs(treasurer, "q=%20r-1%20").andExpect(jsonPath("$.items[*].number", contains("R-1")));
-        listAs(treasurer, "q=GARDEN&size=100").andExpect(jsonPath("$.totalItems").value(16));
+        listAs(treasurer, "q=%D0%A1%D0%90%D0%94%D0%9E%D0%92%D0%90&size=100").andExpect(jsonPath("$.totalItems").value(16));
     }
 
     @Test
     void searchMatchesTheStreet() throws Exception {
-        listAs(treasurer(), "q=orchard&size=100")
+        listAs(treasurer(), "q=%D0%B2%D0%B8%D1%88%D0%BD%D0%B5%D0%B2%D0%B0&size=100")
                 .andExpect(jsonPath("$.totalItems").value(15))
-                .andExpect(jsonPath("$.items[*].street", everyItem(is("Orchard St"))))
+                .andExpect(jsonPath("$.items[*].street", everyItem(is("вул. Вишнева"))))
                 .andExpect(jsonPath("$.items[0].number").value("15"));
     }
 
@@ -256,7 +256,7 @@ class PlotsReadTests extends IntegrationTest {
                 .andExpect(jsonPath("$.items[*].status").doesNotExist())
                 .andExpect(content().string(not(containsString("status"))))
                 .andExpect(jsonPath("$.items[*].archived", everyItem(is(false))))
-                .andExpect(jsonPath("$.items[?(@.number == '9')].street").value("Garden St"))
+                .andExpect(jsonPath("$.items[?(@.number == '9')].street").value("вул. Садова"))
                 .andExpect(jsonPath("$.items[*].areaM2").doesNotExist())
                 .andExpect(jsonPath("$.items[*].cadastralNumber").doesNotExist())
                 .andExpect(jsonPath("$.items[*].hasBuilding").doesNotExist())
@@ -299,13 +299,13 @@ class PlotsReadTests extends IntegrationTest {
         cardAs(treasurer(), plotId("9"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.number").value("9"))
-                .andExpect(jsonPath("$.street").value("Garden St"))
+                .andExpect(jsonPath("$.street").value("вул. Садова"))
                 .andExpect(jsonPath("$.kind").value("PLOT"))
                 .andExpect(jsonPath("$.status").value("GREEN"))
                 .andExpect(jsonPath("$.archived").value(false))
                 .andExpect(jsonPath("$.areaM2").value(1500.0))
                 .andExpect(jsonPath("$.hasBuilding").value(true))
-                .andExpect(jsonPath("$.notes").value("Corner plot next to the entrance gate"))
+                .andExpect(jsonPath("$.notes").value("Кутова ділянка біля в'їзних воріт"))
                 .andExpect(jsonPath("$.createdAt").exists())
                 .andExpect(jsonPath("$.updatedAt").exists())
                 .andExpect(jsonPath("$.archivedAt").doesNotExist());
@@ -318,7 +318,7 @@ class PlotsReadTests extends IntegrationTest {
         cardAs(member(), plotId("9"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.number").value("9"))
-                .andExpect(jsonPath("$.street").value("Garden St"))
+                .andExpect(jsonPath("$.street").value("вул. Садова"))
                 .andExpect(jsonPath("$.kind").value("PLOT"))
                 .andExpect(jsonPath("$.status").doesNotExist()) // "own plots only" is the default setting
                 .andExpect(jsonPath("$.archived").value(false))
@@ -391,7 +391,7 @@ class PlotsReadTests extends IntegrationTest {
         listAs(TestTokens.bearer(OTHER_TENANT, UUID.randomUUID().toString(), "plots-other@other.local"), "")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalItems").value(2))
-                .andExpect(jsonPath("$.items[*].street", everyItem(is("Forest St"))));
+                .andExpect(jsonPath("$.items[*].street", everyItem(is("вул. Лісова"))));
     }
 
     // ---- access

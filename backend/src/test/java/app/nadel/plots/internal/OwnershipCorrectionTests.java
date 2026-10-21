@@ -176,9 +176,9 @@ class OwnershipCorrectionTests extends OwnershipTestSupport {
         UUID id = (UUID) row.get("id");
         try {
             correct(chairman(), id, ARCHIVED_MEMBER, (String) row.get("share"), (String) row.get("valid_from"),
-                    (String) row.get("valid_to"), "Sale contract of 2025-05-20", "Basis was missing", List.of())
+                    (String) row.get("valid_to"), "Договір купівлі-продажу від 20.05.2025", "Basis was missing", List.of())
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.history[?(@.id == '" + id + "')].basis").value("Sale contract of 2025-05-20"))
+                    .andExpect(jsonPath("$.history[?(@.id == '" + id + "')].basis").value("Договір купівлі-продажу від 20.05.2025"))
                     .andExpect(jsonPath("$.history[?(@.id == '" + id + "')].memberArchived").value(true));
             assertThat(statusOf(plot)).isEqualTo("GREEN");
             assertThat(awaitAudit(plot, 1).getFirst().get("action")).isEqualTo("OWNERSHIP_CORRECTED");
@@ -438,7 +438,7 @@ class OwnershipCorrectionTests extends OwnershipTestSupport {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("MEMBER_ARCHIVED"))
                 .andExpect(jsonPath("$.errors[0].field").value("memberId"))
-                .andExpect(content().string(not(containsString("Honcharenko"))));
+                .andExpect(content().string(not(containsString("Гончаренко"))));
         for (UUID unknown : List.of(UUID.randomUUID(), foreign)) {
             correct(chairman, annaRow, unknown, "1/1", "2020-01-01", null, "seeded", REASON, List.of())
                     .andExpect(status().isBadRequest())

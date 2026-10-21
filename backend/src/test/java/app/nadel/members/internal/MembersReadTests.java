@@ -127,16 +127,16 @@ class MembersReadTests extends IntegrationTest {
         getAs(viewer(DEMO_TENANT), "/api/v1/members?q=polishchuk")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items[?(@.id == '" + DEMO_SECRETARY + "')]", hasSize(1)))
-                .andExpect(jsonPath("$.items[?(@.id == '" + DEMO_SECRETARY + "')].roles[?(@.name == 'Secretary')]",
+                .andExpect(jsonPath("$.items[?(@.id == '" + DEMO_SECRETARY + "')].roles[?(@.name == 'Секретар')]",
                         hasSize(1)))
                 .andExpect(jsonPath("$.items[?(@.id == '" + DEMO_SECRETARY
-                        + "')].roles[?(@.name == 'Secretary')].baseCode").isEmpty())
+                        + "')].roles[?(@.name == 'Секретар')].baseCode").isEmpty())
                 .andExpect(jsonPath("$.items[?(@.id == '" + DEMO_SECRETARY
-                        + "')].roles[?(@.name == 'Secretary')].nameCustomized").value(true));
+                        + "')].roles[?(@.name == 'Секретар')].nameCustomized").value(true));
         // the card carries the same flag
         getAs(viewer(DEMO_TENANT), "/api/v1/members/" + DEMO_SECRETARY)
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.roles[?(@.name == 'Secretary')].nameCustomized").value(true))
+                .andExpect(jsonPath("$.roles[?(@.name == 'Секретар')].nameCustomized").value(true))
                 .andExpect(jsonPath("$.roles[?(@.baseCode == 'MEMBER')].nameCustomized").value(false));
     }
 

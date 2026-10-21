@@ -399,18 +399,18 @@ class OwnershipAcceptanceTests extends IntegrationTest {
         // #1 each owned plot shows its owners' names; plots with two owners show both; the last name finds the plots
         JsonNode all = body(get(PLOTS + "?size=100"), treasurer);
         assertThat(ownerNames(all, "3")).hasSize(2);
-        assertThat(ownerNames(all, "7")).containsExactly("Bondarenko Andrii", "Moroz Halyna");
+        assertThat(ownerNames(all, "7")).containsExactly("Бондаренко Андрій", "Мороз Галина");
         assertThat(ownerNames(all, "1")).hasSize(1);
-        assertThat(numbersOf(body(get(PLOTS + "?q=Moroz"), treasurer))).containsExactly("7");
-        assertThat(numbersOf(body(get(PLOTS + "?q=Kravchenko"), treasurer))).containsExactly("11");
+        assertThat(numbersOf(body(get(PLOTS + "?q=Мороз"), treasurer))).containsExactly("7");
+        assertThat(numbersOf(body(get(PLOTS + "?q=Кравченко"), treasurer))).containsExactly("11");
 
         // #2 plot 9: the current owner, the previous owner with the period, and nothing to edit
         UUID plot9 = demoPlot("9");
         JsonNode nine = body(get(PLOTS + "/" + plot9 + "/ownerships"), treasurer);
         assertThat(nine.get("current")).hasSize(1);
-        assertThat(nine.get("current").get(0).get("memberName").asString()).isEqualTo("Lytvynenko Svitlana");
+        assertThat(nine.get("current").get(0).get("memberName").asString()).isEqualTo("Литвиненко Світлана");
         assertThat(nine.get("history")).hasSize(1);
-        assertThat(nine.get("history").get(0).get("memberName").asString()).isEqualTo("Honcharenko Mykola");
+        assertThat(nine.get("history").get(0).get("memberName").asString()).isEqualTo("Гончаренко Микола");
         assertThat(nine.get("history").get(0).get("validFrom").asString()).isEqualTo("2015-06-01");
         assertThat(nine.get("history").get(0).get("validTo").asString()).isEqualTo("2025-05-31");
         UUID currentRow = UUID.fromString(nine.get("current").get(0).get("id").asString());
@@ -458,7 +458,7 @@ class OwnershipAcceptanceTests extends IntegrationTest {
         assertThat(me.get("ownedPlots").get(1).get("number").asString()).isEqualTo("15");
         assertThat(me.get("ownedPlots").get(1).get("share").asString()).isEqualTo("1/1");
         JsonNode seven = body(get(PLOTS + "/" + plot7 + "/ownerships"), demoMember);
-        assertThat(names(seven.get("current"))).containsExactly("Bondarenko Andrii", "Moroz Halyna");
+        assertThat(names(seven.get("current"))).containsExactly("Бондаренко Андрій", "Мороз Галина");
         assertThat(shares(seven.get("current"))).containsExactly("1/2", "1/2");
 
         // §2.6 #1 the card of plot 7: area, green status, both co-owners; the board's notes stay hidden
@@ -475,8 +475,8 @@ class OwnershipAcceptanceTests extends IntegrationTest {
                 "notes", "status");
         // the card carries no owners at all (the generated model serialises an empty list; names never appear)
         assertThat(json.readTree(limited).path("owners")).isEmpty();
-        assertThat(limited).doesNotContain("Lytvynenko").doesNotContain("Honcharenko").contains("Garden St");
-        assertThat(limited).contains("\"number\":\"9\"").contains("Garden St");
+        assertThat(limited).doesNotContain("Литвиненко").doesNotContain("Гончаренко").contains("вул. Садова");
+        assertThat(limited).contains("\"number\":\"9\"").contains("вул. Садова");
         send(demoMember, get(PLOTS + "/" + plot9 + "/ownerships"), null).andExpect(status().isNotFound());
         // the list says no more than the card
         JsonNode listed = body(get(PLOTS + "?q=9&size=100"), demoMember);

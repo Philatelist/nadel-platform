@@ -66,7 +66,7 @@ class OwnershipVisibilityTests extends OwnershipTestSupport {
                 .andExpect(jsonPath("$.items[?(@.number == '15')].areaM2").value(600.0))
                 .andExpect(jsonPath("$.items[?(@.number == '15')].hasBuilding").value(true))
                 // other plots: number, street and kind, never area, cadastral number or building
-                .andExpect(jsonPath("$.items[?(@.number == '9')].street").value("Garden St"))
+                .andExpect(jsonPath("$.items[?(@.number == '9')].street").value("вул. Садова"))
                 .andExpect(jsonPath("$.items[?(@.number == '9')].areaM2").isEmpty())
                 .andExpect(jsonPath("$.items[?(@.number == '9')].cadastralNumber").isEmpty())
                 .andExpect(jsonPath("$.items[?(@.number == '9')].hasBuilding").isEmpty())
@@ -74,8 +74,8 @@ class OwnershipVisibilityTests extends OwnershipTestSupport {
                 .andExpect(jsonPath("$.items[?(@.number == 'R-1')].areaM2").isEmpty())
                 .andExpect(jsonPath("$.items[*].owners").doesNotExist())
                 .andExpect(content().string(not(containsString("owners"))))
-                .andExpect(content().string(not(containsString("Moroz"))))
-                .andExpect(content().string(not(containsString("Lytvynenko"))));
+                .andExpect(content().string(not(containsString("Мороз"))))
+                .andExpect(content().string(not(containsString("Литвиненко"))));
         if (setting == PlotStatusVisibility.ALL_PLOTS) {
             result.andExpect(jsonPath("$.items[?(@.number == '9')].status").value("GREEN"))
                     .andExpect(jsonPath("$.items[?(@.number == '25')].status").value("GREY"))
@@ -120,7 +120,7 @@ class OwnershipVisibilityTests extends OwnershipTestSupport {
                 .andExpect(jsonPath("$.items[?(@.number == '9')].status").value("GREEN"))
                 .andExpect(jsonPath("$.items[?(@.number == '25')].status").value("GREY"))
                 .andExpect(jsonPath("$.items[?(@.number == '7')].owners[*].name",
-                        contains("Bondarenko Andrii", "Moroz Halyna")));
+                        contains("Бондаренко Андрій", "Мороз Галина")));
     }
 
     @Test
@@ -129,7 +129,7 @@ class OwnershipVisibilityTests extends OwnershipTestSupport {
 
         // own plot 7 has this cadastral number, yet a search never widens beyond number and street
         listAs(owner, "q=4810136300:02:001:0007").andExpect(jsonPath("$.items", empty()));
-        listAs(owner, "q=Moroz").andExpect(jsonPath("$.items", empty()));
+        listAs(owner, "q=Мороз").andExpect(jsonPath("$.items", empty()));
         inTenant(DEMO_TENANT, sql -> sql.update("update plot set archived_at = now() where number = '3'"));
         try {
             listAs(owner, "includeArchived=true&size=100")
@@ -152,7 +152,7 @@ class OwnershipVisibilityTests extends OwnershipTestSupport {
             cardAs(demoMemberToken(), plot)
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.number").value("7"))
-                    .andExpect(jsonPath("$.street").value("Garden St"))
+                    .andExpect(jsonPath("$.street").value("вул. Садова"))
                     .andExpect(jsonPath("$.kind").value("PLOT"))
                     .andExpect(jsonPath("$.status").value("GREEN"))
                     .andExpect(jsonPath("$.areaM2").value(800.0))
@@ -181,7 +181,7 @@ class OwnershipVisibilityTests extends OwnershipTestSupport {
             ResultActions result = cardAs(viewer, plot)
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.number").value("9"))
-                    .andExpect(jsonPath("$.street").value("Garden St"))
+                    .andExpect(jsonPath("$.street").value("вул. Садова"))
                     .andExpect(jsonPath("$.kind").value("PLOT"))
                     .andExpect(jsonPath("$.archived").value(false))
                     .andExpect(jsonPath("$.areaM2").doesNotExist())
@@ -191,7 +191,7 @@ class OwnershipVisibilityTests extends OwnershipTestSupport {
                     .andExpect(jsonPath("$.createdAt").doesNotExist())
                     .andExpect(jsonPath("$.updatedAt").doesNotExist())
                     .andExpect(content().string(not(containsString("Corner plot"))))
-                    .andExpect(content().string(not(containsString("Lytvynenko"))));
+                    .andExpect(content().string(not(containsString("Литвиненко"))));
             if (setting == PlotStatusVisibility.ALL_PLOTS) {
                 result.andExpect(jsonPath("$.status").value("GREEN"));
             } else {
@@ -208,7 +208,7 @@ class OwnershipVisibilityTests extends OwnershipTestSupport {
         cardAs(treasurer(), demoPlot("9"))
                 .andExpect(jsonPath("$.status").value("GREEN"))
                 .andExpect(jsonPath("$.areaM2").value(1500.0))
-                .andExpect(jsonPath("$.notes").value("Corner plot next to the entrance gate"));
+                .andExpect(jsonPath("$.notes").value("Кутова ділянка біля в'їзних воріт"));
     }
 
     @Test
@@ -338,14 +338,14 @@ class OwnershipVisibilityTests extends OwnershipTestSupport {
         ownershipsAs(demoMemberToken(), plotId("7"))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$.current[*].memberName", contains("Bondarenko Andrii", "Moroz Halyna")))
+                .andExpect(jsonPath("$.current[*].memberName", contains("Бондаренко Андрій", "Мороз Галина")))
                 .andExpect(jsonPath("$.current[*].share", contains("1/2", "1/2")))
                 .andExpect(jsonPath("$.current[*].validFrom", everyItem(is("2019-04-15"))))
-                .andExpect(jsonPath("$.current[0].basis").value("Purchase, contract of 2019-04-10"))
+                .andExpect(jsonPath("$.current[0].basis").value("Купівля, договір від 10.04.2019"))
                 .andExpect(jsonPath("$.history", empty()));
         ownershipsAs(demoMemberToken(), plotId("15"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.current[*].memberName", contains("Bondarenko Andrii")));
+                .andExpect(jsonPath("$.current[*].memberName", contains("Бондаренко Андрій")));
     }
 
     @Test
@@ -359,10 +359,10 @@ class OwnershipVisibilityTests extends OwnershipTestSupport {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.current", hasSize(2)))
                 .andExpect(jsonPath("$.history", hasSize(1)))
-                .andExpect(jsonPath("$.history[0].memberName").value("Honcharenko Mykola"))
+                .andExpect(jsonPath("$.history[0].memberName").value("Гончаренко Микола"))
                 .andExpect(jsonPath("$.history[0].validFrom").value("2015-06-01"))
                 .andExpect(jsonPath("$.history[0].validTo").value("2025-05-31"))
-                .andExpect(jsonPath("$.history[0].basis").value("Initial allocation"));
+                .andExpect(jsonPath("$.history[0].basis").value("Первісний розподіл"));
     }
 
     @ParameterizedTest
@@ -376,8 +376,8 @@ class OwnershipVisibilityTests extends OwnershipTestSupport {
                     .andExpect(status().isNotFound())
                     .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                     .andExpect(jsonPath("$.code").value("NOT_FOUND"))
-                    .andExpect(content().string(not(containsString("Lytvynenko"))))
-                    .andExpect(content().string(not(containsString("Honcharenko"))));
+                    .andExpect(content().string(not(containsString("Литвиненко"))))
+                    .andExpect(content().string(not(containsString("Гончаренко"))));
         }
         // the plot the former owner used to own looks like any plot that does not exist
         ownershipsAs(demoMemberToken(), UUID.randomUUID()).andExpect(status().isNotFound());
@@ -387,8 +387,8 @@ class OwnershipVisibilityTests extends OwnershipTestSupport {
     void theTreasurerSeesTheOwnersOfAnyPlot() throws Exception {
         ownershipsAs(treasurer(), plotId("9"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.current[0].memberName").value("Lytvynenko Svitlana"))
-                .andExpect(jsonPath("$.history[0].memberName").value("Honcharenko Mykola"));
+                .andExpect(jsonPath("$.current[0].memberName").value("Литвиненко Світлана"))
+                .andExpect(jsonPath("$.history[0].memberName").value("Гончаренко Микола"));
     }
 
     @Test

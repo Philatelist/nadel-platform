@@ -49,10 +49,10 @@ class MeEndpointTests extends IntegrationTest {
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.memberId").value(CHAIRMAN.toString()))
                 .andExpect(jsonPath("$.platformOperator").value(false))
-                .andExpect(jsonPath("$.fullName").value("Kovalenko Oleksandr Petrovych"))
+                .andExpect(jsonPath("$.fullName").value("Коваленко Олександр Петрович"))
                 .andExpect(jsonPath("$.email").value("chairman@demo.local"))
                 .andExpect(jsonPath("$.tenant.id").value(DEMO_TENANT.toString()))
-                .andExpect(jsonPath("$.tenant.name").value("Demo Garden Cooperative"))
+                .andExpect(jsonPath("$.tenant.name").value("СТ «Надія»"))
                 .andExpect(jsonPath("$.ownedPlots", hasSize(0)))
                 .andExpect(jsonPath("$.roles", hasSize(1)))
                 .andExpect(jsonPath("$.roles[0].name").value("Chairman"))
@@ -81,8 +81,8 @@ class MeEndpointTests extends IntegrationTest {
         getAs(demo("electrician@demo.local"), "/api/v1/me")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.roles", hasSize(2)))
-                .andExpect(jsonPath("$.roles[?(@.name == 'Electrician')].baseCode").isEmpty())
-                .andExpect(jsonPath("$.roles[?(@.name == 'Electrician')].nameCustomized").value(true))
+                .andExpect(jsonPath("$.roles[?(@.name == 'Електрик')].baseCode").isEmpty())
+                .andExpect(jsonPath("$.roles[?(@.name == 'Електрик')].nameCustomized").value(true))
                 .andExpect(jsonPath("$.roles[?(@.name == 'Member')].baseCode").value("MEMBER"))
                 .andExpect(jsonPath("$.roles[?(@.name == 'Member')].nameCustomized").value(false));
         DemoAccessChecks.electricianHasNoPermissions(mvc);
@@ -95,7 +95,7 @@ class MeEndpointTests extends IntegrationTest {
         getAs(bearer, "/api/v1/me")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.memberId").value(OTHER_MEMBER.toString()))
-                .andExpect(jsonPath("$.tenant.name").value("Other Cooperative"));
+                .andExpect(jsonPath("$.tenant.name").value("СТ «Світанок»"));
     }
 
     @Test
@@ -122,7 +122,7 @@ class MeEndpointTests extends IntegrationTest {
             getAs(demo("member@demo.local"), "/api/v1/members/" + MEMBER)
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.id").value(MEMBER.toString()))
-                    .andExpect(jsonPath("$.lastName").value("Bondarenko"))
+                    .andExpect(jsonPath("$.lastName").value("Бондаренко"))
                     .andExpect(jsonPath("$.phones[0]").value("+380501110003"))
                     .andExpect(jsonPath("$.deliveryChannel").value("EMAIL"))
                     .andExpect(jsonPath("$.archived").value(false))

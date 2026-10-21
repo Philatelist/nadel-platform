@@ -116,7 +116,7 @@ class RoleNamesAcceptanceTests extends IntegrationTest {
         mvc.perform(get("/api/v1/members/" + TREASURER_MEMBER).header(HttpHeaders.AUTHORIZATION, treasurerToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.roles[?(@.baseCode == 'TREASURER')].name").value("Бухгалтер"));
-        mvc.perform(get("/api/v1/members").param("q", "Shevchenko")
+        mvc.perform(get("/api/v1/members").param("q", "Шевченко")
                         .header(HttpHeaders.AUTHORIZATION, bearer("chairman@demo.local")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items[0].roles[?(@.baseCode == 'TREASURER')].name").value("Бухгалтер"));

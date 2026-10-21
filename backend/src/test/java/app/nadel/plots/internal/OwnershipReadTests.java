@@ -49,13 +49,13 @@ class OwnershipReadTests extends IntegrationTest {
                     .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                     .andExpect(jsonPath("$.plotId").value(plotId("7").toString()))
                     .andExpect(jsonPath("$.current", hasSize(2)))
-                    .andExpect(jsonPath("$.current[*].memberName", contains("Bondarenko Andrii", "Moroz Halyna")))
+                    .andExpect(jsonPath("$.current[*].memberName", contains("Бондаренко Андрій", "Мороз Галина")))
                     .andExpect(jsonPath("$.current[*].share", contains("1/2", "1/2")))
                     .andExpect(jsonPath("$.current[0].memberId").value("aaaaaaaa-0000-0000-0000-000000000003"))
                     .andExpect(jsonPath("$.current[*].validFrom", everyItem(is("2019-04-15"))))
                     .andExpect(jsonPath("$.current[*].validTo").doesNotExist())
                     .andExpect(jsonPath("$.current[*].memberArchived", everyItem(is(false))))
-                    .andExpect(jsonPath("$.current[0].basis").value("Purchase, contract of 2019-04-10"))
+                    .andExpect(jsonPath("$.current[0].basis").value("Купівля, договір від 10.04.2019"))
                     .andExpect(jsonPath("$.current[0].id").exists())
                     .andExpect(jsonPath("$.history", empty()));
         }
@@ -65,7 +65,7 @@ class OwnershipReadTests extends IntegrationTest {
     void namesLeaveOutThePatronymic() throws Exception {
         String body = ownershipsAs(treasurer(), plotId("7")).andReturn().getResponse().getContentAsString();
 
-        org.assertj.core.api.Assertions.assertThat(body).doesNotContain("Mykolaiovych").doesNotContain("Pavlivna");
+        org.assertj.core.api.Assertions.assertThat(body).doesNotContain("Миколайович").doesNotContain("Павлівна");
     }
 
     @Test
@@ -73,23 +73,23 @@ class OwnershipReadTests extends IntegrationTest {
         ownershipsAs(treasurer(), plotId("9"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.current", hasSize(1)))
-                .andExpect(jsonPath("$.current[0].memberName").value("Lytvynenko Svitlana"))
+                .andExpect(jsonPath("$.current[0].memberName").value("Литвиненко Світлана"))
                 .andExpect(jsonPath("$.current[0].share").value("1/1"))
                 .andExpect(jsonPath("$.current[0].validFrom").value("2025-06-01"))
                 .andExpect(jsonPath("$.current[0].memberArchived").value(false))
                 .andExpect(jsonPath("$.history", hasSize(1)))
-                .andExpect(jsonPath("$.history[0].memberName").value("Honcharenko Mykola"))
+                .andExpect(jsonPath("$.history[0].memberName").value("Гончаренко Микола"))
                 .andExpect(jsonPath("$.history[0].memberArchived").value(true))
                 .andExpect(jsonPath("$.history[0].share").value("1/1"))
                 .andExpect(jsonPath("$.history[0].validFrom").value("2015-06-01"))
                 .andExpect(jsonPath("$.history[0].validTo").value("2025-05-31"))
-                .andExpect(jsonPath("$.history[0].basis").value("Initial allocation"));
+                .andExpect(jsonPath("$.history[0].basis").value("Первісний розподіл"));
     }
 
     @Test
     void unevenSharesAreWrittenAsFractions() throws Exception {
         ownershipsAs(chairman(), plotId("11"))
-                .andExpect(jsonPath("$.current[*].memberName", contains("Kravchenko Dmytro", "Rudenko Bohdan")))
+                .andExpect(jsonPath("$.current[*].memberName", contains("Кравченко Дмитро", "Руденко Богдан")))
                 .andExpect(jsonPath("$.current[*].share", contains("2/3", "1/3")));
     }
 
@@ -108,7 +108,7 @@ class OwnershipReadTests extends IntegrationTest {
                 .andExpect(jsonPath("$.history[*].validFrom", contains("2015-07-01", "2013-01-01", "2010-01-01")))
                 .andExpect(jsonPath("$.history[*].validTo", contains("2020-02-29", "2015-06-30", "2012-12-31")))
                 .andExpect(jsonPath("$.history[*].memberName",
-                        contains("Kharchenko Yevhen", "Stetsenko Larysa", "Kharchenko Yevhen")));
+                        contains("Харченко Євген", "Стеценко Лариса", "Харченко Євген")));
     }
 
     @Test
@@ -131,7 +131,7 @@ class OwnershipReadTests extends IntegrationTest {
                     .andExpect(status().isNotFound())
                     .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                     .andExpect(jsonPath("$.code").value("NOT_FOUND"))
-                    .andExpect(content().string(not(containsString("Bondarenko"))));
+                    .andExpect(content().string(not(containsString("Бондаренко"))));
         }
     }
 
@@ -161,7 +161,7 @@ class OwnershipReadTests extends IntegrationTest {
                 .andExpect(status().isNotFound())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.code").value("NOT_FOUND"))
-                .andExpect(content().string(not(containsString("Melnyk"))));
+                .andExpect(content().string(not(containsString("Мельник"))));
         ownershipsAs(treasurer, UUID.randomUUID()).andExpect(status().isNotFound());
     }
 
@@ -177,13 +177,13 @@ class OwnershipReadTests extends IntegrationTest {
     void theListShowsOwnersToTheTreasurerAndOmitsThemForPlotsWithoutOwners() throws Exception {
         listAs(treasurer(), "size=100")
                 .andExpect(jsonPath("$.items[?(@.number == '7')].owners[*].name",
-                        contains("Bondarenko Andrii", "Moroz Halyna")))
+                        contains("Бондаренко Андрій", "Мороз Галина")))
                 .andExpect(jsonPath("$.items[?(@.number == '7')].owners[*].share", contains("1/2", "1/2")))
                 .andExpect(jsonPath("$.items[?(@.number == '7')].owners[0].memberId",
                         contains("aaaaaaaa-0000-0000-0000-000000000003")))
                 .andExpect(jsonPath("$.items[?(@.number == '11')].owners[*].share", contains("2/3", "1/3")))
-                .andExpect(jsonPath("$.items[?(@.number == '9')].owners[*].name", contains("Lytvynenko Svitlana")))
-                .andExpect(jsonPath("$.items[?(@.number == '1')].owners[*].name", contains("Polishchuk Oksana")))
+                .andExpect(jsonPath("$.items[?(@.number == '9')].owners[*].name", contains("Литвиненко Світлана")))
+                .andExpect(jsonPath("$.items[?(@.number == '1')].owners[*].name", contains("Поліщук Оксана")))
                 .andExpect(jsonPath("$.items[*].owners", hasSize(25)))
                 .andExpect(jsonPath("$.items[?(@.number == '25')].owners").isEmpty())
                 .andExpect(jsonPath("$.items[?(@.number == 'R-1')].owners").isEmpty())
@@ -193,8 +193,8 @@ class OwnershipReadTests extends IntegrationTest {
     @Test
     void theListShowsOnlyCurrentOwners() throws Exception {
         listAs(treasurer(), "q=9&size=100")
-                .andExpect(jsonPath("$.items[?(@.number == '9')].owners[*].name", contains("Lytvynenko Svitlana")))
-                .andExpect(content().string(not(containsString("Honcharenko"))));
+                .andExpect(jsonPath("$.items[?(@.number == '9')].owners[*].name", contains("Литвиненко Світлана")))
+                .andExpect(content().string(not(containsString("Гончаренко"))));
     }
 
     @Test
@@ -204,8 +204,8 @@ class OwnershipReadTests extends IntegrationTest {
                 .andExpect(jsonPath("$.items", hasSize(31)))
                 .andExpect(jsonPath("$.items[*].owners").doesNotExist())
                 .andExpect(content().string(not(containsString("owners"))))
-                .andExpect(content().string(not(containsString("Bondarenko"))))
-                .andExpect(content().string(not(containsString("Moroz"))));
+                .andExpect(content().string(not(containsString("Бондаренко"))))
+                .andExpect(content().string(not(containsString("Мороз"))));
     }
 
     @Test
@@ -228,27 +228,27 @@ class OwnershipReadTests extends IntegrationTest {
     void treasurerFindsPlotsByAnOwnersLastName() throws Exception {
         String treasurer = treasurer();
 
-        listAs(treasurer, "q=Bondarenko")
+        listAs(treasurer, "q=Бондаренко")
                 .andExpect(jsonPath("$.items[*].number", contains("7", "15")))
                 .andExpect(jsonPath("$.totalItems").value(2))
-                .andExpect(jsonPath("$.items[0].owners[*].name", contains("Bondarenko Andrii", "Moroz Halyna")));
-        listAs(treasurer, "q=bONDARENKO").andExpect(jsonPath("$.items[*].number", contains("7", "15")));
-        listAs(treasurer, "q=%20bondarenko%20").andExpect(jsonPath("$.items[*].number", contains("7", "15")));
+                .andExpect(jsonPath("$.items[0].owners[*].name", contains("Бондаренко Андрій", "Мороз Галина")));
+        listAs(treasurer, "q=бОНДАРЕНКО").andExpect(jsonPath("$.items[*].number", contains("7", "15")));
+        listAs(treasurer, "q=%20бондаренко%20").andExpect(jsonPath("$.items[*].number", contains("7", "15")));
     }
 
     @Test
     void ownerSearchMatchesFirstAndMiddleNamesToo() throws Exception {
         String treasurer = treasurer();
 
-        listAs(treasurer, "q=Halyna").andExpect(jsonPath("$.items[*].number", contains("7")));
+        listAs(treasurer, "q=Галина").andExpect(jsonPath("$.items[*].number", contains("7")));
         // a patronymic shared by Bondarenko (plots 7 and 15) and Chernenko (plot 21)
-        listAs(treasurer, "q=Mykolaiovych").andExpect(jsonPath("$.items[*].number", contains("7", "15", "21")));
+        listAs(treasurer, "q=Миколайович").andExpect(jsonPath("$.items[*].number", contains("7", "15", "21")));
     }
 
     @Test
     void ownerSearchFindsOnlyCurrentOwners() throws Exception {
         // Honcharenko sold plot 9 last year and is archived: no plot is found by that name
-        listAs(treasurer(), "q=Honcharenko")
+        listAs(treasurer(), "q=Гончаренко")
                 .andExpect(jsonPath("$.items", empty()))
                 .andExpect(jsonPath("$.totalItems").value(0));
     }
@@ -257,9 +257,9 @@ class OwnershipReadTests extends IntegrationTest {
     void ownerSearchCombinesWithTheOtherFilters() throws Exception {
         String treasurer = treasurer();
 
-        listAs(treasurer, "q=Bondarenko&kind=COMMON").andExpect(jsonPath("$.items", empty()));
-        listAs(treasurer, "q=Bondarenko&status=GREY").andExpect(jsonPath("$.items", empty()));
-        listAs(treasurer, "q=Bondarenko&status=GREEN&size=1")
+        listAs(treasurer, "q=Бондаренко&kind=COMMON").andExpect(jsonPath("$.items", empty()));
+        listAs(treasurer, "q=Бондаренко&status=GREY").andExpect(jsonPath("$.items", empty()));
+        listAs(treasurer, "q=Бондаренко&status=GREEN&size=1")
                 .andExpect(jsonPath("$.items[*].number", contains("7")))
                 .andExpect(jsonPath("$.totalItems").value(2))
                 .andExpect(jsonPath("$.totalPages").value(2));
@@ -269,7 +269,7 @@ class OwnershipReadTests extends IntegrationTest {
     void ownerSearchAlsoKeepsMatchingTheNumberAndTheStreet() throws Exception {
         // "15" is the number of one plot and part of nothing else; a text that is also a surname would match both
         listAs(treasurer(), "q=15").andExpect(jsonPath("$.items[*].number", contains("15")));
-        listAs(treasurer(), "q=orchard&size=100").andExpect(jsonPath("$.totalItems").value(15));
+        listAs(treasurer(), "q=%D0%B2%D0%B8%D1%88%D0%BD%D0%B5%D0%B2%D0%B0&size=100").andExpect(jsonPath("$.totalItems").value(15));
     }
 
     @Test
@@ -277,35 +277,35 @@ class OwnershipReadTests extends IntegrationTest {
         String treasurer = treasurer();
 
         listAs(treasurer, "q=%25").andExpect(jsonPath("$.items", empty()));
-        listAs(treasurer, "q=Bond_renko").andExpect(jsonPath("$.items", empty()));
-        listAs(treasurer, "q=Bond%25").andExpect(jsonPath("$.items", empty()));
+        listAs(treasurer, "q=Бонд_аренко").andExpect(jsonPath("$.items", empty()));
+        listAs(treasurer, "q=Бонд%25").andExpect(jsonPath("$.items", empty()));
     }
 
     @Test
     void aMemberCannotFindPlotsByOwnerName() throws Exception {
         String member = member();
 
-        listAs(member, "q=Bondarenko&size=100")
+        listAs(member, "q=Бондаренко&size=100")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items", empty()))
                 .andExpect(jsonPath("$.totalItems").value(0));
-        listAs(member, "q=Halyna").andExpect(jsonPath("$.items", empty()));
+        listAs(member, "q=Галина").andExpect(jsonPath("$.items", empty()));
     }
 
     @Test
     void theOwnersSearchStaysInsideTheCooperative() throws Exception {
         // Melnyk owns plot 1 of the other cooperative; the demo treasurer must not find it, and the other
         // cooperative's own full viewer finds only its plot
-        listAs(treasurer(), "q=Melnyk").andExpect(jsonPath("$.items", empty()));
+        listAs(treasurer(), "q=Мельник").andExpect(jsonPath("$.items", empty()));
 
         UUID chairman = newMember(OTHER_TENANT, "ownership-other@other.local");
         giveBaseRole(OTHER_TENANT, chairman, "CHAIRMAN");
         String bearer = TestTokens.bearer(OTHER_TENANT, UUID.randomUUID().toString(), "ownership-other@other.local");
 
-        listAs(bearer, "q=Melnyk")
+        listAs(bearer, "q=Мельник")
                 .andExpect(jsonPath("$.items[*].number", contains("1")))
-                .andExpect(jsonPath("$.items[0].owners[*].name", contains("Melnyk Olena")));
-        listAs(bearer, "q=Bondarenko").andExpect(jsonPath("$.items", empty()));
+                .andExpect(jsonPath("$.items[0].owners[*].name", contains("Мельник Олена")));
+        listAs(bearer, "q=Бондаренко").andExpect(jsonPath("$.items", empty()));
     }
 
     // ---- helpers

@@ -63,7 +63,7 @@ class PlotMapTests extends IntegrationTest {
                 .andExpect(jsonPath("$.features[?(@.properties.number == '9')].properties.areaM2").value(1500.0))
                 .andExpect(jsonPath("$.features[?(@.properties.number == '9')].properties.debt").value("0.00"))
                 .andExpect(jsonPath("$.features[?(@.properties.number == '9')].properties.street")
-                        .value("Garden St"));
+                        .value("вул. Садова"));
     }
 
     @Test
@@ -104,7 +104,7 @@ class PlotMapTests extends IntegrationTest {
         mapAs(TestTokens.bearer(OTHER_TENANT, UUID.randomUUID().toString(), "map-other@other.local"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.features", hasSize(2)))
-                .andExpect(jsonPath("$.features[*].properties.street", everyItem(is("Forest St"))));
+                .andExpect(jsonPath("$.features[*].properties.street", everyItem(is("вул. Лісова"))));
     }
 
     /** A token for a fresh demo-cooperative member that holds the given base role. */
