@@ -980,6 +980,7 @@ export const en = {
       'Your account is not linked to a member of this cooperative. Please contact your chairman.',
     PERMISSION_DENIED: "You don't have permission to do this.",
     NOT_FOUND: 'Not found',
+    PLOT_NOT_FOUND: 'Plot not found.',
     EMAIL_TAKEN: 'Another active member already uses this email.',
     ROLE_NAME_TAKEN: 'A role with this name already exists.',
     CHARGE_TYPE_NAME_TAKEN: 'A charge type with this name already exists',

@@ -82,7 +82,7 @@ one place that decides what a viewer sees), `MeterAccess` (the member rule share
 | `PUT /meters/{id}` | `updateMeter` | `METERS_VIEW` and `METERS_MANAGE` |
 | `DELETE /meters/{id}` | `deleteMeter` | `METERS_VIEW` and `METERS_MANAGE` |
 | `POST /meters/{id}/remove` | `removeMeter` | `METERS_VIEW` and `METERS_MANAGE` |
-| `GET /plots/{id}/meters` | `listPlotMeters` | `METERS_VIEW` for any plot, otherwise the plot's current owner (without `note`); anyone else 404, the platform operator 403 |
+| `GET /plots/{id}/meters` | `listPlotMeters` | `METERS_VIEW` for any plot, otherwise the plot's current owner (without `note`); anyone else, an unknown plot and one of another cooperative the same 404 `PLOT_NOT_FOUND`, the platform operator 403 |
 
 The platform operator has no permissions: 403 everywhere. A meter or plot of another cooperative is 404 (RLS).
 
@@ -226,7 +226,7 @@ Internal: `ApprovalQueries`; the commands are in `ReadingCommands` (`submit`, `a
 
 | Endpoint | Operation | Who |
 |---|---|---|
-| `POST /plots/{id}/readings` | `submitPlotReading` | a current owner of the plot (`MeterAccess.ownsNow`), whatever their permissions; anyone else 404, the platform operator 403 |
+| `POST /plots/{id}/readings` | `submitPlotReading` | a current owner of the plot (`MeterAccess.ownsNow`), whatever their permissions; anyone else, an unknown plot and one of another cooperative the same 404 `PLOT_NOT_FOUND`, the platform operator 403 |
 | `GET /readings?status=PENDING` | `listReadings` | `READINGS_APPROVE`; the meter's `note` only with `METERS_VIEW` |
 | `POST /readings/{id}/approve` | `approveReading` | `READINGS_APPROVE` |
 | `POST /readings/{id}/reject` | `rejectReading` | `READINGS_APPROVE` |
@@ -331,8 +331,8 @@ derived ids, every insert `ON CONFLICT DO NOTHING`, dates relative to `CURRENT_D
 - 29 electricity plot meters in the tree (plots 1-14 and 12а under quarter A, 15-29 under quarter B; plots 25 and 28 have no
   meter) and 4 water meters (plots 1, 7, 15, 22, outside the tree). Plot 9's meter was replaced 30 days ago (old meter removed
   with a final value, the new one `replaces_meter_id`); plot 20's last reading is 75 days old;
-- 169 readings with irregular gaps of 6-55 days over about 120 days (any range that starts or ends between two readings is an
-  interpolation case): 165 approved, 2 pending (member@demo.local's plots 7 and 15, for the approvals screen), 1 rejected
+- 168 readings with irregular gaps of 6-55 days over about 120 days (any range that starts or ends between two readings is an
+  interpolation case): 165 approved, 1 pending (member@demo.local's plot 7, for the approvals screen), 1 rejected
   (plot 1) and 1 superseded (plot 2, replaced by its correction);
 - the other cooperative: one meter and one reading (isolation checks);
 - the permissions `METERS_VIEW` and `READINGS_ENTER` for the custom role "Електрик" and its description

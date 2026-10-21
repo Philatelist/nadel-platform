@@ -130,10 +130,13 @@ class MemberReadingsTests extends MeterTestSupport {
         UUID otherMeter = register(plotMeter(other, "ELECTRICITY", "MT-other", "2026-06-01", "0"));
 
         submit(member, other, submission(otherMeter, "2026-10-15", "10")).andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.code").value("NOT_FOUND"));
+                .andExpect(jsonPath("$.code").value("PLOT_NOT_FOUND"));
         submit(member, plot, submission(otherMeter, "2026-10-15", "10")).andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.errors[0].field").value("meterId"));
-        submit(member, UUID.randomUUID(), submission(meter, "2026-10-15", "8210")).andExpect(status().isNotFound());
+                .andExpect(jsonPath("$.code").value("NOT_FOUND"))
+                .andExpect(jsonPath("$.errors[0].field").value("meterId"))
+                .andExpect(jsonPath("$.errors[0].code").value("NOT_FOUND"));
+        submit(member, UUID.randomUUID(), submission(meter, "2026-10-15", "8210")).andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("PLOT_NOT_FOUND"));
         // the board does not own the plot: the member flow is not theirs
         submit(chairman(), plot, submission(meter, "2026-10-15", "8210")).andExpect(status().isNotFound());
 

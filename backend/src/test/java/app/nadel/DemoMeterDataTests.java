@@ -55,10 +55,10 @@ class DemoMeterDataTests extends IntegrationTest {
     }
 
     @Test
-    void memberDemoHasPendingReadingsAndTheHistoryShowsEveryStatus() {
+    void memberDemoHasOnePendingReadingAndTheHistoryShowsEveryStatus() {
         assertThat(owner.queryForList("select p.number from meter_reading r join meter m on m.id = r.meter_id "
                 + "join plot p on p.id = m.plot_id where r.status = 'PENDING' and r.entered_by_member_id = "
-                + "'aaaaaaaa-0000-0000-0000-000000000003' order by p.number", String.class)).containsExactly("15", "7");
+                + "'aaaaaaaa-0000-0000-0000-000000000003' order by p.number", String.class)).containsExactly("7");
         assertThat(count("meter_reading where status = 'REJECTED' and reject_reason is not null")).isEqualTo(1);
         assertThat(count("meter_reading s join meter_reading a on a.id = s.superseded_by_id "
                 + "where s.status = 'SUPERSEDED' and a.status = 'APPROVED'")).isEqualTo(1);
@@ -110,7 +110,7 @@ class DemoMeterDataTests extends IntegrationTest {
         assertThat(count("meter where tenant_id in (?, ?)", DEMO_TENANT, OTHER_TENANT)).isEqualTo(39);
     }
 
-    private static final int READINGS = 169;
+    private static final int READINGS = 168;
 
     private int count(String from, Object... args) {
         return owner.queryForObject("select count(*) from " + from, Integer.class, args);

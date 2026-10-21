@@ -108,15 +108,15 @@ class MeterQueries {
     /**
      * Every meter the plot has had. A caller with {@code METERS_VIEW} may ask for any plot, anyone else only for a plot
      * they own now and does not see the board's note; every other case, an unknown plot and a plot of another
-     * cooperative included, is the same 404. The platform operator gets 403.
+     * cooperative included, is the same 404 {@code PLOT_NOT_FOUND}. The platform operator gets 403.
      */
     @Transactional(readOnly = true)
     List<Meter> forPlot(UUID plotId, AccessProfile viewer) {
         access.requireCooperativeData(viewer);
-        PlotFacts plot = plots.find(plotId).orElseThrow(ApiProblemException::notFound);
+        PlotFacts plot = plots.find(plotId).orElseThrow(MeterAccess::plotNotFound);
         boolean full = access.seesEveryMeter(viewer);
         if (!full && !access.ownsNow(viewer, plotId)) {
-            throw ApiProblemException.notFound();
+            throw MeterAccess.plotNotFound();
         }
         List<MeterRecord> found = meters.findByPlotId(plotId).stream().sorted(WITHIN_A_PLOT).toList();
         List<UUID> ids = found.stream().map(MeterRecord::getId).toList();

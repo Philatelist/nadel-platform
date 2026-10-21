@@ -1,7 +1,7 @@
 # Pipeline log — 010 Meters and readings
 
 - Status: running
-- Phase: 3 — implement (Slice 7)
+- Phase: 3 — implement (Slice 8)
 - Branch: 010-meters-and-readings · Base: main (= origin/main) @ 063af9f
 - Requirement: docs/features/010-meters-and-readings.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
@@ -98,3 +98,11 @@ Same as 004–009 (see `context/spec/009-charge-types-and-tariffs/pipeline-log.m
 - Slice 6 review round 1: PASS.
 - Slice 7 DB/docs (postgres-database): demo meter network (38 meters, 169 readings, plot 9 replacement, plot 20 stale 75 days, 2 pending from member@demo.local, Електрик gets METERS_VIEW + READINGS_ENTER), money-rules §6 + new §6.4, glossary, architecture, meters README. Verified: `./mvnw -B verify` 1,688 tests, 0 failures; line coverage 0.97947 → floor stays 0.97 (rounded down; unchanged). Proposed CLAUDE.md edit for the owner: electrician line → 'Member plus the demo custom role "Електрик" (METERS_VIEW and READINGS_ENTER)'. e2e task delegated.
 - Slice 7 e2e (react-frontend): `make e2e` 99 passed / 0 failed (new meters.spec.ts, 5 tests; language-purity covers the new screens; design-system menu count; tariffs-acceptance now expects "немає лічильника" on a plot without a meter). Verified: `make check` green (backend 1,688 tests, 0 failures, coverage floor met; client 56/7/110/424).
+- Slice 7 committed `304f683` — make check + make e2e green; review round 1 running. Slice 8 waits for it (gate).
+- Slice 7 review round 1: PASS. Gate open (Slices 1–7 PASS); Slice 8 delegated to testing-expert.
+- Slice 8 (testing-expert): MetersAcceptanceTests (33) + meters-acceptance.spec.ts (10); `*AcceptanceTests` 103/0 failures; `make e2e` 109 passed / 0 failed; RED shown (backend 4 tests, e2e 2 tests). Note: the agent purged its own `E2E…` fixture meters/readings/audit rows from the local dev DB with SQL (local only). Two GAPs logged in tasks.md:
+  - GAP 1 — demo has two pending member readings (plots 7, 15); spec §2.10 says one. AUTO: align the demo block to the spec (keep plot 7) — the spec is the contract (rule: conservative, smallest change; spec wins over data).
+  - GAP 2 — §2.6 #3 "Ділянку не знайдено" / "Plot not found": the API answers generic `NOT_FOUND`. AUTO: plot-scoped meter endpoints (`GET /plots/{id}/meters`, `POST /plots/{id}/readings`) answer 404 with a specific code `PLOT_NOT_FOUND` and catalog texts (rule: follows the existing `MEMBER_NOT_FOUND` / `OWNERSHIP_NOT_FOUND` pattern; server sends codes, client texts).
+  - Fixes go to the builders sequentially (they share backend/target), then the testing task re-runs to tighten its assertions.
+- GAP 1 fixed (postgres-database): demo has one pending reading (plot 7); DemoMeterDataTests 8/8. GAP 2 fixed (spring-backend): `PLOT_NOT_FOUND` on the plot-scoped meter endpoints + catalog texts; RED shown (5 tests); MetersTests/MemberReadingsTests/MetersAcceptanceTests/ModularityTests 86/0 failures; client checks green. Testing task re-run to tighten §2.10, remove the GAP markers and run make e2e.
+- Slice 8 re-run (testing-expert): §2.10 tightened to exactly one pending demo reading; GAP markers removed; `*AcceptanceTests,DemoMeterDataTests,ModularityTests` 111/0 failures; `make e2e` 109/0 after removing the stale plot-15 row by hand. It found the repeatable-script DELETE built the id from the meter id without dashes (matched nothing on existing DBs); I fixed the one line and confirmed in the local DB that both expressions differ and the fixed one equals the INSERT's id. Verified: DemoMeterDataTests 8, MetersAcceptanceTests 33 green.

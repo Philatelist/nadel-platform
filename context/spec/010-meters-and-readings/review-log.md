@@ -44,3 +44,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `8c40cab..acae94e` | PASS | — | minor: the meters-sheet duplicate check runs before plot resolution, so a row with an unknown/common/suppressed plot still claims the key and a later row gets `DUPLICATE_IN_FILE`; `importProblem.METER_VALUE_INVALID` text omits the 11-integer-digit limit; `hasMeterBetween` checks the whole month even for a mid-month meter-based version (note for 011); long javadoc lines in ImportVocabulary/TemplateWriter |
+
+## Slice 7 — Demo data, docs, e2e flows and coverage
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `acae94e..304f683` | PASS | — | minor: e2e `cleanup` deletes only APPROVED readings, so a failure between submit and approve leaves an active `E2E-M-…` plot (the sweep hits the same 409); two pending demo readings (plots 7, 15) vs tech spec "one"; Квартал А rate 120 kWh/day vs ~118 below it (011 losses near zero or negative); `plotNineWasReplacedThirtyDaysAgo` asserts only `removed_on`; some DemoMeterDataTests queries lack a `tenant_id` filter |

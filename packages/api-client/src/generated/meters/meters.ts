@@ -888,8 +888,8 @@ export const getListPlotMetersUrl = (id: string,) => {
  * Every meter the plot has had, active and removed: active meters first (electricity before water), then removed
  * ones, newest installation first. No permission annotation: a caller with `METERS_VIEW` may ask for any plot of
  * the cooperative, anyone else only for a plot they currently own, and then `note` (the board's note) is left
- * out. Any other plot, an unknown id and a plot of another cooperative are 404 `NOT_FOUND`; the platform operator
- * has no cooperative data: 403. Common land has no meters (an empty list).
+ * out. Any other plot, an unknown id and a plot of another cooperative are the same 404 `PLOT_NOT_FOUND`; the
+ * platform operator has no cooperative data: 403. Common land has no meters (an empty list).
  * @summary The meters of a plot
  */
 export const listPlotMeters = async (id: string, options?: Parameters<typeof nadelFetch>[1]): Promise<Meter[]> => {

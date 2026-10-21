@@ -19,7 +19,7 @@ export interface Problem {
   title: string;
   status: number;
   detail?: string;
-  /** Stable machine-readable error code, for example `VALIDATION_FAILED` or `NOT_FOUND` */
+  /** Stable machine-readable error code, for example `VALIDATION_FAILED`, `NOT_FOUND` or `PLOT_NOT_FOUND` */
   code: string;
   /** Field-level validation errors */
   errors?: ProblemFieldError[];

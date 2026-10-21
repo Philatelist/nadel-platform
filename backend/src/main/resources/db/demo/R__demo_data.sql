@@ -345,14 +345,14 @@ WHERE s.tariff_id = 'ffffffff-0000-0000-0000-000000000001' AND s.reason = 'Exemp
 -- Meters, the electricity tree and readings (spec 010), demo cooperative plus one meter of the other cooperative.
 -- Counts (demo cooperative): 38 meters = 5 network meters (substation, 2 quarters, well, street lighting) + 29 electricity
 -- plot meters (28 plots; plots 25 and 28 have none; plot 9 has the replaced meter and its successor) + 4 water meters;
--- 33 tree periods (water meters are outside the tree); 169 readings = 165 approved + 2 pending + 1 rejected + 1 superseded
+-- 33 tree periods (water meters are outside the tree); 168 readings = 165 approved + 1 pending + 1 rejected + 1 superseded
 -- (asserted by DemoMeterDataTests). The other cooperative: 1 meter, 1 reading.
 -- Dates are relative to CURRENT_DATE (one anchor per statement), so the data looks fresh whenever it is first loaded:
 --  - plot meters are 150 days old, the network meters 400 days; readings are spread over ~120 days with irregular gaps
 --    (6-55 days), a range that starts or ends between two readings is an interpolation case;
 --  - plot 9: the meter was replaced 30 days ago (old meter removed with a final value, the new one starts at 0);
 --  - plot 20: the last reading is 75 days old (the "no reading for 60+ days" case);
---  - plots 7 and 15 (member@demo.local): one PENDING member reading each; plot 1: a REJECTED reading; plot 2: a
+--  - plot 7 (member@demo.local): the one PENDING member reading; plot 1: a REJECTED reading; plot 2: a
 --    SUPERSEDED reading replaced by its correction.
 -- Plot meters of Sadova street (plots 1-14, 12a) hang under "Квартал А", those of Vyshneva street (15-29) under "Квартал Б".
 -- Every insert is DO NOTHING on fixed or derived ids, so re-running never duplicates rows or overwrites edits. Tests that
@@ -480,7 +480,12 @@ VALUES ('99999999-0000-0000-0003-0000000000b1', '22222222-2222-2222-2222-2222222
         'bbbbbbbb-0000-0000-0000-000000000001', 'bbbbbbbb-0000-0000-0000-000000000001', now())
 ON CONFLICT DO NOTHING;
 
--- Pending member readings (the approvals screen): plots 7 and 15 belong to member@demo.local.
+-- The pending member reading (the approvals screen): plot 7 belongs to member@demo.local. An earlier version of this
+-- script also loaded one on plot 15; remove that one by its fixed derived id so existing databases converge (only a PENDING row).
+DELETE FROM meter_reading
+WHERE status = 'PENDING'
+  AND id = md5('demo-reading-pending:' || md5('demo-meter:11111111-1111-1111-1111-111111111111:15:ELECTRICITY')::uuid)::uuid;
+
 INSERT INTO meter_reading (id, tenant_id, meter_id, taken_on, value, source, status, entered_by_member_id)
 SELECT md5('demo-reading-pending:' || m.id)::uuid, m.tenant_id, m.id, CURRENT_DATE - 2,
        coalesce((SELECT max(r.value) FROM meter_reading r WHERE r.meter_id = m.id AND r.status = 'APPROVED'),
@@ -488,7 +493,7 @@ SELECT md5('demo-reading-pending:' || m.id)::uuid, m.tenant_id, m.id, CURRENT_DA
        'MEMBER', 'PENDING', 'aaaaaaaa-0000-0000-0000-000000000003'
 FROM meter m JOIN plot p ON p.tenant_id = m.tenant_id AND p.id = m.plot_id
 WHERE m.tenant_id = '11111111-1111-1111-1111-111111111111' AND m.resource = 'ELECTRICITY' AND m.removed_on IS NULL
-  AND p.number IN ('7', '15')
+  AND p.number = '7'
 ON CONFLICT DO NOTHING;
 
 -- A rejected member reading on plot 1 (owner: member 9).

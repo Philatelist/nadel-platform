@@ -9,6 +9,11 @@ public final class ProblemCodes {
     public static final String MEMBER_NOT_LINKED = "MEMBER_NOT_LINKED";
     public static final String PERMISSION_DENIED = "PERMISSION_DENIED";
     public static final String NOT_FOUND = "NOT_FOUND";
+    /**
+     * 404 of the plot-scoped meter endpoints a member may call: the plot is unknown, of another cooperative or not one
+     * the caller may see. Every case is the same answer, so nothing leaks.
+     */
+    public static final String PLOT_NOT_FOUND = "PLOT_NOT_FOUND";
     public static final String INTERNAL_ERROR = "INTERNAL_ERROR";
     public static final String EMAIL_TAKEN = "EMAIL_TAKEN";
     public static final String LAST_CHAIRMAN = "LAST_CHAIRMAN";

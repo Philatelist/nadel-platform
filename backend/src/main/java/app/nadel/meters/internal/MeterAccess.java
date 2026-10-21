@@ -13,7 +13,8 @@ import org.springframework.stereotype.Component;
 /**
  * The member rule of the endpoints that a member may call for their own plots (the meters of a plot, the readings of a
  * meter): {@code METERS_VIEW} sees every meter, anyone else only the meters of a plot they own now, and everything
- * else, unknown ids and other cooperatives included, is the same 404. The platform operator has no cooperative data.
+ * else, unknown ids and other cooperatives included, is the same 404 ({@code PLOT_NOT_FOUND} when the path names a
+ * plot). The platform operator has no cooperative data.
  */
 @Component
 class MeterAccess {
@@ -30,6 +31,14 @@ class MeterAccess {
             throw new ApiProblemException(HttpStatus.FORBIDDEN, ProblemCodes.PERMISSION_DENIED,
                     "The platform operator has no access to cooperative data.");
         }
+    }
+
+    /**
+     * 404 {@code PLOT_NOT_FOUND}: the plot is unknown, of another cooperative or not one the caller may see; the same
+     * answer in every case.
+     */
+    static ApiProblemException plotNotFound() {
+        return new ApiProblemException(HttpStatus.NOT_FOUND, ProblemCodes.PLOT_NOT_FOUND, "The plot was not found.");
     }
 
     /** Whether the viewer sees the whole register ({@code METERS_VIEW}); then also the board's note. */

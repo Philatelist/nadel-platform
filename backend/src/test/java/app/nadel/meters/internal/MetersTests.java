@@ -506,8 +506,9 @@ class MetersTests extends MeterTestSupport {
                 .andExpect(jsonPath("$[0].lastReading.value").value("8000.000"))
                 .andExpect(jsonPath("$[0].note").doesNotExist());
         send(token, get("/api/v1/plots/" + other + "/meters"), null).andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.code").value("NOT_FOUND"));
-        send(token, get("/api/v1/plots/" + UUID.randomUUID() + "/meters"), null).andExpect(status().isNotFound());
+                .andExpect(jsonPath("$.code").value("PLOT_NOT_FOUND"));
+        send(token, get("/api/v1/plots/" + UUID.randomUUID() + "/meters"), null).andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("PLOT_NOT_FOUND"));
         send(token, get(METERS), null).andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
         send(token, get(METERS + "/" + meter), null).andExpect(status().isForbidden());
@@ -542,7 +543,8 @@ class MetersTests extends MeterTestSupport {
         send(other, get(METERS + "/" + meter), null).andExpect(status().isNotFound());
         assertThat(ids(send(other, get(METERS).param("includeRemoved", "true"), null).andExpect(status().isOk())))
                 .doesNotContain(meter.toString());
-        send(other, get("/api/v1/plots/" + plot + "/meters"), null).andExpect(status().isNotFound());
+        send(other, get("/api/v1/plots/" + plot + "/meters"), null).andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("PLOT_NOT_FOUND"));
         send(other, put(METERS + "/" + meter), Map.of("serial", "MT-x")).andExpect(status().isNotFound());
         send(other, post(METERS + "/" + meter + "/remove"), removal("2026-07-01", "1"))
                 .andExpect(status().isNotFound());

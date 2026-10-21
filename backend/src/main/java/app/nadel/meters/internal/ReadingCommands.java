@@ -191,14 +191,15 @@ class ReadingCommands {
      * A member submits the reading of an active meter of a plot they own now (spec 010, section 2.4). It waits for
      * approval ({@code PENDING}, source {@code MEMBER}) and never counts or supersedes a counted reading until then; a
      * pending reading of the same meter and date is superseded by it, and the same value again changes nothing. It is
-     * checked against the counted readings as the board's entry is. Any plot the caller does not own now, and any meter
-     * that is not a meter of that plot, is the same 404; the platform operator gets 403.
+     * checked against the counted readings as the board's entry is. Any plot the caller does not own now (an unknown
+     * plot and a plot of another cooperative included) is the same 404 {@code PLOT_NOT_FOUND}; a meter that is not a
+     * meter of that plot is 404 {@code NOT_FOUND} on {@code meterId}; the platform operator gets 403.
      */
     @Transactional
     ReadingSaved submit(UUID plotId, ReadingSubmission input, AccessProfile actor) {
         access.requireCooperativeData(actor);
         if (!access.ownsNow(actor, plotId)) {
-            throw ApiProblemException.notFound();
+            throw MeterAccess.plotNotFound();
         }
         MeterValue value = parse(input.getValue());
         MeterRecord meter = meters.findByIdForUpdate(input.getMeterId())

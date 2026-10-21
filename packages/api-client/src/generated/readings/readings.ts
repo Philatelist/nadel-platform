@@ -88,8 +88,8 @@ export const getSubmitPlotReadingUrl = (id: string,) => {
  * (`errors[{field: takenOn}]`), `READING_OUT_OF_ORDER` (`errors[{field: value}]`), `METER_REMOVED` for a removed
  * meter of the plot. The warning `UNUSUAL_CONSUMPTION` follows the rule of `enterReadings`. No permission
  * annotation: only a current owner of the plot may submit; any other plot, an unknown id and a plot of another
- * cooperative are 404 `NOT_FOUND`, as is a meter that is not a meter of the plot (`errors[{field: meterId}]`);
- * the platform operator has no cooperative data: 403. 400 `VALIDATION_FAILED` with `value`
+ * cooperative are the same 404 `PLOT_NOT_FOUND`; a meter that is not a meter of the plot is 404 `NOT_FOUND`
+ * (`errors[{field: meterId, code: NOT_FOUND}]`); the platform operator has no cooperative data: 403. 400 `VALIDATION_FAILED` with `value`
  * `METER_VALUE_INVALID` for a malformed value. Written to the audit log (`READING_SUBMITTED`).
  * @summary Submit a reading of an own meter
  */
