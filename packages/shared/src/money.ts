@@ -20,7 +20,7 @@ function isEnglish(locale: string): boolean {
  * "1250.50" → uk "1 250,50 ₴" (no-break space as group separator and before the sign), en "₴1,250.50".
  * Negative amounts keep the minus sign U+2212 in front: uk "−350,00 ₴", en "−₴350.00". Strings only, no arithmetic.
  */
-export function formatMoney(value: MoneyString, locale: string = 'uk'): string {
+export function formatMoney(value: MoneyString, locale: string): string {
   if (!isMoney(value)) {
     throw new Error(`Invalid money amount: ${value}`);
   }
@@ -51,7 +51,7 @@ const RATE_INPUT_RE = /^\d{1,10}(\.\d{1,4})?$/;
  * "1.4532" → "1,4532" (uk) or "50.00", "4.32", "1.4532" (en). Strings only, so no digit is lost; no grouping.
  * Storage and API keep four decimals.
  */
-export function formatRate(rate: RateString, locale: string = 'uk'): string {
+export function formatRate(rate: RateString, locale: string): string {
   if (!RATE_RE.test(rate)) {
     throw new Error(`Invalid rate: ${rate}`);
   }
@@ -61,7 +61,7 @@ export function formatRate(rate: RateString, locale: string = 'uk'): string {
 }
 
 /** A rate with the hryvnia sign: uk "4,32 ₴" (no-break space), en "₴4.32". Same significant-decimals rule as `formatRate`. */
-export function formatRateWithCurrency(rate: RateString, locale: string = 'uk'): string {
+export function formatRateWithCurrency(rate: RateString, locale: string): string {
   const text = formatRate(rate, locale);
   return isEnglish(locale) ? `₴${text}` : `${text}${NBSP}₴`;
 }

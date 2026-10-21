@@ -18,7 +18,7 @@ export function m2ToSotky(m2: string | number): string {
 }
 
 /** Area shown in sotkas with the locale's grouping and decimal separator; the input is an m² decimal (string preferred). */
-export function formatSotky(areaM2: string | number, locale: string = 'uk'): string {
+export function formatSotky(areaM2: string | number, locale: string): string {
   const [integer = '0', decimals] = m2ToSotky(areaM2).split('.');
   const negative = integer.startsWith('-');
   const digits = negative ? integer.slice(1) : integer;

@@ -33,6 +33,50 @@ export default tseslint.config(
           message: 'No literal UI text in JSX; take it from the i18n catalogs (useT).',
         },
         {
+          selector: 'JSXElement > JSXExpressionContainer > Literal[value=/\\p{L}/u]',
+          message: 'No literal UI text in JSX; take it from the i18n catalogs (useT).',
+        },
+        {
+          selector: 'JSXFragment > JSXExpressionContainer > Literal[value=/\\p{L}/u]',
+          message: 'No literal UI text in JSX; take it from the i18n catalogs (useT).',
+        },
+        {
+          selector:
+            'JSXElement > JSXExpressionContainer > TemplateLiteral > TemplateElement[value.raw=/\\p{L}/u]',
+          message: 'No literal UI text in JSX; take it from the i18n catalogs (useT).',
+        },
+        {
+          selector:
+            'JSXFragment > JSXExpressionContainer > TemplateLiteral > TemplateElement[value.raw=/\\p{L}/u]',
+          message: 'No literal UI text in JSX; take it from the i18n catalogs (useT).',
+        },
+        {
+          selector: 'JSXElement > JSXExpressionContainer > ConditionalExpression > Literal[value=/\\p{L}/u]',
+          message: 'No literal UI text in JSX; take it from the i18n catalogs (useT).',
+        },
+        {
+          selector: 'JSXFragment > JSXExpressionContainer > ConditionalExpression > Literal[value=/\\p{L}/u]',
+          message: 'No literal UI text in JSX; take it from the i18n catalogs (useT).',
+        },
+        {
+          selector:
+            'JSXElement > JSXExpressionContainer > ConditionalExpression > TemplateLiteral > TemplateElement[value.raw=/\\p{L}/u]',
+          message: 'No literal UI text in JSX; take it from the i18n catalogs (useT).',
+        },
+        {
+          selector:
+            'JSXFragment > JSXExpressionContainer > ConditionalExpression > TemplateLiteral > TemplateElement[value.raw=/\\p{L}/u]',
+          message: 'No literal UI text in JSX; take it from the i18n catalogs (useT).',
+        },
+        {
+          selector: 'JSXElement > JSXExpressionContainer > LogicalExpression > Literal[value=/\\p{L}/u]',
+          message: 'No literal UI text in JSX; take it from the i18n catalogs (useT).',
+        },
+        {
+          selector: 'JSXFragment > JSXExpressionContainer > LogicalExpression > Literal[value=/\\p{L}/u]',
+          message: 'No literal UI text in JSX; take it from the i18n catalogs (useT).',
+        },
+        {
           selector:
             'JSXAttribute[name.name=/^(aria-label|placeholder|title|alt)$/] > Literal[value=/\\p{L}/u]',
           message:
