@@ -7,10 +7,14 @@
 //   - in English, no Cyrillic text may be visible outside `[data-user-content]` (the demo data is Ukrainian, like
 //     real data, and is shown as entered).
 // What is checked: text nodes of visible elements, plus the attribute values `aria-label`, `placeholder`, `title`
-// and `alt`, and the document title. What is skipped: `[data-user-content]` subtrees, code/monospace elements, the
-// third-party map attribution, and in attributes any value that is a user-content text present on the page (an
-// aria-label such as "Edit <member name>" is fine, the name is stripped before the check).
+// and `alt`, and the document title. What is skipped: `[data-user-content]` subtrees, real code elements
+// (CODE/KBD/SAMP/PRE/TT) and `[data-code]`, the third-party map attribution, and in attributes any value that is a
+// user-content text present on the page (an aria-label such as "Edit <member name>" is fine, the name is stripped
+// before the check). Font family is deliberately not a skip criterion: tables set monospace on numeric headers.
+// Deliberate exceptions in Ukrainian, besides the allowlist: e-mail addresses, URLs and IBANs (patterns), file
+// extensions such as ".xlsx" (FILE_EXTENSION), and the digit mask letter "N" in input hints (MASK).
 import { expect, test, type Browser, type Page } from '@playwright/test';
+import { messages } from '@nadel/shared';
 import { loginAs } from './support/login';
 
 type Locale = 'uk' | 'en';
@@ -22,7 +26,7 @@ interface Finding {
 }
 
 /** Words that may stay in Latin script in the Ukrainian UI: product and format names, as they are written everywhere. */
-const LATIN_ALLOWLIST = ['Excel', 'Telegram', 'Viber', 'QR', 'IBAN', 'ID', 'CSV', 'PDF', 'XLSX'];
+const LATIN_ALLOWLIST = ['Excel', 'Telegram', 'Viber', 'QR', 'IBAN'];
 
 /**
  * Language names written in their own language on the language switcher ("ENG"/"English", "УКР"/"Українська"):
@@ -62,6 +66,15 @@ async function settle(page: Page): Promise<void> {
     )
     .toBe(false);
   await page.waitForLoadState('networkidle');
+  // the generic error state is a failure of the screen, not a text to check
+  const errors = [messages('uk').state.error, messages('en').state.error];
+  const shown = await page.evaluate(
+    (texts) =>
+      (document.querySelector('main')?.textContent ?? '').includes(texts[0] ?? '') ||
+      (document.querySelector('main')?.textContent ?? '').includes(texts[1] ?? ''),
+    errors,
+  );
+  expect(shown, 'the generic error state is shown').toBe(false);
 }
 
 /** DOM walk in the page: returns every visible piece of text with the path of its nearest element. */
@@ -78,7 +91,9 @@ async function collect(page: Page): Promise<{ text: string; where: string; attri
       const parts: string[] = [];
       for (let node: Element | null = el; node && node !== document.body; node = node.parentElement) {
         const id = node.id ? `#${node.id}` : '';
-        const role = node.getAttribute('role') ? `[role=${node.getAttribute('role')}]` : '';
+        const roleName = node.getAttribute('role');
+        const label = node.getAttribute('aria-label');
+        const role = roleName ? `[role=${roleName}${roleName === 'group' && label ? `:${label}` : ''}]` : '';
         parts.unshift(`${node.tagName.toLowerCase()}${id}${role}`);
         if (parts.length >= 5) break;
       }
@@ -87,10 +102,9 @@ async function collect(page: Page): Promise<{ text: string; where: string; attri
 
     const skipped = (el: Element): boolean => {
       if (SKIP_TAGS.has(el.tagName)) return true;
-      if (el.closest('[data-user-content], .maplibregl-ctrl-attrib')) return true;
+      if (el.closest('[data-user-content], [data-code], .maplibregl-ctrl-attrib')) return true;
       const style = getComputedStyle(el);
-      if (style.display === 'none' || style.visibility === 'hidden') return true;
-      return /mono/i.test(style.fontFamily) && !/sans|serif/i.test(style.fontFamily.split(',')[0] ?? '');
+      return style.display === 'none' || style.visibility === 'hidden';
     };
 
     const visibleChain = (el: Element): boolean => {
@@ -131,9 +145,9 @@ const MASK = /\bN+\b/g;
 const LATIN_WORD = /[A-Za-z]+(?:['’][A-Za-z]+)*/g;
 const CYRILLIC_WORD = /[\u0400-\u04FF]+(?:['’][\u0400-\u04FF]+)*/g;
 
-/** An autonym is allowed only inside the language switcher group. */
-const isAutonym = (word: string, where: string): boolean =>
-  AUTONYMS.includes(word) && where.includes('[role=group]');
+/** An autonym is allowed only inside the language switcher group, found by its catalog aria-label. */
+const isAutonym = (word: string, where: string, locale: Locale): boolean =>
+  AUTONYMS.includes(word) && where.includes(`[role=group:${messages(locale).nav.language}]`);
 
 function check(locale: Locale, items: { text: string; where: string }[]): Finding[] {
   const findings: Finding[] = [];
@@ -146,12 +160,12 @@ function check(locale: Locale, items: { text: string; where: string }[]): Findin
         .replace(FILE_EXTENSION, ' ')
         .replace(MASK, ' ');
       for (const word of stripped.match(LATIN_WORD) ?? []) {
-        if (!LATIN_ALLOWLIST.includes(word) && !isAutonym(word, where))
+        if (!LATIN_ALLOWLIST.includes(word) && !isAutonym(word, where, locale))
           findings.push({ where, word, context: text.slice(0, 80) });
       }
     } else {
       for (const word of text.match(CYRILLIC_WORD) ?? []) {
-        if (isAutonym(word, where)) continue;
+        if (isAutonym(word, where, locale)) continue;
         findings.push({ where, word, context: text.slice(0, 80) });
       }
     }
@@ -234,6 +248,13 @@ for (const locale of ['uk', 'en'] as const) {
       try {
         const findings: Finding[] = [];
         for (const path of ['/account', '/plots']) findings.push(...(await auditScreen(page, path, locale)));
+
+        // the card of a plot the member owns
+        await page.goto('/plots');
+        await settle(page);
+        const ownHref = (await hrefs(page, /^\/plots\/[0-9a-f-]{36}$/))[0];
+        expect(ownHref, 'an own plot link on the member plots list').toBeTruthy();
+        findings.push(...(await auditScreen(page, ownHref ?? '', locale)));
         expect(report(findings), 'language mixes').toBe('');
       } finally {
         await page.context().close();
