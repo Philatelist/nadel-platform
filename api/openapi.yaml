@@ -3168,6 +3168,7 @@ components:
         - METER_REMOVED
         - METER_DELETED
         - METER_REPLACED
+        - METER_PARENT_CHANGED
         - READING_ENTERED
         - READING_REPLACED
         - READING_CORRECTED

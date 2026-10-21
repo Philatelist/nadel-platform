@@ -434,6 +434,34 @@ class MeterTreeTests extends MeterTestSupport {
     }
 
     @Test
+    void theAuditLogShowsAMoveWithItsParentAndDate() throws Exception {
+        UUID quarter = quarter("MT Квартал А");
+        UUID plotMeter = plotMeter();
+        move(chairman(), plotMeter, quarter, "2025-10-15").andExpect(status().isOk());
+        awaitEntries(plotMeter, "METER_PARENT_CHANGED", 1);
+
+        JsonNode page = body(send(chairman(), get("/api/v1/audit").param("entityType", "METER")
+                .param("entityId", plotMeter.toString()), null).andExpect(status().isOk()));
+        List<JsonNode> moves = new ArrayList<>();
+        for (JsonNode item : page.get("items")) {
+            if ("METER_PARENT_CHANGED".equals(item.get("action").asString())) {
+                moves.add(item);
+            }
+        }
+        assertThat(moves).hasSize(1);
+        JsonNode entry = moves.getFirst();
+        assertThat(entry.get("entityType").asString()).isEqualTo("METER");
+        List<Change> changes = new ArrayList<>();
+        for (JsonNode change : entry.get("changes")) {
+            changes.add(new Change(change.get("field").asString(),
+                    change.hasNonNull("oldValue") ? change.get("oldValue").asString() : null,
+                    change.get("newValue").asString()));
+        }
+        assertThat(changes).containsExactly(new Change("parent", null, "MT Квартал А"),
+                new Change("effectiveFrom", null, "2025-10-15"));
+    }
+
+    @Test
     void aRefusedMoveWritesNothing() throws Exception {
         UUID first = quarter("MT Квартал А");
         UUID second = quarter("MT Квартал Б");
