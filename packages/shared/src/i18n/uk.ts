@@ -476,8 +476,8 @@ export const uk: Messages = {
     validFromShort: 'діє з {date}',
     back: 'До тарифів',
     basis: {
-      PER_PLOT: 'З ділянки',
-      PER_AREA_SOTKA: 'З сотки',
+      PER_PLOT: 'За ділянку',
+      PER_AREA_SOTKA: 'За сотку',
       PER_KWH: 'За кВт·год',
       PER_M3: 'За м³',
       FIXED_ONE_TIME: 'Фіксована разова сума',

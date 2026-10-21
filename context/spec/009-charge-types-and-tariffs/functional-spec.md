@@ -3,7 +3,7 @@
 - **Topic:** What the cooperative charges for (charge types), how much (tariffs with dated versions, a basis, a
   frequency and a rate), which plots each tariff applies to, and what each plot would be charged in a given month,
   before any real charges exist.
-- **Status:** Draft
+- **Status:** Completed
 - **Author:** Alex Usov
 - **Source:** `docs/features/009-charge-types-and-tariffs.md` (roadmap phase 2, feature 1 of 5)
 
@@ -48,18 +48,18 @@ nothing about anyone else's.
   expected amount until it is active again.
 - Names are unique among the cooperative's non-archived charge types (ignoring letter case).
   - **Acceptance Criteria:**
-    - [ ] When the chairman opens "Види нарахувань" for the first time, then they see Членський внесок, Електроенергія,
+    - [x] When the chairman opens "Види нарахувань" for the first time, then they see Членський внесок, Електроенергія,
       Земельний податок and Вода, with Вода marked inactive; with the interface in English the same types read
-      Membership fee, Electricity, Land tax and Water.
-    - [ ] When the chairman adds a charge type "Ремонт дороги", then it appears at the end of the list as active.
-    - [ ] When the chairman renames "Членський внесок" to "Членські внески 2026", then the new name is shown in both
-      interface languages and in the tariffs list.
-    - [ ] When the chairman adds or renames a type to a name another type already has, then the save is refused with
-      "Вид нарахування з такою назвою вже є" / "A charge type with this name already exists".
-    - [ ] When the chairman moves "Земельний податок" up, then it changes places with the type above it, and the new
-      order is kept after reloading the page.
-    - [ ] When the chairman archives a charge type and confirms, then it disappears from the list and is no longer
-      offered when a tariff is created, and the plots' expected amounts no longer include its tariffs.
+      Membership fee, Electricity, Land tax and Water. _Evidence: `TariffsAcceptanceTests` §2.1 (`section21_theFourStartingTypesAreThereWaterInactive`); e2e `tariffs-acceptance.spec.ts` (§2.1 #1, uk and en); `ChargeTypesTests`; `docs/screenshots/009-charge-types-and-tariffs-charge-types.png`._
+    - [x] When the chairman adds a charge type "Ремонт дороги", then it appears at the end of the list as active. _Evidence: `TariffsAcceptanceTests` `section21_aCustomTypeIsAddedAtTheEndActive`; e2e `tariffs-acceptance.spec.ts` (§2.1 #2); e2e `tariffs.spec.ts`._
+    - [x] When the chairman renames "Членський внесок" to "Членські внески 2026", then the new name is shown in both
+      interface languages and in the tariffs list. _Evidence: `TariffsAcceptanceTests` `section21_aRenamedTypeShowsTheNewNameEverywhere`; `ChargeTypesTests`; `chargeTypeName` unit tests._
+    - [x] When the chairman adds or renames a type to a name another type already has, then the save is refused with
+      "Вид нарахування з такою назвою вже є" / "A charge type with this name already exists". _Evidence: `TariffsAcceptanceTests` `section21_aDuplicateNameIsRefusedOnAddAndOnRename` (incl. the Ukrainian and English defaults); e2e `tariffs-acceptance.spec.ts` (§2.1 #4); `ChargeTypesTests`._
+    - [x] When the chairman moves "Земельний податок" up, then it changes places with the type above it, and the new
+      order is kept after reloading the page. _Evidence: `TariffsAcceptanceTests` `section21_movingATypeUpChangesPlacesAndTheOrderIsKept`; e2e `tariffs-acceptance.spec.ts` (§2.1 #5, after reload); `ChargeTypesPage.test.tsx` (full id list)._
+    - [x] When the chairman archives a charge type and confirms, then it disappears from the list and is no longer
+      offered when a tariff is created, and the plots' expected amounts no longer include its tariffs. _Evidence: `TariffsAcceptanceTests` `section21_anArchivedTypeDisappearsGetsNoTariffsAndLeavesTheAmounts`; e2e `tariffs-acceptance.spec.ts` (§2.1 #6)._
 
 ### 2.2 Tariffs and versions
 
@@ -78,22 +78,22 @@ nothing about anyone else's.
   recalculation itself is feature 012).
 - A tariff is created together with its first version.
   - **Acceptance Criteria:**
-    - [ ] When the chairman creates the tariff "Для членів кооперативу" for "Членський внесок" with a first version from
-      01.01.2027, per sotka, yearly, rate 50, then the tariffs list shows it with "50.0000", "за сотку", "щороку" and
-      "діє з 01.01.2027".
-    - [ ] When the chairman adds a version from 01.07.2027 with rate 60, then the tariff card lists both versions,
-      newest first, and the first one is shown as valid until 30.06.2027.
-    - [ ] When the chairman enters a new version dated before today, then the form shows "Нарахування за минулі
+    - [x] When the chairman creates the tariff "Для членів кооперативу" for "Членський внесок" with a first version from
+      01.01.2027, per sotka, yearly, rate 50, then the tariffs list shows it with "50,0000" ("50.0000" in English), "за сотку", "щороку" and
+      "діє з 01.01.2027". _Evidence: `TariffsAcceptanceTests` `section22_aTariffWithTwoVersionsListsThemNewestFirstWithFourDecimals`; e2e `tariffs-acceptance.spec.ts` (§2.2); `docs/screenshots/009-charge-types-and-tariffs-tariffs.png` ("50,0000 ₴ · За сотку · Щороку", "діє з")._
+    - [x] When the chairman adds a version from 01.07.2027 with rate 60, then the tariff card lists both versions,
+      newest first, and the first one is shown as valid until 30.06.2027. _Evidence: `TariffsAcceptanceTests` `section22_aTariffWithTwoVersionsListsThemNewestFirstWithFourDecimals` (valid until the day before); e2e `tariffs-acceptance.spec.ts` (§2.2 #2); `docs/screenshots/009-charge-types-and-tariffs-tariff-card.png`._
+    - [x] When the chairman enters a new version dated before today, then the form shows "Нарахування за минулі
       періоди буде перераховано" / "Charges for past periods will be recalculated" before saving, and the version can
-      still be saved.
-    - [ ] When the chairman adds a version with the same start date as an existing version of that tariff, then the
-      save is refused with "Версія з такою датою вже є" / "A version with this date already exists".
-    - [ ] When the chairman enters a rate with more than 4 digits after the decimal point, a negative rate or a rate
+      still be saved. _Evidence: `TariffsAcceptanceTests` `section22_aPastDatedVersionIsSavedAndFlagged`; e2e `tariffs-acceptance.spec.ts` (§2.2 #3, warning then saved); `docs/screenshots/009-charge-types-and-tariffs-past-date-warning.png`._
+    - [x] When the chairman adds a version with the same start date as an existing version of that tariff, then the
+      save is refused with "Версія з такою датою вже є" / "A version with this date already exists". _Evidence: `TariffsAcceptanceTests` `section22_theSameStartDateTwiceIsRefused` (409 `TARIFF_VERSION_DATE_TAKEN`); e2e `tariffs-acceptance.spec.ts` (§2.2 #4 message)._
+    - [x] When the chairman enters a rate with more than 4 digits after the decimal point, a negative rate or a rate
       that is not a number, then the save is refused with "Ставка — невід'ємне число з не більше ніж 4 знаками після
-      коми" / "The rate must be a non-negative number with at most 4 decimal places".
-    - [ ] When the chairman chooses a fixed one-time amount, then the frequency is set to one-off and cannot be changed,
-      and saving without a due date is refused with "Вкажіть дату сплати" / "Enter the due date".
-    - [ ] When the chairman saves a rate of 4.32, then it is shown as 4.3200 everywhere.
+      коми" / "The rate must be a non-negative number with at most 4 decimal places". _Evidence: `TariffsAcceptanceTests` `section22_aBadRateIsRefused` (5 decimals, negative, text → `RATE_INVALID`); `RateTests`; e2e `tariffs-acceptance.spec.ts` (§2.2 #5)._
+    - [x] When the chairman chooses a fixed one-time amount, then the frequency is set to one-off and cannot be changed,
+      and saving without a due date is refused with "Вкажіть дату сплати" / "Enter the due date". _Evidence: `TariffsAcceptanceTests` `section22_aFixedOneTimeAmountIsOneOffWithADueDate`; `VersionFields.test.tsx`; e2e `tariffs-acceptance.spec.ts` (§2.2 #6: frequency disabled, "Вкажіть дату сплати")._
+    - [x] When the chairman saves a rate of 4.32, then it is shown as 4,3200 (4.3200 in English) everywhere. _Evidence: `TariffsAcceptanceTests` `section22_aTariffWithTwoVersionsListsThemNewestFirstWithFourDecimals` (4.32 → 4.3200 on the card, the list and the plot amounts); `formatRate` tests; `docs/screenshots/009-charge-types-and-tariffs-plot-card.png` ("4,3200 ₴")._
 
 ### 2.3 Which plots a tariff applies to
 
@@ -108,17 +108,17 @@ nothing about anyone else's.
   of plots.
 - A new tariff applies to all plots until the chairman changes its scope.
   - **Acceptance Criteria:**
-    - [ ] When the chairman excludes plot 17 from an all-plots tariff with the reason "звільнено рішенням загальних
+    - [x] When the chairman excludes plot 17 from an all-plots tariff with the reason "звільнено рішенням загальних
       зборів", then the tariffs list shows one plot fewer, and plot 17's card shows the tariff as not charged with that
-      reason.
-    - [ ] When the chairman tries to save an exclusion without a reason, then the save is refused with "Вкажіть
-      причину" / "Enter a reason".
-    - [ ] When the chairman switches a tariff to "Selected plots" and picks plots 3 and 5, then the tariffs list shows
-      "2 ділянки" and only plots 3 and 5 show this tariff on their cards.
-    - [ ] When the chairman searches for a plot in the scope editor, then common land is not offered, and a request to
-      add common land anyway is refused with "Спільна земля не має тарифів" / "Common land has no tariffs".
-    - [ ] When the chairman opens a per-kWh electricity tariff, then it shows "застосовується до ділянок з лічильником"
-      instead of a number of plots.
+      reason. _Evidence: `TariffsAcceptanceTests` `section23_anExclusionNeedsAReasonAndShowsOnThePlot` (count −1, EXCLUDED with the reason); e2e `tariffs-acceptance.spec.ts` (§2.3); `docs/screenshots/009-charge-types-and-tariffs-plot-excluded.png`._
+    - [x] When the chairman tries to save an exclusion without a reason, then the save is refused with "Вкажіть
+      причину" / "Enter a reason". _Evidence: `TariffsAcceptanceTests` `section23_anExclusionNeedsAReasonAndShowsOnThePlot` (blank reason → `REQUIRED`); `ScopeEditor.test.tsx`; e2e `tariffs-acceptance.spec.ts` (§2.3 "Вкажіть причину")._
+    - [x] When the chairman switches a tariff to "Selected plots" and picks plots 3 and 5, then the tariffs list shows
+      "2 ділянки" and only plots 3 and 5 show this tariff on their cards. _Evidence: `TariffsAcceptanceTests` `section23_selectedPlotsAreCountedAndTheOnlyOnesWithTheTariff`; e2e `tariffs-acceptance.spec.ts` (§2.3 "2 ділянки")._
+    - [x] When the chairman searches for a plot in the scope editor, then common land is not offered, and a request to
+      add common land anyway is refused with "Спільна земля не має тарифів" / "Common land has no tariffs". _Evidence: `TariffsAcceptanceTests` `section23_commonLandIsNotOfferedAndIsRefused` (`TARIFF_COMMON_LAND`); `PlotPicker.test.tsx`; e2e `tariffs-acceptance.spec.ts` (§2.3)._
+    - [x] When the chairman opens a per-kWh electricity tariff, then it shows "застосовується до ділянок з лічильником"
+      instead of a number of plots. _Evidence: `TariffsAcceptanceTests` `section23_aPerKwhTariffHasNoPlotCount`; `TariffsPage.test.tsx`; `docs/screenshots/009-charge-types-and-tariffs-tariffs.png` ("застосовується до ділянок з лічильником")._
 
 ### 2.4 Expected amount for a plot and a month
 
@@ -150,20 +150,20 @@ nothing about anyone else's.
   | Land tax | 35.0000 per sotka per year, plot 600 m² | 35 × 6 / 12 = 17.50 |
   | Common land | any tariff | never applies |
   - **Acceptance Criteria:**
-    - [ ] Given a membership tariff of 50 per sotka per year, when the chairman opens the card of a 600 m² plot and
-      chooses a month, then the "Тарифи" section shows 25.00 for it.
-    - [ ] Given the version change of the table above, when anyone allowed opens the 600 m² plot for November 2026,
-      then the amount shown is 27.50.
-    - [ ] Given a road-repair fee of 1 200.00 due 01.05.2026, when the chairman chooses May 2026 on a plot card, then
-      the fee shows 1 200.00, and when they choose June 2026, then it shows 0.00.
-    - [ ] Given a per-kWh electricity tariff, when the chairman opens a plot card, then the tariff shows "за
-      показаннями" without an amount.
-    - [ ] When the chairman opens the card of common land, then no tariffs and no amounts are shown.
-    - [ ] When the chairman opens a plot card for a month before any version of a tariff starts, then that tariff is
-      not listed for that month.
-    - [ ] Given two co-owners at 1/2 each, when the chairman opens their plot card, then the amount is the whole
-      plot's amount, not half.
-    - [ ] Every row of the worked examples table passes as an automated check.
+    - [x] Given a membership tariff of 50 per sotka per year, when the chairman opens the card of a 600 m² plot and
+      chooses a month, then the "Тарифи" section shows 25.00 for it. _Evidence: e2e `tariffs.spec.ts` (25.00 on a 600 m² plot); `TariffsAcceptanceTests` `section24_everyRowOfTheWorkedExamplesTable`; e2e `tariffs-acceptance.spec.ts` (§2.4)._
+    - [x] Given the version change of the table above, when anyone allowed opens the 600 m² plot for November 2026,
+      then the amount shown is 27.50. _Evidence: `TariffsAcceptanceTests` `section24_everyRowOfTheWorkedExamplesTable` (27.50); `ChargeCalculatorTests`; e2e `tariffs-acceptance.spec.ts` (month picker 2026-11 → 27.50)._
+    - [x] Given a road-repair fee of 1 200.00 due 01.05.2026, when the chairman chooses May 2026 on a plot card, then
+      the fee shows 1 200.00, and when they choose June 2026, then it shows 0.00. _Evidence: `TariffsAcceptanceTests` `section24_everyRowOfTheWorkedExamplesTable` (1200.00 in May, 0.00 in June); e2e `tariffs-acceptance.spec.ts` (§2.4); `docs/screenshots/009-charge-types-and-tariffs-plot-card.png` (0,00 ₴ in October)._
+    - [x] Given a per-kWh electricity tariff, when the chairman opens a plot card, then the tariff shows "за
+      показаннями" without an amount. _Evidence: `TariffsAcceptanceTests` `section24_landTaxAndMeterBasedTariffs`; e2e `tariffs-acceptance.spec.ts` ("за показаннями"); `docs/screenshots/009-charge-types-and-tariffs-plot-card.png`._
+    - [x] When the chairman opens the card of common land, then no tariffs and no amounts are shown. _Evidence: `TariffsAcceptanceTests` `section24_everyRowOfTheWorkedExamplesTable` (common land row); `PlotTariffsTests`; e2e `tariffs-acceptance.spec.ts` (§2.4 #5); `PlotPage.test.tsx` (no panel for common land)._
+    - [x] When the chairman opens a plot card for a month before any version of a tariff starts, then that tariff is
+      not listed for that month. _Evidence: `TariffsAcceptanceTests` `section24_everyRowOfTheWorkedExamplesTable`; `ChargeCalculatorTests` (version starting after the month → not listed); `PlotTariffsTests`._
+    - [x] Given two co-owners at 1/2 each, when the chairman opens their plot card, then the amount is the whole
+      plot's amount, not half. _Evidence: `TariffsAcceptanceTests` `section24_coOwnersDoNotSplitTheAmount`; `docs/screenshots/009-charge-types-and-tariffs-member-account.png` (plot 7 owned 1/2 shows the whole 33,33 ₴)._
+    - [x] Every row of the worked examples table passes as an automated check. _Evidence: `ChargeCalculatorTests` (one test per row: 25.00, 25.50, 19.44, 100.00, 27.50, 1200.00/0.00, 17.50); `TariffsAcceptanceTests` `section24_everyRowOfTheWorkedExamplesTable`, `section24_landTaxAndMeterBasedTariffs`, `section23_anExclusionNeedsAReasonAndShowsOnThePlot`._
 
 ### 2.5 Who can see and change tariffs
 
@@ -173,18 +173,18 @@ nothing about anyone else's.
 - A member sees the tariffs and expected amounts only for the plots they currently own: in "My account" and on their own
   plot's card. Another plot's tariffs and amounts are never shown to them, not even by typing an address.
   - **Acceptance Criteria:**
-    - [ ] When the treasurer opens "Тарифи", then they see the charge types and tariffs, and no add, edit, version,
-      scope or archive actions.
-    - [ ] When the treasurer tries to change a tariff anyway, then the change is refused with "Недостатньо прав" and
-      nothing changes.
-    - [ ] When a member opens the app, then there is no "Тарифи" menu item, and opening the tariffs page directly shows
-      "Немає доступу до цієї сторінки" / "You don't have access to this page".
-    - [ ] When a member opens "My account", then the section "Що мені нараховуватимуть" / "What I will be charged"
-      lists, for each of their own plots, the tariffs and the expected amounts for the current month.
-    - [ ] When a member asks for the expected amounts of a plot they do not own, then they get "Ділянку не знайдено" /
-      "Plot not found" and no amounts.
-    - [ ] When a user of another cooperative opens this cooperative's tariff, then they get "not found" and see nothing
-      of it.
+    - [x] When the treasurer opens "Тарифи", then they see the charge types and tariffs, and no add, edit, version,
+      scope or archive actions. _Evidence: `TariffsAcceptanceTests` `section25_theTreasurerReadsButCannotChange`; e2e `tariffs.spec.ts`; e2e `tariffs-acceptance.spec.ts` (§2.5); `docs/screenshots/009-charge-types-and-tariffs-treasurer.png`._
+    - [x] When the treasurer tries to change a tariff anyway, then the change is refused with "У вас немає дозволу на цю дію." and
+      nothing changes. _Evidence: `TariffsAcceptanceTests` `section25_theTreasurerReadsButCannotChange` (403 `PERMISSION_DENIED`, nothing changed); e2e `tariffs-acceptance.spec.ts` (§2.5 #2)._
+    - [x] When a member opens the app, then there is no "Тарифи" menu item, and opening the tariffs page directly shows
+      "У вас немає доступу до цієї сторінки" / "You don't have access to this page". _Evidence: `TariffsAcceptanceTests` `section25_aMemberHasNoTariffsPermissionAndNoAccess`; e2e `tariffs.spec.ts`; e2e `tariffs-acceptance.spec.ts`; `docs/screenshots/009-charge-types-and-tariffs-member-no-access.png`._
+    - [x] When a member opens "My account", then the section "Що мені нараховуватимуть" / "What I will be charged"
+      lists, for each of their own plots, the tariffs and the expected amounts for the current month. _Evidence: `TariffsAcceptanceTests` `section25_aMemberSeesOnlyTheAmountsOfOwnPlots`; e2e `tariffs.spec.ts`; e2e `tariffs-acceptance.spec.ts`; `docs/screenshots/009-charge-types-and-tariffs-member-account.png`._
+    - [x] When a member asks for the expected amounts of a plot they do not own, then they get "Ділянку не знайдено" /
+      "Plot not found" and no amounts. _Evidence: `TariffsAcceptanceTests` `section25_aMemberSeesOnlyTheAmountsOfOwnPlots` (404 `NOT_FOUND`, no items); `PlotTariffsTests`; e2e `tariffs.spec.ts`._
+    - [x] When a user of another cooperative opens this cooperative's tariff, then they get "not found" and see nothing
+      of it. _Evidence: `TariffsAcceptanceTests` `section25_anotherCooperativeSeesNothing`; `TariffsTenantIsolationTests`; `PlotTariffsTests` (other-tenant plot 404)._
 
 ### 2.6 Screens
 
@@ -202,10 +202,10 @@ nothing about anyone else's.
 
 - All screens are in Ukrainian by default and in English when the user switches the interface language.
   - **Acceptance Criteria:**
-    - [ ] When the chairman opens "Тарифи" with no tariffs yet, then each charge type is listed with "Тарифів ще немає"
-      / "No tariffs yet" and the action "Новий тариф".
-    - [ ] When the chairman changes the month on a plot card's "Тарифи" section, then the amounts and the total change
-      to that month's values.
+    - [x] When the chairman opens "Тарифи" with no tariffs yet, then each charge type is listed with "Тарифів ще немає"
+      / "No tariffs yet" and the action "Новий тариф". _Evidence: e2e `tariffs-acceptance.spec.ts` (§2.6 #1 "Тарифів ще немає", "Новий тариф"); `TariffsAcceptanceTests` `section26_anEmptyListAndAMonthThatChangesTheAmounts`; `docs/screenshots/009-charge-types-and-tariffs-tariffs.png` (Вода: no tariffs yet)._
+    - [x] When the chairman changes the month on a plot card's "Тарифи" section, then the amounts and the total change
+      to that month's values. _Evidence: e2e `tariffs-acceptance.spec.ts` (month 2026-11 → 27.50, 2026-12 → 30.00); `TariffsAcceptanceTests` `section26_anEmptyListAndAMonthThatChangesTheAmounts`; `PlotTariffsPanel.test.tsx`._
 
 ### 2.7 Audit
 
@@ -213,9 +213,9 @@ nothing about anyone else's.
   activated or deactivated, reordered or archived; a tariff created; a version added; a scope changed; an exclusion
   added or removed with its reason.
   - **Acceptance Criteria:**
-    - [ ] When the chairman renames a charge type, adds a tariff version and excludes a plot, then the audit log shows
+    - [x] When the chairman renames a charge type, adds a tariff version and excludes a plot, then the audit log shows
       three entries with the chairman's name and the old and new values, and each entry links to the charge type or
-      tariff.
+      tariff. _Evidence: `TariffsAcceptanceTests` `section27_renameVersionAndExclusionAreThreeAuditEntries`; e2e `tariffs-acceptance.spec.ts` (§2.7: author, old → new, links to `/charge-types` and `/tariffs/{id}`); `ChargeTypeAuditTests`, `TariffAuditTests`, `TariffScopeAuditTests`._
 
 ---
 
@@ -272,3 +272,4 @@ Decided by the pipeline (no blocking question; the requirement document is detai
 ## Change Log
 
 - 2026-10-20 — created by `/feature-pipeline` from `docs/features/009-charge-types-and-tariffs.md`.
+- 2026-10-21 — verification — wording aligned with the app: rates use the interface's decimal separator ("50,0000" in Ukrainian, "50.0000" in English), and a refused change and a closed page show the app-wide texts "У вас немає дозволу на цю дію." and "У вас немає доступу до цієї сторінки".

@@ -217,7 +217,7 @@ test.describe('tariffs: acceptance', () => {
       await expect(versions).toHaveCount(2);
 
       // #3 a version dated yesterday shows the warning before saving and can still be saved
-      await form('Підстава нарахування').selectOption({ label: 'З ділянки' });
+      await form('Підстава нарахування').selectOption({ label: 'За ділянку' });
       await form('Періодичність').selectOption({ label: 'Щомісяця' });
       await form('Діє з').fill(kyivDay(-1));
       await expect(main(page).getByText('Нарахування за минулі періоди буде перераховано')).toBeVisible();

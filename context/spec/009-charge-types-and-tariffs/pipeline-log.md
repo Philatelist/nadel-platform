@@ -1,7 +1,7 @@
 # Pipeline log — 009 Charge types and tariffs
 
 - Status: running
-- Phase: 3 — implement (Slice 1)
+- Phase: 4 — verify
 - Branch: 009-charge-types-and-tariffs · Base: main (= origin/main) @ eca55b9
 - Requirement: docs/features/009-charge-types-and-tariffs.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
@@ -85,3 +85,7 @@ Same as 004–008 (see `context/spec/005-ui-preferences/pipeline-log.md` and `co
 - Slice 5 review r1 PASS. All slice reviews PASS → Slice 6 (Feature Testing & Regression) started.
 - Slice 6 (testing-expert): `TariffsAcceptanceTests` 24 green (RED: exclusion ignored → failed, restored green); `tariffs-acceptance.spec.ts` 7 specs, full `make e2e` 89 passed (RED: past-date warning hidden → failed, restored green). No GAP. Earlier e2e attempts left E2E-* rows in the shared dev DB; archived through the API (a temporary spec, deleted). Spec wording differs from the existing app-wide UI texts ("У вас немає дозволу на цю дію." for a refused change; "У вас немає доступу до цієї сторінки") — the spec is aligned in verify. Subagent suggestion to git-ignore docs/screenshots ignored (screenshots are committed evidence).
 - Slice 6 committed. Review r1 started.
+- Slice 6 review r1 PASS. Every slice review PASS. Phase 4 — verify started.
+- Phase 4 verify: `make up` (detached, log scratchpad/makeup009.log); screenshots in Ukrainian from demo data only (no writes): docs/screenshots/009-charge-types-and-tariffs-{tariffs,charge-types,tariff-card,past-date-warning,plot-card,plot-excluded,member-account,member-no-access,treasurer}.png; plot 7 (800 m²): membership 33,33, land tax 23,33, road repair 0,00 in October, electricity "за показаннями", total 56,66 — matches 50×8/12 and 35×8/12.
+- Verify fix (criterion §2.2 #1 "за сотку"): Ukrainian basis labels "З сотки"/"З ділянки" → "За сотку"/"За ділянку" (uk.ts, TariffsPage.test.tsx, tariffs-acceptance.spec.ts). Spec wording aligned with the app (rates with the locale decimal separator; app-wide refusal and no-access texts) — change log entry in functional-spec.md.
+- 35/35 criteria marked with evidence; functional-spec and technical-considerations Status Completed. Product docs: architecture.md already updated in Slice 5; no /awos:product or /awos:architecture command needed.

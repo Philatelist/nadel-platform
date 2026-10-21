@@ -127,7 +127,7 @@ describe('TariffsPage', () => {
       '21 ділянка',
       '22 ділянки',
     ]);
-    expect(screen.getAllByText(/^1,0000 ₴ · З ділянки · Щомісяця$/)).toHaveLength(7);
+    expect(screen.getAllByText(/^1,0000 ₴ · За ділянку · Щомісяця$/)).toHaveLength(7);
   });
 });
 

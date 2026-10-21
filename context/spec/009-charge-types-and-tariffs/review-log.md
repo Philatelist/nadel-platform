@@ -36,3 +36,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `96d1698..f22d77f` | PASS | — | minor: the member "own plots only" check filters headings by name (counting all would be stricter); e2e checks English only; the charge type id is looked up after the UI shows it (a failure in between leaves a uniquely named row); two long README lines |
+
+## Slice 6 — Feature Testing & Regression
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `f22d77f..a43e143` | PASS | — | minor: one e2e title says "§2.1 empty list text" for a §2.6 #1 check; the treasurer's card-level absence of controls is left to unit tests; some Ukrainian UI texts (§2.2 #1, §2.3 #5, §2.1 #3) are covered by unit tests, not e2e; the "refused change writes no audit entry" check reads right after the 403 (weak negative); per-test members are not removed (as in other acceptance classes); a fully-qualified `java.util.Arrays`; `rows.last()`/`nth(-2)` assume no concurrent charge types on the shared dev DB |

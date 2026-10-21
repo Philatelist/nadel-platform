@@ -1,7 +1,7 @@
 # Technical Specification: Charge types and tariffs
 
 - **Functional Specification:** [functional-spec.md](functional-spec.md)
-- **Status:** Draft
+- **Status:** Completed
 - **Author(s):** Alex Usov (pipeline; inputs from spring-backend, postgres-database and react-frontend)
 
 ---
