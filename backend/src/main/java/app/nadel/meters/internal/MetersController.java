@@ -9,8 +9,10 @@ import java.util.List;
 import java.util.UUID;
 import nadel.contract.api.MetersApi;
 import nadel.contract.model.Meter;
+import nadel.contract.model.MeterConsumption;
 import nadel.contract.model.MeterCreate;
 import nadel.contract.model.MeterRemoval;
+import nadel.contract.model.MeterReplacement;
 import nadel.contract.model.MeterUpdate;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
@@ -30,11 +32,14 @@ class MetersController implements MetersApi {
     private final CurrentUser currentUser;
     private final MeterQueries queries;
     private final MeterCommands commands;
+    private final ConsumptionQueries consumption;
 
-    MetersController(CurrentUser currentUser, MeterQueries queries, MeterCommands commands) {
+    MetersController(CurrentUser currentUser, MeterQueries queries, MeterCommands commands,
+            ConsumptionQueries consumption) {
         this.currentUser = currentUser;
         this.queries = queries;
         this.commands = commands;
+        this.consumption = consumption;
     }
 
     @Override
@@ -77,6 +82,19 @@ class MetersController implements MetersApi {
     @PreAuthorize("hasAuthority('PERM_METERS_VIEW') and hasAuthority('PERM_METERS_MANAGE')")
     public ResponseEntity<Meter> removeMeter(UUID id, MeterRemoval meterRemoval) {
         return ResponseEntity.ok(commands.remove(id, meterRemoval, currentUser.profile()));
+    }
+
+    @Override
+    @PreAuthorize("hasAuthority('PERM_METERS_VIEW') and hasAuthority('PERM_METERS_MANAGE')")
+    public ResponseEntity<Meter> replaceMeter(UUID id, MeterReplacement meterReplacement) {
+        Meter replacement = commands.replace(id, meterReplacement, currentUser.profile());
+        return ResponseEntity.created(URI.create("/api/v1/meters/" + replacement.getId())).body(replacement);
+    }
+
+    @Override
+    @PreAuthorize("hasAuthority('PERM_METERS_VIEW')")
+    public ResponseEntity<MeterConsumption> getMeterConsumption(UUID id, LocalDate from, LocalDate to) {
+        return ResponseEntity.ok(consumption.consumption(id, from, to));
     }
 
     /**

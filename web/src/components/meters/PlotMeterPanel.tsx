@@ -30,6 +30,7 @@ function MeterRow({ meter }: { meter: Meter }) {
           title
         )}
         <Badge tone={meter.active ? 'success' : 'neutral'}>{meter.active ? m.active : m.removed}</Badge>
+        {meter.replacesMeterId && <Badge tone="info">{m.replacedHint}</Badge>}
       </div>
       <div className="text-sm text-ink-muted">
         {format(m.lastReadingValue, {
@@ -37,6 +38,14 @@ function MeterRow({ meter }: { meter: Meter }) {
           unit,
           date: formatDay(meter.lastReading.takenOn, locale),
         })}
+      </div>
+      <div className="text-sm text-ink-muted">
+        {meter.removedOn
+          ? format(m.periodClosed, {
+              from: formatDay(meter.installedOn, locale),
+              to: formatDay(meter.removedOn, locale),
+            })
+          : format(m.periodOpen, { from: formatDay(meter.installedOn, locale) })}
       </div>
     </li>
   );

@@ -33,6 +33,7 @@ vi.mock('@nadel/api-client', async (importOriginal) => ({
   useGetMeter: () => queryResult(meter),
   useDeleteMeter: () => ({ mutate: vi.fn(), isPending: false }),
   useUpdateMeter: () => ({ mutate: vi.fn(), isPending: false }),
+  useReplaceMeter: () => ({ mutate: vi.fn(), isPending: false }),
   useRemoveMeter: () => ({ mutate: vi.fn(), isPending: false }),
   useListMeterReadings: () => queryResult(history),
   useDeleteReading: () => ({ mutate: deleteReading, isPending: false }),
@@ -101,6 +102,14 @@ describe('MeterPage', () => {
     expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument();
   });
 
+  it('offers replacement to a manager of an active meter and opens the dialog with the wrap-around hint', async () => {
+    const user = userEvent.setup();
+    renderCard();
+    await user.click(screen.getByRole('button', { name: 'Replace meter' }));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByText(/Did the counter wrap around/)).toBeInTheDocument();
+  });
+
   it('hides delete when the meter is not deletable and remove when it is already removed', () => {
     meter = { ...plotMeter, deletable: false };
     const { unmount } = renderCard();
@@ -118,6 +127,7 @@ describe('MeterPage', () => {
     renderCard();
     expect(screen.queryByRole('button', { name: 'Edit' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Remove' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Replace meter' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull();
   });
 

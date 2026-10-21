@@ -2042,7 +2042,9 @@ paths:
         after `removedOn` (`READING_OUT_OF_ORDER`, `errors[{field: removedOn}]`) or `finalReading` is lower than the
         last counted reading up to that day or the initial reading (`READING_OUT_OF_ORDER`,
         `errors[{field: finalReading}]`). 400 `VALIDATION_FAILED` with `finalReading` `METER_VALUE_INVALID` for a
-        malformed value. Requires `METERS_VIEW` and `METERS_MANAGE`; written to the audit log (`METER_REMOVED`).
+        malformed value. A meter with readings waiting for approval is refused with 409 `METER_HAS_PENDING_READINGS`
+        (approve or reject them first). Requires `METERS_VIEW` and `METERS_MANAGE`; written to the audit log
+        (`METER_REMOVED`).
       parameters:
         - name: id
           in: path
@@ -2063,6 +2065,157 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Meter'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /meters/{id}/replace:
+    post:
+      tags: [meters]
+      operationId: replaceMeter
+      summary: Replace a meter by a new one
+      description: |
+        One action: the meter is removed on `replacedOn` with `finalReading` (the rules of `removeMeter`, with the
+        date errors on `replacedOn`), and a new active meter of the same kind, resource, plot and name is installed on
+        the same day with `serial` and `initialReading`; it carries `replacesMeterId` and the board's note of the old
+        meter. A counter that wrapped around (99 999 to 00 012) is a replacement of the meter by itself: the same
+        serial, the final reading before the wrap and initial reading 0. In the electricity tree the new meter takes
+        the place of the old one from `replacedOn`: it gets the old meter's parent, and the meters under a meter that
+        is not a plot meter move under the new one. Consumption over a range adds up the meters of the chain (see
+        `getMeterConsumption`). Conflicts (409): the meter is already removed (`METER_REMOVED`); it has readings
+        waiting for approval (`METER_HAS_PENDING_READINGS`; approve or reject them first); `replacedOn` is after
+        today in Europe/Kyiv (`READING_DATE_IN_FUTURE`), before the installation (`READING_DATE_OUTSIDE_METER`) or
+        before a counted reading (`READING_OUT_OF_ORDER`), all with `errors[{field: replacedOn}]`; `finalReading` is
+        lower than the counted reading before it or the initial reading (`READING_OUT_OF_ORDER`,
+        `errors[{field: finalReading}]`). 400 `VALIDATION_FAILED`: `serial` `REQUIRED` or `TOO_LONG`, `finalReading`
+        or `initialReading` `METER_VALUE_INVALID`. Requires `METERS_VIEW` and `METERS_MANAGE`; written to the audit
+        log as `METER_REPLACED` about the old meter (`removedOn`, `finalReading`, `replacementMeter` = the new serial)
+        and `METER_REGISTERED` about the new one.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MeterReplacement'
+      responses:
+        '201':
+          description: The new meter
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Meter'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /meters/{id}/consumption:
+    get:
+      tags: [meters]
+      operationId: getMeterConsumption
+      summary: The consumption of a meter over a date range
+      description: |
+        The consumption from `from` to `to` (the value on `to` minus the value on `from`), added up over the chain of
+        the meter: the meter, the meters it replaced and the meters that replaced it, each counted in the days it
+        worked (a replacement, a counter that wrapped around). A value on a date without a reading is calculated in
+        proportion to the days between the nearest counted points and the result is marked `calculated`; the
+        consumption is then rounded once to three decimals. When a meter of the chain has no counted point after
+        the range's end, the consumption is not known (`known: false`) and `lastReadingOn` says after which day
+        there is no reading. Only counted (`APPROVED`) readings are used. 400 `VALIDATION_FAILED` with `to`
+        `INVALID` when `to` is before `from`. Requires `METERS_VIEW`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeterConsumption'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /plots/{id}/readings:
+    post:
+      tags: [readings]
+      operationId: submitPlotReading
+      summary: Submit a reading of an own meter
+      description: |
+        A member submits the reading of an active meter of a plot they currently own. It waits for approval (status
+        `PENDING`, source `MEMBER`) and is never used for consumption until someone with `READINGS_APPROVE` approves
+        it. A pending reading of the same meter and date is replaced: it stays in the history as `SUPERSEDED` and its
+        id is in `supersededReadingIds`; the same value on the same date again changes nothing. A pending reading
+        never replaces a counted one. `takenOn` absent means today in Europe/Kyiv. The reading is checked as one the
+        board enters, against the counted readings: 409 `READING_DATE_IN_FUTURE` or `READING_DATE_OUTSIDE_METER`
+        (`errors[{field: takenOn}]`), `READING_OUT_OF_ORDER` (`errors[{field: value}]`), `METER_REMOVED` for a removed
+        meter of the plot. The warning `UNUSUAL_CONSUMPTION` follows the rule of `enterReadings`. No permission
+        annotation: only a current owner of the plot may submit; any other plot, an unknown id and a plot of another
+        cooperative are 404 `NOT_FOUND`, as is a meter that is not a meter of the plot (`errors[{field: meterId}]`);
+        the platform operator has no cooperative data: 403. 400 `VALIDATION_FAILED` with `value`
+        `METER_VALUE_INVALID` for a malformed value. Written to the audit log (`READING_SUBMITTED`).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReadingSubmission'
+      responses:
+        '201':
+          description: The submitted reading, waiting for approval
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadingSaved'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -2190,6 +2343,37 @@ paths:
           $ref: '#/components/responses/Forbidden'
 
   /readings:
+    get:
+      tags: [readings]
+      operationId: listReadings
+      summary: The readings waiting for approval
+      description: |
+        The readings members submitted that wait for approval, oldest reading date first. Only `status=PENDING` is
+        supported; any other status is 400 `VALIDATION_FAILED` with `status` `INVALID`. Each item has the meter and,
+        when the reading fits between the counted readings, the interval it would close once approved and its
+        warnings. `note` of the meter is present only for a caller with `METERS_VIEW`. Requires `READINGS_APPROVE`.
+      parameters:
+        - name: status
+          in: query
+          required: true
+          schema:
+            $ref: '#/components/schemas/ReadingStatus'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PendingReading'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
     post:
       tags: [readings]
       operationId: enterReadings
@@ -2304,6 +2488,83 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
 
+  /readings/{id}/approve:
+    post:
+      tags: [readings]
+      operationId: approveReading
+      summary: Approve a reading a member submitted
+      description: |
+        A `PENDING` reading starts to count (`APPROVED`; its source stays `MEMBER`). It is checked again against the
+        counted readings as they are now: 409 `READING_DATE_OUTSIDE_METER` (`errors[{field: takenOn}]`),
+        `READING_OUT_OF_ORDER` (`errors[{field: value}]`) or `READING_IN_USE` (a charge uses the readings around the
+        date). A counted reading of the same date is replaced: it stays in the history as `SUPERSEDED` and its id is in
+        `supersededReadingIds`. A reading that is not pending is 409 `READING_STATUS_INVALID`. The answer carries the
+        interval the reading now closes and the warning `UNUSUAL_CONSUMPTION` by the rule of `enterReadings`.
+        Requires `READINGS_APPROVE`; written to the audit log (`READING_APPROVED`).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The approved reading
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadingSaved'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /readings/{id}/reject:
+    post:
+      tags: [readings]
+      operationId: rejectReading
+      summary: Reject a reading a member submitted
+      description: |
+        A `PENDING` reading is not approved (`REJECTED`) with a reason the member sees in the history of the meter
+        (`rejectReason`). It never counts. A reading that is not pending is 409 `READING_STATUS_INVALID`. 400
+        `VALIDATION_FAILED` with `reason` `REQUIRED` (absent or blank) or `TOO_LONG`. Requires `READINGS_APPROVE`;
+        written to the audit log (`READING_REJECTED` with the reason).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReadingRejection'
+      responses:
+        '200':
+          description: The rejected reading
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeterReading'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -2397,7 +2658,9 @@ components:
         value is lower than the previous reading or the date before a later one (code `READING_OUT_OF_ORDER`), each
         with `errors[{field}]` naming the date or value, or a reading that is not counted is corrected or deleted (code
         `READING_STATUS_INVALID`), or a reading is corrected or deleted although a charge uses the readings around it
-        (code `READING_IN_USE`)
+        (code `READING_IN_USE`), or a meter with readings waiting for approval is removed or replaced (code
+        `METER_HAS_PENDING_READINGS`), or a reading that is not pending is approved or rejected (code
+        `READING_STATUS_INVALID`)
       content:
         application/problem+json:
           schema:
@@ -2757,10 +3020,14 @@ components:
         - METER_UPDATED
         - METER_REMOVED
         - METER_DELETED
+        - METER_REPLACED
         - READING_ENTERED
         - READING_REPLACED
         - READING_CORRECTED
         - READING_DELETED
+        - READING_SUBMITTED
+        - READING_APPROVED
+        - READING_REJECTED
 
     AuditEntityType:
       type: string
@@ -4245,3 +4512,105 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ReadingWarning'
+
+    ReadingSubmission:
+      type: object
+      description: A reading a member submits for a meter of their own plot
+      required: [meterId, value]
+      properties:
+        meterId:
+          type: string
+          format: uuid
+        takenOn:
+          type: string
+          format: date
+          description: The day the meter was read; absent means today in Europe/Kyiv
+        value:
+          $ref: '#/components/schemas/MeterValue'
+
+    ReadingRejection:
+      type: object
+      description: Why a submitted reading is not approved
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+          description: Shown to the member as typed (user content); surrounding whitespace is trimmed
+
+    PendingReading:
+      type: object
+      description: A reading waiting for approval, with its meter
+      required: [reading, meter, warnings]
+      properties:
+        reading:
+          $ref: '#/components/schemas/MeterReading'
+        meter:
+          $ref: '#/components/schemas/Meter'
+        interval:
+          $ref: '#/components/schemas/ReadingInterval'
+          description: >-
+            The interval the reading would close once approved, from the counted point before it; absent when the
+            reading does not fit between the counted readings (approval would be refused) or is on the installation
+            date
+        warnings:
+          type: array
+          description: The warnings the reading would carry once approved
+          items:
+            $ref: '#/components/schemas/ReadingWarning'
+
+    MeterReplacement:
+      type: object
+      description: The replacement of a meter by a new one on one day
+      required: [replacedOn, finalReading, serial, initialReading]
+      properties:
+        replacedOn:
+          type: string
+          format: date
+          description: The day the old meter is removed and the new one installed; not after today
+        finalReading:
+          $ref: '#/components/schemas/MeterValue'
+          description: The final reading of the old meter
+        serial:
+          type: string
+          minLength: 1
+          maxLength: 50
+          description: The serial number of the new meter (the same one for a counter that wrapped around); trimmed
+        initialReading:
+          $ref: '#/components/schemas/MeterValue'
+          description: The initial reading of the new meter (0 for a counter that wrapped around)
+
+    MeterConsumption:
+      type: object
+      description: The consumption of a meter's chain over a date range, calculated by the server
+      required: [meterId, from, to, meterIds, known, calculated]
+      properties:
+        meterId:
+          type: string
+          format: uuid
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+        meterIds:
+          type: array
+          description: The meters whose consumption is added up, oldest installation first
+          items:
+            type: string
+            format: uuid
+        known:
+          type: boolean
+          description: False when a meter of the chain has no counted point after the end of its part of the range
+        consumption:
+          $ref: '#/components/schemas/MeterValue'
+          description: Present when `known`; rounded once to three decimals when `calculated`
+        calculated:
+          type: boolean
+          description: True when a value at an end of the range was calculated between two readings
+        lastReadingOn:
+          type: string
+          format: date
+          description: When not `known`, the day after which there is no reading; absent when there is none before either

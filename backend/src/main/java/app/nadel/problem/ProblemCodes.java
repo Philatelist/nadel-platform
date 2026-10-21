@@ -65,6 +65,8 @@ public final class ProblemCodes {
     public static final String METER_HAS_READINGS = "METER_HAS_READINGS";
     /** 409: the meter is removed, so it can be neither removed again nor deleted. */
     public static final String METER_REMOVED = "METER_REMOVED";
+    /** 409: the meter has readings waiting for approval, so it is neither removed nor replaced until they are decided. */
+    public static final String METER_HAS_PENDING_READINGS = "METER_HAS_PENDING_READINGS";
     /** 409: a reading (also the initial or final reading of a meter) dated after today (Europe/Kyiv). */
     public static final String READING_DATE_IN_FUTURE = "READING_DATE_IN_FUTURE";
     /** 409: a reading dated before the installation or after the removal of its meter. */
@@ -73,7 +75,10 @@ public final class ProblemCodes {
     public static final String READING_OUT_OF_ORDER = "READING_OUT_OF_ORDER";
     /** 409: a charge uses the readings around the date, so they are no longer corrected, deleted or inserted into. */
     public static final String READING_IN_USE = "READING_IN_USE";
-    /** 409: the reading is not counted (pending, rejected or superseded), so it can be neither corrected nor deleted. */
+    /**
+     * 409: the reading is not counted (pending, rejected or superseded), so it can be neither corrected nor deleted; or it
+     * is not pending, so it can be neither approved nor rejected.
+     */
     public static final String READING_STATUS_INVALID = "READING_STATUS_INVALID";
 
     /** Codes of single fields in {@code errors[]}. */

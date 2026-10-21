@@ -21,6 +21,15 @@ interface MeterReadingRepository extends JpaRepository<MeterReadingRecord, UUID>
     /** Whether the meter has a reading of any status (the foreign key of {@code meter_reading} restricts a delete). */
     boolean existsByMeterId(UUID meterId);
 
+    /** Whether the meter has a reading of the status. */
+    boolean existsByMeterIdAndStatus(UUID meterId, Status status);
+
+    /** The readings of the status of the meters, oldest date first. */
+    List<MeterReadingRecord> findByMeterIdInAndStatusOrderByTakenOn(Collection<UUID> meterIds, Status status);
+
+    /** Every reading of the status in the cooperative, oldest date first, then the oldest submission first. */
+    List<MeterReadingRecord> findByStatusOrderByTakenOnAscCreatedAtAscIdAsc(Status status);
+
     /**
      * The meter of a reading, without loading the reading: a write locks the meter first and only then reads the
      * reading, so it sees the committed state.

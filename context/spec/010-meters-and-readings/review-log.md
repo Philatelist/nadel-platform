@@ -18,3 +18,10 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `73e4b06..eca98e7` | MAJOR_ISSUES | M1 import problem `PLOT_HAS_METER` (kind column) has no `importProblem` catalog text; the preview falls back to "Значення некоректне" | minor: unused `initialPlot` prop in RegisterMeterDialog; PlotPicker needs PLOTS_VIEW (odd custom roles); `ValidationProblems.isMeterValue` keys on field names; `MeterQueries.forPlot` loads the plot before the ownership check |
+| 2 | + `4fd731d` | PASS | M1 resolved (catalog entries uk/en, catalog parity code list, ImportPreviewPanel test) | — |
+
+## Slice 3 — Readings and the round
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `eca98e7..c95e714` | PASS | — | minor: an unexpected non-problem exception in batch row N gives a 500 after rows 0..N-1 were committed; `ReadingQueries.used` calls each `ReadingUsage` port per reading (N calls; 011 should batch); the round's date hint always says "сьогодні" even after the round date changes; one long Javadoc line in meters `package-info` |

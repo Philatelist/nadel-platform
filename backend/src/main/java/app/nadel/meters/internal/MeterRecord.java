@@ -92,6 +92,19 @@ class MeterRecord {
         return meter;
     }
 
+    /**
+     * The meter that replaces {@code old} from {@code installedOn}: the same kind, resource, plot, name and note, a new
+     * serial number (the same one for a counter that wrapped around) and initial reading, and a link back to
+     * {@code old}. The caller has removed {@code old} on that day.
+     */
+    static MeterRecord replacement(MeterRecord old, String serial, LocalDate installedOn, MeterValue initial,
+            Instant now) {
+        MeterRecord meter = register(old.tenantId, old.kind, old.resource, old.plotId, serial, old.name, installedOn,
+                initial, old.note, now);
+        meter.replacesMeterId = old.id;
+        return meter;
+    }
+
     /** Overwrites the descriptive fields. */
     void describe(String serial, @Nullable String name, @Nullable String note, Instant now) {
         this.serial = serial;

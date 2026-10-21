@@ -43,6 +43,12 @@ class ReadingProblem extends ApiProblemException {
                 "Only a counted reading can be corrected or deleted.", null, Map.of());
     }
 
+    /** 409 {@code READING_STATUS_INVALID}: only a pending reading is approved or rejected. */
+    static ReadingProblem notPending() {
+        return new ReadingProblem(HttpStatus.CONFLICT, ProblemCodes.READING_STATUS_INVALID,
+                "Only a reading waiting for approval can be approved or rejected.", null, Map.of());
+    }
+
     /** The field of the request the problem is about; null when it is about the reading as a whole. */
     @Nullable String field() {
         return field;

@@ -79,3 +79,8 @@ Same as 004–009 (see `context/spec/009-charge-types-and-tariffs/pipeline-log.m
 - Slice 3 backend (spring-backend): reported 154 tests green, no V13; deviations to note: `supersededReadingIds` array (a correction can supersede two rows), `GET /meters/{id}/readings` under tag readings, idempotent repeat saves, empty list → `REQUIRED`. Web task delegated; backend re-verification running.
 - Slice 3 web (react-frontend): web 386 tests. Verified: backend Slice 3 tests green (ReadingsTests 22, RoundTests 6, ReadingValidatorTests 14, ReadingAuditTests 5, MetersTests 33, MeterAuditTests 6, PlotChangeGuardTests 9, ValidationProblemsTests 7, MembersAccessAcceptanceTests 13, ModularityTests 2); client test/typecheck/lint/format green; `pnpm gen:api` no diff.
 - Slice 3 committed `c95e714` — tests green; review round 1 running. Slice 2 M1 fix delegated now that the tree is clean.
+- Slice 2 M1 fix committed `4fd731d` (web 387, shared 110); Slice 2 review round 2 running. Slice 4 backend delegated.
+- Slice 2 review round 2: PASS.
+- Slice 3 review round 1: PASS.
+- Slice 4 backend (spring-backend): reported 223 tests green, no V13. AUTO-documented: remove and replace refused while any PENDING reading exists; replacement writes METER_REPLACED (old) + METER_REGISTERED (new); new endpoint `GET /meters/{id}/consumption` (not in the tech spec) for end-to-end range checks across the chain. Web task delegated; backend re-verification running.
+- Slice 4 web (react-frontend): web 406 tests. Verified: backend Slice 4 tests green (MeterReplacementTests 13, MemberReadingsTests 17, MetersTests 34, ReadingsTests 23, RoundTests 6, MeterAuditTests 8, ReadingAuditTests 8, ModularityTests 2); client test/typecheck/lint/format green; `pnpm gen:api` no diff.

@@ -39,6 +39,19 @@ describe('PlotMeterPanel', () => {
     expect(screen.getByText('EM-104523')).toHaveAttribute('data-user-content');
   });
 
+  it('shows the replacement chain with the service periods', () => {
+    useListPlotMeters.mockReturnValue(
+      queryResult([
+        { ...plotMeter, id: 'm3', serial: 'EM-2', replacesMeterId: 'm1', installedOn: '2026-09-20' },
+        { ...plotMeter, removedOn: '2026-09-20', finalReading: '8205.000', active: false },
+      ]),
+    );
+    renderWithApp(<PlotMeterPanel plotId="p7" />);
+    expect(screen.getByText('Replaced a previous meter')).toBeInTheDocument();
+    expect(screen.getByText('In service from 20 Sep 2026')).toBeInTheDocument();
+    expect(screen.getByText('In service 1 Jun 2026 – 20 Sep 2026')).toBeInTheDocument();
+  });
+
   it('says so when the plot has no meters', () => {
     useListPlotMeters.mockReturnValue(queryResult([]));
     renderWithApp(<PlotMeterPanel plotId="p7" />);

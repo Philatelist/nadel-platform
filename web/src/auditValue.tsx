@@ -179,6 +179,9 @@ export function auditValue(
       return roleNames(raw, t.roles);
     case 'chargeType':
       return auditChargeTypeName(raw, t);
+    case 'replacementMeter':
+    case 'reason':
+      return user(raw);
     case 'name':
       if (entityType === 'ROLE') return baseToken(raw, t.roles);
       return entityType === 'CHARGE_TYPE' ? auditChargeTypeName(raw, t) : user(raw);

@@ -102,6 +102,39 @@ class MeterReadingRecord {
     }
 
     /**
+     * A reading a member submitted for a meter of their own plot: it waits for approval and does not count until then.
+     * The caller has locked the meter and checked the date and the value.
+     */
+    static MeterReadingRecord submitted(UUID tenantId, UUID meterId, LocalDate takenOn, MeterValue value,
+            @Nullable UUID memberId, Instant now) {
+        MeterReadingRecord reading = entered(tenantId, meterId, takenOn, value, memberId, now);
+        reading.source = Source.MEMBER;
+        reading.status = Status.PENDING;
+        return reading;
+    }
+
+    /**
+     * A pending reading starts to count. The caller has locked the meter, checked the reading against the counted ones
+     * and superseded (and flushed) a counted reading of the same date, which the partial unique index of approved
+     * readings requires.
+     */
+    void approve(@Nullable UUID deciderId, Instant now) {
+        this.status = Status.APPROVED;
+        this.decidedByMemberId = deciderId;
+        this.decidedAt = now;
+        this.updatedAt = now;
+    }
+
+    /** A pending reading is not approved, with a reason the member sees (user content, trimmed, 1 to 500 characters). */
+    void reject(String reason, @Nullable UUID deciderId, Instant now) {
+        this.status = Status.REJECTED;
+        this.rejectReason = reason;
+        this.decidedByMemberId = deciderId;
+        this.decidedAt = now;
+        this.updatedAt = now;
+    }
+
+    /**
      * Takes the reading out of the count. The successor is linked by {@link #supersededBy} once it exists: the old row
      * must leave {@code APPROVED} (and be flushed) before the new approved row of the same date is inserted.
      */
@@ -153,6 +186,10 @@ class MeterReadingRecord {
 
     boolean isApproved() {
         return status == Status.APPROVED;
+    }
+
+    boolean isPending() {
+        return status == Status.PENDING;
     }
 
     /** The reading as the calculation sees it. */

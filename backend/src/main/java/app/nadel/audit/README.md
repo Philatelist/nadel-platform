@@ -87,6 +87,7 @@ the root `CLAUDE.md`). A server never writes an English phrase into `entity_labe
 | `METER` and `METER_READING` label | the name of a named meter, the serial number of a plot meter (user content); a `METER_READING` entry's entity id is the meter | as is |
 | Meter readings (`initialReading`, `finalReading`, `value` of a reading) | plain decimal with three decimals (`8205.000`) | format meter value |
 | `plot` of a meter | the plot number (user content) | as is |
+| `replacementMeter` of `METER_REPLACED` | the serial number of the new meter (user content) | as is |
 | `SETTINGS` label | the code `settings` | catalog name |
 | `owners` of `OWNERSHIP_CHANGED` / `OWNERSHIP_CORRECTED` | JSON array of `{"member": "Last First", "share": "1/2"}`; a correction adds `"from"` and, unless the record is open, `"to"` (ISO dates) | parse, format dates and names |
 | `effectiveFrom`, `validFrom`, `dueDate`, `installedOn`, `removedOn`, `takenOn` | ISO date `2026-01-01` | format date |
@@ -94,7 +95,7 @@ the root `CLAUDE.md`). A server never writes an English phrase into `entity_labe
 | `permissions` | permission codes sorted and joined by ", " | catalog |
 | Flags (`active`, `archived`, `hasBuilding`) | `true` / `false` | yes/no |
 | Numbers (`areaM2` `600.00`, `rate`, `position`, import counts) | plain decimal text | format number |
-| Member and plot labels, names, notes, reasons, import file name | user content | as is |
+| Member and plot labels, names, notes, reasons (also `reason` of `READING_REJECTED`), import file name | user content | as is |
 
 Entries written before this format keep their old text (the log is append-only and is not migrated): a value that
 does not match a format above is shown as stored.

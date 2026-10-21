@@ -32,10 +32,13 @@ import type {
   BadRequestResponse,
   ConflictResponse,
   ForbiddenResponse,
+  GetMeterConsumptionParams,
   ListMetersParams,
   Meter,
+  MeterConsumption,
   MeterCreate,
   MeterRemoval,
+  MeterReplacement,
   MeterUpdate,
   NotFoundResponse,
   UnauthorizedResponse
@@ -561,7 +564,9 @@ export const useDeleteMeter = <TError = UnauthorizedResponse | ForbiddenResponse
  * after `removedOn` (`READING_OUT_OF_ORDER`, `errors[{field: removedOn}]`) or `finalReading` is lower than the
  * last counted reading up to that day or the initial reading (`READING_OUT_OF_ORDER`,
  * `errors[{field: finalReading}]`). 400 `VALIDATION_FAILED` with `finalReading` `METER_VALUE_INVALID` for a
- * malformed value. Requires `METERS_VIEW` and `METERS_MANAGE`; written to the audit log (`METER_REMOVED`).
+ * malformed value. A meter with readings waiting for approval is refused with 409 `METER_HAS_PENDING_READINGS`
+ * (approve or reject them first). Requires `METERS_VIEW` and `METERS_MANAGE`; written to the audit log
+ * (`METER_REMOVED`).
  * @summary Remove a meter with its final reading
  */
 export const removeMeter = async (id: string,
@@ -641,7 +646,234 @@ export const useRemoveMeter = <TError = BadRequestResponse | UnauthorizedRespons
       > => {
       return useMutation(getRemoveMeterMutationOptions(options), queryClient);
     }
-    export const getListPlotMetersUrl = (id: string,) => {
+    export const getReplaceMeterUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/meters/${id}/replace`
+}
+
+/**
+ * One action: the meter is removed on `replacedOn` with `finalReading` (the rules of `removeMeter`, with the
+ * date errors on `replacedOn`), and a new active meter of the same kind, resource, plot and name is installed on
+ * the same day with `serial` and `initialReading`; it carries `replacesMeterId` and the board's note of the old
+ * meter. A counter that wrapped around (99 999 to 00 012) is a replacement of the meter by itself: the same
+ * serial, the final reading before the wrap and initial reading 0. In the electricity tree the new meter takes
+ * the place of the old one from `replacedOn`: it gets the old meter's parent, and the meters under a meter that
+ * is not a plot meter move under the new one. Consumption over a range adds up the meters of the chain (see
+ * `getMeterConsumption`). Conflicts (409): the meter is already removed (`METER_REMOVED`); it has readings
+ * waiting for approval (`METER_HAS_PENDING_READINGS`; approve or reject them first); `replacedOn` is after
+ * today in Europe/Kyiv (`READING_DATE_IN_FUTURE`), before the installation (`READING_DATE_OUTSIDE_METER`) or
+ * before a counted reading (`READING_OUT_OF_ORDER`), all with `errors[{field: replacedOn}]`; `finalReading` is
+ * lower than the counted reading before it or the initial reading (`READING_OUT_OF_ORDER`,
+ * `errors[{field: finalReading}]`). 400 `VALIDATION_FAILED`: `serial` `REQUIRED` or `TOO_LONG`, `finalReading`
+ * or `initialReading` `METER_VALUE_INVALID`. Requires `METERS_VIEW` and `METERS_MANAGE`; written to the audit
+ * log as `METER_REPLACED` about the old meter (`removedOn`, `finalReading`, `replacementMeter` = the new serial)
+ * and `METER_REGISTERED` about the new one.
+ * @summary Replace a meter by a new one
+ */
+export const replaceMeter = async (id: string,
+    meterReplacement: MeterReplacement, options?: Parameters<typeof nadelFetch>[1]): Promise<Meter> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return nadelFetch<Meter>(getReplaceMeterUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(meterReplacement)
+  }
+);}
+
+
+
+
+
+export const getReplaceMeterMutationKey = () => ['replaceMeter'] as const;
+
+export const getReplaceMeterMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof replaceMeter>>, TError,ReplaceMeterMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof replaceMeter>>, TError,ReplaceMeterMutationVariables, TContext> => {
+
+const mutationKey = getReplaceMeterMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof replaceMeter>>, ReplaceMeterMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  replaceMeter(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReplaceMeterMutationResult = NonNullable<Awaited<ReturnType<typeof replaceMeter>>>
+    export type ReplaceMeterMutationBody = MeterReplacement
+    export type ReplaceMeterMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse
+    export type ReplaceMeterMutationVariables = {id: string;data: MeterReplacement}
+
+    /**
+ * @summary Replace a meter by a new one
+ */
+export const useReplaceMeter = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof replaceMeter>>, TError,ReplaceMeterMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof replaceMeter>>,
+        TError,
+        ReplaceMeterMutationVariables,
+        TContext
+      > => {
+      return useMutation(getReplaceMeterMutationOptions(options), queryClient);
+    }
+    export const getGetMeterConsumptionUrl = (id: string,
+    params: GetMeterConsumptionParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/v1/meters/${id}/consumption?${stringifiedParams}` : `/api/v1/meters/${id}/consumption`
+}
+
+/**
+ * The consumption from `from` to `to` (the value on `to` minus the value on `from`), added up over the chain of
+ * the meter: the meter, the meters it replaced and the meters that replaced it, each counted in the days it
+ * worked (a replacement, a counter that wrapped around). A value on a date without a reading is calculated in
+ * proportion to the days between the nearest counted points and the result is marked `calculated`; the
+ * consumption is then rounded once to three decimals. When a meter of the chain has no counted point after
+ * the range's end, the consumption is not known (`known: false`) and `lastReadingOn` says after which day
+ * there is no reading. Only counted (`APPROVED`) readings are used. 400 `VALIDATION_FAILED` with `to`
+ * `INVALID` when `to` is before `from`. Requires `METERS_VIEW`.
+ * @summary The consumption of a meter over a date range
+ */
+export const getMeterConsumption = async (id: string,
+    params: GetMeterConsumptionParams, options?: Parameters<typeof nadelFetch>[1]): Promise<MeterConsumption> => {
+
+  return nadelFetch<MeterConsumption>(getGetMeterConsumptionUrl(id,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetMeterConsumptionQueryKey = (id: string,
+    params?: GetMeterConsumptionParams,) => {
+    return [
+    `/api/v1/meters/${id}/consumption`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetMeterConsumptionQueryOptions = <TData = Awaited<ReturnType<typeof getMeterConsumption>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(id: string,
+    params: GetMeterConsumptionParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMeterConsumption>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetMeterConsumptionQueryKey(id,params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMeterConsumption>>> = ({ signal }) => getMeterConsumption(id,params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getMeterConsumption>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetMeterConsumptionQueryResult = NonNullable<Awaited<ReturnType<typeof getMeterConsumption>>>
+export type GetMeterConsumptionQueryError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse
+
+
+export function useGetMeterConsumption<TData = Awaited<ReturnType<typeof getMeterConsumption>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string,
+    params: GetMeterConsumptionParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMeterConsumption>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getMeterConsumption>>,
+          TError,
+          Awaited<ReturnType<typeof getMeterConsumption>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetMeterConsumption<TData = Awaited<ReturnType<typeof getMeterConsumption>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string,
+    params: GetMeterConsumptionParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMeterConsumption>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getMeterConsumption>>,
+          TError,
+          Awaited<ReturnType<typeof getMeterConsumption>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetMeterConsumption<TData = Awaited<ReturnType<typeof getMeterConsumption>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string,
+    params: GetMeterConsumptionParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMeterConsumption>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary The consumption of a meter over a date range
+ */
+
+export function useGetMeterConsumption<TData = Awaited<ReturnType<typeof getMeterConsumption>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string,
+    params: GetMeterConsumptionParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMeterConsumption>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetMeterConsumptionQueryOptions(id,params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export const getListPlotMetersUrl = (id: string,) => {
 
 
 

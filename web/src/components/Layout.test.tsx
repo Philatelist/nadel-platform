@@ -160,6 +160,15 @@ describe('Layout', () => {
     expect(screen.getByRole('link', { name: 'Readings' })).toHaveAttribute('href', '/readings');
   });
 
+  it('shows To approve only with READINGS_APPROVE', () => {
+    renderWithApp(<Layout />);
+    expect(screen.queryByRole('link', { name: 'To approve' })).toBeNull();
+    cleanup();
+    me = meWith(['READINGS_APPROVE']);
+    renderWithApp(<Layout />);
+    expect(screen.getByRole('link', { name: 'To approve' })).toHaveAttribute('href', '/readings/approvals');
+  });
+
   it('gives the electrician only Readings and Meters, without Plots', () => {
     me = meWith(['READINGS_ENTER', 'METERS_VIEW']);
     renderWithApp(<Layout />);

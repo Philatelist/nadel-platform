@@ -13,6 +13,7 @@ import { Link, useNavigate, useParams } from 'react-router';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { EditMeterDialog } from '../components/meters/EditMeterDialog';
 import { ReadingHistory } from '../components/readings/ReadingHistory';
+import { ReplaceMeterDialog } from '../components/meters/ReplaceMeterDialog';
 import { RemoveMeterDialog } from '../components/meters/RemoveMeterDialog';
 import { QueryBoundary } from '../components/QueryBoundary';
 import { UserContent, formatUser } from '../components/UserContent';
@@ -50,7 +51,7 @@ function MeterView({ meter }: { meter: Meter }) {
   const canManage = useCanManageMeters();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [dialog, setDialog] = useState<'edit' | 'remove' | 'delete'>();
+  const [dialog, setDialog] = useState<'edit' | 'remove' | 'replace' | 'delete'>();
   const [actionError, setActionError] = useState<string>();
   const unit = resourceUnit(t, meter.resource);
   const value = (v: string): string => `${formatMeterValue(v, locale)} ${unit}`;
@@ -120,6 +121,17 @@ function MeterView({ meter }: { meter: Meter }) {
                   variant="secondary"
                   onClick={() => {
                     setActionError(undefined);
+                    setDialog('replace');
+                  }}
+                >
+                  {m.replace}
+                </Button>
+              )}
+              {meter.active && (
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setActionError(undefined);
                     setDialog('remove');
                   }}
                 >
@@ -166,6 +178,16 @@ function MeterView({ meter }: { meter: Meter }) {
         <RemoveMeterDialog
           meter={meter}
           onRemoved={() => setDialog(undefined)}
+          onClose={() => setDialog(undefined)}
+        />
+      )}
+      {dialog === 'replace' && (
+        <ReplaceMeterDialog
+          meter={meter}
+          onReplaced={(created) => {
+            setDialog(undefined);
+            void navigate(`/meters/${created.id}`);
+          }}
           onClose={() => setDialog(undefined)}
         />
       )}

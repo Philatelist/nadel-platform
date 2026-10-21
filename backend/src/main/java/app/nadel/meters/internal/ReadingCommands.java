@@ -2,6 +2,7 @@ package app.nadel.meters.internal;
 
 import app.nadel.audit.FieldChange;
 import app.nadel.identity.AccessProfile;
+import app.nadel.identity.Permission;
 import app.nadel.meters.ConsumptionCalculator.Interval;
 import app.nadel.meters.ConsumptionCalculator.Reading;
 import app.nadel.meters.InvalidMeterValueException;
@@ -24,14 +25,17 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import nadel.contract.model.MeterReading;
 import nadel.contract.model.ReadingBatch;
 import nadel.contract.model.ReadingBatchResult;
 import nadel.contract.model.ReadingCorrection;
 import nadel.contract.model.ReadingEntry;
+import nadel.contract.model.ReadingRejection;
 import nadel.contract.model.ReadingRowError;
 import nadel.contract.model.ReadingRowOutcome;
 import nadel.contract.model.ReadingRowResult;
 import nadel.contract.model.ReadingSaved;
+import nadel.contract.model.ReadingSubmission;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -40,8 +44,10 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * Enters, corrects and deletes readings (spec 010, section 2.4). The cooperative comes from the caller's
- * {@link AccessProfile}, never from the request; the caller holds {@code READINGS_ENTER} (checked on the controller).
+ * Enters, corrects and deletes readings, takes a member's submission and approves or rejects it (spec 010, section
+ * 2.4). The cooperative comes from the caller's {@link AccessProfile}, never from the request; the caller holds
+ * {@code READINGS_ENTER} for entry, correction and deletion and {@code READINGS_APPROVE} for a decision (checked on the
+ * controller), and a submission is open to a current owner of the plot (checked here).
  * <p>
  * Every write locks the meter {@code FOR UPDATE} first, so the writes of one meter (readings, removal, deletion) run one
  * after another and the ordering check sees the committed readings. A reading of the same date replaces the counted
@@ -51,6 +57,10 @@ import org.springframework.transaction.support.TransactionTemplate;
  * keeps both; a deletion removes the row. Before any change the {@link ReadingUsage} ports are asked whether a charge
  * uses the readings around the date ({@code READING_IN_USE}).
  * <p>
+ * A member's reading waits for approval ({@code PENDING}): it never counts and never supersedes a counted reading; a
+ * second pending reading of the same meter and date supersedes the first. Approval checks it again against the counted
+ * readings as they are then and supersedes a counted reading of the same date as an entry does.
+ * <p>
  * A batch saves each row in its own transaction: a refused row is reported in the answer and never undoes another.
  * Every saved change publishes its audit event in its own transaction.
  */
@@ -59,6 +69,7 @@ class ReadingCommands {
 
     private final MeterRepository meters;
     private final MeterReadingRepository readings;
+    private final MeterAccess access;
     private final List<ReadingUsage> usages;
     private final MeterAuditPublisher audit;
     private final Clock clock;
@@ -67,10 +78,11 @@ class ReadingCommands {
     @PersistenceContext
     private EntityManager entityManager;
 
-    ReadingCommands(MeterRepository meters, MeterReadingRepository readings, List<ReadingUsage> usages,
-            MeterAuditPublisher audit, Clock clock, PlatformTransactionManager transactions) {
+    ReadingCommands(MeterRepository meters, MeterReadingRepository readings, MeterAccess access,
+            List<ReadingUsage> usages, MeterAuditPublisher audit, Clock clock, PlatformTransactionManager transactions) {
         this.meters = meters;
         this.readings = readings;
+        this.access = access;
         this.usages = usages;
         this.audit = audit;
         this.clock = clock;
@@ -171,6 +183,126 @@ class ReadingCommands {
         audit.publishReading(actor, "READING_DELETED", meter, List.of(
                 new FieldChange("takenOn", date.toString(), null),
                 new FieldChange("value", reading.getValue().toString(), null)));
+    }
+
+    // ---- the member flow
+
+    /**
+     * A member submits the reading of an active meter of a plot they own now (spec 010, section 2.4). It waits for
+     * approval ({@code PENDING}, source {@code MEMBER}) and never counts or supersedes a counted reading until then; a
+     * pending reading of the same meter and date is superseded by it, and the same value again changes nothing. It is
+     * checked against the counted readings as the board's entry is. Any plot the caller does not own now, and any meter
+     * that is not a meter of that plot, is the same 404; the platform operator gets 403.
+     */
+    @Transactional
+    ReadingSaved submit(UUID plotId, ReadingSubmission input, AccessProfile actor) {
+        access.requireCooperativeData(actor);
+        if (!access.ownsNow(actor, plotId)) {
+            throw ApiProblemException.notFound();
+        }
+        MeterValue value = parse(input.getValue());
+        MeterRecord meter = meters.findByIdForUpdate(input.getMeterId())
+                .filter(found -> plotId.equals(found.getPlotId()))
+                .orElseThrow(() -> new ApiProblemException(HttpStatus.NOT_FOUND, ProblemCodes.NOT_FOUND,
+                        "The meter was not found.", List.of(new FieldProblem("meterId", ProblemCodes.NOT_FOUND))));
+        if (!meter.isActive()) {
+            throw new ApiProblemException(HttpStatus.CONFLICT, ProblemCodes.METER_REMOVED,
+                    "The meter is removed; it takes no more readings from members.");
+        }
+        LocalDate date = input.getTakenOn() != null ? input.getTakenOn() : LocalDate.now(clock);
+        MeterSpan span = MeterSpan.of(meter);
+        List<Reading> counted = readingsOf(approved(meter));
+        ReadingValidator.check(span, counted, LocalDate.now(clock), date, value).ifPresent(violation -> {
+            throw ReadingProblem.of(violation);
+        });
+        List<Warning> warnings = ReadingValidator.warnings(span, counted, date, value);
+        List<MeterReadingRecord> pending = readings.findByMeterIdAndStatusOrderByTakenOn(meter.getId(), Status.PENDING)
+                .stream().filter(other -> other.getTakenOn().equals(date)).toList();
+        MeterReadingRecord same = pending.stream().filter(other -> other.getValue().equals(value)).findFirst()
+                .orElse(null);
+        if (same != null) {
+            // the same reading again (a second tap on "send"): nothing changes and nothing is audited
+            return new ReadingSaved(ReadingDtoMapper.toDto(same, null, false), List.of(),
+                    ReadingDtoMapper.toDto(warnings));
+        }
+        MeterReadingRecord created = MeterReadingRecord.submitted(meter.getTenantId(), meter.getId(), date, value,
+                actor.memberId(), clock.instant());
+        replace(pending, created);
+        audit.publishReading(actor, "READING_SUBMITTED", meter, List.of(
+                new FieldChange("takenOn", null, date.toString()),
+                new FieldChange("value", pending.isEmpty() ? null : pending.getFirst().getValue().toString(),
+                        value.toString())));
+        return new ReadingSaved(ReadingDtoMapper.toDto(created, null, false),
+                pending.stream().map(MeterReadingRecord::getId).toList(), ReadingDtoMapper.toDto(warnings));
+    }
+
+    /**
+     * A pending reading starts to count. It is checked again against the counted readings as they are now and the
+     * {@link ReadingUsage} ports are asked about the span around its date; a counted reading of the same date is
+     * superseded by it (flushed out of {@code APPROVED} first, then linked).
+     */
+    @Transactional
+    ReadingSaved approve(UUID readingId, AccessProfile actor) {
+        MeterRecord meter = lockMeterOf(readingId);
+        MeterReadingRecord reading = readings.findById(readingId).orElseThrow(ApiProblemException::notFound);
+        if (!reading.isPending()) {
+            throw ReadingProblem.notPending();
+        }
+        LocalDate date = reading.getTakenOn();
+        MeterValue value = reading.getValue();
+        MeterSpan span = MeterSpan.of(meter);
+        List<MeterReadingRecord> approved = approved(meter);
+        MeterReadingRecord sameDate = onDate(approved, date);
+        List<Reading> counted = readingsOf(approved.stream().filter(other -> other != sameDate).toList());
+        ReadingValidator.check(span, counted, LocalDate.now(clock), date, value).ifPresent(violation -> {
+            throw ReadingProblem.of(violation);
+        });
+        Neighbours neighbours = ReadingValidator.neighbours(span, counted, date);
+        ensureNotUsed(meter, neighbours.spanFrom(date), neighbours.spanTo(date));
+
+        Instant now = clock.instant();
+        if (sameDate != null) {
+            sameDate.supersede(now);
+            entityManager.flush();
+        }
+        reading.approve(actor.memberId(), now);
+        entityManager.flush();
+        if (sameDate != null) {
+            sameDate.supersededBy(reading.getId());
+            entityManager.flush();
+        }
+        audit.publishReading(actor, "READING_APPROVED", meter, List.of(
+                new FieldChange("takenOn", sameDate == null ? null : date.toString(), date.toString()),
+                new FieldChange("value", sameDate == null ? null : sameDate.getValue().toString(), value.toString())));
+        Interval interval = ReadingValidator.intervalEndingAt(span, counted, date, value).orElse(null);
+        return new ReadingSaved(ReadingDtoMapper.toDto(reading, interval, actor.can(Permission.READINGS_ENTER)),
+                sameDate == null ? List.of() : List.of(sameDate.getId()),
+                ReadingDtoMapper.toDto(ReadingValidator.warnings(span, counted, date, value)));
+    }
+
+    /**
+     * A pending reading is not approved, with the reason the member sees. The reason is user content: it goes to the
+     * reading and the audit entry, never to a log.
+     */
+    @Transactional
+    MeterReading reject(UUID readingId, ReadingRejection input, AccessProfile actor) {
+        String reason = input.getReason() == null ? "" : input.getReason().strip();
+        if (reason.isEmpty()) {
+            throw new ApiProblemException(HttpStatus.BAD_REQUEST, ProblemCodes.VALIDATION_FAILED,
+                    "The request is not valid.", List.of(new FieldProblem("reason", ProblemCodes.REQUIRED)));
+        }
+        MeterRecord meter = lockMeterOf(readingId);
+        MeterReadingRecord reading = readings.findById(readingId).orElseThrow(ApiProblemException::notFound);
+        if (!reading.isPending()) {
+            throw ReadingProblem.notPending();
+        }
+        reading.reject(reason, actor.memberId(), clock.instant());
+        entityManager.flush();
+        audit.publishReading(actor, "READING_REJECTED", meter, List.of(
+                new FieldChange("takenOn", null, reading.getTakenOn().toString()),
+                new FieldChange("value", null, reading.getValue().toString()),
+                new FieldChange("reason", null, reason)));
+        return ReadingDtoMapper.toDto(reading, null, false);
     }
 
     // ---- one row

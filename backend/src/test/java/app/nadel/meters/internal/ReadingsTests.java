@@ -336,6 +336,27 @@ class ReadingsTests extends MeterTestSupport {
     // ---- a batch
 
     @Test
+    void anApprovalIsRefusedWhileAChargeUsesTheReadingsAround() throws Exception {
+        UUID meter = plotMeter("2026-06-01", "0");
+        entered(meter, "2026-09-01", "10");
+        reading(meter, "2026-09-15", "20", "PENDING");
+        UUID pending = ownerJdbc().queryForObject("select id from meter_reading where meter_id = ? "
+                + "and status = 'PENDING'", UUID.class, meter);
+        usage.used.add(meter);
+
+        send(chairman(), post(READINGS + "/" + pending + "/approve"), null).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("READING_IN_USE"));
+        assertThat(readingStatus(pending)).isEqualTo("PENDING");
+        synchronized (usage.asked) {
+            assertThat(usage.asked).contains(meter + " 2026-09-01 2026-09-15");
+        }
+
+        usage.used.clear();
+        send(chairman(), post(READINGS + "/" + pending + "/approve"), null).andExpect(status().isOk());
+        assertThat(readingStatus(pending)).isEqualTo("APPROVED");
+    }
+
+    @Test
     void aBatchAnswersEveryRowOnItsOwn() throws Exception {
         UUID first = plotMeter("2026-06-01", "100");
         UUID second = plotMeter("2026-06-01", "200");

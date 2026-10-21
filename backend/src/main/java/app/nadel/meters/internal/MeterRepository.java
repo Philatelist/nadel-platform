@@ -22,6 +22,24 @@ interface MeterRepository extends JpaRepository<MeterRecord, UUID> {
     @Query("select m from MeterRecord m where m.id = :id")
     Optional<MeterRecord> findByIdForUpdate(@Param("id") UUID id);
 
+    /**
+     * The meters with an exclusive row lock each ({@code FOR UPDATE}), taken in id order so that two transactions that
+     * lock overlapping sets never wait for each other in a circle.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select m from MeterRecord m where m.id in :ids order by m.id")
+    List<MeterRecord> findAllByIdForUpdate(@Param("ids") Collection<UUID> ids);
+
+    /**
+     * The plot of a meter without loading the meter: a replacement locks the plot {@code FOR SHARE} before it locks the
+     * meter, as a registration does. Empty for an unknown meter and for a meter that is not a plot meter.
+     */
+    @Query("select m.plotId from MeterRecord m where m.id = :id")
+    Optional<UUID> findPlotIdOf(@Param("id") UUID id);
+
+    /** The meters that replaced the meter (one at most: only an active meter is replaced). */
+    List<MeterRecord> findByReplacesMeterId(UUID replacesMeterId);
+
     /** The meters that are not removed. */
     List<MeterRecord> findByRemovedOnIsNull();
 

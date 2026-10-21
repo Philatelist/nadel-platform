@@ -13,7 +13,17 @@ import { Button } from './ui';
 
 interface NavItem {
   to: string;
-  label: 'plots' | 'members' | 'tariffs' | 'readings' | 'meters' | 'imports' | 'roles' | 'audit' | 'settings';
+  label:
+    | 'plots'
+    | 'members'
+    | 'tariffs'
+    | 'readings'
+    | 'approvals'
+    | 'meters'
+    | 'imports'
+    | 'roles'
+    | 'audit'
+    | 'settings';
   /** Omitted: shown to every signed-in member (the server decides what they may see). */
   permission?: Permission;
   /** Extra rule on top of `permission`, from the signed-in person. */
@@ -25,6 +35,7 @@ const NAV_ITEMS: readonly NavItem[] = [
   { to: '/members', label: 'members', permission: 'MEMBERS_VIEW' },
   { to: '/tariffs', label: 'tariffs', permission: 'TARIFFS_VIEW' },
   { to: '/readings', label: 'readings', permission: 'READINGS_ENTER' },
+  { to: '/readings/approvals', label: 'approvals', permission: 'READINGS_APPROVE' },
   { to: '/meters', label: 'meters', permission: 'METERS_VIEW' },
   { to: '/imports', label: 'imports', permission: 'IMPORT_RUN' },
   { to: '/roles', label: 'roles', permission: 'ROLES_MANAGE' },
@@ -117,7 +128,13 @@ export function Layout() {
             </div>
             <nav aria-label={t.nav.main} className="flex flex-col gap-1">
               {items.map((item) => (
-                <NavLink key={item.to} to={item.to} className={itemClass} onClick={() => setOpen(false)}>
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.to === '/readings'}
+                  className={itemClass}
+                  onClick={() => setOpen(false)}
+                >
                   {t.nav[item.label]}
                 </NavLink>
               ))}

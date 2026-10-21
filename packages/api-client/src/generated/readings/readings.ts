@@ -33,13 +33,18 @@ import type {
   ConflictResponse,
   ForbiddenResponse,
   GetReadingRoundParams,
+  ListReadingsParams,
   Meter,
+  MeterReading,
   MeterReadingHistory,
   NotFoundResponse,
+  PendingReading,
   ReadingBatch,
   ReadingBatchResult,
   ReadingCorrection,
+  ReadingRejection,
   ReadingSaved,
+  ReadingSubmission,
   UnauthorizedResponse
 } from '../model';
 
@@ -65,7 +70,107 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   return result;
 };
 
-export const getListMeterReadingsUrl = (id: string,) => {
+export const getSubmitPlotReadingUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/plots/${id}/readings`
+}
+
+/**
+ * A member submits the reading of an active meter of a plot they currently own. It waits for approval (status
+ * `PENDING`, source `MEMBER`) and is never used for consumption until someone with `READINGS_APPROVE` approves
+ * it. A pending reading of the same meter and date is replaced: it stays in the history as `SUPERSEDED` and its
+ * id is in `supersededReadingIds`; the same value on the same date again changes nothing. A pending reading
+ * never replaces a counted one. `takenOn` absent means today in Europe/Kyiv. The reading is checked as one the
+ * board enters, against the counted readings: 409 `READING_DATE_IN_FUTURE` or `READING_DATE_OUTSIDE_METER`
+ * (`errors[{field: takenOn}]`), `READING_OUT_OF_ORDER` (`errors[{field: value}]`), `METER_REMOVED` for a removed
+ * meter of the plot. The warning `UNUSUAL_CONSUMPTION` follows the rule of `enterReadings`. No permission
+ * annotation: only a current owner of the plot may submit; any other plot, an unknown id and a plot of another
+ * cooperative are 404 `NOT_FOUND`, as is a meter that is not a meter of the plot (`errors[{field: meterId}]`);
+ * the platform operator has no cooperative data: 403. 400 `VALIDATION_FAILED` with `value`
+ * `METER_VALUE_INVALID` for a malformed value. Written to the audit log (`READING_SUBMITTED`).
+ * @summary Submit a reading of an own meter
+ */
+export const submitPlotReading = async (id: string,
+    readingSubmission: ReadingSubmission, options?: Parameters<typeof nadelFetch>[1]): Promise<ReadingSaved> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return nadelFetch<ReadingSaved>(getSubmitPlotReadingUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(readingSubmission)
+  }
+);}
+
+
+
+
+
+export const getSubmitPlotReadingMutationKey = () => ['submitPlotReading'] as const;
+
+export const getSubmitPlotReadingMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitPlotReading>>, TError,SubmitPlotReadingMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof submitPlotReading>>, TError,SubmitPlotReadingMutationVariables, TContext> => {
+
+const mutationKey = getSubmitPlotReadingMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof submitPlotReading>>, SubmitPlotReadingMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  submitPlotReading(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SubmitPlotReadingMutationResult = NonNullable<Awaited<ReturnType<typeof submitPlotReading>>>
+    export type SubmitPlotReadingMutationBody = ReadingSubmission
+    export type SubmitPlotReadingMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse
+    export type SubmitPlotReadingMutationVariables = {id: string;data: ReadingSubmission}
+
+    /**
+ * @summary Submit a reading of an own meter
+ */
+export const useSubmitPlotReading = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitPlotReading>>, TError,SubmitPlotReadingMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof submitPlotReading>>,
+        TError,
+        SubmitPlotReadingMutationVariables,
+        TContext
+      > => {
+      return useMutation(getSubmitPlotReadingMutationOptions(options), queryClient);
+    }
+    export const getListMeterReadingsUrl = (id: string,) => {
 
 
 
@@ -275,6 +380,117 @@ export function useGetReadingRound<TData = Awaited<ReturnType<typeof getReadingR
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getGetReadingRoundQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export const getListReadingsUrl = (params: ListReadingsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/v1/readings?${stringifiedParams}` : `/api/v1/readings`
+}
+
+/**
+ * The readings members submitted that wait for approval, oldest reading date first. Only `status=PENDING` is
+ * supported; any other status is 400 `VALIDATION_FAILED` with `status` `INVALID`. Each item has the meter and,
+ * when the reading fits between the counted readings, the interval it would close once approved and its
+ * warnings. `note` of the meter is present only for a caller with `METERS_VIEW`. Requires `READINGS_APPROVE`.
+ * @summary The readings waiting for approval
+ */
+export const listReadings = async (params: ListReadingsParams, options?: Parameters<typeof nadelFetch>[1]): Promise<PendingReading[]> => {
+
+  return nadelFetch<PendingReading[]>(getListReadingsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListReadingsQueryKey = (params?: ListReadingsParams,) => {
+    return [
+    `/api/v1/readings`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListReadingsQueryOptions = <TData = Awaited<ReturnType<typeof listReadings>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>(params: ListReadingsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listReadings>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListReadingsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listReadings>>> = ({ signal }) => listReadings(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listReadings>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListReadingsQueryResult = NonNullable<Awaited<ReturnType<typeof listReadings>>>
+export type ListReadingsQueryError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse
+
+
+export function useListReadings<TData = Awaited<ReturnType<typeof listReadings>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>(
+ params: ListReadingsParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listReadings>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listReadings>>,
+          TError,
+          Awaited<ReturnType<typeof listReadings>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListReadings<TData = Awaited<ReturnType<typeof listReadings>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>(
+ params: ListReadingsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listReadings>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listReadings>>,
+          TError,
+          Awaited<ReturnType<typeof listReadings>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListReadings<TData = Awaited<ReturnType<typeof listReadings>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>(
+ params: ListReadingsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listReadings>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary The readings waiting for approval
+ */
+
+export function useListReadings<TData = Awaited<ReturnType<typeof listReadings>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>(
+ params: ListReadingsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listReadings>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListReadingsQueryOptions(params,options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 
@@ -561,4 +777,176 @@ export const useDeleteReading = <TError = UnauthorizedResponse | ForbiddenRespon
         TContext
       > => {
       return useMutation(getDeleteReadingMutationOptions(options), queryClient);
+    }
+    export const getApproveReadingUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/readings/${id}/approve`
+}
+
+/**
+ * A `PENDING` reading starts to count (`APPROVED`; its source stays `MEMBER`). It is checked again against the
+ * counted readings as they are now: 409 `READING_DATE_OUTSIDE_METER` (`errors[{field: takenOn}]`),
+ * `READING_OUT_OF_ORDER` (`errors[{field: value}]`) or `READING_IN_USE` (a charge uses the readings around the
+ * date). A counted reading of the same date is replaced: it stays in the history as `SUPERSEDED` and its id is in
+ * `supersededReadingIds`. A reading that is not pending is 409 `READING_STATUS_INVALID`. The answer carries the
+ * interval the reading now closes and the warning `UNUSUAL_CONSUMPTION` by the rule of `enterReadings`.
+ * Requires `READINGS_APPROVE`; written to the audit log (`READING_APPROVED`).
+ * @summary Approve a reading a member submitted
+ */
+export const approveReading = async (id: string, options?: Parameters<typeof nadelFetch>[1]): Promise<ReadingSaved> => {
+
+  return nadelFetch<ReadingSaved>(getApproveReadingUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getApproveReadingMutationKey = () => ['approveReading'] as const;
+
+export const getApproveReadingMutationOptions = <TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof approveReading>>, TError,ApproveReadingMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof approveReading>>, TError,ApproveReadingMutationVariables, TContext> => {
+
+const mutationKey = getApproveReadingMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof approveReading>>, ApproveReadingMutationVariables> = (props) => {
+          const {id} = props ?? {};
+
+          return  approveReading(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ApproveReadingMutationResult = NonNullable<Awaited<ReturnType<typeof approveReading>>>
+
+    export type ApproveReadingMutationError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse
+    export type ApproveReadingMutationVariables = {id: string}
+
+    /**
+ * @summary Approve a reading a member submitted
+ */
+export const useApproveReading = <TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof approveReading>>, TError,ApproveReadingMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof approveReading>>,
+        TError,
+        ApproveReadingMutationVariables,
+        TContext
+      > => {
+      return useMutation(getApproveReadingMutationOptions(options), queryClient);
+    }
+    export const getRejectReadingUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/readings/${id}/reject`
+}
+
+/**
+ * A `PENDING` reading is not approved (`REJECTED`) with a reason the member sees in the history of the meter
+ * (`rejectReason`). It never counts. A reading that is not pending is 409 `READING_STATUS_INVALID`. 400
+ * `VALIDATION_FAILED` with `reason` `REQUIRED` (absent or blank) or `TOO_LONG`. Requires `READINGS_APPROVE`;
+ * written to the audit log (`READING_REJECTED` with the reason).
+ * @summary Reject a reading a member submitted
+ */
+export const rejectReading = async (id: string,
+    readingRejection: ReadingRejection, options?: Parameters<typeof nadelFetch>[1]): Promise<MeterReading> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return nadelFetch<MeterReading>(getRejectReadingUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(readingRejection)
+  }
+);}
+
+
+
+
+
+export const getRejectReadingMutationKey = () => ['rejectReading'] as const;
+
+export const getRejectReadingMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rejectReading>>, TError,RejectReadingMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof rejectReading>>, TError,RejectReadingMutationVariables, TContext> => {
+
+const mutationKey = getRejectReadingMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof rejectReading>>, RejectReadingMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  rejectReading(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RejectReadingMutationResult = NonNullable<Awaited<ReturnType<typeof rejectReading>>>
+    export type RejectReadingMutationBody = ReadingRejection
+    export type RejectReadingMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse
+    export type RejectReadingMutationVariables = {id: string;data: ReadingRejection}
+
+    /**
+ * @summary Reject a reading a member submitted
+ */
+export const useRejectReading = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rejectReading>>, TError,RejectReadingMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof rejectReading>>,
+        TError,
+        RejectReadingMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRejectReadingMutationOptions(options), queryClient);
     }

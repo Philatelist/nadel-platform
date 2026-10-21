@@ -14,8 +14,9 @@ import java.util.UUID;
 import org.springframework.stereotype.Component;
 
 /**
- * What the register needs to know about the readings of meters, in bulk: the latest approved reading and whether a
- * meter has readings at all. Runs in the caller's transaction (RLS).
+ * What the register, the approvals and the consumption need to know about the readings of meters, in bulk: the latest
+ * approved reading, the approved readings, whether a meter has readings at all or readings waiting for approval. Runs in
+ * the caller's transaction (RLS).
  */
 @Component
 class ReadingFacts {
@@ -49,6 +50,23 @@ class ReadingFacts {
     /** Whether the meter has a reading of any status. */
     boolean hasReadings(UUID meterId) {
         return readings.existsByMeterId(meterId);
+    }
+
+    /** Whether the meter has readings waiting for approval. */
+    boolean hasPending(UUID meterId) {
+        return readings.existsByMeterIdAndStatus(meterId, Status.PENDING);
+    }
+
+    /** The approved readings of each of the meters, oldest first; a meter without one has an empty list. */
+    Map<UUID, List<Reading>> approvedByMeter(Collection<UUID> meterIds) {
+        Map<UUID, List<Reading>> approved = new HashMap<>();
+        meterIds.forEach(id -> approved.put(id, new ArrayList<>()));
+        for (List<UUID> chunk : chunks(meterIds)) {
+            for (MeterReadingRecord reading : readings.findByMeterIdInAndStatusOrderByTakenOn(chunk, Status.APPROVED)) {
+                approved.get(reading.getMeterId()).add(reading.toReading());
+            }
+        }
+        return approved;
     }
 
     /** The meters among {@code meterIds} that have a reading of any status. */

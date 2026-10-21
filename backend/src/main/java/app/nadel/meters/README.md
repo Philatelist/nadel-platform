@@ -4,10 +4,11 @@ The cooperative's meters, the electricity meter tree, the readings taken on any 
 them (feature 010, ADR 0014). Nothing is charged here; electricity charges, losses and the split of common consumers arrive
 with feature 011, which reuses `ConsumptionCalculator` and feeds the exact `Quantity` to money.
 
-Status: slices 1 to 3 of spec 010 are in code: tables, permissions, the pure calculation, the `ReadingUsage` port, the
-meter register (entity, commands, queries, endpoints, the plot guard, audit), and readings with the round (entry, batch,
-superseding, correction, deletion, the unusual-consumption warning, the history with intervals). Approvals, replacement
-and the tree follow in the later slices and extend this file.
+Status: slices 1 to 4 of spec 010 are in code: tables, permissions, the pure calculation, the `ReadingUsage` port, the
+meter register (entity, commands, queries, endpoints, the plot guard, audit), readings with the round (entry, batch,
+superseding, correction, deletion, the unusual-consumption warning, the history with intervals), and replacement, range
+consumption over a chain of meters and the member flow (submission, approval, rejection). The tree endpoints and the
+Excel sheet follow in the later slices and extend this file.
 
 Depends on `plots` (`PlotCatalog`, and it implements `plots.PlotChangeGuard`), `identity` (`CurrentUser`, `AccessProfile`,
 `OwnedPlotsSource`, `Permission`), `audit` (events) and `problem`. `plots` never depends on `meters`.
@@ -94,7 +95,9 @@ The platform operator has no permissions: 403 everywhere. A meter or plot of ano
   the final reading is the last point of the meter, so `removedOn` after today is `READING_DATE_IN_FUTURE`, before the
   installation `READING_DATE_OUTSIDE_METER`, before the latest approved reading `READING_OUT_OF_ORDER` (all on
   `removedOn`), and a value below the latest approved reading (or the initial one) `READING_OUT_OF_ORDER` on
-  `finalReading`. Pending readings are not checked yet (slice 4 adds `METER_HAS_PENDING_READINGS`).
+  `finalReading`. A meter with readings waiting for approval is 409 `METER_HAS_PENDING_READINGS` (checked right after
+  `METER_REMOVED`): the board approves or rejects them first, so a pending reading never ends up outside the working
+  period of its meter.
 - **Delete** locks the meter: a removed meter is 409 `METER_REMOVED`, a meter with a reading of any status 409
   `METER_HAS_READINGS` (the `meter_reading` foreign key is the backstop). `deletable` in the API says when it is allowed.
   A meter that is somebody's parent in the tree is not checked yet (slice 5, `METER_HAS_CHILDREN`).
@@ -168,6 +171,84 @@ Entity type `METER_READING`, entity id = the meter (the log links to the meter c
 plot), label = the meter's label. `READING_ENTERED` (`takenOn`, `value` new), `READING_REPLACED` (`takenOn` old and new
 the same date, `value` old and new), `READING_CORRECTED` (`takenOn` and `value` old and new), `READING_DELETED`
 (`takenOn`, `value` old). Values are ISO dates and readings with three decimals.
+
+## Replacement and range consumption (slice 4)
+
+Internal: `MeterParentRecord` (entity of `meter_parent`) and `MeterParentRepository`, `MeterParents` (the tree part of a
+replacement), `MeterChains` (the chain of a meter and the histories the calculation needs), `ConsumptionQueries`.
+
+| Endpoint | Operation | Who |
+|---|---|---|
+| `POST /meters/{id}/replace` | `replaceMeter` | `METERS_VIEW` and `METERS_MANAGE` |
+| `GET /meters/{id}/consumption?from&to` | `getMeterConsumption` | `METERS_VIEW` |
+
+- **Replace** (`replacedOn`, `finalReading`, `serial`, `initialReading`) is one transaction: the old meter is removed
+  with the rules of a removal (`METER_REMOVED`, `METER_HAS_PENDING_READINGS`, the date errors on `replacedOn`, the value
+  error on `finalReading`) and flushed, which frees the plot's active slot (`meter_active_plot_uq`), then the new meter
+  is inserted: the same kind, resource, plot, name and note, the new serial and initial reading, installed on
+  `replacedOn`, `replaces_meter_id` = the old meter. A counter that wrapped around is a replacement by itself: the same
+  serial, initial reading 0. Answer 201 with the new meter. Locks: the plot `FOR SHARE` (as a registration), the meter
+  `FOR UPDATE`, then the meters under it (`FOR UPDATE`, id order).
+- **Pending readings, decided conservatively.** Both a removal and a replacement are refused while the meter has a
+  `PENDING` reading, whatever its date: approving it later could put a counted reading after the removal or make the
+  final reading out of order, and a member's reading is never moved to another meter silently. The approvals screen
+  decides it first.
+- **The tree** (`MeterParents.takeOver`): the old meter's parent period that reaches the day ends on that day (the old
+  meter worked that day) and continues for the new meter from that day; a period that starts later belongs to the new
+  meter alone. For a meter that is not a plot meter, the meters under it move under the new one: a period that started
+  before the day ends on the day before and continues under the new meter from the day (one parent at a time,
+  `meter_parent_no_overlap_ex`; the ended rows are flushed before the new ones are inserted); a period that starts on
+  or after the day is put under the new meter. Earlier periods are kept, so a past range shows the tree as it was.
+- **Range consumption** of a meter is `ConsumptionCalculator.rangeConsumption(chain, from, to)` over its chain
+  (`MeterChains.chainOf`: the meters it replaced, back to the first, and the meters that replaced it, oldest first),
+  each meter clipped to the days it worked; only approved readings. `known: false` with `lastReadingOn` when a part has
+  no point after its end; `calculated` when an end was interpolated; the consumption is rounded once
+  (`Quantity.toMeterValue`). 400 `VALIDATION_FAILED` with `to` `INVALID` when `to` is before `from`. The tree of slice 5
+  reuses `MeterChains`.
+
+### Audit of a replacement
+
+Two entries: `METER_REPLACED` about the old meter (`removedOn`, `finalReading`, `replacementMeter` = the serial number of
+the new meter, user content) and `METER_REGISTERED` about the new meter (the fields of a registration), so the log of each
+meter card is complete. A refused replacement writes nothing.
+
+## The member flow (slice 4)
+
+Internal: `ApprovalQueries`; the commands are in `ReadingCommands` (`submit`, `approve`, `reject`).
+
+| Endpoint | Operation | Who |
+|---|---|---|
+| `POST /plots/{id}/readings` | `submitPlotReading` | a current owner of the plot (`MeterAccess.ownsNow`), whatever their permissions; anyone else 404, the platform operator 403 |
+| `GET /readings?status=PENDING` | `listReadings` | `READINGS_APPROVE`; the meter's `note` only with `METERS_VIEW` |
+| `POST /readings/{id}/approve` | `approveReading` | `READINGS_APPROVE` |
+| `POST /readings/{id}/reject` | `rejectReading` | `READINGS_APPROVE` |
+
+- **Submission** (`meterId`, `takenOn` or today, `value`): an active meter of that plot (another meter is 404 with
+  `errors[{field: meterId}]`, a removed one 409 `METER_REMOVED`), checked by `ReadingValidator` against the counted
+  readings like an entry (a counted reading of the same date is not a neighbour). The row is `PENDING`, source `MEMBER`,
+  `entered_by_member_id` the member. A pending reading of the same meter and date is superseded by it (the same value
+  again changes nothing and is not audited). A pending reading never supersedes a counted one and never reaches the
+  calculation: intervals, the register's `lastReading`, the round and range consumption read approved readings only.
+  201 with `ReadingSaved` (no interval, the warnings it would carry).
+- **Approval** locks the meter, takes only a `PENDING` reading (else 409 `READING_STATUS_INVALID`), checks it again
+  against the counted readings as they are now (`READING_DATE_OUTSIDE_METER`, `READING_OUT_OF_ORDER`), asks the
+  `ReadingUsage` ports about the span around its date (`READING_IN_USE`), then supersedes a counted reading of the same
+  date (flushed out of `APPROVED` first, then linked) and sets `APPROVED` with `decided_by_member_id` and `decided_at`.
+  The source stays `MEMBER`. 200 with the interval it now closes and its warnings.
+- **Rejection** needs a `reason` (trimmed, 1 to 500 characters; blank is 400 `REQUIRED`), takes only a `PENDING`
+  reading, sets `REJECTED` with the reason and the decider. The member reads the reason in the meter's history
+  (`rejectReason`). The reason is user content: it is stored and audited, never logged.
+- **The approvals list** reads every pending reading of the cooperative (index `meter_reading_pending_idx`), oldest date
+  first, with its meter and, when the reading fits between the counted readings now, the interval it would close and its
+  warnings. Only `status=PENDING` is supported (400 `INVALID` on `status` otherwise). Bulk loads: the meters, plots,
+  latest and approved readings.
+
+### Audit of the member flow
+
+Entity type `METER_READING` about the meter, as for the board's readings: `READING_SUBMITTED` (`takenOn` new, `value`
+new and, when it replaced a pending reading, old), `READING_APPROVED` (`takenOn` and `value` new and, when it replaced a
+counted reading of that date, old), `READING_REJECTED` (`takenOn`, `value` and `reason` new). The actor of a submission
+is the member.
 
 ## Permissions
 

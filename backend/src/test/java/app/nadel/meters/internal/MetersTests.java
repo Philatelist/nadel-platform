@@ -352,17 +352,34 @@ class MetersTests extends MeterTestSupport {
     void theRemovalDateAndTheFinalReadingFollowTheReadings() throws Exception {
         UUID meter = register(plotMeter(newPlot(STREET), "ELECTRICITY", "MT-1", "2026-06-01", "8000"));
         reading(meter, "2026-09-03", "8140", "APPROVED");
-        reading(meter, "2026-09-20", "9999", "PENDING"); // not counted
+        reading(meter, "2026-09-20", "9999", "REJECTED"); // not counted
 
         expectRemovalConflict(meter, removal(today().plusDays(1).toString(), "9000"), "READING_DATE_IN_FUTURE",
                 "removedOn");
         expectRemovalConflict(meter, removal("2026-05-31", "9000"), "READING_DATE_OUTSIDE_METER", "removedOn");
         expectRemovalConflict(meter, removal("2026-09-02", "9000"), "READING_OUT_OF_ORDER", "removedOn");
         expectRemovalConflict(meter, removal("2026-09-10", "8139.999"), "READING_OUT_OF_ORDER", "finalReading");
-        // a final reading on the day of the last counted reading may equal it; the pending reading does not count
+        // a final reading on the day of the last counted reading may equal it; the rejected reading does not count
         send(chairman(), post(METERS + "/" + meter + "/remove"), removal("2026-09-03", "8140"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.removedOn").value("2026-09-03"));
+    }
+
+    @Test
+    void aMeterWithAReadingWaitingForApprovalIsNotRemoved() throws Exception {
+        UUID meter = register(plotMeter(newPlot(STREET), "ELECTRICITY", "MT-1", "2026-06-01", "8000"));
+        reading(meter, "2026-09-20", "8100", "PENDING");
+
+        send(chairman(), post(METERS + "/" + meter + "/remove"), removal("2026-10-01", "8200"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("METER_HAS_PENDING_READINGS"));
+        send(chairman(), get(METERS + "/" + meter), null).andExpect(jsonPath("$.active").value(true));
+
+        // once the reading is decided the meter is removed
+        ownerJdbc().update("update meter_reading set status = 'REJECTED', reject_reason = 'Wrong' where meter_id = ?",
+                meter);
+        send(chairman(), post(METERS + "/" + meter + "/remove"), removal("2026-10-01", "8200"))
+                .andExpect(status().isOk());
     }
 
     @Test
@@ -529,6 +546,8 @@ class MetersTests extends MeterTestSupport {
         send(other, put(METERS + "/" + meter), Map.of("serial", "MT-x")).andExpect(status().isNotFound());
         send(other, post(METERS + "/" + meter + "/remove"), removal("2026-07-01", "1"))
                 .andExpect(status().isNotFound());
+        send(other, post(METERS + "/" + meter + "/replace"), Map.of("replacedOn", "2026-07-01", "finalReading", "1",
+                "serial", "MT-x", "initialReading", "0")).andExpect(status().isNotFound());
         send(other, delete(METERS + "/" + meter), null).andExpect(status().isNotFound());
         assertThat(meterCount(meter)).isEqualTo(1);
     }
@@ -560,8 +579,12 @@ class MetersTests extends MeterTestSupport {
         send(bearer, put(METERS + "/" + meter), Map.of("serial", "MT-denied")).andExpect(status().isForbidden());
         send(bearer, post(METERS + "/" + meter + "/remove"), removal("2026-07-01", "1"))
                 .andExpect(status().isForbidden());
+        send(bearer, post(METERS + "/" + meter + "/replace"), Map.of("replacedOn", "2026-07-01", "finalReading", "1",
+                "serial", "MT-denied", "initialReading", "0")).andExpect(status().isForbidden());
         send(bearer, delete(METERS + "/" + meter), null).andExpect(status().isForbidden());
         assertThat(meterCount(meter)).isEqualTo(1);
+        assertThat(ownerJdbc().queryForObject("select count(*) from meter where replaces_meter_id = ?", Integer.class,
+                meter)).isZero();
         assertThat(ownerJdbc().queryForObject("select serial from meter where id = ?", String.class, meter))
                 .isNotEqualTo("MT-denied");
     }

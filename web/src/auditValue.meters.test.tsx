@@ -30,3 +30,15 @@ describe('auditValue for meters', () => {
     expect(container.querySelector('[data-user-content]')?.textContent).toBe('ЕМ-1');
   });
 });
+
+describe('auditValue for replacements', () => {
+  const uk = messages('uk');
+
+  it('shows the serial of the new meter and a rejection reason as user content', () => {
+    const serial = render(<>{auditValue('METER', 'replacementMeter', 'ЕМ-2', uk, 'uk')}</>);
+    expect(serial.container.querySelector('[data-user-content]')?.textContent).toBe('ЕМ-2');
+    const reason = render(<>{auditValue('METER_READING', 'reason', 'Нечітке фото', uk, 'uk')}</>);
+    expect(reason.container.querySelector('[data-user-content]')?.textContent).toBe('Нечітке фото');
+    expect(uk.audit.fields.replacementMeter).toBeTruthy();
+  });
+});

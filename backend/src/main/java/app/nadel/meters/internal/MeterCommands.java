@@ -14,6 +14,7 @@ import app.nadel.problem.ConstraintViolations;
 import app.nadel.problem.FieldProblem;
 import app.nadel.problem.ProblemCodes;
 import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -21,6 +22,7 @@ import java.util.UUID;
 import nadel.contract.model.Meter;
 import nadel.contract.model.MeterCreate;
 import nadel.contract.model.MeterRemoval;
+import nadel.contract.model.MeterReplacement;
 import nadel.contract.model.MeterUpdate;
 import org.jspecify.annotations.Nullable;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -29,14 +31,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Registers, corrects, removes and deletes meters. Every method is one transaction that also publishes the audit event.
- * The cooperative always comes from the caller's {@link AccessProfile}, never from the request; the caller must hold
- * {@code METERS_VIEW} and {@code METERS_MANAGE} (checked on the controller).
+ * Registers, corrects, removes, replaces and deletes meters. Every method is one transaction that also publishes the
+ * audit event. The cooperative always comes from the caller's {@link AccessProfile}, never from the request; the caller
+ * must hold {@code METERS_VIEW} and {@code METERS_MANAGE} (checked on the controller).
  * <p>
- * Locks: registering a plot meter takes the plot {@code FOR SHARE} first ({@link PlotCatalog#findAndLockShared}), so it
- * runs after a delete, archive or edit of the plot in progress (they hold {@code FOR UPDATE} and ask the
- * {@link MeterPlotGuard}) and those run after it. Every change of an existing meter locks the meter {@code FOR UPDATE}
- * first, the lock the reading writes take too. Two registrations of the same plot and resource at once are kept apart by
+ * Locks: registering or replacing a plot meter takes the plot {@code FOR SHARE} first
+ * ({@link PlotCatalog#findAndLockShared}), so it runs after a delete, archive or edit of the plot in progress (they hold
+ * {@code FOR UPDATE} and ask the {@link MeterPlotGuard}) and those run after it. Every change of an existing meter locks
+ * the meter {@code FOR UPDATE} first, the lock the reading writes take too. Two registrations of the same plot and resource at once are kept apart by
  * the partial unique index {@code meter_active_plot_uq}, mapped to {@code METER_ACTIVE_EXISTS}.
  */
 @Service
@@ -48,15 +50,17 @@ class MeterCommands {
     private final PlotCatalog plots;
     private final ReadingFacts readings;
     private final MeterQueries queries;
+    private final MeterParents parents;
     private final MeterAuditPublisher audit;
     private final Clock clock;
 
     MeterCommands(MeterRepository meters, PlotCatalog plots, ReadingFacts readings, MeterQueries queries,
-            MeterAuditPublisher audit, Clock clock) {
+            MeterParents parents, MeterAuditPublisher audit, Clock clock) {
         this.meters = meters;
         this.plots = plots;
         this.readings = readings;
         this.queries = queries;
+        this.parents = parents;
         this.audit = audit;
         this.clock = clock;
     }
@@ -158,40 +162,70 @@ class MeterCommands {
     /**
      * Ends the working period of the meter on {@code removedOn} with the final reading. The final reading is the last
      * point of the meter: not after today, not before the installation, not before a counted reading and not lower than
-     * the counted reading before it (or the initial reading).
+     * the counted reading before it (or the initial reading). A meter with readings waiting for approval is not removed
+     * until they are approved or rejected.
      */
     @Transactional
     Meter remove(UUID id, MeterRemoval input, AccessProfile actor) {
         MeterRecord meter = meters.findByIdForUpdate(id).orElseThrow(ApiProblemException::notFound);
-        if (!meter.isActive()) {
-            throw removed();
-        }
+        ensureActiveWithoutPending(meter);
         List<FieldProblem> problems = new ArrayList<>();
         MeterValue finalValue = meterValue(input.getFinalReading(), "finalReading", problems);
         if (!problems.isEmpty()) {
             throw invalid(problems);
         }
         LocalDate removedOn = input.getRemovedOn();
-        ensureNotInFuture(removedOn, "removedOn");
-        if (removedOn.isBefore(meter.getInstalledOn())) {
-            throw conflict(ProblemCodes.READING_DATE_OUTSIDE_METER,
-                    "A meter is not removed before it was installed.", "removedOn");
-        }
-        Reading previous = readings.latestApproved(meter.getId())
-                .orElse(new Reading(meter.getInstalledOn(), meter.getInitialValue()));
-        if (previous.takenOn().isAfter(removedOn)) {
-            throw conflict(ProblemCodes.READING_OUT_OF_ORDER, "The meter has a reading after the removal date.",
-                    "removedOn");
-        }
-        if (finalValue.compareTo(previous.value()) < 0) {
-            throw conflict(ProblemCodes.READING_OUT_OF_ORDER,
-                    "The final reading is lower than the reading before it.", "finalReading");
-        }
+        checkEnd(meter, removedOn, finalValue, "removedOn");
         MeterSnapshot before = MeterSnapshot.of(meter, null);
         meter.remove(removedOn, finalValue, clock.instant());
         save(meter);
         audit.publish(actor, "METER_REMOVED", meter, MeterSnapshot.diff(before, MeterSnapshot.of(meter, null)));
         return queries.card(meter, true);
+    }
+
+    /**
+     * Replaces the meter by a new one on one day (spec 010, section 2.3): the old meter is removed on
+     * {@code replacedOn} with its final reading (the rules of {@link #remove}), and a new active meter of the same kind,
+     * resource, plot, name and note is installed on the same day with its serial number and initial reading and a link
+     * back ({@code replaces_meter_id}). A counter that wrapped around is a replacement of the meter by itself: the same
+     * serial number, initial reading 0. The new meter takes the old one's place in the tree ({@link MeterParents}).
+     * <p>
+     * Locks: the plot of a plot meter {@code FOR SHARE} first (as a registration), then the meter {@code FOR UPDATE},
+     * then the meters under it. The old meter is removed and flushed before the new one is inserted, so the plot's
+     * single active slot ({@code meter_active_plot_uq}) is free for it.
+     */
+    @Transactional
+    Meter replace(UUID id, MeterReplacement input, AccessProfile actor) {
+        meters.findPlotIdOf(id).ifPresent(plots::findAndLockShared);
+        MeterRecord old = meters.findByIdForUpdate(id).orElseThrow(ApiProblemException::notFound);
+        ensureActiveWithoutPending(old);
+        List<FieldProblem> problems = new ArrayList<>();
+        MeterValue finalValue = meterValue(input.getFinalReading(), "finalReading", problems);
+        MeterValue initial = meterValue(input.getInitialReading(), "initialReading", problems);
+        String serial = blankToNull(input.getSerial());
+        if (serial == null) {
+            problems.add(new FieldProblem("serial", ProblemCodes.REQUIRED));
+        }
+        if (!problems.isEmpty()) {
+            throw invalid(problems);
+        }
+        LocalDate day = input.getReplacedOn();
+        checkEnd(old, day, finalValue, "replacedOn");
+
+        Instant now = clock.instant();
+        MeterSnapshot before = MeterSnapshot.of(old, null);
+        old.remove(day, finalValue, now);
+        save(old);
+        MeterRecord replacement = MeterRecord.replacement(old, serial, day, initial, now);
+        save(replacement);
+        parents.takeOver(old, replacement, day, now);
+
+        List<FieldChange> changes = new ArrayList<>(MeterSnapshot.diff(before, MeterSnapshot.of(old, null)));
+        changes.add(new FieldChange("replacementMeter", null, replacement.getSerial()));
+        audit.publish(actor, "METER_REPLACED", old, changes);
+        audit.publish(actor, "METER_REGISTERED", replacement, MeterSnapshot.diff(MeterSnapshot.NONE,
+                MeterSnapshot.of(replacement, plotNumber(replacement))));
+        return queries.card(replacement, true);
     }
 
     /**
@@ -213,6 +247,40 @@ class MeterCommands {
         meters.delete(meter);
         meters.flush();
         audit.publish(actor, "METER_DELETED", meter, MeterSnapshot.diff(before, MeterSnapshot.NONE));
+    }
+
+    /** 409 for a removed meter and for a meter with readings waiting for approval. */
+    private void ensureActiveWithoutPending(MeterRecord meter) {
+        if (!meter.isActive()) {
+            throw removed();
+        }
+        if (readings.hasPending(meter.getId())) {
+            throw new ApiProblemException(HttpStatus.CONFLICT, ProblemCodes.METER_HAS_PENDING_READINGS,
+                    "The meter has readings waiting for approval; approve or reject them first.");
+        }
+    }
+
+    /**
+     * The end of the meter's working period on {@code day} with {@code finalValue}: not after today, not before the
+     * installation, not before the latest counted reading (all on {@code dateField}), and the value not lower than that
+     * reading or the initial one ({@code finalReading}).
+     */
+    private void checkEnd(MeterRecord meter, LocalDate day, MeterValue finalValue, String dateField) {
+        ensureNotInFuture(day, dateField);
+        if (day.isBefore(meter.getInstalledOn())) {
+            throw conflict(ProblemCodes.READING_DATE_OUTSIDE_METER,
+                    "A meter is not removed before it was installed.", dateField);
+        }
+        Reading previous = readings.latestApproved(meter.getId())
+                .orElse(new Reading(meter.getInstalledOn(), meter.getInitialValue()));
+        if (previous.takenOn().isAfter(day)) {
+            throw conflict(ProblemCodes.READING_OUT_OF_ORDER, "The meter has a reading after the removal date.",
+                    dateField);
+        }
+        if (finalValue.compareTo(previous.value()) < 0) {
+            throw conflict(ProblemCodes.READING_OUT_OF_ORDER,
+                    "The final reading is lower than the reading before it.", "finalReading");
+        }
     }
 
     private @Nullable String plotNumber(MeterRecord meter) {
