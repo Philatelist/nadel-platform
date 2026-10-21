@@ -26,4 +26,5 @@ export const AuditEntityType = {
   CHARGE_TYPE: 'CHARGE_TYPE',
   TARIFF: 'TARIFF',
   METER: 'METER',
+  METER_READING: 'METER_READING',
 } as const;

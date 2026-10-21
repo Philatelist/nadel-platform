@@ -96,6 +96,15 @@ const router = createBrowserRouter([
         ],
       },
       {
+        element: <RequirePermission permission="READINGS_ENTER" />,
+        children: [
+          {
+            path: 'readings',
+            lazy: () => import('./pages/ReadingsRoundPage').then((m) => ({ Component: m.ReadingsRoundPage })),
+          },
+        ],
+      },
+      {
         element: <RequirePermission permission="IMPORT_RUN" />,
         children: [
           {

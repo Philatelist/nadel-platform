@@ -1,16 +1,12 @@
 package app.nadel.meters.internal;
 
 import app.nadel.identity.AccessProfile;
-import app.nadel.identity.OwnedPlot;
-import app.nadel.identity.OwnedPlotsSource;
-import app.nadel.identity.Permission;
 import app.nadel.meters.ConsumptionCalculator.Reading;
 import app.nadel.meters.MeterKind;
 import app.nadel.meters.MeterResource;
 import app.nadel.plots.PlotCatalog;
 import app.nadel.plots.PlotCatalog.PlotFacts;
 import app.nadel.problem.ApiProblemException;
-import app.nadel.problem.ProblemCodes;
 import java.text.Collator;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -24,7 +20,6 @@ import java.util.Set;
 import java.util.UUID;
 import nadel.contract.model.Meter;
 import org.jspecify.annotations.Nullable;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,13 +39,13 @@ class MeterQueries {
 
     private final MeterRepository meters;
     private final PlotCatalog plots;
-    private final OwnedPlotsSource ownedPlots;
+    private final MeterAccess access;
     private final ReadingFacts readings;
 
-    MeterQueries(MeterRepository meters, PlotCatalog plots, OwnedPlotsSource ownedPlots, ReadingFacts readings) {
+    MeterQueries(MeterRepository meters, PlotCatalog plots, MeterAccess access, ReadingFacts readings) {
         this.meters = meters;
         this.plots = plots;
-        this.ownedPlots = ownedPlots;
+        this.access = access;
         this.readings = readings;
     }
 
@@ -61,6 +56,16 @@ class MeterQueries {
     @Transactional(readOnly = true)
     List<Meter> list(@Nullable MeterResource resource, @Nullable MeterKind kind, @Nullable String street,
             @Nullable LocalDate noReadingSince, boolean includeRemoved) {
+        return list(resource, kind, street, noReadingSince, includeRemoved, true);
+    }
+
+    /**
+     * The register as {@link #list(MeterResource, MeterKind, String, LocalDate, boolean)}, with the board's note only
+     * when {@code withNote} (the reading round of a caller without {@code METERS_VIEW} leaves it out).
+     */
+    @Transactional(readOnly = true)
+    List<Meter> list(@Nullable MeterResource resource, @Nullable MeterKind kind, @Nullable String street,
+            @Nullable LocalDate noReadingSince, boolean includeRemoved, boolean withNote) {
         List<MeterRecord> candidates = (includeRemoved && noReadingSince == null ? meters.findAll()
                 : meters.findByRemovedOnIsNull()).stream()
                 .filter(meter -> resource == null || meter.getResource() == resource)
@@ -90,7 +95,7 @@ class MeterQueries {
         return inRegisterOrder(candidates).stream()
                 .map(meter -> MeterDtoMapper.toDto(meter,
                         meter.getPlotId() == null ? null : plotFacts.get(meter.getPlotId()), latest.get(meter.getId()),
-                        withReadings.contains(meter.getId()), true))
+                        withReadings.contains(meter.getId()), withNote))
                 .toList();
     }
 
@@ -107,13 +112,10 @@ class MeterQueries {
      */
     @Transactional(readOnly = true)
     List<Meter> forPlot(UUID plotId, AccessProfile viewer) {
-        if (viewer.platformOperator() || viewer.tenantId() == null) {
-            throw new ApiProblemException(HttpStatus.FORBIDDEN, ProblemCodes.PERMISSION_DENIED,
-                    "The platform operator has no access to cooperative data.");
-        }
+        access.requireCooperativeData(viewer);
         PlotFacts plot = plots.find(plotId).orElseThrow(ApiProblemException::notFound);
-        boolean full = viewer.can(Permission.METERS_VIEW);
-        if (!full && !ownsNow(viewer, plotId)) {
+        boolean full = access.seesEveryMeter(viewer);
+        if (!full && !access.ownsNow(viewer, plotId)) {
             throw ApiProblemException.notFound();
         }
         List<MeterRecord> found = meters.findByPlotId(plotId).stream().sorted(WITHIN_A_PLOT).toList();
@@ -132,12 +134,6 @@ class MeterQueries {
         Reading latest = readings.latestApproved(meter.getId()).orElse(null);
         boolean hasReadings = !readings.withReadings(List.of(meter.getId())).isEmpty();
         return MeterDtoMapper.toDto(meter, plot, latest, hasReadings, withNote);
-    }
-
-    private boolean ownsNow(AccessProfile viewer, UUID plotId) {
-        UUID memberId = viewer.memberId();
-        return memberId != null
-                && ownedPlots.currentPlotsOf(memberId).stream().map(OwnedPlot::plotId).anyMatch(plotId::equals);
     }
 
     /** Plot meters in street and number order, then the other meters by name (Ukrainian alphabet). */

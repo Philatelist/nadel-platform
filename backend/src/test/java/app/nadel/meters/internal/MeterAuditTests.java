@@ -1,20 +1,17 @@
 package app.nadel.meters.internal;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.awaitility.Awaitility.await;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
-import tools.jackson.databind.JsonNode;
 
 /**
  * Registering, correcting, removing and deleting a meter are written to the audit log as codes and parameters: entity
@@ -139,30 +136,5 @@ class MeterAuditTests extends MeterTestSupport {
     private UUID audited(UUID meter) {
         audited.add(meter);
         return meter;
-    }
-
-    /** Waits for the asynchronous audit write of {@code expected} entries of that action for the meter. */
-    private List<Map<String, Object>> awaitEntries(UUID meter, String action, int expected) {
-        await().atMost(Duration.ofSeconds(10)).untilAsserted(
-                () -> assertThat(entries(meter, action)).hasSize(expected));
-        return entries(meter, action);
-    }
-
-    private List<Map<String, Object>> entries(UUID meter, String action) {
-        return ownerJdbc().queryForList("select tenant_id, action, entity_type, entity_label, actor_member_id, "
-                + "cast(changes as text) as changes from audit_entry where entity_id = ? and action = ? "
-                + "order by occurred_at, id", meter, action);
-    }
-
-    private List<Change> changes(Map<String, Object> entry) {
-        JsonNode node = json.readTree((String) entry.get("changes"));
-        List<Change> result = new ArrayList<>();
-        node.forEach(change -> result.add(new Change(change.get("field").asString(),
-                change.has("old") && !change.get("old").isNull() ? change.get("old").asString() : null,
-                change.has("new") && !change.get("new").isNull() ? change.get("new").asString() : null)));
-        return result;
-    }
-
-    private record Change(String field, String oldValue, String newValue) {
     }
 }

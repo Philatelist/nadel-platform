@@ -4,9 +4,10 @@ The cooperative's meters, the electricity meter tree, the readings taken on any 
 them (feature 010, ADR 0014). Nothing is charged here; electricity charges, losses and the split of common consumers arrive
 with feature 011, which reuses `ConsumptionCalculator` and feeds the exact `Quantity` to money.
 
-Status: slices 1 and 2 of spec 010 are in code: tables, permissions, the pure calculation, the `ReadingUsage` port, and
-the meter register (entity, commands, queries, endpoints, the plot guard, audit). Readings, the round, approvals,
-replacement and the tree follow in the later slices and extend this file.
+Status: slices 1 to 3 of spec 010 are in code: tables, permissions, the pure calculation, the `ReadingUsage` port, the
+meter register (entity, commands, queries, endpoints, the plot guard, audit), and readings with the round (entry, batch,
+superseding, correction, deletion, the unusual-consumption warning, the history with intervals). Approvals, replacement
+and the tree follow in the later slices and extend this file.
 
 Depends on `plots` (`PlotCatalog`, and it implements `plots.PlotChangeGuard`), `identity` (`CurrentUser`, `AccessProfile`,
 `OwnedPlotsSource`, `Permission`), `audit` (events) and `problem`. `plots` never depends on `meters`.
@@ -63,9 +64,9 @@ slices; the calculator receives only the readings that count.
 ## The register (slice 2)
 
 Internal: `MeterRecord` (entity of `meter`) and `MeterRepository`, `MeterCommands`, `MeterQueries`, `MeterDtoMapper` (the
-one place that decides what a viewer sees), `ReadingFacts` (latest approved reading and "has readings" in bulk, native
-queries on `meter_reading` until the reading entity arrives), `MeterSnapshot` + `MeterAuditPublisher`, `MeterPlotGuard`,
-`MetersController`.
+one place that decides what a viewer sees), `MeterAccess` (the member rule shared with the readings), `ReadingFacts`
+(latest approved reading and "has readings" in bulk, through `MeterReadingRepository`), `MeterSnapshot` +
+`MeterAuditPublisher`, `MeterPlotGuard`, `MetersController`.
 
 | Endpoint | Operation | Who |
 |---|---|---|
@@ -118,6 +119,55 @@ Entity type `METER`, label = the name of a named meter or the serial number of a
 `resource`, `plot` = the plot number, `serial`, `name`, `installedOn`, `initialReading`, `note`), `METER_UPDATED` (changed
 `serial`, `name`, `note`), `METER_REMOVED` (`removedOn`, `finalReading`), `METER_DELETED` (every old value). Values are
 codes, ISO dates and readings with three decimals; never logged.
+
+## Readings and the round (slice 3)
+
+Internal: `MeterReadingRecord` (entity of `meter_reading`) and `MeterReadingRepository`, `ReadingValidator` (pure: the
+rules and the warning), `ReadingProblem`, `ReadingCommands`, `ReadingQueries`, `RoundQueries`, `ReadingDtoMapper`,
+`ReadingsController`.
+
+| Endpoint | Operation | Who |
+|---|---|---|
+| `GET /readings/round` | `getReadingRound` | `READINGS_ENTER`; `note` only with `METERS_VIEW` |
+| `POST /readings` | `enterReadings` | `READINGS_ENTER` |
+| `PUT /readings/{id}` | `correctReading` | `READINGS_ENTER` |
+| `DELETE /readings/{id}` | `deleteReading` | `READINGS_ENTER` |
+| `GET /meters/{id}/readings` | `listMeterReadings` | `METERS_VIEW` for any meter, otherwise a current owner of the meter's plot; anyone else 404, the platform operator 403 |
+
+- **The round** lists the active meters in the order of the register (`MeterQueries`): plot meters in street and
+  number order, electricity before water, then the named meters by name. Filters `resource`, `street`, `noReadingSince`.
+  A plot without an active meter has no row.
+- **Entry** (`POST /readings`, at most 100 rows) saves every row in its own transaction (`TransactionTemplate`; the
+  method itself has none) and answers 200 with a result per row: `SAVED` with the reading, the interval it closes, the
+  superseded ids and the warnings, or `REJECTED` with `error {code, field, params}`. A missing `takenOn` is today
+  (Europe/Kyiv `Clock`). A malformed row is a 400 for the whole request (Bean Validation at the boundary).
+- **Rules** (`ReadingValidator`), against the points of the meter (initial reading, approved readings, final reading;
+  a point on the same date is not a neighbour): the date not after today (`READING_DATE_IN_FUTURE` on `takenOn`,
+  param `today`), within `[installedOn, removedOn]` (`READING_DATE_OUTSIDE_METER` on `takenOn`, params `installedOn`,
+  `removedOn`), `previous <= value <= next` (`READING_OUT_OF_ORDER` on `value`, params `previousTakenOn` and
+  `previousValue` or `nextTakenOn` and `nextValue`). A removed meter still takes readings within its period.
+- **Same date.** The approved reading of the date becomes `SUPERSEDED` and is flushed before the new approved row is
+  inserted (`meter_reading_approved_uq`), then linked to it (`superseded_by_id`). The same value again changes nothing.
+- **Correction** (`PUT`) of an `APPROVED` reading is a new row that supersedes the old one (and an approved reading on
+  the new date); history kept. **Deletion** of an `APPROVED` reading removes the row; a reading it had replaced stays
+  `SUPERSEDED` without a link. Any other status is 409 `READING_STATUS_INVALID`. A no-op correction is not audited.
+- **Use check.** Before a change every `ReadingUsage` bean is asked about the span from the previous to the next point
+  around the date (for a correction around both the old and the new date); any "yes" is 409 `READING_IN_USE` (a row
+  error in a batch). `changeable` in the history says when a reading can still change.
+- **Unusual consumption.** `UNUSUAL_CONSUMPTION` when `ConsumptionCalculator.isUnusual` says so for the interval the new
+  reading closes against the meter's other intervals (counted readings only); the reading is saved anyway.
+- **Locks.** Every reading write takes the meter `FOR UPDATE` first; a correction or deletion finds the meter of the
+  reading by id and reads the reading only after the lock.
+- **History** (`GET /meters/{id}/readings`): every reading, newest date first (on a date the approved one first), each
+  approved one with the interval it closes; the intervals of the counted points newest first. Consumption of an interval
+  is exact (two readings with three decimals).
+
+### Audit of readings
+
+Entity type `METER_READING`, entity id = the meter (the log links to the meter card, as `OWNERSHIP` entries carry the
+plot), label = the meter's label. `READING_ENTERED` (`takenOn`, `value` new), `READING_REPLACED` (`takenOn` old and new
+the same date, `value` old and new), `READING_CORRECTED` (`takenOn` and `value` old and new), `READING_DELETED`
+(`takenOn`, `value` old). Values are ISO dates and readings with three decimals.
 
 ## Permissions
 

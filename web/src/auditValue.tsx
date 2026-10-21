@@ -146,6 +146,9 @@ export function auditValue(
     case 'initialReading':
     case 'finalReading':
       return /^\d+(\.\d{1,3})?$/.test(raw) ? formatMeterValue(raw, locale) : raw;
+    case 'value':
+      if (entityType !== 'METER_READING') return user(raw);
+      return /^\d+(\.\d{1,3})?$/.test(raw) ? formatMeterValue(raw, locale) : raw;
     case 'rate':
       return normalizeRateInput(raw) === raw ? formatRateWithCurrency(raw, locale) : raw;
     case 'scope':
@@ -163,6 +166,7 @@ export function auditValue(
     case 'dueDate':
     case 'installedOn':
     case 'removedOn':
+    case 'takenOn':
       return ISO_DAY.test(raw) ? formatDay(raw, locale) : raw;
     case 'permissions':
       return raw

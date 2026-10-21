@@ -36,6 +36,8 @@ tags:
     description: Tariffs with dated versions (how much the cooperative charges)
   - name: meters
     description: The register of electricity and water meters
+  - name: readings
+    description: Meter readings, the reading round and the consumption between readings
 
 paths:
   /me:
@@ -2106,6 +2108,202 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /meters/{id}/readings:
+    get:
+      tags: [readings]
+      operationId: listMeterReadings
+      summary: The readings of a meter with their intervals
+      description: |
+        Every reading of the meter, newest date first (on one date the counted reading first, then pending, rejected
+        and superseded ones), and the intervals between the counted points of the meter (initial reading, approved
+        readings, final reading), newest first. Each approved reading carries the interval that ends on it; a reading
+        on the installation date has none. Consumption is calculated by the server from exact values. No permission
+        annotation: a caller with `METERS_VIEW` may ask for any meter of the cooperative, anyone else only for a meter
+        of a plot they currently own. Any other meter, an unknown id and a meter of another cooperative are 404
+        `NOT_FOUND`; the platform operator has no cooperative data: 403.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeterReadingHistory'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /readings/round:
+    get:
+      tags: [readings]
+      operationId: getReadingRound
+      summary: The meters of a reading round
+      description: |
+        The active meters to read on a round: plot meters in street order (Ukrainian alphabet, plots without a street
+        last) and natural order of the plot number, electricity before water; then the other meters by name. A plot
+        without an active meter is never listed. Filters combine with AND: `resource`, `street` (the plot's street,
+        ignoring case and surrounding spaces; only plot meters have one) and `noReadingSince` (meters whose last
+        counted reading, or the initial reading when there is none, is dated before that day). `lastReading` of each
+        meter is the point to compare a new reading with. `note` is present only for a caller with `METERS_VIEW`.
+        Requires `READINGS_ENTER`.
+      parameters:
+        - name: resource
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/MeterResource'
+        - name: street
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 200
+        - name: noReadingSince
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Meter'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /readings:
+    post:
+      tags: [readings]
+      operationId: enterReadings
+      summary: Enter readings, one or a whole round
+      description: |
+        Enters up to 100 readings. Each row is saved in its own transaction, so one refused row never undoes another;
+        the answer is 200 with one result per row in request order (`SAVED` or `REJECTED` with `error`). A reading
+        counts at once (status `APPROVED`, source `ENTERED`). `takenOn` absent means today in Europe/Kyiv. A counted
+        reading of the same meter and date is replaced: it stays in the history as `SUPERSEDED` and its id is in
+        `supersededReadingIds`; the same value on the same date again changes nothing. Row error codes: `NOT_FOUND`
+        (`meterId`: no such meter in the cooperative), `READING_DATE_IN_FUTURE` (`takenOn`, params `today`),
+        `READING_DATE_OUTSIDE_METER` (`takenOn`, params `installedOn` and, for a removed meter, `removedOn`),
+        `READING_OUT_OF_ORDER` (`value`: lower than the previous counted point or higher than the next one; params
+        `previousTakenOn` and `previousValue`, or `nextTakenOn` and `nextValue`), `READING_IN_USE` (a charge uses the
+        readings around the date). A saved row may carry the warning `UNUSUAL_CONSUMPTION`: the daily consumption of
+        the interval it closes is more than 3 times the daily average over the meter's counted intervals that ended in
+        the 180 days before it (none without such an interval). 400 `VALIDATION_FAILED` for the whole request when a
+        row is malformed (`rows[i].value` `METER_VALUE_INVALID`, `rows` `REQUIRED` or `TOO_LONG`). Requires
+        `READINGS_ENTER`; each saved row is written to the audit log (`READING_ENTERED`, or `READING_REPLACED` when it
+        replaced a reading of the same date).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReadingBatch'
+      responses:
+        '200':
+          description: One result per row
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadingBatchResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /readings/{id}:
+    put:
+      tags: [readings]
+      operationId: correctReading
+      summary: Correct the value or date of a counted reading
+      description: |
+        Corrects a counted (`APPROVED`) reading: a new reading with the given date and value takes its place and the
+        old one stays in the history as `SUPERSEDED`, as does a counted reading on the new date; their ids are in
+        `supersededReadingIds`. A request that changes nothing is accepted and not audited. Conflicts (409): the
+        reading is not counted (`READING_STATUS_INVALID`); the new date is after today (`READING_DATE_IN_FUTURE`) or
+        outside the meter's working period (`READING_DATE_OUTSIDE_METER`), both with `errors[{field: takenOn}]`; the
+        value does not fit between the neighbouring counted points (`READING_OUT_OF_ORDER`, `errors[{field: value}]`);
+        a charge uses the readings around the old or the new date (`READING_IN_USE`). The warning
+        `UNUSUAL_CONSUMPTION` follows the rule of `enterReadings`. Requires `READINGS_ENTER`; written to the audit log
+        (`READING_CORRECTED`).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReadingCorrection'
+      responses:
+        '200':
+          description: The reading that took the place of the corrected one
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadingSaved'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+    delete:
+      tags: [readings]
+      operationId: deleteReading
+      summary: Delete a counted reading
+      description: |
+        Deletes a counted (`APPROVED`) reading; the intervals around it join. A reading it had replaced stays
+        `SUPERSEDED`. Conflicts (409): the reading is not counted (`READING_STATUS_INVALID`) or a charge uses the
+        readings around it (`READING_IN_USE`). Requires `READINGS_ENTER`; written to the audit log (`READING_DELETED`,
+        the old date and value).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -2197,7 +2395,9 @@ components:
         of a reading (the initial or final reading of a meter) is refused: the date is in the future (code
         `READING_DATE_IN_FUTURE`), outside the working period of the meter (code `READING_DATE_OUTSIDE_METER`), or the
         value is lower than the previous reading or the date before a later one (code `READING_OUT_OF_ORDER`), each
-        with `errors[{field}]` naming the date or value
+        with `errors[{field}]` naming the date or value, or a reading that is not counted is corrected or deleted (code
+        `READING_STATUS_INVALID`), or a reading is corrected or deleted although a charge uses the readings around it
+        (code `READING_IN_USE`)
       content:
         application/problem+json:
           schema:
@@ -2557,11 +2757,15 @@ components:
         - METER_UPDATED
         - METER_REMOVED
         - METER_DELETED
+        - READING_ENTERED
+        - READING_REPLACED
+        - READING_CORRECTED
+        - READING_DELETED
 
     AuditEntityType:
       type: string
       description: Kind of the entity an audit entry is about
-      enum: [MEMBER, ROLE, PLOT, SETTINGS, OWNERSHIP, IMPORT, CHARGE_TYPE, TARIFF, METER]
+      enum: [MEMBER, ROLE, PLOT, SETTINGS, OWNERSHIP, IMPORT, CHARGE_TYPE, TARIFF, METER, METER_READING]
 
     AuditFieldChange:
       type: object
@@ -3829,3 +4033,215 @@ components:
           format: date
         finalReading:
           $ref: '#/components/schemas/MeterValue'
+
+    ReadingStatus:
+      type: string
+      description: >-
+        `APPROVED` counts for consumption; `PENDING` waits for approval (a member's submission); `REJECTED` was not
+        approved (with a reason); `SUPERSEDED` was replaced by a later reading of the same date or by a correction
+      enum: [APPROVED, PENDING, REJECTED, SUPERSEDED]
+
+    ReadingSource:
+      type: string
+      description: Who brought the reading in, the board or the electrician (`ENTERED`), the Excel import or a member
+      enum: [ENTERED, IMPORTED, MEMBER]
+
+    ReadingWarning:
+      type: string
+      description: >-
+        `UNUSUAL_CONSUMPTION`: the daily consumption of the interval the reading closes is more than 3 times the
+        meter's usual daily consumption over the last 180 days. The reading is saved
+      enum: [UNUSUAL_CONSUMPTION]
+
+    ReadingInterval:
+      type: object
+      description: >-
+        The consumption between two neighbouring counted points of a meter (initial reading, approved readings, final
+        reading), calculated by the server
+      required: [from, to, days, consumption]
+      properties:
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+        days:
+          type: integer
+          format: int32
+          description: The number of days from `from` to `to`
+        consumption:
+          $ref: '#/components/schemas/MeterValue'
+
+    MeterReading:
+      type: object
+      description: A reading of a meter
+      required: [id, meterId, takenOn, value, status, source, changeable]
+      properties:
+        id:
+          type: string
+          format: uuid
+        meterId:
+          type: string
+          format: uuid
+        takenOn:
+          type: string
+          format: date
+        value:
+          $ref: '#/components/schemas/MeterValue'
+        status:
+          $ref: '#/components/schemas/ReadingStatus'
+        source:
+          $ref: '#/components/schemas/ReadingSource'
+        supersededById:
+          type: string
+          format: uuid
+          description: The reading that replaced this one; absent when it was deleted since
+        rejectReason:
+          type: string
+          description: Why a `REJECTED` reading was not approved (user content)
+        interval:
+          $ref: '#/components/schemas/ReadingInterval'
+          description: The interval this approved reading closes; absent for other statuses and on the installation date
+        changeable:
+          type: boolean
+          description: >-
+            True when the caller may correct or delete the reading now: it is approved, the caller has
+            `READINGS_ENTER` and no charge uses it
+
+    MeterReadingHistory:
+      type: object
+      description: The readings of one meter and its intervals
+      required: [meterId, readings, intervals]
+      properties:
+        meterId:
+          type: string
+          format: uuid
+        readings:
+          type: array
+          items:
+            $ref: '#/components/schemas/MeterReading'
+        intervals:
+          type: array
+          description: Newest first
+          items:
+            $ref: '#/components/schemas/ReadingInterval'
+
+    ReadingEntry:
+      type: object
+      description: One reading to enter
+      required: [meterId, value]
+      properties:
+        meterId:
+          type: string
+          format: uuid
+        takenOn:
+          type: string
+          format: date
+          description: The day the meter was read; absent means today in Europe/Kyiv
+        value:
+          $ref: '#/components/schemas/MeterValue'
+
+    ReadingBatch:
+      type: object
+      description: Readings to enter, each saved on its own
+      required: [rows]
+      properties:
+        rows:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/ReadingEntry'
+
+    ReadingRowOutcome:
+      type: string
+      enum: [SAVED, REJECTED]
+
+    ReadingRowError:
+      type: object
+      description: Why a row was not saved, as a code with parameters (never display text)
+      required: [code]
+      properties:
+        code:
+          type: string
+          description: >-
+            `NOT_FOUND`, `VALIDATION_FAILED`, `READING_DATE_IN_FUTURE`, `READING_DATE_OUTSIDE_METER`,
+            `READING_OUT_OF_ORDER` or `READING_IN_USE`
+        field:
+          type: string
+          description: The field of the row the error is about (`meterId`, `takenOn` or `value`)
+        params:
+          type: object
+          description: >-
+            Values for the message: ISO dates (`today`, `installedOn`, `removedOn`, `previousTakenOn`, `nextTakenOn`)
+            and meter values with three decimals (`previousValue`, `nextValue`)
+          additionalProperties:
+            type: string
+
+    ReadingRowResult:
+      type: object
+      description: The result of one row of a batch
+      required: [index, meterId, outcome, supersededReadingIds, warnings]
+      properties:
+        index:
+          type: integer
+          format: int32
+          description: The position of the row in the request, from 0
+        meterId:
+          type: string
+          format: uuid
+        outcome:
+          $ref: '#/components/schemas/ReadingRowOutcome'
+        reading:
+          $ref: '#/components/schemas/MeterReading'
+          description: The saved reading with the interval it closes; present when `SAVED`
+        supersededReadingIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        warnings:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReadingWarning'
+        error:
+          $ref: '#/components/schemas/ReadingRowError'
+          description: Present when `REJECTED`
+
+    ReadingBatchResult:
+      type: object
+      required: [rows]
+      properties:
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReadingRowResult'
+
+    ReadingCorrection:
+      type: object
+      description: The corrected date and value of a reading
+      required: [takenOn, value]
+      properties:
+        takenOn:
+          type: string
+          format: date
+        value:
+          $ref: '#/components/schemas/MeterValue'
+
+    ReadingSaved:
+      type: object
+      description: A saved reading, the readings it replaced and its warnings
+      required: [reading, supersededReadingIds, warnings]
+      properties:
+        reading:
+          $ref: '#/components/schemas/MeterReading'
+        supersededReadingIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        warnings:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReadingWarning'

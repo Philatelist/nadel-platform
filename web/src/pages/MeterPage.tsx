@@ -12,6 +12,7 @@ import { useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { EditMeterDialog } from '../components/meters/EditMeterDialog';
+import { ReadingHistory } from '../components/readings/ReadingHistory';
 import { RemoveMeterDialog } from '../components/meters/RemoveMeterDialog';
 import { QueryBoundary } from '../components/QueryBoundary';
 import { UserContent, formatUser } from '../components/UserContent';
@@ -152,7 +153,7 @@ function MeterView({ meter }: { meter: Meter }) {
         </dl>
       </Panel>
       <Panel title={m.historyTitle}>
-        <p className="text-ink-muted">{m.historyPlaceholder}</p>
+        <ReadingHistory meter={meter} />
       </Panel>
       {dialog === 'edit' && (
         <EditMeterDialog

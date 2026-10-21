@@ -1,11 +1,17 @@
 package app.nadel.meters.internal;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import app.nadel.IntegrationTest;
 import app.nadel.TestTokens;
 import java.math.BigDecimal;
+import java.time.Duration;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -31,6 +37,7 @@ import tools.jackson.databind.json.JsonMapper;
 abstract class MeterTestSupport extends IntegrationTest {
 
     static final String METERS = "/api/v1/meters";
+    static final String READINGS = "/api/v1/readings";
 
     @Autowired
     MockMvc mvc;
@@ -54,7 +61,8 @@ abstract class MeterTestSupport extends IntegrationTest {
         owner.update("delete from meter_parent where meter_id in (select id from meter where serial like 'MT-%') "
                 + "or parent_meter_id in (select id from meter where serial like 'MT-%')");
         // audit entries are written after the commit; one that arrives after this cleanup stays, harmlessly
-        owner.update("delete from audit_entry where entity_type = 'METER' and entity_label like 'MT%'");
+        owner.update("delete from audit_entry where entity_type in ('METER', 'METER_READING') "
+                + "and entity_label like 'MT%'");
         owner.update("delete from meter where serial like 'MT-%' and replaces_meter_id is not null");
         owner.update("delete from meter where serial like 'MT-%'");
         for (UUID ownership : ownerships) {
@@ -141,7 +149,15 @@ abstract class MeterTestSupport extends IntegrationTest {
 
     UUID newPlot(UUID tenant, String street, String kind, boolean archived) {
         UUID id = UUID.randomUUID();
-        String number = "MT" + id.toString().substring(0, 8);
+        return newPlot(id, tenant, street, "MT" + id.toString().substring(0, 8), kind, archived);
+    }
+
+    /** A new active plot of the demo cooperative with the given number (unique among active plots); removed after. */
+    UUID newNumberedPlot(String street, String number) {
+        return newPlot(UUID.randomUUID(), DEMO_TENANT, street, number, "PLOT", false);
+    }
+
+    private UUID newPlot(UUID id, UUID tenant, String street, String number, String kind, boolean archived) {
         ownerJdbc().update("insert into plot (id, tenant_id, number, street, kind, area_m2, archived_at) "
                 + "values (?, ?, ?, ?, ?, ?, case when ? then now() end)", id, tenant, number, street, kind,
                 new BigDecimal("COMMON".equals(kind) ? "0.00" : "600.00"), archived);
@@ -218,6 +234,87 @@ abstract class MeterTestSupport extends IntegrationTest {
 
     JsonNode body(ResultActions actions) throws Exception {
         return json.readTree(actions.andReturn().getResponse().getContentAsString());
+    }
+
+    // ---- readings
+
+    /** Today in the cooperative's time zone, the day a reading without a date is taken on. */
+    static LocalDate kyivToday() {
+        return LocalDate.now(ZoneId.of("Europe/Kyiv"));
+    }
+
+    /** One row of a batch; a null date is left out (the server takes today). */
+    static Map<String, Object> row(UUID meter, String takenOn, String value) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("meterId", meter.toString());
+        if (takenOn != null) {
+            row.put("takenOn", takenOn);
+        }
+        row.put("value", value);
+        return row;
+    }
+
+    /** Sends a batch and returns the row results (the answer is 200 whatever the rows' outcome). */
+    JsonNode enterRows(String bearer, List<Map<String, Object>> rows) throws Exception {
+        return body(send(bearer, post(READINGS), Map.of("rows", rows)).andExpect(status().isOk())).get("rows");
+    }
+
+    /** Enters one reading as the demo chairman and returns its row result. */
+    JsonNode enter(UUID meter, String takenOn, String value) throws Exception {
+        return enterRows(chairman(), List.of(row(meter, takenOn, value))).get(0);
+    }
+
+    /** Enters one reading as the demo chairman, expects it saved and returns the id of the new reading. */
+    UUID entered(UUID meter, String takenOn, String value) throws Exception {
+        JsonNode result = enter(meter, takenOn, value);
+        if (!"SAVED".equals(result.get("outcome").asString())) {
+            throw new AssertionError("The reading was not saved: " + result);
+        }
+        return UUID.fromString(result.get("reading").get("id").asString());
+    }
+
+    /** The readings and intervals of a meter as the demo chairman sees them. */
+    JsonNode history(UUID meter) throws Exception {
+        return body(send(chairman(), get(METERS + "/" + meter + "/readings"), null).andExpect(status().isOk()));
+    }
+
+    String readingStatus(UUID reading) {
+        return ownerJdbc().queryForObject("select status from meter_reading where id = ?", String.class, reading);
+    }
+
+    int readingCount(UUID meter) {
+        return ownerJdbc().queryForObject("select count(*) from meter_reading where meter_id = ?", Integer.class,
+                meter);
+    }
+
+    // ---- audit
+
+    /**
+     * Waits for the asynchronous audit write of {@code expected} entries of that action about the meter (a change of
+     * the meter or of one of its readings).
+     */
+    List<Map<String, Object>> awaitEntries(UUID meter, String action, int expected) {
+        await().atMost(Duration.ofSeconds(10)).untilAsserted(
+                () -> assertThat(entries(meter, action)).hasSize(expected));
+        return entries(meter, action);
+    }
+
+    List<Map<String, Object>> entries(UUID meter, String action) {
+        return ownerJdbc().queryForList("select tenant_id, action, entity_type, entity_label, actor_member_id, "
+                + "cast(changes as text) as changes from audit_entry where entity_id = ? and action = ? "
+                + "order by occurred_at, id", meter, action);
+    }
+
+    List<Change> changes(Map<String, Object> entry) {
+        JsonNode node = json.readTree((String) entry.get("changes"));
+        List<Change> result = new ArrayList<>();
+        node.forEach(change -> result.add(new Change(change.get("field").asString(),
+                change.has("old") && !change.get("old").isNull() ? change.get("old").asString() : null,
+                change.has("new") && !change.get("new").isNull() ? change.get("new").asString() : null)));
+        return result;
+    }
+
+    record Change(String field, String oldValue, String newValue) {
     }
 
     int meterCount(UUID id) {

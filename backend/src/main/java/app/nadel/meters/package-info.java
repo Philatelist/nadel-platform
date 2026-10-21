@@ -9,7 +9,7 @@
  * records, and the port {@link app.nadel.meters.ReadingUsage} that the ledger implements so that readings a charge uses
  * are no longer corrected or deleted (ADR 0014). The meter register (entity, commands, queries, the endpoints of tag
  * {@code meters} and the plot guard {@code MeterPlotGuard}, an implementation of {@link app.nadel.plots.PlotChangeGuard})
- * is internal. It depends on {@code identity}, {@code audit}, {@code problem} and {@code plots} (the public
+ * and the readings (entity, rules, commands, the round and the endpoints of tag {@code readings}) are internal. It depends on {@code identity}, {@code audit}, {@code problem} and {@code plots} (the public
  * {@code PlotCatalog}).
  */
 @org.springframework.modulith.ApplicationModule(displayName = "Meters and readings")

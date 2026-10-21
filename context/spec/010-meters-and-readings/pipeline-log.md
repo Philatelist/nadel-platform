@@ -1,7 +1,7 @@
 # Pipeline log — 010 Meters and readings
 
 - Status: running
-- Phase: 3 — implement (Slice 2)
+- Phase: 3 — implement (Slice 3)
 - Branch: 010-meters-and-readings · Base: main (= origin/main) @ 063af9f
 - Requirement: docs/features/010-meters-and-readings.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
@@ -74,3 +74,7 @@ Same as 004–009 (see `context/spec/009-charge-types-and-tariffs/pipeline-log.m
 - Slice 1 review round 2: PASS.
 - Slice 2 backend (spring-backend): reported 312 tests green; contract tag `meters`; guard SPI returns refusals (ADR 0011 note); `READING_DATE_IN_FUTURE/OUTSIDE_METER/OUT_OF_ORDER` already used for installation/removal; carried forward: Slice 4 adds the pending check on remove, Slice 5 must refuse delete/remove of a tree parent (`METER_HAS_CHILDREN`) instead of an FK 500. Web task delegated; backend re-verification running.
 - Slice 2 web (react-frontend): web 367 tests; also re-exported the meters module in the hand-written `packages/api-client/src/index.ts`. Verified: backend Slice 2 tests green (MetersTests 33, PlotChangeGuardTests 9, MeterAuditTests 6, PlotCatalogTests 12, PlotsWriteTests 42, ImportPreviewPlotsTests 27, ValidationProblemsTests 6, ModularityTests 2); client test/typecheck/lint/format green; `pnpm gen:api` no diff.
+- Slice 2 committed `eca98e7` — tests green; review round 1 running.
+- Slice 2 review round 1: MAJOR_ISSUES (M1 import catalog text). The fix touches packages/shared/src/i18n, which Slice 3 (in progress) also edits → applied as a separate commit right after the Slice 3 commit (review loop overlap rule).
+- Slice 3 backend (spring-backend): reported 154 tests green, no V13; deviations to note: `supersededReadingIds` array (a correction can supersede two rows), `GET /meters/{id}/readings` under tag readings, idempotent repeat saves, empty list → `REQUIRED`. Web task delegated; backend re-verification running.
+- Slice 3 web (react-frontend): web 386 tests. Verified: backend Slice 3 tests green (ReadingsTests 22, RoundTests 6, ReadingValidatorTests 14, ReadingAuditTests 5, MetersTests 33, MeterAuditTests 6, PlotChangeGuardTests 9, ValidationProblemsTests 7, MembersAccessAcceptanceTests 13, ModularityTests 2); client test/typecheck/lint/format green; `pnpm gen:api` no diff.

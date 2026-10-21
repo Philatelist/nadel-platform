@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import app.nadel.problem.FieldProblem;
 import app.nadel.problem.ValidationProblems;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.validation.FieldError;
 
@@ -29,6 +30,12 @@ class ValidationProblemsTests {
             assertThat(map("notes", constraint, "").code()).isEqualTo("REQUIRED");
             assertThat(map("notes", constraint, 7).code()).isEqualTo("TOO_LONG");
         }
+    }
+
+    @Test
+    void anEmptyListIsRequiredAndAListOverItsLimitIsTooLong() {
+        assertThat(map("rows", "Size", List.of()).code()).isEqualTo("REQUIRED");
+        assertThat(map("rows", "Size", List.of(1, 2)).code()).isEqualTo("TOO_LONG");
     }
 
     @Test

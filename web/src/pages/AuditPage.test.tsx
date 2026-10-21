@@ -477,3 +477,27 @@ describe('AuditPage tariff version correction entries', () => {
     },
   );
 });
+
+describe('AuditPage reading entries', () => {
+  it('links a reading record to its meter and shows the date and value in the locale format', () => {
+    entry = {
+      id: 'a9',
+      occurredAt: '2026-10-21T10:00:00Z',
+      action: 'READING_CORRECTED',
+      entityType: 'METER_READING',
+      entityId: 'm1',
+      entityLabel: 'EM-1',
+      changes: [
+        { field: 'takenOn', oldValue: '2026-10-05', newValue: '2026-10-06' },
+        { field: 'value', oldValue: '8205.000', newValue: '8250.500' },
+      ],
+    };
+    renderWithApp(<AuditPage />);
+    expect(screen.getByText('Reading corrected')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'EM-1' })).toHaveAttribute('href', '/meters/m1');
+    expect(screen.getByText(/Reading date:/)).toBeInTheDocument();
+    expect(screen.getByText(/5 Oct 2026 → 6 Oct 2026/)).toBeInTheDocument();
+    expect(screen.getByText(/8,205 → 8,250.5/)).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Meter reading' })).toBeInTheDocument();
+  });
+});

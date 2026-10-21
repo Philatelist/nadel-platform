@@ -84,12 +84,12 @@ the root `CLAUDE.md`). A server never writes an English phrase into `entity_labe
 | Role name, role description, `roles` of a member (`ROLE_*`, `MEMBER_ROLES_CHANGED`; `ROLE` label) | `base:<CODE>` (`CHAIRMAN`, `TREASURER`, `MEMBER`) while a base role keeps its standard name/description, otherwise the stored text. `roles` is such names joined by ", " | catalog name |
 | `CHARGE_TYPE` label, `name` old/new, and `chargeType` of `TARIFF_CREATED` | `base:<CODE>` (`MEMBERSHIP`, `ELECTRICITY`, `LAND_TAX`, `WATER`) while a seeded type was never renamed (`nameCustomized` false), otherwise the stored name | catalog default name |
 | `TARIFF` label | the tariff name (user content only; the charge type is not part of the label) | as is |
-| `METER` label | the name of a named meter, the serial number of a plot meter (user content) | as is |
-| Meter readings (`initialReading`, `finalReading`) | plain decimal with three decimals (`8205.000`) | format meter value |
+| `METER` and `METER_READING` label | the name of a named meter, the serial number of a plot meter (user content); a `METER_READING` entry's entity id is the meter | as is |
+| Meter readings (`initialReading`, `finalReading`, `value` of a reading) | plain decimal with three decimals (`8205.000`) | format meter value |
 | `plot` of a meter | the plot number (user content) | as is |
 | `SETTINGS` label | the code `settings` | catalog name |
 | `owners` of `OWNERSHIP_CHANGED` / `OWNERSHIP_CORRECTED` | JSON array of `{"member": "Last First", "share": "1/2"}`; a correction adds `"from"` and, unless the record is open, `"to"` (ISO dates) | parse, format dates and names |
-| `effectiveFrom`, `validFrom`, `dueDate`, `installedOn`, `removedOn` | ISO date `2026-01-01` | format date |
+| `effectiveFrom`, `validFrom`, `dueDate`, `installedOn`, `removedOn`, `takenOn` | ISO date `2026-01-01` | format date |
 | Enums (`kind`, `basis`/`frequency` of a tariff version, `scope`, `deliveryChannel`, `memberPlotStatusVisibility`, `kind`/`resource` of a meter) | the enum code | catalog |
 | `permissions` | permission codes sorted and joined by ", " | catalog |
 | Flags (`active`, `archived`, `hasBuilding`) | `true` / `false` | yes/no |

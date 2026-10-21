@@ -71,6 +71,10 @@ public final class ProblemCodes {
     public static final String READING_DATE_OUTSIDE_METER = "READING_DATE_OUTSIDE_METER";
     /** 409: a reading lower than the previous one or higher than the next one, or dated before a later one. */
     public static final String READING_OUT_OF_ORDER = "READING_OUT_OF_ORDER";
+    /** 409: a charge uses the readings around the date, so they are no longer corrected, deleted or inserted into. */
+    public static final String READING_IN_USE = "READING_IN_USE";
+    /** 409: the reading is not counted (pending, rejected or superseded), so it can be neither corrected nor deleted. */
+    public static final String READING_STATUS_INVALID = "READING_STATUS_INVALID";
 
     /** Codes of single fields in {@code errors[]}. */
     public static final String REQUIRED = "REQUIRED";

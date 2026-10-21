@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { Me, Permission } from '@nadel/api-client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -149,5 +149,34 @@ describe('Layout', () => {
     me = meWith(['METERS_VIEW']);
     renderWithApp(<Layout />);
     expect(screen.getByRole('link', { name: 'Meters' })).toHaveAttribute('href', '/meters');
+  });
+
+  it('shows Readings only with READINGS_ENTER', () => {
+    renderWithApp(<Layout />);
+    expect(screen.queryByRole('link', { name: 'Readings' })).toBeNull();
+    cleanup();
+    me = meWith(['READINGS_ENTER']);
+    renderWithApp(<Layout />);
+    expect(screen.getByRole('link', { name: 'Readings' })).toHaveAttribute('href', '/readings');
+  });
+
+  it('gives the electrician only Readings and Meters, without Plots', () => {
+    me = meWith(['READINGS_ENTER', 'METERS_VIEW']);
+    renderWithApp(<Layout />);
+    const nav = screen.getByRole('navigation', { name: 'Main menu' });
+    expect(Array.from(nav.querySelectorAll('a')).map((a) => a.getAttribute('href'))).toEqual([
+      '/readings',
+      '/meters',
+    ]);
+  });
+
+  it('keeps Plots for a meter reader who owns a plot or may view plots', () => {
+    me = { ...meWith(['METERS_VIEW']), ownedPlots: [{ plotId: 'p1', number: '7' }] } as unknown as Me;
+    const { unmount } = renderWithApp(<Layout />);
+    expect(screen.getByRole('link', { name: 'Plots' })).toBeInTheDocument();
+    unmount();
+    me = meWith(['METERS_VIEW', 'PLOTS_VIEW']);
+    renderWithApp(<Layout />);
+    expect(screen.getByRole('link', { name: 'Plots' })).toBeInTheDocument();
   });
 });

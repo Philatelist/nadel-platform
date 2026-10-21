@@ -205,7 +205,7 @@ class MeterCommands {
             throw removed();
         }
         // the foreign key of meter_reading (ON DELETE RESTRICT) stays as the backstop of this check
-        if (meters.hasReadings(meter.getId())) {
+        if (readings.hasReadings(meter.getId())) {
             throw new ApiProblemException(HttpStatus.CONFLICT, ProblemCodes.METER_HAS_READINGS,
                     "A meter with readings is never deleted; remove it instead.");
         }
