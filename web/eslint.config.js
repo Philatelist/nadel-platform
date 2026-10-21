@@ -15,7 +15,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['src/components/**/*.{ts,tsx}', 'src/pages/**/*.{ts,tsx}'],
+    files: ['src/**/*.{ts,tsx}'],
     ignores: ['**/*.test.{ts,tsx}'],
     rules: {
       'no-restricted-syntax': [
@@ -27,6 +27,28 @@ export default tseslint.config(
         {
           selector: 'TemplateElement[value.raw=/#[0-9a-fA-F]{3,8}\\b/]',
           message: 'Hex colors are not allowed here; use the design tokens (Tailwind token utilities).',
+        },
+        {
+          selector: 'JSXText[value=/\\p{L}/u]',
+          message: 'No literal UI text in JSX; take it from the i18n catalogs (useT).',
+        },
+        {
+          selector:
+            'JSXAttribute[name.name=/^(aria-label|placeholder|title|alt)$/] > Literal[value=/\\p{L}/u]',
+          message:
+            'No literal UI text in aria-label/placeholder/title/alt; take it from the i18n catalogs (useT).',
+        },
+        {
+          selector:
+            'JSXAttribute[name.name=/^(aria-label|placeholder|title|alt)$/] > JSXExpressionContainer > TemplateLiteral > TemplateElement[value.raw=/\\p{L}/u]',
+          message:
+            'No literal UI text in aria-label/placeholder/title/alt; take it from the i18n catalogs (useT).',
+        },
+        {
+          selector:
+            'JSXAttribute[name.name=/^(aria-label|placeholder|title|alt)$/] > JSXExpressionContainer > Literal[value=/\\p{L}/u]',
+          message:
+            'No literal UI text in aria-label/placeholder/title/alt; take it from the i18n catalogs (useT).',
         },
       ],
     },

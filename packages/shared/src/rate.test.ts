@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatRate, normalizeRateInput } from './money';
+import { formatRate, formatRateWithCurrency, normalizeRateInput } from './money';
 
 describe('formatRate', () => {
   it('shows significant decimals, at least two', () => {
@@ -39,5 +39,13 @@ describe('normalizeRateInput', () => {
     for (const bad of ['', '-1', 'abc', '4.32001', '4,3,2', '4..2', '12345678901', '1e3', '.5']) {
       expect(normalizeRateInput(bad)).toBeUndefined();
     }
+  });
+});
+
+describe('formatRateWithCurrency', () => {
+  it('puts the currency sign by locale', () => {
+    expect(formatRateWithCurrency('4.3200', 'uk')).toBe('4,32\u00a0₴');
+    expect(formatRateWithCurrency('4.3200', 'en')).toBe('₴4.32');
+    expect(formatRateWithCurrency('1.4532', 'en')).toBe('₴1.4532');
   });
 });

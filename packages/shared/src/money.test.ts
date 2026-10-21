@@ -20,3 +20,14 @@ describe('formatMoney', () => {
     expect(formatMoney('1000000.00')).toBe(`1${NBSP}000${NBSP}000,00${NBSP}${UAH}`);
   });
 });
+
+describe('formatMoney by locale', () => {
+  it('uk', () => {
+    expect(formatMoney('1250.50', 'uk')).toBe(`1${NBSP}250,50${NBSP}${UAH}`);
+  });
+  it('en', () => {
+    expect(formatMoney('1250.50', 'en')).toBe(`${UAH}1,250.50`);
+    expect(formatMoney('-350.00', 'en')).toBe(`${MINUS}${UAH}350.00`);
+    expect(formatMoney('0.00', 'en')).toBe(`${UAH}0.00`);
+  });
+});

@@ -1,5 +1,5 @@
 import type { PlotTariffItem, PlotTariffs } from '@nadel/api-client';
-import { format, formatRate } from '@nadel/shared';
+import { format, formatRateWithCurrency } from '@nadel/shared';
 import { chargeTypeName } from '../../chargeTypeName';
 import { useLocale, useT } from '../../i18n';
 import { Money } from '../ui';
@@ -48,7 +48,7 @@ export function TariffAmountRows({ data }: { data: PlotTariffs }) {
               <div className="text-sm text-ink-muted">{item.tariffName}</div>
               <div className="text-sm text-ink-muted">
                 {format(t.tariffs.expected.rate, {
-                  rate: formatRate(item.rate, locale),
+                  rate: formatRateWithCurrency(item.rate, locale),
                   basis: t.tariffs.basis[item.basis],
                   frequency: t.tariffs.frequency[item.frequency],
                 })}

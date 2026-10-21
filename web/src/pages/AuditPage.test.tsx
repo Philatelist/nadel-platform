@@ -193,13 +193,13 @@ describe('AuditPage tariff version entries', () => {
     renderWithApp(<AuditPage />);
     expect(screen.getByText('Tariff version added')).toBeInTheDocument();
     expect(screen.getByText(/Valid from:/)).toBeInTheDocument();
-    expect(screen.getByText(/11\/01\/2026/)).toBeInTheDocument();
+    expect(screen.getByText(/1 Nov 2026/)).toBeInTheDocument();
     expect(screen.getByText(/Basis:/)).toBeInTheDocument();
     expect(screen.getByText(/Per sotka$/, { selector: 'li' })).toBeInTheDocument();
     expect(screen.getByText(/Frequency:/)).toBeInTheDocument();
     expect(screen.getByText(/Monthly/)).toBeInTheDocument();
     expect(screen.getByText(/Rate:/)).toBeInTheDocument();
-    expect(screen.getByText(/4\.32 ₴ → 5\.50 ₴/)).toBeInTheDocument();
+    expect(screen.getByText(/₴4\.32 → ₴5\.50/)).toBeInTheDocument();
     expect(screen.getByText(/Due date:/)).toBeInTheDocument();
     expect(screen.getByText(/Note:/)).toBeInTheDocument();
     expect(screen.getByText(/Charge type:/)).toBeInTheDocument();

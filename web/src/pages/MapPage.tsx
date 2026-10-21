@@ -3,7 +3,7 @@ import { formatMoney, formatSotky, isZeroMoney } from '@nadel/shared';
 import { LngLatBounds, Map as MapLibreMap, NavigationControl, type GeoJSONSource } from 'maplibre-gl';
 import { useEffect, useRef, useState } from 'react';
 import { ErrorState } from '../components/ui';
-import { useT } from '../i18n';
+import { useLocale, useT } from '../i18n';
 import { plotStatusLabel } from '../plotStatus';
 
 const LEGEND: { status: PlotStatus; kind: PlotKind }[] = [
@@ -48,6 +48,7 @@ function bounds(fc: PlotFeatureCollection): LngLatBounds | null {
 
 export function MapPage() {
   const t = useT();
+  const { locale } = useLocale();
   const { data, isLoading, isError, refetch } = useGetPlotMap();
   const container = useRef<HTMLDivElement>(null);
   const map = useRef<MapLibreMap | null>(null);
@@ -182,14 +183,14 @@ export function MapPage() {
               <>
                 <dt className="text-ink-muted">{t.map.area}</dt>
                 <dd className="tabular-nums">
-                  {formatSotky(plot.areaM2)} {t.map.sotky}
+                  {formatSotky(plot.areaM2, locale)} {t.map.sotky}
                 </dd>
               </>
             )}
             {plot.debt && !isZeroMoney(plot.debt) && (
               <>
                 <dt className="text-ink-muted">{t.map.debt}</dt>
-                <dd className="tabular-nums">{formatMoney(plot.debt)}</dd>
+                <dd className="tabular-nums">{formatMoney(plot.debt, locale)}</dd>
               </>
             )}
           </dl>

@@ -101,8 +101,8 @@ function PlotView({ plot }: { plot: PlotDetails }) {
         plot.areaM2 === undefined
           ? f.none
           : format(t.plot.areaValue, {
-              sotky: formatSotkyWithUnit(plot.areaM2, locale),
-              m2: formatDecimal(String(plot.areaM2), locale),
+              sotky: formatSotkyWithUnit(plot.areaM2, locale, t.units.sotka),
+              m2: formatM2(plot.areaM2, locale),
             }),
       ],
       [f.cadastralNumber, plot.cadastralNumber ?? f.none],
@@ -179,8 +179,11 @@ function PlotView({ plot }: { plot: PlotDetails }) {
   );
 }
 
-/** Swaps the decimal point of a plain decimal string for the locale's separator. */
-function formatDecimal(value: string, locale: string): string {
-  const separator = new Intl.NumberFormat(locale).formatToParts(1.1).find((p) => p.type === 'decimal')?.value;
-  return separator ? value.replace('.', separator) : value;
+/** m² with the locale's grouping and decimal separator; the text is split, never turned into a float. */
+function formatM2(value: string | number, locale: string): string {
+  const [integer = '0', decimals] = String(value).split('.');
+  const grouped = new Intl.NumberFormat(locale).format(BigInt(integer));
+  const separator =
+    new Intl.NumberFormat(locale).formatToParts(1.1).find((p) => p.type === 'decimal')?.value ?? '.';
+  return decimals ? grouped + separator + decimals : grouped;
 }

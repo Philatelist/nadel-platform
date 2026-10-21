@@ -1,5 +1,5 @@
 import type { ImportEntityCounts, ImportPreview, ImportProblem } from '@nadel/api-client';
-import { format } from '@nadel/shared';
+import { format, formatDateTime } from '@nadel/shared';
 import { importErrorCode } from '../../importError';
 import { Button, DataTable, Notice, Panel, type Column } from '../ui';
 import { useLocale, useT } from '../../i18n';
@@ -73,9 +73,7 @@ export function ImportPreviewPanel({
     },
   ];
 
-  const time = new Intl.DateTimeFormat(locale, { dateStyle: 'short', timeStyle: 'short' }).format(
-    new Date(preview.expiresAt),
-  );
+  const time = formatDateTime(preview.expiresAt, locale);
   const hintId = 'import-run-hint';
   const hasProblems = preview.problemCount > 0;
   const errorCode =

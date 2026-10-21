@@ -1,5 +1,5 @@
 import { DEFAULT_LOCALE, LOCALES, messages, pickLocale, type Locale, type Messages } from '@nadel/shared';
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 const STORAGE_KEY = 'nadel.locale';
 
@@ -27,6 +27,9 @@ const I18nContext = createContext<I18nValue>({
 
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [locale, setLocaleState] = useState<Locale>(initialLocale);
+  useEffect(() => {
+    document.documentElement.lang = locale;
+  }, [locale]);
   const setLocale = useCallback((next: Locale) => {
     setLocaleState(next);
     try {

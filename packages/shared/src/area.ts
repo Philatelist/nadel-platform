@@ -18,7 +18,7 @@ export function m2ToSotky(m2: string | number): string {
 }
 
 /** Area shown in sotkas with the locale's grouping and decimal separator; the input is an m² decimal (string preferred). */
-export function formatSotky(areaM2: string | number, locale: string = 'uk-UA'): string {
+export function formatSotky(areaM2: string | number, locale: string = 'uk'): string {
   const [integer = '0', decimals] = m2ToSotky(areaM2).split('.');
   const negative = integer.startsWith('-');
   const digits = negative ? integer.slice(1) : integer;
@@ -51,16 +51,17 @@ export function toSquareMetres(value: string, unit: AreaUnit): string | undefine
   return rest ? `${integer}.${rest}` : integer;
 }
 
-/** "1 sotka", "6 sotkas", "6.5 sotkas" / "1 сотка", "2 сотки", "5 соток", "21 сотка", "6,5 сотки". */
-export function formatSotkyWithUnit(areaM2: string | number, locale: string = 'uk-UA'): string {
+/** Unit words for sotkas by plural category; they come from the i18n catalog. */
+export type SotkaUnitLabels = Readonly<Record<'one' | 'few' | 'many' | 'other', string>>;
+
+/** Area with its unit word: en "1 sotka", "6.5 sotkas"; uk "1 сотка", "2 сотки", "5 соток", "6,5 сотки". */
+export function formatSotkyWithUnit(
+  areaM2: string | number,
+  locale: string,
+  labels: SotkaUnitLabels,
+): string {
   const amount = m2ToSotky(areaM2);
-  const hasFraction = amount.includes('.');
-  const category = hasFraction ? 'other' : new Intl.PluralRules(locale).select(Number(amount));
-  const isUk = locale.toLowerCase().startsWith('uk');
-  const unit = isUk
-    ? ({ one: 'сотка', few: 'сотки', many: 'соток', other: 'сотки' } as Record<string, string>)[category]
-    : category === 'one'
-      ? 'sotka'
-      : 'sotkas';
-  return `${formatSotky(areaM2, locale)} ${unit ?? ''}`.trim();
+  const category = amount.includes('.') ? 'other' : new Intl.PluralRules(locale).select(Number(amount));
+  const unit = (labels as Readonly<Record<string, string | undefined>>)[category] ?? labels.other;
+  return `${formatSotky(areaM2, locale)} ${unit}`;
 }

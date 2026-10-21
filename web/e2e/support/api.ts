@@ -35,14 +35,11 @@ export function kyivDay(offsetDays = 0): string {
   return day.toISOString().slice(0, 10);
 }
 
-/** A day as the English UI prints it in the ownership lists (dd.MM.yyyy-style short date with a four-digit year, no time zone shift). */
+/** A day as the English UI prints it: "21 Oct 2026" (day without a leading zero, short month, no time zone shift). */
 export function shortDay(isoDay: string): string {
-  return new Intl.DateTimeFormat('en-US', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    timeZone: 'UTC',
-  }).format(new Date(isoDay));
+  const [year = '', month = '01', day = '01'] = isoDay.slice(0, 10).split('-');
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${Number(day)} ${months[Number(month) - 1] ?? month} ${year}`;
 }
 
 /** Parses a JSON response that must have the given status, or throws with the body for a readable failure. */

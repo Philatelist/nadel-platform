@@ -1,5 +1,5 @@
 import { useListAuditEntries, type AuditEntityType, type AuditEntry } from '@nadel/api-client';
-import { formatDay, formatRate, normalizeRateInput } from '@nadel/shared';
+import { formatDateTime, formatDay, formatRateWithCurrency, normalizeRateInput } from '@nadel/shared';
 import { keepPreviousData } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router';
 import { Pagination } from '../components/Pagination';
@@ -11,7 +11,6 @@ import { problemCode, problemFieldErrors } from '../problem';
 import { useDocumentTitle } from '../useDocumentTitle';
 
 const PAGE_SIZE = 50;
-const TIME_ZONE = 'Europe/Kyiv';
 const ENTITY_TYPES = ['MEMBER', 'ROLE', 'PLOT', 'SETTINGS', 'OWNERSHIP', 'CHARGE_TYPE', 'TARIFF'] as const;
 
 /** Where a record of an entity type is shown; absent for types without a page of their own. */
@@ -180,11 +179,7 @@ function Chip({ label, onRemove }: { label: string; onRemove: () => void }) {
 function AuditTime({ entry, locale }: { entry: AuditEntry; locale: string }) {
   return (
     <time dateTime={entry.occurredAt} className="whitespace-nowrap">
-      {new Intl.DateTimeFormat(locale, {
-        dateStyle: 'short',
-        timeStyle: 'medium',
-        timeZone: TIME_ZONE,
-      }).format(new Date(entry.occurredAt))}
+      {formatDateTime(entry.occurredAt, locale)}
     </time>
   );
 }
@@ -232,7 +227,7 @@ function AuditChanges({ entry }: { entry: AuditEntry }) {
     if (field === 'archived' || field === 'hasBuilding' || field === 'active')
       return raw === 'true' ? a.yes : a.no;
     if (field === 'kind') return kinds[raw] ?? raw;
-    if (field === 'rate') return normalizeRateInput(raw) === raw ? `${formatRate(raw, locale)} ₴` : raw;
+    if (field === 'rate') return normalizeRateInput(raw) === raw ? formatRateWithCurrency(raw, locale) : raw;
     if (field === 'scope') return scopes[raw] ?? raw;
     if (field === 'frequency') return frequencies[raw] ?? raw;
     if (field === 'basis' && entry.entityType === 'TARIFF') return bases[raw] ?? raw;

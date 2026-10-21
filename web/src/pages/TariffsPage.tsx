@@ -1,5 +1,5 @@
 import { useListChargeTypes, useListTariffs, type TariffSummary } from '@nadel/api-client';
-import { format, formatDay, formatRate } from '@nadel/shared';
+import { format, formatDay, formatRateWithCurrency } from '@nadel/shared';
 import { Link } from 'react-router';
 import { chargeTypeName } from '../chargeTypeName';
 import { QueryBoundary } from '../components/QueryBoundary';
@@ -78,7 +78,7 @@ function TariffRow({ tariff }: { tariff: TariffSummary }) {
         {tariff.name}
       </Link>
       <span>
-        {formatRate(version.rate, locale)} ₴ · {t.tariffs.basis[version.basis]} ·{' '}
+        {formatRateWithCurrency(version.rate, locale)} · {t.tariffs.basis[version.basis]} ·{' '}
         {t.tariffs.frequency[version.frequency]}
       </span>
       <span className="text-sm text-ink-muted">
