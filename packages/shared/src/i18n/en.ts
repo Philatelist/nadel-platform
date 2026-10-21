@@ -457,6 +457,7 @@ export const en = {
     OWNERSHIP_DATE_INVALID:
       'The ownership start date cannot be in the future and must be after the previous owners’ period.',
     PLOT_COMMON_LAND: 'Common land cannot have owners.',
+    PLOT_HAS_METER: 'The plot has a meter — remove it first.',
   },
   settings: {
     title: 'Cooperative settings',

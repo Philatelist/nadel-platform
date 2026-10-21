@@ -70,6 +70,19 @@ describe('ImportPreviewPanel', () => {
     expect(row).toHaveTextContent('no row with this member key');
   });
 
+  it('explains a plot that has a meter instead of the unknown message', () => {
+    renderPanel(
+      preview({
+        committable: false,
+        problemCount: 1,
+        problems: [problem(3, { column: 'kind', code: 'PLOT_HAS_METER' })],
+      }),
+    );
+    const row = screen.getAllByRole('row').slice(-1)[0];
+    expect(row).toHaveTextContent('The plot has a meter — remove it first.');
+    expect(row).not.toHaveTextContent('The value is not valid.');
+  });
+
   it('interpolates the plot number into the ownership conflict message', () => {
     renderPanel(
       preview({
