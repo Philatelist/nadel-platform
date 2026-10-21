@@ -1,7 +1,7 @@
 # Pipeline log — 009 Charge types and tariffs
 
 - Status: running
-- Phase: 4 — verify
+- Phase: 5 — publish (pushing)
 - Branch: 009-charge-types-and-tariffs · Base: main (= origin/main) @ eca55b9
 - Requirement: docs/features/009-charge-types-and-tariffs.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
@@ -90,3 +90,15 @@ Same as 004–008 (see `context/spec/005-ui-preferences/pipeline-log.md` and `co
 - Verify fix (criterion §2.2 #1 "за сотку"): Ukrainian basis labels "З сотки"/"З ділянки" → "За сотку"/"За ділянку" (uk.ts, TariffsPage.test.tsx, tariffs-acceptance.spec.ts). Spec wording aligned with the app (rates with the locale decimal separator; app-wide refusal and no-access texts) — change log entry in functional-spec.md.
 - 35/35 criteria marked with evidence; functional-spec and technical-considerations Status Completed. Product docs: architecture.md already updated in Slice 5; no /awos:product or /awos:architecture command needed.
 - Verify fix review r1 MAJOR_ISSUES (M1 no Ukrainian list-row test) → fix in progress.
+- Verify fix: M1 fixed in 5bb0594 (Ukrainian list-row unit test, RED with the old label) → review r2 PASS.
+- Full suite on 5bb0594: `make check` green (backend 1,343 tests, 0 failures, coverage met; ui-tokens 56, api-client 7, shared 72, web 309; contract, format, lint) and `make e2e` 89 passed. Baseline (eca55b9) had 0 failures: no regressions. Worktrees: only the main checkout.
+
+## Final report (Phase 4)
+
+- **Branch:** `009-charge-types-and-tariffs` from main @ eca55b9. Commits: a6cdf22 specs; 1b100ae Slice 1; 70bad53 Slice 2 + ec4e615 review fix; 6ed5b5b Slice 3; 96d1698 Slice 4; f22d77f Slice 5; a43e143 Slice 6; 4f7be6e + 5bb0594 verify fixes.
+- **Acceptance criteria:** 35/35 verified with evidence (tests and screenshots `docs/screenshots/009-charge-types-and-tariffs-*.png`); no `[?]`.
+- **Reviews:** Slice 1 PASS r1; Slice 2 MAJOR (TariffsPage ignored the tariffs query's loading/error) → PASS r2; Slice 3 PASS r1; Slice 4 PASS r1; Slice 5 PASS r1; Slice 6 PASS r1; verify fix MAJOR (no Ukrainian list-row test) → PASS r2. Minor notes in review-log.md.
+- **Full suite vs baseline:** 0 → 0 failures; backend 1,096 → 1,343 tests; web 241 → 309; e2e 81 → 89. Coverage 0.9780 → 0.9793, floor stays 0.97 (0.9793 rounds down to 0.97).
+- **Assumptions after Phase 1:** see the AUTO entries above (Phase 2 and slices).
+- **Follow-ups for the owner:** CLAUDE.md language-rule wording for `backend/src/main/resources/tariffs/charge-type-default-names.properties` (and Ukrainian literals in its tests); amounts render with the Ukrainian money format ("25,00 ₴") in the English UI (existing `formatMoney`); audit labels of unrenamed seeded charge types show the stored English default; inactive charge types are not offered in the new-tariff form although the server accepts them; the contract `ChargeType` has no `archived` flag (the new-version form stays visible for an archived type's tariff and the server refuses); demo exclusion returns on a rerun of the repeatable demo script; minor review notes in review-log.md.
+- **Suggested commands:** none (`/awos:architecture` not needed — architecture.md updated in Slice 5).

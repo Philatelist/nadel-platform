@@ -48,3 +48,4 @@
 | Round | Commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `a43e143..4f7be6e` | MAJOR_ISSUES | M1 no automated test asserts the Ukrainian "За сотку · Щороку" row and "діє з" in the list; the cited evidence does not cover it | minor: the criterion quotes lowercase words while the UI capitalises segments; the §2.6 #1 screenshot cuts off the Вода card (the e2e covers it) |
+| 2 | + `5bb0594` | PASS | M1 resolved (uk list-row unit test, cited as evidence) | minor: lowercase quotes in the criterion vs capitalised segments |
