@@ -109,6 +109,8 @@ const NUMBER_FIELDS = new Set([
   'membersUnchanged',
   'ownershipsCreated',
   'ownershipsUnchanged',
+  'metersCreated',
+  'metersUnchanged',
 ]);
 
 function localeNumber(raw: string, locale: string): string {

@@ -74,17 +74,19 @@ class ImportService {
         PlotsSheet.Parsed plots;
         MembersSheet.Parsed members;
         OwnershipSheet.Parsed ownership;
+        MetersSheet.Parsed meters;
         try (WorkbookReader reader = WorkbookReader.open(content)) {
             plots = PlotsSheet.parse(reader);
             members = MembersSheet.parse(reader);
             ownership = OwnershipSheet.parse(reader);
+            meters = MetersSheet.parse(reader);
         }
 
         UUID importId = UUID.randomUUID();
         return transaction.execute(status -> {
             Instant now = clock.instant();
             runs.clearExpiredPlans(actor.tenantId(), now);
-            ImportPlan plan = planner.plan(actor.tenantId(), importId, plots, members, ownership);
+            ImportPlan plan = planner.plan(actor.tenantId(), importId, plots, members, ownership, meters);
             ImportRun run = runs.save(ImportRun.create(importId, actor.tenantId(), fileName, actor.memberId(),
                     actor.subject(), actor.displayName(), now, now.plus(PREVIEW_VALID_FOR),
                     plan.hasProblems() ? ImportStatus.HAS_ERRORS : ImportStatus.PREVIEW, plan.counts().toMap(),
@@ -143,7 +145,8 @@ class ImportService {
         return new ImportCounts()
                 .plots(toApi(counts.plots()))
                 .members(toApi(counts.members()))
-                .ownerships(toApi(counts.ownerships()));
+                .ownerships(toApi(counts.ownerships()))
+                .meters(toApi(counts.meters()));
     }
 
     private static ImportEntityCounts toApi(PlanCounts.EntityCounts counts) {

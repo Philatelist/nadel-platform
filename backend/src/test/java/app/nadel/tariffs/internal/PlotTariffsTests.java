@@ -136,11 +136,12 @@ class PlotTariffsTests extends TariffScopeSupport {
     }
 
     @Test
-    void aMeterBasedTariffIsByReadingsWithoutAnAmount() throws Exception {
+    void aMeterBasedTariffIsByReadingsWithoutAnAmountForAPlotWithAMeter() throws Exception {
         membership("For members", "50");
         tariff(typeId(DEMO_TENANT, "ELECTRICITY"), "By meter", version("2026-01-01", "PER_KWH", "MONTHLY", "4.32",
                 null));
         UUID plot = newPlot("PT-1", "PLOT", false);
+        meter(plot, "ELECTRICITY", "2026-01-15", null);
 
         ask(chairman(), plot, "2026-11").andExpect(jsonPath("$.items", hasSize(2)))
                 .andExpect(jsonPath("$.items[1].chargeTypeCode").value("ELECTRICITY"))
@@ -148,6 +149,58 @@ class PlotTariffsTests extends TariffScopeSupport {
                 .andExpect(jsonPath("$.items[1].rate").value("4.3200"))
                 .andExpect(jsonPath("$.items[1].amount").doesNotExist())
                 .andExpect(jsonPath("$.total").value("25.00"));
+    }
+
+    @Test
+    void aMeterBasedTariffIsNoMeterForAPlotWithoutAMeterOfItsResource() throws Exception {
+        membership("For members", "50");
+        tariff(typeId(DEMO_TENANT, "ELECTRICITY"), "By meter", version("2026-01-01", "PER_KWH", "MONTHLY", "4.32",
+                null));
+        UUID water = typeId(DEMO_TENANT, "WATER");
+        ownerJdbc().update("update charge_type set active = true where id = ?", water); // reseeded after the test
+        tariff(water, "Water by meter", version("2026-01-01", "PER_M3", "MONTHLY", "30", null));
+        UUID plot = newPlot("PT-1", "PLOT", false);
+        meter(plot, "WATER", "2026-01-15", null); // a water meter does not count for electricity
+
+        ask(chairman(), plot, "2026-11").andExpect(status().isOk())
+                .andExpect(jsonPath("$.items", hasSize(3)))
+                .andExpect(jsonPath("$.items[1].chargeTypeCode").value("ELECTRICITY"))
+                .andExpect(jsonPath("$.items[1].status").value("NO_METER"))
+                .andExpect(jsonPath("$.items[1].basis").value("PER_KWH"))
+                .andExpect(jsonPath("$.items[1].rate").value("4.3200"))
+                .andExpect(jsonPath("$.items[1].amount").doesNotExist())
+                .andExpect(jsonPath("$.items[2].chargeTypeCode").value("WATER"))
+                .andExpect(jsonPath("$.items[2].status").value("BY_READINGS"))
+                .andExpect(jsonPath("$.items[2].amount").doesNotExist())
+                .andExpect(jsonPath("$.total").value("25.00"));
+    }
+
+    @Test
+    void aMeterCountsForTheMonthsItWorkedOnAtLeastOneDay() throws Exception {
+        tariff(typeId(DEMO_TENANT, "ELECTRICITY"), "By meter", version("2026-01-01", "PER_KWH", "MONTHLY", "4.32",
+                null));
+        UUID plot = newPlot("PT-1", "PLOT", false);
+        meter(plot, "ELECTRICITY", "2026-03-31", "2026-09-01");
+
+        ask(chairman(), plot, "2026-02").andExpect(jsonPath("$.items[0].status").value("NO_METER"));
+        ask(chairman(), plot, "2026-03").andExpect(jsonPath("$.items[0].status").value("BY_READINGS"));
+        ask(chairman(), plot, "2026-09").andExpect(jsonPath("$.items[0].status").value("BY_READINGS"));
+        ask(chairman(), plot, "2026-10").andExpect(jsonPath("$.items[0].status").value("NO_METER"))
+                .andExpect(jsonPath("$.total").value("0.00"));
+    }
+
+    @Test
+    void anOwnerSeesNoMeterForTheirOwnPlotWithoutAMeter() throws Exception {
+        tariff(typeId(DEMO_TENANT, "ELECTRICITY"), "By meter", version("2026-01-01", "PER_KWH", "MONTHLY", "4.32",
+                null));
+        UUID plot = newPlot("PT-1", "PLOT", false);
+        UUID member = ownerJdbc().queryForObject("select id from member where tenant_id = ? and email = ?",
+                UUID.class, DEMO_TENANT, "member@demo.local");
+        ownerJdbc().update("insert into ownership (tenant_id, plot_id, member_id, share_numerator, share_denominator, "
+                + "valid_from) values (?, ?, ?, 1, 1, date '2020-01-01')", DEMO_TENANT, plot, member);
+
+        ask(demo("member@demo.local"), plot, "2026-11").andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].status").value("NO_METER"));
     }
 
     @Test

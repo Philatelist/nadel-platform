@@ -79,9 +79,9 @@ export const getListTariffsUrl = () => {
  * Each tariff shows one version: the one valid today (Europe/Kyiv), otherwise the earliest future one.
  * `plotCount` is the number of plots the tariff applies to: for `ALL_PLOTS` the active plots that are not
  * common land minus the excluded active ones, for `SELECTED_PLOTS` the active selected plots that are not
- * common land. It is absent when the
- * shown version is meter-based (`PER_KWH`, `PER_M3`): such a tariff applies to the plots with a meter. Requires
- * `TARIFFS_VIEW`.
+ * common land. When the shown version is meter-based (`PER_KWH` electricity, `PER_M3` water) only the plots
+ * among those that have an active meter of that resource are counted: such a tariff applies to the plots with a
+ * meter. Requires `TARIFFS_VIEW`.
  * @summary List the tariffs of the cooperative
  */
 export const listTariffs = async ( options?: Parameters<typeof nadelFetch>[1]): Promise<TariffSummary[]> => {
@@ -279,7 +279,8 @@ export const useCreateTariff = <TError = BadRequestResponse | UnauthorizedRespon
  * whose `validFrom` is before today (Europe/Kyiv). A tariff of another cooperative or an unknown id is 404.
  * `selectedPlots` and `exclusions` hold the scope with plot numbers (and the reason of each exclusion) in natural
  * order of the number; a plot archived after it was added is still listed, marked `archived`, and not counted
- * in `plotCount`. Requires `TARIFFS_VIEW`.
+ * in `plotCount`. For a meter-based shown version `plotCount` counts only the plots with an active meter of the
+ * resource, as in the list. Requires `TARIFFS_VIEW`.
  * @summary A tariff with its versions
  */
 export const getTariff = async (id: string, options?: Parameters<typeof nadelFetch>[1]): Promise<Tariff> => {
@@ -778,7 +779,9 @@ export const useUpdateTariffScope = <TError = BadRequestResponse | UnauthorizedR
  * 403. Common land and archived plots answer 200 with no items and a total of `0.00`.
  * Tariffs of archived or inactive charge types are left out, and so is a tariff none of whose versions overlaps
  * the month. A tariff of all plots that excludes the plot is listed with status `EXCLUDED` and the reason, without
- * an amount. A tariff with a per-kWh or per-m3 version in the month is `BY_READINGS` without an amount. Every
+ * an amount. A tariff with a per-kWh or per-m3 version in the month is `BY_READINGS` without an amount when
+ * the plot has a meter of that resource (electricity for per-kWh, water for per-m3) working on any day of the
+ * month, otherwise `NO_METER` without an amount (the tariff does not reach the plot). Every
  * other tariff is `AMOUNT`, rounded once to kopecks (a one-time fee is 0.00 outside its due month). The rate,
  * basis and frequency are those of the version valid on the last day of the month that the tariff covers (for a
  * one-time fee, the version valid on its due date). Items are ordered by charge type position, then tariff name.

@@ -35,6 +35,16 @@ const data: PlotTariffs = {
     },
     {
       ...base,
+      tariffId: 't4',
+      tariffName: 'Water 2026',
+      chargeTypeCode: undefined,
+      chargeTypeName: 'Water',
+      basis: 'PER_M3',
+      status: 'NO_METER',
+      amount: undefined,
+    },
+    {
+      ...base,
       tariffId: 't3',
       tariffName: 'Road works 2026',
       chargeTypeCode: undefined,
@@ -55,7 +65,7 @@ describe('TariffAmountRows', () => {
     expect(screen.getByText('Membership fee')).toBeInTheDocument();
     expect(screen.getByText('Membership 2026')).toBeInTheDocument();
     expect(screen.getAllByText(/₴4\.32 · Per sotka · Monthly/)[0]).toBeInTheDocument();
-    expect(screen.getByText('by meter readings')).toBeInTheDocument();
+    expect(screen.getByText('by readings')).toBeInTheDocument();
     expect(screen.getByText(hasText('not charged — Paid in advance'))).toBeInTheDocument();
     expect(screen.getByText('Road repair')).toHaveAttribute('data-user-content');
     const total = screen.getByText('Total').parentElement;
@@ -69,6 +79,7 @@ describe('TariffAmountRows', () => {
     expect(screen.getByText('Електроенергія')).toBeInTheDocument();
     expect(screen.getByText('за показаннями')).toBeInTheDocument();
     expect(screen.getByText(hasText('не нараховується — Paid in advance'))).toBeInTheDocument();
+    expect(screen.getByText('немає лічильника')).toBeInTheDocument();
     expect(screen.getByText('Разом')).toBeInTheDocument();
   });
 });

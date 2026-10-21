@@ -1,7 +1,7 @@
 # Pipeline log — 010 Meters and readings
 
 - Status: running
-- Phase: 3 — implement (Slice 5)
+- Phase: 3 — implement (Slice 6)
 - Branch: 010-meters-and-readings · Base: main (= origin/main) @ 063af9f
 - Requirement: docs/features/010-meters-and-readings.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
@@ -88,3 +88,9 @@ Same as 004–009 (see `context/spec/009-charge-types-and-tariffs/pipeline-log.m
 - Slice 4 review round 1: PASS.
 - Slice 5 backend (spring-backend): reported 208 tests green, no V13; closes the Slice 2 gap (delete of a meter that ever had children → 409 `METER_HAS_CHILDREN`, remove refused while a child period lasts past the removal date). Tree nodes are replacement chains; a meter moved within the range appears under each parent with its slice. Web task delegated; backend re-verification running.
 - Slice 5 web (react-frontend): web 424 tests; on my request the move dialog preselects the current parent and disables a no-op move (it started at "Поза деревом"). Verified: backend Slice 5 tests green (MeterTreeTests 20, TreeRulesTests 18, MeterReplacementTests 13, MetersTests 34, MeterAuditTests 8, SettingsTests 13, ModularityTests 2); client test/typecheck/lint/format green; `pnpm gen:api` no diff.
+- Slice 5 committed `76ab842` — tests green; review round 1 running. Slice 6 backend delegated.
+- Slice 5 review round 1: MAJOR_ISSUES (M1 removal-day off by one). Fix delegated to spring-backend in a separate worktree at `76ab842` (fix-010-s5-r1) so it does not share build output with the Slice 6 agent; the fix commit is cherry-picked onto the branch.
+- Slice 5 M1 fix `8d611e2` cherry-picked onto the branch as `8c40cab` (MeterTreeTests 20, MetersTests 34, MeterReplacementTests 13, ModularityTests 2 green; RED shown); review round 2 running.
+- Slice 5 review round 2: PASS.
+- Slice 6 backend (spring-backend): reported 672 tests green over tariffs/imports/meters, no V13. `ImportCounts.meters` kept required (the server always sends it); the 3 web fixtures that break typecheck are fixed in the web task. Import commit refused with `IMPORT_STALE` if meters changed after the preview; `IMPORT_COMMITTED` gains `metersCreated`/`metersUnchanged`. Web task delegated; backend re-verification running.
+- Slice 6 web (react-frontend): web 424 tests; I restored the functional-spec wording "за показаннями" / "by readings" for BY_READINGS (the agent wrote its own longer text). Verified: backend Slice 6 tests green (PlotTariffsTests 26, TariffsTests 25, TariffScopeTests 29, TariffsAcceptanceTests 24, ChargeCalculatorTests 30, ImportPreviewMetersTests 9, ImportCommitTests 25, ImportAcceptanceTests 11, TemplateWriterTests 17, PlanDigestTests 8, MeterCatalogTests 2, ModularityTests 2); client test/typecheck/lint/format green; `pnpm gen:api` no diff.

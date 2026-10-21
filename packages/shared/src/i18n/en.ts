@@ -343,7 +343,7 @@ export const en = {
     fileName: 'File: {name}',
     validUntil: 'Can be imported until {time}',
     countsCaption: 'What the import will do',
-    entity: { plots: 'Plots', members: 'Members', ownerships: 'Owners' },
+    entity: { plots: 'Plots', members: 'Members', ownerships: 'Owners', meters: 'Meters' },
     created: 'New',
     updated: 'Updated',
     unchanged: 'Unchanged',
@@ -396,7 +396,13 @@ export const en = {
       EXPIRED: 'Never imported, expired',
     },
   },
-  importSheets: { FILE: 'File', PLOTS: 'Plots', MEMBERS: 'Members', OWNERSHIP: 'Ownership' },
+  importSheets: {
+    FILE: 'File',
+    PLOTS: 'Plots',
+    MEMBERS: 'Members',
+    OWNERSHIP: 'Ownership',
+    METERS: 'Meters',
+  },
   importColumns: {
     plots: {
       number: 'Number',
@@ -419,6 +425,13 @@ export const en = {
       delivery_channel: 'Delivery channel',
       telegram_username: 'Telegram username',
       viber_phone: 'Viber phone',
+    },
+    meters: {
+      plot_number: 'Plot number',
+      resource: 'Resource',
+      serial: 'Serial number',
+      installed_on: 'Installed on',
+      initial_reading: 'Initial reading',
     },
     ownership: {
       plot_number: 'Plot number',
@@ -458,6 +471,9 @@ export const en = {
     OWNERSHIP_DATE_INVALID:
       'The ownership start date cannot be in the future and must be after the previous owners’ period.',
     PLOT_COMMON_LAND: 'Common land cannot have owners.',
+    METER_ACTIVE_EXISTS: 'The plot already has another active meter — replace it in the register',
+    METER_VALUE_INVALID: 'The initial reading must be a non-negative number with at most three decimals.',
+    READING_DATE_IN_FUTURE: 'The date cannot be in the future.',
     PLOT_HAS_METER: 'The plot has a meter — remove it first.',
   },
   settings: {
@@ -490,7 +506,6 @@ export const en = {
     empty: 'There are no charge types yet.',
     newTariff: 'New tariff',
     plots: { one: '{count} plot', few: '{count} plots', many: '{count} plots' },
-    meterBased: 'applies to plots with a meter',
     validFromShort: 'from {date}',
     back: 'Back to tariffs',
     basis: {
@@ -506,7 +521,8 @@ export const en = {
       month: 'Month',
       empty: 'No tariffs for this month',
       total: 'Total',
-      byReadings: 'by meter readings',
+      byReadings: 'by readings',
+      noMeter: 'no meter',
       notCharged: 'not charged',
       rate: '{rate} · {basis} · {frequency}',
       myTitle: 'What I will be charged',
@@ -714,6 +730,8 @@ export const en = {
       membersUnchanged: 'Members unchanged',
       ownershipsCreated: 'Owners created',
       ownershipsUnchanged: 'Owners unchanged',
+      metersCreated: 'Meters created',
+      metersUnchanged: 'Meters unchanged',
       replacementMeter: 'New meter (serial number)',
       parent: 'Parent meter',
       meterEffectiveFrom: 'In the tree from',

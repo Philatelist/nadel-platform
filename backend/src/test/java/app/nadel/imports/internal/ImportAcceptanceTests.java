@@ -59,7 +59,7 @@ class ImportAcceptanceTests extends ImportCommitSupport {
 
     // ---- 2.1 template and file format
 
-    /** Opens the downloaded file: three sheets, each with the headers, an instruction row and an example row. */
+    /** Opens the downloaded file: four sheets, each with the headers, an instruction row and an example row. */
     private static void assertTemplateLayout(byte[] file, List<String> sheetNames, List<String> firstHeaders)
             throws Exception {
         try (ReadableWorkbook workbook = new ReadableWorkbook(new ByteArrayInputStream(file))) {
@@ -78,17 +78,17 @@ class ImportAcceptanceTests extends ImportCommitSupport {
 
     @Test
     void section21_theDownloadedTemplateUploadsAsNothingToImportWithoutErrors() throws Exception {
-        // #1 the template is a file with the three sheets (Ukrainian by default, English with lang=en);
+        // #1 the template is a file with the four sheets (Ukrainian by default, English with lang=en);
         // #2 uploaded unchanged it has nothing to import
         MvcResult template = mvc.perform(get(TEMPLATE).header(HttpHeaders.AUTHORIZATION, chairman()))
                 .andExpect(status().isOk()).andReturn();
         byte[] file = template.getResponse().getContentAsByteArray();
-        assertTemplateLayout(file, List.of("Ділянки", "Члени", "Власність"),
-                List.of("Номер ділянки", "Ключ члена", "Номер ділянки"));
+        assertTemplateLayout(file, List.of("Ділянки", "Члени", "Власність", "Лічильники"),
+                List.of("Номер ділянки", "Ключ члена", "Номер ділянки", "Номер ділянки"));
         byte[] english = mvc.perform(get(TEMPLATE + "?lang=en").header(HttpHeaders.AUTHORIZATION, chairman()))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
-        assertTemplateLayout(english, List.of("Plots", "Members", "Ownership"),
-                List.of("number", "external_id", "plot_number"));
+        assertTemplateLayout(english, List.of("Plots", "Members", "Ownership", "Meters"),
+                List.of("number", "external_id", "plot_number", "plot_number"));
         int plotsBefore = count("plot");
 
         upload(file)

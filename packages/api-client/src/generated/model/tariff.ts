@@ -29,6 +29,6 @@ export interface Tariff {
   selectedPlots: TariffScopePlot[];
   /** With `ALL_PLOTS`, the excluded plots in natural order of the number (archived ones marked); empty otherwise */
   exclusions: TariffExclusion[];
-  /** Number of plots the tariff applies to, as in the list (exclusions subtracted, archived plots and common land never counted); absent when the shown version (the one valid today, else the earliest future one) is meter-based */
+  /** Number of plots the tariff applies to, as in the list (exclusions subtracted, archived plots and common land never counted); when the shown version (the one valid today, else the earliest future one) is meter-based, only the plots with an active meter of its resource */
   plotCount?: number;
 }

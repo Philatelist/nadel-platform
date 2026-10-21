@@ -400,15 +400,42 @@ class TariffScopeTests extends TariffScopeSupport {
     }
 
     @Test
-    void aMeterBasedTariffHasAScopeButNoPlotCount() throws Exception {
+    void aMeterBasedTariffOfSelectedPlotsCountsOnlyThoseWithAnActiveMeterOfItsResource() throws Exception {
         UUID tariff = newTariff(typeId(DEMO_TENANT, "ELECTRICITY"), "Power", "PER_KWH", "MONTHLY");
-        UUID plot = newPlot("TX-1", "PLOT", false);
+        UUID metered = newPlot("TX-1", "PLOT", false);
+        UUID none = newPlot("TX-2", "PLOT", false);
+        UUID removed = newPlot("TX-3", "PLOT", false);
+        UUID water = newPlot("TX-4", "PLOT", false);
+        meter(metered, "ELECTRICITY", "2026-01-15", null);
+        meter(removed, "ELECTRICITY", "2026-01-15", "2026-06-30");
+        meter(water, "WATER", "2026-01-15", null);
 
-        send(chairman(), put(scope(tariff)), selected(plot)).andExpect(status().isOk())
+        send(chairman(), put(scope(tariff)), selected(metered, none, removed, water)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.scopeKind").value("SELECTED_PLOTS"))
-                .andExpect(jsonPath("$.selectedPlots", hasSize(1)))
-                .andExpect(jsonPath("$.plotCount").doesNotExist());
-        send(chairman(), get(API + "/" + tariff), null).andExpect(jsonPath("$.plotCount").doesNotExist());
+                .andExpect(jsonPath("$.selectedPlots", hasSize(4)))
+                .andExpect(jsonPath("$.plotCount").value(1));
+        send(chairman(), get(API + "/" + tariff), null).andExpect(jsonPath("$.plotCount").value(1));
+        send(chairman(), get(API), null).andExpect(jsonPath("$[0].plotCount").value(1));
+    }
+
+    @Test
+    void aMeterBasedTariffOfAllPlotsCountsThePlotsWithAMeterMinusTheExcludedOnes() throws Exception {
+        UUID tariff = newTariff(typeId(DEMO_TENANT, "WATER"), "Water", "PER_M3", "MONTHLY");
+        long before = meteredPlots("WATER");
+        UUID a = newPlot("TX-1", "PLOT", false);
+        UUID b = newPlot("TX-2", "PLOT", false);
+        UUID excluded = newPlot("TX-3", "PLOT", false);
+        UUID excludedWithout = newPlot("TX-4", "PLOT", false);
+        UUID electricity = newPlot("TX-5", "PLOT", false);
+        for (UUID plot : List.of(a, b, excluded)) {
+            meter(plot, "WATER", "2026-01-15", null);
+        }
+        meter(electricity, "ELECTRICITY", "2026-01-15", null);
+
+        send(chairman(), put(scope(tariff)), allExcept(excluded, "Own well", excludedWithout, "No pipe"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.plotCount").value(before + 2));
+        send(chairman(), get(API), null).andExpect(jsonPath("$[0].plotCount").value(before + 2));
     }
 
     @Test

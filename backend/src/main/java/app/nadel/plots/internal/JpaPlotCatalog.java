@@ -50,6 +50,19 @@ class JpaPlotCatalog implements PlotCatalog {
     }
 
     @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public List<PlotFacts> findAllAndLockShared(Collection<UUID> ids) {
+        List<UUID> sorted = ids.stream().distinct().sorted(UuidOrder.POSTGRES).toList();
+        List<PlotFacts> found = new ArrayList<>();
+        for (int from = 0; from < sorted.size(); from += CHUNK) {
+            plots.lockAllForShare(sorted.subList(from, Math.min(sorted.size(), from + CHUNK))).stream()
+                    .map(JpaPlotCatalog::facts)
+                    .forEach(found::add);
+        }
+        return found;
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public List<PlotFacts> findActiveByNumbers(Collection<String> numbers) {
         List<String> lower = numbers.stream().map(number -> number.strip().toLowerCase(Locale.ROOT)).distinct()

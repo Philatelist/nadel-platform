@@ -21,7 +21,7 @@ const tones: Readonly<Record<ImportRunStatus, BadgeTone>> = {
   STALE: 'warning',
   EXPIRED: 'neutral',
 };
-const entities = ['plots', 'members', 'ownerships'] as const;
+const entities = ['plots', 'members', 'ownerships', 'meters'] as const;
 
 /** The list of uploaded files; the query key starts with the list key so a plain invalidation refreshes it. */
 export function ImportHistory() {

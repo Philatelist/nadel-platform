@@ -4,15 +4,17 @@ The cooperative's meters, the electricity meter tree, the readings taken on any 
 them (feature 010, ADR 0014). Nothing is charged here; electricity charges, losses and the split of common consumers arrive
 with feature 011, which reuses `ConsumptionCalculator` and feeds the exact `Quantity` to money.
 
-Status: slices 1 to 5 of spec 010 are in code: tables, permissions, the pure calculation, the `ReadingUsage` port, the
+Status: slices 1 to 6 of spec 010 are in code: tables, permissions, the pure calculation, the `ReadingUsage` port, the
 meter register (entity, commands, queries, endpoints, the plot guard, audit), readings with the round (entry, batch,
 superseding, correction, deletion, the unusual-consumption warning, the history with intervals), replacement, range
-consumption over a chain of meters, the member flow (submission, approval, rejection) and the electricity tree (moves
-with an effective date, the tree over a date range with the consumption per node). The Excel sheet follows in a later
-slice and extends this file.
+consumption over a chain of meters, the member flow (submission, approval, rejection), the electricity tree (moves
+with an effective date, the tree over a date range with the consumption per node), meter presence for the tariffs
+(`MeterCatalog`) and the Meters sheet of the Excel import (`MeterImport`).
 
-Depends on `plots` (`PlotCatalog`, and it implements `plots.PlotChangeGuard`), `identity` (`CurrentUser`, `AccessProfile`,
-`OwnedPlotsSource`, `Permission`), `audit` (events) and `problem`. `plots` never depends on `meters`.
+Depends on `plots` (`PlotCatalog`, the import records `PlotImportRow` and `PlotImportPlan`, and it implements
+`plots.PlotChangeGuard`), `identity` (`CurrentUser`, `AccessProfile`, `OwnedPlotsSource`, `Permission`), `audit` (events)
+and `problem`. `plots` never depends on `meters`; `tariffs` (`MeterCatalog`) and `imports` (`MeterImport`) depend on it,
+never the other way round.
 
 ## Tables (V12)
 
@@ -43,6 +45,8 @@ within the working period; that a `REJECTED` or `APPROVED` row carries `decided_
 | `Quantity` | An exact reduced fraction (`BigInteger` over `BigInteger`): `plus`, `minus`, `times(long)`, `dividedBy(long)`, `compareTo`, `signum`, `numerator()`, `denominator()`. `toMeterValue()` rounds HALF_UP to three decimals: the only rounding of the module, for display (ADR 0014) |
 | `ConsumptionCalculator` | Pure and static (no Spring, no database, no clock); see below |
 | `ReadingUsage` | Port: `isUsed(tenantId, meterId, from, to)`; the ledger (011) implements it, `internal.NoChargesYetUsage` answers `false` until then. Every bean is asked; the readings are used when any says so |
+| `MeterCatalog` | Read API for other modules (`internal.JpaMeterCatalog`): `plotIdsWithActiveMeter(resource)` (plots with an active plot meter of the resource now) and `hasMeterBetween(plot, resource, from, to)` (a plot meter of the resource worked on a day of the range, both ends included). The tariffs module uses it for `NO_METER` and the plot counts of meter-based tariffs |
+| `MeterImport` | Facade of the Excel import's Meters sheet (`internal.MeterImportService`): `plan`, `lock`, `apply`, with `MeterImportRow`, `MeterImportPlan`, `MeterImportItem`, `MeterImportAction` (`NEW`, `UNCHANGED`) and `MeterImportProblem`. See The Excel sheet |
 
 ### The calculation
 
@@ -297,6 +301,18 @@ Internal: `TreeRules` (pure: which kind may be under which), `TreeCommands` (the
 
 `METER_PARENT_CHANGED` about the moved meter (entity type `METER`): `parent` old and new (the labels of the parents,
 user content; absent outside the tree) and `effectiveFrom` (ISO date).
+
+## The Excel sheet (slice 6)
+
+`MeterImportService` implements `MeterImport` for the `Лічильники`/`Meters` sheet (rules and codes in `imports/README.md`,
+section Meters). Only plot meters; the import never replaces or updates a meter. `plan` resolves the plot from the Plots
+sheet's plan or `PlotCatalog.findActiveByNumbers`, loads the active meters of those plots in one query and decides `NEW`,
+`UNCHANGED` (same serial ignoring case) or `METER_ACTIVE_EXISTS` (`params.plot`). `lock` takes the stored plots of new
+meters `FOR SHARE` (`PlotCatalog.findAllAndLockShared`, id order) and the unchanged meters `FOR UPDATE`. `apply`
+persists the new meters with the ids of the plan (derived from the import id, plot number and resource; Hibernate batches
+the inserts), maps `meter_active_plot_uq` at the flush to 409 `IMPORT_STALE` and returns one `METER_REGISTERED` event per
+meter (`MeterAuditPublisher.event`, the same fields as a registration by hand) for the import to publish in its batches.
+Tests: `ImportPreviewMetersTests`, `ImportCommitTests` (in the imports module), `MeterCatalogTests`.
 
 ## Permissions
 

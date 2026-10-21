@@ -15,6 +15,7 @@ function preview(over: Partial<ImportPreview> = {}): ImportPreview {
       plots: { created: 5, updated: 3, unchanged: 7 },
       members: { created: 0, updated: 0, unchanged: 0 },
       ownerships: { created: 0, updated: 0, unchanged: 0 },
+      meters: { created: 0, updated: 0, unchanged: 0 },
     },
     problems: [],
     problemCount: 0,

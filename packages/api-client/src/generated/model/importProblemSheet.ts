@@ -18,4 +18,5 @@ export const ImportProblemSheet = {
   PLOTS: 'PLOTS',
   MEMBERS: 'MEMBERS',
   OWNERSHIP: 'OWNERSHIP',
+  METERS: 'METERS',
 } as const;

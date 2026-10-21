@@ -62,6 +62,7 @@ class TariffsTests extends IntegrationTest {
     private void restoreTheSeededState() {
         JdbcTemplate owner = ownerJdbc();
         for (UUID plot : plots) {
+            owner.update("delete from meter where plot_id = ?", plot); // a plot with a meter is not deleted
             owner.update("delete from plot where id = ?", plot); // scope rows cascade
         }
         plots.clear();
@@ -442,16 +443,26 @@ class TariffsTests extends IntegrationTest {
         newTariff(typeId(DEMO_TENANT, "WATER"), "Water", "2027-01-01", "PER_M3", "MONTHLY", "20");
         long chargeable = ownerJdbc().queryForObject("select count(*) from plot where tenant_id = ? and "
                 + "archived_at is null and kind <> 'COMMON'", Long.class, DEMO_TENANT);
+        long power = metered("ELECTRICITY");
+        long water = metered("WATER");
         UUID archived = newPlot("TC-A", "PLOT", true);
-        newPlot("TC-C", "COMMON", false);
-        newPlot("TC-P", "PLOT", false);
-        assertThat(archived).isNotNull();
+        UUID road = newPlot("TC-C", "COMMON", false);
+        UUID plot = newPlot("TC-P", "PLOT", false);
+        UUID other = newPlot("TC-Q", "PLOT", false);
+        // the guards keep meters off archived plots and common land; were one there, it would still not count
+        meter(archived, "ELECTRICITY", null);
+        meter(road, "ELECTRICITY", null);
+        meter(plot, "ELECTRICITY", null);
+        meter(other, "ELECTRICITY", "2026-06-30");
+        meter(other, "WATER", null);
 
         JsonNode byName = byName(body(send(chairman(), get(API), null)));
 
-        assertThat(byName.get("Members").get("plotCount").asLong()).isEqualTo(chargeable + 1);
-        assertThat(byName.get("Power").has("plotCount")).as("meter-based: no count").isFalse();
-        assertThat(byName.get("Water").has("plotCount")).as("meter-based: no count").isFalse();
+        assertThat(byName.get("Members").get("plotCount").asLong()).isEqualTo(chargeable + 2);
+        assertThat(byName.get("Power").get("plotCount").asLong()).as("plots with an active electricity meter")
+                .isEqualTo(power + 1);
+        assertThat(byName.get("Water").get("plotCount").asLong()).as("plots with an active water meter")
+                .isEqualTo(water + 1);
         assertThat(chargeable).isPositive();
     }
 
@@ -666,6 +677,21 @@ class TariffsTests extends IntegrationTest {
                 new BigDecimal("600.00"), archived);
         plots.add(id);
         return id;
+    }
+
+    /** A plot meter installed at the start of 2026, active or removed on {@code removedOn}; removed with the plot. */
+    private void meter(UUID plot, String resource, String removedOn) {
+        ownerJdbc().update("insert into meter (tenant_id, kind, resource, serial, plot_id, installed_on, initial_value, "
+                + "removed_on, final_value) select tenant_id, 'PLOT', ?, 'TM-' || number, id, date '2026-01-15', 0, "
+                + "?::date, case when ?::date is null then null else 0 end from plot where id = ?", resource,
+                removedOn, removedOn, plot);
+    }
+
+    /** The active, non-common plots of the demo cooperative with an active meter of the resource. */
+    private long metered(String resource) {
+        return ownerJdbc().queryForObject("select count(distinct p.id) from plot p join meter m on m.plot_id = p.id "
+                + "where p.tenant_id = ? and p.archived_at is null and p.kind <> 'COMMON' and m.resource = ? "
+                + "and m.removed_on is null", Long.class, DEMO_TENANT, resource);
     }
 
     /** The list as an object keyed by tariff name. */

@@ -10,7 +10,8 @@
  * {@link app.nadel.tariffs.TariffVersionUsage} that the ledger implements so that a version a charge uses is no longer
  * corrected or deleted. The endpoints of tags
  * {@code charge-types} and {@code tariffs} are internal. It depends on {@code identity}, {@code audit},
- * {@code problem}, {@code money} and {@code plots} (the public {@code PlotCatalog}).
+ * {@code problem}, {@code money}, {@code plots} (the public {@code PlotCatalog}) and {@code meters} (the public
+ * {@code MeterCatalog}: a tariff charged by meter reaches only the plots with a meter of its resource).
  */
 @org.springframework.modulith.ApplicationModule(displayName = "Charge types and tariffs")
 package app.nadel.tariffs;

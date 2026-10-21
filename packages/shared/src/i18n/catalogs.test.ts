@@ -44,6 +44,9 @@ describe('import problem codes', () => {
     'OWNERSHIP_DATE_INVALID',
     'PLOT_COMMON_LAND',
     'PLOT_HAS_METER',
+    'METER_ACTIVE_EXISTS',
+    'METER_VALUE_INVALID',
+    'READING_DATE_IN_FUTURE',
     'UNKNOWN',
   ];
 

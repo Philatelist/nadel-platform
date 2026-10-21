@@ -29,9 +29,10 @@ class TemplateWriterTests {
     // ---- English: unchanged content
 
     @Test
-    void englishHasThePlotsMembersAndOwnershipSheetsInThatOrder() throws IOException {
+    void englishHasThePlotsMembersOwnershipAndMetersSheetsInThatOrder() throws IOException {
         try (ReadableWorkbook workbook = open(en)) {
-            assertThat(workbook.getSheets().map(Sheet::getName)).containsExactly("Plots", "Members", "Ownership");
+            assertThat(workbook.getSheets().map(Sheet::getName)).containsExactly("Plots", "Members", "Ownership",
+                    "Meters");
         }
     }
 
@@ -44,6 +45,22 @@ class TemplateWriterTests {
                 "delivery_channel", "telegram_username", "viber_phone");
         assertThat(headers(en, "Ownership")).containsExactly(
                 "plot_number", "member_external_id", "share", "valid_from");
+        assertThat(headers(en, "Meters")).containsExactly(
+                "plot_number", "resource", "serial", "installed_on", "initial_reading");
+    }
+
+    @Test
+    void englishMetersRowsExplainTheColumnsAndGiveAnElectricityMeterOfTheExamplePlot() throws IOException {
+        try (ReadableWorkbook workbook = open(en)) {
+            assertThat(rowTexts(workbook, "Meters", 1)).containsExactly(
+                    "# Required. Number of a plot from the Plots sheet or an existing plot. Plot meters only",
+                    "Required. ELECTRICITY or WATER",
+                    "Required. Serial number of the meter, at most 50 characters",
+                    "Required. Installation date, DD.MM.YYYY, not in the future",
+                    "Required. Reading on the installation date, up to 3 decimals");
+            assertThat(rowTexts(workbook, "Meters", 2)).containsExactly(
+                    "# example: 12a", "ELECTRICITY", "0456789", "01.03.2020", "1250.5");
+        }
     }
 
     @Test
@@ -89,7 +106,8 @@ class TemplateWriterTests {
     @Test
     void ukrainianHasTheUkrainianSheetNamesInThatOrder() throws IOException {
         try (ReadableWorkbook workbook = open(uk)) {
-            assertThat(workbook.getSheets().map(Sheet::getName)).containsExactly("Ділянки", "Члени", "Власність");
+            assertThat(workbook.getSheets().map(Sheet::getName)).containsExactly("Ділянки", "Члени", "Власність",
+                    "Лічильники");
         }
     }
 
@@ -102,6 +120,24 @@ class TemplateWriterTests {
                 "Ключ члена", "Прізвище", "Ім'я", "По батькові", "Телефони", "Електронна пошта", "Поштова адреса",
                 "Канал доставки", "Нік у Telegram", "Телефон Viber");
         assertThat(headers(uk, "Власність")).containsExactly("Номер ділянки", "Ключ члена", "Частка", "Власник з");
+        assertThat(headers(uk, "Лічильники")).containsExactly("Номер ділянки", "Ресурс", "Заводський номер",
+                "Дата встановлення", "Початковий показ");
+    }
+
+    @Test
+    void ukrainianMetersRowsAreUkrainianAndTheExampleIsAMeterOfTheExamplePlot() throws IOException {
+        try (ReadableWorkbook workbook = open(uk)) {
+            assertThat(rowTexts(workbook, "Лічильники", 1)).containsExactly(
+                    "# Обов'язково. Номер ділянки з аркуша «Ділянки» або наявної ділянки. Лише лічильники ділянок",
+                    "Обов'язково. ЕЛЕКТРОЕНЕРГІЯ або ВОДА",
+                    "Обов'язково. Заводський номер лічильника, до 50 символів",
+                    "Обов'язково. Дата встановлення, ДД.ММ.РРРР, не пізніше сьогодні",
+                    "Обов'язково. Показ на дату встановлення, до 3 знаків після коми");
+            assertThat(rowTexts(workbook, "Лічильники", 2)).containsExactly(
+                    "# приклад: 31а", "ЕЛЕКТРОЕНЕРГІЯ", "0456789", "01.03.2020", "1250,5");
+            String plot = rowTexts(workbook, "Ділянки", 2).get(0);
+            assertThat(rowTexts(workbook, "Лічильники", 2).get(0)).isEqualTo(plot);
+        }
     }
 
     @Test
@@ -169,11 +205,14 @@ class TemplateWriterTests {
     @EnumSource(TemplateLanguage.class)
     void identifierAndPhoneColumnsHaveTheTextFormat(TemplateLanguage language) throws IOException {
         // text columns: Plots number and cadastral_number; Members external_id, phones, viber_phone;
-        // Ownership plot_number, member_external_id and share ("1/2" typed into a General cell becomes a date)
+        // Ownership plot_number, member_external_id and share ("1/2" typed into a General cell becomes a date);
+        // Meters plot_number and serial
         byte[] template = language == TemplateLanguage.UK ? uk : en;
         assertThat(textColumns(template, 1)).containsExactly(1, 6);
         assertThat(textColumns(template, 2)).containsExactly(1, 5, 10);
         assertThat(textColumns(template, 3)).containsExactly(1, 2, 3);
+        // Meters plot_number and serial (a serial number can start with zeros)
+        assertThat(textColumns(template, 4)).containsExactly(1, 3);
         assertThat(entry(template, "xl/styles.xml")).contains("formatCode=\"@\"");
     }
 
@@ -218,6 +257,7 @@ class TemplateWriterTests {
         int count = switch (sheet) {
             case "Plots", "Ділянки" -> 8;
             case "Members", "Члени" -> 10;
+            case "Meters", "Лічильники" -> 5;
             default -> 4;
         };
         for (int column = 0; column < count; column++) {

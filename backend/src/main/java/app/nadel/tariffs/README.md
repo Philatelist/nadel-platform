@@ -21,7 +21,7 @@ cooperative.
 ## Public API and permissions
 
 The module root exports `ChargeCalculator` (pure, no Spring, no database), `VersionTerms` (with `InvalidVersionTermsException`),
-`Basis`, `Frequency`, `ExpectedCharge` (`Amount` or `ByReadings`) and the port `TariffVersionUsage`; everything else is in `internal`. Feature 011 (the
+`Basis`, `Frequency`, `ExpectedCharge` (`Amount` or `ByReadings` with the meter basis) and the port `TariffVersionUsage`; everything else is in `internal`. Feature 011 (the
 ledger) calls the same `ChargeCalculator`, so the preview and the real charge never diverge.
 
 Permissions (ADR 0009, defined in `identity.Permission`, seeded for the Chairman by `seed_base_roles`; the Treasurer gets
@@ -110,9 +110,12 @@ Writes (`ChargeTypeCommands`, one transaction each, the audit event is published
 - The list (`GET /tariffs`) holds the tariffs of non-archived charge types ordered by charge type position, then name
   (ignoring case), each with the version valid today, else the earliest future one. `plotCount` for `ALL_PLOTS` is
   `plots.PlotCatalog.countChargeable()`; for `SELECTED_PLOTS` the selected rows whose plots are active and not common
-  land (plots are read through `PlotCatalog.findAll`, never from the plot table). It is absent when the shown version is
-  `PER_KWH` or `PER_M3` (such a tariff applies to the plots with a meter). For `ALL_PLOTS` the active, non-common
-  plots among the exclusions are subtracted.
+  land (plots are read through `PlotCatalog.findAll`, never from the plot table). When the shown version is `PER_KWH`
+  or `PER_M3` (such a tariff applies to the plots with a meter, spec 010 section 2.7), a plot also needs an active plot
+  meter of that resource (electricity, water) to count: `ALL_PLOTS` counts the active, non-common plots in
+  `meters.MeterCatalog.plotIdsWithActiveMeter(resource)` and `SELECTED_PLOTS` the selected ones among them. For
+  `ALL_PLOTS` the active, non-common plots among the exclusions (with a meter, for a meter-based version) are
+  subtracted. `TariffAssembler` loads the chargeable count and each resource's metered plots once per request.
 - `GET /tariffs/{id}` returns the tariff with its charge type (an archived one too, so the history stays readable),
   its scope (`selectedPlots`, `exclusions` with plot number, `archived` and reason, in natural order of the number) and
   the same `plotCount` as the list. A tariff of another cooperative or an unknown id is 404 (RLS). `TariffAssembler`
@@ -183,8 +186,9 @@ tests against its own implementation; here a test bean next to the default stand
 `docs/domain/money-rules.md` section 4.1); the query only picks the tariffs and the scope.
 
 - **Calculator.** `ChargeCalculator.calculate(List<VersionTerms>, areaM2, YearMonth)` returns an
-  `Optional<ExpectedCharge>`: empty when no version overlaps the month, `ExpectedCharge.ByReadings` when a `PER_KWH`
-  or `PER_M3` version overlaps it, else `ExpectedCharge.Amount(Money)`. Versions are sorted by `validFrom`, each counts
+  `Optional<ExpectedCharge>`: empty when no version overlaps the month, `ExpectedCharge.ByReadings(basis)` when a
+  `PER_KWH` or `PER_M3` version overlaps it (the basis of the latest such version names the meter's resource), else
+  `ExpectedCharge.Amount(Money)`. Versions are sorted by `validFrom`, each counts
   for its days in the month over `D`; everything is summed as one exact fraction over `D x 12` and rounded once with
   `Money.ofQuotient`. A one-time fee counts in its due month only (never split). `ChargeCalculator.shownVersion` says
   which version's basis, frequency and rate to display.
@@ -198,9 +202,14 @@ tests against its own implementation; here a test bean next to the default stand
   excluded (item status `EXCLUDED` with the reason, no amount, only when the tariff is listed for the month at all);
   `SELECTED_PLOTS` applies only to selected plots. A tariff that no version of covers the month is not listed. Items
   are ordered by charge type position, then tariff name (ignoring case); `total` is the sum of the `AMOUNT` items.
+- **Meter-based tariffs** (feature 010). A `ByReadings` tariff is `BY_READINGS` when the plot had a plot meter of the
+  resource (`PER_KWH` electricity, `PER_M3` water) working on at least one day of the month
+  (`meters.MeterCatalog.hasMeterBetween(plot, resource, first day, last day)`: installed on or before the last day and
+  not removed before the first), otherwise `NO_METER`: the tariff does not reach the plot. Neither has an amount or adds
+  to the total; the amount by readings comes with feature 011. The question is asked once per resource.
 - **Queries.** The active charge types, their tariffs, all their versions and the scope rows that name this plot are
   loaded in four queries, whatever the number of tariffs. Plots are read through `PlotCatalog`, ownership through
-  `OwnedPlotsSource`.
+  `OwnedPlotsSource`, meter presence through `MeterCatalog`.
 - **Demo data.** `R__demo_data.sql` adds membership (50.0000 per sotka yearly, plot 28 excluded), land tax (35.0000
   per sotka yearly), electricity (4.3200 per kWh monthly) and a custom "Road repair" type with a fixed one-time fee of
   1200.0000 due 2026-12-01, all from 2026-01-01 for the demo cooperative.
@@ -247,6 +256,7 @@ narrow exception to "everything in the repository is English", of the same kind 
 ## Dependencies
 
 `identity` (`CurrentUser`, `AccessProfile`, `OwnedPlotsSource`), `audit` (events), `problem`, `money` (`Rate`, `Money`) and
-`plots` (the public `PlotCatalog` only: `find`, `findAll`, `inNaturalOrder`, `countChargeable`). The module root exports
+`plots` (the public `PlotCatalog` only: `find`, `findAll`, `inNaturalOrder`, `countChargeable`) and `meters` (the public
+`MeterCatalog` only: `plotIdsWithActiveMeter`, `hasMeterBetween`; `meters` never depends on `tariffs`). The module root exports
 `Basis`, `Frequency`, `VersionTerms`, `ExpectedCharge`, `ChargeCalculator` and `TariffVersionUsage`. Nothing depends on this
 module yet; the ledger (feature 011) will, and implements `TariffVersionUsage`.

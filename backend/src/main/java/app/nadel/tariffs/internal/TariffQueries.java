@@ -1,9 +1,12 @@
 package app.nadel.tariffs.internal;
 
+import app.nadel.meters.MeterResource;
 import app.nadel.problem.ApiProblemException;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -11,6 +14,7 @@ import java.util.stream.Collectors;
 import nadel.contract.model.Tariff;
 import nadel.contract.model.TariffSummary;
 import nadel.contract.model.TariffVersion;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,7 +39,8 @@ class TariffQueries {
 
     /**
      * The tariffs of the non-archived charge types in list order, each with the version valid today (Kyiv) or else the
-     * earliest future one, and the number of plots it applies to.
+     * earliest future one, and the number of plots it applies to (for a version charged by meter, the plots with an
+     * active meter of its resource).
      */
     @Transactional(readOnly = true)
     List<TariffSummary> list() {
@@ -47,24 +52,29 @@ class TariffQueries {
         List<UUID> ids = all.stream().map(TariffRecord::getId).toList();
         Map<UUID, List<TariffVersionRecord>> byTariff = versions.findByTariffIdInOrderByTariffIdAscValidFromAsc(ids)
                 .stream().collect(Collectors.groupingBy(TariffVersionRecord::getTariffId));
-        Map<UUID, Long> counts = assembler.plotCounts(all);
-
-        List<TariffSummary> result = new ArrayList<>(all.size());
+        Map<TariffRecord, @Nullable MeterResource> meterOf = new LinkedHashMap<>();
+        Map<UUID, Integer> shownIndex = new HashMap<>();
         for (TariffRecord tariff : all) {
             List<TariffVersionRecord> oldestFirst = byTariff.getOrDefault(tariff.getId(), List.of());
-            if (oldestFirst.isEmpty()) {
-                continue; // a tariff is created with its first version, so this cannot happen
+            if (!oldestFirst.isEmpty()) { // a tariff is created with its first version, so it always has one
+                int shown = TariffDtoMapper.shownIndex(oldestFirst, today);
+                shownIndex.put(tariff.getId(), shown);
+                meterOf.put(tariff, MeterBasis.resourceOf(oldestFirst.get(shown).getBasis()));
             }
-            int shown = TariffDtoMapper.shownIndex(oldestFirst, today);
+        }
+        Map<UUID, Long> counts = assembler.plotCounts(meterOf);
+
+        List<TariffSummary> result = new ArrayList<>(all.size());
+        for (TariffRecord tariff : meterOf.keySet()) {
+            List<TariffVersionRecord> oldestFirst = byTariff.get(tariff.getId());
+            int shown = shownIndex.get(tariff.getId());
             TariffVersionRecord version = oldestFirst.get(shown);
             LocalDate validTo = shown + 1 < oldestFirst.size() ? oldestFirst.get(shown + 1).getValidFrom().minusDays(1)
                     : null;
             TariffVersion dto = TariffDtoMapper.version(version, validTo, today);
             var summary = new TariffSummary(tariff.getId(), tariff.getName(), tariff.getChargeTypeId(),
                     TariffDtoMapper.scopeKind(tariff), dto);
-            if (!TariffDtoMapper.meterBased(version)) {
-                summary.setPlotCount(counts.get(tariff.getId()));
-            }
+            summary.setPlotCount(counts.get(tariff.getId()));
             result.add(summary);
         }
         return result;

@@ -6,6 +6,7 @@ import app.nadel.audit.FieldChange;
 import app.nadel.identity.AccessProfile;
 import java.util.List;
 import java.util.Objects;
+import java.util.UUID;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 
@@ -42,5 +43,13 @@ class MeterAuditPublisher {
         events.publishEvent(AuditEvent.now(Objects.requireNonNull(actor.tenantId()),
                 new Actor(actor.memberId(), actor.subject(), actor.displayName()), action, entityType, meter.getId(),
                 meter.auditLabel(), changes));
+    }
+
+    /**
+     * The event of a change to a meter without publishing it: the Excel import returns its events to the caller, which
+     * publishes them in batches ({@code audit.AuditBatch}).
+     */
+    AuditEvent event(UUID tenantId, Actor actor, String action, MeterRecord meter, List<FieldChange> changes) {
+        return AuditEvent.now(tenantId, actor, action, METER, meter.getId(), meter.auditLabel(), changes);
     }
 }

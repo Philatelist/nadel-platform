@@ -21,7 +21,7 @@ final class TariffDtoMapper {
 
     /**
      * The tariff with all versions, newest first; {@code versionsOldestFirst} is every version of the tariff. The
-     * scope lists and the plot count come ready from the caller; the count is null for a meter-based tariff.
+     * scope lists and the plot count come ready from the caller.
      */
     static Tariff toDto(TariffRecord tariff, ChargeTypeRecord chargeType, List<TariffVersionRecord> versionsOldestFirst,
             LocalDate today, List<TariffScopePlot> selectedPlots, List<TariffExclusion> exclusions,
@@ -41,12 +41,6 @@ final class TariffDtoMapper {
             }
         }
         return current >= 0 ? current : 0;
-    }
-
-    /** Whether the version is paid by meter readings; such a tariff applies to the plots with a meter. */
-    static boolean meterBased(TariffVersionRecord version) {
-        return version.getBasis() == app.nadel.tariffs.Basis.PER_KWH
-                || version.getBasis() == app.nadel.tariffs.Basis.PER_M3;
     }
 
     static TariffScopeKind scopeKind(TariffRecord tariff) {

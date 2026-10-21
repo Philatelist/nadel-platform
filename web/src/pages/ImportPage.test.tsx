@@ -93,6 +93,7 @@ describe('ImportPage', () => {
         plots: { created: 2, updated: 1, unchanged: 0 },
         members: { created: 0, updated: 0, unchanged: 0 },
         ownerships: { created: 0, updated: 0, unchanged: 0 },
+        meters: { created: 0, updated: 0, unchanged: 0 },
       },
       problems: [],
       problemCount: 0,

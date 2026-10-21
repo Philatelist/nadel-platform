@@ -1,6 +1,10 @@
 package app.nadel.imports.internal;
 
+import static app.nadel.imports.internal.ImportWorkbooks.METER_HEADER;
+import static app.nadel.imports.internal.ImportWorkbooks.METER_HEADER_UK;
+import static app.nadel.imports.internal.ImportWorkbooks.PLOT_HEADER;
 import static app.nadel.imports.internal.ImportWorkbooks.member;
+import static app.nadel.imports.internal.ImportWorkbooks.meter;
 import static app.nadel.imports.internal.ImportWorkbooks.owner;
 import static app.nadel.imports.internal.ImportWorkbooks.plot;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -8,6 +12,7 @@ import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doCallRealMethod;
 import static org.mockito.Mockito.doThrow;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -15,6 +20,7 @@ import app.nadel.TestTokens;
 import app.nadel.audit.AuditBatch;
 import app.nadel.audit.AuditEvent;
 import app.nadel.plots.PlotImport;
+import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.List;
@@ -30,6 +36,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
+import org.springframework.http.HttpHeaders;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.context.event.ApplicationEvents;
 import org.springframework.test.context.event.RecordApplicationEvents;
@@ -288,6 +295,134 @@ class ImportCommitTests extends ImportCommitSupport {
         await().atMost(Duration.ofSeconds(20)).untilAsserted(() -> assertThat(ownerJdbc().queryForObject(
                 "select count(*) from audit_entry where action = 'OWNERSHIP_CHANGED' and entity_id = ?",
                 Integer.class, plot)).isEqualTo(1));
+    }
+
+    // ---- meters
+
+    @Test
+    void aCommitRegistersTheMetersOfTheFileAuditsThemAndAReimportIsUnchanged() throws Exception {
+        UUID stored = storedPlot("s");
+        byte[] file = workbook(rows(newPlot("a")), rows(), rows(), rows(
+                meter(plotNo("a"), "ELECTRICITY", serial("1"), SINCE, new BigDecimal("1250.5")),
+                meter(plotNo("s"), "WATER", serial("2"), "01.03.2020", 7)));
+        String id = preview(file).get("id").asString();
+
+        commit(id)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.counts.plots.created").value(1))
+                .andExpect(jsonPath("$.counts.meters.created").value(2))
+                .andExpect(jsonPath("$.counts.meters.updated").value(0))
+                .andExpect(jsonPath("$.counts.meters.unchanged").value(0));
+
+        // the ids are those of the plan: derived from the import id, the plot and the resource
+        Map<String, Object> electricity = ownerJdbc().queryForMap("select kind, resource, serial, plot_id, "
+                + "installed_on, initial_value, removed_on, name from meter where id = ?",
+                meterId(id, plotNo("a"), "ELECTRICITY"));
+        assertThat(electricity).containsEntry("kind", "PLOT").containsEntry("resource", "ELECTRICITY")
+                .containsEntry("serial", serial("1")).containsEntry("plot_id", plotId(id, plotNo("a")))
+                .containsEntry("removed_on", null).containsEntry("name", null);
+        assertThat(electricity.get("installed_on").toString()).isEqualTo("2020-03-01");
+        assertThat((BigDecimal) electricity.get("initial_value")).isEqualByComparingTo("1250.5");
+        assertThat(ownerJdbc().queryForObject("select plot_id from meter where id = ?", UUID.class,
+                meterId(id, plotNo("s"), "WATER"))).isEqualTo(stored);
+
+        awaitAudit("METER_REGISTERED", "IMT-" + tag, 2);
+        awaitAudit("IMPORT_COMMITTED", "plots.xlsx", 1);
+        JsonNode registered = JSON.readTree(ownerJdbc().queryForObject("select cast(changes as text) from audit_entry "
+                + "where action = 'METER_REGISTERED' and entity_id = ?", String.class,
+                meterId(id, plotNo("a"), "ELECTRICITY")));
+        assertThat(field(registered, "plot")).isEqualTo(plotNo("a"));
+        assertThat(field(registered, "resource")).isEqualTo("ELECTRICITY");
+        assertThat(field(registered, "initialReading")).isEqualTo("1250.500");
+        assertThat(field(registered, "installedOn")).isEqualTo("2020-03-01");
+        JsonNode summary = JSON.readTree(ownerJdbc().queryForObject("select cast(changes as text) from audit_entry "
+                + "where action = 'IMPORT_COMMITTED' and entity_id = ?::uuid", String.class, id));
+        assertThat(field(summary, "metersCreated")).isEqualTo("2");
+        assertThat(field(summary, "metersUnchanged")).isEqualTo("0");
+        assertThat(applicationEvents.stream(AuditBatch.class).flatMap(batch -> batch.entries().stream())
+                .map(AuditEvent::action)).contains("METER_REGISTERED", "PLOT_CREATED");
+
+        // the same file again: the plot and both meters are already there
+        upload(file)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.counts.plots.unchanged").value(1))
+                .andExpect(jsonPath("$.counts.meters.unchanged").value(2))
+                .andExpect(jsonPath("$.counts.meters.created").value(0))
+                .andExpect(jsonPath("$.problemCount").value(0))
+                .andExpect(jsonPath("$.committable").value(false));
+        assertThat(metersLike("IMT-" + tag)).isEqualTo(2);
+    }
+
+    @Test
+    void theMetersSheetInUkrainianAndInEnglishEndsUpInTheRegister() throws Exception {
+        byte[] ukrainian = ImportWorkbooks.builder()
+                .sheet("Ділянки", List.of("Номер ділянки", "Тип ділянки", "Площа, м²"),
+                        List.of(plotNo("uk"), "ДІЛЯНКА", 600))
+                .sheet("Лічильники", METER_HEADER_UK,
+                        meter(plotNo("uk"), "електроенергія", serial("uk"), "01.03.2020", "1250,5"))
+                .build();
+        byte[] english = ImportWorkbooks.builder()
+                .sheet("Plots", PLOT_HEADER, newPlot("en"))
+                .sheet("Meters", METER_HEADER, meter(plotNo("en"), "WATER", serial("en"), SINCE, 12))
+                .build();
+
+        for (byte[] file : List.of(ukrainian, english)) {
+            JsonNode preview = preview(file);
+            assertThat(preview.get("problemCount").asInt()).isZero();
+            assertThat(preview.get("counts").get("meters").get("created").asInt()).isEqualTo(1);
+            commit(preview.get("id").asString()).andExpect(status().isOk())
+                    .andExpect(jsonPath("$.counts.meters.created").value(1));
+        }
+
+        JsonNode register = body(mvc.perform(get("/api/v1/meters").header(HttpHeaders.AUTHORIZATION, chairman()))
+                .andExpect(status().isOk()).andReturn());
+        Map<String, JsonNode> bySerial = new java.util.HashMap<>();
+        register.forEach(item -> bySerial.put(item.get("serial").asString(), item));
+        assertThat(bySerial.get(serial("uk")).get("plot").get("number").asString()).isEqualTo(plotNo("uk"));
+        assertThat(bySerial.get(serial("uk")).get("resource").asString()).isEqualTo("ELECTRICITY");
+        assertThat(bySerial.get(serial("uk")).get("initialReading").asString()).isEqualTo("1250.500");
+        assertThat(bySerial.get(serial("uk")).get("active").asBoolean()).isTrue();
+        assertThat(bySerial.get(serial("en")).get("plot").get("number").asString()).isEqualTo(plotNo("en"));
+        assertThat(bySerial.get(serial("en")).get("resource").asString()).isEqualTo("WATER");
+        assertThat(bySerial.get(serial("en")).get("installedOn").asString()).isEqualTo("2020-03-01");
+
+        // both files again: nothing new
+        for (byte[] file : List.of(ukrainian, english)) {
+            JsonNode again = preview(file);
+            assertThat(again.get("counts").get("meters").get("unchanged").asInt()).isEqualTo(1);
+            assertThat(again.get("committable").asBoolean()).isFalse();
+        }
+    }
+
+    @Test
+    void aMeterRegisteredAfterThePreviewMakesTheCommitStale() throws Exception {
+        UUID plot = storedPlot("s");
+        String id = preview(workbook(rows(), rows(), rows(),
+                rows(meter(plotNo("s"), "ELECTRICITY", serial("file"), SINCE, 1)))).get("id").asString();
+        storedMeter(plot, "ELECTRICITY", serial("meanwhile"), null);
+
+        commit(id)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("IMPORT_STALE"));
+
+        assertThat(runRow(id)).containsEntry("status", "STALE");
+        assertThat(metersLike(serial("file"))).isZero();
+        assertThat(metersLike("IMT-" + tag)).isEqualTo(1);
+    }
+
+    @Test
+    void aMeterRemovedAfterThePreviewOfAnUnchangedRowMakesTheCommitStale() throws Exception {
+        UUID plot = storedPlot("s");
+        UUID installed = storedMeter(plot, "ELECTRICITY", serial("kept"), null);
+        String id = preview(workbook(rows(newPlot("a")), rows(), rows(),
+                rows(meter(plotNo("s"), "ELECTRICITY", serial("kept"), SINCE, 1)))).get("id").asString();
+        ownerJdbc().update("update meter set removed_on = date '2021-01-01', final_value = 300 where id = ?",
+                installed);
+
+        commit(id).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("IMPORT_STALE"));
+
+        assertThat(plotsLike(plotNo("a"))).isZero();
+        assertThat(metersLike("IMT-" + tag)).isEqualTo(1);
     }
 
     // ---- refusals

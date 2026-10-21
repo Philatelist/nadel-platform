@@ -18,30 +18,32 @@ import org.springframework.core.io.ClassPathResource;
 
 /**
  * The words of the import, from the one resource file {@code imports/header-aliases.properties}: sheet names, column
- * headers and value words (plot kinds, delivery channels, yes and no) in Ukrainian and English. The readers accept every
+ * headers and value words (plot kinds, delivery channels, yes and no, meter resources) in Ukrainian and English. The readers accept every
  * word listed there; the template writer shows the FIRST word of a line as the Ukrainian label, so the two cannot
  * drift apart. English canonical names (column keys, the sheet names of {@link PlotsSheet#NAME} and its siblings) are
  * accepted without being listed.
  * <p>
- * Lines are {@code <group>.<key> = label | alias | ...}. Groups: {@code plots}, {@code members}, {@code ownership}
- * (columns), {@code sheet} (sheet names) and {@code value} (the key is {@code <kind>.<CANONICAL>}).
+ * Lines are {@code <group>.<key> = label | alias | ...}. Groups: {@code plots}, {@code members}, {@code ownership},
+ * {@code meters} (columns), {@code sheet} (sheet names) and {@code value} (the key is {@code <kind>.<CANONICAL>}).
  */
 final class ImportVocabulary {
 
     static final String COLUMNS_PLOTS = "plots";
     static final String COLUMNS_MEMBERS = "members";
     static final String COLUMNS_OWNERSHIP = "ownership";
+    static final String COLUMNS_METERS = "meters";
     static final String KIND = "kind";
     static final String CHANNEL = "channel";
     static final String YES_NO = "yesno";
+    static final String RESOURCE = "resource";
 
-    private static final String RESOURCE = "imports/header-aliases.properties";
+    private static final String FILE = "imports/header-aliases.properties";
     private static final String SEPARATOR = "\\|";
     private static final String SHEET_GROUP = "sheet";
     private static final String VALUE_GROUP = "value";
     private static final Pattern SPACES = Pattern.compile("\\s+");
 
-    private static final ImportVocabulary INSTANCE = new ImportVocabulary(load(RESOURCE));
+    private static final ImportVocabulary INSTANCE = new ImportVocabulary(load(FILE));
 
     /** Words of every line by its property name, in file order; the first word is the Ukrainian label. */
     private final Map<String, List<String>> words;
@@ -117,7 +119,7 @@ final class ImportVocabulary {
     /**
      * The canonical value a word stands for ({@code PLOT} for {@code ДІЛЯНКА}), or null when the word is not listed.
      *
-     * @param kind one of {@link #KIND}, {@link #CHANNEL} and {@link #YES_NO}
+     * @param kind one of {@link #KIND}, {@link #CHANNEL}, {@link #YES_NO} and {@link #RESOURCE}
      */
     @Nullable String canonicalValue(String kind, String word) {
         String wanted = normaliseWord(word);
@@ -139,7 +141,7 @@ final class ImportVocabulary {
     private String label(String name) {
         List<String> list = words.get(name);
         if (list == null || list.isEmpty()) {
-            throw new IllegalStateException("No vocabulary line " + name + " in " + RESOURCE);
+            throw new IllegalStateException("No vocabulary line " + name + " in " + FILE);
         }
         return list.getFirst();
     }

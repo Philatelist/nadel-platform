@@ -7,7 +7,7 @@ import java.util.Map;
  * Records per sheet by what the import does with them. Stored as JSON in {@code import_run.counts} and returned in the
  * preview.
  */
-record PlanCounts(EntityCounts plots, EntityCounts members, EntityCounts ownerships) {
+record PlanCounts(EntityCounts plots, EntityCounts members, EntityCounts ownerships, EntityCounts meters) {
 
     /** The number of records of one kind that are created, updated or already as in the file. */
     record EntityCounts(int created, int updated, int unchanged) {
@@ -28,12 +28,13 @@ record PlanCounts(EntityCounts plots, EntityCounts members, EntityCounts ownersh
         map.put("plots", plots.toMap());
         map.put("members", members.toMap());
         map.put("ownerships", ownerships.toMap());
+        map.put("meters", meters.toMap());
         return map;
     }
 
     /** True when the import would create or update at least one record. */
     boolean changesAnything() {
         return plots.created() + plots.updated() + members.created() + members.updated()
-                + ownerships.created() + ownerships.updated() > 0;
+                + ownerships.created() + ownerships.updated() + meters.created() + meters.updated() > 0;
     }
 }

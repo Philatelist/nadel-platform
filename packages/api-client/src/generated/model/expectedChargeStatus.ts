@@ -11,7 +11,7 @@
  */
 
 /**
- * `AMOUNT` the plot is charged `amount`; `BY_READINGS` the amount depends on meter readings and is not known here; `EXCLUDED` the tariff does not apply to the plot (see `reason`)
+ * `AMOUNT` the plot is charged `amount`; `BY_READINGS` the amount depends on meter readings and is not known here; `NO_METER` the tariff is charged by meter and the plot has no meter of that resource in the month, so nothing is charged and it is not in `total`; `EXCLUDED` the tariff does not apply to the plot (see `reason`)
  */
 export type ExpectedChargeStatus = typeof ExpectedChargeStatus[keyof typeof ExpectedChargeStatus];
 
@@ -19,5 +19,6 @@ export type ExpectedChargeStatus = typeof ExpectedChargeStatus[keyof typeof Expe
 export const ExpectedChargeStatus = {
   AMOUNT: 'AMOUNT',
   BY_READINGS: 'BY_READINGS',
+  NO_METER: 'NO_METER',
   EXCLUDED: 'EXCLUDED',
 } as const;

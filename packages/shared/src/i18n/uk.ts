@@ -357,7 +357,7 @@ export const uk: Messages = {
     fileName: 'Файл: {name}',
     validUntil: 'Можна імпортувати до {time}',
     countsCaption: 'Що зробить імпорт',
-    entity: { plots: 'Ділянки', members: 'Члени кооперативу', ownerships: 'Власники' },
+    entity: { plots: 'Ділянки', members: 'Члени кооперативу', ownerships: 'Власники', meters: 'Лічильники' },
     created: 'Нові',
     updated: 'Оновлені',
     unchanged: 'Без змін',
@@ -410,7 +410,13 @@ export const uk: Messages = {
       EXPIRED: 'Не імпортовано, термін минув',
     },
   },
-  importSheets: { FILE: 'Файл', PLOTS: 'Ділянки', MEMBERS: 'Члени кооперативу', OWNERSHIP: 'Власники' },
+  importSheets: {
+    FILE: 'Файл',
+    PLOTS: 'Ділянки',
+    MEMBERS: 'Члени кооперативу',
+    OWNERSHIP: 'Власники',
+    METERS: 'Лічильники',
+  },
   importColumns: {
     plots: {
       number: 'Номер',
@@ -439,6 +445,13 @@ export const uk: Messages = {
       member_external_id: 'Ключ члена',
       share: 'Частка',
       valid_from: 'Володіє з',
+    },
+    meters: {
+      plot_number: 'Номер ділянки',
+      resource: 'Ресурс',
+      serial: 'Серійний номер',
+      installed_on: 'Встановлено',
+      initial_reading: 'Початковий показ',
     },
   },
   importProblem: {
@@ -472,6 +485,9 @@ export const uk: Messages = {
     OWNERSHIP_DATE_INVALID:
       'Дата початку володіння не може бути в майбутньому і має бути пізнішою за період попередніх власників.',
     PLOT_COMMON_LAND: 'Ділянка спільного користування не може мати власників.',
+    METER_ACTIVE_EXISTS: 'На ділянці вже є інший активний лічильник — замініть його в реєстрі',
+    METER_VALUE_INVALID: 'Початковий показ має бути невід’ємним числом, не більше трьох знаків після коми.',
+    READING_DATE_IN_FUTURE: 'Дата не може бути в майбутньому.',
     PLOT_HAS_METER: 'Ділянка має лічильник — спершу зніміть його.',
   },
   settings: {
@@ -503,7 +519,6 @@ export const uk: Messages = {
     empty: 'Видів нарахувань ще немає.',
     newTariff: 'Новий тариф',
     plots: { one: '{count} ділянка', few: '{count} ділянки', many: '{count} ділянок' },
-    meterBased: 'застосовується до ділянок з лічильником',
     validFromShort: 'діє з {date}',
     back: 'До тарифів',
     basis: {
@@ -520,6 +535,7 @@ export const uk: Messages = {
       empty: 'На цей місяць тарифів немає',
       total: 'Разом',
       byReadings: 'за показаннями',
+      noMeter: 'немає лічильника',
       notCharged: 'не нараховується',
       rate: '{rate} · {basis} · {frequency}',
       myTitle: 'Що мені нараховуватимуть',
@@ -727,6 +743,8 @@ export const uk: Messages = {
       membersUnchanged: 'Членів без змін',
       ownershipsCreated: 'Власників створено',
       ownershipsUnchanged: 'Власників без змін',
+      metersCreated: 'Лічильників створено',
+      metersUnchanged: 'Лічильників без змін',
       replacementMeter: 'Новий лічильник (серійний номер)',
       parent: 'Батьківський лічильник',
       meterEffectiveFrom: 'У дереві з',

@@ -31,3 +31,10 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `4fd731d..18f2ee9` | PASS | — | minor: ReplaceMeterDialog serial `maxLength` 100 vs contract 50; PendingReadingCard links to `/meters/:id` even without METERS_VIEW; `approvals.noInterval` text is misleading for a reading on the installation date; unused `meters.replacedBy` key (no successor link on the old meter's card); approve/reject does not invalidate the plot meters query; one long Javadoc line in MeterCommands |
+
+## Slice 5 — The meter tree
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `18f2ee9..76ab842` | MAJOR_ISSUES | M1 `MeterParentRepository.hasChildrenAfter` off by one: a parent can be removed on D while a child's period ends on D, so the child's D→D+1 consumption falls under no node | minor: `TREE_PARENT_INACTIVE` text says "already removed" but is also sent for a parent installed later; audit README lacks the `parent` value row; Settings visible with METERS_MANAGE alone but the tree needs METERS_VIEW too; move dialog may preselect an inactive (replaced) parent; reused READING_* field texts under "У дереві з" |
+| 2 | + `8c40cab` | PASS | M1 resolved (`>=` on the child period end; test covers 14.10 refused / 15.10 allowed and the slices sum) | minor: `hasChildrenAfter` now means "on or after" (name) |

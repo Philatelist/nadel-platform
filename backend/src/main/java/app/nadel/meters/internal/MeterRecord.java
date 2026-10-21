@@ -76,8 +76,16 @@ class MeterRecord {
     static MeterRecord register(UUID tenantId, MeterKind kind, MeterResource resource, @Nullable UUID plotId,
             String serial, @Nullable String name, LocalDate installedOn, MeterValue initial, @Nullable String note,
             Instant now) {
+        return register(UUID.randomUUID(), tenantId, kind, resource, plotId, serial, name, installedOn, initial, note,
+                now);
+    }
+
+    /** A new active meter with an id chosen by the caller (the Excel import derives it from the import's id). */
+    static MeterRecord register(UUID id, UUID tenantId, MeterKind kind, MeterResource resource, @Nullable UUID plotId,
+            String serial, @Nullable String name, LocalDate installedOn, MeterValue initial, @Nullable String note,
+            Instant now) {
         MeterRecord meter = new MeterRecord();
-        meter.id = UUID.randomUUID();
+        meter.id = id;
         meter.tenantId = tenantId;
         meter.kind = kind;
         meter.resource = resource;

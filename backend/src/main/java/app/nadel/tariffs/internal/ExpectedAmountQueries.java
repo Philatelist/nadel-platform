@@ -4,6 +4,8 @@ import app.nadel.identity.AccessProfile;
 import app.nadel.identity.OwnedPlot;
 import app.nadel.identity.OwnedPlotsSource;
 import app.nadel.identity.Permission;
+import app.nadel.meters.MeterCatalog;
+import app.nadel.meters.MeterResource;
 import app.nadel.money.Money;
 import app.nadel.plots.PlotCatalog;
 import app.nadel.plots.PlotCatalog.PlotFacts;
@@ -16,6 +18,7 @@ import java.time.Clock;
 import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -41,7 +44,12 @@ import org.springframework.transaction.annotation.Transactional;
  * Who may ask: a caller with {@code TARIFFS_VIEW} for any plot of the cooperative, anyone else only for a plot they own
  * now. Every other case, including an unknown plot and a plot of another cooperative (RLS), is the same 404. The data of
  * the cooperative is bulk-loaded once (charge types, their tariffs, all versions, the scope rows that name the plot), so
- * the number of queries does not grow with the number of tariffs.
+ * the number of queries does not grow with the number of tariffs; whether the plot has a meter is asked once per
+ * resource ({@link MeterCatalog}).
+ * <p>
+ * A tariff charged by meter ({@code PER_KWH}, {@code PER_M3}) is {@code BY_READINGS} when the plot had a meter of that
+ * resource working on a day of the month, and {@code NO_METER} otherwise: such a tariff reaches only plots with a
+ * meter. Neither has an amount or adds to the total.
  */
 @Service
 class ExpectedAmountQueries {
@@ -52,17 +60,19 @@ class ExpectedAmountQueries {
     private final TariffRepository tariffs;
     private final TariffVersionRepository versions;
     private final TariffScopePlotRepository scopePlots;
+    private final MeterCatalog meters;
     private final Clock clock;
 
     ExpectedAmountQueries(PlotCatalog plots, OwnedPlotsSource ownedPlots, ChargeTypeRepository chargeTypes,
             TariffRepository tariffs, TariffVersionRepository versions, TariffScopePlotRepository scopePlots,
-            Clock clock) {
+            MeterCatalog meters, Clock clock) {
         this.plots = plots;
         this.ownedPlots = ownedPlots;
         this.chargeTypes = chargeTypes;
         this.tariffs = tariffs;
         this.versions = versions;
         this.scopePlots = scopePlots;
+        this.meters = meters;
         this.clock = clock;
     }
 
@@ -110,6 +120,7 @@ class ExpectedAmountQueries {
         Map<UUID, TariffScopePlotRecord> scopeByTariff = scopePlots.findByPlotId(plotId).stream()
                 .collect(Collectors.toMap(TariffScopePlotRecord::getTariffId, row -> row));
 
+        Map<MeterResource, Boolean> hasMeter = new EnumMap<>(MeterResource.class);
         List<PlotTariffItem> items = new ArrayList<>();
         Money total = Money.ZERO;
         for (TariffRecord tariff : ordered) {
@@ -134,8 +145,11 @@ class ExpectedAmountQueries {
                 item.setStatus(ExpectedChargeStatus.AMOUNT);
                 item.setAmount(amount.money().toString());
                 total = total.plus(amount.money());
-            } else {
-                item.setStatus(ExpectedChargeStatus.BY_READINGS);
+            } else if (charge.get() instanceof ExpectedCharge.ByReadings byReadings) {
+                MeterResource resource = MeterBasis.resourceOf(byReadings.basis());
+                boolean metered = hasMeter.computeIfAbsent(resource, r -> meters.hasMeterBetween(plotId, r,
+                        month.atDay(1), month.atEndOfMonth()));
+                item.setStatus(metered ? ExpectedChargeStatus.BY_READINGS : ExpectedChargeStatus.NO_METER);
             }
             items.add(item);
         }

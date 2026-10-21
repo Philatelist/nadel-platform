@@ -45,6 +45,13 @@ public interface PlotCatalog {
     Optional<PlotFacts> findAndLockShared(UUID id);
 
     /**
+     * {@link #findAndLockShared} for many plots at once (the Excel import's meters): the rows are locked
+     * {@code FOR SHARE} in id order, so two transactions that lock overlapping sets never wait for each other in a
+     * circle. Ids that do not exist in the cooperative are left out. Must run inside the caller's transaction.
+     */
+    List<PlotFacts> findAllAndLockShared(Collection<UUID> ids);
+
+    /**
      * The active (not archived) plots whose number is among {@code numbers}, ignoring case, for an import that names
      * plots by number. Numbers that match no active plot are left out; the caller keys the result by number.
      */

@@ -69,11 +69,11 @@ class ImportsTemplateTests extends IntegrationTest {
         return mvc.perform(request).andExpect(status().isOk()).andReturn();
     }
 
-    private static final List<String> UK_SHEETS = List.of("Ділянки", "Члени", "Власність");
-    private static final List<String> EN_SHEETS = List.of("Plots", "Members", "Ownership");
+    private static final List<String> UK_SHEETS = List.of("Ділянки", "Члени", "Власність", "Лічильники");
+    private static final List<String> EN_SHEETS = List.of("Plots", "Members", "Ownership", "Meters");
 
     @Test
-    void theChairmanDownloadsAnXlsxAttachmentWithThreeSheetsInUkrainianByDefault() throws Exception {
+    void theChairmanDownloadsAnXlsxAttachmentWithFourSheetsInUkrainianByDefault() throws Exception {
         MvcResult result = mvc.perform(get(TEMPLATE).header(HttpHeaders.AUTHORIZATION, demo("chairman@demo.local")))
                 .andExpect(status().isOk())
                 .andExpect(header().string(HttpHeaders.CONTENT_TYPE, XLSX))

@@ -63,7 +63,8 @@ final class Cells {
      * modules know ({@code PLOT}, {@code EMAIL}); a word that is not in the vocabulary is returned as typed, so the
      * owning module reports it.
      *
-     * @param kind one of {@link ImportVocabulary#KIND} and {@link ImportVocabulary#CHANNEL}
+     * @param kind one of {@link ImportVocabulary#KIND}, {@link ImportVocabulary#CHANNEL} and
+     *             {@link ImportVocabulary#RESOURCE}
      */
     static Result<String> word(@Nullable RawCell cell, String kind) {
         String text = text(cell).value();

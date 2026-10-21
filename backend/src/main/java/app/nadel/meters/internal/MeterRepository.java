@@ -2,6 +2,7 @@ package app.nadel.meters.internal;
 
 import app.nadel.meters.MeterResource;
 import jakarta.persistence.LockModeType;
+import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -65,6 +66,21 @@ interface MeterRepository extends JpaRepository<MeterRecord, UUID> {
     /** The plots among {@code plotIds} that have any meter, active or removed. */
     @Query("select distinct m.plotId from MeterRecord m where m.plotId in :plotIds")
     List<UUID> plotIdsWithMeter(@Param("plotIds") Collection<UUID> plotIds);
+
+    /** The plots that have an active plot meter of the resource. */
+    @Query("select distinct m.plotId from MeterRecord m where m.plotId is not null and m.resource = :resource "
+            + "and m.removedOn is null")
+    List<UUID> plotIdsWithActiveMeterOf(@Param("resource") MeterResource resource);
+
+    /** Whether the plot had a meter of the resource working on a day from {@code from} to {@code to}. */
+    @Query("select count(m) > 0 from MeterRecord m where m.plotId = :plotId and m.resource = :resource "
+            + "and m.installedOn <= :to and (m.removedOn is null or m.removedOn >= :from)")
+    boolean existsWorkingBetween(@Param("plotId") UUID plotId, @Param("resource") MeterResource resource,
+            @Param("from") LocalDate from, @Param("to") LocalDate to);
+
+    /** The active plot meters of the given plots, for an import that matches its rows against them. */
+    @Query("select m from MeterRecord m where m.plotId in :plotIds and m.removedOn is null")
+    List<MeterRecord> findActiveOfPlots(@Param("plotIds") Collection<UUID> plotIds);
 
     /** The plots among {@code plotIds} that have an active meter. */
     @Query("select distinct m.plotId from MeterRecord m where m.plotId in :plotIds and m.removedOn is null")

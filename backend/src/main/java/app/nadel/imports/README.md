@@ -1,9 +1,11 @@
 # imports
 
-Excel import of a whole cooperative in one go: plots, members and ownership from one `.xlsx` file with three sheets
-(`Plots`, `Members`, `Ownership`; in the Ukrainian template `Ділянки`, `Члени`, `Власність`). Requirements: `docs/features/008-excel-import.md`; spec: `context/spec/008-excel-import/`.
+Excel import of a whole cooperative in one go: plots, members, ownership and plot meters from one `.xlsx` file with four
+sheets (`Plots`, `Members`, `Ownership`, `Meters`; in the Ukrainian template `Ділянки`, `Члени`, `Власність`,
+`Лічильники`). Requirements: `docs/features/008-excel-import.md` and, for the Meters sheet, section 7 of
+`docs/features/010-meters-and-readings.md`; specs: `context/spec/008-excel-import/`, `context/spec/010-meters-and-readings/`.
 
-The module offers the template download, the upload with a preview of all three sheets, the commit and the history of
+The module offers the template download, the upload with a preview of all four sheets, the commit and the history of
 the uploads.
 
 ## Endpoints
@@ -36,6 +38,7 @@ the first cell and the row is imported. Deleting only the `#` leaves the label i
 | `Plots` | number, street, kind, area_m2, area_sotky, cadastral_number, has_building, notes |
 | `Members` | external_id, last_name, first_name, middle_name, phones, email, postal_address, delivery_channel, telegram_username, viber_phone |
 | `Ownership` | plot_number, member_external_id, share, valid_from |
+| `Meters` | plot_number, resource, serial, installed_on, initial_reading |
 
 **English template:** the sheet names above, the canonical column keys as headers, English hints and examples
 (`imports/template_en.properties`).
@@ -47,12 +50,14 @@ show a word the upload refuses. The hint sentences and the example values are in
 reach the vocabulary's words through placeholders (`{sheet.members}`, `{col.plots.area_m2}`, `{value.kind.PLOT}`). The
 example is a consistent set: plot `31а` (not `12а`: the demo cooperative already has a plot `12а`), street `вулиця Садова`,
 kind `ДІЛЯНКА`, 600 m2, building `так`; member key `Ч-001`, `Шевченко Тарас Григорович`, `+380 67 123 45 67`; ownership of
-plot `31а` by `Ч-001`, share `1` (a single owner must hold the whole plot, rules in `plots/README.md`), since 01.03.2020.
+plot `31а` by `Ч-001`, share `1` (a single owner must hold the whole plot, rules in `plots/README.md`), since 01.03.2020;
+an electricity meter (`ЕЛЕКТРОЕНЕРГІЯ`) of plot `31а`, serial `0456789`, installed 01.03.2020 at `1250,5` (the English
+example: plot `12a`, `ELECTRICITY`, the same serial, date and `1250.5`).
 Missing texts or placeholders fail the build's tests, not a download.
 
 Columns that hold identifiers or phone numbers (`number`, `phones`, `viber_phone`, `external_id`, `plot_number`,
-`member_external_id`, `cadastral_number`) and the `share` have the text format, so Excel keeps leading zeros, long digit
-strings and `1/2`.
+`member_external_id`, `cadastral_number`, the meter `serial`) and the `share` have the text format, so Excel keeps leading
+zeros, long digit strings and `1/2`.
 
 ## The vocabulary
 
@@ -61,15 +66,15 @@ word is the Ukrainian label the template shows:
 
 | Line | Meaning |
 |---|---|
-| `<sheet>.<column key> = label \| alias ...` | column headers of `plots`, `members`, `ownership` |
-| `sheet.<plots\|members\|ownership> = label \| alias ...` | sheet names |
-| `value.kind.<PLOT\|COMMON>`, `value.channel.<EMAIL\|TELEGRAM\|VIBER\|PAPER>`, `value.yesno.<true\|false>` | value words |
+| `<sheet>.<column key> = label \| alias ...` | column headers of `plots`, `members`, `ownership`, `meters` |
+| `sheet.<plots\|members\|ownership\|meters> = label \| alias ...` | sheet names |
+| `value.kind.<PLOT\|COMMON>`, `value.channel.<EMAIL\|TELEGRAM\|VIBER\|PAPER>`, `value.yesno.<true\|false>`, `value.resource.<ELECTRICITY\|WATER>` | value words |
 
 The upload accepts **both languages, also mixed in one file**, for all three: a sheet is found by its English name or any
 listed name (case-insensitive, `WorkbookReader.readSheet(List, ...)`); headers are matched by `HeaderMatcher` after
-normalisation; value words are matched ignoring case and extra spaces. `PlotsSheet` and `MembersSheet` turn a Ukrainian kind
-or delivery channel word into its canonical English word (`ДІЛЯНКА` -> `PLOT`) before the row goes to the plots and members
-modules, which only know the English words; a word that is not in the vocabulary is passed on as typed and reported by
+normalisation; value words are matched ignoring case and extra spaces. `PlotsSheet`, `MembersSheet` and `MetersSheet` turn a
+Ukrainian kind, delivery channel or resource word into its canonical English word (`ДІЛЯНКА` -> `PLOT`, `вода` -> `WATER`)
+before the row goes to the plots, members and meters modules, which only know the English words; a word that is not in the vocabulary is passed on as typed and reported by
 the owning module (`INVALID`). Yes and no (`так`/`ні`, `yes`/`no`, `true`/`false`) come from the same file (`Cells.yesNo`).
 
 ## Upload and preview
@@ -87,13 +92,15 @@ the owning module (`INVALID`). Yes and no (`так`/`ні`, `yes`/`no`, `true`/`
 3. `WorkbookReader` (the only user of the spreadsheet library) streams the rows; `PlotsSheet`, `MembersSheet` and
    `OwnershipSheet` find the columns with `HeaderMatcher`, read every cell with `Cells` and stop with 400
    `IMPORT_LIMIT_EXCEEDED` at the 2,001st plot row, the 3,001st member row or the 6,001st ownership row. The workbook's
-   date system (1900 or 1904) comes from `WorkbookReader.date1904()` and is used for the Excel dates of `valid_from`. A workbook without a `Members` sheet is fine (plots only); a `Members` sheet needs
+   date system (1900 or 1904) comes from `WorkbookReader.date1904()` and is used for the Excel dates of `valid_from` and
+   `installed_on`. `MetersSheet` stops at the 2,001st meter row. A workbook without a `Members` sheet is fine (plots only); a `Members` sheet needs
    its header (`external_id`, `last_name` and `first_name` are required columns). `phones` is split at commas and
    semicolons; a phone cell that Excel stored as a number has lost its leading zero, so nine digits get the `0` back.
    Anything the library throws on a damaged file, a DOCTYPE included (DTDs are off), becomes `FILE_NOT_XLSX`. File
    names, sheet names and cell values are never logged.
-4. In one transaction: the expired previews of the cooperative lose their plan (there is no scheduled job yet), the plots
-   and members modules plan the rows (`plots.PlotImport`, `members.MemberImport`), and an `import_run` row is inserted. Nothing else is saved: a preview
+4. In one transaction: the expired previews of the cooperative lose their plan (there is no scheduled job yet), the plots,
+   members and meters modules plan the rows (`plots.PlotImport`, `members.MemberImport`, `meters.MeterImport`), and an
+   `import_run` row is inserted. Nothing else is saved: a preview
    creates no plot and no audit entry.
 
 The preview lists the problems found (at most 1,000; `problemCount` is the total) with sheet, Excel row (0 for the file or
@@ -126,13 +133,38 @@ How the cascades are avoided (one mistake is reported once, where it is):
 - a plot whose Plots row has a problem (also a problem found while reading the row) is not checked at all;
 - an unreadable `valid_from` is `DATE_INVALID` and is not also reported as `REQUIRED`.
 
+### Meters
+
+The Meters sheet (feature 010) lists plot meters only (the electricity tree is set up on its screen); all five columns are
+required and the sheet itself may be missing. `MetersSheet` reads the cells (an unreadable `installed_on` is `DATE_INVALID`,
+an unreadable `initial_reading` `NUMBER_INVALID`); `meters.MeterImport.plan` decides per row, with the Plots sheet's rows
+and plan (the effective one, as for ownership):
+
+- `REQUIRED` (any column; not repeated on a cell that already has a reading problem), `INVALID` (`resource` other than
+  `ELECTRICITY`/`WATER` or their Ukrainian words), `TOO_LONG` (`serial` over 50 characters), `METER_VALUE_INVALID`
+  (`initial_reading` negative, over three decimals or eleven integer digits; the value is a `meters.MeterValue`, never
+  rounded), `READING_DATE_IN_FUTURE` (`installed_on` after today on the Kyiv `Clock`);
+- `DUPLICATE_IN_FILE` on `resource`: an earlier row without problems names the same plot (ignoring case) and resource;
+- the plot: a plot of the Plots sheet (its kind from the row, else the stored one) or an active plot, else `UNKNOWN_PLOT`;
+  common land is `PLOT_COMMON_LAND`; a plot whose own Plots row has a problem is not checked further;
+- against the stored meters: no active meter of the plot and resource is `NEW` (`meters.created`); an active meter with
+  the same serial (ignoring case and spaces) is `UNCHANGED` (`meters.unchanged`; its dates and reading are not compared),
+  so a second upload of the same file changes nothing; any other active meter is `METER_ACTIVE_EXISTS` on `serial` with
+  `params.plot` (the stored number): the import never replaces a meter, that is done in the register. Meters are never
+  updated (`meters.updated` is 0).
+
+A new meter's id is derived from the import id, the plot number (lower case) and the resource, so the commit's second
+planning gives the same ids.
+
 ### Stored plan and digest
 
-The stored `plan` (version 1, now with a third array) holds the normalised rows: `plots`, `members` and `ownership` (row,
-plot number, member key as typed, share, `valid_from` as an ISO date). Member ids are never stored: they are derived
+The stored `plan` (version 1, now with a fourth array) holds the normalised rows: `plots`, `members`, `ownership` (row,
+plot number, member key as typed, share, `valid_from` as an ISO date) and `meters` (row, plot number, resource, serial,
+`installedOn` as an ISO date, `initialReading` as plain decimal text). A plan stored before the Meters sheet existed has
+no `meters` and reads as an empty sheet. Member ids are never stored: they are derived
 again when the plan is recomputed. `PlanDigest` computes the SHA-256 of a canonical text of the whole plan and the
-preview stores it in `import_run.plan_digest` (null for a run with problems). One line per plot row, member row and
-ownership row with the sheet, the natural key (lower case), the action or outcome, the id of the matched record or `new`,
+preview stores it in `import_run.plan_digest` (null for a run with problems). One line per plot row, member row,
+ownership row and meter row with the sheet, the natural key (lower case), the action or outcome, the id of the matched record or `new`,
 the changed field names and the values of the file; the lines are sorted, so the digest does not depend on the order of
 the rows; ids of records the import creates are left out because they depend on the import's own id. The commit slice
 recomputes the plan from the stored rows and refuses the preview as stale when the digest differs.
@@ -156,28 +188,30 @@ or saves nothing. In this order:
    `IMPORT_STALE`, a `PREVIEW` past `expires_at` (Kyiv `Clock`; also one whose plan was already dropped) is 410
    `IMPORT_EXPIRED`, and a preview with nothing to create or update is 409 `IMPORT_NOTHING_TO_COMMIT` (an accurate code
    of its own: a commit would only add a no-op audit entry; `IMPORT_HAS_ERRORS` would be false).
-3. The stored rows are read back (`StoredPlan`) and planned once to learn which existing plots and members they touch;
-   the persistence context is cleared; `PlotImport.lock` takes those plots `FOR UPDATE`, then `MemberImport.lock` those
-   members, each in id order. The order is that of a change of owner (plot first, then its owners) and of archiving
+3. The stored rows are read back (`StoredPlan`) and planned once to learn which existing plots, meters and members they
+   touch; the persistence context is cleared; `PlotImport.lock` takes those plots `FOR UPDATE`, then `MeterImport.lock`
+   the stored plots that get a new meter `FOR SHARE` (the lock of a registration by hand) and the unchanged meters
+   `FOR UPDATE`, then `MemberImport.lock` those members, each in id order. The order is that of a change of owner (plot first, then its owners) and of archiving
    (member row), so no lock cycle exists; the advisory lock serialises two imports. The clear matters: without it the
    second planning would read the first one's managed entities instead of the locked rows.
 4. The rows are planned again under the locks and the digest is compared with the stored one: a different digest, or any
    problem, is `IMPORT_STALE` (a plot with one of the file's numbers created meanwhile, an owner changed, a member
-   archived, ...).
+   archived, a meter registered, removed or replaced, ...).
 5. `MemberImport.apply` (members), then `PlotImport.apply` (plots with their GREY status rows, plot updates, then first
-   owners with the status refresh), each record audited as when entered by hand (`MEMBER_CREATED`/`MEMBER_UPDATED`,
-   `PLOT_CREATED`/`PLOT_UPDATED`, `OWNERSHIP_CHANGED`). The facades **return** their audit events instead of publishing
+   owners with the status refresh), then `MeterImport.apply` (the new plot meters, after the plots they may belong to),
+   each record audited as when entered by hand (`MEMBER_CREATED`/`MEMBER_UPDATED`, `PLOT_CREATED`/`PLOT_UPDATED`,
+   `OWNERSHIP_CHANGED`, `METER_REGISTERED`). The facades **return** their audit events instead of publishing
    them; `ImportCommitter` publishes them as `audit.AuditBatch` events of at most 500 entries (members first, then plots
    and owners), in the commit transaction, so the outbox stores them atomically with the data. 7,000 records are 14
    batches, not 7,000 events: the audit listener writes a batch with one JDBC batch insert in one transaction (see the
    `audit` README). Then one `IMPORT_COMMITTED` event (a normal single `AuditEvent`, exactly one per import) (entity type `IMPORT`, entity
    id = import id, label = file name, fields `plotsCreated`, `plotsUpdated`, `plotsUnchanged`, `membersCreated`, ...,
-   `ownershipsCreated`, `ownershipsUnchanged` as text). New rows are persisted (no SELECT per row) with Hibernate
+   `ownershipsCreated`, `ownershipsUnchanged`, `metersCreated`, `metersUnchanged` as text). New rows are persisted (no SELECT per row) with Hibernate
    batching (`jdbc.batch_size: 50`, `order_inserts`, `order_updates`). Finally the run becomes `COMMITTED` with
    `committed_at` and its plan dropped.
 
-A unique or exclusion violation while saving (plot number, cadastral number, member e-mail, ownership overlap) is
-translated by the facades into 409 `IMPORT_STALE`. Any other exception rolls everything back, audit events and outbox
+A unique or exclusion violation while saving (plot number, cadastral number, member e-mail, ownership overlap, a second
+active meter of a plot and resource) is translated by the facades into 409 `IMPORT_STALE`. Any other exception rolls everything back, audit events and outbox
 rows included, and leaves the run as a `PREVIEW` that can be tried again.
 
 A stale or expired refusal is also recorded: after the main transaction rolled back, a short `REQUIRES_NEW`
@@ -224,4 +258,5 @@ Table: `import_run` (V9, RLS `tenant_isolation`; the application role cannot del
 author as a snapshot (member id, Keycloak subject, display name), the counts, the problem count and, for a preview that
 can still be committed, the normalised rows (`plan`, personal data, cleared when no longer needed).
 
-Depends on `identity`, `problem`, `tenancy`, `plots`, `members` and `audit` (it publishes `IMPORT_COMMITTED`).
+Depends on `identity`, `problem`, `tenancy`, `plots`, `members`, `meters` (`MeterImport`) and `audit` (it publishes
+`IMPORT_COMMITTED`).

@@ -55,6 +55,14 @@ interface PlotRepository extends JpaRepository<Plot, UUID> {
     @Query("select p from Plot p where p.id in :ids order by p.id")
     List<Plot> lockAllForUpdate(@Param("ids") Collection<UUID> ids);
 
+    /**
+     * The given plots with a shared row lock ({@code FOR SHARE}), in id order, for the Excel import of meters: the lock
+     * a registration of a meter takes, so a delete, archive or edit of the plot waits for the import.
+     */
+    @Lock(LockModeType.PESSIMISTIC_READ)
+    @Query("select p from Plot p where p.id in :ids order by p.id")
+    List<Plot> lockAllForShare(@Param("ids") Collection<UUID> ids);
+
     // no tenant_id filter needed: RLS hides other cooperatives' rows
     @Query("""
             select new app.nadel.plots.internal.PlotRow(p, s.status, s.debt)
