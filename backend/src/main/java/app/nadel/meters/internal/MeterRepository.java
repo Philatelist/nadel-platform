@@ -23,6 +23,14 @@ interface MeterRepository extends JpaRepository<MeterRecord, UUID> {
     Optional<MeterRecord> findByIdForUpdate(@Param("id") UUID id);
 
     /**
+     * The meter with a shared row lock ({@code FOR SHARE}) until the end of the transaction: a move in the tree takes it
+     * on the new parent, so the parent is not removed or replaced while a meter is put under it.
+     */
+    @Lock(LockModeType.PESSIMISTIC_READ)
+    @Query("select m from MeterRecord m where m.id = :id")
+    Optional<MeterRecord> findByIdForShare(@Param("id") UUID id);
+
+    /**
      * The meters with an exclusive row lock each ({@code FOR UPDATE}), taken in id order so that two transactions that
      * lock overlapping sets never wait for each other in a circle.
      */
@@ -39,6 +47,9 @@ interface MeterRepository extends JpaRepository<MeterRecord, UUID> {
 
     /** The meters that replaced the meter (one at most: only an active meter is replaced). */
     List<MeterRecord> findByReplacesMeterId(UUID replacesMeterId);
+
+    /** Every meter of the resource, active and removed. */
+    List<MeterRecord> findByResource(MeterResource resource);
 
     /** The meters that are not removed. */
     List<MeterRecord> findByRemovedOnIsNull();

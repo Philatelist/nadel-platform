@@ -67,6 +67,10 @@ public final class ProblemCodes {
     public static final String METER_REMOVED = "METER_REMOVED";
     /** 409: the meter has readings waiting for approval, so it is neither removed nor replaced until they are decided. */
     public static final String METER_HAS_PENDING_READINGS = "METER_HAS_PENDING_READINGS";
+    /** 409: a change of the electricity tree breaks its rules; {@code errors[]} names the rule ({@code TREE_*}). */
+    public static final String METER_TREE_INVALID = "METER_TREE_INVALID";
+    /** 409: the meter has meters under it in the tree, so it is not deleted, nor removed while they work under it. */
+    public static final String METER_HAS_CHILDREN = "METER_HAS_CHILDREN";
     /** 409: a reading (also the initial or final reading of a meter) dated after today (Europe/Kyiv). */
     public static final String READING_DATE_IN_FUTURE = "READING_DATE_IN_FUTURE";
     /** 409: a reading dated before the installation or after the removal of its meter. */
@@ -102,6 +106,16 @@ public final class ProblemCodes {
     public static final String OWNERSHIP_NOT_FOUND = "OWNERSHIP_NOT_FOUND";
     /** A meter reading that is not a non-negative number with at most 11 integer and 3 decimal digits. */
     public static final String METER_VALUE_INVALID = "METER_VALUE_INVALID";
+    /** With {@link #METER_TREE_INVALID}: a water meter has no tree. */
+    public static final String TREE_WATER = "TREE_WATER";
+    /** With {@link #METER_TREE_INVALID}: a quarter meter under another quarter meter. */
+    public static final String TREE_QUARTER_UNDER_QUARTER = "TREE_QUARTER_UNDER_QUARTER";
+    /** With {@link #METER_TREE_INVALID}: the kinds of the meter and the parent do not allow the link. */
+    public static final String TREE_PARENT_KIND = "TREE_PARENT_KIND";
+    /** With {@link #METER_TREE_INVALID}: the parent is removed or not yet installed on the effective date. */
+    public static final String TREE_PARENT_INACTIVE = "TREE_PARENT_INACTIVE";
+    /** With {@link #METER_TREE_INVALID}: an effective date before the meter's latest change in the tree. */
+    public static final String TREE_DATE_BEFORE_LATEST = "TREE_DATE_BEFORE_LATEST";
 
     /** Codes of the rows of an import file (see {@code ImportProblem} in the API contract). */
     public static final String SHEET_MISSING = "SHEET_MISSING";

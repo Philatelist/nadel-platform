@@ -81,6 +81,15 @@ describe('Layout', () => {
     expect(hrefs()).not.toContain('/settings');
   });
 
+  it('shows Settings with METERS_MANAGE alone', () => {
+    me = meWith(['METERS_VIEW', 'METERS_MANAGE']);
+    renderWithApp(<Layout />);
+    const hrefs = Array.from(screen.getByRole('navigation', { name: 'Main menu' }).querySelectorAll('a')).map(
+      (a) => a.getAttribute('href'),
+    );
+    expect(hrefs).toContain('/settings');
+  });
+
   it('shows Import after Members, only with IMPORT_RUN', () => {
     me = meWith(['MEMBERS_VIEW', 'IMPORT_RUN', 'ROLES_MANAGE']);
     const { unmount } = renderWithApp(<Layout />);

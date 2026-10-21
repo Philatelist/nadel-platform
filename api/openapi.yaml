@@ -38,6 +38,8 @@ tags:
     description: The register of electricity and water meters
   - name: readings
     description: Meter readings, the reading round and the consumption between readings
+  - name: meter-tree
+    description: The electricity meter tree, its dated history and the consumption per node over a date range
 
 paths:
   /me:
@@ -2008,8 +2010,9 @@ paths:
       description: |
         Deletes an active meter that has no readings (its initial reading does not count; see `deletable`). A meter
         with readings of any status is refused with 409 `METER_HAS_READINGS` (remove it instead), a removed meter with
-        409 `METER_REMOVED`. Requires `METERS_VIEW` and `METERS_MANAGE`; written to the audit log (`METER_DELETED`,
-        the old values).
+        409 `METER_REMOVED`, a meter that is or was the parent of another meter in the electricity tree with 409
+        `METER_HAS_CHILDREN` (its children's history refers to it). Requires `METERS_VIEW` and `METERS_MANAGE`;
+        written to the audit log (`METER_DELETED`, the old values).
       parameters:
         - name: id
           in: path
@@ -2043,7 +2046,9 @@ paths:
         last counted reading up to that day or the initial reading (`READING_OUT_OF_ORDER`,
         `errors[{field: finalReading}]`). 400 `VALIDATION_FAILED` with `finalReading` `METER_VALUE_INVALID` for a
         malformed value. A meter with readings waiting for approval is refused with 409 `METER_HAS_PENDING_READINGS`
-        (approve or reject them first). Requires `METERS_VIEW` and `METERS_MANAGE`; written to the audit log
+        (approve or reject them first). A meter that still has working meters under it in the electricity tree after
+        `removedOn` is refused with 409 `METER_HAS_CHILDREN` (move them to another parent first, or replace the meter:
+        a replacement takes its children over). Requires `METERS_VIEW` and `METERS_MANAGE`; written to the audit log
         (`METER_REMOVED`).
       parameters:
         - name: id
@@ -2177,6 +2182,118 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+
+  /meters/{id}/parent:
+    put:
+      tags: [meter-tree]
+      operationId: setMeterParent
+      summary: Put an electricity meter under another parent from a date
+      description: |
+        Puts the meter under `parentMeterId` in the electricity tree from `effectiveFrom`, or takes it out of the tree
+        from that day when `parentMeterId` is absent. The history is kept: the period the meter had ends on the day
+        before `effectiveFrom` and a new period starts on it, so a past date range shows the tree as it was. A change
+        on the date of the meter's latest change corrects that change instead of adding one (a return to the parent of
+        the period before joins the two periods again). The meters under the moved meter stay under it.
+
+        Rules: a substation has no parent; a quarter meter is under a substation; a plot meter or a common consumer is
+        under a substation or a quarter meter. So the tree has at most three levels and no cycle. Water meters have no
+        tree. The parent is active and installed on or before `effectiveFrom`. Refused with 409
+        `METER_TREE_INVALID` and one field error: on `parentMeterId` `TREE_WATER` (the meter measures water),
+        `TREE_QUARTER_UNDER_QUARTER` (a quarter meter under another quarter meter), `TREE_PARENT_KIND` (any other
+        parent that the kinds do not allow, the meter itself and any parent for a substation included) or
+        `TREE_PARENT_INACTIVE` (the parent is removed or installed after `effectiveFrom`); on `effectiveFrom`
+        `TREE_DATE_BEFORE_LATEST` (before the meter's latest change in the tree; such history is not rewritten) or
+        `READING_DATE_OUTSIDE_METER` (before the meter's installation). Also 409 `READING_DATE_IN_FUTURE` with
+        `errors[{field: effectiveFrom}]` for a date after today in Europe/Kyiv and 409 `METER_REMOVED` for a removed
+        meter. An unknown parent or one of another cooperative is 404 `NOT_FOUND` with
+        `errors[{field: parentMeterId}]`. A request that changes nothing is accepted and not audited. Requires
+        `METERS_VIEW` and `METERS_MANAGE`; written to the audit log (`METER_PARENT_CHANGED` about the meter: `parent`
+        old and new, the labels of the parents, and `effectiveFrom`).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MeterParentChange'
+      responses:
+        '200':
+          description: The parent periods of the meter after the change
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeterPlacement'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /meter-tree:
+    get:
+      tags: [meter-tree]
+      operationId: getMeterTree
+      summary: The electricity meter tree over a date range with the consumption per node
+      description: |
+        The electricity meter tree as it was from `from` to `to`, with the consumption of every node, calculated by the
+        server from counted (`APPROVED`) readings only.
+
+        A node is a meter together with the meters it replaced and the meters that replaced it (`meterIds`, oldest
+        installation first; `meter` is the one in place at the end of the range), so a replacement or a counter that
+        wrapped around does not split a node. A node is listed under every parent it had in the range, each time with
+        the slices of the range it spent under that parent: a plot meter moved from quarter A to quarter B on 15.10
+        and shown for 01.10 to 31.10 is under A with the slice 01.10-15.10 and under B with the slice 15.10-31.10.
+        Neighbouring slices share their boundary day and add up to the consumption over the whole range. The days a
+        meter had no parent put it among the roots (substations, and meters outside the tree such as the plot meters
+        of a cooperative without a tree). The children of a node are the meters under it during its own slices.
+        Meters that did not work in the range are left out; water meters are never in the tree.
+
+        Each slice has the value at its start and at its end: `REAL` (a counted reading, or the initial or final
+        reading), `CALCULATED` (interpolated in proportion to the days between the nearest counted points, rounded
+        once to three decimals) or `UNKNOWN` (with the day after which there is no reading), and the consumption of
+        the slice: known, and `calculated` when an end was interpolated, or not known with `lastReadingOn`. `total`
+        is the consumption of the node over its slices under that parent.
+
+        Order: substations, quarter meters and common consumers, each by name (Ukrainian alphabet), then plot meters
+        in street and number order. 400 `VALIDATION_FAILED` with `to` `INVALID` when `to` is before `from`. Requires
+        `METERS_VIEW`.
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeterTree'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
   /plots/{id}/readings:
     post:
@@ -2660,7 +2777,9 @@ components:
         `READING_STATUS_INVALID`), or a reading is corrected or deleted although a charge uses the readings around it
         (code `READING_IN_USE`), or a meter with readings waiting for approval is removed or replaced (code
         `METER_HAS_PENDING_READINGS`), or a reading that is not pending is approved or rejected (code
-        `READING_STATUS_INVALID`)
+        `READING_STATUS_INVALID`), or a change of the electricity tree breaks its rules (code `METER_TREE_INVALID`,
+        with `errors[{field, code}]` naming the rule, see `setMeterParent`), or a meter that has meters under it in the
+        tree is deleted, or removed while they still work under it (code `METER_HAS_CHILDREN`)
       content:
         application/problem+json:
           schema:
@@ -3779,7 +3898,11 @@ components:
             (`ONE_OFF` without `FIXED_ONE_TIME`, or `FIXED_ONE_TIME` without `ONE_OFF`), `TARIFF_COMMON_LAND` (common
             land cannot be in the scope of a tariff), `PLOT_ARCHIVED` (an archived plot), `UNKNOWN_PLOT` (no such plot
             in the cooperative), `DUPLICATE` (the same plot listed twice), `METER_VALUE_INVALID` (a meter reading that
-            is not a non-negative number with at most 11 integer and 3 decimal digits)
+            is not a non-negative number with at most 11 integer and 3 decimal digits); with `METER_TREE_INVALID`:
+            `TREE_WATER` (a water meter has no tree), `TREE_QUARTER_UNDER_QUARTER` (a quarter meter under another
+            quarter meter), `TREE_PARENT_KIND` (the kinds do not allow this parent), `TREE_PARENT_INACTIVE` (the parent
+            is removed or not yet installed on the date), `TREE_DATE_BEFORE_LATEST` (a date before the meter's latest
+            change in the tree), `READING_DATE_OUTSIDE_METER` (a date before the meter's installation)
         message:
           type: string
 
@@ -4614,3 +4737,178 @@ components:
           type: string
           format: date
           description: When not `known`, the day after which there is no reading; absent when there is none before either
+
+    MeterParentChange:
+      type: object
+      description: A move of an electricity meter in the tree
+      required: [effectiveFrom]
+      properties:
+        parentMeterId:
+          type: string
+          format: uuid
+          description: The new parent; absent to take the meter out of the tree from `effectiveFrom`
+        effectiveFrom:
+          type: string
+          format: date
+          description: The first day under the new parent; not after today, not before the meter's latest change
+
+    MeterParentPeriod:
+      type: object
+      description: A period in which a meter had one parent; both dates are days of the period
+      required: [parentMeterId, validFrom]
+      properties:
+        parentMeterId:
+          type: string
+          format: uuid
+        validFrom:
+          type: string
+          format: date
+        validTo:
+          type: string
+          format: date
+          description: The last day under this parent; absent while the period lasts
+
+    MeterPlacement:
+      type: object
+      description: The parent periods of a meter in the electricity tree, oldest first
+      required: [meterId, periods]
+      properties:
+        meterId:
+          type: string
+          format: uuid
+        periods:
+          type: array
+          items:
+            $ref: '#/components/schemas/MeterParentPeriod'
+
+    MeterValueAtKind:
+      type: string
+      description: >-
+        `REAL` a counted reading or the initial or final reading on that day; `CALCULATED` interpolated by days between
+        the nearest counted points (shown as calculated); `UNKNOWN` no counted point after the day (or none before it)
+      enum: [REAL, CALCULATED, UNKNOWN]
+
+    MeterValueAt:
+      type: object
+      description: The value of a node's meter on a day, calculated by the server
+      required: [kind, meterId]
+      properties:
+        kind:
+          $ref: '#/components/schemas/MeterValueAtKind'
+        meterId:
+          type: string
+          format: uuid
+          description: The meter of the node's chain the value belongs to (the old one at the end of a slice that ends on a replacement day)
+        value:
+          $ref: '#/components/schemas/MeterValue'
+          description: Present unless `UNKNOWN`; a `CALCULATED` value is rounded once to three decimals
+        lastReadingOn:
+          type: string
+          format: date
+          description: For `UNKNOWN`, the day after which there is no reading; absent when there is none before either
+
+    MeterRangeConsumption:
+      type: object
+      description: The consumption over a part of a date range, calculated by the server
+      required: [known, calculated]
+      properties:
+        known:
+          type: boolean
+          description: False when a value at an end is not known
+        consumption:
+          $ref: '#/components/schemas/MeterValue'
+          description: Present when `known`; rounded once to three decimals when `calculated`
+        calculated:
+          type: boolean
+          description: True when a value at an end was calculated between two readings
+        lastReadingOn:
+          type: string
+          format: date
+          description: When not `known`, the day after which there is no reading; absent when there is none before either
+
+    MeterTreeSlice:
+      type: object
+      description: >-
+        A part of the range that a node spent under one parent, from `from` to `to` (the consumption is the value on
+        `to` minus the value on `from`)
+      required: [from, to, start, end, consumption]
+      properties:
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+        start:
+          $ref: '#/components/schemas/MeterValueAt'
+        end:
+          $ref: '#/components/schemas/MeterValueAt'
+        consumption:
+          $ref: '#/components/schemas/MeterRangeConsumption'
+
+    MeterTreeMeter:
+      type: object
+      description: The meter a node of the tree shows
+      required: [id, kind, serial, installedOn, active]
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          $ref: '#/components/schemas/MeterKind'
+        serial:
+          type: string
+        name:
+          type: string
+          description: The name of a meter that is not a plot meter
+        plot:
+          $ref: '#/components/schemas/MeterPlot'
+        installedOn:
+          type: string
+          format: date
+        removedOn:
+          type: string
+          format: date
+        active:
+          type: boolean
+
+    MeterTreeNode:
+      type: object
+      description: A node of the electricity tree under one parent (or among the roots) in a date range
+      required: [meter, meterIds, slices, total, children]
+      properties:
+        meter:
+          $ref: '#/components/schemas/MeterTreeMeter'
+        meterIds:
+          type: array
+          description: The meters of the node's chain of replacements, oldest installation first
+          items:
+            type: string
+            format: uuid
+        slices:
+          type: array
+          description: The parts of the range the node spent here, in date order
+          items:
+            $ref: '#/components/schemas/MeterTreeSlice'
+        total:
+          $ref: '#/components/schemas/MeterRangeConsumption'
+        children:
+          type: array
+          items:
+            $ref: '#/components/schemas/MeterTreeNode'
+
+    MeterTree:
+      type: object
+      description: The electricity meter tree as it was over a date range
+      required: [from, to, roots]
+      properties:
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+        roots:
+          type: array
+          items:
+            $ref: '#/components/schemas/MeterTreeNode'

@@ -228,7 +228,12 @@ function AuditChanges({ entry }: { entry: AuditEntry }) {
     <ul className="flex flex-col gap-1">
       {entry.changes.map((change) => (
         <li key={change.field}>
-          <span className="text-ink-muted">{fieldNames[change.field] ?? change.field}: </span>
+          <span className="text-ink-muted">
+            {(entry.entityType === 'METER' && change.field === 'effectiveFrom'
+              ? a.fields.meterEffectiveFrom
+              : fieldNames[change.field]) ?? change.field}
+            :{' '}
+          </span>
           {auditValue(entry.entityType, change.field, change.oldValue, t, locale)} →{' '}
           {auditValue(entry.entityType, change.field, change.newValue, t, locale)}
         </li>

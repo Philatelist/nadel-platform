@@ -42,3 +42,15 @@ describe('auditValue for replacements', () => {
     expect(uk.audit.fields.replacementMeter).toBeTruthy();
   });
 });
+
+describe('auditValue for the meter tree', () => {
+  const uk = messages('uk');
+
+  it('shows the parent as user content and the effective date in the locale format', () => {
+    const parent = render(<>{auditValue('METER', 'parent', 'Квартал А', uk, 'uk')}</>);
+    expect(parent.container.querySelector('[data-user-content]')?.textContent).toBe('Квартал А');
+    expect(text(auditValue('METER', 'effectiveFrom', '2026-10-15', uk, 'uk'), 'uk')).toBe('15.10.2026');
+    expect(uk.audit.action.METER_PARENT_CHANGED).toBeTruthy();
+    expect(uk.audit.fields.parent).toBeTruthy();
+  });
+});

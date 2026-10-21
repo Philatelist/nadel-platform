@@ -25,3 +25,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `eca98e7..c95e714` | PASS | — | minor: an unexpected non-problem exception in batch row N gives a 500 after rows 0..N-1 were committed; `ReadingQueries.used` calls each `ReadingUsage` port per reading (N calls; 011 should batch); the round's date hint always says "сьогодні" even after the round date changes; one long Javadoc line in meters `package-info` |
+
+## Slice 4 — Replacement and the member flow
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `4fd731d..18f2ee9` | PASS | — | minor: ReplaceMeterDialog serial `maxLength` 100 vs contract 50; PendingReadingCard links to `/meters/:id` even without METERS_VIEW; `approvals.noInterval` text is misleading for a reading on the installation date; unused `meters.replacedBy` key (no successor link on the old meter's card); approve/reject does not invalidate the plot meters query; one long Javadoc line in MeterCommands |

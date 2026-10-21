@@ -1,7 +1,7 @@
 # Pipeline log — 010 Meters and readings
 
 - Status: running
-- Phase: 3 — implement (Slice 4)
+- Phase: 3 — implement (Slice 5)
 - Branch: 010-meters-and-readings · Base: main (= origin/main) @ 063af9f
 - Requirement: docs/features/010-meters-and-readings.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
@@ -84,3 +84,7 @@ Same as 004–009 (see `context/spec/009-charge-types-and-tariffs/pipeline-log.m
 - Slice 3 review round 1: PASS.
 - Slice 4 backend (spring-backend): reported 223 tests green, no V13. AUTO-documented: remove and replace refused while any PENDING reading exists; replacement writes METER_REPLACED (old) + METER_REGISTERED (new); new endpoint `GET /meters/{id}/consumption` (not in the tech spec) for end-to-end range checks across the chain. Web task delegated; backend re-verification running.
 - Slice 4 web (react-frontend): web 406 tests. Verified: backend Slice 4 tests green (MeterReplacementTests 13, MemberReadingsTests 17, MetersTests 34, ReadingsTests 23, RoundTests 6, MeterAuditTests 8, ReadingAuditTests 8, ModularityTests 2); client test/typecheck/lint/format green; `pnpm gen:api` no diff.
+- Slice 4 committed `18f2ee9` — tests green; review round 1 running. Slice 5 backend delegated.
+- Slice 4 review round 1: PASS.
+- Slice 5 backend (spring-backend): reported 208 tests green, no V13; closes the Slice 2 gap (delete of a meter that ever had children → 409 `METER_HAS_CHILDREN`, remove refused while a child period lasts past the removal date). Tree nodes are replacement chains; a meter moved within the range appears under each parent with its slice. Web task delegated; backend re-verification running.
+- Slice 5 web (react-frontend): web 424 tests; on my request the move dialog preselects the current parent and disables a no-op move (it started at "Поза деревом"). Verified: backend Slice 5 tests green (MeterTreeTests 20, TreeRulesTests 18, MeterReplacementTests 13, MetersTests 34, MeterAuditTests 8, SettingsTests 13, ModularityTests 2); client test/typecheck/lint/format green; `pnpm gen:api` no diff.

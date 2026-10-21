@@ -6,8 +6,11 @@ import {
 } from '@nadel/api-client';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
+import { Link } from 'react-router';
 import { QueryBoundary } from '../components/QueryBoundary';
 import { Button, Notice, PageHeader, Panel, RadioGroup } from '../components/ui';
+import { useCanManageMeters } from '../hooks/useCanManageMeters';
+import { useCan } from '../me';
 import { useT } from '../i18n';
 import { problemMessage } from '../problem';
 import { useDocumentTitle } from '../useDocumentTitle';
@@ -17,14 +20,30 @@ const VISIBILITIES = ['OWN_ONLY', 'ALL_PLOTS'] as const satisfies readonly PlotS
 export function SettingsPage() {
   const t = useT();
   useDocumentTitle(t.settings.title);
-  const query = useGetSettings();
+  const canSettings = useCan('SETTINGS_MANAGE');
+  const canTree = useCanManageMeters();
   return (
     <div className="flex flex-col gap-4 text-[15px]">
       <PageHeader title={t.settings.title} />
-      <QueryBoundary query={query}>
-        {(data) => <SettingsForm saved={data.memberPlotStatusVisibility} />}
-      </QueryBoundary>
+      {canSettings && <CooperativeSettings />}
+      {canTree && (
+        <Panel>
+          <Link to="/settings/meter-tree" className="text-[17px] font-semibold text-accent underline">
+            {t.settings.meterTreeLink}
+          </Link>
+          <p className="text-ink-muted">{t.settings.meterTreeText}</p>
+        </Panel>
+      )}
     </div>
+  );
+}
+
+function CooperativeSettings() {
+  const query = useGetSettings();
+  return (
+    <QueryBoundary query={query}>
+      {(data) => <SettingsForm saved={data.memberPlotStatusVisibility} />}
+    </QueryBoundary>
   );
 }
 

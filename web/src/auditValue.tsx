@@ -180,6 +180,7 @@ export function auditValue(
     case 'chargeType':
       return auditChargeTypeName(raw, t);
     case 'replacementMeter':
+    case 'parent':
     case 'reason':
       return user(raw);
     case 'name':

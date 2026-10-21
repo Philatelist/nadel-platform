@@ -141,11 +141,20 @@ const router = createBrowserRouter([
         ],
       },
       {
-        element: <RequirePermission permission="SETTINGS_MANAGE" />,
+        element: <RequirePermission permission={['SETTINGS_MANAGE', 'METERS_MANAGE']} any />,
         children: [
           {
             path: 'settings',
             lazy: () => import('./pages/SettingsPage').then((m) => ({ Component: m.SettingsPage })),
+          },
+        ],
+      },
+      {
+        element: <RequirePermission permission={['METERS_VIEW', 'METERS_MANAGE']} />,
+        children: [
+          {
+            path: 'settings/meter-tree',
+            lazy: () => import('./pages/MeterTreePage').then((m) => ({ Component: m.MeterTreePage })),
           },
         ],
       },

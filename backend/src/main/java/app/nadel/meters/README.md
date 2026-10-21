@@ -4,11 +4,12 @@ The cooperative's meters, the electricity meter tree, the readings taken on any 
 them (feature 010, ADR 0014). Nothing is charged here; electricity charges, losses and the split of common consumers arrive
 with feature 011, which reuses `ConsumptionCalculator` and feeds the exact `Quantity` to money.
 
-Status: slices 1 to 4 of spec 010 are in code: tables, permissions, the pure calculation, the `ReadingUsage` port, the
+Status: slices 1 to 5 of spec 010 are in code: tables, permissions, the pure calculation, the `ReadingUsage` port, the
 meter register (entity, commands, queries, endpoints, the plot guard, audit), readings with the round (entry, batch,
-superseding, correction, deletion, the unusual-consumption warning, the history with intervals), and replacement, range
-consumption over a chain of meters and the member flow (submission, approval, rejection). The tree endpoints and the
-Excel sheet follow in the later slices and extend this file.
+superseding, correction, deletion, the unusual-consumption warning, the history with intervals), replacement, range
+consumption over a chain of meters, the member flow (submission, approval, rejection) and the electricity tree (moves
+with an effective date, the tree over a date range with the consumption per node). The Excel sheet follows in a later
+slice and extends this file.
 
 Depends on `plots` (`PlotCatalog`, and it implements `plots.PlotChangeGuard`), `identity` (`CurrentUser`, `AccessProfile`,
 `OwnedPlotsSource`, `Permission`), `audit` (events) and `problem`. `plots` never depends on `meters`.
@@ -97,10 +98,13 @@ The platform operator has no permissions: 403 everywhere. A meter or plot of ano
   `removedOn`), and a value below the latest approved reading (or the initial one) `READING_OUT_OF_ORDER` on
   `finalReading`. A meter with readings waiting for approval is 409 `METER_HAS_PENDING_READINGS` (checked right after
   `METER_REMOVED`): the board approves or rejects them first, so a pending reading never ends up outside the working
-  period of its meter.
+  period of its meter. A meter with a working meter under it after `removedOn` (a period that lasts or ends after that
+  day, of a child not removed by then) is 409 `METER_HAS_CHILDREN`: move the children first, or replace the meter,
+  which takes them over.
 - **Delete** locks the meter: a removed meter is 409 `METER_REMOVED`, a meter with a reading of any status 409
-  `METER_HAS_READINGS` (the `meter_reading` foreign key is the backstop). `deletable` in the API says when it is allowed.
-  A meter that is somebody's parent in the tree is not checked yet (slice 5, `METER_HAS_CHILDREN`).
+  `METER_HAS_READINGS` (the `meter_reading` foreign key is the backstop), a meter that is or ever was somebody's parent
+  in the tree 409 `METER_HAS_CHILDREN` (their periods refer to it; `meter_parent_parent_fk` is the backstop). `deletable`
+  in the API says when it is allowed by readings; the tree check is not part of it.
 - **List** (`MeterQueries`): plot meters in street order (`PlotCatalog.inStreetOrder`) and, within a plot, active first,
   electricity before water, newest installation first; then the named meters by name (`Collator` for Ukrainian). Filters
   `resource`, `kind`, `street` (ignoring case and surrounding spaces), `noReadingSince` (active meters whose last point,
@@ -249,6 +253,50 @@ Entity type `METER_READING` about the meter, as for the board's readings: `READI
 new and, when it replaced a pending reading, old), `READING_APPROVED` (`takenOn` and `value` new and, when it replaced a
 counted reading of that date, old), `READING_REJECTED` (`takenOn`, `value` and `reason` new). The actor of a submission
 is the member.
+
+## The tree (slice 5)
+
+Internal: `TreeRules` (pure: which kind may be under which), `TreeCommands` (the move), `MeterParents.move` (the rows),
+`TreeQueries` (the tree over a range), `MeterTreeController` (tag `meter-tree`).
+
+| Endpoint | Operation | Who |
+|---|---|---|
+| `PUT /meters/{id}/parent` | `setMeterParent` | `METERS_VIEW` and `METERS_MANAGE` |
+| `GET /meter-tree?from&to` | `getMeterTree` | `METERS_VIEW` |
+
+- **Rules** (`TreeRules`): a substation has no parent; a quarter meter is under a substation; a plot meter and a
+  common consumer are under a substation or a quarter meter; water meters have no tree. The kinds alone keep the tree
+  at most three levels deep and free of cycles. 409 `METER_TREE_INVALID` with one field error naming the rule: on
+  `parentMeterId` `TREE_WATER`, `TREE_QUARTER_UNDER_QUARTER`, `TREE_PARENT_KIND` (any other pair, the meter itself and
+  any parent of a substation included), `TREE_PARENT_INACTIVE` (the parent is removed or installed after the date); on
+  `effectiveFrom` `TREE_DATE_BEFORE_LATEST` (before the meter's latest change) or `READING_DATE_OUTSIDE_METER` (before
+  its installation). A date after today is 409 `READING_DATE_IN_FUTURE`, a removed meter 409 `METER_REMOVED`, an
+  unknown parent 404 with `errors[{field: parentMeterId}]`.
+- **A move** (`effectiveFrom`, `parentMeterId` or none to take the meter out of the tree) keeps the history in
+  `meter_parent`: the lasting period ends the day before and a new one starts on the date. On the start date of the
+  latest period the move corrects it (a new parent, or the row goes when the meter leaves the tree, or it joins the
+  period before when that one had the new parent and ended the day before); on the day after a period that ended (the
+  meter left the tree) a return to the same parent lets that period last again. The history before the latest change
+  is never rewritten. The same parent again changes nothing and writes no audit entry. Rows that end or go are flushed
+  before a new row is inserted (`meter_parent_no_overlap_ex`). The children of a moved meter stay under it.
+- **Locks**: the new parent `FOR SHARE`, then the meter `FOR UPDATE` (a parent before its children, as a replacement).
+  A removal or replacement of the parent takes it `FOR UPDATE`, so the two run one after another.
+- **The tree** (`TreeQueries`, four queries: electricity meters, parent rows, approved readings, plots). A node is a
+  chain of meters (`MeterChains.chainsAmong`), so a replacement does not split it; `meter` is the chain's meter
+  installed last by the end of the range, `meterIds` the chain. The parent rows of the chain's meters, with parents read
+  as chains, become its placements: clipped to the days it worked (up to the day before its final removal), a
+  replaced meter's period cut where its successor's starts, neighbouring periods under the same parent joined, the days
+  without a parent among the roots. A node is listed under every parent it had in the range with the slices of
+  `ConsumptionCalculator.splitByParent` (neighbouring slices share their boundary day); its children are looked for
+  within those slices only. Each slice has the value at its start and end (`REAL`, `CALCULATED` rounded once to three
+  decimals, `UNKNOWN` with `lastReadingOn`; on a replacement day the start reads the new meter, the end the old one) and
+  its consumption; `total` adds up the slices exactly. Order: substations, quarter meters, common consumers by name,
+  then plot meters in street order.
+
+### Audit of a move
+
+`METER_PARENT_CHANGED` about the moved meter (entity type `METER`): `parent` old and new (the labels of the parents,
+user content; absent outside the tree) and `effectiveFrom` (ISO date).
 
 ## Permissions
 

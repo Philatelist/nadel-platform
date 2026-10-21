@@ -67,6 +67,12 @@ class MeterParentRecord {
         this.updatedAt = now;
     }
 
+    /** Lets the period last again (a move back to this parent joins the two periods). */
+    void reopen(Instant now) {
+        this.validTo = null;
+        this.updatedAt = now;
+    }
+
     /** Puts the whole period under another parent (the meter that replaced the parent before the period started). */
     void reparent(UUID parentMeterId, Instant now) {
         this.parentMeterId = parentMeterId;

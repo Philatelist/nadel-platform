@@ -38,8 +38,10 @@ import org.springframework.transaction.annotation.Transactional;
  * Locks: registering or replacing a plot meter takes the plot {@code FOR SHARE} first
  * ({@link PlotCatalog#findAndLockShared}), so it runs after a delete, archive or edit of the plot in progress (they hold
  * {@code FOR UPDATE} and ask the {@link MeterPlotGuard}) and those run after it. Every change of an existing meter locks
- * the meter {@code FOR UPDATE} first, the lock the reading writes take too. Two registrations of the same plot and resource at once are kept apart by
- * the partial unique index {@code meter_active_plot_uq}, mapped to {@code METER_ACTIVE_EXISTS}.
+ * the meter {@code FOR UPDATE} first, the lock the reading writes take too; a move in the tree takes the new parent
+ * {@code FOR SHARE}, so a removal of a meter and a move under it run one after another. Two registrations of the same
+ * plot and resource at once are kept apart by the partial unique index {@code meter_active_plot_uq}, mapped to
+ * {@code METER_ACTIVE_EXISTS}.
  */
 @Service
 class MeterCommands {
@@ -163,7 +165,8 @@ class MeterCommands {
      * Ends the working period of the meter on {@code removedOn} with the final reading. The final reading is the last
      * point of the meter: not after today, not before the installation, not before a counted reading and not lower than
      * the counted reading before it (or the initial reading). A meter with readings waiting for approval is not removed
-     * until they are approved or rejected.
+     * until they are approved or rejected, and a meter with working meters under it in the tree after that day is not
+     * removed until they are moved ({@code METER_HAS_CHILDREN}; a replacement takes them over instead).
      */
     @Transactional
     Meter remove(UUID id, MeterRemoval input, AccessProfile actor) {
@@ -176,6 +179,9 @@ class MeterCommands {
         }
         LocalDate removedOn = input.getRemovedOn();
         checkEnd(meter, removedOn, finalValue, "removedOn");
+        if (parents.hasChildrenAfter(meter.getId(), removedOn)) {
+            throw hasChildren("The meter has working meters under it after the removal date; move them first.");
+        }
         MeterSnapshot before = MeterSnapshot.of(meter, null);
         meter.remove(removedOn, finalValue, clock.instant());
         save(meter);
@@ -230,7 +236,8 @@ class MeterCommands {
 
     /**
      * Deletes a meter entered by mistake: only an active meter without readings of any status (its initial reading
-     * does not count). Its parent rows in the tree go with it ({@code ON DELETE CASCADE}).
+     * does not count) that never had a meter under it in the tree (their periods refer to it, {@code ON DELETE RESTRICT}:
+     * {@code METER_HAS_CHILDREN}). Its own parent rows in the tree go with it ({@code ON DELETE CASCADE}).
      */
     @Transactional
     void delete(UUID id, AccessProfile actor) {
@@ -242,6 +249,10 @@ class MeterCommands {
         if (readings.hasReadings(meter.getId())) {
             throw new ApiProblemException(HttpStatus.CONFLICT, ProblemCodes.METER_HAS_READINGS,
                     "A meter with readings is never deleted; remove it instead.");
+        }
+        // the foreign key meter_parent_parent_fk (ON DELETE RESTRICT) stays as the backstop of this check
+        if (parents.wasEverParent(meter.getId())) {
+            throw hasChildren("A meter that has or had meters under it in the tree is not deleted.");
         }
         MeterSnapshot before = MeterSnapshot.of(meter, plotNumber(meter));
         meters.delete(meter);
@@ -329,6 +340,10 @@ class MeterCommands {
     private static ApiProblemException activeExists() {
         return new ApiProblemException(HttpStatus.CONFLICT, ProblemCodes.METER_ACTIVE_EXISTS,
                 "The plot already has an active meter of this resource.");
+    }
+
+    private static ApiProblemException hasChildren(String detail) {
+        return new ApiProblemException(HttpStatus.CONFLICT, ProblemCodes.METER_HAS_CHILDREN, detail);
     }
 
     private static ApiProblemException removed() {

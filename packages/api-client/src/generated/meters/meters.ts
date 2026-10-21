@@ -482,8 +482,9 @@ export const useUpdateMeter = <TError = BadRequestResponse | UnauthorizedRespons
 /**
  * Deletes an active meter that has no readings (its initial reading does not count; see `deletable`). A meter
  * with readings of any status is refused with 409 `METER_HAS_READINGS` (remove it instead), a removed meter with
- * 409 `METER_REMOVED`. Requires `METERS_VIEW` and `METERS_MANAGE`; written to the audit log (`METER_DELETED`,
- * the old values).
+ * 409 `METER_REMOVED`, a meter that is or was the parent of another meter in the electricity tree with 409
+ * `METER_HAS_CHILDREN` (its children's history refers to it). Requires `METERS_VIEW` and `METERS_MANAGE`;
+ * written to the audit log (`METER_DELETED`, the old values).
  * @summary Delete a meter entered by mistake
  */
 export const deleteMeter = async (id: string, options?: Parameters<typeof nadelFetch>[1]): Promise<void> => {
@@ -565,7 +566,9 @@ export const useDeleteMeter = <TError = UnauthorizedResponse | ForbiddenResponse
  * last counted reading up to that day or the initial reading (`READING_OUT_OF_ORDER`,
  * `errors[{field: finalReading}]`). 400 `VALIDATION_FAILED` with `finalReading` `METER_VALUE_INVALID` for a
  * malformed value. A meter with readings waiting for approval is refused with 409 `METER_HAS_PENDING_READINGS`
- * (approve or reject them first). Requires `METERS_VIEW` and `METERS_MANAGE`; written to the audit log
+ * (approve or reject them first). A meter that still has working meters under it in the electricity tree after
+ * `removedOn` is refused with 409 `METER_HAS_CHILDREN` (move them to another parent first, or replace the meter:
+ * a replacement takes its children over). Requires `METERS_VIEW` and `METERS_MANAGE`; written to the audit log
  * (`METER_REMOVED`).
  * @summary Remove a meter with its final reading
  */
