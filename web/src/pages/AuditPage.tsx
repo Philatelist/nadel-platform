@@ -1,17 +1,17 @@
 import { useListAuditEntries, type AuditEntityType, type AuditEntry } from '@nadel/api-client';
-import { formatDay, formatRate, normalizeRateInput } from '@nadel/shared';
+import { formatDateTime } from '@nadel/shared';
 import { keepPreviousData } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router';
 import { Pagination } from '../components/Pagination';
 import { QueryBoundary } from '../components/QueryBoundary';
 import { DataTable, PageHeader, Panel, Select, TextField, type Column } from '../components/ui';
 import { useLocale, useT } from '../i18n';
-import { auditRoleValue } from '../roleName';
+import { UserContent } from '../components/UserContent';
+import { auditRecordLabel, auditValue } from '../auditValue';
 import { problemCode, problemFieldErrors } from '../problem';
 import { useDocumentTitle } from '../useDocumentTitle';
 
 const PAGE_SIZE = 50;
-const TIME_ZONE = 'Europe/Kyiv';
 const ENTITY_TYPES = ['MEMBER', 'ROLE', 'PLOT', 'SETTINGS', 'OWNERSHIP', 'CHARGE_TYPE', 'TARIFF'] as const;
 
 /** Where a record of an entity type is shown; absent for types without a page of their own. */
@@ -65,6 +65,8 @@ export function AuditPage() {
   const a = t.audit;
   useDocumentTitle(a.title);
 
+  const actor = (name: string | undefined) => (name ? <UserContent>{name}</UserContent> : a.system);
+
   const columns: Column<AuditEntry>[] = [
     { key: 'time', header: a.columns.time, cell: (entry) => <AuditTime entry={entry} locale={locale} /> },
     {
@@ -77,10 +79,10 @@ export function AuditPage() {
             onClick={() => setFilter('actorMemberId', entry.actorMemberId)}
             className="text-left underline decoration-dotted hover:text-accent"
           >
-            {entry.actorName ?? a.system}
+            {actor(entry.actorName)}
           </button>
         ) : (
-          (entry.actorName ?? a.system)
+          actor(entry.actorName)
         ),
     },
     { key: 'action', header: a.columns.action, cell: (entry) => a.action[entry.action] },
@@ -180,11 +182,7 @@ function Chip({ label, onRemove }: { label: string; onRemove: () => void }) {
 function AuditTime({ entry, locale }: { entry: AuditEntry; locale: string }) {
   return (
     <time dateTime={entry.occurredAt} className="whitespace-nowrap">
-      {new Intl.DateTimeFormat(locale, {
-        dateStyle: 'short',
-        timeStyle: 'medium',
-        timeZone: TIME_ZONE,
-      }).format(new Date(entry.occurredAt))}
+      {formatDateTime(entry.occurredAt, locale)}
     </time>
   );
 }
@@ -192,13 +190,7 @@ function AuditTime({ entry, locale }: { entry: AuditEntry; locale: string }) {
 function AuditRecord({ entry }: { entry: AuditEntry }) {
   const t = useT();
   const a = t.audit;
-  const label = entry.entityLabel
-    ? entry.entityType === 'ROLE'
-      ? auditRoleValue(entry.entityLabel, t)
-      : entry.entityType === 'SETTINGS'
-        ? t.settings.title
-        : entry.entityLabel
-    : a.unlabelled;
+  const label = entry.entityLabel ? auditRecordLabel(entry.entityType, entry.entityLabel, t) : a.unlabelled;
   const href = entityHref[entry.entityType]?.(entry.entityId);
   return (
     <>
@@ -218,38 +210,14 @@ function AuditChanges({ entry }: { entry: AuditEntry }) {
   const t = useT();
   const { locale } = useLocale();
   const a = t.audit;
-  const bases: Readonly<Record<string, string>> = t.tariffs.basis;
-  const frequencies: Readonly<Record<string, string>> = t.tariffs.frequency;
   const fieldNames: Readonly<Record<string, string>> = { ...t.member.fields, ...a.fields };
-  const scopes: Readonly<Record<string, string>> = {
-    ALL_PLOTS: t.tariffs.scope.all,
-    SELECTED_PLOTS: t.tariffs.scope.selected,
-  };
-  const kinds: Readonly<Record<string, string>> = t.plot.kind;
-  const visibilities: Readonly<Record<string, { label: string } | undefined>> = t.settings.visibility;
-  const value = (field: string, raw: string | undefined): string => {
-    if (raw === undefined || raw === '') return a.noValue;
-    if (field === 'archived' || field === 'hasBuilding' || field === 'active')
-      return raw === 'true' ? a.yes : a.no;
-    if (field === 'kind') return kinds[raw] ?? raw;
-    if (field === 'rate') return normalizeRateInput(raw) === raw ? `${formatRate(raw, locale)} ₴` : raw;
-    if (field === 'scope') return scopes[raw] ?? raw;
-    if (field === 'frequency') return frequencies[raw] ?? raw;
-    if (field === 'basis' && entry.entityType === 'TARIFF') return bases[raw] ?? raw;
-    if ((field === 'validFrom' || field === 'dueDate') && /^\d{4}-\d{2}-\d{2}$/.test(raw)) {
-      return formatDay(raw, locale);
-    }
-    if (field === 'memberPlotStatusVisibility') return visibilities[raw]?.label ?? raw;
-    return field === 'name' || field === 'roles' || field === 'description'
-      ? auditRoleValue(raw, t, field)
-      : raw;
-  };
   return (
     <ul className="flex flex-col gap-1">
       {entry.changes.map((change) => (
         <li key={change.field}>
           <span className="text-ink-muted">{fieldNames[change.field] ?? change.field}: </span>
-          {value(change.field, change.oldValue)} → {value(change.field, change.newValue)}
+          {auditValue(entry.entityType, change.field, change.oldValue, t, locale)} →{' '}
+          {auditValue(entry.entityType, change.field, change.newValue, t, locale)}
         </li>
       ))}
     </ul>

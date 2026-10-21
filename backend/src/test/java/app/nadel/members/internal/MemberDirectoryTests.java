@@ -36,11 +36,11 @@ class MemberDirectoryTests extends IntegrationTest {
 
         assertThat(found).containsOnlyKeys(BONDARENKO, HONCHARENKO_ARCHIVED);
         MemberRef bondarenko = found.get(BONDARENKO);
-        assertThat(bondarenko.lastName()).isEqualTo("Bondarenko");
-        assertThat(bondarenko.firstName()).isEqualTo("Andrii");
-        assertThat(bondarenko.middleName()).isEqualTo("Mykolaiovych");
+        assertThat(bondarenko.lastName()).isEqualTo("Бондаренко");
+        assertThat(bondarenko.firstName()).isEqualTo("Андрій");
+        assertThat(bondarenko.middleName()).isEqualTo("Миколайович");
         assertThat(bondarenko.archived()).isFalse();
-        assertThat(bondarenko.shortName()).isEqualTo("Bondarenko Andrii");
+        assertThat(bondarenko.shortName()).isEqualTo("Бондаренко Андрій");
         assertThat(found.get(HONCHARENKO_ARCHIVED).archived()).isTrue();
     }
 
@@ -61,23 +61,23 @@ class MemberDirectoryTests extends IntegrationTest {
 
     @Test
     void matchesAPartOfTheLastFirstOrMiddleNameIgnoringCase() {
-        assertThat(as(DEMO_TENANT, () -> directory.idsMatchingName("BONDAR"))).containsExactly(BONDARENKO);
-        assertThat(as(DEMO_TENANT, () -> directory.idsMatchingName("halyn"))).containsExactly(MOROZ);
+        assertThat(as(DEMO_TENANT, () -> directory.idsMatchingName("БОНДАР"))).containsExactly(BONDARENKO);
+        assertThat(as(DEMO_TENANT, () -> directory.idsMatchingName("галин"))).containsExactly(MOROZ);
         // the patronymic of Bondarenko is also the patronymic of Chernenko (28), who has no other match
-        assertThat(as(DEMO_TENANT, () -> directory.idsMatchingName("mykolaiov")))
+        assertThat(as(DEMO_TENANT, () -> directory.idsMatchingName("миколайов")))
                 .containsExactlyInAnyOrder(BONDARENKO, UUID.fromString("aaaaaaaa-0000-0000-0000-000000000028"));
     }
 
     @Test
     void archivedMembersAreIncluded() {
-        assertThat(as(DEMO_TENANT, () -> directory.idsMatchingName("Honcharenko")))
+        assertThat(as(DEMO_TENANT, () -> directory.idsMatchingName("Гончаренко")))
                 .containsExactly(HONCHARENKO_ARCHIVED);
     }
 
     @Test
     void membersOfAnotherCooperativeAreNeverMatched() {
-        assertThat(as(DEMO_TENANT, () -> directory.idsMatchingName("Melnyk"))).isEmpty();
-        assertThat(as(OTHER_TENANT, () -> directory.idsMatchingName("Melnyk")))
+        assertThat(as(DEMO_TENANT, () -> directory.idsMatchingName("Мельник"))).isEmpty();
+        assertThat(as(OTHER_TENANT, () -> directory.idsMatchingName("Мельник")))
                 .containsExactly(MELNYK_OTHER_COOPERATIVE);
     }
 

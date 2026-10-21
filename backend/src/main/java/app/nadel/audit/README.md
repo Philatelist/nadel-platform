@@ -74,6 +74,28 @@ profile (the token) and is an explicit `tenant_id` condition on top of RLS.
   absent when the entry has no actor or the member no longer exists (or belongs to another cooperative).
 - `changes` is mapped from the stored `[{field, old, new}]` to `[{field, oldValue, newValue}]`; a null value is absent.
 
+## Values: codes and parameters, never display text
+
+An audit entry stores **codes and parameters**; the client builds the text in the user's language (one UI language, see
+the root `CLAUDE.md`). A server never writes an English phrase into `entity_label` or a change value. The formats:
+
+| Where | Value | Client |
+|---|---|---|
+| Role name, role description, `roles` of a member (`ROLE_*`, `MEMBER_ROLES_CHANGED`; `ROLE` label) | `base:<CODE>` (`CHAIRMAN`, `TREASURER`, `MEMBER`) while a base role keeps its standard name/description, otherwise the stored text. `roles` is such names joined by ", " | catalog name |
+| `CHARGE_TYPE` label, `name` old/new, and `chargeType` of `TARIFF_CREATED` | `base:<CODE>` (`MEMBERSHIP`, `ELECTRICITY`, `LAND_TAX`, `WATER`) while a seeded type was never renamed (`nameCustomized` false), otherwise the stored name | catalog default name |
+| `TARIFF` label | the tariff name (user content only; the charge type is not part of the label) | as is |
+| `SETTINGS` label | the code `settings` | catalog name |
+| `owners` of `OWNERSHIP_CHANGED` / `OWNERSHIP_CORRECTED` | JSON array of `{"member": "Last First", "share": "1/2"}`; a correction adds `"from"` and, unless the record is open, `"to"` (ISO dates) | parse, format dates and names |
+| `effectiveFrom`, `validFrom`, `dueDate` | ISO date `2026-01-01` | format date |
+| Enums (`kind`, `basis`/`frequency` of a tariff version, `scope`, `deliveryChannel`, `memberPlotStatusVisibility`) | the enum code | catalog |
+| `permissions` | permission codes sorted and joined by ", " | catalog |
+| Flags (`active`, `archived`, `hasBuilding`) | `true` / `false` | yes/no |
+| Numbers (`areaM2` `600.00`, `rate`, `position`, import counts) | plain decimal text | format number |
+| Member and plot labels, names, notes, reasons, import file name | user content | as is |
+
+Entries written before this format keep their old text (the log is append-only and is not migrated): a value that
+does not match a format above is shown as stored.
+
 ## Things to remember
 
 - Event payloads contain names and contact details. They are never logged: the listener logs the event id (or the batch id) only. Completed

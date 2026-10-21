@@ -6,7 +6,8 @@ import { MyChargesPanel } from '../components/tariffs/MyChargesPanel';
 import { MemberDetails } from '../components/MemberDetails';
 import { Badge, PageHeader, Panel } from '../components/ui';
 import { useMe } from '../me';
-import { useRoleName } from '../roleName';
+import { RoleName } from '../components/RoleName';
+import { UserContent } from '../components/UserContent';
 import { useDocumentTitle } from '../useDocumentTitle';
 
 export function AccountPage() {
@@ -14,7 +15,6 @@ export function AccountPage() {
   useDocumentTitle(t.account.title);
   const { locale } = useLocale();
   const me = useMe();
-  const roleName = useRoleName();
   // memberId is always present for a non-operator; the operator never reaches this page
   const member = useGetMember(me.memberId ?? '', { query: { enabled: me.memberId !== undefined } });
   const permissions: readonly Permission[] = me.permissions;
@@ -34,12 +34,14 @@ export function AccountPage() {
           <ul className="flex flex-wrap gap-2">
             {me.roles.map((role) => (
               <li key={role.id}>
-                <Badge tone="success">{roleName(role)}</Badge>
+                <Badge tone="success">
+                  <RoleName role={role} />
+                </Badge>
               </li>
             ))}
           </ul>
           <h2 className="text-[17px] font-semibold text-ink">{t.account.cooperative}</h2>
-          <p>{me.tenant?.name}</p>
+          <p>{me.tenant?.name && <UserContent>{me.tenant.name}</UserContent>}</p>
           <h2 className="text-[17px] font-semibold text-ink">{t.account.permissions}</h2>
           {permissions.length === 0 ? (
             <p className="text-ink-muted">{t.account.noPermissions}</p>

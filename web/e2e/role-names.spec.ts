@@ -77,7 +77,7 @@ test.describe('Role names in Ukrainian', () => {
 
       // typing the on-screen name of the Treasurer role as the name of another role warns before saving
       await roleItems(page)
-        .filter({ hasText: /^Secretary/ })
+        .filter({ hasText: /^Секретар/ })
         .getByRole('button', { name: 'Редагувати' })
         .click();
       const warning = page.getByText('Інша роль уже показується під такою назвою.');
@@ -144,9 +144,9 @@ test.describe('Role names in Ukrainian', () => {
 
       // members list and the treasurer's member page, as the chairman sees them
       await menuLink(page, 'Члени кооперативу').click();
-      await page.getByRole('searchbox').fill('Shevchenko');
+      await page.getByRole('searchbox').fill('Шевченко');
       await expect(
-        page.getByRole('row').filter({ hasText: 'Shevchenko' }).filter({ hasText: 'Бухгалтер' }),
+        page.getByRole('row').filter({ hasText: 'Шевченко' }).filter({ hasText: 'Бухгалтер' }),
       ).toBeVisible();
       await page.goto(`/members/${TREASURER_MEMBER_ID}`);
       await expect(page.getByRole('main')).toContainText('Бухгалтер');

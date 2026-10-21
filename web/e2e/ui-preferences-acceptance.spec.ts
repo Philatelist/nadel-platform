@@ -125,7 +125,7 @@ test.describe('§2.2 #4 a person who belongs to no cooperative', () => {
 
     await expect(page.getByRole('heading', { name: 'No cooperative' })).toBeVisible();
     await expect(page).toHaveTitle('No cooperative — Nadel');
-    expect(await page.title()).not.toContain('Demo Garden Cooperative');
+    expect(await page.title()).not.toContain('СТ «Надія»');
     // the full-page message uses the chosen theme (§2.1), not the device's light setting
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
     expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe(DARK_BACKGROUND);

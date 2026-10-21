@@ -68,6 +68,9 @@ describe('toSquareMetres', () => {
   });
 });
 
+const UK = { one: 'сотка', few: 'сотки', many: 'соток', other: 'сотки' };
+const EN = { one: 'sotka', few: 'sotkas', many: 'sotkas', other: 'sotkas' };
+
 describe('formatSotkyWithUnit', () => {
   it.each([
     ['100', 'сотка'],
@@ -76,14 +79,14 @@ describe('formatSotkyWithUnit', () => {
     ['2100', 'сотка'],
     ['1100', 'соток'],
   ])('uk %s m²', (m2, unit) => {
-    expect(formatSotkyWithUnit(m2, 'uk')).toMatch(new RegExp(`^\\d+ ${unit}$`));
+    expect(formatSotkyWithUnit(m2, 'uk', UK)).toMatch(new RegExp(`^\\d+ ${unit}$`));
   });
   it('uk fractions', () => {
-    expect(formatSotkyWithUnit('650', 'uk')).toBe('6,5 сотки');
+    expect(formatSotkyWithUnit('650', 'uk', UK)).toBe('6,5 сотки');
   });
   it('en', () => {
-    expect(formatSotkyWithUnit('100', 'en')).toBe('1 sotka');
-    expect(formatSotkyWithUnit('600', 'en')).toBe('6 sotkas');
-    expect(formatSotkyWithUnit('650', 'en')).toBe('6.5 sotkas');
+    expect(formatSotkyWithUnit('100', 'en', EN)).toBe('1 sotka');
+    expect(formatSotkyWithUnit('600', 'en', EN)).toBe('6 sotkas');
+    expect(formatSotkyWithUnit('650', 'en', EN)).toBe('6.5 sotkas');
   });
 });

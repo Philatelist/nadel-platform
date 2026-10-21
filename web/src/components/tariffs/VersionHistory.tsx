@@ -1,6 +1,7 @@
 import type { TariffVersion } from '@nadel/api-client';
-import { format, formatDay, formatRate } from '@nadel/shared';
+import { format, formatDay, formatRateWithCurrency } from '@nadel/shared';
 import { useLocale, useT } from '../../i18n';
+import { UserContent } from '../UserContent';
 
 /** The versions of a tariff as the server sends them (newest first). */
 export function VersionHistory({ versions }: { versions: readonly TariffVersion[] }) {
@@ -23,7 +24,7 @@ export function VersionHistory({ versions }: { versions: readonly TariffVersion[
               : format(c.rangeOpen, { from: formatDay(version.validFrom, locale) })}
           </span>
           <span>
-            {formatRate(version.rate, locale)} ₴ · {t.tariffs.basis[version.basis]} ·{' '}
+            {formatRateWithCurrency(version.rate, locale)} · {t.tariffs.basis[version.basis]} ·{' '}
             {t.tariffs.frequency[version.frequency]}
           </span>
           {version.dueDate && (
@@ -31,7 +32,11 @@ export function VersionHistory({ versions }: { versions: readonly TariffVersion[
               {format(c.dueOn, { date: formatDay(version.dueDate, locale) })}
             </span>
           )}
-          {version.note && <span className="text-sm text-ink-muted">{version.note}</span>}
+          {version.note && (
+            <span className="text-sm text-ink-muted">
+              <UserContent>{version.note}</UserContent>
+            </span>
+          )}
         </li>
       ))}
     </ol>

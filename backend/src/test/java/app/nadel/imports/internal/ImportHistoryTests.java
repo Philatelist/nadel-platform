@@ -249,7 +249,7 @@ class ImportHistoryTests extends ImportCommitSupport {
         assertThat(committed.get("status").asString()).isEqualTo("COMMITTED");
         assertThat(committed.get("committedAt").asString()).isNotBlank();
         assertThat(committed.get("counts").get("plots").get("created").asInt()).isEqualTo(1);
-        assertThat(committed.get("uploadedBy").asString()).contains("Kovalenko");
+        assertThat(committed.get("uploadedBy").asString()).contains("Коваленко");
         assertThat(committed.get("fileName").asString()).isEqualTo("plots.xlsx");
         // newest first: the commit was the last upload
         assertThat(items.get(0).get("id").asString()).isEqualTo(committedId);

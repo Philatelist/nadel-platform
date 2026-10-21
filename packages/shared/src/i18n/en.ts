@@ -1,10 +1,14 @@
 /** Source catalog. Every other locale must provide the same keys (type `Messages`). */
 export const en = {
   app: { name: 'Nadel' },
+  units: {
+    sotka: { one: 'sotka', few: 'sotkas', many: 'sotkas', other: 'sotkas' },
+  },
   auth: {
     signIn: 'Sign in',
     signOut: 'Sign out',
     signingIn: 'Signing in…',
+    signInFailed: 'Sign-in failed. Please try again.',
     signInHint: 'Sign in to see your plots and charges.',
   },
   nav: {
@@ -478,7 +482,7 @@ export const en = {
       total: 'Total',
       byReadings: 'by meter readings',
       notCharged: 'not charged',
-      rate: '{rate} ₴ · {basis} · {frequency}',
+      rate: '{rate} · {basis} · {frequency}',
       myTitle: 'What I will be charged',
       forMonth: 'For {month}',
     },

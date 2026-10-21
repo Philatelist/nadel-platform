@@ -8,7 +8,8 @@ import { Badge, buttonClass, DataTable, PageHeader, Panel, SearchField, type Col
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useT } from '../i18n';
 import { useCan } from '../me';
-import { useRoleName } from '../roleName';
+import { RoleNameList } from '../components/RoleName';
+import { UserContent } from '../components/UserContent';
 import { useDocumentTitle } from '../useDocumentTitle';
 
 const PAGE_SIZE = 20;
@@ -17,7 +18,6 @@ const SEARCH_DELAY_MS = 300;
 export function MembersPage() {
   const t = useT();
   useDocumentTitle(t.members.title);
-  const roleName = useRoleName();
   const canEdit = useCan('MEMBERS_EDIT');
   const [params, setParams] = useSearchParams();
   const q = params.get('q') ?? '';
@@ -62,14 +62,22 @@ export function MembersPage() {
       header: f.name,
       cell: (m) => (
         <Link to={`/members/${m.id}`} className="font-medium text-accent underline">
-          {fullName(m)}
+          <UserContent>{fullName(m)}</UserContent>
         </Link>
       ),
     },
-    { key: 'phones', header: f.phones, cell: (m) => m.phones.join(', ') || f.none },
-    { key: 'email', header: f.email, cell: (m) => m.email ?? f.none },
+    {
+      key: 'phones',
+      header: f.phones,
+      cell: (m) => (m.phones.length > 0 ? <UserContent>{m.phones.join(', ')}</UserContent> : f.none),
+    },
+    { key: 'email', header: f.email, cell: (m) => (m.email ? <UserContent>{m.email}</UserContent> : f.none) },
     { key: 'channel', header: f.deliveryChannel, cell: (m) => t.channel[m.deliveryChannel] },
-    { key: 'roles', header: f.roles, cell: (m) => m.roles.map(roleName).join(', ') || f.none },
+    {
+      key: 'roles',
+      header: f.roles,
+      cell: (m) => (m.roles.length > 0 ? <RoleNameList roles={m.roles} /> : f.none),
+    },
     {
       key: 'status',
       header: t.members.columnStatus,

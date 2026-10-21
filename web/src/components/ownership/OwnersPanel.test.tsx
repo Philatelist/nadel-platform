@@ -137,7 +137,7 @@ describe('OwnersPanel', () => {
     expect(items).toHaveLength(2);
     expect(items[0]).toHaveTextContent('Lytvynenko Svitlana');
     expect(items[0]).toHaveTextContent('1/2');
-    expect(items[0]).toHaveTextContent(/since 06\/01\/2025/);
+    expect(items[0]).toHaveTextContent(/since 1 Jun 2025/);
     expect(items[0]).toHaveTextContent('Basis: Sale contract of 2025-05-20');
     expect(items[1]).toHaveTextContent('Moroz Halyna');
   });
@@ -150,7 +150,7 @@ describe('OwnersPanel', () => {
       expect.stringContaining('Older Owner'),
     ]);
     expect(items[0]).toHaveTextContent('(archived)');
-    expect(items[0]).toHaveTextContent('06/01/2015 – 05/31/2025');
+    expect(items[0]).toHaveTextContent('1 Jun 2015 – 31 May 2025');
     expect(items[0]).toHaveTextContent('Basis: Initial allocation');
     expect(items[1]).not.toHaveTextContent('(archived)');
   });

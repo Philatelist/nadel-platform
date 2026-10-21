@@ -13,7 +13,8 @@ export function Field({
   hint,
   children,
 }: {
-  label: string;
+  /** Must resolve to text from the i18n catalogs (or user content); never a literal string, the lint rule cannot see props. */
+  label: ReactNode;
   error?: string;
   hint?: string;
   children: (control: ControlProps) => ReactNode;

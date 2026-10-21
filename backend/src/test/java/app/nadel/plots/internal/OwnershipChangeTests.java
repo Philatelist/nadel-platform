@@ -64,10 +64,10 @@ class OwnershipChangeTests extends OwnershipTestSupport {
                 .andExpect(jsonPath("$.current[*].validTo").doesNotExist())
                 .andExpect(jsonPath("$.current[*].basis", everyItem(is("Sale contract of 2026-02-20"))))
                 .andExpect(jsonPath("$.history", hasSize(2)))
-                .andExpect(jsonPath("$.history[0].memberName").value("Lytvynenko Svitlana"))
+                .andExpect(jsonPath("$.history[0].memberName").value("Литвиненко Світлана"))
                 .andExpect(jsonPath("$.history[0].validFrom").value("2025-06-01"))
                 .andExpect(jsonPath("$.history[0].validTo").value("2026-02-28"))
-                .andExpect(jsonPath("$.history[1].memberName").value("Honcharenko Mykola"))
+                .andExpect(jsonPath("$.history[1].memberName").value("Гончаренко Микола"))
                 .andExpect(jsonPath("$.history[1].validTo").value("2025-05-31"));
 
         // the same picture from the read endpoint, and the new rows belong to the cooperative of the token
@@ -303,7 +303,7 @@ class OwnershipChangeTests extends OwnershipTestSupport {
                 .andExpect(jsonPath("$.code").value("MEMBER_ARCHIVED"))
                 .andExpect(jsonPath("$.errors[0].field").value("owners[1].memberId"))
                 .andExpect(jsonPath("$.errors[0].code").value("MEMBER_ARCHIVED"))
-                .andExpect(content().string(not(containsString("Honcharenko"))));
+                .andExpect(content().string(not(containsString("Гончаренко"))));
         assertThat(ownershipRows(plot)).isEmpty();
     }
 
@@ -392,7 +392,7 @@ class OwnershipChangeTests extends OwnershipTestSupport {
         change(chairman, foreign, "2026-03-01", List.of(owner(anna, "1/1")), null)
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("NOT_FOUND"))
-                .andExpect(content().string(not(containsString("Melnyk"))));
+                .andExpect(content().string(not(containsString("Мельник"))));
         change(chairman, UUID.randomUUID(), "2026-03-01", List.of(owner(anna, "1/1")), null)
                 .andExpect(status().isNotFound());
         assertThat(ownershipRows(foreign)).hasSize(1);
@@ -505,8 +505,9 @@ class OwnershipChangeTests extends OwnershipTestSupport {
         assertThat(changes).hasSize(3);
         assertThat(isNull(field(changes, "effectiveFrom"), "old")).isTrue();
         assertThat(field(changes, "effectiveFrom").get("new").asString()).isEqualTo("2026-03-01");
-        assertThat(field(changes, "owners").get("old").asString()).isEqualTo("Lytvynenko Svitlana 1/1");
-        assertThat(field(changes, "owners").get("new").asString()).isEqualTo("Alpha Anna 2/3, Beta Boris 1/3");
+        assertThat(field(changes, "owners").get("old").asString()).isEqualTo("[{\"member\":\"Литвиненко Світлана\",\"share\":\"1/1\"}]");
+        assertThat(field(changes, "owners").get("new").asString()).isEqualTo("[{\"member\":\"Alpha Anna\",\"share\":\"2/3\"},"
+                + "{\"member\":\"Beta Boris\",\"share\":\"1/3\"}]");
         assertThat(isNull(field(changes, "basis"), "old")).isTrue();
         assertThat(field(changes, "basis").get("new").asString()).isEqualTo("Inheritance");
         // and the audit log lists it under the new entity type
@@ -532,11 +533,13 @@ class OwnershipChangeTests extends OwnershipTestSupport {
 
         JsonNode endedChanges = json.readTree((String) awaitAudit(ended, 1).getFirst().get("changes"));
         assertThat(endedChanges).hasSize(2); // no basis was given
-        assertThat(field(endedChanges, "owners").get("old").asString()).isEqualTo("Alpha Anna 1/1");
+        assertThat(field(endedChanges, "owners").get("old").asString())
+                .isEqualTo("[{\"member\":\"Alpha Anna\",\"share\":\"1/1\"}]");
         assertThat(isNull(field(endedChanges, "owners"), "new")).isTrue();
         JsonNode firstChanges = json.readTree((String) awaitAudit(first, 1).getFirst().get("changes"));
         assertThat(isNull(field(firstChanges, "owners"), "old")).isTrue();
-        assertThat(field(firstChanges, "owners").get("new").asString()).isEqualTo("Beta Boris 1/1");
+        assertThat(field(firstChanges, "owners").get("new").asString())
+                .isEqualTo("[{\"member\":\"Beta Boris\",\"share\":\"1/1\"}]");
     }
 
     @Test

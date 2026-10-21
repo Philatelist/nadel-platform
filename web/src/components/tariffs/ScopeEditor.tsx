@@ -12,6 +12,7 @@ import { useState } from 'react';
 import { useLocale, useT } from '../../i18n';
 import { useCan } from '../../me';
 import { problemCode, problemMessage, type FieldErrors } from '../../problem';
+import { UserContent } from '../UserContent';
 import { Badge, Button, Notice, Panel, RadioGroup, TextArea } from '../ui';
 import { PlotPicker, type PickedPlot } from './PlotPicker';
 
@@ -154,9 +155,12 @@ export function ScopeEditor({ tariff }: { tariff: Tariff }) {
                       className="flex flex-col border-b border-line-subtle py-2 last:border-b-0"
                     >
                       <span className="font-medium">
-                        {e.number} {e.archived && <Badge tone="neutral">{s.archivedMark}</Badge>}
+                        <UserContent>{e.number}</UserContent>{' '}
+                        {e.archived && <Badge tone="neutral">{s.archivedMark}</Badge>}
                       </span>
-                      <span className="text-sm text-ink-muted">{e.reason}</span>
+                      <span className="text-sm text-ink-muted">
+                        <UserContent>{e.reason}</UserContent>
+                      </span>
                     </li>
                   ))}
                 </ul>
@@ -168,7 +172,8 @@ export function ScopeEditor({ tariff }: { tariff: Tariff }) {
             <ul className="flex flex-wrap gap-2">
               {tariff.selectedPlots.map((p) => (
                 <li key={p.plotId} className="rounded-control border border-line px-3 py-1">
-                  {p.number} {p.archived && <Badge tone="neutral">{s.archivedMark}</Badge>}
+                  <UserContent>{p.number}</UserContent>{' '}
+                  {p.archived && <Badge tone="neutral">{s.archivedMark}</Badge>}
                 </li>
               ))}
             </ul>
@@ -215,7 +220,8 @@ export function ScopeEditor({ tariff }: { tariff: Tariff }) {
                 <li key={row.id} className="flex flex-col gap-2 rounded-control border border-line p-3">
                   <div className="flex items-center justify-between gap-3">
                     <span className="font-medium">
-                      {s.plot} {row.number} {row.archived && <Badge tone="neutral">{s.archivedMark}</Badge>}
+                      {s.plot} <UserContent>{row.number}</UserContent>{' '}
+                      {row.archived && <Badge tone="neutral">{s.archivedMark}</Badge>}
                     </span>
                     <Button
                       variant="secondary"
@@ -251,7 +257,8 @@ export function ScopeEditor({ tariff }: { tariff: Tariff }) {
                 <li key={row.id} className="flex flex-col gap-1">
                   <div className="flex items-center justify-between gap-3">
                     <span className="font-medium">
-                      {s.plot} {row.number} {row.archived && <Badge tone="neutral">{s.archivedMark}</Badge>}
+                      {s.plot} <UserContent>{row.number}</UserContent>{' '}
+                      {row.archived && <Badge tone="neutral">{s.archivedMark}</Badge>}
                     </span>
                     <Button
                       variant="secondary"

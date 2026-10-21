@@ -1,7 +1,8 @@
 import { useListChargeTypes, useListTariffs, type TariffSummary } from '@nadel/api-client';
-import { format, formatDay, formatRate } from '@nadel/shared';
+import { format, formatDay, formatRateWithCurrency } from '@nadel/shared';
 import { Link } from 'react-router';
-import { chargeTypeName } from '../chargeTypeName';
+import { ChargeTypeName } from '../components/ChargeTypeName';
+import { UserContent } from '../components/UserContent';
 import { QueryBoundary } from '../components/QueryBoundary';
 import { Badge, buttonClass, PageHeader, Panel } from '../components/ui';
 import { useLocale, useT } from '../i18n';
@@ -40,7 +41,7 @@ export function TariffsPage() {
                   const own = allTariffs.filter((tariff) => tariff.chargeTypeId === type.id);
                   return (
                     <li key={type.id}>
-                      <Panel title={chargeTypeName(type, t)}>
+                      <Panel title={<ChargeTypeName type={type} />}>
                         {!type.active && (
                           <div>
                             <Badge tone="neutral">{t.tariffs.inactive}</Badge>
@@ -75,10 +76,10 @@ function TariffRow({ tariff }: { tariff: TariffSummary }) {
   return (
     <li className="flex flex-col gap-1 border-b border-line-subtle py-3 first:pt-0 last:border-b-0 last:pb-0">
       <Link to={`/tariffs/${tariff.id}`} className="font-medium text-accent underline">
-        {tariff.name}
+        <UserContent>{tariff.name}</UserContent>
       </Link>
       <span>
-        {formatRate(version.rate, locale)} ₴ · {t.tariffs.basis[version.basis]} ·{' '}
+        {formatRateWithCurrency(version.rate, locale)} · {t.tariffs.basis[version.basis]} ·{' '}
         {t.tariffs.frequency[version.frequency]}
       </span>
       <span className="text-sm text-ink-muted">

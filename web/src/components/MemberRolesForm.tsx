@@ -12,7 +12,7 @@ import { useState } from 'react';
 import { useT } from '../i18n';
 import { useMe } from '../me';
 import { problemMessage } from '../problem';
-import { useRoleName } from '../roleName';
+import { RoleName } from './RoleName';
 import { QueryBoundary } from './QueryBoundary';
 import { Button, Notice, Panel } from './ui';
 
@@ -28,7 +28,6 @@ export function MemberRolesForm({
 }) {
   const t = useT();
   const c = t.rolesPage;
-  const roleName = useRoleName();
   const me = useMe();
   const queryClient = useQueryClient();
   const roles = useListRoles();
@@ -69,7 +68,7 @@ export function MemberRolesForm({
             {data.map((role) => (
               <label key={role.id} className="flex items-center gap-2 text-[15px]">
                 <input type="checkbox" checked={selected.has(role.id)} onChange={() => toggle(role.id)} />
-                {roleName(role)}
+                <RoleName role={role} />
               </label>
             ))}
           </fieldset>

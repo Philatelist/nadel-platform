@@ -206,13 +206,10 @@ test.describe('page frame (2.6)', () => {
     await page.setViewportSize({ width: 1280, height: 800 });
 
     const header = page.getByRole('banner');
-    await expect(header.getByRole('link', { name: 'Demo Garden Cooperative', exact: true })).toHaveAttribute(
-      'href',
-      '/',
-    );
+    await expect(header.getByRole('link', { name: 'СТ «Надія»', exact: true })).toHaveAttribute('href', '/');
     await expect(header.getByText('Наділ', { exact: true })).toBeVisible();
-    await expect(header).toContainText('Demo Garden Cooperative');
-    await expect(header).toContainText('Kovalenko');
+    await expect(header).toContainText('СТ «Надія»');
+    await expect(header).toContainText('Коваленко');
     await expect(header).toContainText('Голова');
     await expect(header.getByRole('button', { name: 'Вийти' })).toBeVisible();
     const language = header.getByRole('group', { name: 'Мова' });
@@ -254,7 +251,7 @@ test.describe('page frame (2.6)', () => {
     await loginAs(page, 'member@demo.local');
     await expect(page).toHaveURL(/\/account$/);
     await expect(
-      page.getByRole('banner').getByRole('link', { name: 'Demo Garden Cooperative', exact: true }),
+      page.getByRole('banner').getByRole('link', { name: 'СТ «Надія»', exact: true }),
     ).toBeVisible();
     await expect(page.getByRole('banner').getByText('Nadel', { exact: true })).toBeVisible();
     await expect(page.getByRole('banner').getByRole('button', { name: 'Sign out' })).toBeVisible();

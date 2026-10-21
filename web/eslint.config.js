@@ -2,6 +2,9 @@ import js from '@eslint/js';
 import reactHooks from 'eslint-plugin-react-hooks';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
+import { noLiteralJsxText } from './eslint-rules/noLiteralJsxText.js';
+
+const localPlugin = { rules: { 'no-literal-jsx-text': noLiteralJsxText } };
 
 export default tseslint.config(
   { ignores: ['dist', 'playwright-report', 'test-results'] },
@@ -15,9 +18,11 @@ export default tseslint.config(
     },
   },
   {
-    files: ['src/components/**/*.{ts,tsx}', 'src/pages/**/*.{ts,tsx}'],
+    files: ['src/**/*.{ts,tsx}'],
     ignores: ['**/*.test.{ts,tsx}'],
+    plugins: { local: localPlugin },
     rules: {
+      'local/no-literal-jsx-text': 'error',
       'no-restricted-syntax': [
         'error',
         {
@@ -27,6 +32,24 @@ export default tseslint.config(
         {
           selector: 'TemplateElement[value.raw=/#[0-9a-fA-F]{3,8}\\b/]',
           message: 'Hex colors are not allowed here; use the design tokens (Tailwind token utilities).',
+        },
+        {
+          selector:
+            'JSXAttribute[name.name=/^(aria-label|placeholder|title|alt)$/] > Literal[value=/\\p{L}/u]',
+          message:
+            'No literal UI text in aria-label/placeholder/title/alt; take it from the i18n catalogs (useT).',
+        },
+        {
+          selector:
+            'JSXAttribute[name.name=/^(aria-label|placeholder|title|alt)$/] > JSXExpressionContainer > TemplateLiteral > TemplateElement[value.raw=/\\p{L}/u]',
+          message:
+            'No literal UI text in aria-label/placeholder/title/alt; take it from the i18n catalogs (useT).',
+        },
+        {
+          selector:
+            'JSXAttribute[name.name=/^(aria-label|placeholder|title|alt)$/] > JSXExpressionContainer > Literal[value=/\\p{L}/u]',
+          message:
+            'No literal UI text in aria-label/placeholder/title/alt; take it from the i18n catalogs (useT).',
         },
       ],
     },

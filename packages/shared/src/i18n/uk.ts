@@ -3,10 +3,14 @@ import type { Messages } from './en';
 // Ukrainian UI translation (default locale for end users)
 export const uk: Messages = {
   app: { name: 'Наділ' },
+  units: {
+    sotka: { one: 'сотка', few: 'сотки', many: 'соток', other: 'сотки' },
+  },
   auth: {
     signIn: 'Увійти',
     signOut: 'Вийти',
     signingIn: 'Входимо…',
+    signInFailed: 'Не вдалося увійти. Спробуйте ще раз.',
     signInHint: 'Увійдіть, щоб побачити свої ділянки та нарахування.',
   },
   nav: {
@@ -490,7 +494,7 @@ export const uk: Messages = {
       total: 'Разом',
       byReadings: 'за показаннями',
       notCharged: 'не нараховується',
-      rate: '{rate} ₴ · {basis} · {frequency}',
+      rate: '{rate} · {basis} · {frequency}',
       myTitle: 'Що мені нараховуватимуть',
       forMonth: 'За {month}',
     },

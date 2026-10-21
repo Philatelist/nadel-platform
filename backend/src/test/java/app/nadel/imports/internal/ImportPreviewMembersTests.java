@@ -72,7 +72,7 @@ class ImportPreviewMembersTests extends ImportsIntegrationTest {
     @Test
     void aDemoMemberThatIsAlreadyAsInTheFileIsUnchanged() throws Exception {
         // demo member 6: matched by e-mail, every other cell equal to the stored value
-        byte[] file = members(member("M-1", "Savchenko", "Viktor", "Oleksiiovych", "+380672000006",
+        byte[] file = members(member("M-1", "Савченко", "Віктор", "Олексійович", "+380672000006",
                 "viktor.savchenko@example.com", null, "EMAIL", null, null));
 
         upload(file)
@@ -115,7 +115,7 @@ class ImportPreviewMembersTests extends ImportsIntegrationTest {
         String freshEmail = email("stored");
 
         MvcResult result = upload(members(
-                member("M-1", last("Stored"), "Person", "Middle", "0671110111, +380931110112", freshEmail, "1 Garden St",
+                member("M-1", last("Stored"), "Person", "Middle", "0671110111, +380931110112", freshEmail, "1 вул. Садова",
                         "email", null, null)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.counts.members.created").value(1))

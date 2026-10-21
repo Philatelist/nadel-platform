@@ -1,25 +1,28 @@
 import type { Member } from '@nadel/api-client';
 import { useT } from '../i18n';
-import { useRoleName } from '../roleName';
+import type { ReactNode } from 'react';
+import { RoleNameList } from './RoleName';
+import { UserContent } from './UserContent';
 import { Panel } from './ui';
 
 /** Read-only member card. Optional fields (notes, messengers) appear only when the response has them. */
 export function MemberDetails({ member, title, large }: { member: Member; title?: string; large?: boolean }) {
   const t = useT();
   const f = t.member.fields;
-  const roleName = useRoleName();
   const fullName = [member.lastName, member.firstName, member.middleName].filter(Boolean).join(' ');
-  const rows: [string, string][] = [
-    [f.name, fullName],
-    [f.phones, member.phones.join(', ') || f.none],
-    [f.email, member.email ?? f.none],
-    [f.postalAddress, member.postalAddress ?? f.none],
+  const userText = (value: string | undefined): ReactNode =>
+    value ? <UserContent>{value}</UserContent> : f.none;
+  const rows: [string, ReactNode][] = [
+    [f.name, <UserContent>{fullName}</UserContent>],
+    [f.phones, userText(member.phones.join(', '))],
+    [f.email, userText(member.email)],
+    [f.postalAddress, userText(member.postalAddress)],
     [f.deliveryChannel, t.channel[member.deliveryChannel]],
   ];
-  if (member.telegramUsername) rows.push([f.telegramUsername, member.telegramUsername]);
-  if (member.viberPhone) rows.push([f.viberPhone, member.viberPhone]);
-  if (member.notes) rows.push([f.notes, member.notes]);
-  rows.push([f.roles, member.roles.map(roleName).join(', ') || f.none]);
+  if (member.telegramUsername) rows.push([f.telegramUsername, userText(member.telegramUsername)]);
+  if (member.viberPhone) rows.push([f.viberPhone, userText(member.viberPhone)]);
+  if (member.notes) rows.push([f.notes, userText(member.notes)]);
+  rows.push([f.roles, member.roles.length > 0 ? <RoleNameList roles={member.roles} /> : f.none]);
 
   return (
     <Panel {...(title ? { title } : {})}>

@@ -23,7 +23,7 @@ export interface AuditEntry {
   action: AuditAction;
   entityType: AuditEntityType;
   entityId: string;
-  /** Human-readable name of the entity at the time of the change (member name or role name) */
+  /** Name of the entity at the time of the change, as a code or user content, never a display phrase: the member name, plot number, tariff name or import file name as typed; for a role or a charge type the token `base:<CODE>` (for example `base:TREASURER`, `base:MEMBERSHIP`) while it keeps its standard name, otherwise its stored name; `settings` for the cooperative settings. The client shows the catalog text for a token in the user's language and any other value as is. */
   entityLabel?: string;
   changes: AuditFieldChange[];
 }

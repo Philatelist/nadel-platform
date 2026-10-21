@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { useT } from '../i18n';
 import { Modal } from './Modal';
 import { Button } from './ui';
@@ -11,8 +12,8 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
 }: {
-  title: string;
-  message: string;
+  title: ReactNode;
+  message: ReactNode;
   confirmLabel: string;
   busy: boolean;
   onConfirm: () => void;

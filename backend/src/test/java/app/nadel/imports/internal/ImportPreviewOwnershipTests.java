@@ -122,8 +122,8 @@ class ImportPreviewOwnershipTests extends ImportsIntegrationTest {
     void anExistingUnownedDemoPlotAndMembersFoundByEmailGetOwners() throws Exception {
         byte[] file = workbook(
                 List.of(),
-                List.of(member("D-1", "Bondarenko", "Andrii", "member@demo.local"),
-                        member("D-2", "Moroz", "Halyna", "halyna.moroz@example.com")),
+                List.of(member("D-1", "Бондаренко", "Андрій", "member@demo.local"),
+                        member("D-2", "Мороз", "Галина", "halyna.moroz@example.com")),
                 List.of(owner("26", "D-1", "2/3", SINCE), owner("26", "D-2", "1/3", SINCE)));
 
         upload(file)
@@ -137,8 +137,8 @@ class ImportPreviewOwnershipTests extends ImportsIntegrationTest {
     void theRecordedOwnersOfDemoPlot7AreUnchangedAndAreNotCommittable() throws Exception {
         byte[] file = workbook(
                 List.of(),
-                List.of(member("D-1", "Bondarenko", "Andrii", "member@demo.local"),
-                        member("d-2", "Moroz", "Halyna", "halyna.moroz@example.com")),
+                List.of(member("D-1", "Бондаренко", "Андрій", "member@demo.local"),
+                        member("d-2", "Мороз", "Галина", "halyna.moroz@example.com")),
                 // the dates differ from the recorded ones and the key is written in another letter case: both ignored
                 List.of(owner("7", "d-1", "1/2", "05.06.2023"), owner("7", "D-2", "2/4", "05.06.2023")));
 

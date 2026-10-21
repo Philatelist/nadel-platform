@@ -26,7 +26,8 @@ class SettingsService implements CooperativeSettings {
     static final PlotStatusVisibility DEFAULT_VISIBILITY = PlotStatusVisibility.OWN_ONLY;
 
     private static final String FIELD = "memberPlotStatusVisibility";
-    private static final String LABEL = "Cooperative settings";
+    /** A code, not a phrase: the client shows the name of the settings in the reader's language. */
+    private static final String LABEL = "settings";
 
     private final SettingsRepository settings;
     private final ApplicationEventPublisher events;

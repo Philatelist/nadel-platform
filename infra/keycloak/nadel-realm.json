@@ -98,8 +98,8 @@
       "email": "chairman@demo.local",
       "emailVerified": true,
       "enabled": true,
-      "firstName": "Demo",
-      "lastName": "Chairman",
+      "firstName": "Демо",
+      "lastName": "Голова",
       "credentials": [
         {
           "type": "password",
@@ -116,8 +116,8 @@
       "email": "treasurer@demo.local",
       "emailVerified": true,
       "enabled": true,
-      "firstName": "Demo",
-      "lastName": "Treasurer",
+      "firstName": "Демо",
+      "lastName": "Касир",
       "credentials": [
         {
           "type": "password",
@@ -134,8 +134,8 @@
       "email": "electrician@demo.local",
       "emailVerified": true,
       "enabled": true,
-      "firstName": "Demo",
-      "lastName": "Electrician",
+      "firstName": "Демо",
+      "lastName": "Електрик",
       "credentials": [
         {
           "type": "password",
@@ -152,8 +152,8 @@
       "email": "member@demo.local",
       "emailVerified": true,
       "enabled": true,
-      "firstName": "Demo",
-      "lastName": "Member",
+      "firstName": "Демо",
+      "lastName": "Член",
       "credentials": [
         {
           "type": "password",
@@ -170,8 +170,8 @@
       "email": "member@other.local",
       "emailVerified": true,
       "enabled": true,
-      "firstName": "Other",
-      "lastName": "Member",
+      "firstName": "Інший",
+      "lastName": "Член",
       "credentials": [
         {
           "type": "password",
@@ -188,8 +188,8 @@
       "email": "operator@nadel.local",
       "emailVerified": true,
       "enabled": true,
-      "firstName": "Platform",
-      "lastName": "Operator",
+      "firstName": "Оператор",
+      "lastName": "платформи",
       "credentials": [
         {
           "type": "password",

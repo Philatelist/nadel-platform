@@ -16,6 +16,7 @@ import { MemberForm } from '../components/MemberForm';
 import { MemberPlotsPanel } from '../components/ownership/MemberPlotsPanel';
 import { MemberRolesForm } from '../components/MemberRolesForm';
 import { QueryBoundary } from '../components/QueryBoundary';
+import { UserContent } from '../components/UserContent';
 import { Badge, Button, buttonClass, Notice, PageHeader } from '../components/ui';
 import { useT } from '../i18n';
 import { useCan } from '../me';
@@ -129,7 +130,7 @@ function MemberView({ member }: { member: Member }) {
   return (
     <>
       <PageHeader
-        title={fullName}
+        title={<UserContent>{fullName}</UserContent>}
         badge={member.archived && <Badge tone="neutral">{t.members.archived}</Badge>}
         actions={actions}
       />

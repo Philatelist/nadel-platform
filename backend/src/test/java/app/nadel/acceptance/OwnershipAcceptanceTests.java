@@ -227,9 +227,9 @@ class OwnershipAcceptanceTests extends IntegrationTest {
         assertThat(newest.get("action").asString()).isEqualTo("OWNERSHIP_CHANGED");
         assertThat(newest.get("entityLabel").asString()).isEqualTo(numberOf(plot));
         assertThat(change(newest, "effectiveFrom").get("newValue").asString()).isEqualTo("2026-03-01");
-        assertThat(change(newest, "owners").get("newValue").asString())
-                .contains(name(boris) + " 1/2").contains(name(hanna) + " 1/2");
-        assertThat(change(newest, "owners").get("oldValue").asString()).contains(name(anna) + " 1/1");
+        assertThat(ownerTexts(change(newest, "owners").get("newValue").asString()))
+                .containsExactlyInAnyOrder(name(boris) + " 1/2", name(hanna) + " 1/2");
+        assertThat(ownerTexts(change(newest, "owners").get("oldValue").asString())).containsExactly(name(anna) + " 1/1");
     }
 
     /**
@@ -319,10 +319,10 @@ class OwnershipAcceptanceTests extends IntegrationTest {
                 assertThat(auditItems(treasurer, "OWNERSHIP", plot)).hasSize(2)); // the change and the correction
         JsonNode entry = auditItems(treasurer, "OWNERSHIP", plot).get(0);
         assertThat(entry.get("action").asString()).isEqualTo("OWNERSHIP_CORRECTED");
-        assertThat(change(entry, "owners").get("oldValue").asString())
-                .contains(name(anna) + " 1/2").contains(name(boris) + " 1/2");
-        assertThat(change(entry, "owners").get("newValue").asString())
-                .contains(name(anna) + " 2/3").contains(name(boris) + " 1/3");
+        assertThat(ownerTexts(change(entry, "owners").get("oldValue").asString()))
+                .containsExactlyInAnyOrder(name(anna) + " 1/2", name(boris) + " 1/2");
+        assertThat(ownerTexts(change(entry, "owners").get("newValue").asString()))
+                .containsExactlyInAnyOrder(name(anna) + " 2/3", name(boris) + " 1/3");
         assertThat(change(entry, "reason").get("newValue").asString()).isEqualTo(reason);
 
         // #4 the start date of the second owner moved before the end of the previous owner: refused on the date
@@ -399,18 +399,18 @@ class OwnershipAcceptanceTests extends IntegrationTest {
         // #1 each owned plot shows its owners' names; plots with two owners show both; the last name finds the plots
         JsonNode all = body(get(PLOTS + "?size=100"), treasurer);
         assertThat(ownerNames(all, "3")).hasSize(2);
-        assertThat(ownerNames(all, "7")).containsExactly("Bondarenko Andrii", "Moroz Halyna");
+        assertThat(ownerNames(all, "7")).containsExactly("Бондаренко Андрій", "Мороз Галина");
         assertThat(ownerNames(all, "1")).hasSize(1);
-        assertThat(numbersOf(body(get(PLOTS + "?q=Moroz"), treasurer))).containsExactly("7");
-        assertThat(numbersOf(body(get(PLOTS + "?q=Kravchenko"), treasurer))).containsExactly("11");
+        assertThat(numbersOf(body(get(PLOTS + "?q=Мороз"), treasurer))).containsExactly("7");
+        assertThat(numbersOf(body(get(PLOTS + "?q=Кравченко"), treasurer))).containsExactly("11");
 
         // #2 plot 9: the current owner, the previous owner with the period, and nothing to edit
         UUID plot9 = demoPlot("9");
         JsonNode nine = body(get(PLOTS + "/" + plot9 + "/ownerships"), treasurer);
         assertThat(nine.get("current")).hasSize(1);
-        assertThat(nine.get("current").get(0).get("memberName").asString()).isEqualTo("Lytvynenko Svitlana");
+        assertThat(nine.get("current").get(0).get("memberName").asString()).isEqualTo("Литвиненко Світлана");
         assertThat(nine.get("history")).hasSize(1);
-        assertThat(nine.get("history").get(0).get("memberName").asString()).isEqualTo("Honcharenko Mykola");
+        assertThat(nine.get("history").get(0).get("memberName").asString()).isEqualTo("Гончаренко Микола");
         assertThat(nine.get("history").get(0).get("validFrom").asString()).isEqualTo("2015-06-01");
         assertThat(nine.get("history").get(0).get("validTo").asString()).isEqualTo("2025-05-31");
         UUID currentRow = UUID.fromString(nine.get("current").get(0).get("id").asString());
@@ -458,7 +458,7 @@ class OwnershipAcceptanceTests extends IntegrationTest {
         assertThat(me.get("ownedPlots").get(1).get("number").asString()).isEqualTo("15");
         assertThat(me.get("ownedPlots").get(1).get("share").asString()).isEqualTo("1/1");
         JsonNode seven = body(get(PLOTS + "/" + plot7 + "/ownerships"), demoMember);
-        assertThat(names(seven.get("current"))).containsExactly("Bondarenko Andrii", "Moroz Halyna");
+        assertThat(names(seven.get("current"))).containsExactly("Бондаренко Андрій", "Мороз Галина");
         assertThat(shares(seven.get("current"))).containsExactly("1/2", "1/2");
 
         // §2.6 #1 the card of plot 7: area, green status, both co-owners; the board's notes stay hidden
@@ -475,8 +475,8 @@ class OwnershipAcceptanceTests extends IntegrationTest {
                 "notes", "status");
         // the card carries no owners at all (the generated model serialises an empty list; names never appear)
         assertThat(json.readTree(limited).path("owners")).isEmpty();
-        assertThat(limited).doesNotContain("Lytvynenko").doesNotContain("Honcharenko").contains("Garden St");
-        assertThat(limited).contains("\"number\":\"9\"").contains("Garden St");
+        assertThat(limited).doesNotContain("Литвиненко").doesNotContain("Гончаренко").contains("вул. Садова");
+        assertThat(limited).contains("\"number\":\"9\"").contains("вул. Садова");
         send(demoMember, get(PLOTS + "/" + plot9 + "/ownerships"), null).andExpect(status().isNotFound());
         // the list says no more than the card
         JsonNode listed = body(get(PLOTS + "?q=9&size=100"), demoMember);
@@ -817,6 +817,15 @@ class OwnershipAcceptanceTests extends IntegrationTest {
     private JsonNode auditItems(String bearer, String entityType, UUID entity) throws Exception {
         return body(get(URI.create("/api/v1/audit?entityType=" + entityType + "&entityId=" + entity + "&size=50")),
                 bearer).get("items");
+    }
+
+    /** The owners of an audit value (a JSON array of {member, share, ...}) as "member share" texts. */
+    private List<String> ownerTexts(String ownersValue) {
+        List<String> texts = new ArrayList<>();
+        for (JsonNode owner : json.readTree(ownersValue)) {
+            texts.add(owner.get("member").asString() + " " + owner.get("share").asString());
+        }
+        return texts;
     }
 
     private static JsonNode change(JsonNode auditEntry, String field) {

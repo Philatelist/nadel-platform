@@ -96,9 +96,9 @@ describe('TariffPage', () => {
     expect(screen.getByText('Charge type: Membership fee')).toBeInTheDocument();
     const items = within(screen.getByRole('list')).getAllByRole('listitem');
     expect(items.map((li) => li.textContent)).toEqual([
-      'from 01/01/2027' + '5.00 ₴ · Per sotka · Monthly' + 'Meeting of 12 Dec',
-      'from 07/01/2026 to 12/31/2026' + '4.32 ₴ · Per sotka · Monthly',
-      'from 01/01/2026 to 06/30/2026' + '100.00 ₴ · Fixed one-time amount · One-off' + 'due 03/15/2026',
+      'from 1 Jan 2027' + '₴5.00 · Per sotka · Monthly' + 'Meeting of 12 Dec',
+      'from 1 Jul 2026 to 31 Dec 2026' + '₴4.32 · Per sotka · Monthly',
+      'from 1 Jan 2026 to 30 Jun 2026' + '₴100.00 · Fixed one-time amount · One-off' + 'due 15 Mar 2026',
     ]);
   });
 
@@ -128,7 +128,7 @@ describe('TariffPage', () => {
     renderPage();
     expect(screen.queryByRole('heading', { name: 'New version' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Add version' })).toBeNull();
-    expect(screen.getByText('from 01/01/2027', { exact: false })).toBeInTheDocument();
+    expect(screen.getByText('from 1 Jan 2027', { exact: false })).toBeInTheDocument();
   });
 
   it('puts a taken date on the date field', async () => {

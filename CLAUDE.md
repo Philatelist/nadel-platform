@@ -68,8 +68,12 @@ Numbering: a feature document `docs/features/NNN-name.md` and its AWOS spec fold
 ## Hard rules (a violation means the review is rejected)
 
 **Language**
-- Everything in the repository is in English: code, comments, docs, commit messages, test names, SQL comments, demo data.
-- The only exception is end-user UI translations inside `packages/shared/src/i18n` (Ukrainian catalog `uk.ts`).
+- Everything in the repository is in English: code, comments, docs, commit messages, test names, SQL comments.
+- The UI shows exactly one language, the one the user selected. Every text the system produces (labels, enum values,
+  errors, default names, audit actions, e-mail and export texts) comes from the i18n catalogs; the server returns codes
+  and parameters, not display text. Only user-entered content is shown as entered.
+- Exceptions to English in the repository: the Ukrainian i18n catalog (`packages/shared/src/i18n/uk.ts`), Ukrainian
+  backend message bundles for generated files (ADR 0012) and demo data, which is written in Ukrainian like real data.
 
 **Money**
 - Amounts are `BigDecimal` in Java, `numeric(14,2)` in the DB, and strings in JSON (`"1250.50"`). Never `double`/`float`/`number` for calculations.

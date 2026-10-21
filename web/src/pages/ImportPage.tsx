@@ -14,6 +14,7 @@ import { useState, type ChangeEvent } from 'react';
 import { ImportHistory } from '../components/import/ImportHistory';
 import { ImportPreviewPanel } from '../components/import/ImportPreviewPanel';
 import { ImportResultPanel } from '../components/import/ImportResultPanel';
+import { UserContent } from '../components/UserContent';
 import { Button, buttonClass, Notice, PageHeader, Panel } from '../components/ui';
 import { downloadBlob } from '../downloadBlob';
 import { importErrorMessage } from '../importError';
@@ -116,7 +117,7 @@ export function ImportPage() {
               {s.chooseFile}
             </label>
             <span aria-live="polite" className="text-sm text-ink-muted">
-              {file ? file.name : s.noFileChosen}
+              {file ? <UserContent>{file.name}</UserContent> : s.noFileChosen}
             </span>
           </div>
           {fileError && <Notice tone="danger">{t.importError[fileError]}</Notice>}

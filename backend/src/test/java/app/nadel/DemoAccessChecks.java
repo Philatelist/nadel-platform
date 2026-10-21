@@ -63,7 +63,7 @@ public final class DemoAccessChecks {
         getAs(mvc, demo("electrician@demo.local"), "/api/v1/me")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.roles", hasSize(2)))
-                .andExpect(jsonPath("$.roles[?(@.name == 'Electrician')].baseCode").isEmpty())
+                .andExpect(jsonPath("$.roles[?(@.name == 'Електрик')].baseCode").isEmpty())
                 .andExpect(jsonPath("$.roles[?(@.baseCode == 'MEMBER')]", hasSize(1)))
                 .andExpect(jsonPath("$.permissions").isEmpty());
     }

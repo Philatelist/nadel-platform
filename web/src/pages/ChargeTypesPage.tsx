@@ -7,11 +7,11 @@ import {
   useUpdateChargeType,
   type ChargeType,
 } from '@nadel/api-client';
-import { format } from '@nadel/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
-import { chargeTypeName } from '../chargeTypeName';
+import { ChargeTypeName } from '../components/ChargeTypeName';
+import { UserContent, formatUser } from '../components/UserContent';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { QueryBoundary } from '../components/QueryBoundary';
 import { ChargeTypeDialog, type ChargeTypeFormValues } from '../components/tariffs/ChargeTypeDialog';
@@ -119,12 +119,18 @@ export function ChargeTypesPage() {
                 >
                   <div className="flex min-w-0 flex-col gap-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-medium">{chargeTypeName(type, t)}</span>
+                      <span className="font-medium">
+                        <ChargeTypeName type={type} />
+                      </span>
                       <Badge tone={type.active ? 'success' : 'neutral'}>
                         {type.active ? c.active : c.inactive}
                       </Badge>
                     </div>
-                    {type.description && <span className="text-sm text-ink-muted">{type.description}</span>}
+                    {type.description && (
+                      <span className="text-sm text-ink-muted">
+                        <UserContent>{type.description}</UserContent>
+                      </span>
+                    )}
                   </div>
                   {canManage && (
                     <div className="flex flex-wrap gap-2">
@@ -170,7 +176,7 @@ export function ChargeTypesPage() {
       {archiving && (
         <ConfirmDialog
           title={c.archiveTitle}
-          message={format(c.archiveText, { name: chargeTypeName(archiving, t) })}
+          message={formatUser(c.archiveText, { name: <ChargeTypeName type={archiving} /> })}
           confirmLabel={c.archiveConfirm}
           busy={archive.isPending}
           onConfirm={() => archive.mutate({ id: archiving.id })}

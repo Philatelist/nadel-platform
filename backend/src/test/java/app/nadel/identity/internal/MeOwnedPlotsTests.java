@@ -42,11 +42,11 @@ class MeOwnedPlotsTests extends IntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.ownedPlots", hasSize(2)))
                 .andExpect(jsonPath("$.ownedPlots[0].number").value("7"))
-                .andExpect(jsonPath("$.ownedPlots[0].street").value("Garden St"))
+                .andExpect(jsonPath("$.ownedPlots[0].street").value("вул. Садова"))
                 .andExpect(jsonPath("$.ownedPlots[0].share").value("1/2"))
                 .andExpect(jsonPath("$.ownedPlots[0].plotId").exists())
                 .andExpect(jsonPath("$.ownedPlots[1].number").value("15"))
-                .andExpect(jsonPath("$.ownedPlots[1].street").value("Orchard St"))
+                .andExpect(jsonPath("$.ownedPlots[1].street").value("вул. Вишнева"))
                 .andExpect(jsonPath("$.ownedPlots[1].share").value("1/1"));
     }
 
@@ -70,7 +70,7 @@ class MeOwnedPlotsTests extends IntegrationTest {
         meAs(demo("member@other.local", OTHER_TENANT))
                 .andExpect(jsonPath("$.ownedPlots", hasSize(1)))
                 .andExpect(jsonPath("$.ownedPlots[0].number").value("1"))
-                .andExpect(jsonPath("$.ownedPlots[0].street").value("Forest St"));
+                .andExpect(jsonPath("$.ownedPlots[0].street").value("вул. Лісова"));
     }
 
     @Test

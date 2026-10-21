@@ -42,19 +42,19 @@ class MemberOwnershipsTests extends OwnershipTestSupport {
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.current", hasSize(2)))
                 .andExpect(jsonPath("$.current[0].plotNumber").value("7"))
-                .andExpect(jsonPath("$.current[0].street").value("Garden St"))
+                .andExpect(jsonPath("$.current[0].street").value("вул. Садова"))
                 .andExpect(jsonPath("$.current[0].share").value("1/2"))
                 .andExpect(jsonPath("$.current[0].validFrom").value("2019-04-15"))
                 .andExpect(jsonPath("$.current[0].validTo").doesNotExist())
                 .andExpect(jsonPath("$.current[0].ownershipId").value("dddddddd-0000-0000-0000-000000000008"))
                 .andExpect(jsonPath("$.current[0].plotId").exists())
                 .andExpect(jsonPath("$.current[1].plotNumber").value("15"))
-                .andExpect(jsonPath("$.current[1].street").value("Orchard St"))
+                .andExpect(jsonPath("$.current[1].street").value("вул. Вишнева"))
                 .andExpect(jsonPath("$.current[1].share").value("1/1"))
                 .andExpect(jsonPath("$.current[1].validFrom").value("2021-03-25"))
                 .andExpect(jsonPath("$.past", empty()))
                 // no co-owner and no basis: only the member's own records
-                .andExpect(content().string(not(containsString("Moroz"))))
+                .andExpect(content().string(not(containsString("Мороз"))))
                 .andExpect(content().string(not(containsString("Purchase"))));
     }
 
@@ -75,7 +75,7 @@ class MemberOwnershipsTests extends OwnershipTestSupport {
                 .andExpect(jsonPath("$.current", empty()))
                 .andExpect(jsonPath("$.past", hasSize(1)))
                 .andExpect(jsonPath("$.past[0].plotNumber").value("9"))
-                .andExpect(jsonPath("$.past[0].street").value("Garden St"))
+                .andExpect(jsonPath("$.past[0].street").value("вул. Садова"))
                 .andExpect(jsonPath("$.past[0].share").value("1/1"))
                 .andExpect(jsonPath("$.past[0].validFrom").value("2015-06-01"))
                 .andExpect(jsonPath("$.past[0].validTo").value("2025-05-31"))
@@ -148,7 +148,7 @@ class MemberOwnershipsTests extends OwnershipTestSupport {
         membersOwnershipsAs(chairman, OTHER_MEMBER)
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("NOT_FOUND"))
-                .andExpect(content().string(not(containsString("Melnyk"))));
+                .andExpect(content().string(not(containsString("Мельник"))));
         membersOwnershipsAs(chairman, UUID.randomUUID()).andExpect(status().isNotFound());
     }
 

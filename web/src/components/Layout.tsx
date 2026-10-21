@@ -4,7 +4,8 @@ import { useAuth } from 'react-oidc-context';
 import type { Permission } from '@nadel/api-client';
 import { useMe } from '../me';
 import { useT } from '../i18n';
-import { useRoleName } from '../roleName';
+import { RoleNameList } from './RoleName';
+import { UserContent } from './UserContent';
 import { LocaleSwitch } from './LocaleSwitch';
 import { ThemeSwitch } from './ThemeSwitch';
 import { Button } from './ui';
@@ -35,7 +36,6 @@ export function Layout() {
   const me = useMe();
   const auth = useAuth();
   const t = useT();
-  const roleName = useRoleName();
   const [open, setOpen] = useState(false);
   const menuButton = useRef<HTMLButtonElement>(null);
 
@@ -64,7 +64,7 @@ export function Layout() {
           title={title}
           className="order-1 md:order-none min-w-[8rem] max-w-full flex-1 truncate font-serif text-xl font-semibold text-ink no-underline md:flex-none"
         >
-          {title}
+          {me.tenant?.name ? <UserContent>{title}</UserContent> : title}
         </Link>
         {me.tenant?.name && (
           <span className="order-3 text-sm text-ink-muted md:order-none">{t.app.name}</span>
@@ -72,9 +72,11 @@ export function Layout() {
         <div className="order-4 ml-auto flex min-w-0 flex-wrap md:order-none items-center gap-x-3 gap-y-2">
           <div className="flex min-w-0 flex-col text-sm leading-tight">
             <Link to="/account" className="truncate font-medium text-ink">
-              {me.fullName}
+              <UserContent>{me.fullName}</UserContent>
             </Link>
-            <span className="truncate text-xs text-ink-muted">{me.roles.map(roleName).join(', ')}</span>
+            <span className="truncate text-xs text-ink-muted">
+              <RoleNameList roles={me.roles} />
+            </span>
           </div>
           <LocaleSwitch />
           <div className={hasMenu ? 'hidden md:flex' : 'flex'}>

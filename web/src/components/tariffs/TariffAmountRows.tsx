@@ -1,7 +1,8 @@
 import type { PlotTariffItem, PlotTariffs } from '@nadel/api-client';
-import { format, formatRate } from '@nadel/shared';
-import { chargeTypeName } from '../../chargeTypeName';
+import { format, formatRateWithCurrency } from '@nadel/shared';
 import { useLocale, useT } from '../../i18n';
+import { ChargeTypeName } from '../ChargeTypeName';
+import { UserContent } from '../UserContent';
 import { Money } from '../ui';
 
 function Amount({ item }: { item: PlotTariffItem }) {
@@ -16,7 +17,12 @@ function Amount({ item }: { item: PlotTariffItem }) {
       return (
         <span className="text-ink-muted">
           {e.notCharged}
-          {item.reason ? ` — ${item.reason}` : ''}
+          {item.reason && (
+            <>
+              {' — '}
+              <UserContent>{item.reason}</UserContent>
+            </>
+          )}
         </span>
       );
   }
@@ -36,19 +42,20 @@ export function TariffAmountRows({ data }: { data: PlotTariffs }) {
           >
             <div className="min-w-0">
               <div className="font-medium">
-                {chargeTypeName(
-                  {
+                <ChargeTypeName
+                  type={{
                     code: item.chargeTypeCode,
                     name: item.chargeTypeName,
                     nameCustomized: item.chargeTypeNameCustomized,
-                  },
-                  t,
-                )}
+                  }}
+                />
               </div>
-              <div className="text-sm text-ink-muted">{item.tariffName}</div>
+              <div className="text-sm text-ink-muted">
+                <UserContent>{item.tariffName}</UserContent>
+              </div>
               <div className="text-sm text-ink-muted">
                 {format(t.tariffs.expected.rate, {
-                  rate: formatRate(item.rate, locale),
+                  rate: formatRateWithCurrency(item.rate, locale),
                   basis: t.tariffs.basis[item.basis],
                   frequency: t.tariffs.frequency[item.frequency],
                 })}

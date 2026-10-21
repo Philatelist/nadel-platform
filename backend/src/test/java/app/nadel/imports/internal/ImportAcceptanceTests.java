@@ -110,7 +110,7 @@ class ImportAcceptanceTests extends ImportCommitSupport {
         // (the UI prints that as "6 соток (600 м²)", see imports-acceptance.spec.ts)
         String number = plotNo("uk");
         byte[] file = ImportWorkbooks.builder()
-                .sheet("Plots", List.of("ПЛОЩА, СОТ.", "вулиця", "ТИП", "нОмЕр"), List.of(6, "Garden St", "PLOT", number))
+                .sheet("Plots", List.of("ПЛОЩА, СОТ.", "вулиця", "ТИП", "нОмЕр"), List.of(6, "вул. Садова", "PLOT", number))
                 .build();
 
         JsonNode preview = preview(file);
@@ -120,7 +120,7 @@ class ImportAcceptanceTests extends ImportCommitSupport {
 
         JsonNode listed = plotsMatching(number);
         assertThat(listed).hasSize(1);
-        assertThat(listed.get(0).get("street").asString()).isEqualTo("Garden St");
+        assertThat(listed.get(0).get("street").asString()).isEqualTo("вул. Садова");
         assertThat(listed.get(0).get("areaM2").decimalValue()).isEqualByComparingTo("600");
         JsonNode card = getJson(PLOTS + "/" + listed.get(0).get("id").asString(), chairman());
         assertThat(card.get("areaM2").decimalValue()).isEqualByComparingTo("600");
@@ -251,7 +251,7 @@ class ImportAcceptanceTests extends ImportCommitSupport {
         assertThat(history).hasSize(1);
         JsonNode item = history.get(0);
         assertThat(item.get("status").asString()).isEqualTo("COMMITTED");
-        assertThat(item.get("uploadedBy").asString()).isEqualTo("Kovalenko Oleksandr Petrovych");
+        assertThat(item.get("uploadedBy").asString()).isEqualTo("Коваленко Олександр Петрович");
         assertThat(item.get("uploadedAt").asString()).isNotBlank();
         assertThat(item.get("committedAt").asString()).isNotBlank();
         assertThat(item.get("fileName").asString()).isEqualTo("plots.xlsx");
@@ -285,7 +285,7 @@ class ImportAcceptanceTests extends ImportCommitSupport {
         String a = plotNo("a");
         byte[] first = ImportWorkbooks.builder()
                 .sheet("Plots", ImportWorkbooks.PLOT_HEADER,
-                        plot(a, "Garden St", "PLOT", 600, null, null, null, "Keep me"))
+                        plot(a, "вул. Садова", "PLOT", 600, null, null, null, "Keep me"))
                 .sheet("Members", ImportWorkbooks.MEMBER_HEADER, newMember("M-1", "One"))
                 .sheet("Ownership", ImportWorkbooks.OWNERSHIP_HEADER, owner(a, "M-1", "1", SINCE))
                 .build();
@@ -302,7 +302,7 @@ class ImportAcceptanceTests extends ImportCommitSupport {
         // #2 street "Garden St" -> "Orchard St" is one updated plot; #5 empty notes stay; #3 a new phone for the
         // member found by e-mail updates it
         byte[] second = ImportWorkbooks.builder()
-                .sheet("Plots", ImportWorkbooks.PLOT_HEADER, plot(a, "Orchard St", "PLOT", 600, null, null, null, null))
+                .sheet("Plots", ImportWorkbooks.PLOT_HEADER, plot(a, "вул. Вишнева", "PLOT", 600, null, null, null, null))
                 .sheet("Members", ImportWorkbooks.MEMBER_HEADER,
                         ImportWorkbooks.member("M-1", "Fixt" + tag + "One", "Person", null, "+380501112233",
                                 email("one"), null, null, null, null))
@@ -315,7 +315,7 @@ class ImportAcceptanceTests extends ImportCommitSupport {
 
         JsonNode listed = plotsMatching(a);
         assertThat(listed).hasSize(1);
-        assertThat(listed.get(0).get("street").asString()).isEqualTo("Orchard St");
+        assertThat(listed.get(0).get("street").asString()).isEqualTo("вул. Вишнева");
         JsonNode card = getJson(PLOTS + "/" + listed.get(0).get("id").asString(), chairman());
         assertThat(card.get("notes").asString()).isEqualTo("Keep me");
         assertThat(membersLike("Fixt" + tag)).isEqualTo(1);

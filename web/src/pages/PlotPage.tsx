@@ -14,6 +14,7 @@ import { useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { QueryBoundary } from '../components/QueryBoundary';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { UserContent, formatUser } from '../components/UserContent';
 import { PlotTariffsPanel } from '../components/tariffs/PlotTariffsPanel';
 import { OwnersPanel } from '../components/ownership/OwnersPanel';
 import { Badge, Button, Notice, PageHeader, Panel, StatusDot } from '../components/ui';
@@ -45,6 +46,12 @@ export function PlotPage() {
 
 function cardTitle(t: ReturnType<typeof useT>, plot: PlotDetails): string {
   return format(plot.kind === 'COMMON' ? t.plot.cardTitleCommon : t.plot.cardTitlePlot, {
+    number: plot.number,
+  });
+}
+
+function cardTitleNode(t: ReturnType<typeof useT>, plot: PlotDetails): ReactNode {
+  return formatUser(plot.kind === 'COMMON' ? t.plot.cardTitleCommon : t.plot.cardTitlePlot, {
     number: plot.number,
   });
 }
@@ -86,8 +93,8 @@ function PlotView({ plot }: { plot: PlotDetails }) {
   const isToggling = archive.isPending || restore.isPending;
 
   const rows: [string, ReactNode][] = [
-    [f.number, plot.number],
-    [f.street, plot.street ?? f.none],
+    [f.number, <UserContent>{plot.number}</UserContent>],
+    [f.street, plot.street ? <UserContent>{plot.street}</UserContent> : f.none],
     [f.kind, t.plot.kind[plot.kind]],
   ];
   if (plot.status !== undefined) {
@@ -101,20 +108,20 @@ function PlotView({ plot }: { plot: PlotDetails }) {
         plot.areaM2 === undefined
           ? f.none
           : format(t.plot.areaValue, {
-              sotky: formatSotkyWithUnit(plot.areaM2, locale),
-              m2: formatDecimal(String(plot.areaM2), locale),
+              sotky: formatSotkyWithUnit(plot.areaM2, locale, t.units.sotka),
+              m2: formatM2(plot.areaM2, locale),
             }),
       ],
-      [f.cadastralNumber, plot.cadastralNumber ?? f.none],
+      [f.cadastralNumber, plot.cadastralNumber ? <UserContent>{plot.cadastralNumber}</UserContent> : f.none],
       [f.building, plot.hasBuilding ? t.plot.hasBuilding : t.plot.noBuilding],
     );
-    if (canView) rows.push([f.notes, plot.notes ?? f.none]);
+    if (canView) rows.push([f.notes, plot.notes ? <UserContent>{plot.notes}</UserContent> : f.none]);
   }
 
   return (
     <>
       <PageHeader
-        title={cardTitle(t, plot)}
+        title={cardTitleNode(t, plot)}
         badge={plot.archived && <Badge tone="neutral">{t.plots.archived}</Badge>}
         actions={
           canEdit && (
@@ -179,8 +186,11 @@ function PlotView({ plot }: { plot: PlotDetails }) {
   );
 }
 
-/** Swaps the decimal point of a plain decimal string for the locale's separator. */
-function formatDecimal(value: string, locale: string): string {
-  const separator = new Intl.NumberFormat(locale).formatToParts(1.1).find((p) => p.type === 'decimal')?.value;
-  return separator ? value.replace('.', separator) : value;
+/** m² with the locale's grouping and decimal separator; the text is split, never turned into a float. */
+function formatM2(value: string | number, locale: string): string {
+  const [integer = '0', decimals] = String(value).split('.');
+  const grouped = new Intl.NumberFormat(locale).format(BigInt(integer));
+  const separator =
+    new Intl.NumberFormat(locale).formatToParts(1.1).find((p) => p.type === 'decimal')?.value ?? '.';
+  return decimals ? grouped + separator + decimals : grouped;
 }

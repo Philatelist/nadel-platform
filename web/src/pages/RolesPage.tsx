@@ -16,6 +16,8 @@ import { QueryBoundary } from '../components/QueryBoundary';
 import { Badge, Button, Notice, PageHeader, TextArea, TextField } from '../components/ui';
 import { useLocale, useT } from '../i18n';
 import { problemCode, problemFieldErrors, problemMessage, type FieldErrors } from '../problem';
+import { RoleDescription, RoleName } from '../components/RoleName';
+import { formatUser } from '../components/UserContent';
 import { roleDescription, useRoleName } from '../roleName';
 import { findNameClash } from '../roleNameClash';
 import { descriptionToSubmit } from '../roleDescriptionSubmit';
@@ -28,7 +30,6 @@ export function RolesPage() {
   const roles = useListRoles();
   const permissions = useListPermissions();
   const queryClient = useQueryClient();
-  const roleName = useRoleName();
   const [editing, setEditing] = useState<string>();
   const [deleting, setDeleting] = useState<RoleDetails>();
   const [saved, setSaved] = useState<string>();
@@ -108,13 +109,17 @@ export function RolesPage() {
                     <div className="flex flex-wrap items-center gap-3">
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-[17px] font-semibold">{roleName(role)}</span>
+                          <span className="text-[17px] font-semibold">
+                            <RoleName role={role} />
+                          </span>
                           <Badge tone={role.baseCode ? 'info' : 'neutral'}>
                             {role.baseCode ? c.baseRole : c.customRole}
                           </Badge>
                         </div>
                         {roleDescription(role, t) && (
-                          <p className="text-sm text-ink-muted">{roleDescription(role, t)}</p>
+                          <p className="text-sm text-ink-muted">
+                            <RoleDescription role={role} />
+                          </p>
                         )}
                         <p className="text-sm text-ink-muted">
                           {format(c.memberCount, { n: role.memberCount })}
@@ -155,7 +160,7 @@ export function RolesPage() {
       {deleting && (
         <ConfirmDialog
           title={c.deleteTitle}
-          message={format(c.deleteText, { name: roleName(deleting) })}
+          message={formatUser(c.deleteText, { name: <RoleName role={deleting} /> })}
           confirmLabel={c.delete}
           busy={remove.isPending}
           onConfirm={() => remove.mutate({ id: deleting.id })}
@@ -271,7 +276,7 @@ function RoleEditor({
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-3" noValidate>
-      <h2 className="font-serif text-xl font-semibold">{role ? roleName(role) : c.newTitle}</h2>
+      <h2 className="font-serif text-xl font-semibold">{role ? <RoleName role={role} /> : c.newTitle}</h2>
       {banner && <Notice tone="danger">{banner}</Notice>}
       <TextField
         label={c.name}

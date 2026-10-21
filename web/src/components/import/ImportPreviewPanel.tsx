@@ -1,6 +1,7 @@
 import type { ImportEntityCounts, ImportPreview, ImportProblem } from '@nadel/api-client';
-import { format } from '@nadel/shared';
+import { format, formatDateTime } from '@nadel/shared';
 import { importErrorCode } from '../../importError';
+import { formatUser } from '../UserContent';
 import { Button, DataTable, Notice, Panel, type Column } from '../ui';
 import { useLocale, useT } from '../../i18n';
 
@@ -64,18 +65,20 @@ export function ImportPreviewPanel({
     {
       key: 'column',
       header: s.colColumn,
-      cell: (p) => (p.column ? (columnLabels[p.sheet]?.[p.column] ?? p.column) : '—'),
+      cell: (p) => {
+        if (!p.column) return '—';
+        const label = columnLabels[p.sheet]?.[p.column];
+        return label ?? p.column;
+      },
     },
     {
       key: 'message',
       header: s.colMessage,
-      cell: (p) => format(messages[p.code] ?? t.importProblem.UNKNOWN, p.params ?? {}),
+      cell: (p) => formatUser(messages[p.code] ?? t.importProblem.UNKNOWN, p.params ?? {}),
     },
   ];
 
-  const time = new Intl.DateTimeFormat(locale, { dateStyle: 'short', timeStyle: 'short' }).format(
-    new Date(preview.expiresAt),
-  );
+  const time = formatDateTime(preview.expiresAt, locale);
   const hintId = 'import-run-hint';
   const hasProblems = preview.problemCount > 0;
   const errorCode =
@@ -88,7 +91,7 @@ export function ImportPreviewPanel({
     <Panel title={s.previewTitle}>
       <div className="flex flex-col gap-4">
         <div className="text-sm text-ink-muted">
-          <p>{format(s.fileName, { name: preview.fileName })}</p>
+          <p>{formatUser(s.fileName, { name: preview.fileName })}</p>
           <p>{format(s.validUntil, { time })}</p>
         </div>
         <DataTable

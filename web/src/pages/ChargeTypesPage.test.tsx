@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderWithApp } from '../test/render';
 import { ChargeTypesPage } from './ChargeTypesPage';
+import { hasText } from '../test/hasText';
 
 interface Options {
   onSuccess: (...args: unknown[]) => unknown;
@@ -155,7 +156,7 @@ describe('ChargeTypesPage', () => {
     renderPage();
     await user.click(within(row('Water')).getByRole('button', { name: 'Archive' }));
     expect(archiveMutate).not.toHaveBeenCalled();
-    expect(screen.getByText(/Archive "Water"\?/)).toBeInTheDocument();
+    expect(screen.getByText(hasText(/Archive "Water"\?/))).toBeInTheDocument();
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Archive' }));
     expect(archiveMutate).toHaveBeenCalledWith({ id: 'c3' });
   });

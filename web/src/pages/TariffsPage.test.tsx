@@ -100,9 +100,9 @@ describe('TariffsPage', () => {
     renderWithApp(<TariffsPage />);
     const membership = within(screen.getByRole('heading', { name: 'Membership fee' }).closest('section')!);
     expect(membership.getByRole('link', { name: 'Per sotka' })).toHaveAttribute('href', '/tariffs/t1');
-    expect(membership.getByText(/4\.32 ₴ · Per sotka · Monthly/)).toBeInTheDocument();
-    expect(membership.getByText(/from 11\/01\/2026 · 1 plot$/)).toBeInTheDocument();
-    expect(membership.getByText(/120\.50 ₴ · Per plot/)).toBeInTheDocument();
+    expect(membership.getByText(/₴4\.32 · Per sotka · Monthly/)).toBeInTheDocument();
+    expect(membership.getByText(/from 1 Nov 2026 · 1 plot$/)).toBeInTheDocument();
+    expect(membership.getByText(/₴120\.50 · Per plot/)).toBeInTheDocument();
     expect(membership.getByText(/24 plots$/)).toBeInTheDocument();
     const road = within(screen.getByRole('heading', { name: 'Road repair' }).closest('section')!);
     expect(road.getByText(/applies to plots with a meter$/)).toBeInTheDocument();

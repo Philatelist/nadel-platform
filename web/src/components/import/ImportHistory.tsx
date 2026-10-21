@@ -4,15 +4,15 @@ import {
   type ImportRunStatus,
   type ImportSummary,
 } from '@nadel/api-client';
-import { format } from '@nadel/shared';
+import { format, formatDateTime } from '@nadel/shared';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useLocale, useT } from '../../i18n';
 import { Pagination } from '../Pagination';
 import { QueryBoundary } from '../QueryBoundary';
+import { UserContent } from '../UserContent';
 import { Badge, DataTable, Panel, type BadgeTone, type Column } from '../ui';
 
-const TIME_ZONE = 'Europe/Kyiv';
 const pageSize = 20;
 const tones: Readonly<Record<ImportRunStatus, BadgeTone>> = {
   PREVIEW: 'info',
@@ -41,16 +41,12 @@ export function ImportHistory() {
       header: h.colDate,
       cell: (r) => (
         <time dateTime={r.uploadedAt} className="whitespace-nowrap">
-          {new Intl.DateTimeFormat(locale, {
-            dateStyle: 'short',
-            timeStyle: 'short',
-            timeZone: TIME_ZONE,
-          }).format(new Date(r.uploadedAt))}
+          {formatDateTime(r.uploadedAt, locale)}
         </time>
       ),
     },
-    { key: 'file', header: h.colFile, cell: (r) => r.fileName },
-    { key: 'by', header: h.colBy, cell: (r) => r.uploadedBy },
+    { key: 'file', header: h.colFile, cell: (r) => <UserContent>{r.fileName}</UserContent> },
+    { key: 'by', header: h.colBy, cell: (r) => <UserContent>{r.uploadedBy}</UserContent> },
     {
       key: 'status',
       header: h.colStatus,

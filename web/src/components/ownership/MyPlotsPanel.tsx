@@ -4,6 +4,7 @@ import { Link } from 'react-router';
 import { useT } from '../../i18n';
 import { useMe } from '../../me';
 import { QueryBoundary } from '../QueryBoundary';
+import { UserContent, formatUser } from '../UserContent';
 import { Panel } from '../ui';
 import { OwnershipLists } from './OwnershipLists';
 
@@ -14,11 +15,15 @@ function MyPlotCard({ plot }: { plot: OwnedPlot }) {
     <Panel>
       <h3 className="text-[17px] font-semibold">
         <Link to={`/plots/${plot.plotId}`} className="text-accent underline">
-          {format(t.plot.cardTitlePlot, { number: plot.number })}
+          {formatUser(t.plot.cardTitlePlot, { number: plot.number })}
         </Link>
       </h3>
       <p>
-        {plot.street && <span className="mr-3">{plot.street}</span>}
+        {plot.street && (
+          <span className="mr-3">
+            <UserContent>{plot.street}</UserContent>
+          </span>
+        )}
         <span>{format(t.ownership.myShare, { share: formatShare(plot.share) })}</span>
       </p>
       <QueryBoundary query={ownerships} isEmpty={() => false}>

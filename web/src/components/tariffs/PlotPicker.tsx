@@ -1,6 +1,7 @@
 import { useListPlots } from '@nadel/api-client';
 import { useState } from 'react';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
+import { UserContent } from '../UserContent';
 import { useT } from '../../i18n';
 import { SearchField } from '../ui';
 
@@ -51,8 +52,13 @@ export function PlotPicker({
                 }}
                 className="min-h-11 w-full px-3 text-left hover:bg-accent-soft"
               >
-                {p.number}
-                {p.street ? ` · ${p.street}` : ''}
+                <UserContent>{p.number}</UserContent>
+                {p.street && (
+                  <>
+                    {' · '}
+                    <UserContent>{p.street}</UserContent>
+                  </>
+                )}
               </button>
             </li>
           ))}

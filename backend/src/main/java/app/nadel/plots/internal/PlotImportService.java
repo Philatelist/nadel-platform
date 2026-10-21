@@ -217,8 +217,8 @@ class PlotImportService implements PlotImport {
                 inserted.add(entry);
             }
             recorder.refreshStatus(entry, true, now);
-            String newOwners = OwnershipRecorder.ownersText(owners.stream()
-                    .map(o -> OwnershipRecorder.text(names.get(o.memberId()), o.share())));
+            String newOwners = OwnersAudit.of(owners.stream()
+                    .map(o -> OwnersAudit.entry(names.get(o.memberId()), o.share())));
             auditEntries.add(recorder.changeEvent(tenantId, actor, plot, from, null, newOwners, null));
         }
         inserted.forEach(entityManager::persist);

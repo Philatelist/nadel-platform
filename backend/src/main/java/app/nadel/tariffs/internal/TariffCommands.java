@@ -100,9 +100,9 @@ class TariffCommands {
 
         List<FieldChange> changes = new ArrayList<>();
         changes.add(new FieldChange("name", null, name));
-        changes.add(new FieldChange("chargeType", null, chargeType.getName()));
+        changes.add(new FieldChange("chargeType", null, ChargeTypeSnapshot.auditName(chargeType)));
         changes.addAll(versionFields(version));
-        publish(actor, "TARIFF_CREATED", tariff, chargeType, changes);
+        publish(actor, "TARIFF_CREATED", tariff, changes);
         return assembler.assemble(tariff, chargeType);
     }
 
@@ -120,7 +120,7 @@ class TariffCommands {
         TariffVersionRecord version = saveVersion(TariffVersionRecord.create(Objects.requireNonNull(actor.tenantId()),
                 tariff.getId(), Objects.requireNonNull(terms), blankToNull(input.getNote()), Instant.now()));
 
-        publish(actor, "TARIFF_VERSION_ADDED", tariff, chargeType, versionFields(version));
+        publish(actor, "TARIFF_VERSION_ADDED", tariff, versionFields(version));
         // the end of the new version depends on the versions that start after it
         List<TariffVersion> all = TariffDtoMapper.versionsNewestFirst(
                 versions.findByTariffIdOrderByValidFromAsc(tariff.getId()), LocalDate.now(clock));
@@ -209,7 +209,7 @@ class TariffCommands {
                 .persist(TariffScopePlotRecord.excluded(tenantId, id, plotId, reason, now)));
         entityManager.flush();
 
-        publishScopeAudit(actor, tariff, chargeType, change, facts);
+        publishScopeAudit(actor, tariff, change, facts);
         return assembler.assemble(tariff, chargeType);
     }
 
@@ -235,7 +235,7 @@ class TariffCommands {
      * numbers in natural order), then one {@code TARIFF_EXCLUSION_REMOVED} and one {@code TARIFF_EXCLUSION_ADDED}
      * per exclusion, in the order of the plot numbers. A new reason is a removal of the old exclusion plus an addition.
      */
-    private void publishScopeAudit(AccessProfile actor, TariffRecord tariff, ChargeTypeRecord chargeType,
+    private void publishScopeAudit(AccessProfile actor, TariffRecord tariff,
             TariffScopeChange change, Map<UUID, PlotFacts> facts) {
         List<UUID> order = plots.inNaturalOrder(change.plots());
         Function<Set<UUID>, String> numbers = ids -> {
@@ -253,20 +253,20 @@ class TariffCommands {
                 changes.add(new FieldChange("selectedPlots", numbers.apply(change.oldSelected()),
                         numbers.apply(change.newSelected())));
             }
-            publish(actor, "TARIFF_SCOPE_CHANGED", tariff, chargeType, changes);
+            publish(actor, "TARIFF_SCOPE_CHANGED", tariff, changes);
         }
         Map<UUID, String> removed = change.removedExclusions();
         Map<UUID, String> added = change.addedExclusions();
         for (UUID plot : order) {
             if (removed.containsKey(plot)) {
-                publish(actor, "TARIFF_EXCLUSION_REMOVED", tariff, chargeType, List.of(
+                publish(actor, "TARIFF_EXCLUSION_REMOVED", tariff, List.of(
                         new FieldChange("plot", facts.get(plot).number(), null),
                         new FieldChange("reason", removed.get(plot), null)));
             }
         }
         for (UUID plot : order) {
             if (added.containsKey(plot)) {
-                publish(actor, "TARIFF_EXCLUSION_ADDED", tariff, chargeType, List.of(
+                publish(actor, "TARIFF_EXCLUSION_ADDED", tariff, List.of(
                         new FieldChange("plot", null, facts.get(plot).number()),
                         new FieldChange("reason", null, added.get(plot))));
             }
@@ -342,11 +342,10 @@ class TariffCommands {
         return changes;
     }
 
-    private void publish(AccessProfile actor, String action, TariffRecord tariff, ChargeTypeRecord chargeType,
-            List<FieldChange> changes) {
+    private void publish(AccessProfile actor, String action, TariffRecord tariff, List<FieldChange> changes) {
         audit.publish(Objects.requireNonNull(actor.tenantId()),
                 new Actor(actor.memberId(), actor.subject(), actor.displayName()), action,
-                TariffAuditPublisher.TARIFF, tariff.getId(), chargeType.getName() + " / " + tariff.getName(), changes);
+                TariffAuditPublisher.TARIFF, tariff.getId(), tariff.getName(), changes);
     }
 
     /** The trimmed name; a blank one (spaces only) is {@code REQUIRED}, the contract limits the length. */

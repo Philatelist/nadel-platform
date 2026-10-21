@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { useT } from '../../i18n';
 import { useCan } from '../../me';
+import { UserContent } from '../UserContent';
 import { Button, SearchField } from '../ui';
 
 export interface PickedMember {
@@ -39,7 +40,9 @@ export function MemberPicker({
       <div className="flex flex-col gap-1">
         <span className="text-sm font-medium text-ink-muted">{label}</span>
         <div className="flex items-center gap-3">
-          <span className="font-medium">{value.name}</span>
+          <span className="font-medium">
+            <UserContent>{value.name}</UserContent>
+          </span>
           <Button variant="secondary" onClick={() => onChange(null)}>
             {t.ownership.changeMember}
           </Button>
@@ -75,7 +78,7 @@ export function MemberPicker({
                   onClick={() => onChange({ id: m.id, name })}
                   className="min-h-11 w-full px-3 text-left hover:bg-accent-soft"
                 >
-                  {name}
+                  <UserContent>{name}</UserContent>
                 </button>
               </li>
             );

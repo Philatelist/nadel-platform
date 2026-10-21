@@ -74,7 +74,7 @@ test.describe('tariffs', () => {
       // the tariffs list shows the rate with its significant decimals, at least two
       await menuLink(page, 'Tariffs').click();
       const row = main(page).getByRole('listitem').filter({ hasText: tariffName }).last();
-      await expect(row).toContainText('50.00 ₴');
+      await expect(row).toContainText('₴50.00');
       await expect(row).toContainText('Per sotka');
       await expect(row).toContainText('Yearly');
 

@@ -135,7 +135,7 @@ export function App() {
     return <div className="grid h-full place-items-center text-ink-muted">{t.auth.signingIn}</div>;
   }
   if (!auth.isAuthenticated) {
-    return <SignIn error={auth.error?.message} />;
+    return <SignIn hasError={auth.error !== undefined} />;
   }
   return (
     <MeProvider>
