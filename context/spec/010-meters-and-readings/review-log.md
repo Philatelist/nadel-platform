@@ -50,3 +50,15 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `acae94e..304f683` | PASS | — | minor: e2e `cleanup` deletes only APPROVED readings, so a failure between submit and approve leaves an active `E2E-M-…` plot (the sweep hits the same 409); two pending demo readings (plots 7, 15) vs tech spec "one"; Квартал А rate 120 kWh/day vs ~118 below it (011 losses near zero or negative); `plotNineWasReplacedThirtyDaysAgo` asserts only `removed_on`; some DemoMeterDataTests queries lack a `tenant_id` filter |
+
+## Slice 8 — Feature Testing & Regression
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `304f683..cb9877f` | PASS | — | minor: the §2.5 "Long interval" row is checked as range consumption (an extra 05.10 reading sits in between); a misleading comment on a correction call; both §2.10 tests need the demo plot-7 reading still pending (a manual approval on a local DB fails them until `down -v`); the e2e §2.6 #5 check gets 403 (member@other.local lacks METERS_VIEW) — the backend test covers the 404; a repeated Javadoc phrase |
+
+## Fix — §2.9 the audit log lists meter tree moves (verify)
+
+| Round | Commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `cb9877f..997d9cb` | PASS | — | minor: no general test that every action the code writes is in `AuditAction` (one unknown stored value breaks the whole audit page — `AuditQueries` `AuditAction.fromValue`, pre-existing code); every current action string checked against the enum |

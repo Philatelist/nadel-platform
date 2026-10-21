@@ -1,12 +1,12 @@
 # Pipeline log — 010 Meters and readings
 
-- Status: running
-- Phase: 3 — implement (Slice 8)
+- Status: finished
+- Phase: 5 — published
 - Branch: 010-meters-and-readings · Base: main (= origin/main) @ 063af9f
 - Requirement: docs/features/010-meters-and-readings.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
-- Publish: pr+checks · PR: — · Checks: —
-- Review run: on (not started yet)
+- Publish: pr+checks · PR: the pull request of this branch · Checks: see the PR
+- Review run: on — started after green checks (local only, no tracked files)
 
 ## Project facts
 
@@ -106,3 +106,37 @@ Same as 004–009 (see `context/spec/009-charge-types-and-tariffs/pipeline-log.m
   - Fixes go to the builders sequentially (they share backend/target), then the testing task re-runs to tighten its assertions.
 - GAP 1 fixed (postgres-database): demo has one pending reading (plot 7); DemoMeterDataTests 8/8. GAP 2 fixed (spring-backend): `PLOT_NOT_FOUND` on the plot-scoped meter endpoints + catalog texts; RED shown (5 tests); MetersTests/MemberReadingsTests/MetersAcceptanceTests/ModularityTests 86/0 failures; client checks green. Testing task re-run to tighten §2.10, remove the GAP markers and run make e2e.
 - Slice 8 re-run (testing-expert): §2.10 tightened to exactly one pending demo reading; GAP markers removed; `*AcceptanceTests,DemoMeterDataTests,ModularityTests` 111/0 failures; `make e2e` 109/0 after removing the stale plot-15 row by hand. It found the repeatable-script DELETE built the id from the meter id without dashes (matched nothing on existing DBs); I fixed the one line and confirmed in the local DB that both expressions differ and the fixed one equals the INSERT's id. Verified: DemoMeterDataTests 8, MetersAcceptanceTests 33 green.
+- Slice 8 committed `cb9877f` (acceptance tests + the two GAP fixes: one pending demo reading, `PLOT_NOT_FOUND`); review round 1 running.
+- Slice 8 review round 1: PASS. Every slice review is PASS.
+
+## Phase 4 — verify and finish
+
+- Started: /awos:verify (pipeline mode).
+- Phase 4 UI check: `make up` (detached; log scratchpad/makeup010.log), screenshots from demo data with no writes (react-frontend, temporary Playwright spec removed): docs/screenshots/010-meters-and-readings-*.png (18 files). Findings:
+  - DEFECT: `GET /audit?entityType=METER` → 500. Cause: `METER_PARENT_CHANGED` (written by the tree move, Slice 5) is missing from the contract's `AuditAction` enum, so `AuditAction.fromValue` throws in `AuditQueries`. Affects §2.9 (audit). Verify fix delegated to spring-backend.
+  - Not a defect: "Без показу з" checkbox reported as not toggling by the screenshot script; `meters-acceptance.spec.ts` §2.7 #2 clicks it and asserts it is checked (green in make e2e), and the handler sets the URL param — the script's click missed.
+  - Not required by the spec: no successor/predecessor link on the meter card (the plot card shows the replacement history, §2.3 #1); the demo's rejected reading is on plot 1 (not member@demo.local's) — §2.4 #10 is covered by tests; local audit list contains e2e leftovers (local DB only).
+  - `make up` stopped before the fix (it runs from backend/target).
+- Verify fix `997d9cb` (spring-backend): `METER_PARENT_CHANGED` added to the contract `AuditAction` enum; regression test MeterTreeTests.theAuditLogShowsAMoveWithItsParentAndDate (RED 500 → green); audit/meter targeted tests 88/0; client checks green. Fix review r1 running.
+- Fix review r1 (997d9cb): PASS. All 41 criteria marked [x] with evidence in functional-spec.md; change-log entry added.
+- Full suite on the branch (`make check`, after the verify fix): backend 1,722 tests, 0 failures, coverage met (floor 0.97); client ui-tokens 56, api-client 7, shared 110, web 424. Baseline: 0 failing → no regressions. `make e2e`: 109 passed / 0 failed (Slice 8 run, before the contract-only verify fix; CI runs it again).
+- Clean-up: only the main worktree remains; `make up` stopped.
+
+## Final report
+
+- **Branch:** `010-meters-and-readings` from main @ 063af9f. Commits: d418b60 specs; d201cfc Slice 1 + 73e4b06 review fix; 738723b owner's chore (agent model, surefire timeout); eca98e7 Slice 2 + 4fd731d review fix; c95e714 Slice 3; 18f2ee9 Slice 4; 76ab842 Slice 5 + 8c40cab review fix; acae94e Slice 6; 304f683 Slice 7; cb9877f Slice 8 (incl. the two GAP fixes); 997d9cb verify fix (§2.9 audit); final docs commit.
+- **Acceptance criteria:** 41/41 verified with evidence (acceptance tests, e2e and screenshots `docs/screenshots/010-meters-and-readings-*.png`); no `[?]`.
+- **Reviews:** Slice 1 MAJOR (locale-blind parse, trailing zeros) → PASS r2; Slice 2 MAJOR (import catalog text) → PASS r2; Slice 3 PASS r1; Slice 4 PASS r1; Slice 5 MAJOR (removal-day off by one) → PASS r2; Slice 6 PASS r1; Slice 7 PASS r1; Slice 8 PASS r1; verify fix PASS r1. Minor notes in review-log.md.
+- **Full suite vs baseline:** baseline 0 failing; branch 0 failing.
+- **Assumptions after Phase 1:** listed in Phase 2 above and in the spec's "Assumptions & Decisions"; slice-level decisions logged per slice (supersededReadingIds array; `GET /meters/{id}/consumption`; remove/replace refused while a reading is pending; tree nodes are replacement chains; import sheet plot meters only, unchanged by serial).
+- **Decided automatically:**
+  - Phase 1: no blocking question; module layout, MeterValue, tariffs → meters dependency, plot veto SPI, round order, unusual rule, menu/landing, tree screen under Settings, import sheet rules, demo electrician (see "Phase 1 — decisions").
+  - Phase 2: NO_METER texts, refusal messages, ADR 0014, range-based ReadingUsage, correction = new superseding row, per-row batch transactions, `GET /readings?status=PENDING`, parent ranges with an exclusion constraint, relative demo dates.
+  - Slice 8 GAPs: demo aligned to one pending reading (spec wins over data); `PLOT_NOT_FOUND` code for another plot's meters (follows MEMBER_NOT_FOUND / OWNERSHIP_NOT_FOUND).
+  - Reviewer escalations: none (no round 3 reached).
+- **Parked items:** none.
+- **For the owner:**
+  - Proposed CLAUDE.md edit (protected file, not made): the Keycloak test users line `electrician@demo.local → Member plus the demo custom role "Electrician" (no permissions until meters arrive)` → `Member plus the demo custom role "Електрик" (METERS_VIEW and READINGS_ENTER)`.
+  - Local dev DB: agents deleted their own e2e fixture rows and a stale demo pending row with SQL (local only); the repeatable demo script now converges an existing DB on its own.
+  - Notes for 011 from reviews: `ReadingUsage` is called per reading (batch it); `hasMeterBetween` checks the whole month; demo quarter A rate ≈ the sum below it (losses near zero); a general test that every written audit action is in the contract enum is missing.
+- **Suggested follow-ups:** `/awos:architecture` only if the owner wants the meters module described beyond the update in this branch (architecture.md was updated in the slices); no `/awos:hire` needed.
