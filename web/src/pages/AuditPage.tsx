@@ -12,7 +12,16 @@ import { problemCode, problemFieldErrors } from '../problem';
 import { useDocumentTitle } from '../useDocumentTitle';
 
 const PAGE_SIZE = 50;
-const ENTITY_TYPES = ['MEMBER', 'ROLE', 'PLOT', 'SETTINGS', 'OWNERSHIP', 'CHARGE_TYPE', 'TARIFF'] as const;
+const ENTITY_TYPES = [
+  'MEMBER',
+  'ROLE',
+  'PLOT',
+  'SETTINGS',
+  'OWNERSHIP',
+  'CHARGE_TYPE',
+  'TARIFF',
+  'METER',
+] as const;
 
 /** Where a record of an entity type is shown; absent for types without a page of their own. */
 const entityHref: Readonly<Partial<Record<AuditEntityType, (entityId: string) => string>>> = {
@@ -21,6 +30,7 @@ const entityHref: Readonly<Partial<Record<AuditEntityType, (entityId: string) =>
   OWNERSHIP: (id) => `/plots/${id}`,
   CHARGE_TYPE: () => '/charge-types',
   TARIFF: (id) => `/tariffs/${id}`,
+  METER: (id) => `/meters/${id}`,
 };
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 

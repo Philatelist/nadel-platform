@@ -16,6 +16,7 @@ import { QueryBoundary } from '../components/QueryBoundary';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { UserContent, formatUser } from '../components/UserContent';
 import { PlotTariffsPanel } from '../components/tariffs/PlotTariffsPanel';
+import { PlotMeterPanel } from '../components/meters/PlotMeterPanel';
 import { OwnersPanel } from '../components/ownership/OwnersPanel';
 import { Badge, Button, Notice, PageHeader, Panel, StatusDot } from '../components/ui';
 import { useLocale, useT } from '../i18n';
@@ -172,6 +173,7 @@ function PlotView({ plot }: { plot: PlotDetails }) {
           <OwnersPanel plotId={plot.id} kind={plot.kind} archived={plot.archived} />
         ))}
       {plot.kind !== 'COMMON' && <PlotTariffsPanel plotId={plot.id} />}
+      {plot.kind !== 'COMMON' && <PlotMeterPanel plotId={plot.id} />}
       {confirmingDelete && (
         <ConfirmDialog
           title={t.plot.deleteTitle}

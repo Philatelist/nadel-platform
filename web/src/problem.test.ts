@@ -24,3 +24,43 @@ describe('fieldKey for ownership changes', () => {
     expect(result['owners[1].memberId']).toBe('This member is already chosen.');
   });
 });
+
+describe('meter problems', () => {
+  it('has texts for the meter and reading codes in both languages', () => {
+    for (const locale of ['uk', 'en'] as const) {
+      const t = messages(locale);
+      for (const code of [
+        'METER_ACTIVE_EXISTS',
+        'METER_COMMON_LAND',
+        'METER_HAS_READINGS',
+        'METER_REMOVED',
+        'PLOT_HAS_METER',
+        'READING_DATE_IN_FUTURE',
+        'READING_DATE_OUTSIDE_METER',
+        'READING_OUT_OF_ORDER',
+        'METER_VALUE_INVALID',
+        'UNKNOWN_PLOT',
+      ]) {
+        expect(t.problem[code as keyof typeof t.problem], code).not.toBe(t.problem.UNKNOWN);
+      }
+    }
+    expect(messages('uk').problem.PLOT_HAS_METER).toBe('Спершу зніміть лічильник ділянки');
+  });
+
+  it('maps field codes of a meter to their texts', () => {
+    const error = new ApiError(409, {
+      code: 'READING_OUT_OF_ORDER',
+      errors: [
+        { field: 'finalReading', code: 'READING_OUT_OF_ORDER' },
+        { field: 'plotId', code: 'PLOT_ARCHIVED' },
+        { field: 'kind', code: 'PLOT_HAS_METER' },
+      ],
+    });
+    const result = problemFieldErrors(messages('en'), error);
+    expect(result.finalReading).toBe(
+      'The reading is lower than the previous one or higher than the next one',
+    );
+    expect(result.plotId).toBe('The plot is archived');
+    expect(result.kind).toBe('Remove the plot’s meter first');
+  });
+});

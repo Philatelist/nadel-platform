@@ -227,6 +227,27 @@ class ImportPreviewPlotsTests extends ImportsIntegrationTest {
     }
 
     @Test
+    void aPlotWithAMeterDoesNotBecomeCommonLand() throws Exception {
+        String number = unique();
+        UUID plot = UUID.randomUUID();
+        ownerJdbc().update("insert into plot (id, tenant_id, number, street, kind, area_m2) "
+                + "values (?, ?, ?, 'Garden St', 'PLOT', 600)", plot, DEMO_TENANT, number);
+        ownerJdbc().update("insert into meter (tenant_id, kind, resource, serial, plot_id, installed_on, "
+                + "initial_value) values (?, 'PLOT', 'ELECTRICITY', 'IP-1', ?, date '2026-01-01', 0)", DEMO_TENANT, plot);
+        try {
+            upload(plots(plot(number, null, "COMMON", null, null, null, null, null)))
+                    .andExpect(jsonPath("$.problems", hasSize(1)))
+                    .andExpect(jsonPath("$.problems[0].sheet").value("PLOTS"))
+                    .andExpect(jsonPath("$.problems[0].column").value("kind"))
+                    .andExpect(jsonPath("$.problems[0].code").value("PLOT_HAS_METER"))
+                    .andExpect(jsonPath("$.committable").value(false));
+        } finally {
+            ownerJdbc().update("delete from meter where plot_id = ?", plot);
+            ownerJdbc().update("delete from plot where id = ?", plot);
+        }
+    }
+
+    @Test
     void ukrainianHeadersInAnyOrderAndCaseAreRead() throws Exception {
         String number = unique();
         byte[] file = ImportWorkbooks.builder()

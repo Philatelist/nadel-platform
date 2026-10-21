@@ -1,6 +1,7 @@
 import type { AuditEntityType } from '@nadel/api-client';
 import {
   formatDay,
+  formatMeterValue,
   formatRateWithCurrency,
   formatShare,
   normalizeRateInput,
@@ -139,7 +140,12 @@ export function auditValue(
     case 'active':
       return raw === 'true' ? a.yes : a.no;
     case 'kind':
-      return catalog(t.plot.kind);
+      return catalog(entityType === 'METER' ? t.meters.kind : t.plot.kind);
+    case 'resource':
+      return catalog(t.meters.resource);
+    case 'initialReading':
+    case 'finalReading':
+      return /^\d+(\.\d{1,3})?$/.test(raw) ? formatMeterValue(raw, locale) : raw;
     case 'rate':
       return normalizeRateInput(raw) === raw ? formatRateWithCurrency(raw, locale) : raw;
     case 'scope':
@@ -155,6 +161,8 @@ export function auditValue(
     case 'effectiveFrom':
     case 'validFrom':
     case 'dueDate':
+    case 'installedOn':
+    case 'removedOn':
       return ISO_DAY.test(raw) ? formatDay(raw, locale) : raw;
     case 'permissions':
       return raw

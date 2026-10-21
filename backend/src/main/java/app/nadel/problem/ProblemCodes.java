@@ -55,6 +55,22 @@ public final class ProblemCodes {
     public static final String IMPORT_ALREADY_COMMITTED = "IMPORT_ALREADY_COMMITTED";
     /** 410: the preview is older than 30 minutes. */
     public static final String IMPORT_EXPIRED = "IMPORT_EXPIRED";
+    /** 409: a plot that has a meter is deleted or turned into common land, or a plot with an active meter is archived. */
+    public static final String PLOT_HAS_METER = "PLOT_HAS_METER";
+    /** 409: the plot already has an active meter of the resource. */
+    public static final String METER_ACTIVE_EXISTS = "METER_ACTIVE_EXISTS";
+    /** 409: common land has no plot meters. */
+    public static final String METER_COMMON_LAND = "METER_COMMON_LAND";
+    /** 409: a meter with readings is never deleted; it is removed instead. */
+    public static final String METER_HAS_READINGS = "METER_HAS_READINGS";
+    /** 409: the meter is removed, so it can be neither removed again nor deleted. */
+    public static final String METER_REMOVED = "METER_REMOVED";
+    /** 409: a reading (also the initial or final reading of a meter) dated after today (Europe/Kyiv). */
+    public static final String READING_DATE_IN_FUTURE = "READING_DATE_IN_FUTURE";
+    /** 409: a reading dated before the installation or after the removal of its meter. */
+    public static final String READING_DATE_OUTSIDE_METER = "READING_DATE_OUTSIDE_METER";
+    /** 409: a reading lower than the previous one or higher than the next one, or dated before a later one. */
+    public static final String READING_OUT_OF_ORDER = "READING_OUT_OF_ORDER";
 
     /** Codes of single fields in {@code errors[]}. */
     public static final String REQUIRED = "REQUIRED";
@@ -75,6 +91,8 @@ public final class ProblemCodes {
     public static final String DUPLICATE = "DUPLICATE";
     public static final String MEMBER_NOT_FOUND = "MEMBER_NOT_FOUND";
     public static final String OWNERSHIP_NOT_FOUND = "OWNERSHIP_NOT_FOUND";
+    /** A meter reading that is not a non-negative number with at most 11 integer and 3 decimal digits. */
+    public static final String METER_VALUE_INVALID = "METER_VALUE_INVALID";
 
     /** Codes of the rows of an import file (see {@code ImportProblem} in the API contract). */
     public static final String SHEET_MISSING = "SHEET_MISSING";

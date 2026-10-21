@@ -11,3 +11,4 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `d418b60..d201cfc` | MAJOR_ISSUES | M1 `parseMeterValue` ignores the locale: en "8,205" parsed as 8.205; M2 `formatMeterValue` keeps the server's trailing zeros ("8 205,000") against ADR 0014 "clients trim the zeros" | minor: `Quantity.toMeterValue()` throws `InvalidMeterValueException` above 11 integer digits (Javadoc); glossary states the Electrician demo grants before Slice 7 adds them; unused `MeterUnit` type spelled differently from the catalog keys |
+| 2 | + `73e4b06` | PASS | M1, M2 resolved (locale-aware parse; trailing zeros trimmed) | minor: en grouped input has no 11-digit cap ("999,999,999,999" parses; the server rejects it); en "0,205" accepted as 205 |

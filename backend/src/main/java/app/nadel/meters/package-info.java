@@ -7,8 +7,10 @@
  * {@link app.nadel.meters.MeterValue} (a reading, three decimals, never rounded) and {@link app.nadel.meters.Quantity}
  * (an exact fraction, rounded once for display), the calculation {@link app.nadel.meters.ConsumptionCalculator} with its
  * records, and the port {@link app.nadel.meters.ReadingUsage} that the ledger implements so that readings a charge uses
- * are no longer corrected or deleted (ADR 0014). Entities, services and endpoints (internal) arrive with the later slices of
- * spec 010; the module then depends on {@code identity}, {@code audit}, {@code problem} and {@code plots}.
+ * are no longer corrected or deleted (ADR 0014). The meter register (entity, commands, queries, the endpoints of tag
+ * {@code meters} and the plot guard {@code MeterPlotGuard}, an implementation of {@link app.nadel.plots.PlotChangeGuard})
+ * is internal. It depends on {@code identity}, {@code audit}, {@code problem} and {@code plots} (the public
+ * {@code PlotCatalog}).
  */
 @org.springframework.modulith.ApplicationModule(displayName = "Meters and readings")
 package app.nadel.meters;

@@ -4,8 +4,12 @@ The cooperative's meters, the electricity meter tree, the readings taken on any 
 them (feature 010, ADR 0014). Nothing is charged here; electricity charges, losses and the split of common consumers arrive
 with feature 011, which reuses `ConsumptionCalculator` and feeds the exact `Quantity` to money.
 
-Status: slice 1 of spec 010 is in code (tables, permissions, the pure calculation, the `ReadingUsage` port). Entities,
-commands, queries and endpoints follow in the later slices and extend this file.
+Status: slices 1 and 2 of spec 010 are in code: tables, permissions, the pure calculation, the `ReadingUsage` port, and
+the meter register (entity, commands, queries, endpoints, the plot guard, audit). Readings, the round, approvals,
+replacement and the tree follow in the later slices and extend this file.
+
+Depends on `plots` (`PlotCatalog`, and it implements `plots.PlotChangeGuard`), `identity` (`CurrentUser`, `AccessProfile`,
+`OwnedPlotsSource`, `Permission`), `audit` (events) and `problem`. `plots` never depends on `meters`.
 
 ## Tables (V12)
 
@@ -55,6 +59,65 @@ installation or removal date takes the place of that boundary point. `MeterHisto
 Spec rows that are decisions about input and not calculations (a lower reading is refused, a member's pending reading is
 ignored, the same date twice supersedes, the default date, a future date) belong to the reading commands of the later
 slices; the calculator receives only the readings that count.
+
+## The register (slice 2)
+
+Internal: `MeterRecord` (entity of `meter`) and `MeterRepository`, `MeterCommands`, `MeterQueries`, `MeterDtoMapper` (the
+one place that decides what a viewer sees), `ReadingFacts` (latest approved reading and "has readings" in bulk, native
+queries on `meter_reading` until the reading entity arrives), `MeterSnapshot` + `MeterAuditPublisher`, `MeterPlotGuard`,
+`MetersController`.
+
+| Endpoint | Operation | Who |
+|---|---|---|
+| `GET /meters` | `listMeters` | `METERS_VIEW` |
+| `POST /meters` | `registerMeter` | `METERS_VIEW` and `METERS_MANAGE` |
+| `GET /meters/{id}` | `getMeter` | `METERS_VIEW` |
+| `PUT /meters/{id}` | `updateMeter` | `METERS_VIEW` and `METERS_MANAGE` |
+| `DELETE /meters/{id}` | `deleteMeter` | `METERS_VIEW` and `METERS_MANAGE` |
+| `POST /meters/{id}/remove` | `removeMeter` | `METERS_VIEW` and `METERS_MANAGE` |
+| `GET /plots/{id}/meters` | `listPlotMeters` | `METERS_VIEW` for any plot, otherwise the plot's current owner (without `note`); anyone else 404, the platform operator 403 |
+
+The platform operator has no permissions: 403 everywhere. A meter or plot of another cooperative is 404 (RLS).
+
+- **Register.** A plot meter needs `plotId` and has no name; every other kind needs a name, has no plot and measures
+  electricity. Field codes (400 `VALIDATION_FAILED`): `plotId` `REQUIRED`/`INVALID`/`UNKNOWN_PLOT`, `name`
+  `REQUIRED`/`INVALID`, `resource` `INVALID`, `serial` `REQUIRED`/`TOO_LONG`, `initialReading` `METER_VALUE_INVALID`
+  (the contract pattern; `ValidationProblems` maps a `Pattern` on `*Reading` and `value` to it). The plot is locked
+  `FOR SHARE` (`PlotCatalog.findAndLockShared`) before it is checked: common land is 409 `METER_COMMON_LAND`, an archived
+  plot 409 `PLOT_ARCHIVED` (both with `errors[{field: plotId}]`). An installation date after today (Europe/Kyiv `Clock`)
+  is 409 `READING_DATE_IN_FUTURE` on `installedOn`. A second active meter of the plot and resource is 409
+  `METER_ACTIVE_EXISTS` (pre-check, and the index `meter_active_plot_uq` mapped at the flush for two registrations at
+  once).
+- **Update** replaces serial, name and note only (same name rules); also for a removed meter. No change, no audit entry.
+- **Remove** (`removedOn`, `finalReading`) locks the meter `FOR UPDATE`: an already removed meter is 409 `METER_REMOVED`;
+  the final reading is the last point of the meter, so `removedOn` after today is `READING_DATE_IN_FUTURE`, before the
+  installation `READING_DATE_OUTSIDE_METER`, before the latest approved reading `READING_OUT_OF_ORDER` (all on
+  `removedOn`), and a value below the latest approved reading (or the initial one) `READING_OUT_OF_ORDER` on
+  `finalReading`. Pending readings are not checked yet (slice 4 adds `METER_HAS_PENDING_READINGS`).
+- **Delete** locks the meter: a removed meter is 409 `METER_REMOVED`, a meter with a reading of any status 409
+  `METER_HAS_READINGS` (the `meter_reading` foreign key is the backstop). `deletable` in the API says when it is allowed.
+  A meter that is somebody's parent in the tree is not checked yet (slice 5, `METER_HAS_CHILDREN`).
+- **List** (`MeterQueries`): plot meters in street order (`PlotCatalog.inStreetOrder`) and, within a plot, active first,
+  electricity before water, newest installation first; then the named meters by name (`Collator` for Ukrainian). Filters
+  `resource`, `kind`, `street` (ignoring case and surrounding spaces), `noReadingSince` (active meters whose last point,
+  the latest approved reading or else the initial reading, is before the date), `includeRemoved` (default false). Bulk
+  loads: the plots, the latest approved readings, the meters with readings.
+- `lastReading` in the API is the final reading of a removed meter, else the latest approved reading, else the initial
+  reading. Pending, rejected and superseded readings never count.
+
+### Plot guard
+
+`MeterPlotGuard` implements `plots.PlotChangeGuard` (ADR 0011): delete and a change to common land are refused while the
+plot has any meter (active or removed: its history stays readable), archive while it has an active meter, with 409
+`PLOT_HAS_METER`; the import's plan of the Plots sheet reports the same code on `kind`. It only reads. Registration takes
+the plot `FOR SHARE` and the plot changes hold it `FOR UPDATE`, so the two run one after another.
+
+### Audit
+
+Entity type `METER`, label = the name of a named meter or the serial number of a plot meter. `METER_REGISTERED` (`kind`,
+`resource`, `plot` = the plot number, `serial`, `name`, `installedOn`, `initialReading`, `note`), `METER_UPDATED` (changed
+`serial`, `name`, `note`), `METER_REMOVED` (`removedOn`, `finalReading`), `METER_DELETED` (every old value). Values are
+codes, ISO dates and readings with three decimals; never logged.
 
 ## Permissions
 

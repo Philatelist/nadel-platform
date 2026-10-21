@@ -331,7 +331,8 @@ export const getUploadImportUrl = () => {
  * - cell level: `DATE_INVALID`, `NUMBER_INVALID`, `YES_NO_INVALID`, `AREA_BOTH_OR_NONE` (exactly one of
  *   `area_m2` and `area_sotky` must be filled for a new plot);
  * - plot rules, as when a plot is entered by hand: `REQUIRED`, `TOO_LONG`, `INVALID`, `AREA_INVALID`,
- *   `CADASTRAL_INVALID`, `CADASTRAL_NUMBER_TAKEN`, `PLOT_HAS_OWNERSHIP_HISTORY`;
+ *   `CADASTRAL_INVALID`, `CADASTRAL_NUMBER_TAKEN`, `PLOT_HAS_OWNERSHIP_HISTORY`, `PLOT_HAS_METER` (`kind`: a
+ *   plot that has a meter cannot become common land);
  * - member rules, as when a member is entered by hand: `REQUIRED`, `TOO_LONG`, `INVALID` (an e-mail that is
  *   not an address, an unknown `delivery_channel`), `PHONE_INVALID` (`phones` or `viber_phone`),
  *   `CHANNEL_CONTACT_MISSING` (the contact the delivery channel needs is empty: `email`, `telegram_username` or

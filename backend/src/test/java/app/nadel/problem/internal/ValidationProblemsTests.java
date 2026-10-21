@@ -47,6 +47,16 @@ class ValidationProblemsTests {
     }
 
     @Test
+    void aPatternOnAMeterReadingIsAnInvalidMeterValue() {
+        assertThat(map("initialReading", "Pattern", "1.2345").code()).isEqualTo("METER_VALUE_INVALID");
+        assertThat(map("finalReading", "Pattern", "-1").code()).isEqualTo("METER_VALUE_INVALID");
+        assertThat(map("value", "Pattern", "1e3").code()).isEqualTo("METER_VALUE_INVALID");
+        assertThat(map("rows[0].value", "Pattern", "x").code()).isEqualTo("METER_VALUE_INVALID");
+        assertThat(map("initialReading", "NotNull", null).code()).isEqualTo("REQUIRED");
+        assertThat(map("values", "Pattern", "x").code()).isEqualTo("INVALID");
+    }
+
+    @Test
     void aFieldErrorWithoutACodeIsInvalid() {
         FieldError error = new FieldError("input", "email", "x");
 

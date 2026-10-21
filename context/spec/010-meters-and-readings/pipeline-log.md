@@ -1,7 +1,7 @@
 # Pipeline log — 010 Meters and readings
 
 - Status: running
-- Phase: 3 — implement (Slice 1)
+- Phase: 3 — implement (Slice 2)
 - Branch: 010-meters-and-readings · Base: main (= origin/main) @ 063af9f
 - Requirement: docs/features/010-meters-and-readings.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
@@ -68,3 +68,9 @@ Same as 004–009 (see `context/spec/009-charge-types-and-tariffs/pipeline-log.m
 - Resumed (`/feature-pipeline resume`, 2026-10-21 20:34): Slice 1 backend task found written but uncommitted; web task not started. Re-running the slice's backend tests; web task delegated to react-frontend.
 - Found in the working tree, changed after the builder finished and not part of this run: `.claude/agents/spring-backend.md` (model sonnet → opus) and `backend/pom.xml` (surefire `forkedProcessTimeoutInSeconds` 900 → 4000). Treated as the owner's local edits: left as they are and never staged.
 - Slice 1: backend slice tests green (meters + roles + modularity; 0 failures); client test/typecheck/lint/format green (shared 97, web 345); `pnpm gen:api` no diff.
+- Slice 1 committed `d201cfc` — tests green; review round 1 running.
+- Owner asked to move their local edits to the branch: `.claude/agents/spring-backend.md` (model opus) and `backend/pom.xml` (surefire timeout 4000 s) committed as `738723b`.
+- Slice 1 review round 1: MAJOR_ISSUES (M1 locale-blind parse, M2 trailing zeros); fixes by react-frontend committed `73e4b06` (shared 110 tests green); round 2 running.
+- Slice 1 review round 2: PASS.
+- Slice 2 backend (spring-backend): reported 312 tests green; contract tag `meters`; guard SPI returns refusals (ADR 0011 note); `READING_DATE_IN_FUTURE/OUTSIDE_METER/OUT_OF_ORDER` already used for installation/removal; carried forward: Slice 4 adds the pending check on remove, Slice 5 must refuse delete/remove of a tree parent (`METER_HAS_CHILDREN`) instead of an FK 500. Web task delegated; backend re-verification running.
+- Slice 2 web (react-frontend): web 367 tests; also re-exported the meters module in the hand-written `packages/api-client/src/index.ts`. Verified: backend Slice 2 tests green (MetersTests 33, PlotChangeGuardTests 9, MeterAuditTests 6, PlotCatalogTests 12, PlotsWriteTests 42, ImportPreviewPlotsTests 27, ValidationProblemsTests 6, ModularityTests 2); client test/typecheck/lint/format green; `pnpm gen:api` no diff.

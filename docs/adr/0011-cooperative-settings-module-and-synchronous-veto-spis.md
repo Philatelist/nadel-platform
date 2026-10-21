@@ -34,6 +34,12 @@ Feature 007 records who owns each plot, with shares and history, and adds the fi
   cheap, read-only queries; an SPI that needs to write must be an event instead.
 - `ModularityTests` still passes: no cycle, `internal` packages stay closed. A new SPI of this kind is a design decision
   and gets a line in the module READMEs and here.
+- Spec 010 adds `plots.PlotChangeGuard` (implemented by `meters.internal.MeterPlotGuard`): a veto on deleting, archiving
+  or turning a plot into common land, asked by `PlotCommands` after the plot is locked `FOR UPDATE` and by the Excel
+  import's plan of the Plots sheet. Unlike `MemberArchiveGuard` it returns the refused plots with a code instead of
+  throwing, so the import can ask about many plots at once and report each as a row problem; `plots` turns a refusal of
+  a single change into the 409. The writers of the guard's data take the plot `FOR SHARE` first
+  (`PlotCatalog.findAndLockShared`), so a guard and such a write never interleave.
 - New settings are added as fields of `CooperativeSettings`; the table gets a column through a new Flyway migration.
 - The `ownership` table is append-only for the application (`nadel_app` has no `DELETE`), like the ledger (ADR 0006), and
   tests that need cleanup use the owner connection.

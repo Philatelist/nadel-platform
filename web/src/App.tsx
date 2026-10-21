@@ -83,6 +83,19 @@ const router = createBrowserRouter([
         ],
       },
       {
+        element: <RequirePermission permission="METERS_VIEW" />,
+        children: [
+          {
+            path: 'meters',
+            lazy: () => import('./pages/MetersPage').then((m) => ({ Component: m.MetersPage })),
+          },
+          {
+            path: 'meters/:id',
+            lazy: () => import('./pages/MeterPage').then((m) => ({ Component: m.MeterPage })),
+          },
+        ],
+      },
+      {
         element: <RequirePermission permission="IMPORT_RUN" />,
         children: [
           {

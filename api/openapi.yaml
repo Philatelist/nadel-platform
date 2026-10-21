@@ -34,6 +34,8 @@ tags:
     description: Charge types (what the cooperative charges for)
   - name: tariffs
     description: Tariffs with dated versions (how much the cooperative charges)
+  - name: meters
+    description: The register of electricity and water meters
 
 paths:
   /me:
@@ -762,7 +764,8 @@ paths:
         checked against the active plots, and restoring it checks the number again.
         The same rules apply as when creating: 409 `PLOT_NUMBER_TAKEN`, 409 `CADASTRAL_NUMBER_TAKEN`,
         400 `CADASTRAL_INVALID`, 400 `AREA_INVALID`. A plot that has ever had an owner cannot become common land
-        (409 `PLOT_HAS_OWNERSHIP_HISTORY`, `errors[{field: kind}]`). A change that alters nothing is accepted and not audited.
+        (409 `PLOT_HAS_OWNERSHIP_HISTORY`, `errors[{field: kind}]`), and neither can a plot that has a meter, active
+        or removed (409 `PLOT_HAS_METER`, `errors[{field: kind}]`). A change that alters nothing is accepted and not audited.
       parameters:
         - name: id
           in: path
@@ -801,7 +804,8 @@ paths:
       description: |
         Removes a plot that was created by mistake, together with its status. Requires `PLOTS_VIEW` and `PLOTS_EDIT`. Only an active
         plot can be deleted; an archived plot is refused with 409 `PLOT_ARCHIVED` and must be restored first, and a plot
-        that has ever had an owner is refused with 409 `PLOT_HAS_OWNERSHIP_HISTORY`. The deletion is audited.
+        that has ever had an owner is refused with 409 `PLOT_HAS_OWNERSHIP_HISTORY`, a plot that has a meter (active or
+        removed) with 409 `PLOT_HAS_METER`. The deletion is audited.
       parameters:
         - name: id
           in: path
@@ -831,7 +835,8 @@ paths:
       description: |
         Moves the plot to the archive: it is hidden from the default list and its number becomes free for a new
         plot. Archiving an already archived plot is a no-op and is not audited. A plot that has a current owner cannot
-        be archived (409 `PLOT_HAS_OWNERS`). Requires `PLOTS_VIEW` and `PLOTS_EDIT`.
+        be archived (409 `PLOT_HAS_OWNERS`), nor can a plot with an active meter (409 `PLOT_HAS_METER`; remove the
+        meter first). Requires `PLOTS_VIEW` and `PLOTS_EDIT`.
       parameters:
         - name: id
           in: path
@@ -1208,7 +1213,8 @@ paths:
         - cell level: `DATE_INVALID`, `NUMBER_INVALID`, `YES_NO_INVALID`, `AREA_BOTH_OR_NONE` (exactly one of
           `area_m2` and `area_sotky` must be filled for a new plot);
         - plot rules, as when a plot is entered by hand: `REQUIRED`, `TOO_LONG`, `INVALID`, `AREA_INVALID`,
-          `CADASTRAL_INVALID`, `CADASTRAL_NUMBER_TAKEN`, `PLOT_HAS_OWNERSHIP_HISTORY`;
+          `CADASTRAL_INVALID`, `CADASTRAL_NUMBER_TAKEN`, `PLOT_HAS_OWNERSHIP_HISTORY`, `PLOT_HAS_METER` (`kind`: a
+          plot that has a meter cannot become common land);
         - member rules, as when a member is entered by hand: `REQUIRED`, `TOO_LONG`, `INVALID` (an e-mail that is
           not an address, an unknown `delivery_channel`), `PHONE_INVALID` (`phones` or `viber_phone`),
           `CHANNEL_CONTACT_MISSING` (the contact the delivery channel needs is empty: `email`, `telegram_username` or
@@ -1831,6 +1837,275 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /meters:
+    get:
+      tags: [meters]
+      operationId: listMeters
+      summary: List the meters of the cooperative
+      description: |
+        The meter register. Plot meters come first, in street order (Ukrainian alphabet, plots without a street last)
+        and then natural order of the plot number, electricity before water; then the other meters by name. Removed
+        meters are left out unless `includeRemoved` is true. Filters combine with AND: `resource`, `kind`, `street`
+        (the plot's street, ignoring case and surrounding spaces; only plot meters have one) and `noReadingSince`
+        (active meters whose last reading, or the initial reading when there is none, is dated before that day;
+        removed meters never match). Requires `METERS_VIEW`.
+      parameters:
+        - name: resource
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/MeterResource'
+        - name: kind
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/MeterKind'
+        - name: street
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 200
+        - name: noReadingSince
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: includeRemoved
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Meter'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      tags: [meters]
+      operationId: registerMeter
+      summary: Register a meter
+      description: |
+        Registers a meter with its installation date and initial reading. A plot meter (`kind: PLOT`) needs `plotId`
+        and has no name; every other kind needs a `name` and has no plot and measures electricity only. Field codes of
+        400 `VALIDATION_FAILED`: `plotId` `REQUIRED`, `INVALID` (a plot for a meter that is not a plot meter) or
+        `UNKNOWN_PLOT` (no such plot in the cooperative); `name` `REQUIRED` or `INVALID` (a name for a plot meter);
+        `resource` `INVALID` (water for a meter that is not a plot meter); `serial` `REQUIRED` (blank) or `TOO_LONG`;
+        `initialReading` `METER_VALUE_INVALID`. Conflicts (409): the plot already has an active meter of the resource
+        (`METER_ACTIVE_EXISTS`); the plot is common land (`METER_COMMON_LAND`, `errors[{field: plotId}]`) or archived
+        (`PLOT_ARCHIVED`, `errors[{field: plotId}]`); the installation date is after today in Europe/Kyiv
+        (`READING_DATE_IN_FUTURE`, `errors[{field: installedOn}]`). Requires `METERS_VIEW` and `METERS_MANAGE`; written to
+        the audit log (`METER_REGISTERED`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MeterCreate'
+      responses:
+        '201':
+          description: Registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Meter'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /meters/{id}:
+    get:
+      tags: [meters]
+      operationId: getMeter
+      summary: A meter
+      description: |
+        The meter card. A meter of another cooperative or an unknown id is 404. Requires `METERS_VIEW`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Meter'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags: [meters]
+      operationId: updateMeter
+      summary: Change the serial number, name or note of a meter
+      description: |
+        Replaces the serial number, the name and the note (an absent note or name is cleared). Kind, resource, plot,
+        dates and readings never change here: a meter is removed or replaced instead. The name rules and field codes
+        are those of registration (`name` `REQUIRED` for a meter that is not a plot meter, `INVALID` for a plot meter).
+        A removed meter can still be corrected. A request that changes nothing is accepted and not audited. Requires
+        `METERS_VIEW` and `METERS_MANAGE`; written to the audit log (`METER_UPDATED`, old and new values of the changed
+        fields).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MeterUpdate'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Meter'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [meters]
+      operationId: deleteMeter
+      summary: Delete a meter entered by mistake
+      description: |
+        Deletes an active meter that has no readings (its initial reading does not count; see `deletable`). A meter
+        with readings of any status is refused with 409 `METER_HAS_READINGS` (remove it instead), a removed meter with
+        409 `METER_REMOVED`. Requires `METERS_VIEW` and `METERS_MANAGE`; written to the audit log (`METER_DELETED`,
+        the old values).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /meters/{id}/remove:
+    post:
+      tags: [meters]
+      operationId: removeMeter
+      summary: Remove a meter with its final reading
+      description: |
+        Ends the working period of the meter on `removedOn` with `finalReading`. The meter keeps its readings and
+        history; a plot meter frees its plot for a new meter of the resource. Conflicts (409): the meter is already
+        removed (`METER_REMOVED`); `removedOn` is after today in Europe/Kyiv (`READING_DATE_IN_FUTURE`) or before the
+        installation (`READING_DATE_OUTSIDE_METER`), both with `errors[{field: removedOn}]`; a counted reading is dated
+        after `removedOn` (`READING_OUT_OF_ORDER`, `errors[{field: removedOn}]`) or `finalReading` is lower than the
+        last counted reading up to that day or the initial reading (`READING_OUT_OF_ORDER`,
+        `errors[{field: finalReading}]`). 400 `VALIDATION_FAILED` with `finalReading` `METER_VALUE_INVALID` for a
+        malformed value. Requires `METERS_VIEW` and `METERS_MANAGE`; written to the audit log (`METER_REMOVED`).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MeterRemoval'
+      responses:
+        '200':
+          description: The removed meter
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Meter'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /plots/{id}/meters:
+    get:
+      tags: [meters]
+      operationId: listPlotMeters
+      summary: The meters of a plot
+      description: |
+        Every meter the plot has had, active and removed: active meters first (electricity before water), then removed
+        ones, newest installation first. No permission annotation: a caller with `METERS_VIEW` may ask for any plot of
+        the cooperative, anyone else only for a plot they currently own, and then `note` (the board's note) is left
+        out. Any other plot, an unknown id and a plot of another cooperative are 404 `NOT_FOUND`; the platform operator
+        has no cooperative data: 403. Common land has no meters (an empty list).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Meter'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1913,7 +2188,16 @@ components:
         `TARIFF_VERSION_DATE_TAKEN`, with `errors[{field: validFrom}]`), a tariff version is corrected or deleted
         although a charge uses it (code `TARIFF_VERSION_IN_USE`), the only version of a tariff is deleted (code
         `TARIFF_LAST_VERSION`), or a tariff is added to, a version is added to, corrected or deleted, or the scope is
-        changed of a tariff under an archived charge type (code `CHARGE_TYPE_ARCHIVED`)
+        changed of a tariff under an archived charge type (code `CHARGE_TYPE_ARCHIVED`), or a plot that has a meter is
+        deleted or turned into common land, or a plot with an active meter is archived (code `PLOT_HAS_METER`, with
+        `errors[{field: kind}]` for the update), or a meter is registered for a plot that already has an active meter
+        of the resource (code `METER_ACTIVE_EXISTS`) or for common land (code `METER_COMMON_LAND`) or an archived plot
+        (code `PLOT_ARCHIVED`), both with `errors[{field: plotId}]`, a meter with readings is deleted (code
+        `METER_HAS_READINGS`), a removed meter is removed again or deleted (code `METER_REMOVED`), or a date or value
+        of a reading (the initial or final reading of a meter) is refused: the date is in the future (code
+        `READING_DATE_IN_FUTURE`), outside the working period of the meter (code `READING_DATE_OUTSIDE_METER`), or the
+        value is lower than the previous reading or the date before a later one (code `READING_OUT_OF_ORDER`), each
+        with `errors[{field}]` naming the date or value
       content:
         application/problem+json:
           schema:
@@ -2269,11 +2553,15 @@ components:
         - TARIFF_SCOPE_CHANGED
         - TARIFF_EXCLUSION_ADDED
         - TARIFF_EXCLUSION_REMOVED
+        - METER_REGISTERED
+        - METER_UPDATED
+        - METER_REMOVED
+        - METER_DELETED
 
     AuditEntityType:
       type: string
       description: Kind of the entity an audit entry is about
-      enum: [MEMBER, ROLE, PLOT, SETTINGS, OWNERSHIP, IMPORT, CHARGE_TYPE, TARIFF]
+      enum: [MEMBER, ROLE, PLOT, SETTINGS, OWNERSHIP, IMPORT, CHARGE_TYPE, TARIFF, METER]
 
     AuditFieldChange:
       type: object
@@ -2282,8 +2570,9 @@ components:
         Values are codes and parameters, not display text: enum codes, ISO dates (`2026-01-01`), plain decimal
         numbers, `true`/`false`, `base:<CODE>` tokens for a standard role or charge type name (also in the `roles`
         list joined by ", "), and for `owners` a JSON array of `{"member": "Last First", "share": "1/2"}` (a
-        correction adds `from` and `to`, ISO dates, `to` absent while the record is open). Values written before
-        this format are plain text and are shown as stored.
+        correction adds `from` and `to`, ISO dates, `to` absent while the record is open). Meter readings are plain
+        decimals with three decimals (`8205.000`). Values written before this format are plain text and are shown as
+        stored.
       required: [field]
       properties:
         field:
@@ -2323,7 +2612,8 @@ components:
           type: string
           description: >-
             Name of the entity at the time of the change, as a code or user content, never a display phrase:
-            the member name, plot number, tariff name or import file name as typed; for a role or a charge type
+            the member name, plot number, tariff name, meter name (or a plot meter's serial number) or import file
+            name as typed; for a role or a charge type
             the token `base:<CODE>` (for example `base:TREASURER`, `base:MEMBERSHIP`) while it keeps its standard
             name, otherwise its stored name; `settings` for the cooperative settings. The client shows the
             catalog text for a token in the user's language and any other value as is.
@@ -3017,7 +3307,8 @@ components:
             not a non-negative number with at most 10 integer and 4 decimal digits), `FREQUENCY_BASIS_MISMATCH`
             (`ONE_OFF` without `FIXED_ONE_TIME`, or `FIXED_ONE_TIME` without `ONE_OFF`), `TARIFF_COMMON_LAND` (common
             land cannot be in the scope of a tariff), `PLOT_ARCHIVED` (an archived plot), `UNKNOWN_PLOT` (no such plot
-            in the cooperative), `DUPLICATE` (the same plot listed twice)
+            in the cooperative), `DUPLICATE` (the same plot listed twice), `METER_VALUE_INVALID` (a meter reading that
+            is not a non-negative number with at most 11 integer and 3 decimal digits)
         message:
           type: string
 
@@ -3384,3 +3675,157 @@ components:
             $ref: '#/components/schemas/PlotTariffItem'
         total:
           $ref: '#/components/schemas/Money'
+
+    MeterKind:
+      type: string
+      description: >-
+        `PLOT` belongs to one plot; `SUBSTATION`, `QUARTER` (feeds a group of plots) and `COMMON_CONSUMER` (a well
+        pump, street lighting) are named meters of the electricity tree
+      enum: [PLOT, SUBSTATION, QUARTER, COMMON_CONSUMER]
+
+    MeterResource:
+      type: string
+      description: What a meter measures, `ELECTRICITY` in kWh or `WATER` in cubic metres
+      enum: [ELECTRICITY, WATER]
+
+    MeterValue:
+      type: string
+      pattern: '^\d{1,11}(\.\d{1,3})?$'
+      description: >-
+        A meter reading as a string: not negative, at most 11 integer digits and at most 3 digits after the decimal
+        point. It is never rounded; the server returns it with exactly three decimals (`"8205.000"`). Not money.
+        Field code `METER_VALUE_INVALID` when it does not match.
+      examples: ['8205.000']
+
+    MeterPoint:
+      type: object
+      description: A value of a meter on a date
+      required: [takenOn, value]
+      properties:
+        takenOn:
+          type: string
+          format: date
+        value:
+          $ref: '#/components/schemas/MeterValue'
+
+    MeterPlot:
+      type: object
+      description: The plot of a plot meter
+      required: [id, number]
+      properties:
+        id:
+          type: string
+          format: uuid
+        number:
+          type: string
+        street:
+          type: string
+
+    Meter:
+      type: object
+      description: A meter of the register
+      required: [id, kind, resource, serial, installedOn, initialReading, active, deletable, lastReading]
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          $ref: '#/components/schemas/MeterKind'
+        resource:
+          $ref: '#/components/schemas/MeterResource'
+        serial:
+          type: string
+        name:
+          type: string
+          description: The name of a meter that is not a plot meter; absent for a plot meter
+        plot:
+          $ref: '#/components/schemas/MeterPlot'
+        installedOn:
+          type: string
+          format: date
+        initialReading:
+          $ref: '#/components/schemas/MeterValue'
+        removedOn:
+          type: string
+          format: date
+          description: Present once the meter is removed, together with `finalReading`
+        finalReading:
+          $ref: '#/components/schemas/MeterValue'
+        note:
+          type: string
+          description: The board's note; absent for a member who sees the meter of their own plot
+        replacesMeterId:
+          type: string
+          format: uuid
+          description: The meter this one replaced
+        active:
+          type: boolean
+          description: True until the meter is removed
+        deletable:
+          type: boolean
+          description: True when the meter may be deleted (active and without readings); otherwise it is removed instead
+        lastReading:
+          $ref: '#/components/schemas/MeterPoint'
+          description: >-
+            The latest point of the meter: its final reading once removed, otherwise its latest counted reading, or
+            the initial reading when there is none
+
+    MeterCreate:
+      type: object
+      description: A new meter
+      required: [kind, resource, serial, installedOn, initialReading]
+      properties:
+        kind:
+          $ref: '#/components/schemas/MeterKind'
+        resource:
+          $ref: '#/components/schemas/MeterResource'
+        plotId:
+          type: string
+          format: uuid
+          description: Required for a plot meter, absent for any other kind
+        serial:
+          type: string
+          minLength: 1
+          maxLength: 50
+          description: 1 to 50 characters; surrounding whitespace is trimmed
+        name:
+          type: string
+          maxLength: 100
+          description: Required for a meter that is not a plot meter (1 to 100 characters, trimmed); absent for a plot meter
+        installedOn:
+          type: string
+          format: date
+          description: The installation date, the date of the initial reading; not after today
+        initialReading:
+          $ref: '#/components/schemas/MeterValue'
+        note:
+          type: string
+          maxLength: 500
+          description: Optional; blank text is not stored
+
+    MeterUpdate:
+      type: object
+      description: The descriptive fields of a meter
+      required: [serial]
+      properties:
+        serial:
+          type: string
+          minLength: 1
+          maxLength: 50
+        name:
+          type: string
+          maxLength: 100
+        note:
+          type: string
+          maxLength: 500
+
+    MeterRemoval:
+      type: object
+      description: The end of a meter's working period
+      required: [removedOn, finalReading]
+      properties:
+        removedOn:
+          type: string
+          format: date
+        finalReading:
+          $ref: '#/components/schemas/MeterValue'

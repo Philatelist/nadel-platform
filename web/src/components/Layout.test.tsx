@@ -140,4 +140,14 @@ describe('Layout', () => {
     expect(inHeader.parentElement).toHaveClass('hidden', 'md:flex');
     expect(inMenu.parentElement).toHaveClass('md:hidden');
   });
+
+  it('shows Meters in the menu only with METERS_VIEW', () => {
+    me = meWith([]);
+    const { unmount } = renderWithApp(<Layout />);
+    expect(screen.queryByRole('link', { name: 'Meters' })).toBeNull();
+    unmount();
+    me = meWith(['METERS_VIEW']);
+    renderWithApp(<Layout />);
+    expect(screen.getByRole('link', { name: 'Meters' })).toHaveAttribute('href', '/meters');
+  });
 });
