@@ -96,9 +96,9 @@ describe('TariffPage', () => {
     expect(screen.getByText('Charge type: Membership fee')).toBeInTheDocument();
     const items = within(screen.getByRole('list')).getAllByRole('listitem');
     expect(items.map((li) => li.textContent)).toEqual([
-      'from 01/01/2027' + '5.0000 ₴ · Per sotka · Monthly' + 'Meeting of 12 Dec',
-      'from 07/01/2026 to 12/31/2026' + '4.3200 ₴ · Per sotka · Monthly',
-      'from 01/01/2026 to 06/30/2026' + '100.0000 ₴ · Fixed one-time amount · One-off' + 'due 03/15/2026',
+      'from 01/01/2027' + '5.00 ₴ · Per sotka · Monthly' + 'Meeting of 12 Dec',
+      'from 07/01/2026 to 12/31/2026' + '4.32 ₴ · Per sotka · Monthly',
+      'from 01/01/2026 to 06/30/2026' + '100.00 ₴ · Fixed one-time amount · One-off' + 'due 03/15/2026',
     ]);
   });
 

@@ -100,9 +100,9 @@ describe('TariffsPage', () => {
     renderWithApp(<TariffsPage />);
     const membership = within(screen.getByRole('heading', { name: 'Membership fee' }).closest('section')!);
     expect(membership.getByRole('link', { name: 'Per sotka' })).toHaveAttribute('href', '/tariffs/t1');
-    expect(membership.getByText(/4\.3200 ₴ · Per sotka · Monthly/)).toBeInTheDocument();
+    expect(membership.getByText(/4\.32 ₴ · Per sotka · Monthly/)).toBeInTheDocument();
     expect(membership.getByText(/from 11\/01\/2026 · 1 plot$/)).toBeInTheDocument();
-    expect(membership.getByText(/120\.5000 ₴ · Per plot/)).toBeInTheDocument();
+    expect(membership.getByText(/120\.50 ₴ · Per plot/)).toBeInTheDocument();
     expect(membership.getByText(/24 plots$/)).toBeInTheDocument();
     const road = within(screen.getByRole('heading', { name: 'Road repair' }).closest('section')!);
     expect(road.getByText(/applies to plots with a meter$/)).toBeInTheDocument();
@@ -127,7 +127,7 @@ describe('TariffsPage', () => {
       '21 ділянка',
       '22 ділянки',
     ]);
-    expect(screen.getAllByText(/^1,0000 ₴ · За ділянку · Щомісяця$/)).toHaveLength(7);
+    expect(screen.getAllByText(/^1,00 ₴ · За ділянку · Щомісяця$/)).toHaveLength(7);
   });
 
   it('shows the per-sotka yearly row in Ukrainian with the start date', () => {
@@ -142,7 +142,7 @@ describe('TariffsPage', () => {
       ),
     ];
     renderWithApp(<TariffsPage />);
-    expect(screen.getByText('50,0000 ₴ · За сотку · Щороку')).toBeInTheDocument();
+    expect(screen.getByText('50,00 ₴ · За сотку · Щороку')).toBeInTheDocument();
     expect(screen.getByText(/^діє з 01\.01\.2027/)).toBeInTheDocument();
   });
 });

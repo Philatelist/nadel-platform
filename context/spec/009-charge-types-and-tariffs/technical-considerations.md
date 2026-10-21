@@ -147,7 +147,7 @@ Kyiv month (`Clock`).
   `VersionHistory`, `ChargeTypeDialog`, `PlotTariffsPanel` (month picker, rows, total), `MyChargesPanel`
   (account page, one block per owned plot, current month), shared `TariffAmountRows`.
 - `components/ui/MonthField` (`<input type="month">`, value `YYYY-MM`).
-- `packages/shared`: `formatRate` (string only, pads to 4 decimals, locale separator) and a rate input check; no
+- `packages/shared`: `formatRate` (string only, significant decimals but at least 2 — "4.3200" → "4,32" — locale separator; storage and API keep 4) and a rate input check; no
   `Number()` anywhere for rates or amounts. Past-date warning: `validFrom < kyivToday()` (string comparison), plus the
   server's `pastDated` on saved versions.
 - i18n (uk + en): `nav.tariffs`, `tariffs.*`, `tariffs.basis.*`, `tariffs.frequency.*`, `chargeTypes.*`,

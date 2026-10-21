@@ -1,7 +1,7 @@
 # Pipeline log — 009 Charge types and tariffs
 
-- Status: finished
-- Phase: 5 — published
+- Status: running
+- Phase: change request 1 — rate display
 - Branch: 009-charge-types-and-tariffs · Base: main (= origin/main) @ eca55b9
 - Requirement: docs/features/009-charge-types-and-tariffs.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
@@ -103,3 +103,9 @@ Same as 004–008 (see `context/spec/005-ui-preferences/pipeline-log.md` and `co
 - **Follow-ups for the owner:** CLAUDE.md language-rule wording for `backend/src/main/resources/tariffs/charge-type-default-names.properties` (and Ukrainian literals in its tests); amounts render with the Ukrainian money format ("25,00 ₴") in the English UI (existing `formatMoney`); audit labels of unrenamed seeded charge types show the stored English default; inactive charge types are not offered in the new-tariff form although the server accepts them; the contract `ChargeType` has no `archived` flag (the new-version form stays visible for an archived type's tariff and the server refuses); demo exclusion returns on a rerun of the repeatable demo script; minor review notes in review-log.md.
 - **Suggested commands:** none (`/awos:architecture` not needed — architecture.md updated in Slice 5).
 - Phase 5: pushed the spec branch; PR #31 opened (https://github.com/Philatelist/nadel-platform/pull/31). Status set to finished before the last push; checks are watched after it.
+
+## Change request 1 — rate display (2026-10-21)
+
+- Owner request: show a rate with its significant decimals but at least 2 ("50,00", "4,32", "1,4532", "0,35"; en with a dot); storage and API keep 4 decimals; money formatting unchanged. The review run was stopped (PIDs 33444 33362 33186) to free the e2e ports.
+- Spec documents updated (functional-spec §2.2 text, criteria #1 and #7 and their evidence, change log; technical-considerations 2.5).
+- Change request 1 implemented (react-frontend): formatRate trims trailing zeros to at least 2 decimals (strings only); rate.test.ts owner examples uk/en (RED against the old body); web unit tests and tariffs.spec.ts expectations updated. Not changed: the new-version form prefills the stored rate ("4.3200"). make check green (backend 1,343, coverage met; ui-tokens 56, api-client 7, shared 73, web 309); make e2e 89 passed. Screenshots retaken from demo data (rates now "50,00", "4,32").

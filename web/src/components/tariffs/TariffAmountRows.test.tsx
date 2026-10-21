@@ -53,7 +53,7 @@ describe('TariffAmountRows', () => {
     renderWithApp(<TariffAmountRows data={data} />);
     expect(screen.getByText('Membership fee')).toBeInTheDocument();
     expect(screen.getByText('Membership 2026')).toBeInTheDocument();
-    expect(screen.getAllByText(/4[.,]3200 ₴ · Per sotka · Monthly/)[0]).toBeInTheDocument();
+    expect(screen.getAllByText(/4[.,]32 ₴ · Per sotka · Monthly/)[0]).toBeInTheDocument();
     expect(screen.getByText('by meter readings')).toBeInTheDocument();
     expect(screen.getByText('not charged — Paid in advance')).toBeInTheDocument();
     expect(screen.getByText('Road repair', { selector: 'div' })).toBeInTheDocument();

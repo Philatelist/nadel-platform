@@ -36,13 +36,18 @@ export type RateString = string;
 const RATE_RE = /^\d+(\.\d{1,4})?$/;
 const RATE_INPUT_RE = /^\d{1,10}(\.\d{1,4})?$/;
 
-/** "4.32" → "4,3200" (uk) or "4.3200" (en). Strings only, so no digit is lost; no grouping. */
+/**
+ * Displays a rate with its significant decimals but at least two: "50.0000" → "50,00", "4.3200" → "4,32",
+ * "1.4532" → "1,4532" (uk) or "50.00", "4.32", "1.4532" (en). Strings only, so no digit is lost; no grouping.
+ * Storage and API keep four decimals.
+ */
 export function formatRate(rate: RateString, locale: string = 'uk-UA'): string {
   if (!RATE_RE.test(rate)) {
     throw new Error(`Invalid rate: ${rate}`);
   }
   const [int = '0', frac = ''] = rate.split('.');
-  return `${int}${locale.startsWith('en') ? '.' : ','}${frac.padEnd(4, '0')}`;
+  const trimmed = frac.replace(/0+$/, '').padEnd(2, '0');
+  return `${int}${locale.startsWith('en') ? '.' : ','}${trimmed}`;
 }
 
 /**

@@ -2,11 +2,21 @@ import { describe, expect, it } from 'vitest';
 import { formatRate, normalizeRateInput } from './money';
 
 describe('formatRate', () => {
-  it('pads to four decimals with the locale separator', () => {
-    expect(formatRate('4.3200')).toBe('4,3200');
-    expect(formatRate('4.32')).toBe('4,3200');
-    expect(formatRate('4', 'en-US')).toBe('4.0000');
+  it('shows significant decimals, at least two', () => {
+    expect(formatRate('50.0000')).toBe('50,00');
+    expect(formatRate('4.3200')).toBe('4,32');
+    expect(formatRate('1.4532')).toBe('1,4532');
+    expect(formatRate('0.3500')).toBe('0,35');
+    expect(formatRate('50.0000', 'en-US')).toBe('50.00');
+    expect(formatRate('4.3200', 'en')).toBe('4.32');
+    expect(formatRate('1.4532', 'en')).toBe('1.4532');
+    expect(formatRate('0.3500', 'en')).toBe('0.35');
+  });
+  it('handles integers, tiny and zero rates', () => {
+    expect(formatRate('4')).toBe('4,00');
+    expect(formatRate('4', 'en-US')).toBe('4.00');
     expect(formatRate('0.0001', 'en')).toBe('0.0001');
+    expect(formatRate('0.0000')).toBe('0,00');
   });
   it('keeps every digit of a long value (never through Number)', () => {
     expect(formatRate('33.3333')).toBe('33,3333');

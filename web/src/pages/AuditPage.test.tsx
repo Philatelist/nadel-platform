@@ -199,7 +199,7 @@ describe('AuditPage tariff version entries', () => {
     expect(screen.getByText(/Frequency:/)).toBeInTheDocument();
     expect(screen.getByText(/Monthly/)).toBeInTheDocument();
     expect(screen.getByText(/Rate:/)).toBeInTheDocument();
-    expect(screen.getByText(/4\.3200 ₴ → 5\.5 ₴|4\.3200 ₴ → 5\.5000 ₴/)).toBeInTheDocument();
+    expect(screen.getByText(/4\.32 ₴ → 5\.50 ₴/)).toBeInTheDocument();
     expect(screen.getByText(/Due date:/)).toBeInTheDocument();
     expect(screen.getByText(/Note:/)).toBeInTheDocument();
     expect(screen.getByText(/Charge type:/)).toBeInTheDocument();

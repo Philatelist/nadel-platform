@@ -69,7 +69,7 @@ nothing about anyone else's.
   - the date it applies from ("діє з"); it applies until the day before the next version's date, or without end;
   - the basis: per plot, per sotka of the plot's area, per kWh, per m³ of water, or a fixed one-time amount;
   - the frequency: monthly, quarterly, yearly or one-off;
-  - the rate, a number with up to 4 digits after the decimal point (for example 4.3200); it is not rounded when saved;
+  - the rate, a number with up to 4 digits after the decimal point (for example 4.3200); it is not rounded when saved, and it is shown with its significant decimals but at least two (4.3200 as "4,32", 50.0000 as "50,00", 1.4532 as "1,4532");
   - an optional note, for example "рішення загальних зборів від 12.04.2026".
 - A fixed one-time amount is always one-off and has a due date; "one-off" is only possible for a fixed one-time amount.
 - Two versions of the same tariff cannot start on the same date.
@@ -79,8 +79,8 @@ nothing about anyone else's.
 - A tariff is created together with its first version.
   - **Acceptance Criteria:**
     - [x] When the chairman creates the tariff "Для членів кооперативу" for "Членський внесок" with a first version from
-      01.01.2027, per sotka, yearly, rate 50, then the tariffs list shows it with "50,0000" ("50.0000" in English), "за сотку", "щороку" and
-      "діє з 01.01.2027". _Evidence: `TariffsPage.test.tsx` ("shows the per-sotka yearly row in Ukrainian with the start date": "50,0000 ₴ · За сотку · Щороку", "діє з 01.01.2027"); `TariffsAcceptanceTests` `section22_aTariffWithTwoVersionsListsThemNewestFirstWithFourDecimals`; `docs/screenshots/009-charge-types-and-tariffs-tariffs.png` ("50,0000 ₴ · За сотку · Щороку", "діє з")._
+      01.01.2027, per sotka, yearly, rate 50, then the tariffs list shows it with "50,00" ("50.00" in English), "за сотку", "щороку" and
+      "діє з 01.01.2027". _Evidence: `TariffsPage.test.tsx` ("shows the per-sotka yearly row in Ukrainian with the start date": "50,00 ₴ · За сотку · Щороку", "діє з 01.01.2027"); `TariffsAcceptanceTests` `section22_aTariffWithTwoVersionsListsThemNewestFirstWithFourDecimals`; `docs/screenshots/009-charge-types-and-tariffs-tariffs.png` ("50,0000 ₴ · За сотку · Щороку", "діє з")._
     - [x] When the chairman adds a version from 01.07.2027 with rate 60, then the tariff card lists both versions,
       newest first, and the first one is shown as valid until 30.06.2027. _Evidence: `TariffsAcceptanceTests` `section22_aTariffWithTwoVersionsListsThemNewestFirstWithFourDecimals` (valid until the day before); e2e `tariffs-acceptance.spec.ts` (§2.2 #2); `docs/screenshots/009-charge-types-and-tariffs-tariff-card.png`._
     - [x] When the chairman enters a new version dated before today, then the form shows "Нарахування за минулі
@@ -93,7 +93,7 @@ nothing about anyone else's.
       коми" / "The rate must be a non-negative number with at most 4 decimal places". _Evidence: `TariffsAcceptanceTests` `section22_aBadRateIsRefused` (5 decimals, negative, text → `RATE_INVALID`); `RateTests`; e2e `tariffs-acceptance.spec.ts` (§2.2 #5)._
     - [x] When the chairman chooses a fixed one-time amount, then the frequency is set to one-off and cannot be changed,
       and saving without a due date is refused with "Вкажіть дату сплати" / "Enter the due date". _Evidence: `TariffsAcceptanceTests` `section22_aFixedOneTimeAmountIsOneOffWithADueDate`; `VersionFields.test.tsx`; e2e `tariffs-acceptance.spec.ts` (§2.2 #6: frequency disabled, "Вкажіть дату сплати")._
-    - [x] When the chairman saves a rate of 4.32, then it is shown as 4,3200 (4.3200 in English) everywhere. _Evidence: `TariffsAcceptanceTests` `section22_aTariffWithTwoVersionsListsThemNewestFirstWithFourDecimals` (4.32 → 4.3200 on the card, the list and the plot amounts); `formatRate` tests; `docs/screenshots/009-charge-types-and-tariffs-plot-card.png` ("4,3200 ₴")._
+    - [x] When the chairman saves a rate of 4.32, then it is kept as 4.3200 and shown as 4,32 (4.32 in English) everywhere. _Evidence: `TariffsAcceptanceTests` `section22_aTariffWithTwoVersionsListsThemNewestFirstWithFourDecimals` (4.32 stored and returned as 4.3200); `formatRate` tests (`rate.test.ts`: 4.3200 → "4,32"); `TariffsPage.test.tsx`, `TariffPage.test.tsx` (rates shown with at least two decimals)._
 
 ### 2.3 Which plots a tariff applies to
 
@@ -273,3 +273,4 @@ Decided by the pipeline (no blocking question; the requirement document is detai
 
 - 2026-10-20 — created by `/feature-pipeline` from `docs/features/009-charge-types-and-tariffs.md`.
 - 2026-10-21 — verification — wording aligned with the app: rates use the interface's decimal separator ("50,0000" in Ukrainian, "50.0000" in English), and a refused change and a closed page show the app-wide texts "У вас немає дозволу на цю дію." and "У вас немає доступу до цієї сторінки".
+- 2026-10-21 — change request from the owner — a rate is shown with its significant decimals but at least two ("50,00", "4,32", "1,4532", "0,35"; a dot in English) instead of four; storage and the API keep four decimals; money formatting unchanged.
