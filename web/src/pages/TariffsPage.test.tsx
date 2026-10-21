@@ -129,13 +129,30 @@ describe('TariffsPage', () => {
     ]);
     expect(screen.getAllByText(/^1,0000 ₴ · За ділянку · Щомісяця$/)).toHaveLength(7);
   });
+
+  it('shows the per-sotka yearly row in Ukrainian with the start date', () => {
+    localStorage.setItem('nadel.locale', 'uk');
+    tariffs = [
+      summary(
+        't1',
+        'c1',
+        'Land tariff',
+        { rate: '50.0000', basis: 'PER_AREA_SOTKA', frequency: 'YEARLY', validFrom: '2027-01-01' },
+        3,
+      ),
+    ];
+    renderWithApp(<TariffsPage />);
+    expect(screen.getByText('50,0000 ₴ · За сотку · Щороку')).toBeInTheDocument();
+    expect(screen.getByText(/^діє з 01\.01\.2027/)).toBeInTheDocument();
+  });
 });
 
 function summary(
   id: string,
   chargeTypeId: string,
   name: string,
-  version: { rate: string; basis: TariffSummary['version']['basis'] },
+  version: Pick<TariffSummary['version'], 'rate' | 'basis'> &
+    Partial<Pick<TariffSummary['version'], 'frequency' | 'validFrom'>>,
   plotCount: number | undefined,
 ): TariffSummary {
   return {
