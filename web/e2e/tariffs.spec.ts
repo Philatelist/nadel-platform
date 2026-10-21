@@ -71,7 +71,7 @@ test.describe('tariffs', () => {
       await main(page).getByRole('button', { name: 'Create tariff', exact: true }).click();
       await expect(page.getByRole('heading', { level: 1, name: tariffName })).toBeVisible();
 
-      // the tariffs list shows the rate with four decimals
+      // the tariffs list shows the rate with its significant decimals, at least two
       await menuLink(page, 'Tariffs').click();
       const row = main(page).getByRole('listitem').filter({ hasText: tariffName }).last();
       await expect(row).toContainText('50.00 ₴');

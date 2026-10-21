@@ -1,7 +1,7 @@
 # Pipeline log — 009 Charge types and tariffs
 
-- Status: running
-- Phase: change request 1 — rate display
+- Status: finished
+- Phase: 5 — published
 - Branch: 009-charge-types-and-tariffs · Base: main (= origin/main) @ eca55b9
 - Requirement: docs/features/009-charge-types-and-tariffs.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
@@ -109,3 +109,4 @@ Same as 004–008 (see `context/spec/005-ui-preferences/pipeline-log.md` and `co
 - Owner request: show a rate with its significant decimals but at least 2 ("50,00", "4,32", "1,4532", "0,35"; en with a dot); storage and API keep 4 decimals; money formatting unchanged. The review run was stopped (PIDs 33444 33362 33186) to free the e2e ports.
 - Spec documents updated (functional-spec §2.2 text, criteria #1 and #7 and their evidence, change log; technical-considerations 2.5).
 - Change request 1 implemented (react-frontend): formatRate trims trailing zeros to at least 2 decimals (strings only); rate.test.ts owner examples uk/en (RED against the old body); web unit tests and tariffs.spec.ts expectations updated. Not changed: the new-version form prefills the stored rate ("4.3200"). make check green (backend 1,343, coverage met; ui-tokens 56, api-client 7, shared 73, web 309); make e2e 89 passed. Screenshots retaken from demo data (rates now "50,00", "4,32").
+- Change request 1 review r1 PASS (afbf243); the two stale texts it noted are corrected. Status set to finished before the last push; checks are watched after it.

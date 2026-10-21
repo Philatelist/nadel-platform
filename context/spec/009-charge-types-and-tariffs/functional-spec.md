@@ -80,7 +80,7 @@ nothing about anyone else's.
   - **Acceptance Criteria:**
     - [x] When the chairman creates the tariff "Для членів кооперативу" for "Членський внесок" with a first version from
       01.01.2027, per sotka, yearly, rate 50, then the tariffs list shows it with "50,00" ("50.00" in English), "за сотку", "щороку" and
-      "діє з 01.01.2027". _Evidence: `TariffsPage.test.tsx` ("shows the per-sotka yearly row in Ukrainian with the start date": "50,00 ₴ · За сотку · Щороку", "діє з 01.01.2027"); `TariffsAcceptanceTests` `section22_aTariffWithTwoVersionsListsThemNewestFirstWithFourDecimals`; `docs/screenshots/009-charge-types-and-tariffs-tariffs.png` ("50,0000 ₴ · За сотку · Щороку", "діє з")._
+      "діє з 01.01.2027". _Evidence: `TariffsPage.test.tsx` ("shows the per-sotka yearly row in Ukrainian with the start date": "50,00 ₴ · За сотку · Щороку", "діє з 01.01.2027"); `TariffsAcceptanceTests` `section22_aTariffWithTwoVersionsListsThemNewestFirstWithFourDecimals`; `docs/screenshots/009-charge-types-and-tariffs-tariffs.png` ("50,00 ₴ · За сотку · Щороку", "діє з")._
     - [x] When the chairman adds a version from 01.07.2027 with rate 60, then the tariff card lists both versions,
       newest first, and the first one is shown as valid until 30.06.2027. _Evidence: `TariffsAcceptanceTests` `section22_aTariffWithTwoVersionsListsThemNewestFirstWithFourDecimals` (valid until the day before); e2e `tariffs-acceptance.spec.ts` (§2.2 #2); `docs/screenshots/009-charge-types-and-tariffs-tariff-card.png`._
     - [x] When the chairman enters a new version dated before today, then the form shows "Нарахування за минулі
