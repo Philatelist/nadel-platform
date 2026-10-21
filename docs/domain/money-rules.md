@@ -27,7 +27,7 @@ prepayment           = Σ payments − Σ allocations
 
 ## 4. Tariffs
 
-- A tariff belongs to a charge type (membership fee, electricity, land tax, water, or a custom special-purpose fee). A charge type may have several tariffs. A tariff has versions, each with `valid_from` (effective date). A version applies until the day before the next version's `valid_from`, or without end; the end date is derived, never stored. Versions are never edited or deleted: a change of rate is a new version, and two versions of a tariff never start on the same date.
+- A tariff belongs to a charge type (membership fee, electricity, land tax, water, or a custom special-purpose fee). A charge type may have several tariffs. A tariff has versions, each with `valid_from` (effective date). A version applies until the day before the next version's `valid_from`, or without end; the end date is derived, never stored. A change of rate is normally a new version, and two versions of a tariff never start on the same date. A version can be corrected or deleted until a charge uses it; after that a correction goes through recalculation (feature 012). The only version of a tariff is never deleted.
 - Calculation basis: `PER_PLOT`, `PER_AREA_SOTKA` (the rate per sotka, area in m² ÷ 100), `PER_KWH`, `PER_M3` (water, per cubic metre of a meter reading), `FIXED_ONE_TIME` (one-off special-purpose fee with a due date).
 - Frequency: `MONTHLY`, `QUARTERLY`, `YEARLY`, `ONE_OFF`. `ONE_OFF` goes with `FIXED_ONE_TIME` and only with it, and a one-off version has a due date.
 - Rate: a `Rate` with up to 4 decimals, never rounded on its own (section 1).

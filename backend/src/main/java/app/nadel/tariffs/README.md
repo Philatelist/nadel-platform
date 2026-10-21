@@ -10,16 +10,18 @@ Tables (all under RLS `tenant_isolation`, an index on `tenant_id`, composite for
 |---|---|
 | `charge_type` | What is charged for: the four seeded types (`code` MEMBERSHIP, ELECTRICITY, LAND_TAX, WATER) and custom ones |
 | `tariff` | A tariff of one charge type, with its `scope_kind` (`ALL_PLOTS` or `SELECTED_PLOTS`; new tariffs are `ALL_PLOTS`) |
-| `tariff_version` | Append-only rates by date (`valid_from`, basis, frequency, `rate numeric(14,4)`, due date, note) |
+| `tariff_version` | Rates by date (`valid_from`, basis, frequency, `rate numeric(14,4)`, due date, note); a new rate is a new version, a mistake is corrected or deleted until a charge uses the version |
 | `tariff_scope_plot` | Selected plots (`SELECTED`), or exclusions with a reason (`EXCLUDED`); written by `PUT /tariffs/{id}/scope`; cascades when a plot is deleted |
 
-All four tables exist in V10 (one migration, one isolation test). `nadel_app` has no `DELETE`/`TRUNCATE` on `charge_type` and `tariff`, and
-no `UPDATE`/`DELETE`/`TRUNCATE` on `tariff_version`.
+All four tables exist in V10 (one migration, one isolation test). `nadel_app` has no `DELETE`/`TRUNCATE` on `charge_type` and `tariff`.
+`tariff_version` had no `UPDATE`/`DELETE` in V10; V11 grants both so a version can be corrected or deleted until a charge
+uses it (see Correcting a version). `TRUNCATE` stays revoked on all four, and RLS limits both statements to the caller's
+cooperative.
 
 ## Public API and permissions
 
 The module root exports `ChargeCalculator` (pure, no Spring, no database), `VersionTerms` (with `InvalidVersionTermsException`),
-`Basis`, `Frequency` and `ExpectedCharge` (`Amount` or `ByReadings`); everything else is in `internal`. Feature 011 (the
+`Basis`, `Frequency`, `ExpectedCharge` (`Amount` or `ByReadings`) and the port `TariffVersionUsage`; everything else is in `internal`. Feature 011 (the
 ledger) calls the same `ChargeCalculator`, so the preview and the real charge never diverge.
 
 Permissions (ADR 0009, defined in `identity.Permission`, seeded for the Chairman by `seed_base_roles`; the Treasurer gets
@@ -61,6 +63,8 @@ Tag `tariffs` (`TariffsController`):
 | `POST /tariffs` | `createTariff` | `TARIFFS_VIEW` and `TARIFFS_MANAGE` |
 | `GET /tariffs/{id}` | `getTariff` | `TARIFFS_VIEW` |
 | `POST /tariffs/{id}/versions` | `addTariffVersion` | `TARIFFS_VIEW` and `TARIFFS_MANAGE` |
+| `PUT /tariffs/{id}/versions/{versionId}` | `updateTariffVersion` | `TARIFFS_VIEW` and `TARIFFS_MANAGE` |
+| `DELETE /tariffs/{id}/versions/{versionId}` | `deleteTariffVersion` | `TARIFFS_VIEW` and `TARIFFS_MANAGE` |
 | `PUT /tariffs/{id}/scope` | `updateTariffScope` | `TARIFFS_VIEW` and `TARIFFS_MANAGE` |
 | `GET /plots/{id}/tariffs?month=YYYY-MM` | `getPlotTariffs` | `TARIFFS_VIEW` for any plot; otherwise a member for a plot they own now (no `@PreAuthorize`) |
 
@@ -86,8 +90,8 @@ Writes (`ChargeTypeCommands`, one transaction each, the audit event is published
 ## Tariffs and versions
 
 - A tariff is created together with its first version (`TariffCommands.create`, one transaction) and applies to all
-  plots until its scope is changed. Tariffs are never renamed or deleted; versions are never edited or deleted (the
-  entity is `@Immutable`, the application role has no `UPDATE` on `tariff_version`). A change of rate is a new version.
+  plots until its scope is changed. Tariffs are never renamed or deleted. A change of rate is a new version; a mistake in a
+  version is corrected or the version deleted until a charge uses it (below).
 - `VersionTerms` (module root) holds the terms of a version and enforces `FIXED_ONE_TIME` iff `ONE_OFF` iff a due date.
   The controller maps its violations to field codes of `400 VALIDATION_FAILED`: `frequency` `FREQUENCY_BASIS_MISMATCH`,
   `dueDate` `REQUIRED` (a one-time amount without a due date) and `dueDate` `INVALID` (a due date with any other
@@ -114,6 +118,45 @@ Writes (`ChargeTypeCommands`, one transaction each, the audit event is published
   the same `plotCount` as the list. A tariff of another cooperative or an unknown id is 404 (RLS). `TariffAssembler`
   builds the card (also the answer of `POST /tariffs` and `PUT .../scope`) and the counts; plots are read only through
   `PlotCatalog`.
+
+## Correcting a version
+
+`PUT /tariffs/{id}/versions/{versionId}` replaces the terms of a version; `DELETE` removes it
+(`TariffCommands.updateVersion` and `deleteVersion`, one transaction each). The rule (money rules section 4): a version can
+be corrected or deleted until a charge uses it; after that a correction goes through recalculation (feature 012).
+
+- **Request.** The body is `TariffVersionCreate`, the same form as for a new version, with the same field codes (`rate`
+  `RATE_INVALID`, `frequency` `FREQUENCY_BASIS_MISMATCH`, `dueDate` `REQUIRED` or `INVALID`) and the same rule for the
+  past date (`pastDated` in the answer, no refusal). The answer is `200` with the version and its derived `validTo`.
+- **Order of checks.** Field problems (400); the tariff row `FOR UPDATE` (404 when unknown or foreign) and its charge type
+  `FOR SHARE` (409 `CHARGE_TYPE_ARCHIVED`); the version, which must belong to that tariff (404 otherwise); the use check
+  (409 `TARIFF_VERSION_IN_USE`); for `DELETE` the last-version check (409 `TARIFF_LAST_VERSION`: a tariff always has a
+  version, archive the charge type instead); then the write. A `validFrom` that another version of the tariff has is 409
+  `TARIFF_VERSION_DATE_TAKEN` (`errors[{field: validFrom}]`, from the unique index as on create).
+- **A request that changes nothing** (`rate` `50` against a stored `50.0000` is no change) writes nothing and no audit entry.
+  It still goes through the use check, so a version in use answers 409 for it too.
+- **End dates.** `validTo` is derived from the ordering of the versions on every read and never stored, so correcting a
+  date or deleting a version re-derives the neighbours' `validTo` with no further write; `GET /tariffs/{id}` and
+  `GET /plots/{id}/tariffs` show the result at once.
+- **Entity.** `TariffVersionRecord` is no longer `@Immutable`; `correct(terms, note)` replaces the terms and keeps the
+  owner, the tariff and the creation time. V11 grants `UPDATE` and `DELETE` to `nadel_app`; the use check, not the grant,
+  protects a version a charge was produced from.
+
+### The port `TariffVersionUsage`
+
+`TariffVersionUsage.isUsed(UUID tenantId, UUID versionId)` is a public interface in the module root. The tariffs module
+asks **every** bean of that type (`List<TariffVersionUsage>`) and counts a version as used when any answers `true`.
+`NoChargesYetUsage` is the bundled default and always answers `false`, because no charge exists in feature 009.
+
+How feature 011 plugs in without a module cycle: the ledger module depends on `tariffs` (it already must, for
+`ChargeCalculator`), so it implements `TariffVersionUsage` in its own `internal` package as a Spring bean, answering from
+its `charge` table (for example `exists(select 1 from charge where tariff_version_id = ?)`). The tariffs module never
+imports the ledger; Spring finds the bean by type, so nothing in `tariffs` changes and the default may stay (it answers
+`false`) or be deleted. The method runs inside the caller's tenant-aware transaction with the tariff row locked
+`FOR UPDATE`, so the implementation queries its own tables under RLS without a transaction of its own. To make the check
+race-free, the code that creates a charge from a version must lock the same tariff row `FOR SHARE` (or otherwise wait for
+a correction) in the transaction that writes the charge. The ledger's feature also adds the `TARIFF_VERSION_IN_USE`
+tests against its own implementation; here a test bean next to the default stands in (`TariffVersionCorrectionTests`).
 
 ## Scopes
 
@@ -164,10 +207,14 @@ Writes (`ChargeTypeCommands`, one transaction each, the audit event is published
 
 ## Audit
 
-`TARIFF_CREATED` and `TARIFF_VERSION_ADDED` (entity type `TARIFF`, label = the tariff name, user content). The first
-lists `name`, `chargeType` (a charge type name token, see below) and the version fields; the second `validFrom`, `basis`, `frequency`, `rate` (four decimals),
-`dueDate` and `note` (the last two only when set). The note text is part of the audit entry (like plot notes) but is never
-written to the application log.
+`TARIFF_CREATED`, `TARIFF_VERSION_ADDED`, `TARIFF_VERSION_UPDATED` and `TARIFF_VERSION_DELETED` (entity type `TARIFF`,
+label = the tariff name, user content). The first lists `name`, `chargeType` (a charge type name token, see below) and the
+version fields; the second `validFrom`, `basis`, `frequency`, `rate` (four decimals), `dueDate` and `note` (the last two only
+when set). `TARIFF_VERSION_UPDATED` lists the changed fields only, each as old to new, in the order `validFrom`, `basis`,
+`frequency`, `rate`, `dueDate`, `note` (a field that was or becomes unset has no old or no new value; a request that
+changes nothing writes no entry). `TARIFF_VERSION_DELETED` lists the old values (new is empty) of `validFrom`, `basis`,
+`frequency`, `rate` and, when set, `dueDate` and `note`. The version is identified by the values (the entry is about the
+tariff). The note text is part of the audit entry (like plot notes) but is never written to the application log.
 
 A change of scope writes (entity type `TARIFF`, label = the tariff name), in this order:
 `TARIFF_SCOPE_CHANGED` when the kind or the selected plots changed, with `scope` (old to new kind, only when it
@@ -201,4 +248,5 @@ narrow exception to "everything in the repository is English", of the same kind 
 
 `identity` (`CurrentUser`, `AccessProfile`, `OwnedPlotsSource`), `audit` (events), `problem`, `money` (`Rate`, `Money`) and
 `plots` (the public `PlotCatalog` only: `find`, `findAll`, `inNaturalOrder`, `countChargeable`). The module root exports
-`Basis`, `Frequency`, `VersionTerms`, `ExpectedCharge` and `ChargeCalculator`. Nothing depends on this module yet.
+`Basis`, `Frequency`, `VersionTerms`, `ExpectedCharge`, `ChargeCalculator` and `TariffVersionUsage`. Nothing depends on this
+module yet; the ledger (feature 011) will, and implements `TariffVersionUsage`.

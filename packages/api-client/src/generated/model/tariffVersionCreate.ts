@@ -14,7 +14,7 @@ import type { Frequency } from './frequency';
 import type { Rate } from './rate';
 
 /**
- * A new version of a tariff
+ * The terms of a version of a tariff, new or corrected (same rules for both)
  */
 export interface TariffVersionCreate {
   /** The date the version applies from; unique among the versions of the tariff */

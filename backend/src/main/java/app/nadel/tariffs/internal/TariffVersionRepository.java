@@ -12,4 +12,6 @@ interface TariffVersionRepository extends JpaRepository<TariffVersionRecord, UUI
     List<TariffVersionRecord> findByTariffIdInOrderByTariffIdAscValidFromAsc(Collection<UUID> tariffIds);
 
     List<TariffVersionRecord> findByTariffIdOrderByValidFromAsc(UUID tariffId);
+
+    long countByTariffId(UUID tariffId);
 }

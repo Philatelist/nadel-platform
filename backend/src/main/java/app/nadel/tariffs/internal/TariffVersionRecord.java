@@ -14,15 +14,14 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
-import org.hibernate.annotations.Immutable;
 import org.jspecify.annotations.Nullable;
 
 /**
- * One rate of a tariff from a date. Append-only: the application role has no {@code UPDATE} or {@code DELETE} on the
- * table, and the entity is immutable. A change of rate is a new version.
+ * One rate of a tariff from a date. A change of rate is a new version. A version can be corrected
+ * ({@link #correct}) or deleted until a charge uses it (see {@link app.nadel.tariffs.TariffVersionUsage}); the
+ * application role holds {@code UPDATE} and {@code DELETE} on the table for that (V11), the use check guards it.
  */
 @Entity
-@Immutable
 @Table(name = "tariff_version")
 class TariffVersionRecord {
 
@@ -35,24 +34,24 @@ class TariffVersionRecord {
     @Column(name = "tariff_id", nullable = false, updatable = false)
     private UUID tariffId;
 
-    @Column(name = "valid_from", nullable = false, updatable = false)
+    @Column(name = "valid_from", nullable = false)
     private LocalDate validFrom;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, updatable = false)
+    @Column(nullable = false)
     private Basis basis;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, updatable = false)
+    @Column(nullable = false)
     private Frequency frequency;
 
-    @Column(nullable = false, updatable = false, precision = 14, scale = 4)
+    @Column(nullable = false, precision = 14, scale = 4)
     private BigDecimal rate;
 
-    @Column(name = "due_date", updatable = false)
+    @Column(name = "due_date")
     private LocalDate dueDate;
 
-    @Column(updatable = false)
+    @Column
     private String note;
 
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -75,6 +74,16 @@ class TariffVersionRecord {
         version.note = note;
         version.createdAt = now;
         return version;
+    }
+
+    /** Replaces the terms and the note; the owner (tenant, tariff) and the creation time never change. */
+    void correct(VersionTerms terms, @Nullable String note) {
+        this.validFrom = terms.validFrom();
+        this.basis = terms.basis();
+        this.frequency = terms.frequency();
+        this.rate = terms.rate().value();
+        this.dueDate = terms.dueDate();
+        this.note = note;
     }
 
     UUID getId() {

@@ -35,6 +35,10 @@ public final class ProblemCodes {
     public static final String CHARGE_TYPE_ORDER_STALE = "CHARGE_TYPE_ORDER_STALE";
     /** 409: another version of the tariff starts on the same date. */
     public static final String TARIFF_VERSION_DATE_TAKEN = "TARIFF_VERSION_DATE_TAKEN";
+    /** 409: a charge uses the tariff version, so it can be neither corrected nor deleted (a correction is a recalculation). */
+    public static final String TARIFF_VERSION_IN_USE = "TARIFF_VERSION_IN_USE";
+    /** 409: the only version of a tariff cannot be deleted; a tariff always has a version. */
+    public static final String TARIFF_LAST_VERSION = "TARIFF_LAST_VERSION";
     /** 413: the uploaded file is over the size limit. */
     public static final String FILE_TOO_LARGE = "FILE_TOO_LARGE";
     /** 400: the upload is not an {@code .xlsx} workbook (also a corrupt, encrypted or oversized-when-unpacked one). */

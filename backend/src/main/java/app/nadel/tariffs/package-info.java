@@ -6,7 +6,9 @@
  * <p>
  * Public API: {@link app.nadel.tariffs.Basis}, {@link app.nadel.tariffs.Frequency},
  * {@link app.nadel.tariffs.VersionTerms} (the terms of one tariff version and the one-off rule) and the calculation
- * {@link app.nadel.tariffs.ChargeCalculator} with its result {@link app.nadel.tariffs.ExpectedCharge}. The endpoints of tags
+ * {@link app.nadel.tariffs.ChargeCalculator} with its result {@link app.nadel.tariffs.ExpectedCharge}, and the port
+ * {@link app.nadel.tariffs.TariffVersionUsage} that the ledger implements so that a version a charge uses is no longer
+ * corrected or deleted. The endpoints of tags
  * {@code charge-types} and {@code tariffs} are internal. It depends on {@code identity}, {@code audit},
  * {@code problem}, {@code money} and {@code plots} (the public {@code PlotCatalog}).
  */

@@ -1600,8 +1600,9 @@ paths:
       operationId: addTariffVersion
       summary: Add a version to a tariff
       description: |
-        Adds a version that applies from `validFrom`. Versions are never edited or deleted; a change of rate is a new
-        version. Two versions of one tariff cannot start on the same date (409 `TARIFF_VERSION_DATE_TAKEN`,
+        Adds a version that applies from `validFrom`. A change of rate is a new version; a mistake in a version can be
+        corrected or the version deleted until a charge uses it (`PUT` and `DELETE` of
+        `/tariffs/{id}/versions/{versionId}`). Two versions of one tariff cannot start on the same date (409 `TARIFF_VERSION_DATE_TAKEN`,
         `errors[{field: validFrom}]`). The charge type must not be archived (409 `CHARGE_TYPE_ARCHIVED`). A date in the
         past is accepted (`pastDated: true` in the answer). Field codes of 400 `VALIDATION_FAILED`: `rate`
         `RATE_INVALID`; `frequency` `FREQUENCY_BASIS_MISMATCH` (`ONE_OFF` goes only with `FIXED_ONE_TIME` and
@@ -1631,6 +1632,98 @@ paths:
                 $ref: '#/components/schemas/TariffVersion'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /tariffs/{id}/versions/{versionId}:
+    put:
+      tags: [tariffs]
+      operationId: updateTariffVersion
+      summary: Correct a version of a tariff
+      description: |
+        Replaces the terms of a version (the same fields and rules as `POST /tariffs/{id}/versions`; `validFrom` may
+        change too). A version can be corrected until a charge uses it: then 409 `TARIFF_VERSION_IN_USE` (a later
+        correction goes through recalculation, feature 012). The tariff and the version are 404 when unknown or of
+        another cooperative, and also when the version belongs to another tariff. Two versions of one tariff cannot
+        start on the same date (409 `TARIFF_VERSION_DATE_TAKEN`, `errors[{field: validFrom}]`). The charge type must
+        not be archived (409 `CHARGE_TYPE_ARCHIVED`). Field codes of 400 `VALIDATION_FAILED` are those of the create
+        operation (`rate` `RATE_INVALID`, `frequency` `FREQUENCY_BASIS_MISMATCH`, `dueDate` `REQUIRED` or `INVALID`).
+        A date in the past is accepted (`pastDated: true` in the answer). The answer is the version with `validTo`
+        derived from the versions that follow it; the end dates of the neighbours are derived on every read, so they
+        follow the new date. A request that changes nothing is accepted and writes nothing. Requires `TARIFFS_VIEW`
+        and `TARIFFS_MANAGE`; the change is written to the audit log (`TARIFF_VERSION_UPDATED`, old and new values of
+        the changed fields).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: versionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TariffVersionCreate'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TariffVersion'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+    delete:
+      tags: [tariffs]
+      operationId: deleteTariffVersion
+      summary: Delete a version of a tariff
+      description: |
+        Deletes a version until a charge uses it (409 `TARIFF_VERSION_IN_USE` afterwards). The only version of a tariff
+        cannot be deleted (409 `TARIFF_LAST_VERSION`): archive the charge type or keep the tariff instead. The end
+        dates of the neighbours are derived on every read, so the version before the deleted one then lasts until the
+        next one starts. The tariff and the version are 404 when unknown or of another cooperative, and also when the
+        version belongs to another tariff. The charge type must not be archived (409 `CHARGE_TYPE_ARCHIVED`). Requires
+        `TARIFFS_VIEW` and `TARIFFS_MANAGE`; the change is written to the audit log (`TARIFF_VERSION_DELETED`, the old
+        values).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: versionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Deleted
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -1817,8 +1910,10 @@ components:
         `errors[{field: name}]`), a charge type is archived and cannot be changed or archived again (code
         `CHARGE_TYPE_ARCHIVED`), or the submitted order of charge types is not the current list (code
         `CHARGE_TYPE_ORDER_STALE`), a tariff version with the same start date exists (code
-        `TARIFF_VERSION_DATE_TAKEN`, with `errors[{field: validFrom}]`), or a tariff is added to, a version is added
-        to or the scope is changed of a tariff under an archived charge type (code `CHARGE_TYPE_ARCHIVED`)
+        `TARIFF_VERSION_DATE_TAKEN`, with `errors[{field: validFrom}]`), a tariff version is corrected or deleted
+        although a charge uses it (code `TARIFF_VERSION_IN_USE`), the only version of a tariff is deleted (code
+        `TARIFF_LAST_VERSION`), or a tariff is added to, a version is added to, corrected or deleted, or the scope is
+        changed of a tariff under an archived charge type (code `CHARGE_TYPE_ARCHIVED`)
       content:
         application/problem+json:
           schema:
@@ -2165,6 +2260,8 @@ components:
         - CHARGE_TYPE_ARCHIVED
         - TARIFF_CREATED
         - TARIFF_VERSION_ADDED
+        - TARIFF_VERSION_UPDATED
+        - TARIFF_VERSION_DELETED
         - TARIFF_SCOPE_CHANGED
         - TARIFF_EXCLUSION_ADDED
         - TARIFF_EXCLUSION_REMOVED
@@ -3089,7 +3186,7 @@ components:
 
     TariffVersionCreate:
       type: object
-      description: A new version of a tariff
+      description: The terms of a version of a tariff, new or corrected (same rules for both)
       required: [validFrom, basis, frequency, rate]
       properties:
         validFrom:

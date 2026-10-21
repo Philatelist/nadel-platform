@@ -53,6 +53,12 @@ money-rules section 7). A charge type that has tariffs is archived, never delete
   never rounded on its own. Rounding to kopecks happens only when a charge amount is produced (money-rules section 1).
 - A version whose `valid_from` is in the past is allowed (retroactive). In this feature it only shows a warning: "Нарахування
   за минулі періоди буде перераховано" — the actual recalculation is feature 012.
+- A version can be **corrected or deleted until a charge uses it**; after that a correction goes through recalculation
+  (feature 012). A correction takes the same fields and rules as a new version (unique `valid_from` per tariff, rate,
+  one-off rule, past-date warning) and the end dates of the neighbours follow, because they are derived. The only
+  version of a tariff cannot be deleted (archive the charge type instead). Whether a charge uses a version is asked
+  through a port of the tariffs module (`TariffVersionUsage`); no charge exists in this feature, so every version is
+  free here, and feature 011 plugs in the real answer. A change is audited with the old and new values.
 
 ### 2.3 Which plots a tariff applies to
 
@@ -103,6 +109,11 @@ periods share   MONTHLY 1 · QUARTERLY 1/3 · YEARLY 1/12 when the cooperative b
 - `GET/POST /charge-types`, `PUT /charge-types/{id}`, `POST /charge-types/{id}/archive`.
 - `GET/POST /tariffs`, `GET /tariffs/{id}`, `POST /tariffs/{id}/versions`, `PUT /tariffs/{id}/scope` (scope,
   selected plots, exclusions with reasons).
+- `PUT /tariffs/{id}/versions/{versionId}` (correct a version: `validFrom`, `basis`, `frequency`, `rate`, `dueDate`,
+  `note`; 200 with the version) and `DELETE /tariffs/{id}/versions/{versionId}` (204), both `TARIFFS_MANAGE`. 409
+  `TARIFF_VERSION_IN_USE` when a charge uses the version, 409 `TARIFF_LAST_VERSION` when it is the only one of its
+  tariff, 409 `TARIFF_VERSION_DATE_TAKEN` and `CHARGE_TYPE_ARCHIVED` as for a new version; 404 for an unknown or
+  foreign tariff and for a version that is not of that tariff.
 - `GET /plots/{id}/tariffs?month=2026-11` — the tariffs that apply to the plot in that month and the server-calculated
   expected amount for each (`Money` strings).
 - Rates in JSON are strings with up to 4 decimals (new schema `Rate`, pattern `^\d+(\.\d{1,4})?$`); amounts stay `Money`.
@@ -131,7 +142,7 @@ existing and new cooperative (like base roles). Versions of the same tariff cann
 
 ## 8. Audit
 
-Every create, rename, archive, new version, scope change and exclusion is audited with old and new values.
+Every create, rename, archive, new version, correction or deletion of a version, scope change and exclusion is audited with old and new values (`TARIFF_VERSION_UPDATED` lists the changed fields only; `TARIFF_VERSION_DELETED` the old values).
 
 ## 9. Out of scope
 
