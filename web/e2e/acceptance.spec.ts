@@ -60,7 +60,7 @@ async function expectAuditRow(page: Page, text: string | RegExp) {
 }
 
 test.describe('§2.10 / §2.11 landing page and navigation', () => {
-  test('§2.10 #1, #2 and §2.11 #2: the treasurer lands on Plots, opens My account and has no Roles or Map item', async ({
+  test('§2.10 #1, #2 and §2.11 #2: the treasurer lands on Plots, opens My account and has no Roles or Map item @smoke', async ({
     page,
   }) => {
     await loginAs(page, 'treasurer@demo.local');
@@ -86,7 +86,7 @@ test.describe('§2.10 / §2.11 landing page and navigation', () => {
     );
   });
 
-  test('§2.11 #1: the chairman lands on Plots and sees Plots, My account, Members, Roles and Audit log', async ({
+  test('§2.11 #1: the chairman lands on Plots and sees Plots, My account, Members, Roles and Audit log @smoke', async ({
     page,
   }) => {
     await loginAs(page, 'chairman@demo.local');
@@ -105,7 +105,7 @@ test.describe('§2.10 / §2.11 landing page and navigation', () => {
 });
 
 test.describe('§2.5 what an ordinary member sees', () => {
-  test('§2.5 #1-#4, §2.1 #2, §2.9 #7: only Member means own read-only card and no admin screens', async ({
+  test('§2.5 #1-#4, §2.1 #2, §2.9 #7: only Member means own read-only card and no admin screens @smoke', async ({
     page,
   }) => {
     await loginAs(page, 'member@demo.local');

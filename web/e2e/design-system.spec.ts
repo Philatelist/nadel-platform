@@ -245,7 +245,7 @@ test.describe('page frame (2.6)', () => {
     });
   });
 
-  test('plain member sees the header and the account page, with a menu holding only Plots', async ({
+  test('plain member sees the header and the account page, with a menu holding only Plots @smoke', async ({
     page,
   }) => {
     await loginAs(page, 'member@demo.local');

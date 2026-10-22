@@ -79,6 +79,9 @@ Numbering: a feature document `docs/features/NNN-name.md` and its AWOS spec fold
   - e2e: only the Playwright specs of the changed screens, for example `pnpm --filter web exec playwright test meters`.
 - Run the full local suite for a fix only to reproduce a CI failure that the narrow run does not show.
 - CI is the gate: a PR is merged only with all checks green.
+- End-to-end: a feature runs its own Playwright specs and the smoke set (`--grep @smoke`) locally; CI runs the smoke
+  set on every PR. The full suite runs at the end of a roadmap phase, or on demand with the `full-e2e` label on a PR
+  or `gh workflow run CI --ref main`.
 
 **Language**
 - Everything in the repository is in English: code, comments, docs, commit messages, test names, SQL comments.

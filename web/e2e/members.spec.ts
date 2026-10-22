@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { loginAs } from './support/login';
 
 test.describe('members access', () => {
-  test('treasurer sees the member list and a read-only card', async ({ page }) => {
+  test('treasurer sees the member list and a read-only card @smoke', async ({ page }) => {
     await loginAs(page, 'treasurer@demo.local');
 
     await page.locator('#app-menu nav').getByRole('link', { name: 'Members' }).click();

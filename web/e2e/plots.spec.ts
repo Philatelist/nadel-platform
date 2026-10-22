@@ -25,7 +25,9 @@ async function apiDelete(page: Page, id: string): Promise<{ status: number; body
 }
 
 test.describe('plots registry', () => {
-  test('treasurer lands on the plots list, searches, opens a full read-only card', async ({ page }) => {
+  test('treasurer lands on the plots list, searches, opens a full read-only card @smoke', async ({
+    page,
+  }) => {
     await loginAs(page, 'treasurer@demo.local');
 
     await expect(page).toHaveURL(/\/plots$/);
@@ -70,7 +72,7 @@ test.describe('plots registry', () => {
     await expect(page.getByRole('main')).toContainText("Кутова ділянка біля в'їзних воріт");
   });
 
-  test('member opens Plots from the menu and sees the restricted view only', async ({ page }) => {
+  test('member opens Plots from the menu and sees the restricted view only @smoke', async ({ page }) => {
     await loginAs(page, 'member@demo.local');
 
     await menuLink(page, 'Plots').click();
