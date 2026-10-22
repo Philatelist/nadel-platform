@@ -9,8 +9,24 @@
  *
  * OpenAPI spec version: 0.1.0
  */
+import type { CommonConsumerSplit } from './commonConsumerSplit';
+import type { LossesMode } from './lossesMode';
+import type { LossesPercent } from './lossesPercent';
+import type { Money } from './money';
 import type { PlotStatusVisibility } from './plotStatusVisibility';
 
+/**
+ * The settings of the cooperative. `redAmount` and `redDays` are the red threshold of the plot status: a plot is red when its debt is above `redAmount` or the oldest unpaid charge is older than `redDays` days, yellow with any other debt, green without a debt (docs/domain/money-rules.md, section 9).
+ */
 export interface CooperativeSettings {
   memberPlotStatusVisibility: PlotStatusVisibility;
+  lossesMode: LossesMode;
+  lossesPercent: LossesPercent;
+  commonConsumerDefaultSplit: CommonConsumerSplit;
+  redAmount: Money;
+  /**
+     * @minimum 0
+     * @maximum 36500
+     */
+  redDays: number;
 }

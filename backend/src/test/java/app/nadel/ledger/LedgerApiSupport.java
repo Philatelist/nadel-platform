@@ -69,11 +69,10 @@ abstract class LedgerApiSupport extends LedgerTestSupport {
             });
         }
         JdbcTemplate owner = ownerJdbc();
-        for (UUID month : owner.queryForList("select id from billing_month", UUID.class)) {
-            if (!monthsBefore.contains(month)) {
-                owner.update("delete from billing_month where id = ?", month);
-            }
-        }
+        List<UUID> created = owner.queryForList("select id from billing_month", UUID.class).stream()
+                .filter(month -> !monthsBefore.contains(month)).toList();
+        // billing_month refuses DELETE (trigger billing_month_guard, V14) except to the owner in maintenance
+        asLedgerOwner(sql -> created.forEach(month -> sql.update("delete from billing_month where id = ?", month)));
         monthsBefore.clear();
         for (UUID ownership : ownerships) {
             owner.update("delete from ownership where id = ?", ownership);

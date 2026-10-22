@@ -1,5 +1,6 @@
 export * from './http';
 export * from './generated/audit/audit';
+export * from './generated/billing/billing';
 export * from './generated/charges/charges';
 export * from './generated/charge-types/charge-types';
 export * from './generated/imports/imports';

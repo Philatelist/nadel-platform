@@ -24,6 +24,11 @@ prepayment           = Σ payments − Σ allocations
 - `charge`, `payment` and `allocation` are append-only.
 - A wrong charge is cancelled by a `REVERSAL` entry that references the original and states a reason.
 - Every entry stores its author, timestamp and reason (for manual operations).
+- Every charge is booked in a billing month, which is open or closed. Months close only in order (every earlier month
+  first) and a month after the current one is never closed; a closed month is never reopened and nothing is booked in
+  it any more. A charge about a day of a closed month is booked in the earliest open month after it (a new month when
+  there is none), keeping its own service period and debt date. The closing check list (month run done, "not charged"
+  items, plot meters without a reading for more than 60 days) never blocks closing.
 
 ## 4. Tariffs
 
@@ -216,7 +221,8 @@ Feature 010 (`ConsumptionCalculator`, pure and tested without a database).
 
 ## 9. Plot status (map color)
 
-Thresholds are configured per cooperative: `red_amount`, `red_days`, `yellow_amount` (optional), `yellow_days` (optional).
+Thresholds are configured per cooperative in the settings ("Поріг червоного статусу"): `red_amount` (default
+1 000,00 ₴) and `red_days` (default 90). There are no separate yellow thresholds: yellow is any debt that is not red.
 
 ```
 debt age = today − date of the oldest unpaid charge
@@ -228,7 +234,12 @@ GREY   common land, or a plot without an owner
 
 Visibility: A member always sees full details (status, amounts, owners) of the plots they own. Whether a member also sees the status color of other plots is a cooperative setting chosen by the chairman: `OWN_ONLY` (default; other plots show number, street and kind with a neutral color) or `ALL_PLOTS` (the status color of every plot, still without amounts, owners or personal data). Showing every plot's color should follow a general meeting decision; changing the setting is audited. Admins see what their permissions allow. This is enforced by the API, not only hidden in the UI.
 
-The status is recalculated after every allocation, charge and recalculation and is stored as a cache in `plot_status` (the cache can be rebuilt from the ledger at any time).
+After every charge and reversal (later also every allocation and recalculation) the debt of the plot and the date of
+its oldest unpaid charge are rebuilt from the ledger and cached in `plot_status` (the cache can be rebuilt from the
+ledger at any time). Until payments exist, the debt is the sum of the charges and the oldest unpaid charge is the oldest
+`accrued_on` among the positive charges that were not reversed. The colour itself is derived whenever it is read, from
+the cached debt and date, the current thresholds and today, so a change of the thresholds and the passing of days apply
+at once without rewriting the cache. "Debt age > red_days" means today minus that date is more than `red_days` days.
 
 ## 10. Land tax
 

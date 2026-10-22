@@ -134,28 +134,32 @@ class PlotsReadTests extends IntegrationTest {
     }
 
     @Test
-    void statusFilterAppliesTheCachedStatusOfAPlotButNeverOfCommonLand() throws Exception {
+    void statusFilterDerivesTheStatusFromTheCachedDebtButNeverForCommonLand() throws Exception {
         String treasurer = treasurer();
         inTenant(DEMO_TENANT, sql -> {
-            sql.update("update plot_status set status = 'RED' where plot_id in "
+            // above the red amount (1 000,00 by default): RED; the road keeps GREY whatever its debt
+            sql.update("update plot_status set debt = 1500.00, oldest_debt_date = current_date where plot_id in "
                     + "(select id from plot where number in ('3', 'R-1'))");
-            return null;
+            // a small debt: YELLOW; the same small debt older than the red days (90): RED
+            sql.update("update plot_status set debt = 25.00, oldest_debt_date = current_date where plot_id = "
+                    + "(select id from plot where number = '12')");
+            return sql.update("update plot_status set debt = 25.00, oldest_debt_date = current_date - 91 "
+                    + "where plot_id = (select id from plot where number = '5')");
         });
         try {
             listAs(treasurer, "status=RED")
-                    .andExpect(jsonPath("$.items[*].number", contains("3")))
-                    .andExpect(jsonPath("$.items[0].status").value("RED"));
-            // plot 3 is RED now; the road keeps GREY whatever its cached row says: plots 25-29 and R-1
+                    .andExpect(jsonPath("$.items[*].number", contains("3", "5")))
+                    .andExpect(jsonPath("$.items[*].status", everyItem(is("RED"))));
+            listAs(treasurer, "status=YELLOW")
+                    .andExpect(jsonPath("$.items[*].number", contains("12")))
+                    .andExpect(jsonPath("$.items[0].status").value("YELLOW"));
+            // plots 25-29 have no owner and R-1 is common land: GREY whatever their debt
             listAs(treasurer, "status=GREY&size=100")
                     .andExpect(jsonPath("$.totalItems").value(6))
                     .andExpect(jsonPath("$.items[?(@.number == 'R-1')].status").value("GREY"));
+            listAs(treasurer, "status=GREEN&size=100").andExpect(jsonPath("$.totalItems").value(22));
         } finally {
-            // back to the demo statuses: GREEN with a current owner, GREY without
-            inTenant(DEMO_TENANT, sql -> sql.update("""
-                    update plot_status s set status = case when p.kind = 'PLOT' and exists (
-                        select 1 from ownership o where o.plot_id = p.id and o.valid_to is null)
-                        then 'GREEN' else 'GREY' end
-                    from plot p where p.id = s.plot_id"""));
+            inTenant(DEMO_TENANT, sql -> sql.update("update plot_status set debt = 0, oldest_debt_date = null"));
         }
     }
 

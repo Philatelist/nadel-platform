@@ -12,8 +12,10 @@ import java.time.LocalDate;
 import java.util.UUID;
 
 /**
- * Cached plot status for the map. Rebuilt from the charges and allocations ledger,
- * so it can be overwritten at any time (unlike ledger entries).
+ * The debt cache of a plot for its status (table {@code plot_status}): the debt and the day its oldest unpaid charge
+ * counts from, rebuilt from the ledger after every booking ({@code PlotDebtCache}), so it can be overwritten at any time
+ * (unlike ledger entries). The colour is derived from them when it is read ({@link PlotStatusPolicy#statusOf}); the
+ * {@code status} column is a snapshot written with every change for the previous release and never read by this one.
  */
 @Entity
 @Table(name = "plot_status")
@@ -59,6 +61,17 @@ class PlotStatusEntry {
         updatedAt = now;
     }
 
+    /**
+     * Records the debt rebuilt from the ledger and the status it gives today (the snapshot of the {@code status}
+     * column).
+     */
+    void recordDebt(BigDecimal newDebt, LocalDate newOldestDebtDate, PlotStatusCode snapshot, Instant now) {
+        debt = newDebt;
+        oldestDebtDate = newOldestDebtDate;
+        status = snapshot;
+        updatedAt = now;
+    }
+
     UUID getPlotId() {
         return plotId;
     }
@@ -73,5 +86,9 @@ class PlotStatusEntry {
 
     BigDecimal getDebt() {
         return debt;
+    }
+
+    LocalDate getOldestDebtDate() {
+        return oldestDebtDate;
     }
 }

@@ -8,11 +8,13 @@
  * Public API: the event {@link app.nadel.ledger.ChargesBooked}, published after every booking or reversal so that the
  * plot status can follow the debt. Everything else is internal: the entities, the pure rules {@code BillingCalendar}
  * (which month a charge is booked in) and {@code DebtCalculator} (debt per charge type), the reversal and opening
- * balance commands, the account query, the plot guard {@code LedgerPlotGuard} (an implementation of
- * {@link app.nadel.plots.PlotChangeGuard}: a plot with charges is never deleted) and the endpoints of tag
- * {@code charges}. It depends on {@code tariffs} (the public {@code ChargeTypeCatalog}), {@code plots} (the public
- * {@code PlotCatalog} and {@code PlotChangeGuard}), {@code money}, {@code identity}, {@code audit}, {@code problem} and
- * {@code tenancy}; no module depends on it.
+ * balance commands, the account query, the billing months (list, check list, closing in order), the listener
+ * {@code PlotStatusRefresher} (the debt behind the plot status, through {@link app.nadel.plots.PlotDebtCache}), the
+ * plot guard {@code LedgerPlotGuard} (an implementation of {@link app.nadel.plots.PlotChangeGuard}: a plot with charges
+ * is never deleted) and the endpoints of tags {@code charges} and {@code billing}. It depends on {@code tariffs} (the
+ * public {@code ChargeTypeCatalog}), {@code plots} (the public {@code PlotCatalog}, {@code PlotChangeGuard} and
+ * {@code PlotDebtCache}), {@code meters} ({@code MeterNetwork}), {@code money}, {@code identity}, {@code audit},
+ * {@code problem} and {@code tenancy}; no module depends on it.
  */
 @org.springframework.modulith.ApplicationModule(displayName = "Ledger and charges")
 package app.nadel.ledger;

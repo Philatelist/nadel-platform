@@ -1,6 +1,7 @@
 package app.nadel.meters.internal;
 
 import app.nadel.meters.internal.MeterReadingRecord.Status;
+import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -49,4 +50,16 @@ interface MeterReadingRepository extends JpaRepository<MeterReadingRecord, UUID>
                                where o.meterId = r.meterId and o.status = :status)
             """)
     List<MeterReadingRecord> latest(@Param("meterIds") Collection<UUID> meterIds, @Param("status") Status status);
+
+    /**
+     * For each of the meters that has one, the date of its latest reading of the status on or before {@code asOf}:
+     * rows of {@code [meterId, takenOn]}.
+     */
+    @Query("""
+            select r.meterId, max(r.takenOn) from MeterReadingRecord r
+            where r.status = :status and r.meterId in :meterIds and r.takenOn <= :asOf
+            group by r.meterId
+            """)
+    List<Object[]> latestDatesOnOrBefore(@Param("meterIds") Collection<UUID> meterIds, @Param("status") Status status,
+            @Param("asOf") LocalDate asOf);
 }

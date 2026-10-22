@@ -197,7 +197,9 @@ class LedgerTenantIsolationTests extends LedgerTestSupport {
         inTenant(DEMO_TENANT, sql -> sql.update(
                 "insert into billing_month (tenant_id, month, status, closed_at) "
                         + "values (?, date '2031-02-01', 'CLOSED', now())", DEMO_TENANT));
-        ownerJdbc().update("delete from billing_month where tenant_id = ? and month = date '2031-02-01'", DEMO_TENANT);
+        // billing_month refuses DELETE (trigger billing_month_guard, V14) except to the owner in maintenance
+        asLedgerOwner(sql -> sql.update("delete from billing_month where tenant_id = ? and month = date '2031-02-01'",
+                DEMO_TENANT));
     }
 
     // ---- charge checks and unique indexes

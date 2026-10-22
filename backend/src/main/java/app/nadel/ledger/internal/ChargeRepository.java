@@ -1,5 +1,6 @@
 package app.nadel.ledger.internal;
 
+import java.math.BigDecimal;
 import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
@@ -10,8 +11,26 @@ import org.springframework.data.repository.query.Param;
 // no tenant_id filter needed: RLS hides other cooperatives' rows
 interface ChargeRepository extends JpaRepository<ChargeRecord, UUID> {
 
+    /** The sum of the charges of one charge type booked in one billing month (reversals count negative). */
+    record MonthTypeTotal(UUID billingMonthId, UUID chargeTypeId, BigDecimal amount) {
+    }
+
     /** Every charge of the plot, reversals included, in no particular order. */
     List<ChargeRecord> findByPlotId(UUID plotId);
+
+    /** Every charge of the plots, reversals included, in no particular order. */
+    List<ChargeRecord> findByPlotIdIn(Collection<UUID> plotIds);
+
+    /** The totals of every billing month per charge type; months and types without a charge are absent. */
+    @Query("select new app.nadel.ledger.internal.ChargeRepository$MonthTypeTotal(c.billingMonthId, c.chargeTypeId, "
+            + "sum(c.amount)) from ChargeRecord c group by c.billingMonthId, c.chargeTypeId")
+    List<MonthTypeTotal> totalsPerMonthAndType();
+
+    /** The totals of one billing month per charge type; types without a charge are absent. */
+    @Query("select new app.nadel.ledger.internal.ChargeRepository$MonthTypeTotal(c.billingMonthId, c.chargeTypeId, "
+            + "sum(c.amount)) from ChargeRecord c where c.billingMonthId = :monthId "
+            + "group by c.billingMonthId, c.chargeTypeId")
+    List<MonthTypeTotal> totalsOfMonth(@Param("monthId") UUID monthId);
 
     /** Whether a reversal of the charge exists (a charge is reversed at most once). */
     boolean existsByReversesChargeId(UUID chargeId);

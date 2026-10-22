@@ -1,6 +1,7 @@
 package app.nadel.plots.internal;
 
 import app.nadel.settings.PlotStatusVisibility;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
@@ -12,17 +13,24 @@ import java.util.UUID;
  *                     who does not need it
  * @param setting      who sees the status of plots that are not theirs; {@code ALL_PLOTS} for a full viewer, whose
  *                     view the setting never narrows (so it is not read for them)
+ * @param statusBasis  the red threshold and today, from which every status of the request is derived
  */
-record ViewerScope(boolean full, Set<UUID> ownedPlotIds, PlotStatusVisibility setting) {
-
-    /** A viewer with {@code PLOTS_VIEW}. */
-    static final ViewerScope FULL = new ViewerScope(true, Set.of(), PlotStatusVisibility.ALL_PLOTS);
-
-    /** A viewer who sees nothing beyond the basics: no owned plots, own plots only. */
-    static final ViewerScope NONE = new ViewerScope(false, Set.of(), PlotStatusVisibility.OWN_ONLY);
+record ViewerScope(boolean full, Set<UUID> ownedPlotIds, PlotStatusVisibility setting,
+        PlotStatusPolicy.Basis statusBasis) {
 
     ViewerScope {
         ownedPlotIds = Set.copyOf(ownedPlotIds);
+        Objects.requireNonNull(statusBasis, "statusBasis");
+    }
+
+    /** A viewer with {@code PLOTS_VIEW}. */
+    static ViewerScope full(PlotStatusPolicy.Basis statusBasis) {
+        return new ViewerScope(true, Set.of(), PlotStatusVisibility.ALL_PLOTS, statusBasis);
+    }
+
+    /** A viewer who sees nothing beyond the basics: no owned plots, own plots only. */
+    static ViewerScope none(PlotStatusPolicy.Basis statusBasis) {
+        return new ViewerScope(false, Set.of(), PlotStatusVisibility.OWN_ONLY, statusBasis);
     }
 
     /** Area, cadastral number, building flag and, on the map, area and debt: the board and the plot's owners. */

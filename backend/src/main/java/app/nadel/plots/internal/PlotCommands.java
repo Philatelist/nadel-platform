@@ -36,14 +36,16 @@ class PlotCommands {
     private final OwnershipRepository ownerships;
     private final PlotAuditPublisher audit;
     private final PlotChangeGuards guards;
+    private final PlotStatusBasis statusBasis;
 
     PlotCommands(PlotRepository plots, PlotStatusRepository statuses, OwnershipRepository ownerships,
-            PlotAuditPublisher audit, PlotChangeGuards guards) {
+            PlotAuditPublisher audit, PlotChangeGuards guards, PlotStatusBasis statusBasis) {
         this.plots = plots;
         this.statuses = statuses;
         this.ownerships = ownerships;
         this.audit = audit;
         this.guards = guards;
+        this.statusBasis = statusBasis;
     }
 
     @Transactional
@@ -55,7 +57,7 @@ class PlotCommands {
         // a plot has no owner yet, so it starts GREY without debt; the ledger changes it later
         statuses.save(PlotStatusEntry.initial(plot.getId(), plot.getTenantId()));
         publish(actor, "PLOT_CREATED", plot, PlotSnapshot.diff(PlotSnapshot.NONE, PlotSnapshot.of(plot)));
-        return PlotDtoMapper.toDetails(actor, new PlotRow(plot, PlotStatusCode.GREY, null));
+        return PlotDtoMapper.toDetails(actor, new PlotRow(plot, null, null, false), statusBasis.current());
     }
 
     @Transactional
@@ -83,7 +85,7 @@ class PlotCommands {
             publish(actor, "PLOT_UPDATED", plot, changes);
         }
         PlotRow row = plots.findRowById(plot.getId()).orElseThrow(ApiProblemException::notFound);
-        return PlotDtoMapper.toDetails(actor, row);
+        return PlotDtoMapper.toDetails(actor, row, statusBasis.current());
     }
 
     @Transactional
@@ -143,7 +145,7 @@ class PlotCommands {
 
     private PlotDetails card(Plot plot, AccessProfile actor) {
         PlotRow row = plots.findRowById(plot.getId()).orElseThrow(ApiProblemException::notFound);
-        return PlotDtoMapper.toDetails(actor, row);
+        return PlotDtoMapper.toDetails(actor, row, statusBasis.current());
     }
 
     /** Saves and flushes, so a unique violation of an index surfaces here as the matching 409. */

@@ -13,8 +13,8 @@ with an effective date, the tree over a date range with the consumption per node
 
 Depends on `plots` (`PlotCatalog`, the import records `PlotImportRow` and `PlotImportPlan`, and it implements
 `plots.PlotChangeGuard`), `identity` (`CurrentUser`, `AccessProfile`, `OwnedPlotsSource`, `Permission`), `audit` (events)
-and `problem`. `plots` never depends on `meters`; `tariffs` (`MeterCatalog`) and `imports` (`MeterImport`) depend on it,
-never the other way round.
+and `problem`. `plots` never depends on `meters`; `tariffs` (`MeterCatalog`), `imports` (`MeterImport`) and `ledger`
+(`MeterNetwork`) depend on it, never the other way round.
 
 ## Tables (V12)
 
@@ -46,6 +46,7 @@ within the working period; that a `REJECTED` or `APPROVED` row carries `decided_
 | `ConsumptionCalculator` | Pure and static (no Spring, no database, no clock); see below |
 | `ReadingUsage` | Port: `isUsed(tenantId, meterId, from, to)`; the ledger (011) implements it, `internal.NoChargesYetUsage` answers `false` until then. Every bean is asked; the readings are used when any says so |
 | `MeterCatalog` | Read API for other modules (`internal.JpaMeterCatalog`): `plotIdsWithActiveMeter(resource)` (plots with an active plot meter of the resource now) and `hasMeterBetween(plot, resource, from, to)` (a plot meter of the resource worked on a day of the range, both ends included). The tariffs module uses it for `NO_METER` and the plot counts of meter-based tariffs |
+| `MeterNetwork` | Read API for the ledger (`internal.JpaMeterNetwork`, feature 011): `staleMeters(asOf, days)` lists the plot meters that worked on `asOf` (installed on or before it, not removed on or before it) whose last point on or before `asOf` (the latest approved reading, else the installation) is dated before `asOf - days`, as `StaleMeter(meterId, plotId, resource, lastReadingOn)`; the rule of the round's `noReadingSince` filter, as of a date. The closing check list of a billing month asks it with 60 days. Tests: `MeterNetworkTests` |
 | `MeterImport` | Facade of the Excel import's Meters sheet (`internal.MeterImportService`): `plan`, `lock`, `apply`, with `MeterImportRow`, `MeterImportPlan`, `MeterImportItem`, `MeterImportAction` (`NEW`, `UNCHANGED`) and `MeterImportProblem`. See The Excel sheet |
 
 ### The calculation

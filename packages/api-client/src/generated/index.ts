@@ -1,4 +1,5 @@
 export * from './audit/audit';
+export * from './billing/billing';
 export * from './charge-types/charge-types';
 export * from './charges/charges';
 export * from './imports/imports';

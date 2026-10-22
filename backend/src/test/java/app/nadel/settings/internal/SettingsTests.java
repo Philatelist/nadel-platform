@@ -9,9 +9,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import app.nadel.IntegrationTest;
 import app.nadel.TestTokens;
+import app.nadel.money.Money;
+import app.nadel.settings.CommonConsumerSplit;
 import app.nadel.settings.CooperativeSettings;
+import app.nadel.settings.LossesMode;
 import app.nadel.settings.PlotStatusVisibility;
 import app.nadel.tenancy.TenantContext;
+import java.math.BigDecimal;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -179,13 +183,127 @@ class SettingsTests extends IntegrationTest {
     }
 
     @Test
-    void anInvalidOrMissingValueIsRejected() throws Exception {
+    void anInvalidValueIsRejected() throws Exception {
         String chairman = demo("chairman@demo.local");
 
         save(chairman, Map.of("memberPlotStatusVisibility", "EVERYONE")).andExpect(status().isBadRequest());
-        save(chairman, Map.of()).andExpect(status().isBadRequest());
         save(chairman, "not json").andExpect(status().isBadRequest());
         assertThat(rowCount(DEMO_TENANT)).isZero();
+    }
+
+    @Test
+    void anEmptyChangeChangesNothing() throws Exception {
+        save(demo("chairman@demo.local"), Map.of()).andExpect(status().isOk())
+                .andExpect(jsonPath("$.memberPlotStatusVisibility").value("OWN_ONLY"))
+                .andExpect(jsonPath("$.redAmount").value("1000.00"));
+        assertThat(rowCount(DEMO_TENANT)).isZero();
+    }
+
+    // ---- the ledger settings (feature 011): red threshold, losses, common consumers
+
+    @Test
+    void theLedgerSettingsHaveTheirDefaultsWithoutARow() throws Exception {
+        read(demo("member@demo.local")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.lossesMode").value("FIXED_PERCENT"))
+                .andExpect(jsonPath("$.lossesPercent").value("0.00"))
+                .andExpect(jsonPath("$.commonConsumerDefaultSplit").value("CONNECTED_PLOTS"))
+                .andExpect(jsonPath("$.redAmount").value("1000.00"))
+                .andExpect(jsonPath("$.redDays").value(90));
+        TenantContext.runAs(DEMO_TENANT, () -> {
+            assertThat(cooperativeSettings.lossesMode()).isEqualTo(LossesMode.FIXED_PERCENT);
+            assertThat(cooperativeSettings.lossesPercent()).isEqualByComparingTo("0");
+            assertThat(cooperativeSettings.commonConsumerDefaultSplit()).isEqualTo(CommonConsumerSplit.CONNECTED_PLOTS);
+            assertThat(cooperativeSettings.redAmount()).isEqualTo(Money.parse("1000.00"));
+            assertThat(cooperativeSettings.redDays()).isEqualTo(90);
+            return null;
+        });
+    }
+
+    @Test
+    void theChairmanChangesTheRedThresholdAndTheOtherSettingsKeepTheirValues() throws Exception {
+        String chairman = demo("chairman@demo.local");
+        save(chairman, Map.of("memberPlotStatusVisibility", "ALL_PLOTS")).andExpect(status().isOk());
+
+        // §2.10: the chairman changes the red amount to 2 000,00 ₴
+        save(chairman, Map.of("redAmount", "2000.00", "redDays", 60)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.redAmount").value("2000.00"))
+                .andExpect(jsonPath("$.redDays").value(60))
+                .andExpect(jsonPath("$.memberPlotStatusVisibility").value("ALL_PLOTS"))
+                .andExpect(jsonPath("$.lossesMode").value("FIXED_PERCENT"));
+        save(chairman, Map.of("lossesMode", "PROPORTIONAL", "lossesPercent", "5",
+                "commonConsumerDefaultSplit", "EQUAL_PER_PLOT")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.lossesPercent").value("5.00"))
+                .andExpect(jsonPath("$.redAmount").value("2000.00"));
+
+        read(demo("member@demo.local")).andExpect(jsonPath("$.redAmount").value("2000.00"))
+                .andExpect(jsonPath("$.redDays").value(60))
+                .andExpect(jsonPath("$.lossesMode").value("PROPORTIONAL"))
+                .andExpect(jsonPath("$.lossesPercent").value("5.00"))
+                .andExpect(jsonPath("$.commonConsumerDefaultSplit").value("EQUAL_PER_PLOT"))
+                .andExpect(jsonPath("$.memberPlotStatusVisibility").value("ALL_PLOTS"));
+        assertThat(ownerJdbc().queryForMap("select red_amount, red_days, losses_mode, losses_percent, "
+                + "common_consumer_default_split from cooperative_settings where tenant_id = ?", DEMO_TENANT))
+                .containsEntry("red_amount", new BigDecimal("2000.00"))
+                .containsEntry("red_days", 60)
+                .containsEntry("losses_mode", "PROPORTIONAL")
+                .containsEntry("losses_percent", new BigDecimal("5.00"))
+                .containsEntry("common_consumer_default_split", "EQUAL_PER_PLOT");
+        TenantContext.runAs(DEMO_TENANT, () -> {
+            assertThat(cooperativeSettings.redAmount()).isEqualTo(Money.parse("2000.00"));
+            assertThat(cooperativeSettings.redDays()).isEqualTo(60);
+            return null;
+        });
+    }
+
+    @Test
+    void aChangeOfTheRedThresholdIsAuditedWithEveryChangedField() throws Exception {
+        long before = auditCount();
+
+        save(demo("chairman@demo.local"), Map.of("redAmount", "2000.00", "redDays", 90, "lossesPercent", "0.00"))
+                .andExpect(status().isOk());
+        await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> assertThat(auditCount()).isEqualTo(before + 1));
+
+        Map<String, Object> entry = auditEntries().getLast();
+        assertThat(entry.get("action")).isEqualTo("SETTINGS_UPDATED");
+        JsonNode changes = json.readTree((String) entry.get("changes"));
+        // redDays and lossesPercent keep their values: only the red amount is a change
+        assertThat(changes).hasSize(1);
+        assertThat(changes.get(0).get("field").asString()).isEqualTo("redAmount");
+        assertThat(changes.get(0).get("old").asString()).isEqualTo("1000.00");
+        assertThat(changes.get(0).get("new").asString()).isEqualTo("2000.00");
+    }
+
+    @Test
+    void invalidLedgerSettingsAreRejected() throws Exception {
+        String chairman = demo("chairman@demo.local");
+
+        save(chairman, Map.of("redAmount", "-1.00")).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("redAmount"))
+                .andExpect(jsonPath("$.errors[0].code").value("INVALID"));
+        save(chairman, Map.of("redAmount", "1000000000000.00")).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("redAmount"));
+        save(chairman, Map.of("redAmount", "1000")).andExpect(status().isBadRequest());
+        save(chairman, Map.of("lossesPercent", "100.01")).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("lossesPercent"))
+                .andExpect(jsonPath("$.errors[0].code").value("INVALID"));
+        save(chairman, Map.of("lossesPercent", "5.001")).andExpect(status().isBadRequest());
+        save(chairman, Map.of("redDays", -1)).andExpect(status().isBadRequest());
+        save(chairman, Map.of("lossesMode", "SOMETIMES")).andExpect(status().isBadRequest());
+        save(chairman, Map.of("commonConsumerDefaultSplit", "BY_AREA")).andExpect(status().isBadRequest());
+        assertThat(rowCount(DEMO_TENANT)).isZero();
+
+        save(chairman, Map.of("lossesPercent", "100.00", "redAmount", "0.00", "redDays", 0))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void onlySettingsManageChangesTheLedgerSettings() throws Exception {
+        for (String email : List.of("treasurer@demo.local", "member@demo.local")) {
+            save(demo(email), Map.of("redAmount", "2000.00")).andExpect(status().isForbidden());
+        }
+        save(customRoleToken("SETTINGS_MANAGE"), Map.of("redDays", 30)).andExpect(status().isOk());
+        assertThat(ownerJdbc().queryForObject("select red_days from cooperative_settings where tenant_id = ?",
+                Integer.class, DEMO_TENANT)).isEqualTo(30);
     }
 
     @Test

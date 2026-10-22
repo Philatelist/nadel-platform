@@ -59,10 +59,9 @@ abstract class LedgerTestSupport extends IntegrationTest {
                         uuidArray(plots));
             });
         }
+        // billing_month refuses DELETE (trigger billing_month_guard, V14) except to the owner in maintenance
+        asLedgerOwner(sql -> months.forEach(month -> sql.update("delete from billing_month where id = ?", month)));
         JdbcTemplate owner = ownerJdbc();
-        for (UUID month : months) {
-            owner.update("delete from billing_month where id = ?", month);
-        }
         for (UUID meter : meters) {
             owner.update("delete from meter where id = ?", meter);
         }

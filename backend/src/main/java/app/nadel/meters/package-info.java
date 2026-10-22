@@ -8,14 +8,15 @@
  * (an exact fraction, rounded once for display), the calculation {@link app.nadel.meters.ConsumptionCalculator} with its
  * records, the port {@link app.nadel.meters.ReadingUsage} that the ledger implements so that readings a charge uses
  * are no longer corrected or deleted (ADR 0014), the read API {@link app.nadel.meters.MeterCatalog} (which plots have a
- * meter of a resource; the tariffs module asks it) and the import facade {@link app.nadel.meters.MeterImport} with its
+ * meter of a resource; the tariffs module asks it), the read API {@link app.nadel.meters.MeterNetwork} for the ledger
+ * (the plot meters not read for a while) and the import facade {@link app.nadel.meters.MeterImport} with its
  * records (the Meters sheet of the Excel import). The meter register (entity, commands, queries, the endpoints of tag
  * {@code meters} and the plot guard {@code MeterPlotGuard}, an implementation of {@link app.nadel.plots.PlotChangeGuard}),
  * the readings (entity, rules, commands, the round, the member's submission, approvals and the endpoints of tag
  * {@code readings}), replacement with the tree periods it moves, and range consumption over a chain of meters are
  * internal. It depends on {@code identity}, {@code audit}, {@code problem} and {@code plots} (the public
- * {@code PlotCatalog} and the import records {@code PlotImportRow}, {@code PlotImportPlan}). {@code tariffs} and
- * {@code imports} depend on it, never the other way round.
+ * {@code PlotCatalog} and the import records {@code PlotImportRow}, {@code PlotImportPlan}). {@code tariffs},
+ * {@code imports} and {@code ledger} depend on it, never the other way round.
  */
 @org.springframework.modulith.ApplicationModule(displayName = "Meters and readings")
 package app.nadel.meters;

@@ -42,6 +42,8 @@ tags:
     description: The electricity meter tree, its dated history and the consumption per node over a date range
   - name: charges
     description: The ledger of a plot (its account), reversals of charges and opening balances
+  - name: billing
+    description: Billing months, their totals, the closing check list and closing
 
 paths:
   /me:
@@ -1063,7 +1065,8 @@ paths:
       description: |
         Returns the settings of the current cooperative. Every member of the cooperative may call it; the platform
         operator has no cooperative data: 403. A cooperative that never saved its settings has the defaults
-        (`memberPlotStatusVisibility` is `OWN_ONLY`).
+        (`memberPlotStatusVisibility` `OWN_ONLY`, `lossesMode` `FIXED_PERCENT`, `lossesPercent` `0.00`,
+        `commonConsumerDefaultSplit` `CONNECTED_PLOTS`, `redAmount` `1000.00`, `redDays` 90).
       responses:
         '200':
           description: OK
@@ -1080,15 +1083,19 @@ paths:
       operationId: updateSettings
       summary: Change cooperative settings
       description: |
-        Replaces the settings of the current cooperative. Requires the `SETTINGS_MANAGE` permission. A change is
-        written to the audit log with the old and the new value; saving the current value changes nothing and writes
-        no audit entry.
+        Changes the settings of the current cooperative. Requires the `SETTINGS_MANAGE` permission. Every field is
+        optional: a field left out keeps its value, so each section of the settings page saves only its own fields.
+        A change is written to the audit log (`SETTINGS_UPDATED`) with the old and the new value of every changed
+        field; saving the current values changes nothing and writes no audit entry. 400 `VALIDATION_FAILED`:
+        `redAmount` negative or with more than 12 integer digits (`INVALID`), `lossesPercent` above `100.00`
+        (`INVALID`), `redDays` outside 0..36500, an unknown enum value or a malformed number. A change of the red
+        threshold applies to every plot status shown from then on (the status is derived when it is read).
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CooperativeSettings'
+              $ref: '#/components/schemas/CooperativeSettingsUpdate'
       responses:
         '200':
           description: The saved settings
@@ -2854,6 +2861,106 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
 
+  /billing-months:
+    get:
+      tags: [billing]
+      operationId: listBillingMonths
+      summary: The billing months with their totals
+      description: |
+        Every billing month of the cooperative, newest first: from the month of its first billing month row (the
+        first charge) to the current month in Europe/Kyiv, including months that have no row or no charge yet (they
+        are listed `OPEN` with empty totals; a row is created when the month is closed or a charge is booked in it).
+        `totals` holds the sum of the charges booked in the month per charge type (a reversal counts negative), in the
+        order of the charge types; `total` is their sum. A cooperative without any month gets an empty list.
+        Requires `CHARGES_VIEW`.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BillingMonthSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /billing-months/{month}:
+    get:
+      tags: [billing]
+      operationId: getBillingMonth
+      summary: One billing month with its totals and the closing check list
+      description: |
+        The month as in the list plus the check list shown before closing: whether the month run is done, the number
+        of "not charged" items of the month and the plot meters without a reading for more than 60 days (active plot
+        meters whose last approved reading, or installation, is more than 60 days before the month's last day or
+        today, whichever is earlier). Nothing on the list blocks closing. A month that is not listed (before the
+        first month, after the current one) is 404 `NOT_FOUND`. Requires `CHARGES_VIEW`.
+      parameters:
+        - name: month
+          in: path
+          required: true
+          description: The billing month, `YYYY-MM`
+          schema:
+            type: string
+            pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillingMonthDetails'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /billing-months/{month}/close:
+    post:
+      tags: [billing]
+      operationId: closeBillingMonth
+      summary: Close a billing month
+      description: |
+        Closes the month: nothing is booked in it any more, and a charge about its days is booked in the earliest open
+        month after it. A closed month is never reopened. Conflicts (409): a month after the current one in
+        Europe/Kyiv (`PERIOD_IN_FUTURE`), a closed month (`PERIOD_CLOSED`), an earlier month that is still open
+        (`PERIOD_CLOSE_ORDER`; months close in order). A month before the first month of the cooperative (or any
+        month while it has none) is 404 `NOT_FOUND`. A listed month without a row is created and closed. The check
+        list does not block closing. Requires `PERIODS_CLOSE`; written to the audit log (`BILLING_MONTH_CLOSED`,
+        entity type `BILLING_MONTH`, label `YYYY-MM`).
+      parameters:
+        - name: month
+          in: path
+          required: true
+          description: The billing month, `YYYY-MM`
+          schema:
+            type: string
+            pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+      responses:
+        '200':
+          description: The closed month
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillingMonthDetails'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -2958,7 +3065,9 @@ components:
         tree is deleted, or removed while they still work under it (code `METER_HAS_CHILDREN`), or a plot that has
         charges is deleted (code `PLOT_HAS_CHARGES`), or a charge that was reversed before is reversed again (code
         `CHARGE_ALREADY_REVERSED`), a reversal is reversed (code `REVERSAL_NOT_REVERSIBLE`), or a charge booked in a
-        closed billing month is reversed (code `CHARGE_IN_CLOSED_MONTH`)
+        closed billing month is reversed (code `CHARGE_IN_CLOSED_MONTH`), or a billing month is closed while an
+        earlier month is open (code `PERIOD_CLOSE_ORDER`), a closed month is closed again (code `PERIOD_CLOSED`) or a
+        month after the current one is closed (code `PERIOD_IN_FUTURE`)
       content:
         application/problem+json:
           schema:
@@ -3006,12 +3115,84 @@ components:
         plots. People allowed to view plots always see every status.
       enum: [OWN_ONLY, ALL_PLOTS]
 
+    LossesMode:
+      type: string
+      description: >-
+        How losses in the electricity network are charged. `FIXED_PERCENT`: every electricity interval of a plot also
+        charges `lossesPercent` of its kWh at the same rate parts. `PROPORTIONAL`: losses are charged by runs over a
+        date range, shared among the plots under each node of the meter tree.
+      enum: [FIXED_PERCENT, PROPORTIONAL]
+
+    CommonConsumerSplit:
+      type: string
+      description: >-
+        How the consumption of a common consumer is shared among plots. `CONNECTED_PLOTS`: equally among the plots
+        connected to that water source, day by day. `EQUAL_PER_PLOT`: equally among all active plots.
+        `SERVICE_USERS`: equally among the plots marked as using the consumer. `NOT_CHARGED`: covered by the
+        membership fee, nothing is charged.
+      enum: [CONNECTED_PLOTS, EQUAL_PER_PLOT, SERVICE_USERS, NOT_CHARGED]
+
+    LossesPercent:
+      type: string
+      pattern: '^\d{1,3}(\.\d{1,2})?$'
+      description: >-
+        A percentage from 0 to 100 with at most two decimal places, as a string (not money). The server answers
+        with exactly two decimals (`"5.00"`).
+      examples: ['5.00']
+
     CooperativeSettings:
       type: object
-      required: [memberPlotStatusVisibility]
+      description: >-
+        The settings of the cooperative. `redAmount` and `redDays` are the red threshold of the plot status: a plot
+        is red when its debt is above `redAmount` or the oldest unpaid charge is older than `redDays` days, yellow with
+        any other debt, green without a debt (docs/domain/money-rules.md, section 9).
+      required:
+        [
+          memberPlotStatusVisibility,
+          lossesMode,
+          lossesPercent,
+          commonConsumerDefaultSplit,
+          redAmount,
+          redDays,
+        ]
       properties:
         memberPlotStatusVisibility:
           $ref: '#/components/schemas/PlotStatusVisibility'
+        lossesMode:
+          $ref: '#/components/schemas/LossesMode'
+        lossesPercent:
+          $ref: '#/components/schemas/LossesPercent'
+        commonConsumerDefaultSplit:
+          $ref: '#/components/schemas/CommonConsumerSplit'
+        redAmount:
+          $ref: '#/components/schemas/Money'
+        redDays:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 36500
+
+    CooperativeSettingsUpdate:
+      type: object
+      description: >-
+        A change of the settings: only the fields present are changed, the others keep their value. An empty object
+        changes nothing.
+      properties:
+        memberPlotStatusVisibility:
+          $ref: '#/components/schemas/PlotStatusVisibility'
+        lossesMode:
+          $ref: '#/components/schemas/LossesMode'
+        lossesPercent:
+          $ref: '#/components/schemas/LossesPercent'
+        commonConsumerDefaultSplit:
+          $ref: '#/components/schemas/CommonConsumerSplit'
+        redAmount:
+          $ref: '#/components/schemas/Money'
+        redDays:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 36500
 
     BaseRole:
       type: string
@@ -3333,14 +3514,29 @@ components:
         - READING_REJECTED
         - CHARGE_REVERSED
         - OPENING_BALANCE_ENTERED
+        - BILLING_MONTH_CLOSED
 
     AuditEntityType:
       type: string
       description: >-
         Kind of the entity an audit entry is about. A `CHARGE` entry (a reversal, an opening balance) is about the
-        plot whose account changed: its `entityId` is the plot id and its label the plot number.
+        plot whose account changed: its `entityId` is the plot id and its label the plot number. A `BILLING_MONTH`
+        entry is about a billing month: its label is the month as `YYYY-MM`.
       enum:
-        [MEMBER, ROLE, PLOT, SETTINGS, OWNERSHIP, IMPORT, CHARGE_TYPE, TARIFF, METER, METER_READING, CHARGE]
+        [
+          MEMBER,
+          ROLE,
+          PLOT,
+          SETTINGS,
+          OWNERSHIP,
+          IMPORT,
+          CHARGE_TYPE,
+          TARIFF,
+          METER,
+          METER_READING,
+          CHARGE,
+          BILLING_MONTH,
+        ]
 
     AuditFieldChange:
       type: object
@@ -5421,3 +5617,121 @@ components:
           description: >-
             A reason or a document reference (user content), stored on the charge and written to the audit log;
             surrounding whitespace is trimmed, a blank reason means none
+
+    BillingMonthStatus:
+      type: string
+      description: '`OPEN` accepts new charges; `CLOSED` never changes again'
+      enum: [OPEN, CLOSED]
+
+    ChargeTypeTotal:
+      type: object
+      description: The sum of the charges of one charge type booked in a billing month (reversals count negative)
+      required: [chargeTypeId, name, nameCustomized, amount]
+      properties:
+        chargeTypeId:
+          type: string
+          format: uuid
+        chargeTypeCode:
+          $ref: '#/components/schemas/ChargeTypeCode'
+        name:
+          type: string
+          description: The stored name; clients show their own default name while `nameCustomized` is false
+        nameCustomized:
+          type: boolean
+        amount:
+          $ref: '#/components/schemas/Money'
+
+    BillingMonthSummary:
+      type: object
+      description: A billing month with the totals of the charges booked in it
+      required: [month, status, runDone, totals, total]
+      properties:
+        month:
+          type: string
+          pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+          description: The month, `YYYY-MM`
+        status:
+          $ref: '#/components/schemas/BillingMonthStatus'
+        runDone:
+          type: boolean
+          description: True when the month run of recurring tariffs was booked for the month
+        closedAt:
+          type: string
+          format: date-time
+          description: When the month was closed; absent while it is open
+        totals:
+          type: array
+          description: Per charge type that has a charge in the month, in the order of the charge types
+          items:
+            $ref: '#/components/schemas/ChargeTypeTotal'
+        total:
+          $ref: '#/components/schemas/Money'
+
+    StaleMeter:
+      type: object
+      description: >-
+        An active plot meter without an approved reading (or its installation) for more than 60 days before the
+        check date
+      required: [meterId, plotId, plotNumber, resource, lastReadingOn]
+      properties:
+        meterId:
+          type: string
+          format: uuid
+        plotId:
+          type: string
+          format: uuid
+        plotNumber:
+          type: string
+          description: User content, as the cooperative writes it
+        resource:
+          $ref: '#/components/schemas/MeterResource'
+        lastReadingOn:
+          type: string
+          format: date
+          description: The date of the last approved reading on or before the check date, or the installation date
+
+    BillingMonthChecklist:
+      type: object
+      description: What the person closing the month sees first; nothing here blocks closing
+      required: [runDone, notChargedCount, staleMeters]
+      properties:
+        runDone:
+          type: boolean
+        notChargedCount:
+          type: integer
+          format: int32
+          minimum: 0
+          description: The open "not charged" items of the month
+        staleMeters:
+          type: array
+          description: In the natural order of the plot numbers, electricity before water
+          items:
+            $ref: '#/components/schemas/StaleMeter'
+
+    BillingMonthDetails:
+      type: object
+      description: A billing month with its totals and the closing check list
+      required: [month, status, runDone, totals, total, checklist]
+      properties:
+        month:
+          type: string
+          pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+          description: The month, `YYYY-MM`
+        status:
+          $ref: '#/components/schemas/BillingMonthStatus'
+        runDone:
+          type: boolean
+        closedAt:
+          type: string
+          format: date-time
+        closedByName:
+          type: string
+          description: The current name of the member who closed the month; absent while open or when unknown
+        totals:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChargeTypeTotal'
+        total:
+          $ref: '#/components/schemas/Money'
+        checklist:
+          $ref: '#/components/schemas/BillingMonthChecklist'

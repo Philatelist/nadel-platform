@@ -2,13 +2,15 @@ import {
   getGetSettingsQueryKey,
   useGetSettings,
   useUpdateSettings,
+  type CooperativeSettings as Settings,
   type PlotStatusVisibility,
 } from '@nadel/api-client';
+import { normalizeMoneyInput } from '@nadel/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { QueryBoundary } from '../components/QueryBoundary';
-import { Button, Notice, PageHeader, Panel, RadioGroup } from '../components/ui';
+import { Button, Notice, PageHeader, Panel, RadioGroup, TextField } from '../components/ui';
 import { useCanManageMeters } from '../hooks/useCanManageMeters';
 import { useCan } from '../me';
 import { useT } from '../i18n';
@@ -42,7 +44,12 @@ function CooperativeSettings() {
   const query = useGetSettings();
   return (
     <QueryBoundary query={query}>
-      {(data) => <SettingsForm saved={data.memberPlotStatusVisibility} />}
+      {(data) => (
+        <>
+          <SettingsForm saved={data.memberPlotStatusVisibility} />
+          <StatusThresholdSection saved={data} />
+        </>
+      )}
     </QueryBoundary>
   );
 }
@@ -95,6 +102,81 @@ function SettingsForm({ saved }: { saved: PlotStatusVisibility }) {
         <div>
           <Button type="submit" disabled={choice === saved || update.isPending}>
             {update.isPending ? s.saving : s.save}
+          </Button>
+        </div>
+      </form>
+    </Panel>
+  );
+}
+
+const DAYS_RE = /^\d{1,5}$/;
+
+/** The red status threshold: the debt amount and the debt age. The server checks the ranges. */
+function StatusThresholdSection({ saved }: { saved: Settings }) {
+  const t = useT();
+  const s = t.settings;
+  const queryClient = useQueryClient();
+  const [amount, setAmount] = useState(saved.redAmount);
+  const [days, setDays] = useState(String(saved.redDays));
+  const [submitted, setSubmitted] = useState(false);
+  const [result, setResult] = useState<'saved' | { error: string }>();
+
+  const update = useUpdateSettings({
+    mutation: {
+      onSuccess: (data) => {
+        queryClient.setQueryData(getGetSettingsQueryKey(), data);
+        setAmount(data.redAmount);
+        setDays(String(data.redDays));
+        setSubmitted(false);
+        setResult('saved');
+      },
+      onError: (error) => setResult({ error: problemMessage(t, error) }),
+    },
+  });
+
+  const normalizedAmount = normalizeMoneyInput(amount);
+  const daysValid = DAYS_RE.test(days.trim());
+  const changed = normalizedAmount !== saved.redAmount || days.trim() !== String(saved.redDays);
+
+  return (
+    <Panel title={s.threshold.title}>
+      <form
+        className="flex max-w-xl flex-col gap-4"
+        noValidate
+        onSubmit={(event) => {
+          event.preventDefault();
+          setSubmitted(true);
+          setResult(undefined);
+          if (normalizedAmount === undefined || !daysValid) return;
+          update.mutate({ data: { redAmount: normalizedAmount, redDays: Number(days.trim()) } });
+        }}
+      >
+        <p className="text-sm text-ink-muted">{s.threshold.text}</p>
+        <TextField
+          label={s.threshold.redAmount}
+          inputMode="decimal"
+          value={amount}
+          error={submitted && normalizedAmount === undefined ? s.threshold.amountInvalid : undefined}
+          onChange={(e) => {
+            setAmount(e.target.value);
+            setResult(undefined);
+          }}
+        />
+        <TextField
+          label={s.threshold.redDays}
+          inputMode="numeric"
+          value={days}
+          error={submitted && !daysValid ? s.threshold.daysInvalid : undefined}
+          onChange={(e) => {
+            setDays(e.target.value);
+            setResult(undefined);
+          }}
+        />
+        {result === 'saved' && <Notice tone="success">{s.saved}</Notice>}
+        {typeof result === 'object' && <Notice tone="danger">{result.error}</Notice>}
+        <div>
+          <Button type="submit" disabled={!changed || update.isPending}>
+            {s.threshold.save}
           </Button>
         </div>
       </form>

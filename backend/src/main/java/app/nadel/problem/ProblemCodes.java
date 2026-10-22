@@ -97,6 +97,12 @@ public final class ProblemCodes {
     public static final String REVERSAL_NOT_REVERSIBLE = "REVERSAL_NOT_REVERSIBLE";
     /** 409: the charge is booked in a closed billing month; its correction is an adjustment (feature 012). */
     public static final String CHARGE_IN_CLOSED_MONTH = "CHARGE_IN_CLOSED_MONTH";
+    /** 409: a billing month is closed while an earlier month is still open; months close in order. */
+    public static final String PERIOD_CLOSE_ORDER = "PERIOD_CLOSE_ORDER";
+    /** 409: the billing month is closed; a closed month never changes and is never closed again. */
+    public static final String PERIOD_CLOSED = "PERIOD_CLOSED";
+    /** 409: a month after the current one (Europe/Kyiv) cannot be closed or charged. */
+    public static final String PERIOD_IN_FUTURE = "PERIOD_IN_FUTURE";
 
     /** Codes of single fields in {@code errors[]}. */
     public static final String REQUIRED = "REQUIRED";

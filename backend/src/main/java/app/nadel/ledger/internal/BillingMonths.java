@@ -12,9 +12,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Finds the billing month a charge is booked in ({@link BillingCalendar}) and opens it when the cooperative does not
- * have it yet. Runs inside the caller's transaction and leaves the month locked {@code FOR SHARE} until its end, so a
- * closing (slice 2, {@code FOR UPDATE}) waits for the booking or the booking sees the month closed and asks the
- * calendar again.
+ * have it yet. Every booking path goes through here. Runs inside the caller's transaction and leaves the month locked
+ * {@code FOR SHARE} until its end, so a closing ({@link MonthClosing}, {@code FOR UPDATE}) waits for the booking, or the
+ * booking waits for the closing and then sees the month closed and asks the calendar again. The status is read as a
+ * scalar under the lock, never from a managed entity that an earlier read of this transaction could have left stale.
  */
 @Component
 class BillingMonths {
@@ -38,13 +39,16 @@ class BillingMonths {
     @Transactional(propagation = Propagation.MANDATORY)
     BillingMonthRecord openForBooking(UUID tenantId, LocalDate date) {
         for (int attempt = 0; attempt < ATTEMPTS; attempt++) {
-            List<MonthState> states = months.findAllInOrder().stream()
-                    .map(m -> new MonthState(m.yearMonth(), m.isClosed())).toList();
+            List<MonthState> states = months.statesInOrder().stream()
+                    .map(m -> new MonthState(YearMonth.from(m.month()),
+                            m.status() == BillingMonthRecord.Status.CLOSED))
+                    .toList();
             YearMonth target = BillingCalendar.bookingMonth(date, states, LocalDate.now(clock));
             months.insertIfAbsent(tenantId, target.atDay(1));
-            BillingMonthRecord month = months.findByMonthForShare(target.atDay(1)).orElseThrow();
-            if (!month.isClosed()) {
-                return month;
+            String status = months.lockStatusForShare(target.atDay(1));
+            if (BillingMonthRecord.Status.OPEN.name().equals(status)) {
+                // the id and the month of a row never change, so a managed instance serves for both
+                return months.findByMonth(target.atDay(1)).orElseThrow();
             }
         }
         throw new IllegalStateException("No open billing month found for a booking");

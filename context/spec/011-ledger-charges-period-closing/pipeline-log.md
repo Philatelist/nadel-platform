@@ -67,3 +67,12 @@ Same as 004–010 (see `context/spec/010-meters-and-readings/pipeline-log.md`). 
 
 - Slice 1 DB (postgres-database): V13 (billing_month, charge, charge_part, meter_value_use; trigger with owner-only maintenance bypass; REVOKE; permissions + COMMON_CONSUMERS seed); LedgerTenantIsolationTests 22 + LedgerAppendOnlyTests 8 green with RED validation. Test support creates a `nadel_owner` role in Testcontainers. Java permission tests left red for the backend task. Backend task delegated to spring-backend.
 - Slice 1 backend (spring-backend): ledger module, reversals, opening balances, account API, ChargeTypeCatalog facade in tariffs; full backend verify 1,816 green per builder. V13 edited (not yet committed) so OPENING charges keep an optional reason. Verified by orchestrator: 208 tests (ledger, money, roles, seeds, modularity, charge types, me endpoint) green. Web task delegated to react-frontend.
+- Slice 1 committed `32ed18c` — backend 208 slice tests green (orchestrator), clients green (shared 130, web 453), gen stable; review round 1 running.
+- Slice 1 review round 1: MAJOR_ISSUES (M1 negative opening amount text, M2 V13 seed hides name clashes). Fixes run in the detached review worktree at 32ed18c (postgres-database for M2, react-frontend for M1) so they never mix with the Slice 2 work in progress; the fix commit is then cherry-picked onto the branch.
+- Slice 1 review fixes committed `303f4ff` (cherry-picked from the review worktree); LedgerMigrationTests/Isolation/AppendOnly/ChargeTypes/SeedBaseRoles 70 green and RED checked by orchestrator; web 455 green per builder; round 2 running.
+- Slice 1 review round 2: PASS (minors noted in review-log).
+- Slice 2 backend (spring-backend): V14 (billing_month guard trigger; settings columns), billing tag endpoints, MonthClosing, MeterNetwork.staleMeters, PlotDebtCache, read-time PlotStatusPolicy, PlotStatusRefresher; full backend verify 1,853 green, coverage 0.9802 (builder).
+- AUTO: months without a row are listed as OPEN without creating rows; closing creates the row (rule: a GET must not write; the treasurer may only view).
+- AUTO: `PUT /settings` is a partial update (`CooperativeSettingsUpdate`), `{}` → 200 no change (rule: new sections save independently).
+- AUTO: settings read without a bound cooperative return defaults (rule: RLS shows no row anyway; no tenant data exposed).
+- Slice 2 verified by orchestrator: backend 849 (ledger, plots, settings, meters, modularity) green; clients shared 130, web 466, typecheck/lint/format green; gen stable.

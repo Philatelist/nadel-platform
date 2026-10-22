@@ -12,6 +12,7 @@ import {
 } from '@nadel/shared';
 import type { ReactNode } from 'react';
 import { UserContent } from './components/UserContent';
+import { billingMonthLabel } from './components/charges/billingMonth';
 
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
 const BASE_PREFIX = 'base:';
@@ -177,6 +178,7 @@ export function auditValue(
     case 'date':
       return ISO_DAY.test(raw) ? formatDay(raw, locale) : raw;
     case 'amount':
+    case 'redAmount':
       return isMoney(raw) ? formatMoney(raw, locale) : raw;
     case 'billingMonth':
       return /^\d{4}-\d{2}$/.test(raw) ? formatMonth(raw, locale) : raw;
@@ -209,6 +211,7 @@ export function auditValue(
 /** The label of the changed record in the "Record" column. */
 export function auditRecordLabel(entityType: AuditEntityType, label: string, t: Messages): ReactNode {
   if (entityType === 'SETTINGS') return t.settings.title;
+  if (entityType === 'BILLING_MONTH') return billingMonthLabel(label, t);
   if (entityType === 'ROLE') return baseToken(label, t.roles);
   if (entityType === 'CHARGE_TYPE') return auditChargeTypeName(label, t);
   return user(label);
