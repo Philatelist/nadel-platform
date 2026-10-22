@@ -1,6 +1,9 @@
 import type { AuditEntityType } from '@nadel/api-client';
 import {
   formatDay,
+  formatMonth,
+  formatMoney,
+  isMoney,
   formatMeterValue,
   formatRateWithCurrency,
   formatShare,
@@ -169,7 +172,14 @@ export function auditValue(
     case 'installedOn':
     case 'removedOn':
     case 'takenOn':
+    case 'serviceFrom':
+    case 'serviceTo':
+    case 'date':
       return ISO_DAY.test(raw) ? formatDay(raw, locale) : raw;
+    case 'amount':
+      return isMoney(raw) ? formatMoney(raw, locale) : raw;
+    case 'billingMonth':
+      return /^\d{4}-\d{2}$/.test(raw) ? formatMonth(raw, locale) : raw;
     case 'permissions':
       return raw
         .split(', ')

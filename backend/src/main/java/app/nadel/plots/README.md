@@ -204,13 +204,15 @@ lock a change of owner takes), so a guard and an ownership change of one plot ru
   `ownership` (`ON DELETE RESTRICT`) stays as the database backstop.
 - Update: a plot that has any ownership row cannot become common land: 409 `PLOT_HAS_OWNERSHIP_HISTORY` with
   `errors[{field: kind}]`. Common land with no history can become a plot, and other edits are unaffected.
-- `PlotChangeGuard` (SPI of this module, ADR 0011; implemented by `meters.internal.MeterPlotGuard`): after the ownership
+- `PlotChangeGuard` (SPI of this module, ADR 0011; implemented by `meters.internal.MeterPlotGuard` and
+  `ledger.internal.LedgerPlotGuard`): after the ownership
   checks, `PlotCommands.delete`, `archive` and `update` (a `PLOT` becoming `COMMON`) ask every guard bean through
   `PlotChangeGuards` with the plot already locked `FOR UPDATE`; the first refusal is a 409 with the guard's code
   (`PLOT_HAS_METER`; `errors[{field: kind}]` for the update). The import's plan asks the guards in bulk about the matched
   plots a row turns into common land and reports a refusal as a problem on `kind`; the commit plans again under the plot
   locks. Guards return the refused plots instead of throwing, only read and take no locks. `meters` refuses delete and
-  common land while the plot has any meter (active or removed) and archive while it has an active one.
+  common land while the plot has any meter (active or removed) and archive while it has an active one; `ledger` refuses
+  delete while the plot has any charge (`PLOT_HAS_CHARGES`).
 - `OwnershipArchiveGuard` implements `members.MemberArchiveGuard`: 409 `MEMBER_OWNS_PLOT` when the member has a current
   ownership. Lock order: a change of owner takes the plot lock, then the members `FOR SHARE`; the member archive takes
   only the member row lock (after the chairman lock) and the guard takes no locks, so no cycle is possible. If the

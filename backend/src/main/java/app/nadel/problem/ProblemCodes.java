@@ -89,6 +89,14 @@ public final class ProblemCodes {
      * is not pending, so it can be neither approved nor rejected.
      */
     public static final String READING_STATUS_INVALID = "READING_STATUS_INVALID";
+    /** 409: a plot that has charges (any kind, reversed or not) is never deleted; the ledger keeps them. */
+    public static final String PLOT_HAS_CHARGES = "PLOT_HAS_CHARGES";
+    /** 409: the charge was reversed before; a charge is reversed at most once. */
+    public static final String CHARGE_ALREADY_REVERSED = "CHARGE_ALREADY_REVERSED";
+    /** 409: the charge is a reversal, which cannot itself be reversed. */
+    public static final String REVERSAL_NOT_REVERSIBLE = "REVERSAL_NOT_REVERSIBLE";
+    /** 409: the charge is booked in a closed billing month; its correction is an adjustment (feature 012). */
+    public static final String CHARGE_IN_CLOSED_MONTH = "CHARGE_IN_CLOSED_MONTH";
 
     /** Codes of single fields in {@code errors[]}. */
     public static final String REQUIRED = "REQUIRED";
@@ -105,6 +113,10 @@ public final class ProblemCodes {
     public static final String FREQUENCY_BASIS_MISMATCH = "FREQUENCY_BASIS_MISMATCH";
     /** Common land named in the scope of a tariff (selected plots or exclusions); it has no tariffs. */
     public static final String TARIFF_COMMON_LAND = "TARIFF_COMMON_LAND";
+    /** An amount that must be greater than zero (an opening balance) is zero or negative. */
+    public static final String AMOUNT_NOT_POSITIVE = "AMOUNT_NOT_POSITIVE";
+    /** A date that must not be after today in the cooperative's time zone (an opening balance) is in the future. */
+    public static final String DATE_IN_FUTURE = "DATE_IN_FUTURE";
     /** The same plot listed twice in one list of a request. */
     public static final String DUPLICATE = "DUPLICATE";
     public static final String MEMBER_NOT_FOUND = "MEMBER_NOT_FOUND";

@@ -61,3 +61,9 @@ Same as 004–010 (see `context/spec/010-meters-and-readings/pipeline-log.md`). 
 - AUTO: preview digest, stale booking → 409 PREVIEW_OUTDATED (rule: 008 PlanDigest pattern).
 - AUTO: a plot with charges cannot be deleted (PLOT_HAS_CHARGES via PlotChangeGuard) (rule: append-only ledger references the plot).
 - tasks.md written: 10 slices (ledger core; months + status; month run + queue; reading charges + fixed %; water connections; proportional losses; common consumers; import; demo/docs/guides/e2e/coverage; Feature Testing & Regression by testing-expert). No staffing gaps. `<!-- not-user-reviewed -->` marker removed (pipeline rule: Phase 1 answers stand in for the plan review; plan listed in the final report).
+- Baseline: make check green (backend 1,733 tests, coverage 0.9794 vs floor 0.97; clients 56/7/122/438). Recorded in review-log.md; baseline worktree removed.
+
+## Phase 3 — implement
+
+- Slice 1 DB (postgres-database): V13 (billing_month, charge, charge_part, meter_value_use; trigger with owner-only maintenance bypass; REVOKE; permissions + COMMON_CONSUMERS seed); LedgerTenantIsolationTests 22 + LedgerAppendOnlyTests 8 green with RED validation. Test support creates a `nadel_owner` role in Testcontainers. Java permission tests left red for the backend task. Backend task delegated to spring-backend.
+- Slice 1 backend (spring-backend): ledger module, reversals, opening balances, account API, ChargeTypeCatalog facade in tariffs; full backend verify 1,816 green per builder. V13 edited (not yet committed) so OPENING charges keep an optional reason. Verified by orchestrator: 208 tests (ledger, money, roles, seeds, modularity, charge types, me endpoint) green. Web task delegated to react-frontend.

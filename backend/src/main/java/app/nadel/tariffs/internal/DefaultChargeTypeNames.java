@@ -12,7 +12,7 @@ import java.util.stream.Collectors;
 import org.springframework.core.io.ClassPathResource;
 
 /**
- * The default names of the four seeded charge types in both languages, from the one resource file
+ * The default names of the five seeded charge types in both languages, from the one resource file
  * {@code tariffs/charge-type-default-names.properties}. The English names are what {@code seed_charge_types} stores;
  * the Ukrainian ones mirror {@code chargeTypes.defaultNames} of the web catalog. A seeded type that was never renamed
  * is shown under its default name in the user's language, so a new name must not equal either default of such a type.

@@ -40,6 +40,8 @@ tags:
     description: Meter readings, the reading round and the consumption between readings
   - name: meter-tree
     description: The electricity meter tree, its dated history and the consumption per node over a date range
+  - name: charges
+    description: The ledger of a plot (its account), reversals of charges and opening balances
 
 paths:
   /me:
@@ -809,7 +811,8 @@ paths:
         Removes a plot that was created by mistake, together with its status. Requires `PLOTS_VIEW` and `PLOTS_EDIT`. Only an active
         plot can be deleted; an archived plot is refused with 409 `PLOT_ARCHIVED` and must be restored first, and a plot
         that has ever had an owner is refused with 409 `PLOT_HAS_OWNERSHIP_HISTORY`, a plot that has a meter (active or
-        removed) with 409 `PLOT_HAS_METER`. The deletion is audited.
+        removed) with 409 `PLOT_HAS_METER`, a plot that has charges (any kind) with 409 `PLOT_HAS_CHARGES`. The deletion
+        is audited.
       parameters:
         - name: id
           in: path
@@ -2707,6 +2710,150 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
 
+  /plots/{id}/account:
+    get:
+      tags: [charges]
+      operationId: getPlotAccount
+      summary: The account of a plot with its charges and the debt per charge type
+      description: |
+        The ledger of one plot. `debts` lists every charge type the plot has a charge of, in the order of the charge
+        types, with the sum of its charges (a reversal counts negative); `total` is their sum. Until payments exist
+        the debt is the sum of the charges. `charges` lists the charges newest first (by `accruedOn`, then by the
+        time they were booked); `from` and `to` (both optional, inclusive) limit the list by `accruedOn`, never the
+        debts. `from` after `to` is 400 `VALIDATION_FAILED` (`errors[{field: from, code: INVALID}]`). Every amount is
+        calculated by the server. No permission annotation: a caller with `CHARGES_VIEW` may ask for any plot of the
+        cooperative, anyone else only for a plot they currently own. Any other plot, an unknown id and a plot of
+        another cooperative are the same 404 `PLOT_NOT_FOUND`; the platform operator has no cooperative data: 403.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: from
+          in: query
+          required: false
+          description: The first day of the list (by `accruedOn`), inclusive
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: false
+          description: The last day of the list (by `accruedOn`), inclusive
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlotAccount'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /plots/{id}/opening-balances:
+    post:
+      tags: [charges]
+      operationId: enterOpeningBalance
+      summary: Enter an opening balance of a plot
+      description: |
+        Books the debt a plot had before the cooperative started with the platform: a charge of kind `OPENING` and
+        source `OPENING` of the charge type, with `accruedOn` and the service period equal to `date`. It is booked in
+        the billing month of `date` when that month is open, otherwise in the earliest open month after it (a month
+        that does not exist yet is opened). 400 `VALIDATION_FAILED`: `amount` not greater than zero
+        (`AMOUNT_NOT_POSITIVE`) or with more than 12 integer digits (`INVALID`), `date` after today in Europe/Kyiv
+        (`DATE_IN_FUTURE`), a missing field (`REQUIRED`), `reason` over 500 characters (`TOO_LONG`). An unknown charge
+        type is 404 `NOT_FOUND` (`errors[{field: chargeTypeId, code: NOT_FOUND}]`); an archived one is 409
+        `CHARGE_TYPE_ARCHIVED` (`errors[{field: chargeTypeId}]`). An unknown plot, or one of another cooperative, is
+        404 `PLOT_NOT_FOUND`; an archived plot is 409 `PLOT_ARCHIVED` and common land 409 `PLOT_COMMON_LAND`.
+        The optional reason is stored on the charge (`reason`). Requires `CHARGES_RUN`; written to the audit log
+        (`OPENING_BALANCE_ENTERED`, entity type `CHARGE` about the plot, with the reason).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpeningBalanceInput'
+      responses:
+        '201':
+          description: The booked opening balance
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Charge'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /charges/{id}/reverse:
+    post:
+      tags: [charges]
+      operationId: reverseCharge
+      summary: Reverse a charge
+      description: |
+        Cancels a charge by a new charge of kind `REVERSAL` and source `MANUAL_REVERSAL`: the same amount with the
+        opposite sign, the same plot, charge type, service period and `accruedOn`, the reason, and `reverses` naming
+        the original. It is booked in the billing month of the original, which must be open. Nothing is changed or
+        deleted (the ledger is append-only). Conflicts (409): the charge is a reversal (`REVERSAL_NOT_REVERSIBLE`), it
+        was reversed before (`CHARGE_ALREADY_REVERSED`), its billing month is closed (`CHARGE_IN_CLOSED_MONTH`; its
+        correction is an adjustment). 400 `VALIDATION_FAILED` with `reason` `REQUIRED` (absent or blank) or
+        `TOO_LONG`. An unknown charge, or one of another cooperative, is 404 `NOT_FOUND`. Requires `CHARGES_REVERSE`;
+        written to the audit log (`CHARGE_REVERSED`, entity type `CHARGE` about the plot, with the reason).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChargeReversal'
+      responses:
+        '201':
+          description: The reversal
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Charge'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -2747,8 +2894,9 @@ components:
     NotFound:
       description: >-
         The resource does not exist or is not visible to the caller (code `NOT_FOUND`; `PLOT_NOT_FOUND` from the
-        plot-scoped meter operations `listPlotMeters` and `submitPlotReading` when the plot is unknown, of another
-        cooperative or not the caller's)
+        plot-scoped meter operations `listPlotMeters` and `submitPlotReading` and the ledger operations
+        `getPlotAccount` and `enterOpeningBalance` when the plot is unknown, of another cooperative or not the
+        caller's)
       content:
         application/problem+json:
           schema:
@@ -2807,7 +2955,10 @@ components:
         `METER_HAS_PENDING_READINGS`), or a reading that is not pending is approved or rejected (code
         `READING_STATUS_INVALID`), or a change of the electricity tree breaks its rules (code `METER_TREE_INVALID`,
         with `errors[{field, code}]` naming the rule, see `setMeterParent`), or a meter that has meters under it in the
-        tree is deleted, or removed while they still work under it (code `METER_HAS_CHILDREN`)
+        tree is deleted, or removed while they still work under it (code `METER_HAS_CHILDREN`), or a plot that has
+        charges is deleted (code `PLOT_HAS_CHARGES`), or a charge that was reversed before is reversed again (code
+        `CHARGE_ALREADY_REVERSED`), a reversal is reversed (code `REVERSAL_NOT_REVERSIBLE`), or a charge booked in a
+        closed billing month is reversed (code `CHARGE_IN_CLOSED_MONTH`)
       content:
         application/problem+json:
           schema:
@@ -2842,6 +2993,10 @@ components:
         - METERS_MANAGE
         - READINGS_ENTER
         - READINGS_APPROVE
+        - CHARGES_VIEW
+        - CHARGES_RUN
+        - CHARGES_REVERSE
+        - PERIODS_CLOSE
 
     PlotStatusVisibility:
       type: string
@@ -3176,11 +3331,16 @@ components:
         - READING_SUBMITTED
         - READING_APPROVED
         - READING_REJECTED
+        - CHARGE_REVERSED
+        - OPENING_BALANCE_ENTERED
 
     AuditEntityType:
       type: string
-      description: Kind of the entity an audit entry is about
-      enum: [MEMBER, ROLE, PLOT, SETTINGS, OWNERSHIP, IMPORT, CHARGE_TYPE, TARIFF, METER, METER_READING]
+      description: >-
+        Kind of the entity an audit entry is about. A `CHARGE` entry (a reversal, an opening balance) is about the
+        plot whose account changed: its `entityId` is the plot id and its label the plot number.
+      enum:
+        [MEMBER, ROLE, PLOT, SETTINGS, OWNERSHIP, IMPORT, CHARGE_TYPE, TARIFF, METER, METER_READING, CHARGE]
 
     AuditFieldChange:
       type: object
@@ -3190,8 +3350,8 @@ components:
         numbers, `true`/`false`, `base:<CODE>` tokens for a standard role or charge type name (also in the `roles`
         list joined by ", "), and for `owners` a JSON array of `{"member": "Last First", "share": "1/2"}` (a
         correction adds `from` and `to`, ISO dates, `to` absent while the record is open). Meter readings are plain
-        decimals with three decimals (`8205.000`). Values written before this format are plain text and are shown as
-        stored.
+        decimals with three decimals (`8205.000`). Money amounts are plain decimals with two decimals (`-25.00`), a
+        billing month is `YYYY-MM`. Values written before this format are plain text and are shown as stored.
       required: [field]
       properties:
         field:
@@ -3934,14 +4094,16 @@ components:
             `TREE_WATER` (a water meter has no tree), `TREE_QUARTER_UNDER_QUARTER` (a quarter meter under another
             quarter meter), `TREE_PARENT_KIND` (the kinds do not allow this parent), `TREE_PARENT_INACTIVE` (the parent
             is removed or not yet installed on the date), `TREE_DATE_BEFORE_LATEST` (a date before the meter's latest
-            change in the tree), `READING_DATE_OUTSIDE_METER` (a date before the meter's installation)
+            change in the tree), `READING_DATE_OUTSIDE_METER` (a date before the meter's installation),
+            `AMOUNT_NOT_POSITIVE` (an amount that is zero or negative), `DATE_IN_FUTURE` (a date after today in
+            Europe/Kyiv), `NOT_FOUND` (no such charge type in the cooperative)
         message:
           type: string
 
     ChargeTypeCode:
       type: string
-      description: Code of one of the four charge types every cooperative starts with; custom types have no code
-      enum: [MEMBERSHIP, ELECTRICITY, LAND_TAX, WATER]
+      description: Code of one of the five charge types every cooperative starts with; custom types have no code
+      enum: [MEMBERSHIP, ELECTRICITY, LAND_TAX, WATER, COMMON_CONSUMERS]
 
     ChargeType:
       type: object
@@ -4990,3 +5152,272 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/MeterTreeNode'
+
+    ChargeKind:
+      type: string
+      description: >-
+        `REGULAR` an accrual; `REVERSAL` cancels one charge with the opposite amount (see `reverses`, `reason`);
+        `OPENING` an opening balance
+      enum: [REGULAR, REVERSAL, OPENING]
+
+    ChargeSource:
+      type: string
+      description: >-
+        What produced the charge: `TARIFF` the month run of a tariff, `CONSUMPTION` a meter reading, `LOSSES` losses
+        in the network, `COMMON_CONSUMER` a common consumer run, `OPENING` an opening balance, `MANUAL_REVERSAL` a
+        reversal made by hand
+      enum: [TARIFF, CONSUMPTION, LOSSES, COMMON_CONSUMER, OPENING, MANUAL_REVERSAL]
+
+    ChargeTypeRef:
+      type: object
+      description: The charge type of a charge
+      required: [id, name, nameCustomized]
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          $ref: '#/components/schemas/ChargeTypeCode'
+        name:
+          type: string
+          description: The stored name; clients show their own default name while `nameCustomized` is false
+        nameCustomized:
+          type: boolean
+
+    CalculationUnit:
+      type: string
+      description: >-
+        What the quantity of a calculation part counts: `PLOT` one plot, `SOTKA` sotkas (100 m2) of area, `KWH`
+        kilowatt-hours, `M3` cubic metres
+      enum: [PLOT, SOTKA, KWH, M3]
+
+    ChargeCalculationPart:
+      type: object
+      description: >-
+        One part of a calculation: a quantity priced at the rate of one tariff version for the days that version
+        applied. Parts are added exactly and the sum is rounded once.
+      required: [days, from, to]
+      properties:
+        tariffVersionId:
+          type: string
+          format: uuid
+        basis:
+          $ref: '#/components/schemas/Basis'
+        frequency:
+          $ref: '#/components/schemas/Frequency'
+        quantity:
+          type: string
+          description: The quantity as a plain decimal string (for example kWh `93.300`, sotkas `6.00`); not money
+        unit:
+          $ref: '#/components/schemas/CalculationUnit'
+        rate:
+          $ref: '#/components/schemas/Rate'
+        days:
+          type: integer
+          format: int32
+          minimum: 0
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+        calculated:
+          type: boolean
+          description: True when the quantity rests on a value calculated between readings ("розрахунковий")
+
+    ChargeCalculationReading:
+      type: object
+      description: A meter value a charge was calculated from
+      required: [meterId, takenOn, value]
+      properties:
+        meterId:
+          type: string
+          format: uuid
+        takenOn:
+          type: string
+          format: date
+        value:
+          $ref: '#/components/schemas/MeterValue'
+        calculated:
+          type: boolean
+          description: True for a value calculated between readings ("розрахунковий")
+
+    ChargeCalculation:
+      type: object
+      description: >-
+        How a charge was calculated, as codes and numbers only (the client builds the text). An opening balance and a
+        reversal have no parts and no readings.
+      required: [amount, parts, readings]
+      properties:
+        amount:
+          $ref: '#/components/schemas/Money'
+        parts:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChargeCalculationPart'
+        readings:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChargeCalculationReading'
+        nodeMeterId:
+          type: string
+          format: uuid
+          description: The node of the meter tree whose losses the charge carries
+        consumerMeterId:
+          type: string
+          format: uuid
+          description: The common consumer the charge is for
+
+    Charge:
+      type: object
+      description: One row of the ledger of a plot. Never changed or deleted.
+      required:
+        [
+          id,
+          plotId,
+          kind,
+          source,
+          chargeType,
+          amount,
+          billingMonth,
+          billingMonthClosed,
+          serviceFrom,
+          serviceTo,
+          accruedOn,
+          reversible,
+          calculation,
+          createdAt,
+        ]
+      properties:
+        id:
+          type: string
+          format: uuid
+        plotId:
+          type: string
+          format: uuid
+        kind:
+          $ref: '#/components/schemas/ChargeKind'
+        source:
+          $ref: '#/components/schemas/ChargeSource'
+        chargeType:
+          $ref: '#/components/schemas/ChargeTypeRef'
+        amount:
+          $ref: '#/components/schemas/Money'
+        billingMonth:
+          type: string
+          pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+          description: The billing month the charge is booked in, `YYYY-MM`
+        billingMonthClosed:
+          type: boolean
+          description: True when the billing month is closed (a correction is then an adjustment, not a reversal)
+        serviceFrom:
+          type: string
+          format: date
+          description: The first day the charge pays for
+        serviceTo:
+          type: string
+          format: date
+          description: The last day the charge pays for
+        accruedOn:
+          type: string
+          format: date
+          description: The day the debt counts from (its age)
+        reason:
+          type: string
+          description: >-
+            The reason of a reversal (always present), or the optional reason or document reference of an opening
+            balance (user content)
+        reverses:
+          type: string
+          format: uuid
+          description: The charge a reversal cancels
+        reversedBy:
+          type: string
+          format: uuid
+          description: The reversal that cancelled this charge
+        reversible:
+          type: boolean
+          description: >-
+            True when the caller may reverse the charge now: the caller has `CHARGES_REVERSE`, the charge is not a
+            reversal, was not reversed and its billing month is open
+        calculation:
+          $ref: '#/components/schemas/ChargeCalculation'
+        createdAt:
+          type: string
+          format: date-time
+        createdByName:
+          type: string
+          description: >-
+            The current name of the member who booked the charge; only for callers with `CHARGES_VIEW`, absent for
+            charges booked by the system or by a member who no longer exists
+
+    ChargeTypeDebt:
+      type: object
+      description: The debt of a plot for one charge type
+      required: [chargeTypeId, name, nameCustomized, debt]
+      properties:
+        chargeTypeId:
+          type: string
+          format: uuid
+        chargeTypeCode:
+          $ref: '#/components/schemas/ChargeTypeCode'
+        name:
+          type: string
+          description: The stored name; clients show their own default name while `nameCustomized` is false
+        nameCustomized:
+          type: boolean
+        debt:
+          $ref: '#/components/schemas/Money'
+
+    PlotAccount:
+      type: object
+      description: The account of a plot
+      required: [plotId, debts, total, charges]
+      properties:
+        plotId:
+          type: string
+          format: uuid
+        debts:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChargeTypeDebt'
+        total:
+          $ref: '#/components/schemas/Money'
+        charges:
+          type: array
+          description: Newest first, limited by `from` and `to`
+          items:
+            $ref: '#/components/schemas/Charge'
+
+    ChargeReversal:
+      type: object
+      description: Why a charge is reversed
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+          description: User content, stored as typed; surrounding whitespace is trimmed
+
+    OpeningBalanceInput:
+      type: object
+      description: An opening debt of a plot for one charge type as of a date
+      required: [chargeTypeId, amount, date]
+      properties:
+        chargeTypeId:
+          type: string
+          format: uuid
+        amount:
+          $ref: '#/components/schemas/Money'
+        date:
+          type: string
+          format: date
+          description: The day the debt counts from; not after today
+        reason:
+          type: string
+          maxLength: 500
+          description: >-
+            A reason or a document reference (user content), stored on the charge and written to the audit log;
+            surrounding whitespace is trimmed, a blank reason means none

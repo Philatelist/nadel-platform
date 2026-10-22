@@ -1,0 +1,27 @@
+import { render } from '@testing-library/react';
+import { messages } from '@nadel/shared';
+import { describe, expect, it } from 'vitest';
+import { auditValue } from './auditValue';
+
+const text = (node: ReturnType<typeof auditValue>) => render(<>{node}</>).container.textContent;
+
+describe('auditValue for charges', () => {
+  const uk = messages('uk');
+  const en = messages('en');
+
+  it('formats the amount, month and days from their codes', () => {
+    expect(text(auditValue('CHARGE', 'amount', '-25.00', uk, 'uk'))).toBe('−25,00 ₴');
+    expect(text(auditValue('CHARGE', 'billingMonth', '2026-10', uk, 'uk'))).toBe('10.2026');
+    expect(text(auditValue('CHARGE', 'billingMonth', '2026-10', en, 'en'))).toBe('Oct 2026');
+    expect(text(auditValue('CHARGE', 'serviceFrom', '2026-09-23', uk, 'uk'))).toBe('23.09.2026');
+    expect(text(auditValue('CHARGE', 'date', '2026-10-01', en, 'en'))).toBe('1 Oct 2026');
+  });
+
+  it('shows the charge type by its base token and the reason as user content', () => {
+    expect(text(auditValue('CHARGE', 'chargeType', 'base:COMMON_CONSUMERS', uk, 'uk'))).toBe(
+      'Спільні споживачі',
+    );
+    const reason = render(<>{auditValue('CHARGE', 'reason', 'Помилка', uk, 'uk')}</>);
+    expect(reason.container.querySelector('[data-user-content]')?.textContent).toBe('Помилка');
+  });
+});

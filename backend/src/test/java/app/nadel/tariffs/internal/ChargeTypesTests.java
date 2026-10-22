@@ -30,12 +30,14 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
-/** Charge types: the seeded four, add, change, reorder, archive, name rules and who may do what. */
+/** Charge types: the seeded five, add, change, reorder, archive, name rules and who may do what. */
 class ChargeTypesTests extends IntegrationTest {
 
     private static final String API = "/api/v1/charge-types";
-    private static final List<String> CODES = List.of("MEMBERSHIP", "ELECTRICITY", "LAND_TAX", "WATER");
-    private static final List<String> ENGLISH = List.of("Membership fee", "Electricity", "Land tax", "Water");
+    private static final List<String> CODES = List.of("MEMBERSHIP", "ELECTRICITY", "LAND_TAX", "WATER",
+            "COMMON_CONSUMERS");
+    private static final List<String> ENGLISH = List.of("Membership fee", "Electricity", "Land tax", "Water",
+            "Common consumers");
 
     @Autowired
     MockMvc mvc;
@@ -74,18 +76,18 @@ class ChargeTypesTests extends IntegrationTest {
                 + "('chairman@demo.local', 'treasurer@demo.local', 'member@demo.local', 'electrician@demo.local')"));
     }
 
-    // ---- the four seeded types
+    // ---- the five seeded types
 
     @Test
-    void theDemoCooperativeStartsWithTheFourSeededTypesWaterInactive() throws Exception {
+    void theDemoCooperativeStartsWithTheFiveSeededTypesWaterInactive() throws Exception {
         JsonNode list = list(demo("chairman@demo.local"));
 
-        assertThat(list).hasSize(4);
-        for (int i = 0; i < 4; i++) {
+        assertThat(list).hasSize(5);
+        for (int i = 0; i < 5; i++) {
             assertThat(list.get(i).get("code").asString()).isEqualTo(CODES.get(i));
             assertThat(list.get(i).get("name").asString()).isEqualTo(ENGLISH.get(i));
             assertThat(list.get(i).get("nameCustomized").asBoolean()).isFalse();
-            assertThat(list.get(i).get("active").asBoolean()).isEqualTo(i < 3);
+            assertThat(list.get(i).get("active").asBoolean()).isEqualTo(!"WATER".equals(CODES.get(i)));
             assertThat(list.get(i).get("position").asInt()).isEqualTo(i + 1);
             assertThat(list.get(i).has("description")).isFalse();
         }
@@ -93,19 +95,19 @@ class ChargeTypesTests extends IntegrationTest {
 
     @Test
     void theStoredEnglishNamesAreTheDefaultsOfTheNamesFile() {
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < CODES.size(); i++) {
             assertThat(DefaultChargeTypeNames.of(CODES.get(i)).getFirst()).isEqualTo(ENGLISH.get(i));
         }
     }
 
     @Test
-    void theOtherCooperativeHasItsOwnFourAndTheListsNeverMix() throws Exception {
+    void theOtherCooperativeHasItsOwnFiveAndTheListsNeverMix() throws Exception {
         List<Map<String, Object>> other = ownerJdbc().queryForList(
                 "select code, name, active, position from charge_type where tenant_id = ? order by position, id",
                 OTHER_TENANT);
         assertThat(other).extracting(row -> row.get("code")).containsExactlyElementsOf(CODES);
         assertThat(other).extracting(row -> row.get("name")).containsExactlyElementsOf(ENGLISH);
-        assertThat(other).extracting(row -> row.get("active")).containsExactly(true, true, true, false);
+        assertThat(other).extracting(row -> row.get("active")).containsExactly(true, true, true, false, true);
 
         List<String> demoIds = new ArrayList<>();
         list(demo("chairman@demo.local")).forEach(node -> demoIds.add(node.get("id").asString()));
@@ -129,8 +131,8 @@ class ChargeTypesTests extends IntegrationTest {
                     tenant.toString(), tenant);
             assertThat(types).extracting(row -> row.get("code")).containsExactlyElementsOf(CODES);
             assertThat(types).extracting(row -> row.get("name")).containsExactlyElementsOf(ENGLISH);
-            assertThat(types).extracting(row -> row.get("position")).containsExactly(1, 2, 3, 4);
-            assertThat(types).extracting(row -> row.get("active")).containsExactly(true, true, true, false);
+            assertThat(types).extracting(row -> row.get("position")).containsExactly(1, 2, 3, 4, 5);
+            assertThat(types).extracting(row -> row.get("active")).containsExactly(true, true, true, false, true);
             assertThat(types).extracting(row -> row.get("name_customized")).containsOnly(false);
             assertThat(types).extracting(row -> row.get("deterministic")).containsOnly(true);
             assertThat(owner.queryForList("select permission from role_permission where role_id = "
@@ -161,7 +163,7 @@ class ChargeTypesTests extends IntegrationTest {
 
         assertThat(ownerJdbc().queryForObject("select name from charge_type where id = ?", String.class, membership))
                 .isEqualTo("Fees 2026");
-        assertThat(list(chairman)).hasSize(3);
+        assertThat(list(chairman)).hasSize(4);
     }
 
     // ---- add
@@ -178,17 +180,17 @@ class ChargeTypesTests extends IntegrationTest {
                 .andExpect(jsonPath("$.description").value("Fund for the road"))
                 .andExpect(jsonPath("$.active").value(true))
                 .andExpect(jsonPath("$.nameCustomized").value(true))
-                .andExpect(jsonPath("$.position").value(5))
+                .andExpect(jsonPath("$.position").value(6))
                 .andExpect(jsonPath("$.code").doesNotExist()), json);
 
         String id = created.node().get("id").asString();
         JsonNode list = list(chairman);
-        assertThat(list).hasSize(5);
-        assertThat(list.get(4).get("id").asString()).isEqualTo(id);
+        assertThat(list).hasSize(6);
+        assertThat(list.get(5).get("id").asString()).isEqualTo(id);
         assertThat(ownerJdbc().queryForObject("select tenant_id from charge_type where id = ?::uuid", UUID.class, id))
                 .as("the cooperative comes from the token, never from the body").isEqualTo(DEMO_TENANT);
         assertThat(ownerJdbc().queryForObject("select position from charge_type where id = ?::uuid", Integer.class, id))
-                .isEqualTo(5);
+                .isEqualTo(6);
     }
 
     @Test
@@ -295,7 +297,7 @@ class ChargeTypesTests extends IntegrationTest {
                     .andExpect(jsonPath("$.errors[0].field").value("name"))
                     .andExpect(jsonPath("$.errors[0].code").value("CHARGE_TYPE_NAME_TAKEN"));
         }
-        assertThat(list(chairman)).hasSize(5);
+        assertThat(list(chairman)).hasSize(6);
     }
 
     @Test
@@ -303,12 +305,12 @@ class ChargeTypesTests extends IntegrationTest {
         String chairman = demo("chairman@demo.local");
 
         for (String clash : List.of("Membership fee", "membership FEE", "Членський внесок", "електроенергія",
-                "ЗЕМЕЛЬНИЙ ПОДАТОК", "Water", "Вода")) {
+                "ЗЕМЕЛЬНИЙ ПОДАТОК", "Water", "Вода", "Common consumers", "спільні СПОЖИВАЧІ")) {
             send(chairman, post(API), Map.of("name", clash)).andExpect(status().isConflict())
                     .andExpect(jsonPath("$.code").value("CHARGE_TYPE_NAME_TAKEN"))
                     .andExpect(jsonPath("$.errors[0].field").value("name"));
         }
-        assertThat(list(chairman)).hasSize(4);
+        assertThat(list(chairman)).hasSize(5);
     }
 
     @Test
@@ -335,7 +337,7 @@ class ChargeTypesTests extends IntegrationTest {
 
         send(chairman, post(API), Map.of("name", "Членський внесок")).andExpect(status().isCreated());
         send(chairman, post(API), Map.of("name", "Membership fee")).andExpect(status().isCreated());
-        assertThat(list(chairman)).hasSize(6);
+        assertThat(list(chairman)).hasSize(7);
     }
 
     @Test
@@ -419,9 +421,9 @@ class ChargeTypesTests extends IntegrationTest {
         send(chairman, post(API + "/" + electricity + "/archive"), null).andExpect(status().isNoContent());
 
         JsonNode list = list(chairman);
-        assertThat(list).hasSize(3);
+        assertThat(list).hasSize(4);
         assertThat(list).extracting(node -> node.get("code").asString())
-                .containsExactly("MEMBERSHIP", "LAND_TAX", "WATER");
+                .containsExactly("MEMBERSHIP", "LAND_TAX", "WATER", "COMMON_CONSUMERS");
         assertThat(ownerJdbc().queryForObject("select archived_at is not null from charge_type where id = ?",
                 Boolean.class, electricity)).isTrue();
         send(chairman, post(API + "/" + electricity + "/archive"), null).andExpect(status().isConflict())
@@ -438,12 +440,12 @@ class ChargeTypesTests extends IntegrationTest {
         List<String> ids = idsOf(list(chairman));
 
         // land tax moves up one place
-        List<String> reordered = List.of(ids.get(0), ids.get(2), ids.get(1), ids.get(3));
+        List<String> reordered = List.of(ids.get(0), ids.get(2), ids.get(1), ids.get(3), ids.get(4));
         send(chairman, put(API + "/order"), Map.of("ids", reordered)).andExpect(status().isNoContent());
 
         JsonNode list = list(chairman);
         assertThat(idsOf(list)).containsExactlyElementsOf(reordered);
-        assertThat(list).extracting(node -> node.get("position").asInt()).containsExactly(1, 2, 3, 4);
+        assertThat(list).extracting(node -> node.get("position").asInt()).containsExactly(1, 2, 3, 4, 5);
         assertThat(list.get(1).get("code").asString()).isEqualTo("LAND_TAX");
     }
 
@@ -451,13 +453,13 @@ class ChargeTypesTests extends IntegrationTest {
     void theOrderOfTheCurrentListChangesNothing() throws Exception {
         String chairman = demo("chairman@demo.local");
         List<String> ids = idsOf(list(chairman));
-        archiveType(chairman, ids.get(1)); // positions are now 1, 3, 4
+        archiveType(chairman, ids.get(1)); // positions are now 1, 3, 4, 5
         List<String> current = idsOf(list(chairman));
 
         send(chairman, put(API + "/order"), Map.of("ids", current)).andExpect(status().isNoContent());
 
         assertThat(ownerJdbc().queryForList("select position from charge_type where archived_at is null "
-                + "and tenant_id = ? order by position", Integer.class, DEMO_TENANT)).containsExactly(1, 3, 4);
+                + "and tenant_id = ? order by position", Integer.class, DEMO_TENANT)).containsExactly(1, 3, 4, 5);
         assertThat(idsOf(list(chairman))).containsExactlyElementsOf(current);
     }
 
@@ -467,12 +469,12 @@ class ChargeTypesTests extends IntegrationTest {
         List<String> ids = idsOf(list(chairman));
         archiveType(chairman, ids.get(1));
 
-        send(chairman, put(API + "/order"), Map.of("ids", List.of(ids.get(3), ids.get(2), ids.get(0))))
+        send(chairman, put(API + "/order"), Map.of("ids", List.of(ids.get(4), ids.get(3), ids.get(2), ids.get(0))))
                 .andExpect(status().isNoContent());
 
-        assertThat(idsOf(list(chairman))).containsExactly(ids.get(3), ids.get(2), ids.get(0));
+        assertThat(idsOf(list(chairman))).containsExactly(ids.get(4), ids.get(3), ids.get(2), ids.get(0));
         assertThat(ownerJdbc().queryForList("select position from charge_type where archived_at is null "
-                + "and tenant_id = ? order by position", Integer.class, DEMO_TENANT)).containsExactly(1, 2, 3);
+                + "and tenant_id = ? order by position", Integer.class, DEMO_TENANT)).containsExactly(1, 2, 3, 4);
     }
 
     @Test
@@ -484,18 +486,18 @@ class ChargeTypesTests extends IntegrationTest {
         archiveType(chairman, ids.get(3));
 
         List<List<String>> stale = List.of(
-                List.of(ids.get(2), ids.get(1), ids.get(0), ids.get(3)), // contains an archived type
+                List.of(ids.get(2), ids.get(1), ids.get(0), ids.get(4), ids.get(3)), // contains an archived type
                 List.of(ids.get(2), ids.get(1)), // misses one
                 List.of(ids.get(2), ids.get(1), ids.get(0), unknown), // an unknown id
                 List.of(ids.get(2), ids.get(1), ids.get(0), foreign), // another cooperative's id
-                List.of(ids.get(2), ids.get(1), ids.get(1)), // a repeated id
-                List.of(ids.get(2), ids.get(1), ids.get(0), ids.get(0)), // longer, with a repeat
+                List.of(ids.get(2), ids.get(1), ids.get(1), ids.get(4)), // a repeated id
+                List.of(ids.get(2), ids.get(1), ids.get(0), ids.get(4), ids.get(4)), // longer, with a repeat
                 List.of());
         for (List<String> candidate : stale) {
             send(chairman, put(API + "/order"), Map.of("ids", candidate)).andExpect(status().isConflict())
                     .andExpect(jsonPath("$.code").value("CHARGE_TYPE_ORDER_STALE"));
         }
-        assertThat(idsOf(list(chairman))).containsExactly(ids.get(0), ids.get(1), ids.get(2));
+        assertThat(idsOf(list(chairman))).containsExactly(ids.get(0), ids.get(1), ids.get(2), ids.get(4));
     }
 
     @Test
@@ -515,7 +517,7 @@ class ChargeTypesTests extends IntegrationTest {
         send(chairman, post(API + "/" + last + "/archive"), null).andExpect(status().isNoContent());
 
         send(chairman, post(API), Map.of("name", "Gate")).andExpect(status().isCreated())
-                .andExpect(jsonPath("$.position").value(6));
+                .andExpect(jsonPath("$.position").value(7));
     }
 
     // ---- who may do what
@@ -525,7 +527,7 @@ class ChargeTypesTests extends IntegrationTest {
         String treasurer = demo("treasurer@demo.local");
         UUID membership = idOf(DEMO_TENANT, "MEMBERSHIP");
 
-        send(treasurer, get(API), null).andExpect(status().isOk()).andExpect(jsonPath("$", hasSize(4)));
+        send(treasurer, get(API), null).andExpect(status().isOk()).andExpect(jsonPath("$", hasSize(5)));
         denied(treasurer, membership);
     }
 
@@ -592,7 +594,7 @@ class ChargeTypesTests extends IntegrationTest {
         body.put("name", "Treasurer");
         body.put("description", "Read access to members, plots and audit");
         body.put("permissions", List.of("MEMBERS_VIEW", "PLOTS_VIEW", "AUDIT_VIEW", "TARIFFS_VIEW", "METERS_VIEW",
-                "TARIFFS_MANAGE"));
+                "CHARGES_VIEW", "TARIFFS_MANAGE"));
         try {
             send(chairman, put("/api/v1/roles/" + treasurerRole), body).andExpect(status().isOk());
 

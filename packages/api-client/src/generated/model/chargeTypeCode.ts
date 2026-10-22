@@ -11,7 +11,7 @@
  */
 
 /**
- * Code of one of the four charge types every cooperative starts with; custom types have no code
+ * Code of one of the five charge types every cooperative starts with; custom types have no code
  */
 export type ChargeTypeCode = typeof ChargeTypeCode[keyof typeof ChargeTypeCode];
 
@@ -21,4 +21,5 @@ export const ChargeTypeCode = {
   ELECTRICITY: 'ELECTRICITY',
   LAND_TAX: 'LAND_TAX',
   WATER: 'WATER',
+  COMMON_CONSUMERS: 'COMMON_CONSUMERS',
 } as const;

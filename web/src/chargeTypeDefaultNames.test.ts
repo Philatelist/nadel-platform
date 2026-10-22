@@ -21,7 +21,7 @@ describe('charge type default names', () => {
     const expected = Object.fromEntries(
       Object.keys(defaults).map((code) => [code, fromFile.get(`${code}.${locale}`)]),
     );
-    expect(Object.keys(expected)).toHaveLength(4);
+    expect(Object.keys(expected)).toHaveLength(5);
     expect(defaults).toEqual(expected);
   });
 });

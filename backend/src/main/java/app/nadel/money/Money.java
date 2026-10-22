@@ -64,6 +64,21 @@ public final class Money {
         return new Money(value.add(other.value));
     }
 
+    /** {@code this - other}, exact (both have two decimals, so nothing is rounded). */
+    public Money minus(Money other) {
+        return new Money(value.subtract(other.value));
+    }
+
+    /** The same amount with the opposite sign: the amount of a reversal. {@code 0.00} stays {@code 0.00}. */
+    public Money negate() {
+        return new Money(value.negate());
+    }
+
+    /** -1, 0 or 1 as the amount is negative, zero or positive. */
+    public int signum() {
+        return value.signum();
+    }
+
     /** The amount, always with scale 2. */
     public BigDecimal value() {
         return value;

@@ -82,20 +82,23 @@ the root `CLAUDE.md`). A server never writes an English phrase into `entity_labe
 | Where | Value | Client |
 |---|---|---|
 | Role name, role description, `roles` of a member (`ROLE_*`, `MEMBER_ROLES_CHANGED`; `ROLE` label) | `base:<CODE>` (`CHAIRMAN`, `TREASURER`, `MEMBER`) while a base role keeps its standard name/description, otherwise the stored text. `roles` is such names joined by ", " | catalog name |
-| `CHARGE_TYPE` label, `name` old/new, and `chargeType` of `TARIFF_CREATED` | `base:<CODE>` (`MEMBERSHIP`, `ELECTRICITY`, `LAND_TAX`, `WATER`) while a seeded type was never renamed (`nameCustomized` false), otherwise the stored name | catalog default name |
+| `CHARGE_TYPE` label, `name` old/new, and `chargeType` of `TARIFF_CREATED`, `CHARGE_REVERSED` and `OPENING_BALANCE_ENTERED` | `base:<CODE>` (`MEMBERSHIP`, `ELECTRICITY`, `LAND_TAX`, `WATER`, `COMMON_CONSUMERS`) while a seeded type was never renamed (`nameCustomized` false), otherwise the stored name | catalog default name |
 | `TARIFF` label | the tariff name (user content only; the charge type is not part of the label) | as is |
 | `METER` and `METER_READING` label | the name of a named meter, the serial number of a plot meter (user content); a `METER_READING` entry's entity id is the meter | as is |
 | Meter readings (`initialReading`, `finalReading`, `value` of a reading) | plain decimal with three decimals (`8205.000`) | format meter value |
 | `plot` of a meter | the plot number (user content) | as is |
 | `replacementMeter` of `METER_REPLACED` | the serial number of the new meter (user content) | as is |
+| `CHARGE` label (`CHARGE_REVERSED`, `OPENING_BALANCE_ENTERED`) | the plot number (user content); the entity id is the plot, whose account changed | as is |
+| Money amounts (`amount` of a reversal or an opening balance) | plain decimal with two decimals (`-25.00`, `1500.00`) | format money |
+| `billingMonth` of a ledger entry | `YYYY-MM` | format month |
 | `SETTINGS` label | the code `settings` | catalog name |
 | `owners` of `OWNERSHIP_CHANGED` / `OWNERSHIP_CORRECTED` | JSON array of `{"member": "Last First", "share": "1/2"}`; a correction adds `"from"` and, unless the record is open, `"to"` (ISO dates) | parse, format dates and names |
-| `effectiveFrom`, `validFrom`, `dueDate`, `installedOn`, `removedOn`, `takenOn` | ISO date `2026-01-01` | format date |
+| `effectiveFrom`, `validFrom`, `dueDate`, `installedOn`, `removedOn`, `takenOn`, `serviceFrom`, `serviceTo`, `date` | ISO date `2026-01-01` | format date |
 | Enums (`kind`, `basis`/`frequency` of a tariff version, `scope`, `deliveryChannel`, `memberPlotStatusVisibility`, `kind`/`resource` of a meter) | the enum code | catalog |
 | `permissions` | permission codes sorted and joined by ", " | catalog |
 | Flags (`active`, `archived`, `hasBuilding`) | `true` / `false` | yes/no |
 | Numbers (`areaM2` `600.00`, `rate`, `position`, import counts) | plain decimal text | format number |
-| Member and plot labels, names, notes, reasons (also `reason` of `READING_REJECTED`), import file name | user content | as is |
+| Member and plot labels, names, notes, reasons (also `reason` of `READING_REJECTED`, `CHARGE_REVERSED` and `OPENING_BALANCE_ENTERED`), import file name | user content | as is |
 
 Entries written before this format keep their old text (the log is append-only and is not migrated): a value that
 does not match a format above is shown as stored.

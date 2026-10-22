@@ -11,7 +11,7 @@
  */
 
 /**
- * Kind of the entity an audit entry is about
+ * Kind of the entity an audit entry is about. A `CHARGE` entry (a reversal, an opening balance) is about the plot whose account changed: its `entityId` is the plot id and its label the plot number.
  */
 export type AuditEntityType = typeof AuditEntityType[keyof typeof AuditEntityType];
 
@@ -27,4 +27,5 @@ export const AuditEntityType = {
   TARIFF: 'TARIFF',
   METER: 'METER',
   METER_READING: 'METER_READING',
+  CHARGE: 'CHARGE',
 } as const;

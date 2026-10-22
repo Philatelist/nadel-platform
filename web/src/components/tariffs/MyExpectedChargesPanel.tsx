@@ -24,15 +24,15 @@ function MyPlotCharges({ plot, month }: { plot: OwnedPlot; month: string }) {
   );
 }
 
-/** "What I will be charged" on the account page: the current month's expected amounts per owned plot. */
-export function MyChargesPanel() {
+/** "Expected charges" on the account page: the current month's expected amounts per owned plot. */
+export function MyExpectedChargesPanel() {
   const t = useT();
   const { ownedPlots } = useMe();
   if (ownedPlots.length === 0) return null;
   const month = kyivToday().slice(0, 7);
   return (
-    <section aria-labelledby="my-charges" className="flex flex-col gap-3">
-      <h2 id="my-charges" className="font-serif text-lg font-semibold text-ink">
+    <section aria-labelledby="my-expected-charges" className="flex flex-col gap-3">
+      <h2 id="my-expected-charges" className="font-serif text-lg font-semibold text-ink">
         {t.tariffs.expected.myTitle}
       </h2>
       {ownedPlots.map((p) => (

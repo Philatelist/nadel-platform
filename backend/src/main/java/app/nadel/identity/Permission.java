@@ -19,7 +19,11 @@ public enum Permission {
     METERS_VIEW,
     METERS_MANAGE,
     READINGS_ENTER,
-    READINGS_APPROVE;
+    READINGS_APPROVE,
+    CHARGES_VIEW,
+    CHARGES_RUN,
+    CHARGES_REVERSE,
+    PERIODS_CLOSE;
 
     public static final String AUTHORITY_PREFIX = "PERM_";
 

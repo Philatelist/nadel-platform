@@ -74,3 +74,17 @@ export function normalizeRateInput(text: string): RateString | undefined {
   const value = text.trim().replace(',', '.');
   return RATE_INPUT_RE.test(value) ? value : undefined;
 }
+
+const MONEY_INPUT_RE = /^\d{1,12}(\.\d{1,2})?$/;
+
+/**
+ * Normalises typed amount text into the API form "1250.50": trims, drops spaces, accepts a comma as the decimal
+ * separator and pads to two decimals, all on the text (no arithmetic). Returns undefined for anything that is not a
+ * non-negative amount with at most two decimals; whether it is greater than zero is the server's call.
+ */
+export function normalizeMoneyInput(text: string): MoneyString | undefined {
+  const value = text.replace(/[\s ]/g, '').replace(',', '.');
+  if (!MONEY_INPUT_RE.test(value)) return undefined;
+  const [int = '0', frac = ''] = value.split('.');
+  return `${int.replace(/^0+(?=\d)/, '')}.${frac.padEnd(2, '0')}`;
+}

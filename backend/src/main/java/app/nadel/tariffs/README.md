@@ -8,7 +8,7 @@ Tables (all under RLS `tenant_isolation`, an index on `tenant_id`, composite for
 
 | Table | What it holds |
 |---|---|
-| `charge_type` | What is charged for: the four seeded types (`code` MEMBERSHIP, ELECTRICITY, LAND_TAX, WATER) and custom ones |
+| `charge_type` | What is charged for: the five seeded types (`code` MEMBERSHIP, ELECTRICITY, LAND_TAX, WATER, COMMON_CONSUMERS since V13) and custom ones |
 | `tariff` | A tariff of one charge type, with its `scope_kind` (`ALL_PLOTS` or `SELECTED_PLOTS`; new tariffs are `ALL_PLOTS`) |
 | `tariff_version` | Rates by date (`valid_from`, basis, frequency, `rate numeric(14,4)`, due date, note); a new rate is a new version, a mistake is corrected or deleted until a charge uses the version |
 | `tariff_scope_plot` | Selected plots (`SELECTED`), or exclusions with a reason (`EXCLUDED`); written by `PUT /tariffs/{id}/scope`; cascades when a plot is deleted |
@@ -21,7 +21,7 @@ cooperative.
 ## Public API and permissions
 
 The module root exports `ChargeCalculator` (pure, no Spring, no database), `VersionTerms` (with `InvalidVersionTermsException`),
-`Basis`, `Frequency`, `ExpectedCharge` (`Amount` or `ByReadings` with the meter basis) and the port `TariffVersionUsage`; everything else is in `internal`. Feature 011 (the
+`Basis`, `Frequency`, `ExpectedCharge` (`Amount` or `ByReadings` with the meter basis), the port `TariffVersionUsage` and the read API `ChargeTypeCatalog` (`find`, `findAndLockShared`, `all`: `ChargeTypeFacts` with code, stored name, `nameCustomized`, active, archived, position and the audit token `auditName()`; implemented by `JpaChargeTypeCatalog`); everything else is in `internal`. Feature 011 (the
 ledger) calls the same `ChargeCalculator`, so the preview and the real charge never diverge.
 
 Permissions (ADR 0009, defined in `identity.Permission`, seeded for the Chairman by `seed_base_roles`; the Treasurer gets
@@ -31,8 +31,9 @@ currently own. Every change is written to the audit log (see Audit).
 
 ## Charge types
 
-- `seed_charge_types(tenant)` writes the four types with deterministic ids `md5(tenant || ':CHARGE_TYPE:' || code)::uuid`,
-  positions 1 to 4, English names, Water inactive, `name_customized = false`, `ON CONFLICT DO NOTHING` (never
+- `seed_charge_types(tenant)` writes the five types with deterministic ids `md5(tenant || ':CHARGE_TYPE:' || code)::uuid`,
+  positions 1 to 5, English names, Water inactive (`COMMON_CONSUMERS`, "Common consumers", added by V13 for new and
+  existing cooperatives), `name_customized = false`, `ON CONFLICT DO NOTHING` (never
   overwrites what a chairman changed). `seed_base_roles(tenant)` calls it, so a new cooperative gets the types and the
   roles from one call; V10 seeds every existing cooperative.
 - The stored name of a seeded type is the English default. While `nameCustomized` is false clients show their own
@@ -235,7 +236,7 @@ removed exclusion. The reasons are in the audit entries only, never in the appli
 
 Charge type names in the audit log are tokens, never English display text (the pattern of the role names): a seeded type
 that was never renamed (`nameCustomized` false) is written as `base:<CODE>`, with `<CODE>` one of `MEMBERSHIP`,
-`ELECTRICITY`, `LAND_TAX`, `WATER`; a renamed seeded type and every custom type is written under its stored name
+`ELECTRICITY`, `LAND_TAX`, `WATER`, `COMMON_CONSUMERS`; a renamed seeded type and every custom type is written under its stored name
 (`ChargeTypeSnapshot.auditName`). This applies to the `CHARGE_TYPE` label and `name` old/new values and to the
 `chargeType` value of `TARIFF_CREATED`. The client shows the catalog name for `base:<CODE>` and the value as is otherwise.
 
@@ -246,8 +247,8 @@ old and new number), `CHARGE_TYPE_ARCHIVED` (`archived` false to true). Publishe
 
 ## Default names: an exception to the English-only rule
 
-The Ukrainian default names of the four seeded types ("Членський внесок", "Електроенергія", "Земельний податок",
-"Вода") are needed on the server for the name check above. They live in one UTF-8 resource file,
+The Ukrainian default names of the five seeded types ("Членський внесок", "Електроенергія", "Земельний податок",
+"Вода", "Спільні споживачі") are needed on the server for the name check above. They live in one UTF-8 resource file,
 `src/main/resources/tariffs/charge-type-default-names.properties` (the English and Ukrainian default names side by
 side, keys like `MEMBERSHIP.en` and `MEMBERSHIP.uk`), read by `DefaultChargeTypeNames`. The file mirrors `chargeTypes.defaultNames` in the web catalog
 (`packages/shared/src/i18n/uk.ts`), which is the source of the texts users see; keep the two in step. This is a
@@ -258,5 +259,5 @@ narrow exception to "everything in the repository is English", of the same kind 
 `identity` (`CurrentUser`, `AccessProfile`, `OwnedPlotsSource`), `audit` (events), `problem`, `money` (`Rate`, `Money`) and
 `plots` (the public `PlotCatalog` only: `find`, `findAll`, `inNaturalOrder`, `countChargeable`) and `meters` (the public
 `MeterCatalog` only: `plotIdsWithActiveMeter`, `hasMeterBetween`; `meters` never depends on `tariffs`). The module root exports
-`Basis`, `Frequency`, `VersionTerms`, `ExpectedCharge`, `ChargeCalculator` and `TariffVersionUsage`. Nothing depends on this
-module yet; the ledger (feature 011) will, and implements `TariffVersionUsage`.
+`Basis`, `Frequency`, `VersionTerms`, `ExpectedCharge`, `ChargeCalculator`, `TariffVersionUsage` and `ChargeTypeCatalog`.
+The ledger (feature 011) depends on this module (`ChargeTypeCatalog` now) and will implement `TariffVersionUsage`.

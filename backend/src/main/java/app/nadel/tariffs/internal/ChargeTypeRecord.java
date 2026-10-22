@@ -9,7 +9,7 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
 /**
- * What the cooperative charges for. The four seeded types have a {@code code}; custom types have none. A seeded type
+ * What the cooperative charges for. The five seeded types have a {@code code}; custom types have none. A seeded type
  * keeps its English default name until it is renamed, which sets {@code nameCustomized} for good (the pattern of the
  * role name). A type is archived, never deleted.
  */

@@ -22,7 +22,7 @@ public final class DemoTariffData {
     }
 
     /**
-     * Leaves the two cooperatives with exactly the four seeded charge types and no tariffs: removes every scope row,
+     * Leaves the two cooperatives with exactly the five seeded charge types and no tariffs: removes every scope row,
      * version, tariff and charge type (the owner role may, the application role may not) and seeds the types again.
      */
     public static void clear(JdbcTemplate owner) {

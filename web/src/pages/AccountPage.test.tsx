@@ -6,6 +6,7 @@ import { AccountPage } from './AccountPage';
 const ok = (data: unknown) => ({ data, error: null, isPending: false, isError: false, refetch: vi.fn() });
 
 vi.mock('../me', () => ({
+  useCan: () => false,
   useOptionalMe: () => null,
   useMe: () => ({
     memberId: 'm1',
@@ -23,15 +24,17 @@ vi.mock('@nadel/api-client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@nadel/api-client')>()),
   useGetMember: () => ok({ id: 'm1' }),
   useGetPlotTariffs: () => ok({ month: '2026-10', total: '0.00', items: [] }),
+  useGetPlotAccount: () => ok({ plotId: 'p7', debts: [], total: '0.00', charges: [] }),
 }));
 
 describe('AccountPage', () => {
   beforeEach(() => window.localStorage.setItem('nadel.locale', 'en'));
 
-  it('shows what the member will be charged after the plots', () => {
+  it('shows the own account and what the member will be charged after the plots', () => {
     renderWithApp(<AccountPage />);
-    expect(screen.getByRole('heading', { name: 'What I will be charged' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Plot 7' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'My charges' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Expected charges' })).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { name: 'Plot 7' })).toHaveLength(2);
     expect(screen.getByText('my meters')).toBeInTheDocument();
   });
 });

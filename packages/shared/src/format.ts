@@ -54,3 +54,20 @@ export function formatDateTime(iso: string, locale: string): string {
   const day = `${part('year')}-${part('month')}-${part('day')}`;
   return `${formatDay(day, locale)}, ${part('hour')}:${part('minute')}`;
 }
+
+/** A date-only value without the year, from its text: uk "23.09", en "23 Sep". */
+export function formatDayMonth(value: string, locale: string): string {
+  const match = DAY_RE.exec(value);
+  if (!match) throw new Error(`Not an ISO day: ${value}`);
+  const [, , month = '01', day = '01'] = match;
+  if (isEnglish(locale)) return `${Number(day)} ${MONTHS_EN[Number(month) - 1] ?? month}`;
+  return `${day}.${month}`;
+}
+
+/** A billing month ("2026-10") from its text: uk "10.2026", en "Oct 2026". */
+export function formatMonth(value: string, locale: string): string {
+  const match = /^(\d{4})-(\d{2})$/.exec(value);
+  if (!match) throw new Error(`Not a month: ${value}`);
+  const [, year = '', month = '01'] = match;
+  return isEnglish(locale) ? `${MONTHS_EN[Number(month) - 1] ?? month} ${year}` : `${month}.${year}`;
+}

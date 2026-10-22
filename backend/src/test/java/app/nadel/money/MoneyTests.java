@@ -49,6 +49,33 @@ class MoneyTests {
     }
 
     @Test
+    void amountsAreSubtractedExactly() {
+        assertThat(Money.parse("42.50").minus(Money.parse("25.00"))).isEqualTo(Money.parse("17.50"));
+        assertThat(Money.parse("25.00").minus(Money.parse("42.50"))).isEqualTo(Money.parse("-17.50"));
+        assertThat(Money.parse("0.01").minus(Money.parse("0.01"))).isEqualTo(Money.ZERO);
+        assertThat(Money.parse("10.00").minus(Money.parse("-0.05")).value().scale()).isEqualTo(2);
+    }
+
+    @Test
+    void aNegatedAmountHasTheOppositeSign() {
+        // the amount of a reversal (feature 011 §3: 25.00 reversed is -25.00)
+        assertThat(Money.parse("25.00").negate()).isEqualTo(Money.parse("-25.00"));
+        assertThat(Money.parse("-1500.00").negate()).isEqualTo(Money.parse("1500.00"));
+        assertThat(Money.ZERO.negate()).isEqualTo(Money.ZERO);
+        assertThat(Money.ZERO.negate().toString()).isEqualTo("0.00");
+        Money amount = Money.parse("403.06");
+        assertThat(amount.plus(amount.negate())).isEqualTo(Money.ZERO);
+    }
+
+    @Test
+    void theSignIsMinusOneZeroOrOne() {
+        assertThat(Money.parse("-0.01").signum()).isEqualTo(-1);
+        assertThat(Money.ZERO.signum()).isZero();
+        assertThat(Money.parse("0.00").signum()).isZero();
+        assertThat(Money.parse("0.01").signum()).isEqualTo(1);
+    }
+
+    @Test
     void theWireFormatIsParsedStrictly() {
         assertThat(Money.parse("1250.50").value()).isEqualTo(new BigDecimal("1250.50"));
         assertThat(Money.parse("-3.00").toString()).isEqualTo("-3.00");

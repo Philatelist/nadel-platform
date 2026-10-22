@@ -22,6 +22,7 @@ const ENTITY_TYPES = [
   'TARIFF',
   'METER',
   'METER_READING',
+  'CHARGE',
 ] as const;
 
 /** Where a record of an entity type is shown; absent for types without a page of their own. */
@@ -34,6 +35,8 @@ const entityHref: Readonly<Partial<Record<AuditEntityType, (entityId: string) =>
   METER: (id) => `/meters/${id}`,
   // the entity id of a reading's record is its meter
   METER_READING: (id) => `/meters/${id}`,
+  // the entity id of a charge's record is its plot
+  CHARGE: (id) => `/plots/${id}`,
 };
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
