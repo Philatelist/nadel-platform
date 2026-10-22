@@ -21,7 +21,7 @@ async function signedInPage(browser: Browser, email: string): Promise<Page> {
 }
 
 test.describe('tariffs', () => {
-  test('chairman creates a charge type and a per-sotka tariff, the treasurer and a member see only what they may', async ({
+  test('chairman creates a charge type and a per-sotka tariff, the treasurer and a member see only what they may @smoke', async ({
     page,
     browser,
   }) => {

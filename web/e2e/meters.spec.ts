@@ -112,7 +112,7 @@ test.describe('meters and readings', () => {
     }
   });
 
-  test('the electrician sees only Readings and Meters, lands on Readings and enters readings with the default and a changed date', async ({
+  test('the electrician sees only Readings and Meters, lands on Readings and enters readings with the default and a changed date @smoke', async ({
     page,
     browser,
   }) => {
