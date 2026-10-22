@@ -1,0 +1,451 @@
+/* Print styles for the Ukrainian guides. Fonts are injected by scripts/build-pdf.mjs from web/node_modules/@fontsource. */
+:root {
+  --ink: #1c2a22;
+  --ink-muted: #46564c;
+  --ink-subtle: #5b6a60;
+  --line: #d9dfd4;
+  --line-subtle: #edf0ea;
+  --paper: #ffffff;
+  --tint: #f3f5f0;
+  --accent: #245a41;
+  --accent-soft: #e3eee6;
+  --warn-soft: #fff6e5;
+  --warn-line: #ebcb98;
+  --warn-ink: #6b4a0b;
+  --info-soft: #e1e9f6;
+  --info-ink: #1e3a6e;
+  --danger: #a3301b;
+  --serif: 'IBM Plex Serif', Georgia, serif;
+  --sans: 'IBM Plex Sans', system-ui, sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, monospace;
+}
+
+@page {
+  size: A4;
+  margin: 20mm 18mm 20mm 18mm;
+}
+@page :first {
+  margin: 0;
+}
+
+* {
+  box-sizing: border-box;
+}
+html {
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+body {
+  margin: 0;
+  font-family: var(--sans);
+  font-size: 10.5pt;
+  line-height: 1.55;
+  color: var(--ink);
+  background: var(--paper);
+}
+
+/* Cover */
+.cover {
+  height: 297mm;
+  width: 210mm;
+  padding: 34mm 22mm 24mm;
+  display: flex;
+  flex-direction: column;
+  background: var(--tint);
+  page-break-after: always;
+  position: relative;
+  overflow: hidden;
+}
+.cover::after {
+  content: '';
+  position: absolute;
+  right: -40mm;
+  bottom: -40mm;
+  width: 150mm;
+  height: 150mm;
+  border-radius: 50%;
+  border: 18mm solid var(--accent-soft);
+}
+.cover .brand {
+  font-family: var(--serif);
+  font-size: 13pt;
+  color: var(--accent);
+  letter-spacing: 0.02em;
+}
+.cover .brand b {
+  font-weight: 600;
+}
+.cover h1 {
+  font-family: var(--serif);
+  font-weight: 600;
+  font-size: 34pt;
+  line-height: 1.12;
+  margin: 26mm 0 6mm;
+  max-width: 150mm;
+}
+.cover .lead {
+  font-size: 13pt;
+  color: var(--ink-muted);
+  max-width: 140mm;
+  margin: 0;
+}
+.cover .meta {
+  margin-top: auto;
+  position: relative;
+  z-index: 1;
+  font-size: 10pt;
+  color: var(--ink-muted);
+  border-top: 1px solid var(--line);
+  padding-top: 6mm;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 1.5mm 8mm;
+  max-width: 120mm;
+}
+.cover .meta dt {
+  color: var(--ink-subtle);
+}
+.cover .meta dd {
+  margin: 0;
+  color: var(--ink);
+}
+
+/* Table of contents */
+.toc {
+  page-break-after: always;
+}
+.toc h2 {
+  margin-top: 0;
+}
+.toc ol {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  counter-reset: toc;
+}
+.toc > ol > li {
+  counter-increment: toc;
+  padding: 2.2mm 0;
+  border-bottom: 1px solid var(--line-subtle);
+  display: flex;
+  gap: 4mm;
+  align-items: baseline;
+}
+.toc > ol > li::before {
+  content: counter(toc);
+  font-family: var(--serif);
+  color: var(--accent);
+  font-weight: 600;
+  min-width: 7mm;
+}
+.toc a {
+  color: var(--ink);
+  text-decoration: none;
+}
+.toc .tag {
+  margin-left: auto;
+}
+
+/* Headings */
+h2 {
+  font-family: var(--serif);
+  font-weight: 600;
+  font-size: 20pt;
+  line-height: 1.2;
+  margin: 0 0 4mm;
+  color: var(--ink);
+}
+section.chapter {
+  page-break-before: always;
+}
+section.chapter > h2 {
+  display: flex;
+  gap: 4mm;
+  align-items: baseline;
+  padding-bottom: 3mm;
+  border-bottom: 2px solid var(--accent);
+  margin-bottom: 6mm;
+}
+section.chapter > h2 .num {
+  color: var(--accent);
+}
+h3 {
+  font-family: var(--serif);
+  font-weight: 600;
+  font-size: 13.5pt;
+  margin: 7mm 0 2.5mm;
+  page-break-after: avoid;
+}
+h4 {
+  font-size: 10.5pt;
+  font-weight: 600;
+  margin: 5mm 0 1.5mm;
+  page-break-after: avoid;
+}
+p {
+  margin: 0 0 3mm;
+  orphans: 3;
+  widows: 3;
+}
+ul,
+ol {
+  margin: 0 0 3mm;
+  padding-left: 6mm;
+}
+li {
+  margin: 0 0 1.2mm;
+}
+strong {
+  font-weight: 600;
+}
+code,
+.mono {
+  font-family: var(--mono);
+  font-size: 0.9em;
+  background: var(--line-subtle);
+  padding: 0.2mm 1.2mm;
+  border-radius: 1mm;
+}
+.lead {
+  font-size: 11.5pt;
+  color: var(--ink-muted);
+}
+
+/* Status tags */
+.tag {
+  display: inline-block;
+  font-size: 8pt;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 0.6mm 2.2mm;
+  border-radius: 10mm;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.tag.done {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.tag.planned {
+  background: var(--info-soft);
+  color: var(--info-ink);
+}
+h2 .tag,
+h3 .tag {
+  margin-left: 2mm;
+  font-family: var(--sans);
+}
+
+/* Callouts */
+.note,
+.example,
+.warn {
+  border-radius: 2.5mm;
+  padding: 3.5mm 4.5mm;
+  margin: 3mm 0 4mm;
+  page-break-inside: avoid;
+}
+.note {
+  background: var(--accent-soft);
+}
+.example {
+  background: var(--tint);
+  border-left: 1.2mm solid var(--accent);
+}
+.warn {
+  background: var(--warn-soft);
+  border: 1px solid var(--warn-line);
+  color: var(--warn-ink);
+}
+.note > :last-child,
+.example > :last-child,
+.warn > :last-child {
+  margin-bottom: 0;
+}
+.callout-title {
+  display: block;
+  font-weight: 600;
+  font-size: 9pt;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 1.5mm;
+  color: var(--accent);
+}
+.warn .callout-title {
+  color: var(--warn-ink);
+}
+
+/* Steps */
+ol.steps {
+  list-style: none;
+  padding: 0;
+  counter-reset: step;
+}
+ol.steps > li {
+  counter-increment: step;
+  position: relative;
+  padding-left: 10mm;
+  margin-bottom: 2.5mm;
+}
+ol.steps > li::before {
+  content: counter(step);
+  position: absolute;
+  left: 0;
+  top: 0.2mm;
+  width: 6.5mm;
+  height: 6.5mm;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+  font-size: 9pt;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Tables */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 2mm 0 4mm;
+  font-size: 9.5pt;
+  page-break-inside: auto;
+}
+thead {
+  display: table-header-group;
+}
+tr {
+  page-break-inside: avoid;
+}
+th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--ink-muted);
+  background: var(--tint);
+  border-bottom: 1px solid var(--line);
+  padding: 2mm 2.5mm;
+  vertical-align: bottom;
+}
+td {
+  border-bottom: 1px solid var(--line-subtle);
+  padding: 2mm 2.5mm;
+  vertical-align: top;
+}
+td.num,
+th.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Figures */
+figure {
+  margin: 3mm 0 5mm;
+  page-break-inside: avoid;
+}
+figure img {
+  display: block;
+  max-width: 100%;
+  max-height: 120mm;
+  margin: 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 2mm;
+}
+figure.phone img {
+  max-height: 110mm;
+}
+figure svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 85mm;
+  margin: 0 auto;
+}
+figcaption {
+  font-size: 8.5pt;
+  color: var(--ink-subtle);
+  text-align: center;
+  margin-top: 1.5mm;
+}
+.shot-missing {
+  border: 1px dashed var(--line);
+  border-radius: 2mm;
+  background: var(--tint);
+  color: var(--ink-subtle);
+  font-size: 9pt;
+  padding: 8mm;
+  text-align: center;
+}
+
+/* Definition grid */
+dl.terms {
+  display: grid;
+  grid-template-columns: 38mm 1fr;
+  gap: 1.6mm 5mm;
+  margin: 2mm 0 4mm;
+}
+dl.terms dt {
+  font-weight: 600;
+}
+dl.terms dd {
+  margin: 0;
+}
+
+.formula {
+  margin-top: 2mm;
+  font-family: var(--mono);
+  font-size: 9pt;
+  background: var(--tint);
+  border-radius: 2mm;
+  padding: 3mm 4mm;
+  white-space: pre-wrap;
+  margin: 2mm 0 4mm;
+  page-break-inside: avoid;
+}
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6mm;
+}
+.muted {
+  color: var(--ink-subtle);
+}
+.small {
+  font-size: 9pt;
+}
+
+/* Parts */
+section.part {
+  page-break-before: always;
+  min-height: 230mm;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+section.part .part-label {
+  font-family: var(--serif);
+  color: var(--accent);
+  font-size: 14pt;
+  letter-spacing: 0.04em;
+}
+section.part h2 {
+  font-size: 30pt;
+  margin: 3mm 0 6mm;
+}
+section.part .lead {
+  max-width: 140mm;
+}
+.toc > ol > li.toc-part {
+  counter-increment: none;
+  font-weight: 600;
+  color: var(--accent);
+  border-bottom: 1px solid var(--line);
+  padding-top: 5mm;
+}
+.toc > ol > li.toc-part::before {
+  content: none;
+}
+.toc > ol > li.toc-part a {
+  color: var(--accent);
+}

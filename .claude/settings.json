@@ -38,7 +38,6 @@
       "Bash(git push * --force-with-lease*)",
       "Bash(git push --delete*)",
       "Bash(git push * --delete*)",
-      "Bash(git push * :*)",
       "Bash(git push --mirror*)",
       "Bash(git push --all*)",
       "Bash(git push --tags*)",

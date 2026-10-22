@@ -1,0 +1,1363 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Nadel — board guide</title>
+    <link rel="stylesheet" href="../guide.css" />
+  </head>
+  <body>
+    <div class="cover">
+      <div class="brand"><b>Nadel</b> · payment accounting for garden cooperatives</div>
+      <h1>Board guide</h1>
+      <p class="lead">
+        How the chairman, the treasurer and the electrician work in the system, and the rules it calculates
+        by: tariffs, readings, charges, losses, water — with worked examples.
+      </p>
+      <dl class="meta">
+        <dt>Reader</dt>
+        <dd>Chairman, treasurer, electrician, other board members</dd>
+        <dt>System state</dt>
+        <dd>Phases 1–2: part I — working in the system, part II — how the system calculates</dd>
+        <dt>Edition</dt>
+        <dd>22 October 2026</dd>
+      </dl>
+    </div>
+
+    <nav class="toc">
+      <h2>Contents</h2>
+      <ol>
+        <li class="toc-part"><a href="#about">Part I. Working in the system</a></li>
+        <li><a href="#about">The system, roles and signing in</a><span class="tag done">works</span></li>
+        <li><a href="#members">Members</a><span class="tag done">works</span></li>
+        <li><a href="#roles">Roles and permissions</a><span class="tag done">works</span></li>
+        <li><a href="#plots">Plots</a><span class="tag done">works</span></li>
+        <li><a href="#owners">Plot owners</a><span class="tag done">works</span></li>
+        <li><a href="#settings">Cooperative settings</a><span class="tag done">works</span></li>
+        <li><a href="#import">Excel import</a><span class="tag done">works</span></li>
+        <li><a href="#tariffs">Tariffs</a><span class="tag done">works</span></li>
+        <li><a href="#meters">Meters and the meter tree</a><span class="tag done">works</span></li>
+        <li><a href="#readings">Readings: the round and approvals</a><span class="tag done">works</span></li>
+        <li><a href="#audit">Audit log</a><span class="tag done">works</span></li>
+        <li><a href="#account">The member's account</a><span class="tag done">works</span></li>
+        <li class="toc-part"><a href="#part-2">Part II. How the system calculates</a></li>
+        <li><a href="#r-principles">Core principles</a><span class="tag done">works</span></li>
+        <li><a href="#r-tariffs">Tariffs and the expected amount</a><span class="tag done">works</span></li>
+        <li><a href="#r-meters">Meters and the tree</a><span class="tag done">works</span></li>
+        <li><a href="#r-readings">Readings and consumption</a><span class="tag done">works</span></li>
+        <li>
+          <a href="#r-charges">Charges and closing months</a><span class="tag planned">planned · 011</span>
+        </li>
+        <li>
+          <a href="#r-losses">Network losses and common consumers</a
+          ><span class="tag planned">planned · 011</span>
+        </li>
+        <li><a href="#r-water">Water and connections</a><span class="tag planned">planned · 011</span></li>
+        <li>
+          <a href="#r-recalc">Corrections and recalculation</a><span class="tag planned">planned · 012</span>
+        </li>
+        <li><a href="#r-reports">Reports and templates</a><span class="tag planned">planned · 013</span></li>
+        <li><a href="#next">What comes next</a><span class="tag planned">planned</span></li>
+      </ol>
+    </nav>
+
+    <section class="chapter" id="about">
+      <h2><span class="num">1</span> The system, roles and signing in</h2>
+      <p class="lead">
+        Nadel keeps the cooperative's records: who the members are, which plots they own, what is charged and
+        at which tariffs, how much electricity and water was used. Charges, payments, invoices and the map
+        come next.
+      </p>
+
+      <h3>Who sees what</h3>
+      <p>
+        Everyone signs in with their own account. What a person sees and may do depends on their
+        <strong>roles</strong>, and roles are made of <strong>permissions</strong> (chapter 3). Every
+        cooperative has three base roles:
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Role</th>
+            <th>May do</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Chairman</strong></td>
+            <td>
+              Everything: members, roles, plots, owners, tariffs, meters, readings, import, settings, audit
+              log. The chairman's rights cannot be reduced, and a cooperative always keeps at least one
+              chairman.
+            </td>
+          </tr>
+          <tr>
+            <td><strong>Treasurer</strong></td>
+            <td>
+              Views members, plots, tariffs, meters and the audit log. Changes nothing until the chairman adds
+              permissions.
+            </td>
+          </tr>
+          <tr>
+            <td><strong>Member</strong></td>
+            <td>Own data only: own plots and their tariffs, own meters, submitting readings.</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>
+        The chairman can create custom roles. For example the role "Electrician" has only two permissions,
+        "View meters" and "Enter readings"; a person with it sees only "Readings" and "Meters" in the menu.
+      </p>
+
+      <h3>Signing in</h3>
+      <ol class="steps">
+        <li>Open the system's address and press "Sign in".</li>
+        <li>Enter your email and password.</li>
+        <li>
+          The system finds you among the members by email. If your member card has no email or a different
+          one, you see "Account not linked": ask the chairman to correct the email on your card.
+        </li>
+      </ol>
+      <div class="note">
+        <span class="callout-title">Note</span>
+        <p>
+          For now the sign-in account (email and password) is created by the platform administrator. Self
+          sign-up and email invitations come later.
+        </p>
+      </div>
+
+      <h3>Language and theme</h3>
+      <p>
+        At the top right: the language switch <strong>УКР / ENG</strong> and the theme
+        <strong>System / Light / Dark</strong>. The choice is remembered in this browser. The interface always
+        shows exactly one language: with English selected, every name, hint and message is English.
+      </p>
+      <p>
+        At the top left is your cooperative's name, below it the menu. On a phone the menu hides behind the
+        "Menu" button.
+      </p>
+    </section>
+
+    <section class="chapter" id="members">
+      <h2><span class="num">2</span> Members</h2>
+      <p>"Members" lists every member, with search by last name, phone or email.</p>
+      <figure>
+        <img src="../img/en/members.png" alt="Members" />
+        <figcaption>The members list</figcaption>
+      </figure>
+
+      <h3>Adding a member</h3>
+      <ol class="steps">
+        <li>Press "Add member".</li>
+        <li>Fill in the last and first name (required), patronymic, phones, email, postal address.</li>
+        <li>
+          Choose how invoices are delivered: email, Telegram, Viber or paper. The matching contact is
+          required.
+        </li>
+        <li>
+          Press "Save". A phone typed as <code>0XXXXXXXXX</code> is stored as <code>+380XXXXXXXXX</code>.
+        </li>
+      </ol>
+      <div class="note">
+        <span class="callout-title">Notes and personal data</span>
+        <p>
+          Notes are for working information about a member: how best to reach them, arrangements, relatives'
+          contacts. Only people with "View members" see them. The system has no fields for tax numbers
+          (РНОКПП), passport data or dates of birth — the cooperative does not need them for its records.
+        </p>
+      </div>
+
+      <h3>The member card</h3>
+      <p>Contacts, roles, owned plots and notes. Notes are visible only to people with "View members".</p>
+      <figure>
+        <img src="../img/en/member-card.png" alt="Member card" />
+        <figcaption>A member card</figcaption>
+      </figure>
+
+      <h3>Archiving</h3>
+      <p>
+        A member is archived, not deleted: hidden from the list (visible with "Show archived"), unable to sign
+        in, history kept. "Restore" brings them back. A current plot owner cannot be archived until the plot
+        changes hands, nor the last chairman until another is appointed.
+      </p>
+    </section>
+
+    <section class="chapter" id="roles">
+      <h2><span class="num">3</span> Roles and permissions</h2>
+      <p>In "Roles" the chairman (or anyone with "Manage roles") decides who may do what.</p>
+      <figure>
+        <img src="../img/en/roles.png" alt="Roles" />
+        <figcaption>Base and custom roles</figcaption>
+      </figure>
+      <ul>
+        <li>
+          <strong>Base roles</strong> (Chairman, Treasurer, Member) cannot be deleted but can be renamed; the
+          new name and description then show in every language. "Restore standard name" undoes it.
+        </li>
+        <li>
+          <strong>Custom roles</strong>: "Add role", a name, a description and any set of permissions. A
+          person may hold several roles; permissions add up.
+        </li>
+        <li>A role still assigned to someone cannot be deleted.</li>
+      </ul>
+      <h3>Permissions</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Permission</th>
+            <th>Allows</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>View / edit members</td>
+            <td>See all members and contacts; add, change, archive</td>
+          </tr>
+          <tr>
+            <td>Manage roles</td>
+            <td>Create roles, change permissions, assign roles</td>
+          </tr>
+          <tr>
+            <td>View / edit plots</td>
+            <td>See every plot in detail; add, change, archive</td>
+          </tr>
+          <tr>
+            <td>Edit ownership</td>
+            <td>Add, change and correct owners</td>
+          </tr>
+          <tr>
+            <td>Run import</td>
+            <td>Upload data from Excel</td>
+          </tr>
+          <tr>
+            <td>Manage settings</td>
+            <td>Change the cooperative settings</td>
+          </tr>
+          <tr>
+            <td>View / manage tariffs</td>
+            <td>See tariffs; create charge types, tariffs and versions</td>
+          </tr>
+          <tr>
+            <td>View / manage meters</td>
+            <td>See the register and the tree; register, replace, remove meters</td>
+          </tr>
+          <tr>
+            <td>Enter readings</td>
+            <td>Enter, correct and delete readings (the electrician's round)</td>
+          </tr>
+          <tr>
+            <td>Approve readings</td>
+            <td>Approve or reject readings submitted by members</td>
+          </tr>
+          <tr>
+            <td>View audit log</td>
+            <td>Read the audit log</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="chapter" id="plots">
+      <h2><span class="num">4</span> Plots</h2>
+      <p>
+        "Plots" is the register of every plot, with search by number, street or cadastral number and filters
+        by kind and status.
+      </p>
+      <figure>
+        <img src="../img/en/plots.png" alt="Plots" />
+        <figcaption>The plot register</figcaption>
+      </figure>
+
+      <h3>What is kept about a plot</h3>
+      <dl class="terms">
+        <dt>Number</dt>
+        <dd>
+          Required, unique in the cooperative: <code>12</code>, <code>12a</code>, <code>R-1</code>. Natural
+          order: 2 before 10, 12a after 12.
+        </dd>
+        <dt>Kind</dt>
+        <dd>
+          <strong>Plot</strong> or <strong>Common land</strong> (roads, shared areas). Common land has no
+          owners, tariffs or plot meters.
+        </dd>
+        <dt>Area</dt>
+        <dd>In sotkas or m², entered in either unit (1 sotka = 100 m²).</dd>
+        <dt>Cadastral number</dt>
+        <dd>Optional, format <code>NNNNNNNNNN:NN:NNN:NNNN</code>.</dd>
+        <dt>Building</dt>
+        <dd>Whether a building stands on the plot. Reference only; it never affects charges.</dd>
+        <dt>Notes</dt>
+        <dd>Visible only with "View plots".</dd>
+      </dl>
+
+      <h3>Plot status (colour)</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Colour</th>
+            <th>Meaning</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Green</td>
+            <td>No debt</td>
+          </tr>
+          <tr>
+            <td>Yellow</td>
+            <td>Has a debt</td>
+          </tr>
+          <tr>
+            <td>Red</td>
+            <td>Debt over the threshold (amount or age set by the chairman)</td>
+          </tr>
+          <tr>
+            <td>Grey</td>
+            <td>A plot without an owner, or common land</td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="muted small">
+        Until charges exist, a plot with an owner is green. Colours start to show debts with the charges
+        (chapter 17).
+      </p>
+
+      <h3>The plot card</h3>
+      <p>All the plot's data, owners with history, tariffs for a chosen month, meters.</p>
+      <figure>
+        <img src="../img/en/plot-card.png" alt="Plot card" />
+        <figcaption>Plot 9: owners, tariffs, meters</figcaption>
+      </figure>
+      <p>
+        "Archive" hides a plot from the list and keeps its history. Only a plot created by mistake that never
+        had an owner can be deleted.
+      </p>
+    </section>
+
+    <section class="chapter" id="owners">
+      <h2><span class="num">5</span> Plot owners</h2>
+      <p>
+        Owners are kept on the plot card. A plot can have several co-owners with shares (<code>1/2</code>,
+        <code>1/3</code>); the shares always add up to one. One member may own several plots, each with its
+        own account.
+      </p>
+
+      <h3>Change of owner (sale, inheritance)</h3>
+      <ol class="steps">
+        <li>On the plot card press "Change owner".</li>
+        <li>
+          Enter the date and the new owners with shares. If a new owner is not a member yet, use "Add member"
+          right in the form.
+        </li>
+        <li>Enter the basis (purchase contract, inheritance, court decision) and save.</li>
+      </ol>
+      <p>
+        The previous owners stay in the history up to the day before.
+        <strong>A debt belongs to the plot, not the person:</strong> after a sale it stays on the plot.
+      </p>
+
+      <h3>Correcting a mistake</h3>
+      <p>
+        A wrong share, date or person in a record is fixed with "Correct" next to the record. The old values
+        stay in the audit log. Ownership records are never deleted.
+      </p>
+    </section>
+
+    <section class="chapter" id="settings">
+      <h2><span class="num">6</span> Cooperative settings</h2>
+      <figure>
+        <img src="../img/en/settings.png" alt="Cooperative settings" />
+        <figcaption>Cooperative settings</figcaption>
+      </figure>
+      <h3>Who sees plot colours</h3>
+      <ul>
+        <li>
+          <strong>Own plots only</strong> (default): a member sees the colour of their own plots only; other
+          plots are neutral.
+        </li>
+        <li>
+          <strong>All plots</strong>: everyone sees every plot's colour, but never the amounts, owners or
+          personal data of other plots.
+        </li>
+      </ul>
+      <div class="warn">
+        <span class="callout-title">Why "own plots only" is the default</span>
+        <p>
+          Neighbours know whose plot is whose, so the colour effectively names the debtor. Switch to "All
+          plots" only after a general meeting decision. The change is written to the audit log.
+        </p>
+      </div>
+      <h3>Meter tree</h3>
+      <p>The meter tree is opened from here too — see chapter 9.</p>
+    </section>
+
+    <section class="chapter" id="import">
+      <h2><span class="num">7</span> Excel import</h2>
+      <p>
+        Instead of typing the cooperative in by hand, plots, members, owners and meters can be loaded from one
+        Excel file.
+      </p>
+      <figure>
+        <img src="../img/en/imports.png" alt="Import" />
+        <figcaption>The import page</figcaption>
+      </figure>
+      <ol class="steps">
+        <li>
+          "Download template" gives a file in the interface language with the sheets Plots, Members, Ownership
+          and Meters, each with a hint and an example row.
+        </li>
+        <li>
+          Fill in the sheets. Dates as Excel dates or <code>DD.MM.YYYY</code>, area in sotkas or m², shares as
+          <code>1/2</code>.
+        </li>
+        <li>
+          Upload the file. The system checks everything <strong>without saving</strong> and shows how many
+          records will be added, updated or left unchanged, and every problem with its sheet, row and column.
+        </li>
+        <li>With no problems, confirm. Everything is saved together: the whole file or nothing.</li>
+      </ol>
+      <ul>
+        <li>
+          Importing the same file again duplicates nothing: plots are matched by number, members by email (or
+          name and phone).
+        </li>
+        <li>An import cannot change an owner; use "Change owner" (chapter 5).</li>
+        <li>
+          Limits: <code>.xlsx</code> up to 10 MB, up to 2,000 plots and 3,000 members. A check is valid for 30
+          minutes.
+        </li>
+        <li>Sheet and column names are accepted in Ukrainian and English, even mixed.</li>
+      </ul>
+    </section>
+
+    <section class="chapter" id="tariffs">
+      <h2><span class="num">8</span> Tariffs</h2>
+      <p>
+        Here the chairman describes what the cooperative charges for and how much. The charges themselves come
+        later (chapter 17), but every plot card already shows what the plot will be charged.
+      </p>
+      <figure>
+        <img src="../img/en/tariffs.png" alt="Tariffs" />
+        <figcaption>Tariffs by charge type</figcaption>
+      </figure>
+
+      <h3>Charge types</h3>
+      <p>
+        The "Charge types" button. Every cooperative starts with membership fee, electricity, land tax and
+        water (inactive until there are water meters). Add your own, such as "Road repair", rename, reorder,
+        archive.
+      </p>
+
+      <h3>A new tariff</h3>
+      <ol class="steps">
+        <li>"New tariff" → choose the charge type and name it, for example "For members".</li>
+        <li>Fill in the first version: from which date it applies, the basis, the frequency and the rate.</li>
+        <li>Save, then on the tariff card choose the plots it applies to.</li>
+      </ol>
+      <figure>
+        <img src="../img/en/tariff-form.png" alt="New tariff" />
+        <figcaption>The new tariff form</figcaption>
+      </figure>
+      <table>
+        <thead>
+          <tr>
+            <th>Basis</th>
+            <th>Example</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Per plot</td>
+            <td>300 ₴ per plot per quarter</td>
+          </tr>
+          <tr>
+            <td>Per sotka</td>
+            <td>Membership fee 50 ₴ per sotka per year</td>
+          </tr>
+          <tr>
+            <td>Per kWh</td>
+            <td>Electricity 4.32 ₴ per kWh, by meter readings</td>
+          </tr>
+          <tr>
+            <td>Per m³</td>
+            <td>Water, by water meter readings</td>
+          </tr>
+          <tr>
+            <td>Fixed one-time amount</td>
+            <td>Special-purpose fee 1,200 ₴ with a due date</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>
+        Frequency: monthly, quarterly, yearly or one-off. The cooperative bills monthly, so a yearly tariff is
+        divided by 12 and a quarterly one by 3.
+      </p>
+      <div class="example">
+        <span class="callout-title">Example</span>
+        <p>
+          Membership fee 50 ₴ per sotka per year, a 6-sotka plot: 50 × 6 / 12 =
+          <strong>25.00 ₴ per month</strong>.
+        </p>
+      </div>
+      <p>
+        A rate may have up to four decimals (for example 1.4532 ₴ per m² for land tax); amounts are rounded to
+        kopecks only at the end. A rate is shown without trailing zeros: 50.00 ₴, not 50.0000 ₴.
+      </p>
+
+      <h3>Tariff versions</h3>
+      <p>
+        A tariff is changed not by editing but with a <strong>new version</strong> and the date it starts
+        ("New version"). The version history is on the tariff card. A version starting in the past shows a
+        warning that past charges will be recalculated.
+      </p>
+      <figure>
+        <img src="../img/en/tariff-card.png" alt="Tariff card" />
+        <figcaption>A tariff card: versions and plots</figcaption>
+      </figure>
+      <p>
+        A mistake in a version can be fixed ("Edit") or the version deleted
+        <strong>while no charge uses it</strong>. The only version of a tariff cannot be deleted; archive the
+        tariff instead.
+      </p>
+
+      <h3>Which plots it applies to</h3>
+      <ul>
+        <li>
+          <strong>All plots</strong> (never common land), with <strong>exclusions</strong> if needed, each
+          with a mandatory reason such as "exempted by the general meeting".
+        </li>
+        <li><strong>Selected plots</strong>: an explicit list.</li>
+        <li>
+          Per-kWh and per-m³ tariffs apply only to plots with a meter of that resource. A plot without one
+          shows "no meter".
+        </li>
+      </ul>
+    </section>
+
+    <section class="chapter" id="meters">
+      <h2><span class="num">9</span> Meters and the meter tree</h2>
+      <p>
+        "Meters" is the register of every meter in the cooperative. Each one has a resource icon: a
+        <strong>lightning bolt</strong> for electricity, a <strong>drop</strong> for water.
+      </p>
+      <figure>
+        <img src="../img/en/meters.png" alt="Meters" />
+        <figcaption>The meter register</figcaption>
+      </figure>
+
+      <h3>Kinds of meters</h3>
+      <dl class="terms">
+        <dt>Plot meter</dt>
+        <dd>Belongs to a plot. A plot has at most one active meter per resource.</dd>
+        <dt>Substation</dt>
+        <dd>The meter at the cooperative's transformer: the root of the tree.</dd>
+        <dt>Quarter meter</dt>
+        <dd>The meter of a group of plots (a street or a block).</dd>
+        <dt>Common consumer</dt>
+        <dd>A well pump, street lighting, the office.</dd>
+      </dl>
+      <p>
+        A cooperative may have any number of substations, quarter meters and wells — the system sets no limit.
+      </p>
+
+      <h3>Register, replace, remove</h3>
+      <ul>
+        <li>
+          <strong>Register a meter</strong>: kind, resource, serial number, plot (or a name for other kinds),
+          installation date, initial reading.
+        </li>
+        <li>
+          <strong>Replace meter</strong> is one action: the date, the final reading of the old meter, the
+          serial number and initial reading of the new one. Both keep their history, and their cards link to
+          each other ("Replaced a previous meter…", "Replaced by the meter ЕЛ-9/2").
+        </li>
+        <li>
+          <strong>A counter wrapping past zero</strong> (99 999 → 00 012) is a replacement of the meter by
+          itself: "Fill in as a wrap-around" in the replace form.
+        </li>
+        <li>
+          <strong>Remove</strong>: the meter stops working on the removal date; its readings are kept. Only a
+          meter registered by mistake, without readings, can be deleted.
+        </li>
+      </ul>
+      <figure>
+        <img src="../img/en/meter-card.png" alt="Meter card" />
+        <figcaption>A meter card with its readings</figcaption>
+      </figure>
+
+      <h3>The meter tree</h3>
+      <p>
+        "Cooperative settings" → "Meter tree". The chairman builds the tree: substations, below them quarter
+        meters, common consumers and plot meters. "Move" puts a meter under another node
+        <strong>from a given date</strong>; earlier periods use the old tree.
+      </p>
+      <figure>
+        <img src="../img/en/meter-tree.png" alt="Meter tree" />
+        <figcaption>The meter tree with consumption for a range</figcaption>
+      </figure>
+      <p>
+        Choose a range "from … to …" and every meter shows its consumption for it. With no reading on a range
+        boundary, the system estimates the value in proportion to the days between the neighbouring readings
+        and marks it "calculated". With no reading after the range end yet it says "no reading after …".
+      </p>
+    </section>
+
+    <section class="chapter" id="readings">
+      <h2><span class="num">10</span> Readings: the round and approvals</h2>
+      <p>
+        Readings are not tied to months: the electrician may come after a month, after three or after a few
+        days. <strong>A reading is a meter's value on a date.</strong> Consumption is counted between
+        neighbouring readings.
+      </p>
+
+      <h3>The electrician's round</h3>
+      <figure>
+        <img src="../img/en/readings-round.png" alt="Readings round" />
+        <figcaption>"Readings": one card per plot, a row per meter</figcaption>
+      </figure>
+      <ol class="steps">
+        <li>
+          Open "Readings". "Round date" already holds today's date with the hint "Reading date is today…
+          Change it if the meter was read on another day". A single meter's date can be changed in its row.
+        </li>
+        <li>Filter by resource (lightning / drop) if needed — the choice is remembered — and by street.</li>
+        <li>
+          Each meter shows its last reading and date. Type the new reading and press "Save" in that row. The
+          interval consumption appears at once.
+        </li>
+      </ol>
+      <ul>
+        <li>
+          A reading lower than the previous one is refused: "The reading is lower than the previous one or
+          higher than the next one".
+        </li>
+        <li>
+          When consumption is much higher than usual, the reading is saved with the warning "Check the
+          reading".
+        </li>
+        <li>"No reading since" lists meters that have not been read for a long time.</li>
+        <li>
+          A second reading for the same date replaces the first; the old one stays in the history marked
+          "superseded".
+        </li>
+      </ul>
+      <figure class="phone">
+        <img src="../img/en/readings-round-phone.png" alt="Round on a phone" />
+        <figcaption>The same screen on a phone</figcaption>
+      </figure>
+
+      <h3>Readings from members</h3>
+      <p>
+        A member can submit the reading of their own meter from their account. It waits in "To approve":
+        "Approve" or "Reject" with a reason the owner sees. A reading that is not approved is never used.
+      </p>
+      <figure>
+        <img src="../img/en/approvals.png" alt="To approve" />
+        <figcaption>Readings to approve</figcaption>
+      </figure>
+
+      <h3>Corrections</h3>
+      <p>
+        On the meter card every reading can be corrected or deleted <strong>while no charge uses it</strong>.
+        Once charged, a correction will go through recalculation (chapter 20).
+      </p>
+    </section>
+
+    <section class="chapter" id="audit">
+      <h2><span class="num">11</span> Audit log</h2>
+      <p>
+        Every board action is recorded: who, when, what changed — with old and new values. Filters by person,
+        action, object and date.
+      </p>
+      <figure>
+        <img src="../img/en/audit.png" alt="Audit log" />
+        <figcaption>The audit log</figcaption>
+      </figure>
+      <p class="muted small">
+        Log entries are never changed or deleted. Data loaded by demo scripts does not appear in the log —
+        only actions of people in the system.
+      </p>
+    </section>
+
+    <section class="chapter" id="account">
+      <h2><span class="num">12</span> The member's account</h2>
+      <p>
+        After signing in a member sees "My account": own plots, what they will be charged by the tariffs, own
+        meters with their readings and "Submit a reading".
+      </p>
+      <div class="two-col">
+        <figure>
+          <img src="../img/en/member-account.png" alt="My account" />
+          <figcaption>My account</figcaption>
+        </figure>
+        <figure class="phone">
+          <img src="../img/en/member-account-phone.png" alt="My account on a phone" />
+          <figcaption>On a phone</figcaption>
+        </figure>
+      </div>
+      <p>
+        A member never sees other plots' amounts, owners or personal data. Other plots' colours only when the
+        chairman chose "All plots" (chapter 6).
+      </p>
+    </section>
+
+    <section class="part" id="part-2">
+      <div class="part-label">Part II</div>
+      <h2>How the system calculates</h2>
+      <p class="lead">
+        The rules the system calculates amounts by, and why they are what they are — with worked examples.
+        Chapters marked "planned" describe the next capabilities as they have already been decided.
+      </p>
+    </section>
+
+    <section class="chapter" id="r-principles">
+      <h2><span class="num">13</span> Core principles</h2>
+      <dl class="terms">
+        <dt>Only the server counts money</dt>
+        <dd>
+          The web page and the app only show amounts, debts and statuses; they never calculate them. One
+          formula, in one place.
+        </dd>
+        <dt>Kopecks</dt>
+        <dd>
+          Hryvnia with two decimals. Intermediate calculations are exact, never rounded. An amount is rounded
+          to kopecks <strong>once</strong>, half up, only when a charge is produced.
+        </dd>
+        <dt>A rate is not money</dt>
+        <dd>
+          A tariff rate has up to four decimals (1.4532 ₴ per m²) and is never rounded. A fifth decimal is
+          rejected, not cut.
+        </dd>
+        <dt>Nothing is erased</dt>
+        <dd>
+          Charges, owners and readings are never edited in place. A mistake is fixed by a new record (a
+          reversal, a new version, a new reading); the old one stays in the history.
+        </dd>
+        <dt>Audit log</dt>
+        <dd>Every board action is recorded with old and new values.</dd>
+        <dt>Cooperatives apart</dt>
+        <dd>
+          Each cooperative's data is separated in the database itself: another cooperative cannot see it even
+          if the code has a bug.
+        </dd>
+        <dt>One language</dt>
+        <dd>The interface shows only the selected language, never a mix.</dd>
+        <dt>Minimal personal data</dt>
+        <dd>No tax numbers, passports or dates of birth; personal data never goes to the server logs.</dd>
+      </dl>
+      <div class="example">
+        <span class="callout-title">Why round once</span>
+        <p>
+          A rate of 0.05 ₴ for 15 + 15 days of a 30-day month is exactly 0.05 ₴. Rounding each half separately
+          gives 0.03 + 0.03 = 0.06 ₴, a kopeck more. Over thousands of plots and months such kopecks add up.
+        </p>
+      </div>
+    </section>
+
+    <section class="chapter" id="r-tariffs">
+      <h2><span class="num">14</span> Tariffs and the expected amount</h2>
+      <p>
+        A charge type (membership fee, electricity, land tax, water, special-purpose fees) has one or more
+        tariffs. A tariff has <strong>versions</strong>: each applies from its date until the day before the
+        next version. Two versions never start on the same day.
+      </p>
+      <pre class="formula">
+units           per plot → 1 · per sotka → area m² / 100
+period share    monthly 1 · quarterly 1/3 · yearly 1/12
+month amount    rate × units × period share × (days the version applies in the month) / (days in the month)
+one-time fee    the whole rate in the month of its due date, 0.00 in other months</pre>
+      <h3>Worked examples</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Case</th>
+            <th>Given</th>
+            <th class="num">Result</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Membership fee</td>
+            <td>50 ₴/sotka/year, plot 600 m²</td>
+            <td class="num">50 × 6 / 12 = 25.00</td>
+          </tr>
+          <tr>
+            <td>Odd area</td>
+            <td>50 ₴/sotka/year, 612 m²</td>
+            <td class="num">50 × 6.12 / 12 = 25.50</td>
+          </tr>
+          <tr>
+            <td>Rounded at the end</td>
+            <td>33.3333 ₴/sotka/year, 700 m²</td>
+            <td class="num">19.444425 → 19.44</td>
+          </tr>
+          <tr>
+            <td>Per plot, quarterly</td>
+            <td>300 ₴ per quarter</td>
+            <td class="num">100.00 per month</td>
+          </tr>
+          <tr>
+            <td>Version change mid-month</td>
+            <td>50 ₴ until the 15th, 60 ₴ from the 16th, 600 m², 30 days</td>
+            <td class="num">12.50 + 15.00 = 27.50</td>
+          </tr>
+          <tr>
+            <td>Special-purpose fee</td>
+            <td>1,200 ₴, due 01.05.2026</td>
+            <td class="num">1,200.00 in May, 0.00 otherwise</td>
+          </tr>
+          <tr>
+            <td>Land tax</td>
+            <td>35 ₴/sotka/year, 600 m²</td>
+            <td class="num">17.50 per month</td>
+          </tr>
+        </tbody>
+      </table>
+      <h3>Which plots</h3>
+      <ul>
+        <li>
+          "All plots" minus exclusions (each with a reason), or "Selected plots". Never archived plots or
+          common land.
+        </li>
+        <li>
+          Per-kWh and per-m³ tariffs only for plots with an active meter of that resource.
+          <strong>No meter, no charge</strong> (confirmed by the cooperative's chairman).
+        </li>
+      </ul>
+      <h3>Correcting a version</h3>
+      <p>
+        A version can be corrected or deleted <strong>while no charge uses it</strong>. After that a
+        correction goes through recalculation (chapter 20): charges already issued to people never change
+        silently.
+      </p>
+    </section>
+
+    <section class="chapter" id="r-meters">
+      <h2><span class="num">15</span> Meters and the tree</h2>
+      <p>
+        A meter measures one resource: electricity (kWh) or water (m³). Meter values are not money: up to
+        three decimals.
+      </p>
+      <figure>
+        <svg
+          viewBox="0 0 720 240"
+          xmlns="http://www.w3.org/2000/svg"
+          font-family="IBM Plex Sans, sans-serif"
+          font-size="12"
+        >
+          <g fill="none" stroke="#b9c3b3" stroke-width="1.5">
+            <path d="M360 52 V70 H95 V90 M360 70 H275 V90 M360 70 H455 V90 M360 70 H625 V90" />
+            <path d="M95 126 V144 H40 V162 M95 144 V162 M95 144 H150 V162" />
+            <path d="M275 126 V144 H215 V162 M275 144 H285 V162 M275 144 H365 V162" />
+          </g>
+          <rect x="280" y="16" width="160" height="36" rx="8" fill="#245a41" />
+          <text x="360" y="39" text-anchor="middle" fill="#fff" font-weight="600">Substation 1</text>
+          <rect x="30" y="90" width="130" height="36" rx="8" fill="#e3eee6" stroke="#245a41" />
+          <text x="95" y="113" text-anchor="middle" fill="#1c2a22" font-weight="600">Quarter A</text>
+          <rect x="210" y="90" width="130" height="36" rx="8" fill="#e3eee6" stroke="#245a41" />
+          <text x="275" y="113" text-anchor="middle" fill="#1c2a22" font-weight="600">Quarter B</text>
+          <rect x="385" y="90" width="140" height="36" rx="8" fill="#fff6e5" stroke="#ebcb98" />
+          <text x="455" y="113" text-anchor="middle" fill="#6b4a0b" font-weight="600">Well 1</text>
+          <rect x="555" y="90" width="140" height="36" rx="8" fill="#fff6e5" stroke="#ebcb98" />
+          <text x="625" y="113" text-anchor="middle" fill="#6b4a0b" font-weight="600">Well 2</text>
+          <g fill="#fff" stroke="#d9dfd4">
+            <rect x="12" y="162" width="56" height="30" rx="6" />
+            <rect x="67" y="162" width="56" height="30" rx="6" />
+            <rect x="122" y="162" width="56" height="30" rx="6" />
+            <rect x="187" y="162" width="56" height="30" rx="6" />
+            <rect x="257" y="162" width="56" height="30" rx="6" />
+            <rect x="337" y="162" width="56" height="30" rx="6" />
+          </g>
+          <g fill="#46564c" text-anchor="middle">
+            <text x="40" y="182">EL-1</text>
+            <text x="95" y="182">EL-2</text>
+            <text x="150" y="182">EL-3</text>
+            <text x="215" y="182">EL-4</text>
+            <text x="285" y="182">EL-5</text>
+            <text x="365" y="182">EL-6</text>
+          </g>
+          <text x="540" y="146" text-anchor="middle" fill="#5b6a60" font-size="11">common consumers</text>
+          <text x="200" y="222" text-anchor="middle" fill="#5b6a60" font-size="11">plot meters</text>
+        </svg>
+        <figcaption>
+          The meter tree: substation → quarters → plots; common consumers are nodes of their own. There may be
+          any number of substations, quarters and wells.
+        </figcaption>
+      </figure>
+      <ul>
+        <li>
+          The chairman builds the tree; nothing about it is hard-coded. Moving a meter under another node
+          takes effect from a date; the tree's history is kept, so a past range is calculated with the tree as
+          it was then.
+        </li>
+        <li>
+          Any number of substations, quarter meters and common consumers (wells included); every quarter meter
+          and every well has its own list of plots.
+        </li>
+        <li>A plot has at most one active meter per resource.</li>
+      </ul>
+      <h3>Replacing a meter</h3>
+      <p>
+        A replacement is one action: the final reading of the old meter, the serial number and the initial
+        reading of the new one. Consumption of a period with a replacement is the sum over both meters.
+      </p>
+      <div class="example">
+        <span class="callout-title">Example</span>
+        <p>
+          Old meter: 8,140 at the start, removed at 8,205. New one: installed at 3, reads 69 at the end.
+          Consumption: (8,205 − 8,140) + (69 − 3) = 65 + 66 = <strong>131 kWh</strong>.
+        </p>
+      </div>
+      <p>
+        A counter wrapping past zero (99,999 → 00,012) is "a replacement of the meter by itself": same serial
+        number, final 99,999, initial 0. The same rule then applies.
+      </p>
+    </section>
+
+    <section class="chapter" id="r-readings">
+      <h2><span class="num">16</span> Readings and consumption</h2>
+      <p>
+        <strong>A reading is a meter's value on a date</strong>, not "the reading for a month". The
+        electrician comes when they can: after a few days or after a few months. The person enters the date;
+        it defaults to today, with an unobtrusive hint.
+      </p>
+      <h3>Reading statuses</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Status</th>
+            <th>Meaning</th>
+            <th>Counted</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Approved</td>
+            <td>Entered by the electrician or the board, imported, or a member's reading approved</td>
+            <td>yes</td>
+          </tr>
+          <tr>
+            <td>Pending</td>
+            <td>Submitted by a member, waits for approval</td>
+            <td>no</td>
+          </tr>
+          <tr>
+            <td>Rejected</td>
+            <td>With a reason the owner sees</td>
+            <td>no</td>
+          </tr>
+          <tr>
+            <td>Superseded</td>
+            <td>Replaced by a new reading for the same date or a correction; kept in the history</td>
+            <td>no</td>
+          </tr>
+        </tbody>
+      </table>
+      <h3>Intervals and the value on a date</h3>
+      <ul>
+        <li>
+          <strong>Interval consumption</strong> is the difference between a reading and the previous reading
+          of the same meter.
+        </li>
+        <li>
+          <strong>The value on any date</strong>: the real reading if there is one on that date; otherwise a
+          linear interpolation by days between the neighbouring readings, marked "calculated"; with no reading
+          after the date yet, unknown.
+        </li>
+        <li>
+          <strong>Consumption for a range "from … to …"</strong> = the value at the end − the value at the
+          start.
+        </li>
+      </ul>
+      <figure>
+        <svg
+          viewBox="0 0 640 150"
+          xmlns="http://www.w3.org/2000/svg"
+          font-family="IBM Plex Sans, sans-serif"
+          font-size="11.5"
+        >
+          <line x1="40" y1="70" x2="610" y2="70" stroke="#b9c3b3" stroke-width="2" />
+          <g fill="#245a41">
+            <circle cx="60" cy="70" r="7" />
+            <circle cx="330" cy="70" r="7" />
+            <circle cx="590" cy="70" r="7" />
+          </g>
+          <g fill="#fff" stroke="#1e3a6e" stroke-width="2" stroke-dasharray="3 2">
+            <circle cx="191" cy="70" r="7" />
+            <circle cx="460" cy="70" r="7" />
+          </g>
+          <g text-anchor="middle" fill="#1c2a22">
+            <text x="60" y="50" font-weight="600">1,000</text>
+            <text x="330" y="50" font-weight="600">1,310</text>
+            <text x="590" y="50" font-weight="600">1,480</text>
+          </g>
+          <g text-anchor="middle" fill="#5b6a60">
+            <text x="60" y="95">01.03</text>
+            <text x="330" y="95">01.04</text>
+            <text x="590" y="95">01.05</text>
+          </g>
+          <g text-anchor="middle" fill="#1e3a6e">
+            <text x="191" y="50">1,150</text>
+            <text x="460" y="50">1,395</text>
+            <text x="191" y="95">16.03</text>
+            <text x="460" y="95">16.04</text>
+            <text x="191" y="112" font-size="10">calculated</text>
+            <text x="460" y="112" font-size="10">calculated</text>
+          </g>
+          <path d="M191 128 H460" stroke="#1e3a6e" stroke-width="1.5" />
+          <path d="M191 123 V133 M460 123 V133" stroke="#1e3a6e" stroke-width="1.5" />
+          <text x="325" y="145" text-anchor="middle" fill="#1e3a6e" font-weight="600">
+            range 16.03–16.04: 1,395 − 1,150 = 245 kWh
+          </text>
+        </svg>
+        <figcaption>Real readings (green) and values calculated at the range boundaries (dashed)</figcaption>
+      </figure>
+      <div class="example">
+        <span class="callout-title">Where 1,150 comes from</span>
+        <p>
+          Between 01.03 (1,000) and 01.04 (1,310) there are 31 days and 310 kWh. 16.03 is day 15: 1,000 + 310
+          × 15 / 31 = 1,150. Calculated values are always marked so that nobody takes them for a real reading.
+        </p>
+      </div>
+      <h3>Checks</h3>
+      <ul>
+        <li>
+          A reading lower than the previous one (or higher than the next one, when entered back-dated) is
+          refused. A lower value is valid only as the initial reading of a new meter.
+        </li>
+        <li>A date in the future or outside the meter's working period is refused.</li>
+        <li>
+          Daily consumption three times the average of the last 180 days: the reading is accepted with the
+          warning "Check the reading".
+        </li>
+        <li>
+          A reading can be corrected or deleted while no charge uses it; after that, through recalculation.
+        </li>
+      </ul>
+    </section>
+
+    <section class="chapter" id="r-charges">
+      <h2>
+        <span class="num">17</span> Charges and closing months <span class="tag planned">planned · 011</span>
+      </h2>
+      <p>
+        A charge is an entry in the plot's account: charge type, amount, month, the days it pays for (service
+        period) and how the amount was obtained (rates, units, kWh, the readings and tariff versions used).
+      </p>
+      <h3>Where charges come from</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Source</th>
+            <th>How it arises</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Recurring tariffs</td>
+            <td>
+              The board presses "Charge the month": preview → "Post". A rerun adds only what is missing, never
+              duplicates.
+            </td>
+          </tr>
+          <tr>
+            <td>Electricity</td>
+            <td>
+              Every approved reading at once gives a charge for the interval since the previous reading.
+            </td>
+          </tr>
+          <tr>
+            <td>Network losses</td>
+            <td>
+              Depending on the chairman's setting: a percentage on every electricity charge, or a board run
+              for a range (chapter 18).
+            </td>
+          </tr>
+          <tr>
+            <td>Common consumers</td>
+            <td>A separate board run for a range, a separate line in the account (chapter 18).</td>
+          </tr>
+          <tr>
+            <td>Opening balance</td>
+            <td>
+              A plot's debt on the day the cooperative starts in the system — by hand or with an Excel sheet.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <h3>Electricity by reading</h3>
+      <p>
+        The days of an interval run from the day after the previous reading to the day of the new one, both
+        included. When the tariff changes inside the interval, the kWh are split by days, each part times its
+        rate, and the total is rounded once.
+      </p>
+      <div class="example">
+        <span class="callout-title">Examples</span>
+        <p>
+          Readings 112.4 (22.09) and 205.7 (04.10): 93.3 kWh × 4.32 = <strong>403.06 ₴</strong> for
+          23.09–04.10 (12 days).
+        </p>
+        <p>
+          Readings 1,000 (01.10) and 1,300 (31.10), tariff 4.32 until 16.10 and 5.00 from 17.10: 15 days each,
+          150 × 4.32 + 150 × 5.00 = 648.00 + 750.00 = <strong>1,398.00 ₴</strong>.
+        </p>
+        <p>A meter replacement gives two charges: 65 kWh = 280.80 and 66 kWh = 285.12.</p>
+      </div>
+      <h3>Months and closing</h3>
+      <ul>
+        <li>A month is open or closed. Months are closed only in order; a closed month never reopens.</li>
+        <li>
+          Before closing the board sees a check list: is the month posted, what was not charged, which meters
+          have not been read for long. None of it blocks closing — a person decides with everything in view.
+        </li>
+        <li>
+          A charge for an already closed month (a late reading, say) goes to the earliest open month, marked
+          "for September, charged in October".
+        </li>
+      </ul>
+      <h3>Reversals and the "not charged" queue</h3>
+      <ul>
+        <li>
+          Charges are never changed or deleted — the database itself enforces it. A wrong charge is cancelled
+          by a <strong>reversal</strong> (the same amount with a minus and a reason). A whole losses or
+          common-consumer run can be reversed together.
+        </li>
+        <li>
+          What the system could not charge goes to the "not charged" queue with the reason: no tariff for some
+          days; two tariffs of one type on a plot on the same day; no node readings. Once the cause is fixed,
+          "Retry".
+        </li>
+      </ul>
+      <h3>Debt</h3>
+      <pre class="formula">
+debt per charge type = Σ charges of that type (reversals negative) − Σ allocated payments
+prepayment           = Σ payments − Σ allocated payments</pre>
+      <p>Payments arrive in the next phase. Until then a plot with charges shows a debt — that is correct.</p>
+    </section>
+
+    <section class="chapter" id="r-losses">
+      <h2>
+        <span class="num">18</span> Network losses and common consumers
+        <span class="tag planned">planned · 011</span>
+      </h2>
+      <h3>Losses: two modes, the chairman chooses</h3>
+      <ul>
+        <li>
+          <strong>Fixed percentage</strong>: every electricity charge gets, for example, 5 % kWh on top. 65
+          kWh → losses 3.25 kWh = 14.04 ₴.
+        </li>
+        <li>
+          <strong>Proportional by node</strong>: the board chooses a range and runs the calculation. For every
+          node, bottom-up: losses = node consumption − the sum of its children's consumption. The losses are
+          shared among the plots under the node in proportion to their consumption.
+        </li>
+      </ul>
+      <div class="example">
+        <span class="callout-title">Example: a quarter and the substation</span>
+        <p>
+          Quarter A: 1,100 kWh, plots P1 = 600 and P2 = 400 below it → losses 100: P1 60 kWh (259.20 ₴), P2 40
+          (172.80 ₴).
+        </p>
+        <p>Quarter B: 1,050, plot P3 = 1,000 → losses 50 → P3.</p>
+        <p>
+          Substation: 2,300; children A 1,100 + B 1,050 + well 50 = 2,200 → losses 100 shared 600 / 400 /
+          1,000 of 2,000: P1 30, P2 20, P3 50 kWh.
+        </p>
+      </div>
+      <ul>
+        <li>
+          <strong>Negative losses</strong> (the plots together "used" more than the node shows: a wrong
+          reading, different reading dates, a faulty meter): nothing is charged, the board sees a warning with
+          the numbers.
+        </li>
+        <li>
+          <strong>An unknown value</strong> (no reading of the node or a child after the range end): that node
+          and the nodes above it are skipped with a warning; the rest of the tree is charged.
+        </li>
+        <li>Two runs cannot cover the same days of the same node.</li>
+      </ul>
+      <h3>Common consumers — a separate line</h3>
+      <p>
+        Well pumps, street lighting, the office. Their consumption is a separate charge type "Common
+        consumers" with its own per-kWh tariff and its own board run. The split is chosen per consumer:
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Split</th>
+            <th>Who pays</th>
+            <th>Example</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Connected plots</td>
+            <td>Plots connected to that well, for their connected days</td>
+            <td>Pump 60 kWh, three connected plots: 20 kWh each = 86.40 ₴; an unconnected plot nothing</td>
+          </tr>
+          <tr>
+            <td>Equally</td>
+            <td>Every active plot, with or without a meter</td>
+            <td>Lighting</td>
+          </tr>
+          <tr>
+            <td>Service users</td>
+            <td>The plots listed in the settings</td>
+            <td>Lighting 30 kWh, 3 plots: 10 each = 43.20 ₴</td>
+          </tr>
+          <tr>
+            <td>Not charged</td>
+            <td>Nobody — covered by the membership fee</td>
+            <td>Shown in reports</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="chapter" id="r-water">
+      <h2>
+        <span class="num">19</span> Water and connections <span class="tag planned">planned · 011</span>
+      </h2>
+      <p>
+        Water works like electricity:
+        <strong>a plot not connected to the well pays nothing for water</strong>.
+      </p>
+      <ul>
+        <li>
+          There may be several wells: each plot is connected to a particular well, and each well's pump is
+          shared only among its own plots.
+        </li>
+        <li>
+          A plot has a history of water connections: the source (a well or "the cooperative's water supply"),
+          from a date, until a date.
+        </li>
+        <li>
+          Any water tariff — by water meter (m³) or fixed (per plot per season, say) — is charged only for the
+          connected days. A per-m³ tariff also needs a water meter.
+        </li>
+        <li>
+          A connection starting or ending mid-month splits the amount by days: 300 ₴ per year, connected from
+          16.10 (31 days) → 300 / 12 × 16 / 31 = <strong>12.90 ₴</strong>.
+        </li>
+        <li>
+          The well pump's electricity is shared only among the plots connected to it, by plot-days: P1 and P2
+          the whole month, P3 from 16.10, pump 60 kWh → 30 + 30 + 15 = 75 plot-days → P1 24, P2 24, P3 12 kWh.
+        </li>
+        <li>
+          Connections are entered on the plot card, in bulk on the well's page, or with the "Water" column of
+          the import.
+        </li>
+      </ul>
+    </section>
+
+    <section class="chapter" id="r-recalc">
+      <h2>
+        <span class="num">20</span> Corrections and recalculation
+        <span class="tag planned">planned · 012</span>
+      </h2>
+      <p>A back-dated tariff version, a correction of a used version or of a used reading — one mechanism:</p>
+      <ul>
+        <li><strong>Open month</strong>: the old charge is reversed and a new one created.</li>
+        <li>
+          <strong>Closed month</strong>: nothing in it changes; the current open month gets an adjustment for
+          the difference, referring to the original month.
+        </li>
+        <li>A reason is required. Before posting, a preview: how many plots and how much.</li>
+        <li>
+          If a debt goes down after it was already paid, the excess becomes a prepayment, never a "negative
+          debt".
+        </li>
+      </ul>
+      <div class="example">
+        <span class="callout-title">Example</span>
+        <p>
+          From 1 September 60 ₴/sotka/year was entered by mistake instead of 50; a 6-sotka plot. September is
+          closed, October open.
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th></th>
+              <th class="num">Was</th>
+              <th>After the correction</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>September (closed)</td>
+              <td class="num">30.00</td>
+              <td>Unchanged; in October an adjustment −5.00 "for September"</td>
+            </tr>
+            <tr>
+              <td>October (open)</td>
+              <td class="num">30.00</td>
+              <td>Reversal −30.00 and a new charge 25.00</td>
+            </tr>
+            <tr>
+              <td>Total</td>
+              <td class="num">60.00</td>
+              <td>50.00; if 60.00 was paid, a prepayment of 10.00</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="chapter" id="r-reports">
+      <h2>
+        <span class="num">21</span> Reports and templates <span class="tag planned">planned · 013</span>
+      </h2>
+      <ul>
+        <li>
+          Built-in reports with filters and Excel download: charges for a period, plot balances, debtors,
+          electricity by the tree (readings, cost per kWh, amount, losses in kWh and %), missing readings,
+          land tax.
+        </li>
+        <li>
+          <strong>Templates</strong>: the chairman uploads their own Excel file with placeholders such as
+          <code>${cooperative.name}</code>, <code>${period.from}</code> and rows
+          <code>${rows.plots.number}</code>; the system fills it in. The catalogue of all placeholders is on
+          the templates page.
+        </li>
+        <li>
+          <strong>Tax report</strong>: for now a placeholder "template not added yet"; the official form is
+          added later as a template, without code changes.
+        </li>
+        <li>The cooperative's requisites join the settings: full name, ЄДРПОУ code, address, bank, IBAN.</li>
+      </ul>
+    </section>
+
+    <section class="chapter" id="next">
+      <h2><span class="num">22</span> What comes next <span class="tag planned">planned</span></h2>
+      <table>
+        <thead>
+          <tr>
+            <th>What</th>
+            <th>What it gives the board</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Payments</strong></td>
+            <td>
+              Entering payments, a cash desk with receipts, bank statement import, allocation, prepayments.
+            </td>
+          </tr>
+          <tr>
+            <td><strong>Invoices and delivery</strong></td>
+            <td>
+              PDF invoices with the NBU QR code, no-debt certificates, delivery by email, Telegram, Viber.
+            </td>
+          </tr>
+          <tr>
+            <td><strong>Mobile app and map</strong></td>
+            <td>
+              An app for members and the electrician with photo readings; the cooperative map coloured by
+              debt.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="muted small">This guide is updated with every new capability of the system.</p>
+    </section>
+  </body>
+</html>

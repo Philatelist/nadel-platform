@@ -4,7 +4,7 @@ SHELL := /bin/bash
 
 COMPOSE := docker compose -f infra/docker-compose.yml
 
-.PHONY: help install up down infra backend web mobile dev gen test check lint format format-check clean e2e-install e2e
+.PHONY: help install up down infra backend web mobile dev gen test check lint format format-check clean e2e-install e2e guide-shots guide
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
@@ -95,3 +95,9 @@ check: gen format-check lint test ## Everything CI runs: contract, format, lint,
 clean: ## Remove build outputs
 	cd backend && ./mvnw -q clean
 	rm -rf web/dist
+
+guide-shots: ## Screenshots for the guides from the running app (start it with `make up` first)
+	node docs/guide/scripts/capture-screens.mjs
+
+guide: ## Build the guide PDFs (docs/guide/pdf) from docs/guide/uk and docs/guide/en
+	node docs/guide/scripts/build-pdf.mjs
