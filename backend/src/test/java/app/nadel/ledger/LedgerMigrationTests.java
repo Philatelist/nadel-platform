@@ -35,6 +35,8 @@ class LedgerMigrationTests {
                     postgres.getUsername(), postgres.getPassword()));
             UUID first = UUID.randomUUID();
             UUID second = UUID.randomUUID();
+            UUID customOne = UUID.randomUUID();
+            UUID customTwo = UUID.randomUUID();
             for (UUID tenant : List.of(first, second)) {
                 sql.update("insert into tenant (id, name) values (?, 'Existing Cooperative')", tenant);
                 sql.queryForList("select seed_base_roles(?)", tenant);
@@ -44,6 +46,11 @@ class LedgerMigrationTests {
                     + "and permission = 'METERS_VIEW'", first);
             sql.update("update charge_type set name = 'Водопостачання', name_customized = true "
                     + "where tenant_id = ? and code = 'WATER'", first);
+            // the second chairman created active custom types named like the defaults of the type V13 seeds
+            sql.update("insert into charge_type (id, tenant_id, name, position) values (?, ?, 'common consumers', 5)",
+                    customOne, second);
+            sql.update("insert into charge_type (id, tenant_id, name, position) values (?, ?, 'Спільні споживачі', 6)",
+                    customTwo, second);
             assertThat(permissions(sql, first, "CHAIRMAN")).hasSize(15);
             assertThat(sql.queryForObject("select count(*) from charge_type where tenant_id = ?", Integer.class, first))
                     .isEqualTo(4);
@@ -53,7 +60,7 @@ class LedgerMigrationTests {
             for (UUID tenant : List.of(first, second)) {
                 assertThat(permissions(sql, tenant, "CHAIRMAN")).hasSize(19).containsAll(LEDGER_PERMISSIONS);
                 assertThat(permissions(sql, tenant, "MEMBER")).isEmpty();
-                assertThat(sql.queryForList("select code from charge_type where tenant_id = ? order by position",
+                assertThat(sql.queryForList("select code from charge_type where tenant_id = ? and code is not null order by position",
                         String.class, tenant)).containsExactly("MEMBERSHIP", "ELECTRICITY", "LAND_TAX", "WATER",
                         "COMMON_CONSUMERS");
                 assertThat(sql.queryForObject("select name || '|' || active || '|' || name_customized || '|' "
@@ -61,6 +68,12 @@ class LedgerMigrationTests {
                         + "where tenant_id = ? and code = 'COMMON_CONSUMERS'", String.class, tenant, tenant))
                         .isEqualTo("Common consumers|true|false|true");
             }
+            // custom types that clashed with the default names were renamed, still exist, and are not archived
+            assertThat(sql.queryForList("select name from charge_type where tenant_id = ? and id in (?, ?) "
+                    + "and archived_at is null and code is null and name_customized order by position",
+                    String.class, second, customOne, customTwo)).containsExactly(
+                    "common consumers (" + customOne.toString().substring(0, 8) + ")",
+                    "Спільні споживачі (" + customTwo.toString().substring(0, 8) + ")");
             // the removed permission stays removed; the Treasurer gets CHARGES_VIEW only
             assertThat(permissions(sql, first, "TREASURER")).containsExactlyInAnyOrder("MEMBERS_VIEW", "PLOTS_VIEW",
                     "AUDIT_VIEW", "TARIFFS_VIEW", "CHARGES_VIEW");

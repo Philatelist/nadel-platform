@@ -37,8 +37,13 @@ function OpeningBalanceFields({
   const [serverErrors, setServerErrors] = useState<FieldErrors>({});
   const [notice, setNotice] = useState<string>();
 
-  const normalized = normalizeMoneyInput(amount);
-  const amountError = normalized === undefined ? o.amountInvalid : undefined;
+  const trimmed = amount.trim();
+  const isNegative = trimmed.startsWith('-');
+  const normalized = normalizeMoneyInput(isNegative ? trimmed.slice(1) : amount);
+  // A well-formed amount that is negative or zero gets the catalog text of AMOUNT_NOT_POSITIVE (text check, no arithmetic).
+  const isNotPositive = normalized !== undefined && (isNegative || normalized.replace(/[0.]/g, '') === '');
+  const amountError =
+    normalized === undefined ? o.amountInvalid : isNotPositive ? t.problem.AMOUNT_NOT_POSITIVE : undefined;
 
   const enter = useEnterOpeningBalance({
     mutation: {
@@ -65,7 +70,7 @@ function OpeningBalanceFields({
   function submit(event: FormEvent) {
     event.preventDefault();
     setSubmitted(true);
-    if (normalized === undefined || chargeTypeId === '' || date === '') return;
+    if (normalized === undefined || isNotPositive || chargeTypeId === '' || date === '') return;
     enter.mutate({
       id: plotId,
       data: {

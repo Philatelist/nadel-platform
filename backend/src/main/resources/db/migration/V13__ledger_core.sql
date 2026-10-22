@@ -228,7 +228,7 @@ AS $$
         ('WATER', 'Water', 4, false),
         ('COMMON_CONSUMERS', 'Common consumers', 5, true)
     ) AS t(code, name, pos, is_active)
-    ON CONFLICT DO NOTHING;
+    ON CONFLICT (tenant_id, code) WHERE code IS NOT NULL DO NOTHING;
 $$;
 
 -- Base roles of a cooperative (V12 body) with the four new permissions: Chairman gets all nineteen (rows kept for
@@ -274,6 +274,16 @@ JOIN (VALUES
     ('CHAIRMAN', 'PERIODS_CLOSE'), ('TREASURER', 'CHARGES_VIEW')
 ) AS g(code, permission) ON g.code = r.base_code
 ON CONFLICT DO NOTHING;
+
+-- A custom type named like a default name of COMMON_CONSUMERS ("Common consumers" / "Спільні споживачі", any letter
+-- case, not archived) would clash with the seeded row on charge_type_tenant_name_uq, or look identical to it in the UI.
+-- It is renamed before seeding by appending ' (' || first 8 characters of its own id || ')' (the id is unique, so the new
+-- name cannot clash again; the old name is cut to 89 characters to stay within the 100-character limit). The conflict
+-- target of seed_charge_types is explicit, so a name clash is never swallowed silently. No audit row is written from SQL.
+UPDATE charge_type
+SET name = left(name, 89) || ' (' || left(id::text, 8) || ')', name_customized = true, updated_at = now()
+WHERE code IS NULL AND archived_at IS NULL
+  AND lower(btrim(name)) IN ('common consumers', 'спільні споживачі');
 
 -- Existing cooperatives get the fifth charge type (idempotent).
 SELECT seed_charge_types(id) FROM tenant;

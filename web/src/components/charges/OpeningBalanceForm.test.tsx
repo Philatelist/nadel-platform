@@ -34,6 +34,18 @@ describe('OpeningBalanceForm', () => {
     expect(mutate).not.toHaveBeenCalled();
   });
 
+  it.each(['-5', '0'])(
+    'shows the not-positive text for the well-formed amount %s without calling the server',
+    async (text) => {
+      renderWithApp(withQueries(<OpeningBalanceForm plotId="p7" onDone={vi.fn()} onClose={vi.fn()} />));
+      await userEvent.type(screen.getByLabelText('Debt amount, ₴'), text);
+      await userEvent.click(screen.getByRole('button', { name: 'Add' }));
+      expect(screen.getByText('The amount must be greater than zero')).toBeInTheDocument();
+      expect(screen.queryByText('Enter an amount like 1250.50')).toBeNull();
+      expect(mutate).not.toHaveBeenCalled();
+    },
+  );
+
   it('sends the amount in the API form, the chosen type, today as the date and the trimmed reason', async () => {
     renderWithApp(withQueries(<OpeningBalanceForm plotId="p7" onDone={vi.fn()} onClose={vi.fn()} />));
     await userEvent.type(screen.getByLabelText('Debt amount, ₴'), '1250,5');
