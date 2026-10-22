@@ -54,7 +54,13 @@ const SHOTS = [
     path: '/meters',
     open: { css: 'main a[href^="/meters/"]', text: 'ЕЛ-9/2' },
   },
-  { name: 'meter-tree', user: 'chairman', path: '/settings/meter-tree' },
+  // A range inside the demo readings, so the tree shows consumption and calculated values, not "no reading after".
+  {
+    name: 'meter-tree',
+    user: 'chairman',
+    path: '/settings/meter-tree',
+    range: { fromDaysAgo: 21, toDaysAgo: 7 },
+  },
   { name: 'approvals', user: 'chairman', path: '/readings/approvals' },
   { name: 'audit', user: 'chairman', path: '/audit' },
   { name: 'readings-round', user: 'electrician', path: '/readings' },
@@ -63,6 +69,14 @@ const SHOTS = [
   { name: 'member-account-phone', user: 'member', path: '/account', phone: true },
   { name: 'treasurer-plots', user: 'treasurer', path: '/plots' },
 ];
+
+/** A calendar day in Kyiv as YYYY-MM-DD, shifted by offsetDays. */
+function kyivDay(offsetDays) {
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Kyiv' }).format(new Date());
+  const day = new Date(`${today}T00:00:00Z`);
+  day.setUTCDate(day.getUTCDate() + offsetDays);
+  return day.toISOString().slice(0, 10);
+}
 
 async function signIn(page, user) {
   await page.goto(BASE + '/');
@@ -121,6 +135,12 @@ try {
                   hasText: new RegExp(`^\\s*${shot.open.text.replace(/[/.-]/g, '\\$&')}\\s*$`),
                 });
               await link.first().click({ timeout: 10000 });
+              await page.waitForLoadState('networkidle');
+            }
+            if (shot.range) {
+              const dates = page.locator('input[type="date"]');
+              await dates.nth(0).fill(kyivDay(-shot.range.fromDaysAgo));
+              await dates.nth(1).fill(kyivDay(-shot.range.toDaysAgo));
               await page.waitForLoadState('networkidle');
             }
             await page.waitForTimeout(400);
