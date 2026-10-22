@@ -7,6 +7,7 @@ import {
   formatDay,
   formatMeterValue,
   formatMonth,
+  formatPercent,
 } from '@nadel/shared';
 import type { ReactNode } from 'react';
 import { useLocale, useT } from '../../i18n';
@@ -23,7 +24,7 @@ export function ChargeDetailDialog({ charge, onClose }: { charge: Charge; onClos
   const { locale } = useLocale();
   const canReverse = useCan('CHARGES_REVERSE');
   const d = t.charges.detail;
-  const { parts, readings } = charge.calculation;
+  const { parts, readings, consumption, lossesPercent } = charge.calculation;
   const note = chargePeriodNote(charge, t, locale);
   const singlePart = parts.length === 1;
   const showClosedNote =
@@ -37,6 +38,12 @@ export function ChargeDetailDialog({ charge, onClose }: { charge: Charge; onClos
     [d.servicePeriod, `${formatDay(charge.serviceFrom, locale)}–${formatDay(charge.serviceTo, locale)}`],
     [d.accruedOn, formatDay(charge.accruedOn, locale)],
   ];
+  if (consumption !== undefined) {
+    const unit = parts[0]?.unit;
+    const text = formatMeterValue(consumption, locale);
+    rows.push([d.consumption, unit && unit !== 'PLOT' ? `${text} ${t.charges.line.unit[unit]}` : text]);
+  }
+  if (lossesPercent !== undefined) rows.push([d.lossesPercent, formatPercent(lossesPercent, locale)]);
   if (charge.reason) rows.push([d.reason, <UserContent key="reason">{charge.reason}</UserContent>]);
   rows.push([
     d.createdBy,

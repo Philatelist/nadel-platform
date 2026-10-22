@@ -24,4 +24,14 @@ export interface ChargeCalculation {
   nodeMeterId?: string;
   /** The common consumer the charge is for */
   consumerMeterId?: string;
+  /**
+     * The percentage (two decimals, `"5.00"`) of a fixed-percentage losses charge (source `LOSSES` of a meter interval); its parts carry the losses quantities
+     * @pattern ^\d{1,3}(\.\d{1,2})?$
+     */
+  lossesPercent?: string;
+  /**
+     * The consumption of the meter interval a fixed-percentage losses charge is taken of, rounded to three decimals for display (the amount was calculated from the exact quantity)
+     * @pattern ^\d{1,11}(\.\d{1,3})?$
+     */
+  consumption?: string;
 }

@@ -23,6 +23,12 @@ interface NotChargedItemRepository extends JpaRepository<NotChargedItemRecord, U
 
     Optional<NotChargedItemRecord> findByItemKeyAndStatus(String itemKey, Status status);
 
+    /** The items of a kind and a status, in no particular order. */
+    List<NotChargedItemRecord> findByKindAndStatus(Kind kind, Status status);
+
+    /** The items of a kind and a status about one meter. */
+    List<NotChargedItemRecord> findByKindAndStatusAndMeterId(Kind kind, Status status, UUID meterId);
+
     /** The items of a kind, a status and a billing month (its first day). */
     List<NotChargedItemRecord> findByKindAndStatusAndMonth(Kind kind, Status status, LocalDate month);
 

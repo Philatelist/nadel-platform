@@ -8,6 +8,7 @@ import { renderWithApp } from '../test/render';
 import { NotChargedPage } from './NotChargedPage';
 
 let permissions: Permission[];
+let notCharged: NotChargedItem[];
 const mutate = vi.fn();
 let mutation: { onSuccess: (r: { resolved: boolean }) => Promise<void> };
 
@@ -32,18 +33,30 @@ vi.mock('../me', () => ({
 }));
 vi.mock('@nadel/api-client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@nadel/api-client')>()),
-  useListNotCharged: () => queryResult([item]),
+  useListNotCharged: () => queryResult(notCharged),
   useRetryNotCharged: (o: { mutation: typeof mutation }) => {
     mutation = o.mutation;
     return { mutate, isPending: false };
   },
 }));
 
+const intervalItem: NotChargedItem = {
+  id: 'n2',
+  kind: 'INTERVAL',
+  reason: 'NO_TARIFF_FOR_ALL_DAYS',
+  meterId: 'm9',
+  chargeType: { id: 't1', code: 'ELECTRICITY', name: 'Electricity', nameCustomized: false },
+  from: '2026-09-23',
+  to: '2026-10-04',
+  tariffs: [],
+};
+
 describe('NotChargedPage', () => {
   beforeEach(() => {
     window.localStorage.setItem('nadel.locale', 'en');
     permissions = ['CHARGES_VIEW', 'CHARGES_RUN'];
     mutate.mockReset();
+    notCharged = [item];
   });
 
   it('lists the item with plot and tariff links', () => {
@@ -52,6 +65,13 @@ describe('NotChargedPage', () => {
     expect(screen.getByRole('link', { name: 'Old fee' })).toHaveAttribute('href', '/tariffs/tf1');
     expect(screen.getByRole('link', { name: 'New fee' })).toHaveAttribute('href', '/tariffs/tf2');
     expect(screen.getByText('September 2026')).toBeInTheDocument();
+  });
+
+  it('shows the period and a meter link for an interval item', () => {
+    notCharged = [intervalItem];
+    renderWithApp(withQueries(<NotChargedPage />));
+    expect(screen.getByText('23 Sep 2026 – 4 Oct 2026')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Meter' })).toHaveAttribute('href', '/meters/m9');
   });
 
   it('retries and reports an item that is still not charged', async () => {

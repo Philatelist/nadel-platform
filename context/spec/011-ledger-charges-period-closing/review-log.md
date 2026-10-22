@@ -18,3 +18,18 @@
 |---|---|---|---|---|
 | 1 | `303f4ff..057fbd4` | MAJOR_ISSUES | M1 late booking skips a listed-open month without a row (BillingCalendar uses min existing open row); M2 BILLING_MONTH status values shown raw in the audit log | minor: losses/common-consumer settings fields raw in audit; JpaPlotDebtCache.record ~4 queries per plot; settings partial update without a row lock; PERIOD_IN_FUTURE wording for closing; LedgerAuditPublisher javadoc |
 | 2 | + `4a0698d` | PASS | M1, M2 resolved | fixes: M1 calendar books into lastClosed+1 (+pure and API gap tests, RED checked); M2 audit status via catalog (+ losses/split settings labels); minor: BillingCalendar javadoc repeats; settings labels added beyond M1/M2 (harmless) |
+
+## Slice 3 — round 1 (9006194): MAJOR_ISSUES
+- M1 `MonthRun.java:226-262`: a booked run only re-plans open TARIFF_MONTH items of its own month; spec §2.4/§2.7 and tech §2.2 require retrying open items of earlier months. → fixing.
+- Minor 1 `TariffResolver` versions never end: two FIXED_ONE_TIME tariffs of one type conflict forever. → AUTO rule: only tariffs charging > 0.00 that month take part in a conflict; fixing.
+- Minor 2 `TariffMonthPlanning.java:168-173`: Conflicting queued although the plot already has this month's charge from one of the tariffs. → fixing.
+- Minor 3 `MonthRun.java:114-124`: digest covers planned charges only, not conflicts. → noted.
+- Minor 4 `MonthRun.java:143`: charge types locked from an unlocked snapshot. → fixing.
+- Minor 5 `web/src/auditValue.tsx`: a typed reversal reason equal to a queue reason code is shown translated. → noted.
+
+## Slice 3 — round 2 (0f8d1fe): PASS
+- M1, minors 1, 2, 4 resolved.
+- Minor: `api/openapi.yaml:2985` wording "that month's service period" is ambiguous (behaviour keeps the item month's period). → noted; reword in a later slice.
+- Minor: `MonthRun.java:181` items closed by the run get no per-item NOT_CHARGED_RETRIED audit entry. → noted.
+- Minor: `MonthRun.java:200` the run retries items of every other month, later ones too (spec says earlier). Harmless under the queue lock. → noted.
+- Minor: digest still covers charges only (round 1 minor 3). → noted.

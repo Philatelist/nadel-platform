@@ -8,15 +8,19 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.TreeMap;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Serves {@link MeterNetwork} from the meter register and the approved readings; RLS limits both to the caller's
  * cooperative. The "not read since" rule is the one of the reading round's filter ({@code noReadingSince}): the last
  * point of a meter is its latest approved reading, else its installation, and the meter is stale when that point is
- * dated before the given day.
+ * dated before the given day. The points of a meter are those of {@code ConsumptionCalculator}: the initial value, the
+ * approved readings and the final value, a reading taking the place of a boundary point on its date.
  */
 @Component
 class JpaMeterNetwork implements MeterNetwork {
@@ -57,5 +61,26 @@ class JpaMeterNetwork implements MeterNetwork {
             }
         }
         return stale;
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY) // a row lock needs a read-write transaction
+    public Optional<MeterPoints> lockSharedPoints(UUID meterId) {
+        return meters.findByIdForShare(meterId).map(meter -> {
+            TreeMap<LocalDate, Point> points = new TreeMap<>();
+            points.put(meter.getInstalledOn(), new Point(meter.getInstalledOn(), meter.getInitialValue(),
+                    "INSTALL:" + meter.getId(), PointKind.INSTALLATION));
+            if (meter.getRemovedOn() != null && meter.getFinalValue() != null) {
+                points.put(meter.getRemovedOn(), new Point(meter.getRemovedOn(), meter.getFinalValue(),
+                        "REMOVAL:" + meter.getId(), PointKind.REMOVAL));
+            }
+            for (MeterReadingRecord reading : readings.findByMeterIdAndStatusOrderByTakenOn(meter.getId(),
+                    Status.APPROVED)) {
+                points.put(reading.getTakenOn(), new Point(reading.getTakenOn(), reading.getValue(),
+                        reading.getId().toString(), PointKind.READING));
+            }
+            return new MeterPoints(meter.getId(), meter.getKind(), meter.getResource(), meter.getPlotId(),
+                    List.copyOf(points.values()));
+        });
     }
 }

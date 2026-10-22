@@ -71,3 +71,19 @@ export function formatMonth(value: string, locale: string): string {
   const [, year = '', month = '01'] = match;
   return isEnglish(locale) ? `${MONTHS_EN[Number(month) - 1] ?? month} ${year}` : `${month}.${year}`;
 }
+
+const PERCENT_INPUT_RE = /^\d{1,3}(\.\d{1,2})?$/;
+
+/**
+ * A typed percentage as the contract's decimal string ("5,5" -> "5.5", "5" -> "5"): spaces dropped, "," read as the
+ * decimal separator. Text only; whether it is within 0..100 is the server's call. Undefined when malformed.
+ */
+export function normalizePercentInput(text: string): string | undefined {
+  const value = text.replace(/[\s ]/g, '').replace(',', '.');
+  return PERCENT_INPUT_RE.test(value) ? value : undefined;
+}
+
+/** A server percentage ("5.00") for display with the locale's separator and a percent sign: uk "5,00 %", en "5.00%". */
+export function formatPercent(value: string, locale: string): string {
+  return isEnglish(locale) ? `${value}%` : `${value.replace('.', ',')} %`;
+}

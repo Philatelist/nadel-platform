@@ -11,8 +11,8 @@ Settings (V7, and V14 for the ledger, feature 011):
 | `memberPlotStatusVisibility` | `member_plot_status_visibility` | `OWN_ONLY` | Who sees the debt status (colour) of a plot, below |
 | `redAmount` | `red_amount numeric(14,2)`, CHECK `>= 0` | `1000.00` | A plot whose debt is above it is red (money-rules section 9) |
 | `redDays` | `red_days integer`, CHECK `0..36500` | `90` | A plot whose oldest unpaid charge is more than this many days old is red |
-| `lossesMode` | `losses_mode`, CHECK | `FIXED_PERCENT` | `FIXED_PERCENT` or `PROPORTIONAL` losses (used from slice 4 of spec 011) |
-| `lossesPercent` | `losses_percent numeric(5,2)`, CHECK `0..100` | `0.00` | The fixed losses percentage |
+| `lossesMode` | `losses_mode`, CHECK | `FIXED_PERCENT` | `FIXED_PERCENT` or `PROPORTIONAL` losses; with `FIXED_PERCENT` every electricity interval also gets a losses charge (ledger, spec 011 slice 4) |
+| `lossesPercent` | `losses_percent numeric(5,2)`, CHECK `0..100` | `0.00` | The fixed losses percentage (`0.00` charges no losses) |
 | `commonConsumerDefaultSplit` | `common_consumer_default_split`, CHECK | `CONNECTED_PLOTS` | `CONNECTED_PLOTS`, `EQUAL_PER_PLOT`, `SERVICE_USERS` or `NOT_CHARGED` (used from slice 7) |
 
 A change of the red threshold applies to every status read from then on: `plots` derives the colour at read time.

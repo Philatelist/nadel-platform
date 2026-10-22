@@ -41,10 +41,19 @@ export function NotChargedPeriod({ item }: { item: NotChargedItem }) {
 /** The plot of an item as a link to the plot card. */
 export function NotChargedPlot({ item }: { item: NotChargedItem }) {
   const t = useT();
-  if (!item.plotId) return <>{t.billing.notCharged.noPlot}</>;
+  if (!item.plotId && !item.meterId) return <>{t.billing.notCharged.noPlot}</>;
   return (
-    <Link to={`/plots/${item.plotId}`} className="text-accent underline">
-      <UserContent>{item.plotNumber ?? item.plotId}</UserContent>
-    </Link>
+    <div className="flex flex-col gap-1">
+      {item.plotId && (
+        <Link to={`/plots/${item.plotId}`} className="text-accent underline">
+          <UserContent>{item.plotNumber ?? item.plotId}</UserContent>
+        </Link>
+      )}
+      {item.meterId && (
+        <Link to={`/meters/${item.meterId}`} className="text-sm text-accent underline">
+          {t.billing.notCharged.meter}
+        </Link>
+      )}
+    </div>
   );
 }

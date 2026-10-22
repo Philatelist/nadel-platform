@@ -44,9 +44,10 @@ within the working period; that a `REJECTED` or `APPROVED` row carries `decided_
 | `MeterValue` | A reading or a quantity of a resource: not negative, at most 11 integer digits and 3 decimals, scale 3, never rounded. `parse` is strict (`^\d{1,11}(\.\d{1,3})?$`); a fourth decimal is an `InvalidMeterValueException`. `toString()` is the wire format with exactly three decimals (`"8205.000"`); clients trim the zeros for display |
 | `Quantity` | An exact reduced fraction (`BigInteger` over `BigInteger`): `plus`, `minus`, `times(long)`, `dividedBy(long)`, `compareTo`, `signum`, `numerator()`, `denominator()`. `toMeterValue()` rounds HALF_UP to three decimals: the only rounding of the module, for display (ADR 0014) |
 | `ConsumptionCalculator` | Pure and static (no Spring, no database, no clock); see below |
-| `ReadingUsage` | Port: `isUsed(tenantId, meterId, from, to)`; the ledger (011) implements it, `internal.NoChargesYetUsage` answers `false` until then. Every bean is asked; the readings are used when any says so |
+| `ReadingUsage` | Port: `isUsed(tenantId, meterId, from, to)`; the ledger implements it (`LedgerReadingUsage`, feature 011: a charge that is not reversed read the meter on a day of the span). Every bean is asked; the readings are used when any says so |
+| `PlotMeterPointsChanged` | Event (feature 011): the points of a plot meter changed on a date (`cause` `READING_ENTERED`, `READING_APPROVED`, `READING_CORRECTED`, `READING_DELETED`, `METER_REMOVED`, `METER_REPLACED`), published by `internal.MeterPointEvents` in the transaction of the change, for `PLOT` meters only; a correction that moves a reading publishes one per date. Ids, codes and a date only. The ledger charges the intervals around the date |
 | `MeterCatalog` | Read API for other modules (`internal.JpaMeterCatalog`): `plotIdsWithActiveMeter(resource)` (plots with an active plot meter of the resource now) and `hasMeterBetween(plot, resource, from, to)` (a plot meter of the resource worked on a day of the range, both ends included). The tariffs module uses it for `NO_METER` and the plot counts of meter-based tariffs |
-| `MeterNetwork` | Read API for the ledger (`internal.JpaMeterNetwork`, feature 011): `staleMeters(asOf, days)` lists the plot meters that worked on `asOf` (installed on or before it, not removed on or before it) whose last point on or before `asOf` (the latest approved reading, else the installation) is dated before `asOf - days`, as `StaleMeter(meterId, plotId, resource, lastReadingOn)`; the rule of the round's `noReadingSince` filter, as of a date. The closing check list of a billing month asks it with 60 days. Tests: `MeterNetworkTests` |
+| `MeterNetwork` | Read API for the ledger (`internal.JpaMeterNetwork`, feature 011): `lockSharedPoints(meterId)` locks the meter `FOR SHARE` (a reading write holds it `FOR UPDATE`) and returns its points with stable keys (`INSTALL:{meter}`, the reading id, `REMOVAL:{meter}`; a reading on a boundary date takes its place), in the caller's transaction; `staleMeters(asOf, days)` lists the plot meters that worked on `asOf` (installed on or before it, not removed on or before it) whose last point on or before `asOf` (the latest approved reading, else the installation) is dated before `asOf - days`, as `StaleMeter(meterId, plotId, resource, lastReadingOn)`; the rule of the round's `noReadingSince` filter, as of a date. The closing check list of a billing month asks it with 60 days. Tests: `MeterNetworkTests` |
 | `MeterImport` | Facade of the Excel import's Meters sheet (`internal.MeterImportService`): `plan`, `lock`, `apply`, with `MeterImportRow`, `MeterImportPlan`, `MeterImportItem`, `MeterImportAction` (`NEW`, `UNCHANGED`) and `MeterImportProblem`. See The Excel sheet |
 
 ### The calculation
@@ -163,9 +164,15 @@ rules and the warning), `ReadingProblem`, `ReadingCommands`, `ReadingQueries`, `
 - **Correction** (`PUT`) of an `APPROVED` reading is a new row that supersedes the old one (and an approved reading on
   the new date); history kept. **Deletion** of an `APPROVED` reading removes the row; a reading it had replaced stays
   `SUPERSEDED` without a link. Any other status is 409 `READING_STATUS_INVALID`. A no-op correction is not audited.
-- **Use check.** Before a change every `ReadingUsage` bean is asked about the span from the previous to the next point
-  around the date (for a correction around both the old and the new date); any "yes" is 409 `READING_IN_USE` (a row
-  error in a batch). `changeable` in the history says when a reading can still change.
+- **Use check.** Before a change every `ReadingUsage` bean is asked about the days the change reaches: from the day
+  after the previous point to the day before the next point around the date, or the date itself where there is no such
+  point (for a correction around both the old and the new date); any "yes" is 409 `READING_IN_USE` (a row error in a
+  batch). The neighbouring points stay out, so a new reading after a charged interval is accepted while a change inside
+  or at the end of a charged interval is not (feature 011). `changeable` in the history says when a reading can still
+  change.
+- **Charges.** Every saved change of a counted reading of a plot meter (entry, approval, correction, deletion) and a
+  removal or replacement publish `PlotMeterPointsChanged`; the ledger charges the intervals asynchronously. A meter
+  registration or import publishes nothing (an initial value closes no interval).
 - **Unusual consumption.** `UNUSUAL_CONSUMPTION` when `ConsumptionCalculator.isUnusual` says so for the interval the new
   reading closes against the meter's other intervals (counted readings only); the reading is saved anyway.
 - **Locks.** Every reading write takes the meter `FOR UPDATE` first; a correction or deletion finds the meter of the

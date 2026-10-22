@@ -75,6 +75,9 @@ class ChargeRecord {
     @Column(name = "tariff_id", updatable = false)
     private UUID tariffId;
 
+    @Column(name = "meter_id", updatable = false)
+    private UUID meterId;
+
     @Column(name = "reverses_charge_id", updatable = false)
     private UUID reversesChargeId;
 
@@ -144,6 +147,39 @@ class ChargeRecord {
     }
 
     /**
+     * A charge of a meter interval (kind {@code REGULAR}, source {@code CONSUMPTION} or {@code LOSSES}): the tariff and
+     * the meter it was priced from, identified by {@code sourceKey} ({@code CONSUMPTION:{fromKey}:{toKey}} or
+     * {@code LOSSES:...}), so a redelivered event never books it twice. Booked by the system (no author) or by the
+     * person who retried it.
+     */
+    static ChargeRecord reading(UUID tenantId, UUID plotId, UUID chargeTypeId, UUID billingMonthId, ChargeSource source,
+            UUID tariffId, UUID meterId, Money amount, LocalDate serviceFrom, LocalDate serviceTo, LocalDate accruedOn,
+            String sourceKey, Map<String, Object> calculation, @Nullable UUID createdBy, Instant now) {
+        if (source != ChargeSource.CONSUMPTION && source != ChargeSource.LOSSES) {
+            throw new IllegalArgumentException("A reading charge is a consumption or a losses charge");
+        }
+        ChargeRecord charge = new ChargeRecord();
+        charge.id = UUID.randomUUID();
+        charge.tenantId = tenantId;
+        charge.plotId = plotId;
+        charge.chargeTypeId = chargeTypeId;
+        charge.billingMonthId = billingMonthId;
+        charge.kind = ChargeKind.REGULAR;
+        charge.source = source;
+        charge.amount = amount.value();
+        charge.serviceFrom = serviceFrom;
+        charge.serviceTo = serviceTo;
+        charge.accruedOn = accruedOn;
+        charge.calculation = calculation;
+        charge.sourceKey = sourceKey;
+        charge.tariffId = tariffId;
+        charge.meterId = meterId;
+        charge.createdBy = createdBy;
+        charge.createdAt = now;
+        return charge;
+    }
+
+    /**
      * The reversal of {@code original}: the opposite amount, the same plot, charge type, service period and debt age,
      * source {@code MANUAL_REVERSAL}, the reason, pointing at the original.
      */
@@ -162,6 +198,7 @@ class ChargeRecord {
         charge.serviceTo = original.serviceTo;
         charge.accruedOn = original.accruedOn;
         charge.calculation = calculation;
+        charge.meterId = original.meterId;
         charge.reversesChargeId = original.id;
         charge.reason = reason;
         charge.createdBy = createdBy;
@@ -219,6 +256,10 @@ class ChargeRecord {
 
     @Nullable UUID getTariffId() {
         return tariffId;
+    }
+
+    @Nullable UUID getMeterId() {
+        return meterId;
     }
 
     @Nullable UUID getReversesChargeId() {

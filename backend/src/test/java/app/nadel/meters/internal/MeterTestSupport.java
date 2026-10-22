@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import app.nadel.DemoReadingCharges;
 import app.nadel.IntegrationTest;
 import app.nadel.TestTokens;
 import java.math.BigDecimal;
@@ -32,7 +33,8 @@ import tools.jackson.databind.json.JsonMapper;
 /**
  * What the meter tests share: tokens of the demo users and of custom roles, throw-away plots, meters registered through
  * the API, and a cleanup that removes every meter of the test (serial numbers start with {@code MT-}), the readings,
- * plots and roles it created. The demo meters (when they exist) are never used.
+ * plots and roles it created. The demo meters (when they exist) are never used. The demo electricity charge type is
+ * switched off during a test ({@link DemoReadingCharges}), so the readings it enters are never charged.
  */
 abstract class MeterTestSupport extends IntegrationTest {
 
@@ -52,11 +54,13 @@ abstract class MeterTestSupport extends IntegrationTest {
     @BeforeEach
     void unlinkDemoUsers() {
         unlinkDemoMembers();
+        DemoReadingCharges.pause(ownerJdbc());
     }
 
     @AfterEach
     void removeMeterFixtures() {
         JdbcTemplate owner = ownerJdbc();
+        DemoReadingCharges.resume(owner);
         owner.update("delete from meter_reading where meter_id in (select id from meter where serial like 'MT-%')");
         owner.update("delete from meter_parent where meter_id in (select id from meter where serial like 'MT-%') "
                 + "or parent_meter_id in (select id from meter where serial like 'MT-%')");

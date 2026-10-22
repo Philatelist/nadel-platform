@@ -213,6 +213,28 @@ Feature 010 (`ConsumptionCalculator`, pure and tested without a database).
   kind that may measure water; at most one active meter per plot and resource. The other kinds (`SUBSTATION`, `QUARTER`,
   `COMMON_CONSUMER`) have a name instead of a plot and measure electricity only.
 
+### 6.5 Charges by readings (feature 011)
+
+- Every approved reading of a plot meter charges one interval: from the previous point of the same meter (the initial
+  value after an installation, the previous approved reading) to this reading; a removal or replacement charges the
+  interval up to the final value. The initial value alone charges nothing; a pending reading charges nothing until it
+  is approved.
+- **Days rule.** The days of an interval run from the day after the previous point to the day of the reading, both
+  included (a reading on 4 October after one on 22 September covers 23 September - 4 October, 12 days).
+- **Amount.** The interval's consumption is spread evenly over its `N` days: each per-kWh (per-m3 for water) version of
+  the plot's tariff gets `consumption x d / N` for the `d` days it is valid, times its rate; the parts are added exactly
+  and the sum is rounded once (7 kWh at 4.3250 and 1 kWh at 4.3350 is 34.61, not 34.62). The debt counts from the
+  reading date; the charge is booked in the month of the reading or the earliest open month after it.
+- **Fixed-percentage losses** (`FIXED_PERCENT`, a percentage above zero): the same interval also gets a losses charge
+  of `percent` of each part at the same rate, rounded once (65 kWh at 5 % is 3.25 kWh = 14.04).
+- **Not charged.** No per-kWh tariff for every day of the interval, the plot outside the scope of every electricity
+  tariff or excluded, or two tariffs that would both charge the interval: no charge and an item in the "not charged"
+  queue, retried by "Повторити" and by the next month run. An inactive charge type (water until it is switched on)
+  charges and queues nothing.
+- **In use.** A reading is in use while a charge that is not reversed read the meter on a day it reaches: a correction
+  or deletion of a charged reading, or a new reading inside a charged interval, is refused; a new reading after a
+  charged interval is accepted; after the reversal of the charge the reading may change again.
+
 ## 7. Allocation
 
 - A payment is first saved as unallocated.

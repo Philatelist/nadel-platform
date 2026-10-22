@@ -9,7 +9,9 @@
  * records, the port {@link app.nadel.meters.ReadingUsage} that the ledger implements so that readings a charge uses
  * are no longer corrected or deleted (ADR 0014), the read API {@link app.nadel.meters.MeterCatalog} (which plots have a
  * meter of a resource; the tariffs module asks it), the read API {@link app.nadel.meters.MeterNetwork} for the ledger
- * (the plot meters not read for a while) and the import facade {@link app.nadel.meters.MeterImport} with its
+ * (the plot meters not read for a while, the locked points of a meter), the event
+ * {@link app.nadel.meters.PlotMeterPointsChanged} (the points of a plot meter changed; the ledger charges the intervals)
+ * and the import facade {@link app.nadel.meters.MeterImport} with its
  * records (the Meters sheet of the Excel import). The meter register (entity, commands, queries, the endpoints of tag
  * {@code meters} and the plot guard {@code MeterPlotGuard}, an implementation of {@link app.nadel.plots.PlotChangeGuard}),
  * the readings (entity, rules, commands, the round, the member's submission, approvals and the endpoints of tag

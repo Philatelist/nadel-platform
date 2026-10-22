@@ -66,8 +66,11 @@ import org.springframework.transaction.annotation.Transactional;
  * nothing is written. The digest is a SHA-256 over the planned new charges (source key, amount, service period), so a
  * preview followed by an unchanged booking always matches.
  * <p>
- * Seams for later slices: {@link #applicableDays} is where the water connection days apply (slice 5), and the run
- * retries only {@code TARIFF_MONTH} items now; {@code INTERVAL} items follow with the reading charges (slice 4).
+ * A booking also retries every open reading interval item ({@code INTERVAL}, whatever its month;
+ * {@link IntervalCharging#retryAll}) before it locks the tariffs; those charges are booked like the listener's, in the
+ * month of their reading or the earliest open month after it, and are not part of the preview or its digest.
+ * <p>
+ * Seam for a later slice: {@link #applicableDays} is where the water connection days apply (slice 5).
  */
 @Service
 class MonthRun {
@@ -81,11 +84,12 @@ class MonthRun {
     private final NotChargedViews itemViews;
     private final TariffChargeWriter writer;
     private final LedgerAuditPublisher audit;
+    private final IntervalCharging intervals;
     private final Clock clock;
 
     MonthRun(TariffBook book, ChargeTypeCatalog chargeTypes, PlotCatalog plots, BillingMonths billingMonths,
             ChargeRepository charges, NotChargedItemRepository items, NotChargedViews itemViews,
-            TariffChargeWriter writer, LedgerAuditPublisher audit, Clock clock) {
+            TariffChargeWriter writer, LedgerAuditPublisher audit, IntervalCharging intervals, Clock clock) {
         this.book = book;
         this.chargeTypes = chargeTypes;
         this.plots = plots;
@@ -95,6 +99,7 @@ class MonthRun {
         this.itemViews = itemViews;
         this.writer = writer;
         this.audit = audit;
+        this.intervals = intervals;
         this.clock = clock;
     }
 
@@ -140,6 +145,8 @@ class MonthRun {
         }
 
         writer.lockMonth(tenantId, month);
+        // the open reading intervals of every month first: they lock their meters before the tariffs (lock order)
+        intervals.retryAll(tenantId, actor.memberId(), clock.instant());
         Snapshot snapshot = writer.lockTariffs(chargingTypes(book.snapshot()).stream().map(ChargeTypeEntry::id)
                 .toList());
         BillingMonthRecord row = billingMonths.openMonthForRun(tenantId, month).orElseThrow(MonthRun::closed);

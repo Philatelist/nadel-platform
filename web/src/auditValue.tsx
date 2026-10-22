@@ -185,6 +185,8 @@ export function auditValue(
     case 'takenOn':
     case 'serviceFrom':
     case 'serviceTo':
+    case 'from':
+    case 'to':
     case 'date':
       return ISO_DAY.test(raw) ? formatDay(raw, locale) : raw;
     case 'amount':

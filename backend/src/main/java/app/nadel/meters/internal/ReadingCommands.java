@@ -7,6 +7,8 @@ import app.nadel.meters.ConsumptionCalculator.Interval;
 import app.nadel.meters.ConsumptionCalculator.Reading;
 import app.nadel.meters.InvalidMeterValueException;
 import app.nadel.meters.MeterValue;
+import app.nadel.meters.PlotMeterPointsChanged;
+import app.nadel.meters.PlotMeterPointsChanged.Cause;
 import app.nadel.meters.ReadingUsage;
 import app.nadel.meters.internal.MeterReadingRecord.Status;
 import app.nadel.meters.internal.ReadingValidator.MeterSpan;
@@ -55,7 +57,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  * partial unique index {@code meter_reading_approved_uq} allows one approved reading per meter and date), and only then
  * is the old row linked to its successor. A correction is a new row that supersedes the corrected one, so the history
  * keeps both; a deletion removes the row. Before any change the {@link ReadingUsage} ports are asked whether a charge
- * uses the readings around the date ({@code READING_IN_USE}).
+ * uses the readings around the date ({@code READING_IN_USE}), and every change of a counted reading of a plot meter
+ * publishes {@link PlotMeterPointsChanged} in its transaction (the ledger charges the intervals around it).
  * <p>
  * A member's reading waits for approval ({@code PENDING}): it never counts and never supersedes a counted reading; a
  * second pending reading of the same meter and date supersedes the first. Approval checks it again against the counted
@@ -72,6 +75,7 @@ class ReadingCommands {
     private final MeterAccess access;
     private final List<ReadingUsage> usages;
     private final MeterAuditPublisher audit;
+    private final MeterPointEvents pointEvents;
     private final Clock clock;
     private final TransactionTemplate rowTransaction;
 
@@ -79,12 +83,14 @@ class ReadingCommands {
     private EntityManager entityManager;
 
     ReadingCommands(MeterRepository meters, MeterReadingRepository readings, MeterAccess access,
-            List<ReadingUsage> usages, MeterAuditPublisher audit, Clock clock, PlatformTransactionManager transactions) {
+            List<ReadingUsage> usages, MeterAuditPublisher audit, MeterPointEvents pointEvents, Clock clock,
+            PlatformTransactionManager transactions) {
         this.meters = meters;
         this.readings = readings;
         this.access = access;
         this.usages = usages;
         this.audit = audit;
+        this.pointEvents = pointEvents;
         this.clock = clock;
         this.rowTransaction = new TransactionTemplate(transactions);
     }
@@ -160,6 +166,10 @@ class ReadingCommands {
         audit.publishReading(actor, "READING_CORRECTED", meter, List.of(
                 new FieldChange("takenOn", oldDate.toString(), newDate.toString()),
                 new FieldChange("value", reading.getValue().toString(), value.toString())));
+        pointEvents.changed(meter, newDate, Cause.READING_CORRECTED);
+        if (!oldDate.equals(newDate)) {
+            pointEvents.changed(meter, oldDate, Cause.READING_CORRECTED);
+        }
         return saved(new Saved(created, ReadingValidator.intervalEndingAt(span, counted, newDate, value).orElse(null),
                 replaced.stream().map(MeterReadingRecord::getId).toList(),
                 ReadingValidator.warnings(span, counted, newDate, value)));
@@ -183,6 +193,7 @@ class ReadingCommands {
         audit.publishReading(actor, "READING_DELETED", meter, List.of(
                 new FieldChange("takenOn", date.toString(), null),
                 new FieldChange("value", reading.getValue().toString(), null)));
+        pointEvents.changed(meter, date, Cause.READING_DELETED);
     }
 
     // ---- the member flow
@@ -275,6 +286,7 @@ class ReadingCommands {
         audit.publishReading(actor, "READING_APPROVED", meter, List.of(
                 new FieldChange("takenOn", sameDate == null ? null : date.toString(), date.toString()),
                 new FieldChange("value", sameDate == null ? null : sameDate.getValue().toString(), value.toString())));
+        pointEvents.changed(meter, date, Cause.READING_APPROVED);
         Interval interval = ReadingValidator.intervalEndingAt(span, counted, date, value).orElse(null);
         return new ReadingSaved(ReadingDtoMapper.toDto(reading, interval, actor.can(Permission.READINGS_ENTER)),
                 sameDate == null ? List.of() : List.of(sameDate.getId()),
@@ -343,6 +355,7 @@ class ReadingCommands {
                     new FieldChange("takenOn", date.toString(), date.toString()),
                     new FieldChange("value", sameDate.getValue().toString(), value.toString())));
         }
+        pointEvents.changed(meter, date, Cause.READING_ENTERED);
         return new Saved(created, ReadingValidator.intervalEndingAt(span, counted, date, value).orElse(null),
                 replaced.stream().map(MeterReadingRecord::getId).toList(),
                 ReadingValidator.warnings(span, counted, date, value));

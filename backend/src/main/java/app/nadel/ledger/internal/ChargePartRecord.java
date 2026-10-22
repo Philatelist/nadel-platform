@@ -47,14 +47,20 @@ class ChargePartRecord {
 
     static ChargePartRecord of(UUID tenantId, UUID chargeId, UUID tariffVersionId, long days, BigDecimal units,
             BigDecimal rate) {
+        return of(tenantId, chargeId, tariffVersionId, days, units, BigDecimal.ONE, rate);
+    }
+
+    /** A part whose quantity is the exact fraction {@code unitsNum / unitsDen} (kWh or m3 of a meter interval). */
+    static ChargePartRecord of(UUID tenantId, UUID chargeId, UUID tariffVersionId, long days, BigDecimal unitsNum,
+            BigDecimal unitsDen, BigDecimal rate) {
         ChargePartRecord part = new ChargePartRecord();
         part.id = UUID.randomUUID();
         part.tenantId = tenantId;
         part.chargeId = chargeId;
         part.tariffVersionId = tariffVersionId;
         part.days = Math.toIntExact(days);
-        part.unitsNum = units;
-        part.unitsDen = BigDecimal.ONE;
+        part.unitsNum = unitsNum;
+        part.unitsDen = unitsDen;
         part.rate = rate;
         return part;
     }

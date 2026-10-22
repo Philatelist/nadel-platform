@@ -25,3 +25,25 @@ export async function invalidateAfterRun(queryClient: QueryClient, month: string
     queryClient.invalidateQueries({ queryKey: getListNotChargedQueryKey() }),
   ]);
 }
+
+const READING_CHARGE_DELAY_MS = 2500;
+
+/**
+ * After a reading is entered, approved or corrected the server books the consumption charge asynchronously, for any
+ * plot of the cooperative: refresh every plot query and the queue now, and once more shortly after, when the charge
+ * has normally been booked.
+ */
+export async function invalidateAfterReading(queryClient: QueryClient): Promise<void> {
+  const refresh = () =>
+    Promise.all([
+      queryClient.invalidateQueries({
+        predicate: (query) => {
+          const head = query.queryKey[0];
+          return typeof head === 'string' && head.startsWith('/api/v1/plots');
+        },
+      }),
+      queryClient.invalidateQueries({ queryKey: getListNotChargedQueryKey() }),
+    ]);
+  setTimeout(() => void refresh(), READING_CHARGE_DELAY_MS);
+  await refresh();
+}

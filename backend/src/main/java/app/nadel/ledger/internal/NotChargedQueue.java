@@ -49,7 +49,8 @@ import org.springframework.transaction.annotation.Transactional;
  * period and date; the item is then {@code RESOLVED}, also when the charge exists already. Nothing left to charge (the
  * plot left the scopes, the amount is 0.00, the plot or the type is no longer charged) makes it {@code OBSOLETE}. A
  * conflict that remains keeps it open with the tariffs of the retry. An item that is not open answers resolved and
- * changes nothing. Audit {@code NOT_CHARGED_RETRIED} (entity type {@code CHARGE}, about the plot) with the kind, the
+ * changes nothing. A reading interval ({@code INTERVAL}) is retried by {@link IntervalCharging#retry}. Audit
+ * {@code NOT_CHARGED_RETRIED} (entity type {@code CHARGE}, about the plot) with the kind, the
  * reason, the charge type, the month and the outcome.
  */
 @Service
@@ -64,12 +65,13 @@ class NotChargedQueue {
     private final PlotCatalog plots;
     private final ChargeTypeCatalog chargeTypes;
     private final LedgerAuditPublisher audit;
+    private final IntervalCharging intervals;
     private final EntityManager entityManager;
     private final Clock clock;
 
     NotChargedQueue(NotChargedItemRepository items, NotChargedViews views, TariffBook book, TariffChargeWriter writer,
             BillingMonths billingMonths, ChargeRepository charges, PlotCatalog plots, ChargeTypeCatalog chargeTypes,
-            LedgerAuditPublisher audit, EntityManager entityManager, Clock clock) {
+            LedgerAuditPublisher audit, IntervalCharging intervals, EntityManager entityManager, Clock clock) {
         this.items = items;
         this.views = views;
         this.book = book;
@@ -79,6 +81,7 @@ class NotChargedQueue {
         this.plots = plots;
         this.chargeTypes = chargeTypes;
         this.audit = audit;
+        this.intervals = intervals;
         this.entityManager = entityManager;
         this.clock = clock;
     }
@@ -110,8 +113,11 @@ class NotChargedQueue {
         if (item.getStatus() != Status.OPEN) {
             return new NotChargedRetryResult(true);
         }
+        if (item.getKind() == Kind.INTERVAL) {
+            return retryInterval(item, actor);
+        }
         if (item.getKind() != Kind.TARIFF_MONTH) {
-            // reading intervals, losses nodes and common consumers are retried by their own slices (011 slices 4-7)
+            // losses nodes and common consumers are retried by their own slices (011 slices 6-7)
             return unresolved(item);
         }
         UUID tenantId = Objects.requireNonNull(actor.tenantId());
@@ -163,6 +169,36 @@ class NotChargedQueue {
                 plot.map(PlotFacts::number).orElse(null), changes);
 
         return outcomeStatus == Status.OPEN ? unresolved(item, snapshot) : new NotChargedRetryResult(true);
+    }
+
+    /**
+     * Retries a reading interval ({@link IntervalCharging#retry}: the meter, the item and the tariffs locked, the
+     * interval ending at the item's point charged as the listener would). Audit {@code NOT_CHARGED_RETRIED} with the
+     * kind, the reason, the charge type, the days of the interval and the outcome.
+     */
+    private NotChargedRetryResult retryInterval(NotChargedItemRecord item, AccessProfile actor) {
+        UUID tenantId = Objects.requireNonNull(actor.tenantId());
+        Status outcomeStatus = intervals.retry(tenantId, item, actor.memberId(), clock.instant());
+        UUID plotId = item.getPlotId();
+        List<FieldChange> changes = new ArrayList<>(List.of(
+                new FieldChange("kind", null, item.getKind().name()),
+                new FieldChange("reason", null, item.getReason().name())));
+        if (item.getChargeTypeId() != null) {
+            chargeTypes.find(item.getChargeTypeId())
+                    .ifPresent(type -> changes.add(new FieldChange("chargeType", null, type.auditName())));
+        }
+        if (item.getFromDate() != null) {
+            changes.add(new FieldChange("from", null, item.getFromDate().toString()));
+        }
+        if (item.getToDate() != null) {
+            changes.add(new FieldChange("to", null, item.getToDate().toString()));
+        }
+        changes.add(new FieldChange("outcome", null, outcomeStatus.name()));
+        if (plotId != null) {
+            audit.publish(actor, LedgerAuditPublisher.Action.NOT_CHARGED_RETRIED, plotId,
+                    plots.find(plotId).map(PlotFacts::number).orElse(null), changes);
+        }
+        return outcomeStatus == Status.OPEN ? unresolved(item) : new NotChargedRetryResult(true);
     }
 
     private NotChargedRetryResult unresolved(NotChargedItemRecord item) {

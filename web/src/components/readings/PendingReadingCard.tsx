@@ -12,6 +12,7 @@ import { Link } from 'react-router';
 import { useLocale, useT } from '../../i18n';
 import { meterLabel, resourceUnit } from '../../meters';
 import { problemMessage } from '../../problem';
+import { invalidateAfterReading } from '../charges/chargeInvalidation';
 import { UserContent, formatUser } from '../UserContent';
 import { Badge, Button, Notice } from '../ui';
 import { RejectReadingDialog } from './RejectReadingDialog';
@@ -33,6 +34,7 @@ export function PendingReadingCard({ item }: { item: PendingReading }) {
       queryClient.invalidateQueries({ queryKey: getListReadingsQueryKey({ status: 'PENDING' }) }),
       queryClient.invalidateQueries({ queryKey: getListMeterReadingsQueryKey(meter.id) }),
       queryClient.invalidateQueries({ queryKey: getListMetersQueryKey() }),
+      invalidateAfterReading(queryClient),
     ]);
   }
 

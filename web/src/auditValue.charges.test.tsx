@@ -17,6 +17,11 @@ describe('auditValue for charges', () => {
     expect(text(auditValue('CHARGE', 'date', '2026-10-01', en, 'en'))).toBe('1 Oct 2026');
   });
 
+  it('formats the from and to days of a retried interval', () => {
+    expect(text(auditValue('BILLING_MONTH', 'from', '2026-09-23', uk, 'uk'))).toBe('23.09.2026');
+    expect(text(auditValue('BILLING_MONTH', 'to', '2026-10-04', en, 'en'))).toBe('4 Oct 2026');
+  });
+
   it('shows the charge type by its base token and the reason as user content', () => {
     expect(text(auditValue('CHARGE', 'chargeType', 'base:COMMON_CONSUMERS', uk, 'uk'))).toBe(
       'Спільні споживачі',

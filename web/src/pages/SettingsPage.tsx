@@ -3,9 +3,10 @@ import {
   useGetSettings,
   useUpdateSettings,
   type CooperativeSettings as Settings,
+  type LossesMode,
   type PlotStatusVisibility,
 } from '@nadel/api-client';
-import { normalizeMoneyInput } from '@nadel/shared';
+import { normalizeMoneyInput, normalizePercentInput } from '@nadel/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
@@ -17,6 +18,7 @@ import { useT } from '../i18n';
 import { problemMessage } from '../problem';
 import { useDocumentTitle } from '../useDocumentTitle';
 
+const LOSSES_MODES = ['FIXED_PERCENT', 'PROPORTIONAL'] as const satisfies readonly LossesMode[];
 const VISIBILITIES = ['OWN_ONLY', 'ALL_PLOTS'] as const satisfies readonly PlotStatusVisibility[];
 
 export function SettingsPage() {
@@ -48,6 +50,7 @@ function CooperativeSettings() {
         <>
           <SettingsForm saved={data.memberPlotStatusVisibility} />
           <StatusThresholdSection saved={data} />
+          <LossesSettingsSection saved={data} />
         </>
       )}
     </QueryBoundary>
@@ -177,6 +180,79 @@ function StatusThresholdSection({ saved }: { saved: Settings }) {
         <div>
           <Button type="submit" disabled={!changed || update.isPending}>
             {s.threshold.save}
+          </Button>
+        </div>
+      </form>
+    </Panel>
+  );
+}
+
+/** How the losses of a meter tree node are charged; the percentage applies to FIXED_PERCENT. The server checks the range. */
+function LossesSettingsSection({ saved }: { saved: Settings }) {
+  const t = useT();
+  const s = t.settings;
+  const queryClient = useQueryClient();
+  const [mode, setMode] = useState<LossesMode>(saved.lossesMode);
+  const [percent, setPercent] = useState(saved.lossesPercent);
+  const [submitted, setSubmitted] = useState(false);
+  const [result, setResult] = useState<'saved' | { error: string }>();
+
+  const update = useUpdateSettings({
+    mutation: {
+      onSuccess: (data) => {
+        queryClient.setQueryData(getGetSettingsQueryKey(), data);
+        setMode(data.lossesMode);
+        setPercent(data.lossesPercent);
+        setSubmitted(false);
+        setResult('saved');
+      },
+      onError: (error) => setResult({ error: problemMessage(t, error) }),
+    },
+  });
+
+  const normalized = normalizePercentInput(percent);
+  const changed = mode !== saved.lossesMode || normalized !== saved.lossesPercent;
+
+  return (
+    <Panel title={s.losses.title}>
+      <form
+        className="flex max-w-xl flex-col gap-4"
+        noValidate
+        onSubmit={(event) => {
+          event.preventDefault();
+          setSubmitted(true);
+          setResult(undefined);
+          if (normalized === undefined) return;
+          update.mutate({ data: { lossesMode: mode, lossesPercent: normalized } });
+        }}
+      >
+        <p className="text-sm text-ink-muted">{s.losses.text}</p>
+        <RadioGroup
+          legend={s.losses.mode}
+          value={mode}
+          onChange={(value) => {
+            setMode(value);
+            setResult(undefined);
+          }}
+          options={LOSSES_MODES.map((value) => ({ value, label: s.losses[value] }))}
+        />
+        <TextField
+          label={s.losses.percent}
+          inputMode="decimal"
+          value={percent}
+          disabled={mode === 'PROPORTIONAL'}
+          error={submitted && normalized === undefined ? s.losses.percentInvalid : undefined}
+          onChange={(e) => {
+            setPercent(e.target.value);
+            setResult(undefined);
+          }}
+        />
+        {mode === 'PROPORTIONAL' && <p className="text-sm text-ink-muted">{s.losses.proportionalHint}</p>}
+        {result === 'saved' && <Notice tone="success">{s.saved}</Notice>}
+        {typeof result === 'object' && <Notice tone="danger">{result.error}</Notice>}
+        <div>
+          <Button type="submit" disabled={!changed || update.isPending}>
+            {s.losses.save}
           </Button>
         </div>
       </form>

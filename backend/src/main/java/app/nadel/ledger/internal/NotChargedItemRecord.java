@@ -43,6 +43,8 @@ class NotChargedItemRecord {
     }
 
     static final String TARIFF_IDS = "tariffIds";
+    static final String FROM_KEY = "fromKey";
+    static final String TO_KEY = "toKey";
 
     @Id
     private UUID id;
@@ -123,6 +125,67 @@ class NotChargedItemRecord {
         item.createdAt = now;
         item.updatedAt = now;
         return item;
+    }
+
+    /** The key of the item of a meter interval: {@code INTERVAL:{meter}:{toKey}} (the point that closes it). */
+    static String intervalKey(UUID meterId, String toKey) {
+        return "INTERVAL:" + meterId + ":" + toKey;
+    }
+
+    /**
+     * An open item: the interval of a plot meter from the point {@code fromKey} on {@code from - 1} to the point
+     * {@code toKey} on {@code to} could not be charged. {@code from} is the first day of the interval.
+     */
+    static NotChargedItemRecord interval(UUID tenantId, UUID plotId, UUID chargeTypeId, UUID meterId, String fromKey,
+            String toKey, LocalDate from, LocalDate to, Reason reason, List<UUID> tariffIds, Instant now) {
+        NotChargedItemRecord item = new NotChargedItemRecord();
+        item.id = UUID.randomUUID();
+        item.tenantId = tenantId;
+        item.itemKey = intervalKey(meterId, toKey);
+        item.kind = Kind.INTERVAL;
+        item.plotId = plotId;
+        item.chargeTypeId = chargeTypeId;
+        item.meterId = meterId;
+        item.fromDate = from;
+        item.toDate = to;
+        item.reason = reason;
+        item.params = intervalParams(tariffIds, fromKey, toKey);
+        item.status = Status.OPEN;
+        item.createdAt = now;
+        item.updatedAt = now;
+        return item;
+    }
+
+    /**
+     * A new attempt at the interval ending at the same point failed again: the reason, the tariffs and the start of
+     * the interval of that attempt (a reading inserted or deleted before the point changes it). Only an open item
+     * changes.
+     */
+    void intervalFailedAgain(Reason newReason, List<UUID> tariffIds, String fromKey, LocalDate from, Instant now) {
+        if (status != Status.OPEN || kind != Kind.INTERVAL) {
+            throw new IllegalStateException("Only an open interval item changes");
+        }
+        Map<String, Object> newParams = intervalParams(tariffIds, fromKey, toKey());
+        if (newReason != reason || !newParams.equals(params) || !from.equals(fromDate)) {
+            reason = newReason;
+            params = newParams;
+            fromDate = from;
+            updatedAt = now;
+        }
+    }
+
+    /** The key of the first point of an interval item; null for other kinds. */
+    @Nullable String fromKey() {
+        return params == null ? null : (String) params.get(FROM_KEY);
+    }
+
+    /** The key of the point that closes an interval item; null for other kinds. */
+    @Nullable String toKey() {
+        return params == null ? null : (String) params.get(TO_KEY);
+    }
+
+    private static Map<String, Object> intervalParams(List<UUID> tariffIds, String fromKey, String toKey) {
+        return Map.of(TARIFF_IDS, tariffIds.stream().map(UUID::toString).toList(), FROM_KEY, fromKey, TO_KEY, toKey);
     }
 
     /** A new attempt failed again: the reason and the tariffs of that attempt. Only an open item changes. */

@@ -7,6 +7,7 @@ import app.nadel.meters.InvalidMeterValueException;
 import app.nadel.meters.MeterKind;
 import app.nadel.meters.MeterResource;
 import app.nadel.meters.MeterValue;
+import app.nadel.meters.PlotMeterPointsChanged;
 import app.nadel.plots.PlotCatalog;
 import app.nadel.plots.PlotCatalog.PlotFacts;
 import app.nadel.problem.ApiProblemException;
@@ -32,7 +33,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Registers, corrects, removes, replaces and deletes meters. Every method is one transaction that also publishes the
- * audit event. The cooperative always comes from the caller's {@link AccessProfile}, never from the request; the caller
+ * audit event; a removal and a replacement of a plot meter also publish {@link PlotMeterPointsChanged} (its final
+ * value closes an interval the ledger charges). The cooperative always comes from the caller's {@link AccessProfile}, never from the request; the caller
  * must hold {@code METERS_VIEW} and {@code METERS_MANAGE} (checked on the controller).
  * <p>
  * Locks: registering or replacing a plot meter takes the plot {@code FOR SHARE} first
@@ -54,16 +56,18 @@ class MeterCommands {
     private final MeterQueries queries;
     private final MeterParents parents;
     private final MeterAuditPublisher audit;
+    private final MeterPointEvents pointEvents;
     private final Clock clock;
 
     MeterCommands(MeterRepository meters, PlotCatalog plots, ReadingFacts readings, MeterQueries queries,
-            MeterParents parents, MeterAuditPublisher audit, Clock clock) {
+            MeterParents parents, MeterAuditPublisher audit, MeterPointEvents pointEvents, Clock clock) {
         this.meters = meters;
         this.plots = plots;
         this.readings = readings;
         this.queries = queries;
         this.parents = parents;
         this.audit = audit;
+        this.pointEvents = pointEvents;
         this.clock = clock;
     }
 
@@ -186,6 +190,7 @@ class MeterCommands {
         meter.remove(removedOn, finalValue, clock.instant());
         save(meter);
         audit.publish(actor, "METER_REMOVED", meter, MeterSnapshot.diff(before, MeterSnapshot.of(meter, null)));
+        pointEvents.changed(meter, removedOn, PlotMeterPointsChanged.Cause.METER_REMOVED);
         return queries.card(meter, true);
     }
 
@@ -229,6 +234,8 @@ class MeterCommands {
         List<FieldChange> changes = new ArrayList<>(MeterSnapshot.diff(before, MeterSnapshot.of(old, null)));
         changes.add(new FieldChange("replacementMeter", null, replacement.getSerial()));
         audit.publish(actor, "METER_REPLACED", old, changes);
+        // the old meter's last interval ends at its final value; the new meter's initial value closes no interval
+        pointEvents.changed(old, day, PlotMeterPointsChanged.Cause.METER_REPLACED);
         audit.publish(actor, "METER_REGISTERED", replacement, MeterSnapshot.diff(MeterSnapshot.NONE,
                 MeterSnapshot.of(replacement, plotNumber(replacement))));
         return queries.card(replacement, true);

@@ -2,9 +2,10 @@
 
 The ledger of the cooperative (feature 011): the **charges** of plots, the **billing months** they are booked in,
 **reversals**, **opening balances**, the **account** of a plot with the debt per charge type, the **month run** of
-recurring tariffs and the **"not charged" queue**. Slices 1 to 3 of spec 011 are in code (slice 2: the billing months
-with their totals and check list, closing in order, and the plot status refresh; slice 3: the month run and the
-queue); charges from readings, losses and common consumer runs and water connections follow in the next slices.
+recurring tariffs, the **charges from meter readings** and the **"not charged" queue**. Slices 1 to 4 of spec 011 are
+in code (slice 2: the billing months with their totals and check list, closing in order, and the plot status refresh;
+slice 3: the month run and the queue; slice 4: a charge per interval of a plot meter and fixed-percentage losses);
+losses and common consumer runs and water connections follow in the next slices.
 
 Tables (V13, all under RLS `tenant_isolation`, an index leading with `tenant_id`, composite foreign keys on
 `(tenant_id, id)`):
@@ -14,7 +15,7 @@ Tables (V13, all under RLS `tenant_isolation`, an index leading with `tenant_id`
 | `billing_month` | An accounting period: `month` (its first day), `status` `OPEN` or `CLOSED`, `run_at`, `closed_at`, `closed_by`. Created on demand, `OPEN` by default; never deleted (`DELETE`/`TRUNCATE` revoked). The V14 trigger `billing_month_guard` refuses any change of a closed month (so no reopening), a change of `month`, and every `DELETE`/`TRUNCATE`, to everyone but `nadel_owner` with the maintenance setting |
 | `charge` | The ledger. `kind` `REGULAR`/`REVERSAL`/`OPENING`, `source` `TARIFF`/`CONSUMPTION`/`LOSSES`/`COMMON_CONSUMER`/`OPENING`/`MANUAL_REVERSAL`, `amount numeric(14,2)`, service period `service_from..service_to`, `accrued_on` (the age of the debt), `billing_month_id`, `calculation jsonb` (codes and numbers only), `source_key` (idempotency of later runs), `reverses_charge_id` (only on a reversal), `reason` (required on a reversal, optional on other kinds, for example an opening balance), `created_by`, `created_at` |
 | `charge_part` | The tariff versions behind a charge (days, an exact quantity `units_num/units_den`, the rate); written by the month run (one row per version) |
-| `meter_value_use` | The meter values a charge or run read; written from slice 4 |
+| `meter_value_use` | The meter values a charge or run read: one row per point date (an interval charge: its two points). Not a ledger table. Rows stay after a reversal; `LedgerReadingUsage` leaves out the rows of reversed charges |
 | `not_charged_item` (V15) | The "not charged" queue: `item_key`, `kind` `TARIFF_MONTH`/`INTERVAL`/`LOSSES_NODE`/`COMMON_CONSUMER`, `plot_id`, `charge_type_id`, `meter_id`, `month`, `from_date`, `to_date`, `reason`, `params jsonb` (codes and ids only, `tariffIds`), `status` `OPEN`/`RESOLVED`/`OBSOLETE`, `resolved_at`. Not a ledger table: the application updates the status and, while open, the reason and params; `DELETE`/`TRUNCATE` revoked. One open item per key (`not_charged_item_open_key_uq`); an item goes with its plot or meter (`ON DELETE CASCADE`) |
 
 **Append-only (ADR 0006).** `nadel_app` has no `UPDATE`, `DELETE` or `TRUNCATE` on `charge` and `charge_part`, and a
@@ -29,7 +30,7 @@ index `charge_reversed_once_uq` lets a charge be reversed once.
 
 | Type | Use |
 |---|---|
-| `ChargesBooked(tenantId, plotIds)` | Published inside the transaction of every booking or reversal (a reversal, an opening balance, the month run and a retry, at most 500 plots per event; every later booking path must publish it too). `PlotStatusRefresher` recomputes the debt of those plots from the committed ledger. Ids only, no personal data; the set is never empty |
+| `ChargesBooked(tenantId, plotIds)` | Published inside the transaction of every booking or reversal (a reversal, an opening balance, the month run, a retry and the charges of readings, at most 500 plots per event; every later booking path must publish it too). `PlotStatusRefresher` recomputes the debt of those plots from the committed ledger. Ids only, no personal data; the set is never empty |
 
 Everything else is in `internal`.
 
@@ -139,7 +140,8 @@ Lock order of the slice: plot `FOR SHARE` -> charge type `FOR SHARE` -> billing 
   "not charged" case for recurring fees (it is for electricity readings, slice 4).
 - **The run also closes** the open `TARIFF_MONTH` items of its month: charged by this run or before -> `RESOLVED`,
   nothing left to charge (no tariff applies any more, the plot is archived, the type inactive, `0.00`) -> `OBSOLETE`, a
-  conflict that remains stays open with the tariffs of this run. `INTERVAL` items join with slice 4.
+  conflict that remains stays open with the tariffs of this run. A booking also retries the open `INTERVAL` items (see
+  Charges from readings).
 - **Preview and booking** run the same code. A preview writes nothing (not even the month row) and answers `{month,
   preview, plots (with at least one new charge), totals per charge type (new charges only, in type order), total,
   notCharged[] (the conflicts, with the id of an open item), created: 0, digest}`. The digest is SHA-256 over the
@@ -167,7 +169,7 @@ Lock order of the slice: plot `FOR SHARE` -> charge type `FOR SHARE` -> billing 
   natural order of the plot numbers, then the charge types. Each with `id`, `kind`, `reason`, `plotId`, `plotNumber`,
   `chargeType` (code, stored name, `nameCustomized`), `meterId`, `month`, `from`, `to`, `tariffs[{id, name}]` (by
   name; the link to fix) and `createdAt`.
-- **Retry** of a `TARIFF_MONTH` item: the month's advisory lock, the item `FOR UPDATE`, the charge type and the
+- **Retry** of an `INTERVAL` item: see Charges from readings. **Retry** of a `TARIFF_MONTH` item: the month's advisory lock, the item `FOR UPDATE`, the charge type and the
   tariffs `FOR SHARE`, then `TariffMonthPlanning` for the plot, type and month. A new charge is booked through
   `BillingMonths.openForBooking`: in the month, or, when it was closed meanwhile, in the earliest open month after it
   (the charge keeps its service period and `accrued_on`); the item is `RESOLVED` (also when the charge exists already),
@@ -178,6 +180,70 @@ Lock order of the slice: plot `FOR SHARE` -> charge type `FOR SHARE` -> billing 
   `RESOLVED`/`OBSOLETE`/`OPEN`).
 - **Check list:** `notChargedCount` of a month counts its open items: those of the month itself and those without a
   month whose `to_date` falls in it.
+
+## Charges from readings (slice 4)
+
+Every change of the points of a plot meter charges the meter's intervals that are not charged yet (functional spec
+2.4): `meters` publishes `PlotMeterPointsChanged(tenantId, meterId, plotId, resource, on, cause)` in the transaction of
+an entered, approved, corrected or deleted reading and of a removal or replacement (plot meters only; a correction that
+moves the date publishes one event per date; a meter import creates meters with their initial value only, which closes
+no interval, so it publishes nothing). `ReadingCharges` listens with the ADR 0007 pattern (`@Async
+@TransactionalEventListener`, `TenantContext.runAs`, then a `TransactionTemplate`) and calls `IntervalCharging`.
+
+- **Intervals** (`IntervalCharging`, `meters.MeterNetwork.lockSharedPoints`): the points of the meter (initial value
+  `INSTALL:{meter}`, approved readings by id, final value `REMOVAL:{meter}`; a reading on a boundary date takes its
+  place) in date order; an interval is two neighbouring points. The listener handles the intervals that contain the
+  event's date (the one ending there and the one starting there, or the one spanning it when no point is left on it).
+  The initial value alone is no interval; a replacement charges the old meter's last interval (up to its final value)
+  and later the new meter's first one.
+- **The decision** (`ReadingChargePlanning`, pure): key `CONSUMPTION:{fromKey}:{toKey}`; a key that a charge has
+  (reversed or not) is never booked again, so a redelivered event writes nothing and a reversed interval is not
+  re-created (a correction is a new reading with a new key). `tariffs.TariffResolver` over the days of the interval for
+  the charge type of the resource (`ELECTRICITY`, `WATER`): one tariff is priced; of two or more only the tariffs that
+  would charge the interval by the meter take part (one of them is then the tariff, two or more `CONFLICTING_TARIFFS`,
+  none nothing); an inactive or archived type charges and queues nothing (water until it is switched on); no tariff
+  valid in the interval or one that misses days `NO_TARIFF_FOR_ALL_DAYS`, outside every scope `OUTSIDE_SCOPE`, excluded
+  `EXCLUDED`. A tariff with no version of the meter's basis on any day of the interval (a fixed fee) is charged by the
+  month run, not here.
+- **The amount** (`ReadingChargeCalculator`, pure): the days of an interval run from the day after the previous point
+  to the reading date, both included (`N` days); each `PER_KWH` (`PER_M3` for water) version gets
+  `consumption x d / N` for its `d` applicable days, priced at its rate; one exact sum rounded once by
+  `Money.ofQuotient`. Applicable days are every day now; `IntervalCharging.applicableDays` is the seam for the water
+  connection days (slice 5). `0.00` charges nothing.
+- **Fixed-percentage losses**: with `lossesMode = FIXED_PERCENT` and `lossesPercent > 0` an electricity interval also
+  gets a `LOSSES` charge (charge type `ELECTRICITY`, key `LOSSES:{fromKey}:{toKey}`) of `percent / 100` of each part at
+  the same rate, rounded once on its own; booked only together with the consumption charge.
+- **The charge**: kind `REGULAR`, source `CONSUMPTION` or `LOSSES`, `tariff_id`, `meter_id`, service period = the first
+  to the last applicable day, `accrued_on` = the reading date, booked by `BillingMonths.openForBooking` (the reading's
+  month, or the earliest open month after it), no author (a retry: the person who retried), `calculation` `{amount,
+  parts[{tariffVersionId, basis, frequency, quantity (kWh or m3, three decimals for display), unit KWH|M3, rate, days,
+  from, to}], readings[{meterId, takenOn, value}] (the two points), lossesPercent and consumption (losses only)}`, one
+  `charge_part` per version with the exact quantity as `units_num / units_den`, and one `meter_value_use` row per point.
+  `ChargesBooked` for the plot.
+- **The queue**: a failure opens (or refreshes: reason, tariffs, the interval's start) the item
+  `INTERVAL:{meter}:{toKey}` (`plot_id`, `charge_type_id`, `meter_id`, `from_date` = the first day, `to_date` = the
+  reading date, no month, `params` `{tariffIds, fromKey, toKey}`); a charge (now or before) closes it `RESOLVED`,
+  nothing to charge `OBSOLETE`; an open item of the meter whose interval no longer exists (a reading inserted or
+  deleted before its point) becomes `OBSOLETE`. Business failures never throw.
+- **Retries**: `POST /not-charged/{id}/retry` of an `INTERVAL` item charges the interval that ends at the item's point
+  (`OBSOLETE` when the point is gone), audit `NOT_CHARGED_RETRIED` with `kind`, `reason`, `chargeType`, `from`, `to`,
+  `outcome`. A booked month run retries every open `INTERVAL` item of the cooperative, whatever its month, before it
+  locks its tariffs; those charges are not part of the run's preview, digest or totals.
+- **Locks**: the meter `FOR SHARE` with its points (a reading write holds it `FOR UPDATE`, so the two run one after the
+  other) -> a transaction advisory lock per meter (`ledger.meter-charges:{tenant}:{meter}`: ledger transactions about one
+  meter run one after another, so a key is checked and written once and an item opened once) -> the charge types and
+  every tariff `FOR SHARE` -> the billing month `FOR SHARE`. The month run takes the meters of its retries before its
+  tariffs.
+
+## Readings in use
+
+`LedgerReadingUsage` implements `meters.ReadingUsage`: a charge reads its meter on the closed range of days from its
+first to its last `meter_value_use` row (an interval charge: from its previous point to its reading); the readings of a
+span are used when such a range of a charge that is not reversed meets the span. The meters module asks about the days
+a change on a date reaches, from the day after the previous point to the day before the next one (or the date itself),
+so a correction or deletion of a charged reading and a reading inside a charged interval are 409 `READING_IN_USE`, a
+new reading after a charged interval is accepted, and after the reversal of the charge the reading can change again.
+It replaced the stub `meters/internal/NoChargesYetUsage`.
 
 ## Tariff versions in use
 
@@ -216,7 +282,8 @@ Entity type `BILLING_MONTH` (`LedgerAuditPublisher.publishMonth`), about the mon
 
 Entity type `CHARGE` about the plot, as above:
 
-- `NOT_CHARGED_RETRIED`: `kind`, `reason`, `chargeType`, `month`, `outcome`.
+- `NOT_CHARGED_RETRIED`: `kind`, `reason`, `chargeType`, `month` (a month item) or `from` and `to` (a reading
+  interval), `outcome`.
 
 The charges themselves are the ledger and are not repeated in the log. Reasons are user content: never logged.
 
@@ -230,7 +297,9 @@ Every action is a constant of `LedgerAuditPublisher.Action` and must also be a v
 `tariffIds`, `lockShared`; the pure `TariffResolver`, `ChargeCalculator.breakdown` and `DaySet`; the port
 `TariffVersionUsage`, implemented here), `plots` (`PlotCatalog`: `find`, `findAll`, `findAndLockShared`,
 `inNaturalOrder`, `findChargeable`; the SPI `PlotChangeGuard`; the debt cache writer `PlotDebtCache`),
-`meters` (`MeterNetwork.staleMeters`), `money` (`Money`), `identity` (`CurrentUser`, `AccessProfile`, `Permission`,
+`meters` (`MeterNetwork.staleMeters` and `lockSharedPoints`, the event `PlotMeterPointsChanged`, `Quantity`,
+`MeterValue`; the port `ReadingUsage`, implemented here), `settings` (`CooperativeSettings.lossesMode`,
+`lossesPercent`), `money` (`Money`), `identity` (`CurrentUser`, `AccessProfile`, `Permission`,
 `OwnedPlotsSource`), `audit` (events, `ActorNames`), `problem`, `tenancy` (`TenantContext`). Nothing depends on
 `ledger`.
 
@@ -248,7 +317,11 @@ consumer runs. `CHARGES_REVERSE`
 rerun, a plot added later, 0.00, a reversed charge, one-time fees, scopes, inactive types, tariffs by readings,
 conflicts to the queue naming both tariffs, a stale digest, closed and future months, permissions, audit, plot debt),
 `NotChargedQueueTests` (list order, retry unfixed, fixed, nothing left, a closed month, auto-closing by the run,
-404, permissions, audit), `TariffVersionUsageTests` (409 after the run, accepted after the reversal),
+404, permissions, audit), `ReadingChargeCalculatorTests` and `ReadingChargePlanningTests` (pure: the reading rows of
+§3, keys, the conflict rule, the queue reasons, losses), `ReadingChargesTests` (entry, member approval, replacement,
+removal, a closed month, no tariff -> queue -> retry and month run, a deletion, conflicts, water inactive, fixed
+losses, a redelivered event), `ReadingUsageTests` (409 while charged, a reading inside a charged interval, a new reading
+after one, accepted after the reversal), `TariffVersionUsageTests` (409 after the run, accepted after the reversal),
 `TariffConflictWarningTests` (the tariffs page), `NotChargedTenantIsolationTests` (V15) - these run in a cooperative of
 their own (`FreshCooperativeSupport`); `BillingMonthsTests` (the list and totals, the month page and its
 check list, closing in order, a closed month that gets nothing more, late bookings, future months, permissions, audit,
