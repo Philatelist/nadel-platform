@@ -4,13 +4,13 @@ import app.nadel.ledger.ChargesBooked;
 import app.nadel.ledger.internal.TariffMonthPlanning.PlannedCharge;
 import app.nadel.tariffs.ChargeCalculator.Part;
 import app.nadel.tariffs.ChargeTypeCatalog;
+import app.nadel.tariffs.ChargeTypeCatalog.ChargeTypeFacts;
 import app.nadel.tariffs.TariffBook;
 import app.nadel.tariffs.TariffBook.Snapshot;
 import jakarta.persistence.EntityManager;
 import java.time.Instant;
 import java.time.YearMonth;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
@@ -25,10 +25,13 @@ import org.springframework.transaction.annotation.Transactional;
  * What the month run and the retry of a month item share: the locks they take and the writing of tariff charges.
  * Everything runs inside the caller's transaction.
  * <p>
- * Lock order: the month advisory lock (one run or retry of a month at a time per cooperative), the charge types
- * {@code FOR SHARE} (an archive waits), the tariffs {@code FOR SHARE} (a correction of a version or a change of scope
- * waits, then sees the charges: {@link LedgerTariffVersionUsage}), then the billing month {@code FOR SHARE} (a closing
- * waits). Ids are locked in id order.
+ * Lock order: the month advisory lock (one run or retry of a month at a time per cooperative), the queue advisory lock
+ * (one booking run or retry of the cooperative at a time, since a run also retries the open items of every other
+ * month), the charge types {@code FOR SHARE} (an archive waits), the tariffs {@code FOR SHARE} (a correction of a
+ * version or a change of scope waits, then sees the charges: {@link LedgerTariffVersionUsage}), then the billing months
+ * {@code FOR SHARE} (a closing waits). Ids are locked in id order. Nothing takes a month advisory lock while it holds
+ * the queue lock, and every transaction takes at most one month advisory lock, so the two advisory locks cannot
+ * deadlock; a closing takes a single month {@code FOR UPDATE}, so the shared month locks cannot either.
  */
 @Component
 class TariffChargeWriter {
@@ -62,12 +65,25 @@ class TariffChargeWriter {
     }
 
     /**
-     * Locks the charge types and then every tariff of the cooperative {@code FOR SHARE}, and reads the tariffs under
-     * the lock.
+     * The transaction-scoped advisory lock of the "not charged" queue of the cooperative: every booking month run and
+     * every retry takes it after its month lock, so the retries of the open items (by a run of any month or by
+     * "Повторити") never run side by side and each sees the charges the other booked.
      */
     @Transactional(propagation = Propagation.MANDATORY)
-    Snapshot lockTariffs(Collection<UUID> chargeTypeIds) {
-        for (UUID type : new TreeSet<>(chargeTypeIds)) {
+    void lockQueue(UUID tenantId) {
+        entityManager.createNativeQuery(
+                "select count(*) from (select pg_advisory_xact_lock(hashtextextended(:key, 0))) as l")
+                .setParameter("key", "ledger.not-charged:" + tenantId)
+                .getSingleResult();
+    }
+
+    /**
+     * Locks every charge type and then every tariff of the cooperative {@code FOR SHARE} (each in id order), and reads
+     * the tariffs under the lock.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    Snapshot lockTariffs() {
+        for (UUID type : new TreeSet<>(chargeTypes.all().stream().map(ChargeTypeFacts::id).toList())) {
             chargeTypes.findAndLockShared(type);
         }
         book.lockShared(book.tariffIds());

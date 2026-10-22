@@ -64,6 +64,14 @@ PER_KWH/PER_M3 not calculated here: needs readings (features 010–011); the plo
 - **Conflicting tariffs.** When two tariffs of the same charge type apply to one plot (its scope, not excluded) on the
   same day, neither is charged for that plot; the month run puts the case in the "not charged" queue naming both
   tariffs, and the tariffs page warns. Versions never end, so two such tariffs conflict from the later first version on.
+  **Only tariffs that would charge the plot more than `0.00` in the month take part in a conflict:** the month run (and
+  a retry) leaves out the tariffs whose amount for the plot and month is `0.00` or that are charged by readings; one
+  tariff left is charged, two or more are the conflict (the queue item names those), none is nothing. So two
+  `FIXED_ONE_TIME` fees of one charge type due in different months never conflict, and a one-time fee is charged in its
+  due month (example: "Цільовий 2025" due 15.05.2025 and "Цільовий 2026" due 15.10.2026 on the same plot: the October
+  2026 run charges 1 200.00 of the 2026 fee and queues nothing). A plot that already has the month's charge of one of
+  the tariffs is not a conflict for that month either (nothing new, nothing queued). The tariffs page keeps warning about
+  every overlap of scopes from today on, whatever the amounts.
 
 Worked examples (each is a unit test of `ChargeCalculator`):
 

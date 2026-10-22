@@ -120,10 +120,13 @@ Lock order of the slice: plot `FOR SHARE` -> charge type `FOR SHARE` -> billing 
 
 - **What it charges** (`MonthRun`, `TariffMonthPlanning`): every active plot that is not common land
   (`PlotCatalog.findChargeable`) times every charge type that is active, not archived and has a tariff. Per plot and
-  type `tariffs.TariffResolver` resolves over the month (`tariffs.TariffBook` snapshot): one tariff -> its charge, two
-  or more -> a conflict, none -> nothing. The amount is `tariffs.ChargeCalculator.breakdown(versions, area, month,
-  applicable days)`, rounded once; `0.00`, a tariff charged by meter readings (`PER_KWH`, `PER_M3`, any such version in
-  the month) and no applicable day create nothing. The applicable days are `DaySet.ALL` now; `MonthRun.applicableDays`
+  type `tariffs.TariffResolver` finds the tariffs that apply over the month (`tariffs.TariffBook` snapshot). When the
+  month's charge of any of them exists (reversed or not) there is nothing new. Otherwise each one's amount is
+  `tariffs.ChargeCalculator.breakdown(versions, area, month, applicable days)`, rounded once, and **only the tariffs
+  that would charge more than `0.00` take part** (money rules §4.1): one -> its charge, two or more -> a conflict, none
+  -> nothing (`0.00`, a tariff charged by meter readings (`PER_KWH`, `PER_M3`, any such version in the month), no
+  applicable day). So a one-time fee is charged in its due month although a fee of the same type due in another month
+  applies too. The applicable days are `DaySet.ALL` now; `MonthRun.applicableDays`
   is the seam where slice 5 puts the water connection days.
 - **The charge:** kind `REGULAR`, source `TARIFF`, `tariff_id`, `source_key` `TARIFF:{tariff}:{plot}:{YYYY-MM}`, booked
   in the run month, service period = the first to the last day the versions count for, `accrued_on` = the first day of
@@ -134,29 +137,44 @@ Lock order of the slice: plot `FOR SHARE` -> charge type `FOR SHARE` -> billing 
   missing (a plot or tariff added later) and a reversed tariff charge is not re-created (its correction is feature
   012). Runs of one month are serialised by a transaction advisory lock (`ledger.month-run:{tenant}:{YYYY-MM}`).
 - **Conflicts** go to the queue: item `TARIFF_MONTH`, key `TARIFF_MONTH:{plot}:{chargeType}:{YYYY-MM}`, reason
-  `CONFLICTING_TARIFFS`, `params.tariffIds` all tariffs involved; an open item of the key is refreshed, never
-  duplicated. A conflict whose tariffs would all charge `0.00` (for example two one-time fees due in other months) is not
-  queued. **Only conflicts are queued by the month run:** a plot outside every tariff of a type, or excluded, is not a
+  `CONFLICTING_TARIFFS`, `params.tariffIds` the tariffs that would charge more than `0.00`; an open item of the key is
+  refreshed, never duplicated. A plot that already has the month's charge of one of the tariffs (a tariff whose scope
+  grew after the run) is not queued for that month. **Only conflicts are queued by the month run:** a plot outside every tariff of a type, or excluded, is not a
   "not charged" case for recurring fees (it is for electricity readings, slice 4).
 - **The run also closes** the open `TARIFF_MONTH` items of its month: charged by this run or before -> `RESOLVED`,
   nothing left to charge (no tariff applies any more, the plot is archived, the type inactive, `0.00`) -> `OBSOLETE`, a
-  conflict that remains stays open with the tariffs of this run. A booking also retries the open `INTERVAL` items (see
-  Charges from readings).
+  conflict that remains stays open with the tariffs of this run. A booking also retries the open `INTERVAL` items of
+  every month (`IntervalCharging.retryAll`, see Charges from readings), right after the month's advisory lock.
+- **The run retries the open items of every other month** (`NotChargedRetries`, the same path as "Повторити"): each
+  open `TARIFF_MONTH` item is planned again with `TariffMonthPlanning` for its plot, type and own month (a plot that is
+  no longer chargeable has nothing left). A new charge is booked through `BillingMonths.openForBooking`: in the item's
+  month, or, when it is closed, in the earliest open month after it (with the item month's service period, source key
+  and `accrued_on`); the item becomes `RESOLVED` (also when the charge exists already) or `OBSOLETE`, or stays open
+  with the reason and tariffs of this run.
 - **Preview and booking** run the same code. A preview writes nothing (not even the month row) and answers `{month,
   preview, plots (with at least one new charge), totals per charge type (new charges only, in type order), total,
-  notCharged[] (the conflicts, with the id of an open item), created: 0, digest}`. The digest is SHA-256 over the
-  planned new charges (source key, amount, service period, sorted by key). A booking answers the same with `created`;
-  with a `digest` that differs from the one it would produce now it is 409 `PREVIEW_OUTDATED` and writes nothing.
+  notCharged[] (the conflicts of the month, with the id of an open item), created: 0, digest}`. The new charges are
+  those of the month and those of the retried items of other months: both count in `plots`, `totals`, `total`,
+  `created` and the digest; `notCharged` lists only the month's own conflicts (an earlier item that stays open is in
+  the queue). The digest is SHA-256 over the planned new charges (source key, amount, service period, sorted by key).
+  A booking answers the same with `created`; with a `digest` that differs from the one it would produce now it is 409
+  `PREVIEW_OUTDATED` and writes nothing.
 - **Refusals:** a month after the current one in Europe/Kyiv 409 `PERIOD_IN_FUTURE` (preview too); a closed month, or
   a missing month before the last closed one, 409 `PERIOD_CLOSED` (preview too). A malformed month or a missing
   `preview` is 400.
 - **Booking:** the month row is opened when missing, `run_at` is set (also when nothing new was charged), audit
-  `BILLING_MONTH_RUN` (entity type `BILLING_MONTH`, label `YYYY-MM`, values `count` and `total`), `ChargesBooked` for
-  the plots charged.
-- **Locks** (`TariffChargeWriter`): the month's advisory lock -> the charge types `FOR SHARE` -> every tariff
-  `FOR SHARE` (`TariffBook.lockShared`, id order) -> the billing month `FOR SHARE` (`BillingMonths.openMonthForRun`).
-  A correction or deletion of a version or a change of scope holds its tariff `FOR UPDATE`, so it waits for a run and
-  then sees its charges. The snapshot is read after the locks.
+  `BILLING_MONTH_RUN` (entity type `BILLING_MONTH`, label `YYYY-MM`, values `count` and `total`, the retried items'
+  charges included), `ChargesBooked` for the plots charged.
+- **Locks** (`TariffChargeWriter`): the month's advisory lock (`ledger.month-run:{tenant}:{YYYY-MM}`) -> the queue
+  advisory lock (`ledger.not-charged:{tenant}`) -> every charge type `FOR SHARE` (id order) -> every tariff
+  `FOR SHARE` (`TariffBook.lockShared`, id order) -> the billing month `FOR SHARE` (`BillingMonths.openMonthForRun`)
+  -> the months of the retried charges `FOR SHARE` (`openForBooking`, in calendar order). A retry takes the same locks
+  (its item's month, the queue, the item `FOR UPDATE`, the types and tariffs). The queue lock serialises every booking
+  run and retry of the cooperative, so a run that books an item of another month never races that month's run or a
+  retry of the item: nobody takes a month advisory lock while holding the queue lock and each transaction takes one
+  month lock, so the advisory locks cannot deadlock; a closing takes one month `FOR UPDATE`, so the shared month locks
+  cannot either. A correction or deletion of a version or a change of scope holds its tariff `FOR UPDATE`, so it waits
+  for a run and then sees its charges. The snapshot is read after the locks.
 
 ## The "not charged" queue (tag `not-charged`, slice 3)
 
@@ -169,8 +187,10 @@ Lock order of the slice: plot `FOR SHARE` -> charge type `FOR SHARE` -> billing 
   natural order of the plot numbers, then the charge types. Each with `id`, `kind`, `reason`, `plotId`, `plotNumber`,
   `chargeType` (code, stored name, `nameCustomized`), `meterId`, `month`, `from`, `to`, `tariffs[{id, name}]` (by
   name; the link to fix) and `createdAt`.
-- **Retry** of an `INTERVAL` item: see Charges from readings. **Retry** of a `TARIFF_MONTH` item: the month's advisory lock, the item `FOR UPDATE`, the charge type and the
-  tariffs `FOR SHARE`, then `TariffMonthPlanning` for the plot, type and month. A new charge is booked through
+- **Retry** of an `INTERVAL` item: see Charges from readings. **Retry** of a `TARIFF_MONTH` item (`NotChargedRetries`,
+  the path the month run uses for other months' items): the month's advisory lock, the queue lock, the item
+  `FOR UPDATE`, the charge types and the tariffs `FOR SHARE`, then `TariffMonthPlanning` for the plot, type and month. A
+  new charge is booked through
   `BillingMonths.openForBooking`: in the month, or, when it was closed meanwhile, in the earliest open month after it
   (the charge keeps its service period and `accrued_on`); the item is `RESOLVED` (also when the charge exists already),
   `OBSOLETE` when nothing is left to charge, and stays open (reason and tariffs refreshed) while the conflict remains.
@@ -315,13 +335,16 @@ consumer runs. `CHARGES_REVERSE`
 
 `BillingCalendarTests`, `DebtCalculatorTests` (pure); `MonthRunTests` (the month-run rows of §3: preview, booking,
 rerun, a plot added later, 0.00, a reversed charge, one-time fees, scopes, inactive types, tariffs by readings,
-conflicts to the queue naming both tariffs, a stale digest, closed and future months, permissions, audit, plot debt),
-`NotChargedQueueTests` (list order, retry unfixed, fixed, nothing left, a closed month, auto-closing by the run,
-404, permissions, audit), `ReadingChargeCalculatorTests` and `ReadingChargePlanningTests` (pure: the reading rows of
-§3, keys, the conflict rule, the queue reasons, losses), `ReadingChargesTests` (entry, member approval, replacement,
-removal, a closed month, no tariff -> queue -> retry and month run, a deletion, conflicts, water inactive, fixed
-losses, a redelivered event), `ReadingUsageTests` (409 while charged, a reading inside a charged interval, a new reading
-after one, accepted after the reversal), `TariffVersionUsageTests` (409 after the run, accepted after the reversal),
+conflicts to the queue naming both tariffs, only tariffs above 0.00 in a conflict (two one-time fees due in different
+months), no conflict for a plot charged before a second tariff joined, a stale digest, closed and future months,
+permissions, audit, plot debt), `NotChargedQueueTests` (list order, retry unfixed, fixed, nothing left, a closed month,
+auto-closing by the run, the next month's run previewing and booking a fixed earlier item with its own service period
+or keeping it open with the run's tariffs, 404, permissions, audit), `ReadingChargeCalculatorTests` and
+`ReadingChargePlanningTests` (pure: the reading rows of §3, keys, the conflict rule, the queue reasons, losses),
+`ReadingChargesTests` (entry, member approval, replacement, removal, a closed month, no tariff -> queue -> retry and
+month run, a deletion, conflicts, water inactive, fixed losses, a redelivered event), `ReadingUsageTests` (409 while
+charged, a reading inside a charged interval, a new reading after one, accepted after the reversal),
+`TariffVersionUsageTests` (409 after the run, accepted after the reversal),
 `TariffConflictWarningTests` (the tariffs page), `NotChargedTenantIsolationTests` (V15) - these run in a cooperative of
 their own (`FreshCooperativeSupport`); `BillingMonthsTests` (the list and totals, the month page and its
 check list, closing in order, a closed month that gets nothing more, late bookings, future months, permissions, audit,

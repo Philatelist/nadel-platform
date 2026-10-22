@@ -4,11 +4,7 @@ import app.nadel.audit.FieldChange;
 import app.nadel.identity.AccessProfile;
 import app.nadel.ledger.internal.NotChargedItemRecord.Kind;
 import app.nadel.ledger.internal.NotChargedItemRecord.Status;
-import app.nadel.ledger.internal.TariffMonthPlanning.AlreadyCharged;
-import app.nadel.ledger.internal.TariffMonthPlanning.Conflicting;
-import app.nadel.ledger.internal.TariffMonthPlanning.NewCharge;
-import app.nadel.ledger.internal.TariffMonthPlanning.Outcome;
-import app.nadel.ledger.internal.TariffMonthPlanning.PlannedCharge;
+import app.nadel.ledger.internal.NotChargedRetries.Attempt;
 import app.nadel.plots.PlotCatalog;
 import app.nadel.plots.PlotCatalog.PlotFacts;
 import app.nadel.problem.ApiProblemException;
@@ -16,7 +12,6 @@ import app.nadel.tariffs.ChargeTypeCatalog;
 import app.nadel.tariffs.ChargeTypeCatalog.ChargeTypeFacts;
 import app.nadel.tariffs.TariffBook;
 import app.nadel.tariffs.TariffBook.Snapshot;
-import app.nadel.tariffs.TariffBook.TariffEntry;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
 import java.time.Clock;
@@ -42,16 +37,16 @@ import org.springframework.transaction.annotation.Transactional;
  * The "not charged" queue (feature 011 §2.7): {@code GET /not-charged} lists the open items, {@code POST
  * /not-charged/{id}/retry} tries one again.
  * <p>
- * A retry of a {@code TARIFF_MONTH} item does for its plot, charge type and month what the month run does
- * ({@link TariffMonthPlanning}, under the same locks: the month's advisory lock, the charge type and the tariffs
- * {@code FOR SHARE}, the item {@code FOR UPDATE}). A new charge is booked in the month, or, when the month was closed
- * meanwhile, in the earliest open month after it ({@link BillingMonths#openForBooking}), keeping its own service
- * period and date; the item is then {@code RESOLVED}, also when the charge exists already. Nothing left to charge (the
- * plot left the scopes, the amount is 0.00, the plot or the type is no longer charged) makes it {@code OBSOLETE}. A
- * conflict that remains keeps it open with the tariffs of the retry. An item that is not open answers resolved and
- * changes nothing. A reading interval ({@code INTERVAL}) is retried by {@link IntervalCharging#retry}. Audit
- * {@code NOT_CHARGED_RETRIED} (entity type {@code CHARGE}, about the plot) with the kind, the
- * reason, the charge type, the month and the outcome.
+ * A retry of a {@code TARIFF_MONTH} item does for its plot, charge type and month what the month run does, on the
+ * same path as the run's retries ({@link NotChargedRetries}, under the same locks: the month's advisory lock, the
+ * queue lock, the item {@code FOR UPDATE}, the charge types and the tariffs {@code FOR SHARE}). A new charge is booked
+ * in the month, or, when the month was closed meanwhile, in the earliest open month after it
+ * ({@link BillingMonths#openForBooking}), keeping its own service period and date; the item is then {@code RESOLVED},
+ * also when the charge exists already. Nothing left to charge (the plot left the scopes, the amount is 0.00, the plot
+ * or the type is no longer charged) makes it {@code OBSOLETE}. A conflict that remains keeps it open with the tariffs
+ * of the retry. An item that is not open answers resolved and changes nothing. A reading interval
+ * ({@code INTERVAL}) is retried by {@link IntervalCharging#retry}. Audit {@code NOT_CHARGED_RETRIED} (entity type
+ * {@code CHARGE}, about the plot) with the kind, the reason, the charge type, the month and the outcome.
  */
 @Service
 class NotChargedQueue {
@@ -60,7 +55,7 @@ class NotChargedQueue {
     private final NotChargedViews views;
     private final TariffBook book;
     private final TariffChargeWriter writer;
-    private final BillingMonths billingMonths;
+    private final NotChargedRetries retries;
     private final ChargeRepository charges;
     private final PlotCatalog plots;
     private final ChargeTypeCatalog chargeTypes;
@@ -70,13 +65,13 @@ class NotChargedQueue {
     private final Clock clock;
 
     NotChargedQueue(NotChargedItemRepository items, NotChargedViews views, TariffBook book, TariffChargeWriter writer,
-            BillingMonths billingMonths, ChargeRepository charges, PlotCatalog plots, ChargeTypeCatalog chargeTypes,
+            NotChargedRetries retries, ChargeRepository charges, PlotCatalog plots, ChargeTypeCatalog chargeTypes,
             LedgerAuditPublisher audit, IntervalCharging intervals, EntityManager entityManager, Clock clock) {
         this.items = items;
         this.views = views;
         this.book = book;
         this.writer = writer;
-        this.billingMonths = billingMonths;
+        this.retries = retries;
         this.charges = charges;
         this.plots = plots;
         this.chargeTypes = chargeTypes;
@@ -125,38 +120,21 @@ class NotChargedQueue {
         UUID plotId = Objects.requireNonNull(item.getPlotId());
         UUID chargeTypeId = Objects.requireNonNull(item.getChargeTypeId());
         writer.lockMonth(tenantId, month);
+        writer.lockQueue(tenantId);
         entityManager.refresh(item, LockModeType.PESSIMISTIC_WRITE);
         if (item.getStatus() != Status.OPEN) {
             return new NotChargedRetryResult(true);
         }
-        Snapshot snapshot = writer.lockTariffs(List.of(chargeTypeId));
+        Snapshot snapshot = writer.lockTariffs();
         Optional<PlotFacts> plot = plots.find(plotId);
-        Outcome outcome = plot.map(p -> TariffMonthPlanning.plan(snapshot, chargeTypeId, MonthRun.facts(p), month,
-                MonthRun.applicableDays(chargeTypeId, plotId, month),
-                key -> !charges.existingSourceKeys(List.of(key)).isEmpty()))
-                .orElse(new TariffMonthPlanning.Nothing());
-
+        Attempt attempt = NotChargedRetries.plan(snapshot, List.of(item),
+                plot.map(p -> Map.of(p.id(), p)).orElse(Map.of()),
+                key -> !charges.existingSourceKeys(List.of(key)).isEmpty()).getFirst();
         Instant now = clock.instant();
-        Status outcomeStatus;
-        if (outcome instanceof NewCharge newCharge) {
-            PlannedCharge planned = newCharge.charge();
-            BillingMonthRecord booking = billingMonths.openForBooking(tenantId, month.atDay(1));
-            writer.book(tenantId, List.of(planned), booking.getId(), actor.memberId(), now);
+        if (!retries.apply(tenantId, List.of(attempt), actor.memberId(), now).isEmpty()) {
             writer.publishBooked(tenantId, Set.of(plotId));
-            outcomeStatus = Status.RESOLVED;
-        } else if (outcome instanceof AlreadyCharged) {
-            outcomeStatus = Status.RESOLVED;
-        } else if (outcome instanceof Conflicting conflicting) {
-            item.failedAgain(NotChargedItemRecord.Reason.CONFLICTING_TARIFFS,
-                    conflicting.tariffs().stream().map(TariffEntry::id).toList(), now);
-            outcomeStatus = Status.OPEN;
-        } else {
-            outcomeStatus = Status.OBSOLETE;
         }
-        if (outcomeStatus != Status.OPEN) {
-            item.close(outcomeStatus, now);
-        }
-        items.flush();
+        Status outcomeStatus = attempt.status();
 
         List<FieldChange> changes = new ArrayList<>(List.of(
                 new FieldChange("kind", null, item.getKind().name()),

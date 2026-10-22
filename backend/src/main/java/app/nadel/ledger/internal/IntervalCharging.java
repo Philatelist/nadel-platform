@@ -19,7 +19,6 @@ import app.nadel.plots.PlotCatalog;
 import app.nadel.settings.CooperativeSettings;
 import app.nadel.settings.LossesMode;
 import app.nadel.tariffs.DaySet;
-import app.nadel.tariffs.TariffBook;
 import app.nadel.tariffs.TariffBook.ChargeTypeEntry;
 import app.nadel.tariffs.TariffBook.Snapshot;
 import app.nadel.tariffs.TariffResolver;
@@ -68,7 +67,6 @@ import org.springframework.transaction.annotation.Transactional;
 class IntervalCharging {
 
     private final MeterNetwork network;
-    private final TariffBook book;
     private final TariffChargeWriter writer;
     private final PlotCatalog plots;
     private final CooperativeSettings settings;
@@ -77,11 +75,10 @@ class IntervalCharging {
     private final NotChargedItemRepository items;
     private final EntityManager entityManager;
 
-    IntervalCharging(MeterNetwork network, TariffBook book, TariffChargeWriter writer, PlotCatalog plots,
+    IntervalCharging(MeterNetwork network, TariffChargeWriter writer, PlotCatalog plots,
             CooperativeSettings settings, BillingMonths billingMonths, ChargeRepository charges,
             NotChargedItemRepository items, EntityManager entityManager) {
         this.network = network;
-        this.book = book;
         this.writer = writer;
         this.plots = plots;
         this.settings = settings;
@@ -332,12 +329,9 @@ class IntervalCharging {
         return points.filter(p -> p.kind() == MeterKind.PLOT && p.plotId() != null);
     }
 
-    /** The charge types of the meter resources and every tariff, locked {@code FOR SHARE}. */
+    /** Every charge type and every tariff, locked {@code FOR SHARE} (the same order as the month run). */
     private Snapshot lockTariffs() {
-        List<UUID> types = book.snapshot().chargeTypes().stream()
-                .filter(type -> "ELECTRICITY".equals(type.code()) || "WATER".equals(type.code()))
-                .map(ChargeTypeEntry::id).toList();
-        return writer.lockTariffs(types);
+        return writer.lockTariffs();
     }
 
     private Optional<Context> context(MeterPoints meter, Snapshot snapshot) {

@@ -29,14 +29,17 @@ import java.util.function.Predicate;
  * What the month run does for one plot, one charge type and one month (feature 011 §2.3). Pure: no Spring, no
  * database, no clock; the month run and the retry of a queue item both call it, so they never disagree.
  * <p>
- * {@link TariffResolver} picks the tariff over the month. One tariff: its charge is identified by the source key
- * {@code TARIFF:{tariff}:{plot}:{YYYY-MM}}; when a charge with that key exists (reversed or not) there is nothing new
- * ({@link AlreadyCharged}: a rerun never books twice and never re-creates a reversed charge); otherwise
- * {@link ChargeCalculator#breakdown} over the applicable days gives the amount, and {@code 0.00}, a tariff charged by
- * meter readings or no applicable day is {@link Nothing}. Two or more tariffs: neither is charged and the case is
- * queued ({@link Conflicting}) when at least one of them would charge the plot an amount in the month; otherwise there
- * is nothing to queue. No tariff (none in scope, excluded, inactive type, archived plot or common land): nothing, and
- * nothing is queued (a plot outside a membership tariff is not a "not charged" case).
+ * {@link TariffResolver} finds the tariffs of the type that apply to the plot over the month. A tariff's charge is
+ * identified by the source key {@code TARIFF:{tariff}:{plot}:{YYYY-MM}}; when a charge with the key of any of them
+ * exists (reversed or not) there is nothing new ({@link AlreadyCharged}: a rerun never books twice, never re-creates a
+ * reversed charge, and a tariff that joins later does not turn a charged month into a conflict). Otherwise
+ * {@link ChargeCalculator#breakdown} over the applicable days gives each tariff's amount, and <b>only the tariffs that
+ * would charge more than {@code 0.00} take part</b> (money rules §4.1): exactly one is charged ({@link NewCharge}), two
+ * or more are a conflict that is queued with those tariffs ({@link Conflicting}), none is {@link Nothing} ({@code 0.00},
+ * a tariff charged by meter readings, no applicable day; also two one-time fees due in other months). So a one-time fee
+ * is charged in its due month although a fee of the same type due in another month applies too. No tariff (none in
+ * scope, excluded, inactive type, archived plot or common land): nothing, and nothing is queued (a plot outside a
+ * membership tariff is not a "not charged" case).
  */
 final class TariffMonthPlanning {
 
@@ -51,7 +54,7 @@ final class TariffMonthPlanning {
     record NewCharge(PlannedCharge charge) implements Outcome {
     }
 
-    /** The tariff's charge of the month exists already (reversed or not). */
+    /** The month's charge of one of the tariffs that apply exists already (reversed or not). */
     record AlreadyCharged(String sourceKey) implements Outcome {
     }
 
@@ -59,7 +62,10 @@ final class TariffMonthPlanning {
     record Nothing() implements Outcome {
     }
 
-    /** Two or more tariffs apply: neither is charged, the case is queued with them. Ordered by name. */
+    /**
+     * Two or more tariffs would charge the plot more than {@code 0.00}: none is charged, the case is queued with them.
+     * Ordered by name.
+     */
     record Conflicting(List<TariffEntry> tariffs) implements Outcome {
     }
 
@@ -151,26 +157,48 @@ final class TariffMonthPlanning {
      */
     static Outcome plan(Snapshot snapshot, UUID chargeTypeId, PlotFacts plot, YearMonth month, DaySet applicable,
             Predicate<String> charged) {
-        Resolution resolution = TariffResolver.resolve(snapshot, chargeTypeId, plot, month.atDay(1),
-                month.atEndOfMonth());
-        if (resolution instanceof Single single) {
-            TariffEntry tariff = single.tariff();
+        List<TariffEntry> applying = applying(snapshot, chargeTypeId, plot, month);
+        for (TariffEntry tariff : applying) {
             String key = sourceKey(tariff.id(), plot.plotId(), month);
             if (charged.test(key)) {
                 return new AlreadyCharged(key);
             }
-            return ChargeCalculator.breakdown(tariff.terms(), plot.areaM2(), month, applicable)
-                    .filter(breakdown -> breakdown.amount().signum() > 0)
-                    .<Outcome>map(breakdown -> new NewCharge(new PlannedCharge(plot.plotId(), chargeTypeId, tariff,
-                            month, breakdown, key)))
-                    .orElse(new Nothing());
         }
-        if (resolution instanceof Conflict conflict) {
-            boolean wouldCharge = conflict.tariffs().stream().anyMatch(tariff -> ChargeCalculator
-                    .breakdown(tariff.terms(), plot.areaM2(), month, applicable)
-                    .map(breakdown -> breakdown.amount().signum() > 0).orElse(false));
-            return wouldCharge ? new Conflicting(conflict.tariffs()) : new Nothing();
+        List<PlannedCharge> charging = new ArrayList<>();
+        for (TariffEntry tariff : applying) {
+            ChargeCalculator.breakdown(tariff.terms(), plot.areaM2(), month, applicable)
+                    .filter(breakdown -> breakdown.amount().signum() > 0)
+                    .ifPresent(breakdown -> charging.add(new PlannedCharge(plot.plotId(), chargeTypeId, tariff, month,
+                            breakdown, sourceKey(tariff.id(), plot.plotId(), month))));
+        }
+        if (charging.size() == 1) {
+            return new NewCharge(charging.getFirst());
+        }
+        if (charging.size() > 1) {
+            return new Conflicting(charging.stream().map(PlannedCharge::tariff).toList());
         }
         return new Nothing();
+    }
+
+    /**
+     * The source keys of the charges {@link #plan} may look for: one per tariff that applies to the plot in the month
+     * (so a caller can ask the ledger for all of them in one query before planning).
+     */
+    static List<String> sourceKeys(Snapshot snapshot, UUID chargeTypeId, PlotFacts plot, YearMonth month) {
+        return applying(snapshot, chargeTypeId, plot, month).stream()
+                .map(tariff -> sourceKey(tariff.id(), plot.plotId(), month)).toList();
+    }
+
+    /** The tariffs of the type that apply to the plot in the month, in the resolver's order (by name, then id). */
+    private static List<TariffEntry> applying(Snapshot snapshot, UUID chargeTypeId, PlotFacts plot, YearMonth month) {
+        Resolution resolution = TariffResolver.resolve(snapshot, chargeTypeId, plot, month.atDay(1),
+                month.atEndOfMonth());
+        if (resolution instanceof Single single) {
+            return List.of(single.tariff());
+        }
+        if (resolution instanceof Conflict conflict) {
+            return conflict.tariffs();
+        }
+        return List.of();
     }
 }

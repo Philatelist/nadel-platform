@@ -2974,10 +2974,14 @@ paths:
         (scope, exclusions), with the amount of the tariff calculation (money rules section 4.1). Tariffs charged by
         meter readings (`PER_KWH`, `PER_M3`) are not part of the run. One charge per plot, tariff and month: a rerun
         creates only what is missing, never a duplicate, and never re-creates a reversed charge. An amount of `0.00`
-        creates nothing. When two tariffs of the same charge type apply to a plot in the month neither is charged and
-        a "not charged" item (`TARIFF_MONTH`, `CONFLICTING_TARIFFS`) names both; the run also resolves the open
-        `TARIFF_MONTH` items of the month that it can now charge. With `preview=true` nothing is written: the answer
-        shows what the run would create (`created` is 0) and a `digest` of it. With `preview=false` the run is booked:
+        creates nothing. When two tariffs of the same charge type would charge a plot more than `0.00` in the month
+        neither is charged and a "not charged" item (`TARIFF_MONTH`, `CONFLICTING_TARIFFS`) names them; a tariff that
+        charges `0.00` that month (a one-time fee due in another month) takes no part, and a plot that already has the
+        month's charge of one of them is not queued. The run also resolves the open `TARIFF_MONTH` items of the month
+        that it can now charge, and retries the open `TARIFF_MONTH` items of every other month: a charge it can now book
+        goes into that month, or the earliest open month after it when it is closed, with that month's service period;
+        these charges count in `plots`, `totals`, `total`, `created` and the `digest`. With `preview=true` nothing is
+        written: the answer shows what the run would create (`created` is 0) and a `digest` of it. With `preview=false` the run is booked:
         the charges are written in the month, the month is marked as run and the answer shows what was created;
         a `digest` from an earlier preview that no longer matches is refused with 409 `PREVIEW_OUTDATED` and nothing
         is written. Conflicts (409): a month after the current one in Europe/Kyiv (`PERIOD_IN_FUTURE`), a closed
@@ -6028,7 +6032,7 @@ components:
       type: object
       description: >-
         What a month run would create (preview) or created (booking): the new charges only, never those of an earlier
-        run
+        run; the charges of the retried "not charged" items of other months included
       required: [month, preview, plots, totals, total, notCharged, created, digest]
       properties:
         month:
@@ -6052,8 +6056,8 @@ components:
         notCharged:
           type: array
           description: >-
-            The items the run cannot charge (opened by a booking, or kept open when they exist), in the natural order
-            of the plot numbers, then by charge type
+            The items of the month the run cannot charge (opened by a booking, or kept open when they exist), in the
+            natural order of the plot numbers, then by charge type
           items:
             $ref: '#/components/schemas/NotChargedItem'
         created:

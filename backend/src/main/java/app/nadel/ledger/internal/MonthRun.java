@@ -29,6 +29,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -52,23 +53,30 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * The month run of recurring tariffs ({@code POST /billing-months/{month}/run?preview=}, feature 011 §2.3): every
- * active plot that is not common land times every active, non-archived charge type with tariffs, as
- * {@link TariffMonthPlanning} decides. A preview writes nothing; a booking writes the new charges (and their parts) in
- * the month, opens a "not charged" item ({@code TARIFF_MONTH}, {@code CONFLICTING_TARIFFS}) per conflict or refreshes the
- * open one, closes the open month items that the run can now charge or that have nothing left to charge, sets the
- * month's {@code run_at}, writes the audit entry {@code BILLING_MONTH_RUN} and publishes {@code ChargesBooked}.
+ * The month run of recurring tariffs ({@code POST /billing-months/{month}/run?preview=}, feature 011 §2.3 and §2.7):
+ * every active plot that is not common land times every active, non-archived charge type with tariffs, as
+ * {@link TariffMonthPlanning} decides, and a retry of the open "not charged" items of every other month
+ * ({@link NotChargedRetries}). A preview writes nothing; a booking writes the new charges of the month (and their
+ * parts) in the month, opens a "not charged" item ({@code TARIFF_MONTH}, {@code CONFLICTING_TARIFFS}) per conflict or
+ * refreshes the open one, closes the open items of the month that the run can now charge or that have nothing left to
+ * charge, books the charges of the retried items of other months (each in the open month
+ * {@link BillingMonths#openForBooking} gives for its own month, with its own service period) and closes those items or
+ * keeps them open with the tariffs of this run, sets the month's {@code run_at}, writes the audit entry
+ * {@code BILLING_MONTH_RUN} and publishes {@code ChargesBooked}. The answer's {@code plots}, {@code totals},
+ * {@code total}, {@code created} and the digest count the charges of the retried items too; {@code notCharged} lists
+ * the conflicts of the month itself.
  * <p>
  * The rules, in order: a month after the current one in Europe/Kyiv is 409 {@code PERIOD_IN_FUTURE}; the booking takes
- * the month's advisory lock, the charge types and the tariffs {@code FOR SHARE} and then the month {@code FOR SHARE}
- * ({@link TariffChargeWriter}); a closed month (or one that counts as closed) is 409 {@code PERIOD_CLOSED}; a
- * {@code digest} that differs from the one of what the run would create now is 409 {@code PREVIEW_OUTDATED} and
- * nothing is written. The digest is a SHA-256 over the planned new charges (source key, amount, service period), so a
- * preview followed by an unchanged booking always matches.
+ * the month's advisory lock, the queue lock, every charge type and every tariff {@code FOR SHARE} and then the month
+ * {@code FOR SHARE} ({@link TariffChargeWriter}); a closed month (or one that counts as closed) is 409
+ * {@code PERIOD_CLOSED}; a {@code digest} that differs from the one of what the run would create now is 409
+ * {@code PREVIEW_OUTDATED} and nothing is written. The digest is a SHA-256 over the planned new charges, the retried
+ * ones included (source key, amount, service period), so a preview followed by an unchanged booking always matches.
  * <p>
  * A booking also retries every open reading interval item ({@code INTERVAL}, whatever its month;
- * {@link IntervalCharging#retryAll}) before it locks the tariffs; those charges are booked like the listener's, in the
- * month of their reading or the earliest open month after it, and are not part of the preview or its digest.
+ * {@link IntervalCharging#retryAll}) right after the month's advisory lock and before the queue lock and the tariffs;
+ * those charges are booked like the listener's, in the month of their reading or the earliest open month after it,
+ * and are not part of the preview or its digest.
  * <p>
  * Seam for a later slice: {@link #applicableDays} is where the water connection days apply (slice 5).
  */
@@ -83,13 +91,15 @@ class MonthRun {
     private final NotChargedItemRepository items;
     private final NotChargedViews itemViews;
     private final TariffChargeWriter writer;
+    private final NotChargedRetries retries;
     private final LedgerAuditPublisher audit;
     private final IntervalCharging intervals;
     private final Clock clock;
 
     MonthRun(TariffBook book, ChargeTypeCatalog chargeTypes, PlotCatalog plots, BillingMonths billingMonths,
             ChargeRepository charges, NotChargedItemRepository items, NotChargedViews itemViews,
-            TariffChargeWriter writer, LedgerAuditPublisher audit, IntervalCharging intervals, Clock clock) {
+            TariffChargeWriter writer, NotChargedRetries retries, LedgerAuditPublisher audit,
+            IntervalCharging intervals, Clock clock) {
         this.book = book;
         this.chargeTypes = chargeTypes;
         this.plots = plots;
@@ -98,6 +108,7 @@ class MonthRun {
         this.items = items;
         this.itemViews = itemViews;
         this.writer = writer;
+        this.retries = retries;
         this.audit = audit;
         this.intervals = intervals;
         this.clock = clock;
@@ -110,14 +121,24 @@ class MonthRun {
     /**
      * What the run would do.
      *
-     * @param charges   the new charges, plots in natural order of the number, then charge types in list order
-     * @param conflicts the conflicts, in the same order
-     * @param outcomes  the outcome per month item key, for closing the open items
+     * @param charges   the new charges of the month, plots in natural order of the number, then charge types in list
+     *                  order
+     * @param conflicts the conflicts of the month, in the same order
+     * @param outcomes  the outcome per month item key, for closing the open items of the month
+     * @param retries   the retries of the open items of every other month
      */
-    record Plan(List<PlannedCharge> charges, List<ConflictCase> conflicts, Map<String, Outcome> outcomes) {
+    record Plan(List<PlannedCharge> charges, List<ConflictCase> conflicts, Map<String, Outcome> outcomes,
+            List<NotChargedRetries.Attempt> retries) {
+
+        /** The new charges of the month, then those of the retried items. */
+        List<PlannedCharge> allCharges() {
+            List<PlannedCharge> all = new ArrayList<>(charges);
+            retries.forEach(attempt -> attempt.charge().ifPresent(all::add));
+            return all;
+        }
 
         String digest() {
-            String lines = charges.stream().sorted(Comparator.comparing(PlannedCharge::sourceKey))
+            String lines = allCharges().stream().sorted(Comparator.comparing(PlannedCharge::sourceKey))
                     .map(c -> c.sourceKey() + "|" + c.amount() + "|" + c.serviceFrom() + "|" + c.serviceTo())
                     .collect(Collectors.joining("\n"));
             try {
@@ -147,8 +168,8 @@ class MonthRun {
         writer.lockMonth(tenantId, month);
         // the open reading intervals of every month first: they lock their meters before the tariffs (lock order)
         intervals.retryAll(tenantId, actor.memberId(), clock.instant());
-        Snapshot snapshot = writer.lockTariffs(chargingTypes(book.snapshot()).stream().map(ChargeTypeEntry::id)
-                .toList());
+        writer.lockQueue(tenantId);
+        Snapshot snapshot = writer.lockTariffs();
         BillingMonthRecord row = billingMonths.openMonthForRun(tenantId, month).orElseThrow(MonthRun::closed);
         Plan plan = plan(snapshot, month);
         if (digest != null && !digest.equals(plan.digest())) {
@@ -156,33 +177,45 @@ class MonthRun {
         }
 
         Instant now = clock.instant();
-        writer.book(tenantId, plan.charges(), row.getId(), actor.memberId(), now);
-        queueConflicts(tenantId, month, plan, now);
-        closeOpenItems(month, plan, snapshot, now);
         UUID monthId = row.getId();
-        Money total = plan.charges().stream().map(PlannedCharge::amount).reduce(Money.ZERO, Money::plus);
+        writer.book(tenantId, plan.charges(), monthId, actor.memberId(), now);
+        queueConflicts(tenantId, month, plan, now);
+        closeOpenItems(month, plan, now);
+        retries.apply(tenantId, plan.retries(), actor.memberId(), now);
+        List<PlannedCharge> all = plan.allCharges();
+        Money total = all.stream().map(PlannedCharge::amount).reduce(Money.ZERO, Money::plus);
         audit.publishMonth(actor, LedgerAuditPublisher.Action.BILLING_MONTH_RUN, monthId, month.toString(), List.of(
-                new FieldChange("count", null, Integer.toString(plan.charges().size())),
+                new FieldChange("count", null, Integer.toString(all.size())),
                 new FieldChange("total", null, total.toString())));
-        Set<UUID> plotIds = plan.charges().stream().map(PlannedCharge::plotId).collect(Collectors.toSet());
+        Set<UUID> plotIds = all.stream().map(PlannedCharge::plotId).collect(Collectors.toSet());
         if (!plotIds.isEmpty()) {
             writer.publishBooked(tenantId, plotIds);
         }
         billingMonths.markRun(month, now);
-        return result(month, false, plan, plan.charges().size(), snapshot);
+        return result(month, false, plan, all.size(), snapshot);
     }
 
-    /** The plan of the month: every chargeable plot times every charging type with a tariff. */
+    /**
+     * The plan of the month: every chargeable plot times every charging type with a tariff, and the retries of the
+     * open {@code TARIFF_MONTH} items of every other month.
+     */
     Plan plan(Snapshot snapshot, YearMonth month) {
         List<ChargeTypeEntry> types = chargingTypes(snapshot);
         List<PlotFacts> chargeable = plots.findChargeable();
-        // first pass: the source keys the run would use, to ask the ledger which exist (reversed ones included)
+        Map<UUID, PlotFacts> chargeableById = chargeable.stream()
+                .collect(Collectors.toMap(PlotFacts::id, plot -> plot));
+        LocalDate first = month.atDay(1);
+        List<NotChargedItemRecord> otherMonths = items.findByKindAndStatus(Kind.TARIFF_MONTH, Status.OPEN).stream()
+                .filter(item -> !first.equals(Objects.requireNonNull(item.getMonth()).atDay(1)))
+                .sorted(Comparator.comparing(NotChargedItemRecord::getItemKey)).toList();
+        // first: the source keys the run may use, to ask the ledger once which exist (reversed ones included)
         Set<String> keys = new HashSet<>();
         for (PlotFacts plot : chargeable) {
             for (ChargeTypeEntry type : types) {
-                TariffMonthPlanning.plan(snapshot, type.id(), facts(plot), month, DaySet.NONE, key -> keys.add(key));
+                keys.addAll(TariffMonthPlanning.sourceKeys(snapshot, type.id(), facts(plot), month));
             }
         }
+        keys.addAll(NotChargedRetries.sourceKeys(snapshot, otherMonths, chargeableById));
         Set<String> existing = existingKeys(keys);
         List<PlannedCharge> planned = new ArrayList<>();
         List<ConflictCase> conflicts = new ArrayList<>();
@@ -199,7 +232,8 @@ class MonthRun {
                 }
             }
         }
-        return new Plan(planned, conflicts, outcomes);
+        return new Plan(planned, conflicts, outcomes,
+                NotChargedRetries.plan(snapshot, otherMonths, chargeableById, existing::contains));
     }
 
     /**
@@ -251,7 +285,7 @@ class MonthRun {
      * ({@code RESOLVED}), or with nothing left to charge ({@code OBSOLETE}; also when the plot or the type is no longer
      * charged at all).
      */
-    private void closeOpenItems(YearMonth month, Plan plan, Snapshot snapshot, Instant now) {
+    private void closeOpenItems(YearMonth month, Plan plan, Instant now) {
         for (NotChargedItemRecord item : openItems(month).values()) {
             Outcome outcome = plan.outcomes().getOrDefault(item.getItemKey(), new Nothing());
             if (outcome instanceof NewCharge || outcome instanceof AlreadyCharged) {
@@ -269,15 +303,16 @@ class MonthRun {
     }
 
     private MonthRunResult result(YearMonth month, boolean preview, Plan plan, int created, Snapshot snapshot) {
+        List<PlannedCharge> all = plan.allCharges();
         Map<UUID, Money> byType = new LinkedHashMap<>();
-        for (PlannedCharge charge : plan.charges()) {
+        for (PlannedCharge charge : all) {
             byType.merge(charge.chargeTypeId(), charge.amount(), Money::plus);
         }
         List<ChargeTypeTotal> totals = chargeTypes.all().stream().filter(type -> byType.containsKey(type.id()))
                 .sorted(Comparator.comparingInt(ChargeTypeFacts::position).thenComparing(ChargeTypeFacts::id))
                 .map(type -> BillingMonthQueries.total(type, byType.get(type.id()))).toList();
         Money total = byType.values().stream().reduce(Money.ZERO, Money::plus);
-        int plotCount = new LinkedHashSet<>(plan.charges().stream().map(PlannedCharge::plotId).toList()).size();
+        int plotCount = new LinkedHashSet<>(all.stream().map(PlannedCharge::plotId).toList()).size();
 
         Map<String, NotChargedItemRecord> open = openItems(month);
         NotChargedViews.Context context = itemViews.context(

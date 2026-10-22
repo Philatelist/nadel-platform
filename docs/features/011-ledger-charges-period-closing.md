@@ -82,7 +82,9 @@ catalogs), admin changes audited through the outbox, only the server calculates 
 - A tariff amount of `0.00` creates no charge.
 - **Conflicting tariffs.** If two tariffs of the same charge type apply to one plot on the same day (for example two
   scopes overlap), neither is charged for that plot and the case goes to the "not charged" queue with both tariffs
-  named. The tariffs page shows the conflict too (a warning, the tariffs themselves stay valid).
+  named. Only tariffs that would charge the plot more than `0.00` that month take part (two one-time fees of one type
+  due in different months never conflict; money rules §4.1). The tariffs page shows the conflict too (a warning, the
+  tariffs themselves stay valid).
 
 ### 2.4 Electricity by readings
 

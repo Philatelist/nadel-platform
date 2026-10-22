@@ -179,6 +179,9 @@ stands in (`TariffVersionCorrectionTests`).
   in natural order)}]`, worked out with the same resolver for every active plot that is not common land from today
   on (`PlotCatalog.findChargeable`), ordered by the other tariff's name; empty when there is none or the type is
   inactive. A warning only: both tariffs stay valid; the ledger charges neither on those plots and queues the case.
+  The warning shows every overlap of scopes, whatever the amounts; the ledger's month run counts a tariff in a conflict
+  only when it would charge the plot more than `0.00` in the month (money rules §4.1, `ledger` README), so two
+  one-time fees of one type due in different months are warned about here but never queued.
   Tests: `ledger.TariffConflictWarningTests`.
 
 ## Scopes

@@ -14,7 +14,7 @@ import type { Money } from './money';
 import type { NotChargedItem } from './notChargedItem';
 
 /**
- * What a month run would create (preview) or created (booking): the new charges only, never those of an earlier run
+ * What a month run would create (preview) or created (booking): the new charges only, never those of an earlier run; the charges of the retried "not charged" items of other months included
  */
 export interface MonthRunResult {
   /**
@@ -31,7 +31,7 @@ export interface MonthRunResult {
   /** The new charges per charge type, in the order of the charge types */
   totals: ChargeTypeTotal[];
   total: Money;
-  /** The items the run cannot charge (opened by a booking, or kept open when they exist), in the natural order of the plot numbers, then by charge type */
+  /** The items of the month the run cannot charge (opened by a booking, or kept open when they exist), in the natural order of the plot numbers, then by charge type */
   notCharged: NotChargedItem[];
   /**
      * The number of charges written; 0 in a preview

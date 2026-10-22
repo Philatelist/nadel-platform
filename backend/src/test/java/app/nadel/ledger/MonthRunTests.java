@@ -313,6 +313,50 @@ class MonthRunTests extends FreshCooperativeSupport {
         assertThat(preview().get("notCharged")).isEmpty();
     }
 
+    @Test
+    void aOneTimeFeeDueThisMonthIsChargedAlthoughAFeeOfTheSameTypeDueInAnotherMonthAppliesToo() throws Exception {
+        // only tariffs that would charge more than 0.00 in the month take part in a conflict (money rules 4.1)
+        UUID purpose = owner().queryForObject("insert into charge_type (tenant_id, name, name_customized, position) "
+                + "values (?, 'Цільові внески', true, 6) returning id", UUID.class, tenant);
+        UUID fee2025 = UUID.randomUUID();
+        owner().update("insert into tariff (id, tenant_id, charge_type_id, name) values (?, ?, ?, 'Цільовий 2025')",
+                fee2025, tenant, purpose);
+        version(fee2025, "FIXED_ONE_TIME", "ONE_OFF", "800.0000", "2025-01-01", "2025-05-15");
+        UUID fee2026 = UUID.randomUUID();
+        owner().update("insert into tariff (id, tenant_id, charge_type_id, name) values (?, ?, ?, 'Цільовий 2026')",
+                fee2026, tenant, purpose);
+        version(fee2026, "FIXED_ONE_TIME", "ONE_OFF", "1200.0000", "2026-01-01", "2026-10-15");
+
+        JsonNode booked = run(chairman, "2026-10", false, null);
+
+        assertThat(booked.get("notCharged")).isEmpty();
+        assertThat(owner().queryForObject("select count(*) from not_charged_item where tenant_id = ?",
+                Integer.class, tenant)).isZero();
+        List<Map<String, Object>> fees = charges(plot7).stream()
+                .filter(c -> fee2025.equals(c.get("tariff_id")) || fee2026.equals(c.get("tariff_id"))).toList();
+        assertThat(fees).singleElement().satisfies(fee -> {
+            assertThat(fee.get("tariff_id")).isEqualTo(fee2026);
+            assertThat(fee.get("amount")).isEqualTo("1200.00");
+            assertThat(date(fee.get("accrued_on"))).isEqualTo(LocalDate.of(2026, 10, 15));
+        });
+    }
+
+    @Test
+    void aPlotChargedByOneTariffBeforeASecondTariffOfTheTypeJoinsIsNotQueued() throws Exception {
+        book();
+        Tariff extra = tariff("MEMBERSHIP", "Додатковий внесок", "PER_PLOT", "MONTHLY", "100.0000", "2026-01-01");
+        select(extra, plot7);
+
+        JsonNode rerun = book();
+
+        assertThat(rerun.get("created").asInt()).isZero();
+        assertThat(rerun.get("notCharged")).isEmpty();
+        assertThat(owner().queryForObject("select count(*) from not_charged_item where tenant_id = ?",
+                Integer.class, tenant)).isZero();
+        assertThat(charges(plot7)).extracting(c -> c.get("tariff_id"))
+                .containsExactlyInAnyOrder(membership.id(), landTax.id());
+    }
+
     // ---- refusals
 
     @Test

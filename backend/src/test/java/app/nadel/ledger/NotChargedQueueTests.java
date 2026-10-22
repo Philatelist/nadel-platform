@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import app.nadel.TestTokens;
 import java.time.Duration;
 import java.time.YearMonth;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -52,6 +53,11 @@ class NotChargedQueueTests extends FreshCooperativeSupport {
 
     private JsonNode retry(UUID item) throws Exception {
         return body(send(chairman, post(RETRY.formatted(item)), null).andExpect(status().isOk()));
+    }
+
+    private JsonNode run(String runMonth, boolean preview, String digest) throws Exception {
+        return body(send(chairman, post(RUN.formatted(runMonth, preview)), digest == null ? null : digest(digest))
+                .andExpect(status().isOk()));
     }
 
     private String itemStatus(UUID item) {
@@ -204,6 +210,71 @@ class NotChargedQueueTests extends FreshCooperativeSupport {
         unselect(third, plot12);
         body(send(chairman, post(RUN.formatted(month, false)), null).andExpect(status().isOk()));
         assertThat(itemStatus(item)).isEqualTo("OBSOLETE");
+    }
+
+    @Test
+    void theNextMonthRunPreviewsAndBooksTheFixedItemOfAnEarlierMonthWithItsOwnServicePeriod() throws Exception {
+        String earlier = ym(1);
+        UUID item = queued(earlier);
+        closeMonth(earlier);
+        unselect(extra, plot12);
+        int before = chargeCount();
+
+        // the preview of this month lists the charge of the earlier item and writes nothing
+        JsonNode preview = body(send(chairman, post(RUN.formatted(month, true)), null).andExpect(status().isOk()));
+
+        // this month: plots 7 and 12 at 25.00 each; the earlier month's item: plot 12 at 25.00
+        assertThat(preview.get("plots").asInt()).isEqualTo(2);
+        assertThat(total(preview, "MEMBERSHIP")).isEqualTo("75.00");
+        assertThat(preview.get("total").asString()).isEqualTo("75.00");
+        assertThat(itemStatus(item)).isEqualTo("OPEN");
+        assertThat(chargeCount()).isEqualTo(before);
+        assertThat(charges(plot12)).isEmpty();
+
+        JsonNode booked = run(month, false, preview.get("digest").asString());
+
+        assertThat(booked.get("created").asInt()).isEqualTo(3);
+        assertThat(booked.get("total").asString()).isEqualTo("75.00");
+        assertThat(itemStatus(item)).isEqualTo("RESOLVED");
+        assertThat(list()).isEmpty();
+        Map<String, Object> earlierCharge = charges(plot12).stream()
+                .filter(c -> date(c.get("service_from")).equals(YearMonth.parse(earlier).atDay(1))).findFirst()
+                .orElseThrow();
+        assertThat(earlierCharge.get("tariff_id")).isEqualTo(main.id());
+        assertThat(earlierCharge.get("amount")).isEqualTo("25.00");
+        assertThat(earlierCharge.get("source_key")).isEqualTo("TARIFF:" + main.id() + ":" + plot12 + ":" + earlier);
+        assertThat(date(earlierCharge.get("service_to"))).isEqualTo(YearMonth.parse(earlier).atEndOfMonth());
+        assertThat(date(earlierCharge.get("accrued_on"))).isEqualTo(YearMonth.parse(earlier).atDay(1));
+        // its month was closed, so it is booked in the earliest open month after it
+        assertThat(date(earlierCharge.get("billing_month"))).isEqualTo(YearMonth.parse(month).atDay(1));
+        assertThat(charges(plot12)).hasSize(2);
+    }
+
+    @Test
+    void theNextMonthRunKeepsAnEarlierItemOpenWhileItsConflictRemainsWithTheTariffsOfTheRun() throws Exception {
+        String earlier = ym(1);
+        UUID item = queued(earlier);
+        Tariff third = tariff("MEMBERSHIP", "Третій внесок", "PER_PLOT", "MONTHLY", "10.0000", "2026-01-01");
+        select(third, plot12);
+        unselect(extra, plot12);
+
+        JsonNode booked = run(month, false, null);
+
+        assertThat(itemStatus(item)).isEqualTo("OPEN");
+        assertThat(charges(plot12)).isEmpty();
+        // this month's conflict is queued as well; the earlier item now names the tariffs of this run
+        assertThat(booked.get("notCharged")).singleElement()
+                .satisfies(entry -> assertThat(entry.get("month").asString()).isEqualTo(month));
+        JsonNode earlierItem = null;
+        for (JsonNode entry : list()) {
+            if (entry.get("id").asString().equals(item.toString())) {
+                earlierItem = entry;
+            }
+        }
+        assertThat(earlierItem).isNotNull();
+        List<String> names = new ArrayList<>();
+        earlierItem.get("tariffs").forEach(t -> names.add(t.get("name").asString()));
+        assertThat(names).containsExactly("Третій внесок", "Членський внесок");
     }
 
     @Test
