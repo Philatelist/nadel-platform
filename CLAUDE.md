@@ -137,3 +137,14 @@ Numbering: a feature document `docs/features/NNN-name.md` and its AWOS spec fold
 - Commit messages follow Conventional Commits (`feat(ledger): ...`, `fix(web): ...`).
 - Commits must not mention AI: no `Co-Authored-By` lines for AI assistants, no session links, no "Generated with ..." lines. The commit author is the repository owner.
 - Agents never merge, never approve PRs and never push `main`. Work only on a feature branch; never commit on `main`. The only push allowed to an agent is `/feature-pipeline` Phase 5 pushing its own spec branch (no force) and opening a PR for it (`publish: pr+checks` in `.claude/feature-pipeline.yml`). The repository owner reviews and merges.
+
+**Guides**
+
+- `docs/guide/` holds two guides for people, each in Ukrainian (`uk/`) and English (`en/`): the board guide
+  (part I: working in the system; part II: how the system calculates, with worked examples) and the platform
+  owner's manual (architecture, local run, Keycloak, creating cooperatives, every screen and button, security,
+  deployment, development, troubleshooting). They are the only repository text that is not English-only.
+- A feature that changes a screen, a button, a permission, a calculation rule or how the platform is run updates
+  the affected guides in both languages in the same pull request: the HTML text, the screenshot list in
+  `docs/guide/scripts/capture-screens.mjs` for a new screen, and the PDFs (`make guide-shots` with the app running,
+  then `make guide`). A part marked "planned" becomes "works" in the feature that delivers it.

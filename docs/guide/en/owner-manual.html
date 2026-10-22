@@ -1,0 +1,1389 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Nadel — platform owner's manual</title>
+    <link rel="stylesheet" href="../guide.css" />
+  </head>
+  <body>
+    <div class="cover">
+      <div class="brand"><b>Nadel</b> · payment accounting for garden cooperatives</div>
+      <h1>Platform owner's manual</h1>
+      <p class="lead">
+        How the platform is built and how to run it: components, running it locally, Keycloak, creating
+        cooperatives and users, the platform operator, every screen and button of the cooperative admin, data
+        security, server deployment, development, common problems.
+      </p>
+      <dl class="meta">
+        <dt>Reader</dt>
+        <dd>The platform owner and administrator</dd>
+        <dt>State</dt>
+        <dd>Chapters marked "works" describe the system as it is; "planned" — decided but not built yet</dd>
+        <dt>Edition</dt>
+        <dd>22 October 2026</dd>
+      </dl>
+    </div>
+
+    <nav class="toc">
+      <h2>Contents</h2>
+      <ol>
+        <li><a href="#arch">How the platform is built</a><span class="tag done">works</span></li>
+        <li><a href="#local">Local environment</a><span class="tag done">works</span></li>
+        <li><a href="#keycloak">Keycloak: sign-in and accounts</a><span class="tag done">works</span></li>
+        <li>
+          <a href="#tenants">Cooperatives: creation and isolation</a><span class="tag done">works</span>
+        </li>
+        <li><a href="#operator">The platform operator</a><span class="tag planned">partly</span></li>
+        <li>
+          <a href="#screens">Cooperative admin: screens and buttons</a><span class="tag done">works</span>
+        </li>
+        <li><a href="#permissions">Permissions and roles</a><span class="tag done">works</span></li>
+        <li><a href="#security">Data, security, personal data</a><span class="tag done">works</span></li>
+        <li><a href="#deploy">Server deployment</a><span class="tag planned">planned</span></li>
+        <li><a href="#updates">Updates and database migrations</a><span class="tag done">works</span></li>
+        <li><a href="#dev">How the system is developed</a><span class="tag done">works</span></li>
+        <li><a href="#trouble">Common problems and fixes</a><span class="tag done">works</span></li>
+        <li><a href="#decisions">Decision log</a></li>
+      </ol>
+    </nav>
+
+    <section class="chapter" id="arch">
+      <h2><span class="num">1</span> How the platform is built</h2>
+      <p class="lead">
+        One platform serves many cooperatives. Each cooperative's data is kept apart by the database itself.
+      </p>
+      <figure>
+        <svg
+          viewBox="0 0 720 250"
+          xmlns="http://www.w3.org/2000/svg"
+          font-family="IBM Plex Sans, sans-serif"
+          font-size="12"
+        >
+          <g fill="none" stroke="#b9c3b3" stroke-width="1.5">
+            <path d="M130 60 V95 M130 135 H300 M450 135 H520 M375 155 V190 M220 40 H605 V115" />
+          </g>
+          <rect x="40" y="20" width="180" height="40" rx="8" fill="#fff" stroke="#d9dfd4" />
+          <text x="130" y="38" text-anchor="middle" fill="#1c2a22" font-weight="600">Browser, app</text>
+          <text x="130" y="53" text-anchor="middle" fill="#5b6a60" font-size="10.5">
+            board, members, electrician
+          </text>
+          <rect x="40" y="95" width="180" height="40" rx="8" fill="#e3eee6" stroke="#245a41" />
+          <text x="130" y="113" text-anchor="middle" fill="#1c2a22" font-weight="600">Web client</text>
+          <text x="130" y="128" text-anchor="middle" fill="#5b6a60" font-size="10.5">React · :5173</text>
+          <rect x="300" y="115" width="150" height="40" rx="8" fill="#245a41" />
+          <text x="375" y="133" text-anchor="middle" fill="#fff" font-weight="600">Backend API</text>
+          <text x="375" y="148" text-anchor="middle" fill="#e3eee6" font-size="10.5">
+            Spring Boot · :8080
+          </text>
+          <rect x="520" y="115" width="170" height="40" rx="8" fill="#fff6e5" stroke="#ebcb98" />
+          <text x="605" y="133" text-anchor="middle" fill="#6b4a0b" font-weight="600">Keycloak</text>
+          <text x="605" y="148" text-anchor="middle" fill="#6b4a0b" font-size="10.5">sign-in · :8180</text>
+          <rect x="290" y="190" width="170" height="40" rx="8" fill="#e1e9f6" stroke="#1e3a6e" />
+          <text x="375" y="208" text-anchor="middle" fill="#1e3a6e" font-weight="600">
+            PostgreSQL + PostGIS
+          </text>
+          <text x="375" y="223" text-anchor="middle" fill="#1e3a6e" font-size="10.5">data · RLS · :5432</text>
+          <text x="470" y="32" text-anchor="middle" fill="#5b6a60" font-size="10.5">
+            sign-in through Keycloak
+          </text>
+        </svg>
+        <figcaption>Platform components and local ports</figcaption>
+      </figure>
+      <dl class="terms">
+        <dt>Web client</dt>
+        <dd>
+          The board's screens and the member's account. It calculates nothing; it shows what the server
+          returns.
+        </dd>
+        <dt>Backend</dt>
+        <dd>
+          One application (a modular monolith) with the modules <code>tenancy</code> (cooperatives),
+          <code>identity</code> (sign-in and permissions), <code>members</code>, <code>plots</code>,
+          <code>settings</code>, <code>imports</code>, <code>tariffs</code>, <code>meters</code>,
+          <code>money</code>, <code>audit</code>. A test guards the module boundaries.
+        </dd>
+        <dt>API contract</dt>
+        <dd>
+          <code>api/openapi.yaml</code> is the single source of truth: the server interfaces and the web and
+          app client are generated from it.
+        </dd>
+        <dt>PostgreSQL</dt>
+        <dd>
+          All data. Every table with cooperative data has a <code>tenant_id</code> and an RLS policy: a query
+          only sees its own cooperative's rows.
+        </dd>
+        <dt>Keycloak</dt>
+        <dd>
+          Accounts, passwords, sign-in. Cooperative roles are not kept in Keycloak but in the database;
+          Keycloak holds only the platform operator role.
+        </dd>
+        <dt>Mobile app</dt>
+        <dd>An Expo shell exists; the real app is phase 5.</dd>
+      </dl>
+      <h3>How a request flows</h3>
+      <ol class="steps">
+        <li>
+          A person signs in through Keycloak and gets a token with the <code>tenant_id</code> attribute (their
+          cooperative).
+        </li>
+        <li>
+          The backend checks the token, finds the member by email and takes their permissions from the
+          database.
+        </li>
+        <li>
+          For the request the database receives the <code>tenant_id</code>; RLS lets through only that
+          cooperative's rows.
+        </li>
+        <li>
+          Board changes are published as events; the audit module records them through an "outbox", so no
+          event is lost even if the server restarts.
+        </li>
+      </ol>
+    </section>
+
+    <section class="chapter" id="local">
+      <h2><span class="num">2</span> Local environment</h2>
+      <h3>What the computer needs</h3>
+      <p>
+        Docker Desktop, JDK 25, Node.js 22 and pnpm, Git, the GitHub CLI (<code>gh</code>). Repository:
+        <code>~/IdeaProjects/nadel-platform</code>.
+      </p>
+      <h3>First run</h3>
+      <pre class="formula">
+make install        # web and shared package dependencies
+make up             # database, Keycloak, backend and web in one terminal (Ctrl+C stops backend and web)
+make e2e-install    # once: the browser for end-to-end tests</pre>
+      <h3>Make commands</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Command</th>
+            <th>What it does</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>make help</code></td>
+            <td>Lists every command</td>
+          </tr>
+          <tr>
+            <td><code>make install</code></td>
+            <td>Installs client dependencies (pnpm)</td>
+          </tr>
+          <tr>
+            <td><code>make infra</code></td>
+            <td>Starts PostgreSQL + PostGIS and Keycloak in Docker and waits until ready</td>
+          </tr>
+          <tr>
+            <td><code>make up</code> / <code>make dev</code></td>
+            <td>Infrastructure + backend (:8080) + web (:5173)</td>
+          </tr>
+          <tr>
+            <td><code>make backend</code>, <code>make web</code>, <code>make mobile</code></td>
+            <td>The backend, the web or the Expo server alone</td>
+          </tr>
+          <tr>
+            <td><code>make down</code></td>
+            <td>Stops the Docker containers (data is kept)</td>
+          </tr>
+          <tr>
+            <td><code>make gen</code></td>
+            <td>Regenerates the API client from <code>api/openapi.yaml</code></td>
+          </tr>
+          <tr>
+            <td><code>make test</code></td>
+            <td>Backend tests (with a database container) and client tests</td>
+          </tr>
+          <tr>
+            <td><code>make check</code></td>
+            <td>Everything CI checks: contract, formatting, lint, tests</td>
+          </tr>
+          <tr>
+            <td><code>make e2e</code></td>
+            <td>End-to-end browser scenarios (Playwright) on a separate database</td>
+          </tr>
+          <tr>
+            <td><code>make guide-shots</code>, <code>make guide</code></td>
+            <td>Screenshots for the guides (from the running app) and the PDF build</td>
+          </tr>
+          <tr>
+            <td><code>make clean</code></td>
+            <td>Removes build output</td>
+          </tr>
+        </tbody>
+      </table>
+      <h3>Addresses and passwords (local development only)</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>What</th>
+            <th>Address</th>
+            <th>Sign-in</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>The app</td>
+            <td><code>http://localhost:5173</code></td>
+            <td>demo users below</td>
+          </tr>
+          <tr>
+            <td>API</td>
+            <td><code>http://localhost:8080/api/v1</code></td>
+            <td>a Keycloak token</td>
+          </tr>
+          <tr>
+            <td>Keycloak admin console</td>
+            <td><code>http://localhost:8180/admin/</code></td>
+            <td>realm master, <code>admin</code> / <code>admin</code></td>
+          </tr>
+          <tr>
+            <td>PostgreSQL</td>
+            <td><code>localhost:5432</code>, database <code>nadel</code></td>
+            <td>
+              <code>postgres</code>/<code>postgres</code> (superuser), <code>nadel_owner</code>,
+              <code>nadel_app</code>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <h3>Demo users (password <code>nadel</code>)</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Email</th>
+            <th>Who</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>chairman@demo.local</code></td>
+            <td>Chairman of СТ «Надія»</td>
+          </tr>
+          <tr>
+            <td><code>treasurer@demo.local</code></td>
+            <td>Treasurer</td>
+          </tr>
+          <tr>
+            <td><code>electrician@demo.local</code></td>
+            <td>A member with the custom role "Електрик"</td>
+          </tr>
+          <tr>
+            <td><code>member@demo.local</code></td>
+            <td>A member</td>
+          </tr>
+          <tr>
+            <td><code>member@other.local</code></td>
+            <td>A member of another cooperative (СТ «Світанок»), to check isolation</td>
+          </tr>
+          <tr>
+            <td><code>operator@nadel.local</code></td>
+            <td>The platform operator (no access to cooperative data)</td>
+          </tr>
+        </tbody>
+      </table>
+      <h3>Resetting the local database</h3>
+      <pre class="formula">make down && docker compose -f infra/docker-compose.yml down -v && make up</pre>
+      <p>
+        Erases all local data; migrations and demo data load again and Keycloak imports the realm again.
+        Needed after changing <code>infra/keycloak/nadel-realm.json</code> or when test data has spoiled the
+        demo.
+      </p>
+    </section>
+
+    <section class="chapter" id="keycloak">
+      <h2><span class="num">3</span> Keycloak: sign-in and accounts</h2>
+      <p>
+        Keycloak keeps accounts and passwords. The platform's realm is <code>nadel</code> with two clients,
+        <code>nadel-web</code> and <code>nadel-mobile</code>. Sign-in is by email, self sign-up is off,
+        password reset by email is allowed (it works once mail is configured), the sign-in page speaks
+        Ukrainian (default) and English.
+      </p>
+      <h3>How an account is tied to a cooperative</h3>
+      <ul>
+        <li>
+          The user attribute <code>tenant_id</code> is the cooperative's identifier. It goes into the token,
+          and the backend works only with that cooperative's data.
+        </li>
+        <li>
+          The member is found by <strong>email</strong>: the email in Keycloak must match the email on the
+          member card. The backend remembers the link at the first sign-in.
+        </li>
+        <li>
+          Roles and permissions live in the cooperative's database, not in Keycloak. The exception is the
+          <code>PLATFORM_OPERATOR</code> role.
+        </li>
+      </ul>
+      <h3>Creating an account for a member</h3>
+      <ol class="steps">
+        <li>
+          Make sure the member exists in the system and their card has an email (the chairman does this).
+        </li>
+        <li>
+          Keycloak admin console → choose the realm <strong>nadel</strong> at the top left →
+          <strong>Users</strong> → <strong>Add user</strong>.
+        </li>
+        <li>
+          Username and Email — the same address; First name, Last name; switch on
+          <strong>Email verified</strong>; <strong>Create</strong>.
+        </li>
+        <li>
+          Tab <strong>Attributes</strong>: key <code>tenant_id</code>, value — the cooperative's identifier
+          (chapter 4) → <strong>Save</strong>.
+        </li>
+        <li>
+          Tab <strong>Credentials</strong> → <strong>Set password</strong>: a temporary password with
+          <strong>Temporary</strong> on — the person sets their own at the first sign-in.
+        </li>
+      </ol>
+      <div class="warn">
+        <span class="callout-title">No Attributes tab?</span>
+        <p>
+          Keycloak 26 hides custom attributes by default. Once: <strong>Realm settings</strong> →
+          <strong>General</strong> → <strong>Unmanaged attributes</strong> → "Admin can edit" →
+          <strong>Save</strong>.
+        </p>
+      </div>
+      <h3>Other tasks</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Task</th>
+            <th>Where</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Reset a password</td>
+            <td>Users → user → Credentials → Reset password (Temporary)</td>
+          </tr>
+          <tr>
+            <td>Block sign-in</td>
+            <td>
+              Users → user → switch off <strong>Enabled</strong>. Archiving the member in the system also
+              blocks sign-in.
+            </td>
+          </tr>
+          <tr>
+            <td>End all sessions</td>
+            <td>Users → user → Sessions → Sign out</td>
+          </tr>
+          <tr>
+            <td>Make someone the platform operator</td>
+            <td>
+              Users → user → Role mapping → Assign role → <code>PLATFORM_OPERATOR</code>; no
+              <code>tenant_id</code> attribute
+            </td>
+          </tr>
+          <tr>
+            <td>Change realm settings for good</td>
+            <td>
+              Edit <code>infra/keycloak/nadel-realm.json</code> and reset the local database (chapter 2): the
+              file is imported only into an empty Keycloak
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="muted small">
+        Creating accounts and email invitations from the cooperative admin come with the operator console and
+        mail (phases 4 and 7). Until then the platform owner creates accounts in Keycloak.
+      </p>
+    </section>
+
+    <section class="chapter" id="tenants">
+      <h2><span class="num">4</span> Cooperatives: creation and isolation</h2>
+      <p>
+        A cooperative (a <em>tenant</em> in the code) is a row in the <code>tenant</code> table with an
+        identifier (UUID) and a name. When a cooperative is created the system gives it the base roles, the
+        settings and the standard charge types.
+      </p>
+      <h3>Creating a new cooperative (until the operator console exists)</h3>
+      <ol class="steps">
+        <li>
+          Connect to the database as the superuser:
+          <code>docker compose -f infra/docker-compose.yml exec postgres psql -U postgres -d nadel</code>.
+        </li>
+        <li>Run, with the name and the chairman's details filled in:</li>
+      </ol>
+      <pre class="formula">
+DO $$
+DECLARE t uuid := gen_random_uuid(); m uuid := gen_random_uuid();
+BEGIN
+  INSERT INTO tenant (id, name) VALUES (t, 'СТ «Назва»');
+  PERFORM seed_base_roles(t);          -- roles, settings, charge types
+  INSERT INTO member (id, tenant_id, last_name, first_name, email, delivery_channel)
+  VALUES (m, t, 'Last name', 'First name', 'chairman@example.com', 'EMAIL');
+  INSERT INTO member_role (tenant_id, member_id, role_id)
+  SELECT t, m, id FROM role WHERE tenant_id = t AND base_code = 'CHAIRMAN';
+  RAISE NOTICE 'tenant_id = %', t;
+END $$;</pre>
+      <ol class="steps" start="3">
+        <li>
+          Note the <code>tenant_id</code> from the message and create the chairman's Keycloak account with
+          that attribute (chapter 3).
+        </li>
+        <li>The chairman signs in and fills in the cooperative: Excel import, members, tariffs, meters.</li>
+      </ol>
+      <div class="warn">
+        <span class="callout-title">A temporary way</span>
+        <p>
+          This SQL is a workaround until the operator console; creation through it is not in the audit log. On
+          the server a "first cooperative" command replaces it (chapter 9), later the operator console.
+        </p>
+      </div>
+      <h3>Isolation</h3>
+      <ul>
+        <li>
+          The application talks to the database as <code>nadel_app</code>, which cannot bypass RLS; migrations
+          run as <code>nadel_owner</code>.
+        </li>
+        <li>
+          Every new table has an isolation test: another cooperative's data is invisible even to a direct
+          query.
+        </li>
+        <li>Deleting a cooperative is not provided; the data stays until an archiving decision (phase 7).</li>
+      </ul>
+    </section>
+
+    <section class="chapter" id="operator">
+      <h2><span class="num">5</span> The platform operator <span class="tag planned">partly</span></h2>
+      <p>
+        The operator is the person who runs the platform (you). The principle (ADR 0008):
+        <strong>the operator does not see cooperative data</strong> — no members, no plots, no money.
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>What</th>
+            <th>State</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              Signing in as <code>operator@nadel.local</code>: the app says "No cooperative", data is
+              unavailable
+            </td>
+            <td><span class="tag done">works</span></td>
+          </tr>
+          <tr>
+            <td>Operator console: list of cooperatives, creating a cooperative and its chairman, blocking</td>
+            <td><span class="tag planned">phase 7</span></td>
+          </tr>
+          <tr>
+            <td>
+              Platform reports without personal data: number of cooperatives, plots, active users, storage
+              used, subscription state
+            </td>
+            <td><span class="tag planned">phase 7</span></td>
+          </tr>
+          <tr>
+            <td>
+              Support access: a chairman grants temporary access to their cooperative; every action goes to
+              their audit log
+            </td>
+            <td><span class="tag planned">phase 7</span></td>
+          </tr>
+          <tr>
+            <td>Subscriptions and payment for using the platform</td>
+            <td><span class="tag planned">phase 7</span></td>
+          </tr>
+        </tbody>
+      </table>
+      <p>
+        Until then the operator's technical tasks are Keycloak (chapter 3), creating cooperatives (chapter 4),
+        the server and backups (chapter 9).
+      </p>
+    </section>
+
+    <section class="chapter" id="screens">
+      <h2><span class="num">6</span> Cooperative admin: screens and buttons</h2>
+      <p>
+        Every screen, every button — what it does and which permission it needs. A person does not see buttons
+        they have no permission for; the server refuses such a request anyway.
+      </p>
+
+      <h3>Header and menu</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Element</th>
+            <th>What it does</th>
+            <th>Permission</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Cooperative name</td>
+            <td>Goes to the home page</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>УКР / ENG</td>
+            <td>Interface language, remembered in the browser</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>System / Light / Dark</td>
+            <td>Theme</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>Sign out</td>
+            <td>Ends the session</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>Menu</td>
+            <td>Shows only the sections the person has permissions for</td>
+            <td>—</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Plots</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Element</th>
+            <th>What it does</th>
+            <th>Permission</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Search, "Kind", "Status", "Show archived"</td>
+            <td>Filter the register</td>
+            <td>View plots (a member sees a short list)</td>
+          </tr>
+          <tr>
+            <td>Add plot</td>
+            <td>Form: number, street, kind, area (sotkas or m²), cadastral number, building, notes</td>
+            <td>Edit plots</td>
+          </tr>
+          <tr>
+            <td>Card → Edit</td>
+            <td>Changes the plot's data</td>
+            <td>Edit plots</td>
+          </tr>
+          <tr>
+            <td>Card → Archive / Restore</td>
+            <td>Hides the plot from the list or brings it back</td>
+            <td>Edit plots</td>
+          </tr>
+          <tr>
+            <td>Card → Delete</td>
+            <td>Only for a plot that never had an owner</td>
+            <td>Edit plots</td>
+          </tr>
+          <tr>
+            <td>Card → Change owner</td>
+            <td>Date, new owners with shares (sum = 1), basis; "Add member" right in the form</td>
+            <td>Edit ownership</td>
+          </tr>
+          <tr>
+            <td>Card → Correct (next to a record)</td>
+            <td>Fixes dates, share or person in an ownership record, with a reason</td>
+            <td>Edit ownership</td>
+          </tr>
+          <tr>
+            <td>Card → Tariffs (month)</td>
+            <td>What the plot will be charged for the chosen month</td>
+            <td>View tariffs, or own plot</td>
+          </tr>
+          <tr>
+            <td>Card → Meters</td>
+            <td>The plot's meters with history and replacement chain</td>
+            <td>View meters, or own plot</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Members</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Element</th>
+            <th>What it does</th>
+            <th>Permission</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Search, "Show archived"</td>
+            <td>By name, phone or email</td>
+            <td>View members</td>
+          </tr>
+          <tr>
+            <td>Add member</td>
+            <td>Name, phones, email, address, preferred channel, Telegram, Viber, notes</td>
+            <td>Edit members</td>
+          </tr>
+          <tr>
+            <td>Card → Edit</td>
+            <td>Changes the member's data</td>
+            <td>Edit members</td>
+          </tr>
+          <tr>
+            <td>Card → Archive / Restore</td>
+            <td>Blocks or restores sign-in; not for a plot owner or the last chairman</td>
+            <td>Edit members</td>
+          </tr>
+          <tr>
+            <td>Card → Change roles</td>
+            <td>Assigns roles to the member</td>
+            <td>Manage roles</td>
+          </tr>
+          <tr>
+            <td>Card → Change history</td>
+            <td>The audit log of this member</td>
+            <td>View audit log</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Roles</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Element</th>
+            <th>What it does</th>
+            <th>Permission</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Add role</td>
+            <td>Name, description, set of permissions</td>
+            <td>Manage roles</td>
+          </tr>
+          <tr>
+            <td>Edit</td>
+            <td>Changes name, description, permissions (the chairman's permissions never change)</td>
+            <td>Manage roles</td>
+          </tr>
+          <tr>
+            <td>Restore standard name / description</td>
+            <td>Undoes the renaming of a base role</td>
+            <td>Manage roles</td>
+          </tr>
+          <tr>
+            <td>Delete</td>
+            <td>Only a custom role assigned to nobody</td>
+            <td>Manage roles</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Cooperative settings</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Element</th>
+            <th>What it does</th>
+            <th>Permission</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Who sees plot colours</td>
+            <td>"Own plots only" or "All plots"</td>
+            <td>Manage settings</td>
+          </tr>
+          <tr>
+            <td>Meter tree</td>
+            <td>Opens the tree (below)</td>
+            <td>View meters</td>
+          </tr>
+          <tr>
+            <td>Tree → From / To</td>
+            <td>A range: every meter shows consumption, "calculated" or "no reading after …"</td>
+            <td>View meters</td>
+          </tr>
+          <tr>
+            <td>Tree → Move</td>
+            <td>A new parent meter (or "outside the tree") from the date in "Effective from"</td>
+            <td>Manage meters</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Import</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Element</th>
+            <th>What it does</th>
+            <th>Permission</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Download template</td>
+            <td>The Excel template in the interface language</td>
+            <td>Run import</td>
+          </tr>
+          <tr>
+            <td>Choose file → Check file</td>
+            <td>Checks without saving: new, updated, unchanged, problems by sheet, row and column</td>
+            <td>Run import</td>
+          </tr>
+          <tr>
+            <td>Import</td>
+            <td>Saves everything at once (only with no problems, within 30 minutes)</td>
+            <td>Run import</td>
+          </tr>
+          <tr>
+            <td>Import history</td>
+            <td>Who, when, which file, how many records</td>
+            <td>Run import</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Tariffs</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Element</th>
+            <th>What it does</th>
+            <th>Permission</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Charge types → Add / Change</td>
+            <td>Name, description, "Active" (an inactive type gives no amounts)</td>
+            <td>Manage tariffs</td>
+          </tr>
+          <tr>
+            <td>Charge types → Up / Down</td>
+            <td>Order (later the payment allocation priority)</td>
+            <td>Manage tariffs</td>
+          </tr>
+          <tr>
+            <td>Charge types → Archive</td>
+            <td>Removes the type and its tariffs</td>
+            <td>Manage tariffs</td>
+          </tr>
+          <tr>
+            <td>New tariff</td>
+            <td>Charge type, name, first version: valid from, basis, frequency, rate, due date, note</td>
+            <td>Manage tariffs</td>
+          </tr>
+          <tr>
+            <td>Card → New version</td>
+            <td>A new rate from a date; a past date shows a recalculation warning</td>
+            <td>Manage tariffs</td>
+          </tr>
+          <tr>
+            <td>Card → Edit / Delete a version</td>
+            <td>Only while no charge uses it; the only version cannot be deleted</td>
+            <td>Manage tariffs</td>
+          </tr>
+          <tr>
+            <td>Card → Plots → Change</td>
+            <td>"All plots" with exclusions (with a reason) or "Selected plots"</td>
+            <td>Manage tariffs</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Meters</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Element</th>
+            <th>What it does</th>
+            <th>Permission</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Filters, "Show removed meters"</td>
+            <td>Resource, kind, street</td>
+            <td>View meters</td>
+          </tr>
+          <tr>
+            <td>Register a meter</td>
+            <td>Kind, resource, plot or name, serial number, installation date, initial reading</td>
+            <td>Manage meters</td>
+          </tr>
+          <tr>
+            <td>Card → Edit</td>
+            <td>Serial number, name, note</td>
+            <td>Manage meters</td>
+          </tr>
+          <tr>
+            <td>Card → Replace meter</td>
+            <td>Date, old final reading, new serial and initial reading; "Fill in as a wrap-around"</td>
+            <td>Manage meters</td>
+          </tr>
+          <tr>
+            <td>Card → Remove</td>
+            <td>Removal date and final reading</td>
+            <td>Manage meters</td>
+          </tr>
+          <tr>
+            <td>Card → Delete</td>
+            <td>Only a meter without readings</td>
+            <td>Manage meters</td>
+          </tr>
+          <tr>
+            <td>Card → readings → Correct / Delete reading</td>
+            <td>While the reading is not used in a charge</td>
+            <td>Enter readings</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Readings and approvals</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Element</th>
+            <th>What it does</th>
+            <th>Permission</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Round date</td>
+            <td>The date for all readings of the round; defaults to today, with a hint</td>
+            <td>Enter readings</td>
+          </tr>
+          <tr>
+            <td>Resource, Street, "No reading since"</td>
+            <td>Round filters; the resource is remembered</td>
+            <td>Enter readings</td>
+          </tr>
+          <tr>
+            <td>Meter row → Save</td>
+            <td>Saves the reading (the row's date can be changed); shows consumption and warnings at once</td>
+            <td>Enter readings</td>
+          </tr>
+          <tr>
+            <td>To approve → Approve</td>
+            <td>A member's reading becomes counted</td>
+            <td>Approve readings</td>
+          </tr>
+          <tr>
+            <td>To approve → Reject</td>
+            <td>With a reason the owner sees</td>
+            <td>Approve readings</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Audit log and account</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Element</th>
+            <th>What it does</th>
+            <th>Permission</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Audit log → record type, From, To, "Only this record", "Only this author"</td>
+            <td>Filter entries; "Remove filter"</td>
+            <td>View audit log</td>
+          </tr>
+          <tr>
+            <td>My account</td>
+            <td>My details, roles, what I may do, my plots with shares, what I will be charged</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>My meters → Submit a reading</td>
+            <td>A reading for the board to approve</td>
+            <td>own plot</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="chapter" id="permissions">
+      <h2><span class="num">7</span> Permissions and roles</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Permission</th>
+            <th>Chairman</th>
+            <th>Treasurer</th>
+            <th>Member</th>
+            <th>Electrician (demo)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>View members</td>
+            <td>yes</td>
+            <td>yes</td>
+            <td>—</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>Edit members</td>
+            <td>yes</td>
+            <td>—</td>
+            <td>—</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>Manage roles</td>
+            <td>yes</td>
+            <td>—</td>
+            <td>—</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>View audit log</td>
+            <td>yes</td>
+            <td>yes</td>
+            <td>—</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>View plots</td>
+            <td>yes</td>
+            <td>yes</td>
+            <td>—</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>Edit plots</td>
+            <td>yes</td>
+            <td>—</td>
+            <td>—</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>Edit ownership</td>
+            <td>yes</td>
+            <td>—</td>
+            <td>—</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>Run import</td>
+            <td>yes</td>
+            <td>—</td>
+            <td>—</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>Manage settings</td>
+            <td>yes</td>
+            <td>—</td>
+            <td>—</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>View tariffs</td>
+            <td>yes</td>
+            <td>yes</td>
+            <td>—</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>Manage tariffs</td>
+            <td>yes</td>
+            <td>—</td>
+            <td>—</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>View meters</td>
+            <td>yes</td>
+            <td>yes</td>
+            <td>—</td>
+            <td>yes</td>
+          </tr>
+          <tr>
+            <td>Manage meters</td>
+            <td>yes</td>
+            <td>—</td>
+            <td>—</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>Enter readings</td>
+            <td>yes</td>
+            <td>—</td>
+            <td>—</td>
+            <td>yes</td>
+          </tr>
+          <tr>
+            <td>Approve readings</td>
+            <td>yes</td>
+            <td>—</td>
+            <td>—</td>
+            <td>—</td>
+          </tr>
+        </tbody>
+      </table>
+      <ul>
+        <li>The chairman always holds every permission, including any new one.</li>
+        <li>The chairman changes the treasurer's and other roles' permissions in "Roles".</li>
+        <li>A member without permissions sees only their own data — enforced by the server.</li>
+        <li>With charges come permissions to view and run charges, reverse them and close months.</li>
+      </ul>
+    </section>
+
+    <section class="chapter" id="security">
+      <h2><span class="num">8</span> Data, security, personal data</h2>
+      <dl class="terms">
+        <dt>Isolation</dt>
+        <dd>Database RLS on every table with cooperative data; the application cannot bypass it.</dd>
+        <dt>Access</dt>
+        <dd>The server checks permissions on every request; a member sees only their own plots.</dd>
+        <dt>Audit log</dt>
+        <dd>Who, when, what changed, old and new value. Entries are never changed or deleted.</dd>
+        <dt>Not stored</dt>
+        <dd>Tax numbers (РНОКПП), passport data, dates of birth — there are no such fields.</dd>
+        <dt>Server logs</dt>
+        <dd>No personal data: even a database error message does not include values.</dd>
+        <dt>Events</dt>
+        <dd>
+          Completed events are deleted from the event table at once, because they may carry personal data.
+        </dd>
+        <dt>Secrets</dt>
+        <dd>
+          Only from environment variables; the repository holds only local development passwords. CI scans for
+          leaked secrets (gitleaks).
+        </dd>
+        <dt>Dependencies</dt>
+        <dd>CI checks known vulnerabilities (pnpm audit, OSV) and the code (Semgrep).</dd>
+      </dl>
+      <div class="note">
+        <span class="callout-title">Encrypting personal data</span>
+        <p>
+          A separate feature is under discussion: encrypting contacts, addresses and notes in the database, so
+          that even a copy of the database without the key reveals no personal data. On the server the disk
+          and the backups are encrypted as well (chapter 9).
+        </p>
+      </div>
+    </section>
+
+    <section class="chapter" id="deploy">
+      <h2><span class="num">9</span> Server deployment <span class="tag planned">planned · 6a</span></h2>
+      <p>
+        The decision (ADR 0010): the whole product is finished locally first, the server comes last. The plan
+        is as follows.
+      </p>
+      <h3>What runs on the server</h3>
+      <ul>
+        <li>
+          One virtual server in an EU data centre (initially Hetzner Cloud, Germany or Finland), about 4 vCPU
+          and 8 GB RAM; a smaller second one for staging.
+        </li>
+        <li>
+          Docker Compose: PostgreSQL + PostGIS, Keycloak in production mode, the backend and Caddy (the web
+          client, HTTPS with automatic certificates). Only ports 80 and 443 are open to the outside.
+        </li>
+        <li>Cost: tens of euros per month.</li>
+      </ul>
+      <h3>How updates arrive</h3>
+      <ol class="steps">
+        <li>
+          Every merge to <code>main</code>: GitHub builds the images, pushes them to the GitHub Container
+          Registry and updates staging.
+        </li>
+        <li>
+          A version tag <code>v…</code>: deployment to production after your approval in GitHub, with a
+          database backup right before.
+        </li>
+        <li>Rollback: deploy the previous tag with a separate action.</li>
+      </ol>
+      <h3>First installation</h3>
+      <ul>
+        <li>The server: SSH keys only, no root, a firewall, automatic security updates.</li>
+        <li>
+          A domain and DNS pointing to the server; secrets in the server's environment file and in GitHub
+          environments; the backend refuses to start with a default password.
+        </li>
+        <li>
+          A "first cooperative" command creates the cooperative, its chairman and the Keycloak account and
+          sends the set-your-password email.
+        </li>
+        <li>The Keycloak admin console and the database only through an SSH tunnel.</li>
+      </ul>
+      <h3>Backups and monitoring</h3>
+      <ul>
+        <li>
+          Every night an encrypted copy of the application and Keycloak databases, stored outside the server;
+          30 daily and 12 monthly copies kept. Every month a copy is restored on staging as a test.
+        </li>
+        <li>
+          An external uptime check with Telegram alerts; error tracking without personal data; disk, memory
+          and certificate alerts.
+        </li>
+      </ul>
+      <p class="muted small">
+        A step-by-step runbook with exact commands joins this chapter with the deployment feature.
+      </p>
+    </section>
+
+    <section class="chapter" id="updates">
+      <h2><span class="num">10</span> Updates and database migrations</h2>
+      <ul>
+        <li>
+          The database structure changes only through Flyway migrations
+          (<code>backend/src/main/resources/db/migration</code>), run when the backend starts. Existing
+          migrations are never edited — only new ones are added.
+        </li>
+        <li>
+          "Expand, then contract": a release may add tables and fields; removing or renaming waits for the
+          next release, when the old code no longer runs. The previous version thus works on the new database
+          and a rollback is safe.
+        </li>
+        <li>
+          Demo data (<code>db/demo</code>) loads only in the development profile; the server never has it.
+        </li>
+      </ul>
+    </section>
+
+    <section class="chapter" id="dev">
+      <h2><span class="num">11</span> How the system is developed</h2>
+      <h3>From an idea to main</h3>
+      <ol class="steps">
+        <li>
+          <strong>A feature document</strong> in <code>docs/features/NNN-….md</code>: requirements, rules,
+          worked examples, acceptance criteria. The number is the highest in <code>context/spec</code> + 1.
+        </li>
+        <li>
+          <strong>The pipeline</strong>: <code>/feature-pipeline docs/features/NNN-….md</code> in Claude Code.
+          Agents write the specification, the plan, the code and the tests slice by slice; a separate reviewer
+          checks every slice; at the end every criterion is verified, screenshots taken, the full suite run, a
+          PR opened and its checks brought to green.
+        </li>
+        <li>
+          <strong>Your check</strong>: the app from the PR branch is running for you; try the scenarios from
+          the report.
+        </li>
+        <li>
+          <strong>Merging</strong> — only you:
+          <code>gh pr merge &lt;number&gt; --squash --delete-branch</code>, then
+          <code>git switch main &amp;&amp; git pull</code>.
+        </li>
+      </ol>
+      <h3>CI checks on every PR</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Check</th>
+            <th>What it does</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Backend</td>
+            <td>Build, every test with a database container, module boundaries, coverage floor</td>
+          </tr>
+          <tr>
+            <td>Clients</td>
+            <td>API contract, formatting, types, tests, lint, web build</td>
+          </tr>
+          <tr>
+            <td>Security</td>
+            <td>Leaked secrets (gitleaks), dependency vulnerabilities (pnpm audit, OSV)</td>
+          </tr>
+          <tr>
+            <td>SAST</td>
+            <td>Static code analysis (Semgrep)</td>
+          </tr>
+          <tr>
+            <td>End-to-end</td>
+            <td>Browser scenarios on a freshly started database</td>
+          </tr>
+        </tbody>
+      </table>
+      <h3>Rules</h3>
+      <ul>
+        <li>
+          Agents never merge or approve PRs and never push to <code>main</code>; only the owner commits
+          changes to <code>CLAUDE.md</code> and <code>.claude/</code>.
+        </li>
+        <li>
+          Commits never mention AI. All repository text is English, except the guides in
+          <code>docs/guide</code> (Ukrainian and English).
+        </li>
+        <li>
+          Verification levels: a new feature runs the full suite locally; a small fix on an open PR runs only
+          the affected tests, and CI runs the full suite.
+        </li>
+        <li>
+          Models: the orchestrator and the reviewer use your Claude Code session's model (Opus); the worker
+          agents use the model set in <code>.claude/agents</code>.
+        </li>
+        <li>
+          Working notes outside git: <code>NOTES.local.md</code> (questions and answers) and
+          <code>DECISIONS.local.md</code> (decisions and deferred tasks).
+        </li>
+      </ul>
+    </section>
+
+    <section class="chapter" id="trouble">
+      <h2><span class="num">12</span> Common problems and fixes</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Problem</th>
+            <th>Cause and fix</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>"Port 8080 was already in use", the web opened on 5174</td>
+            <td>
+              A previous run is still going (for example the one the pipeline left for review).
+              <code>lsof -ti :8080 -ti :5173 | xargs kill</code>, then <code>make up</code>.
+            </td>
+          </tr>
+          <tr>
+            <td>"Account not linked"</td>
+            <td>
+              The email in Keycloak differs from the member card's, or the member is archived, or Keycloak has
+              no <code>tenant_id</code>.
+            </td>
+          </tr>
+          <tr>
+            <td><code>admin</code> cannot sign in to the Keycloak console</td>
+            <td>
+              Use the <strong>master</strong> realm at <code>/admin/</code>, not nadel; check the keyboard
+              layout.
+            </td>
+          </tr>
+          <tr>
+            <td>"E2E …" entries and odd plots in the audit log</td>
+            <td>
+              Traces of old end-to-end tests. Reset the local database (chapter 2); the tests now use a
+              separate database.
+            </td>
+          </tr>
+          <tr>
+            <td>"platform (linux/amd64) does not match" for postgres</td>
+            <td>
+              The PostGIS image is Intel-only and runs emulated on a Mac — slower, tests included. An arm64
+              image is to be tried locally.
+            </td>
+          </tr>
+          <tr>
+            <td>Slow backend tests, long CI</td>
+            <td>Backend tests are the longest part; measuring and speeding them up is planned.</td>
+          </tr>
+          <tr>
+            <td>Git: "File exists … .lock"</td>
+            <td>
+              A lock file left by an interrupted command. Make sure no git is running and delete the named
+              <code>.lock</code>.
+            </td>
+          </tr>
+          <tr>
+            <td>Realm file changes did not apply</td>
+            <td>The realm is imported only into an empty Keycloak — reset the local database.</td>
+          </tr>
+          <tr>
+            <td>IntelliJ keeps asking for access to other apps' data</td>
+            <td>System Settings → Privacy &amp; Security → Full Disk Access → IntelliJ IDEA, restart.</td>
+          </tr>
+          <tr>
+            <td>The pipeline stopped</td>
+            <td><code>/feature-pipeline resume</code> continues where it stopped, from its log.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="chapter" id="decisions">
+      <h2><span class="num">13</span> Decision log</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Decision</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>17.10.2026</td>
+            <td>Design: the "calm registry" — side menu, tables, green accent.</td>
+          </tr>
+          <tr>
+            <td>18.10.2026</td>
+            <td>
+              The chairman's answers: the chairman chooses how common consumers are split; the quarter report
+              shows readings, cost and amount; a building is reference only; no meter, no charge; the chairman
+              configures the meter tree.
+            </td>
+          </tr>
+          <tr>
+            <td>18.10.2026</td>
+            <td>
+              Other members' plot colours hidden by default; "All plots" only by a general meeting decision.
+            </td>
+          </tr>
+          <tr>
+            <td>20.10.2026</td>
+            <td>The whole product on the local machine first, servers last.</td>
+          </tr>
+          <tr>
+            <td>21.10.2026</td>
+            <td>
+              The interface always in one language. A rate has up to 4 decimals, shown without trailing zeros;
+              amounts 2 decimals.
+            </td>
+          </tr>
+          <tr>
+            <td>21.10.2026</td>
+            <td>
+              A tariff version can be corrected or deleted until a charge uses it; then through recalculation.
+            </td>
+          </tr>
+          <tr>
+            <td>21.10.2026</td>
+            <td>
+              Readings are not tied to months: a reading is a value on a date; moves in the tree take effect
+              from a date.
+            </td>
+          </tr>
+          <tr>
+            <td>22.10.2026</td>
+            <td>
+              A resource icon; a plot's two meters in one card; calculated consumption rounded for display.
+            </td>
+          </tr>
+          <tr>
+            <td>22.10.2026</td>
+            <td>
+              Electricity charged per reading; the chairman chooses the losses mode; negative losses are not
+              charged; common consumers as a separate line.
+            </td>
+          </tr>
+          <tr>
+            <td>22.10.2026</td>
+            <td>
+              Water like electricity: an unconnected plot pays neither for water nor for the pump; any number
+              of wells and quarters.
+            </td>
+          </tr>
+          <tr>
+            <td>22.10.2026</td>
+            <td>
+              Verification levels: small fixes run only the affected tests locally, the full suite in CI.
+            </td>
+          </tr>
+          <tr>
+            <td>22.10.2026</td>
+            <td>
+              Two guides in Ukrainian and English in <code>main</code>: for the board (working in the system
+              and the calculation rules) and for the platform owner (this one).
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+  </body>
+</html>
