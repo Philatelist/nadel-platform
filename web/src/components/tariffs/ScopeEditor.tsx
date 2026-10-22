@@ -122,7 +122,7 @@ export function ScopeEditor({ tariff }: { tariff: Tariff }) {
     return format(category === 'one' ? forms.one : category === 'few' ? forms.few : forms.many, { count });
   }
 
-  const count = tariff.plotCount === undefined ? t.tariffs.meterBased : plotCountText(tariff.plotCount);
+  const count = plotCountText(tariff.plotCount ?? 0);
   const changeKindWarning =
     kind !== tariff.scopeKind
       ? kind === 'SELECTED_PLOTS' && exclusions.length > 0

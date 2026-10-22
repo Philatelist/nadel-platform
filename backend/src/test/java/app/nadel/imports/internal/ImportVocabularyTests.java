@@ -20,6 +20,7 @@ class ImportVocabularyTests {
         assertLabelsAreAccepted(ImportVocabulary.COLUMNS_PLOTS, PlotColumn.values());
         assertLabelsAreAccepted(ImportVocabulary.COLUMNS_MEMBERS, MemberColumn.values());
         assertLabelsAreAccepted(ImportVocabulary.COLUMNS_OWNERSHIP, OwnershipColumn.values());
+        assertLabelsAreAccepted(ImportVocabulary.COLUMNS_METERS, MeterColumn.values());
     }
 
     private void assertLabelsAreAccepted(String sheet, SheetColumn[] columns) {
@@ -37,9 +38,11 @@ class ImportVocabularyTests {
         Arrays.stream(PlotColumn.values()).forEach(c -> known.add("plots." + c.key()));
         Arrays.stream(MemberColumn.values()).forEach(c -> known.add("members." + c.key()));
         Arrays.stream(OwnershipColumn.values()).forEach(c -> known.add("ownership." + c.key()));
+        Arrays.stream(MeterColumn.values()).forEach(c -> known.add("meters." + c.key()));
         Properties file = ImportVocabulary.load("imports/header-aliases.properties");
         for (String name : file.stringPropertyNames()) {
-            if (name.startsWith("plots.") || name.startsWith("members.") || name.startsWith("ownership.")) {
+            if (name.startsWith("plots.") || name.startsWith("members.") || name.startsWith("ownership.")
+                    || name.startsWith("meters.")) {
                 assertThat(known).as(name).contains(name);
             }
         }
@@ -51,7 +54,9 @@ class ImportVocabularyTests {
         assertThat(PlotsSheet.NAMES).containsExactly("Plots", "Ділянки");
         assertThat(MembersSheet.NAMES).contains("Members", "Члени");
         assertThat(OwnershipSheet.NAMES).contains("Ownership", "Власність");
+        assertThat(MetersSheet.NAMES).containsExactly("Meters", "Лічильники");
         assertThat(vocabulary.sheetLabel("plots")).isEqualTo("Ділянки");
+        assertThat(vocabulary.sheetLabel("meters")).isEqualTo("Лічильники");
     }
 
     @Test
@@ -67,6 +72,10 @@ class ImportVocabularyTests {
         assertThat(vocabulary.canonicalValue(ImportVocabulary.YES_NO, "Так")).isEqualTo("true");
         assertThat(vocabulary.canonicalValue(ImportVocabulary.YES_NO, "NO")).isEqualTo("false");
         assertThat(vocabulary.canonicalValue(ImportVocabulary.YES_NO, "maybe")).isNull();
+        assertThat(vocabulary.canonicalValue(ImportVocabulary.RESOURCE, "електроенергія")).isEqualTo("ELECTRICITY");
+        assertThat(vocabulary.canonicalValue(ImportVocabulary.RESOURCE, "Електрика")).isEqualTo("ELECTRICITY");
+        assertThat(vocabulary.canonicalValue(ImportVocabulary.RESOURCE, " вода ")).isEqualTo("WATER");
+        assertThat(vocabulary.canonicalValue(ImportVocabulary.RESOURCE, "WATER")).isNull(); // the module reads English
     }
 
     @Test
@@ -74,6 +83,10 @@ class ImportVocabularyTests {
         for (String plot : new String[] {"PLOT", "COMMON"}) {
             String label = vocabulary.valueLabel(ImportVocabulary.KIND, plot);
             assertThat(vocabulary.canonicalValue(ImportVocabulary.KIND, label)).isEqualTo(plot);
+        }
+        for (String resource : new String[] {"ELECTRICITY", "WATER"}) {
+            String label = vocabulary.valueLabel(ImportVocabulary.RESOURCE, resource);
+            assertThat(vocabulary.canonicalValue(ImportVocabulary.RESOURCE, label)).isEqualTo(resource);
         }
         for (String channel : new String[] {"EMAIL", "TELEGRAM", "VIBER", "PAPER"}) {
             String label = vocabulary.valueLabel(ImportVocabulary.CHANNEL, channel);

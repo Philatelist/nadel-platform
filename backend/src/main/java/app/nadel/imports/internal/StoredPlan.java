@@ -1,6 +1,7 @@
 package app.nadel.imports.internal;
 
 import app.nadel.members.MemberImportRow;
+import app.nadel.meters.MeterImportRow;
 import app.nadel.plots.PlotImportRow;
 import app.nadel.problem.ApiProblemException;
 import app.nadel.problem.ProblemCodes;
@@ -24,8 +25,9 @@ final class StoredPlan {
     private StoredPlan() {
     }
 
-    /** The three sheets of a stored plan. */
-    record Sheets(PlotsSheet.Parsed plots, MembersSheet.Parsed members, OwnershipSheet.Parsed ownership) {
+    /** The four sheets of a stored plan; a plan stored before the Meters sheet existed has no meters. */
+    record Sheets(PlotsSheet.Parsed plots, MembersSheet.Parsed members, OwnershipSheet.Parsed ownership,
+            MetersSheet.Parsed meters) {
     }
 
     /**
@@ -40,7 +42,8 @@ final class StoredPlan {
         }
         return new Sheets(plots((List<Map<String, Object>>) plan.get("plots")),
                 members((List<Map<String, Object>>) plan.get("members")),
-                ownership((List<Map<String, Object>>) plan.get("ownership")));
+                ownership((List<Map<String, Object>>) plan.get("ownership")),
+                meters((List<Map<String, Object>>) plan.get("meters")));
     }
 
     private static PlotsSheet.Parsed plots(@Nullable List<Map<String, Object>> stored) {
@@ -76,6 +79,18 @@ final class StoredPlan {
                     text(map, "memberKey"), text(map, "share"), date == null ? null : LocalDate.parse(date)));
         }
         return new OwnershipSheet.Parsed(rows, List.of());
+    }
+
+    private static MetersSheet.Parsed meters(@Nullable List<Map<String, Object>> stored) {
+        List<MeterImportRow> rows = new ArrayList<>();
+        for (Map<String, Object> map : orEmpty(stored)) {
+            String date = text(map, "installedOn");
+            String reading = text(map, "initialReading");
+            rows.add(new MeterImportRow(number(map, "row"), text(map, "plotNumber"), text(map, "resource"),
+                    text(map, "serial"), date == null ? null : LocalDate.parse(date),
+                    reading == null ? null : new BigDecimal(reading)));
+        }
+        return new MetersSheet.Parsed(rows, List.of());
     }
 
     private static List<Map<String, Object>> orEmpty(@Nullable List<Map<String, Object>> stored) {

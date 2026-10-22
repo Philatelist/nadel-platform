@@ -2,6 +2,7 @@ import { useGetMember, type Permission } from '@nadel/api-client';
 import { useLocale, useT } from '../i18n';
 import { QueryBoundary } from '../components/QueryBoundary';
 import { MyPlotsPanel } from '../components/ownership/MyPlotsPanel';
+import { MyMetersPanel } from '../components/readings/MyMetersPanel';
 import { MyChargesPanel } from '../components/tariffs/MyChargesPanel';
 import { MemberDetails } from '../components/MemberDetails';
 import { Badge, PageHeader, Panel } from '../components/ui';
@@ -59,6 +60,7 @@ export function AccountPage() {
       </div>
 
       <MyPlotsPanel />
+      <MyMetersPanel />
       <MyChargesPanel />
     </div>
   );

@@ -30,6 +30,13 @@ final class ImportWorkbooks {
 
     static final List<String> OWNERSHIP_HEADER = List.of("plot_number", "member_external_id", "share", "valid_from");
 
+    static final List<String> METER_HEADER = List.of("plot_number", "resource", "serial", "installed_on",
+            "initial_reading");
+
+    /** The Meters sheet headers of the Ukrainian template. */
+    static final List<String> METER_HEADER_UK = List.of("Номер ділянки", "Ресурс", "Заводський номер",
+            "Дата встановлення", "Початковий показ");
+
     private ImportWorkbooks() {
     }
 
@@ -40,6 +47,18 @@ final class ImportWorkbooks {
         row.add(memberKey);
         row.add(share);
         row.add(validFrom);
+        return row;
+    }
+
+    /** A row of the Meters sheet in {@link #METER_HEADER} order; the date is a date or text, the reading any value. */
+    static List<Object> meter(Object plotNumber, Object resource, Object serial, Object installedOn,
+            Object initialReading) {
+        List<Object> row = new ArrayList<>();
+        row.add(plotNumber);
+        row.add(resource);
+        row.add(serial);
+        row.add(installedOn);
+        row.add(initialReading);
         return row;
     }
 

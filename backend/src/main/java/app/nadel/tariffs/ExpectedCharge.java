@@ -19,7 +19,18 @@ public sealed interface ExpectedCharge {
         }
     }
 
-    /** A per-kWh or per-m3 version applies in the month: the amount comes from meter readings (features 010-011). */
-    record ByReadings() implements ExpectedCharge {
+    /**
+     * A per-kWh or per-m3 version applies in the month: the amount comes from meter readings (features 010-011).
+     *
+     * @param basis {@link Basis#PER_KWH} or {@link Basis#PER_M3}: the basis of the latest meter-based version that
+     *              applies in the month, which names the resource whose meter the plot needs
+     */
+    record ByReadings(Basis basis) implements ExpectedCharge {
+        public ByReadings {
+            java.util.Objects.requireNonNull(basis, "basis");
+            if (basis != Basis.PER_KWH && basis != Basis.PER_M3) {
+                throw new IllegalArgumentException("Only a per-kWh or per-m3 basis is charged by readings");
+            }
+        }
     }
 }

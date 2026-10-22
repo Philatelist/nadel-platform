@@ -64,7 +64,7 @@ class DemoDataTextTests extends IntegrationTest {
         assertThat(text("select name from tenant where id = ?", DEMO_TENANT)).isEqualTo("СТ «Надія»");
         assertThat(text("select name from tenant where id = ?", OTHER_TENANT)).isEqualTo("СТ «Світанок»");
         assertThat(text("select name || '|' || description from role where id = ?::uuid", ELECTRICIAN))
-                .isEqualTo("Електрик|Роль без дозволів до появи лічильників");
+                .isEqualTo("Електрик|Вносить покази лічильників на обході");
         assertThat(text("select name from role where id = ?::uuid", SECRETARY)).isEqualTo("Board secretary");
         assertThat(text("select name || '|' || description from charge_type where id = ?::uuid", ROAD))
                 .isEqualTo("Ремонт дороги|Цільовий збір на ремонт головної дороги");

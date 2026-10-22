@@ -17,3 +17,4 @@ Format: context → decision → consequences. A new decision is a new file `NNN
 | 0011 | Cooperative settings module; ownership inside plots; synchronous veto and read SPIs instead of events | accepted, implemented (spec 007) |
 | 0012 | Excel import module: facades in members and plots, preview stored in the database, synchronous two-pass commit | accepted, implemented (spec 008) |
 | 0013 | Money module: `Money` is the only place that rounds, `Rate` (4 decimals, never rounded) is not money | accepted, implemented (spec 009) |
+| 0014 | Meter quantities: `MeterValue` is not money, consumption is exact rational arithmetic, calculated values are rounded once for display | accepted, implemented (spec 010) |

@@ -9,6 +9,8 @@ import app.nadel.plots.OwnershipImportItem;
 import app.nadel.plots.OwnershipImportOutcome;
 import app.nadel.plots.OwnershipImportPlan;
 import app.nadel.plots.OwnershipImportRow;
+import app.nadel.plots.PlotChangeGuard.Change;
+import app.nadel.plots.PlotChangeGuard.Refusal;
 import app.nadel.plots.PlotImport;
 import app.nadel.plots.PlotImportAction;
 import app.nadel.plots.PlotImportItem;
@@ -50,7 +52,8 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>
  * Rules, in addition to those of {@link PlotData}: a number that appears twice in the file is a problem on the later
  * row; a cadastral number held by another plot (archived ones included) or claimed by an earlier row is taken; a plot
- * with ownership history cannot become common land. A blank value leaves the value of the matched plot unchanged; the
+ * with ownership history cannot become common land, nor can a plot that a {@link app.nadel.plots.PlotChangeGuard}
+ * refuses (a plot with a meter: {@code PLOT_HAS_METER}). A blank value leaves the value of the matched plot unchanged; the
  * number of a matched plot keeps its stored spelling.
  */
 @Service
@@ -70,6 +73,7 @@ class PlotImportService implements PlotImport {
     private final OwnershipRecorder recorder;
     private final PlotAuditPublisher auditPublisher;
     private final MemberDirectory members;
+    private final PlotChangeGuards guards;
     private final Clock clock;
 
     @PersistenceContext
@@ -77,7 +81,7 @@ class PlotImportService implements PlotImport {
 
     PlotImportService(PlotRepository plots, PlotStatusRepository statuses, OwnershipRepository ownerships,
             OwnershipImportPlanner ownershipPlanner, OwnershipRecorder recorder, PlotAuditPublisher audit,
-            MemberDirectory members, Clock clock) {
+            MemberDirectory members, PlotChangeGuards guards, Clock clock) {
         this.plots = plots;
         this.statuses = statuses;
         this.ownerships = ownerships;
@@ -85,6 +89,7 @@ class PlotImportService implements PlotImport {
         this.recorder = recorder;
         this.auditPublisher = audit;
         this.members = members;
+        this.guards = guards;
         this.clock = clock;
     }
 
@@ -100,13 +105,20 @@ class PlotImportService implements PlotImport {
     public PlotImportPlan plan(UUID tenantId, UUID importId, List<PlotImportRow> rows) {
         Map<String, Plot> existingByNumber = activePlotsByNumber(tenantId, rows);
         Map<String, UUID> cadastralHolders = cadastralHolders(tenantId, rows);
-        Set<UUID> withHistory = plotsWithHistory(rows, existingByNumber);
+        List<UUID> commonLandCandidates = commonLandCandidates(rows, existingByNumber);
+        Set<UUID> withHistory = plotsWithHistory(commonLandCandidates);
+        // a guard of another module (meters) may refuse a plot that would become common land; the commit plans again
+        // under the plot locks, so a meter registered after the preview makes the commit stale
+        Map<UUID, Refusal> refused = new HashMap<>();
+        for (List<UUID> chunk : chunks(commonLandCandidates)) {
+            refused.putAll(guards.refusals(Change.BECOME_COMMON_LAND, chunk));
+        }
 
         Set<String> seenNumbers = new HashSet<>();
         Set<String> claimedCadastral = new HashSet<>();
         List<PlotImportItem> items = new ArrayList<>(rows.size());
         for (PlotImportRow row : rows) {
-            items.add(planRow(row, importId, existingByNumber, cadastralHolders, withHistory, seenNumbers,
+            items.add(planRow(row, importId, existingByNumber, cadastralHolders, withHistory, refused, seenNumbers,
                     claimedCadastral));
         }
         return new PlotImportPlan(items);
@@ -293,8 +305,8 @@ class PlotImportService implements PlotImport {
     }
 
     private PlotImportItem planRow(PlotImportRow row, UUID importId, Map<String, Plot> existingByNumber,
-            Map<String, UUID> cadastralHolders, Set<UUID> withHistory, Set<String> seenNumbers,
-            Set<String> claimedCadastral) {
+            Map<String, UUID> cadastralHolders, Set<UUID> withHistory, Map<UUID, Refusal> refused,
+            Set<String> seenNumbers, Set<String> claimedCadastral) {
         String number = blankToNull(row.number());
         String key = number == null ? null : lower(number);
         if (key != null && !seenNumbers.add(key)) {
@@ -308,9 +320,14 @@ class PlotImportService implements PlotImport {
         PlotData.Validation validation = resolved.validation();
 
         checkCadastral(row, existing, cadastralHolders, claimedCadastral, problems);
-        if (existing != null && existing.getKind() == PlotKind.PLOT && kind == PlotKind.COMMON
-                && withHistory.contains(existing.getId())) {
-            problems.add(new FieldProblem("kind", ProblemCodes.PLOT_HAS_OWNERSHIP_HISTORY));
+        if (existing != null && existing.getKind() == PlotKind.PLOT && kind == PlotKind.COMMON) {
+            if (withHistory.contains(existing.getId())) {
+                problems.add(new FieldProblem("kind", ProblemCodes.PLOT_HAS_OWNERSHIP_HISTORY));
+            }
+            Refusal refusal = refused.get(existing.getId());
+            if (refusal != null) {
+                problems.add(new FieldProblem("kind", refusal.code()));
+            }
         }
 
         List<FieldProblem> distinct = onePerField(problems);
@@ -431,15 +448,19 @@ class PlotImportService implements PlotImport {
         return holders;
     }
 
-    /** Ids of the matched plots that have ever had an owner: only needed for a plot that might become common land. */
-    private Set<UUID> plotsWithHistory(List<PlotImportRow> rows, Map<String, Plot> existingByNumber) {
-        List<UUID> candidates = rows.stream()
+    /** Ids of the matched plots of kind {@code PLOT} that a row turns into common land. */
+    private static List<UUID> commonLandCandidates(List<PlotImportRow> rows, Map<String, Plot> existingByNumber) {
+        return rows.stream()
                 .filter(row -> row.kind() != null && parseKind(row.kind().strip()) == PlotKind.COMMON)
                 .map(row -> row.number() == null ? null : existingByNumber.get(lower(row.number().strip())))
                 .filter(plot -> plot != null && plot.getKind() == PlotKind.PLOT)
                 .map(Plot::getId)
                 .distinct()
                 .toList();
+    }
+
+    /** Ids of the candidates that have ever had an owner: only needed for a plot that might become common land. */
+    private Set<UUID> plotsWithHistory(List<UUID> candidates) {
         Set<UUID> withHistory = new HashSet<>();
         for (List<UUID> chunk : chunks(candidates)) {
             withHistory.addAll(ownerships.findPlotIdsWithOwnership(chunk));

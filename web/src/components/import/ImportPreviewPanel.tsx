@@ -8,7 +8,7 @@ import { useLocale, useT } from '../../i18n';
 /** How many problems the table shows; the rest is summarised as "and N more". */
 export const maxShownProblems = 200;
 
-const entities = ['plots', 'members', 'ownerships'] as const;
+const entities = ['plots', 'members', 'ownerships', 'meters'] as const;
 
 interface ImportPreviewPanelProps {
   preview: ImportPreview;
@@ -43,6 +43,7 @@ export function ImportPreviewPanel({
     PLOTS: t.importColumns.plots,
     MEMBERS: t.importColumns.members,
     OWNERSHIP: t.importColumns.ownership,
+    METERS: t.importColumns.meters,
   };
   const messages: Readonly<Record<string, string>> = t.importProblem;
 

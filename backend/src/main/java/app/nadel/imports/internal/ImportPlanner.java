@@ -4,6 +4,11 @@ import app.nadel.members.MemberImport;
 import app.nadel.members.MemberImportItem;
 import app.nadel.members.MemberImportPlan;
 import app.nadel.members.MemberImportRow;
+import app.nadel.meters.MeterImport;
+import app.nadel.meters.MeterImportItem;
+import app.nadel.meters.MeterImportPlan;
+import app.nadel.meters.MeterImportProblem;
+import app.nadel.meters.MeterImportRow;
 import app.nadel.plots.OwnershipImportItem;
 import app.nadel.plots.OwnershipImportOutcome;
 import app.nadel.plots.OwnershipImportPlan;
@@ -28,15 +33,16 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 
 /**
- * Asks the plots and members modules what each parsed row would do and puts the answers together with the problems
- * found while reading the file: counts, problems in file order, the normalised rows to store for a later commit, the
- * member of every Members row and the digest of the whole plan. The caller provides the transaction.
+ * Asks the plots, members and meters modules what each parsed row would do and puts the answers together with the
+ * problems found while reading the file: counts, problems in file order, the normalised rows to store for a later
+ * commit, the member of every Members row and the digest of the whole plan. The caller provides the transaction.
  * <p>
  * The Ownership sheet is planned last. The planner resolves each row's member key to a member through the Members
  * sheet (case-insensitive). A key with no Members row is {@code UNKNOWN_MEMBER_KEY}. A key whose Members row has a
  * problem is not reported again: the problem is already listed on the Members sheet, and every plot with such a row is
  * checked no further until it is fixed (a second message per ownership row would only repeat it). A plot whose own
- * Plots row has a problem is treated the same way.
+ * Plots row has a problem is treated the same way. The Meters sheet is planned after the Plots sheet with the same rule:
+ * a meter of a plot whose Plots row has a problem is not checked further.
  */
 @Component
 class ImportPlanner {
@@ -68,37 +74,51 @@ class ImportPlanner {
             "share", OwnershipColumn.SHARE,
             "validFrom", OwnershipColumn.VALID_FROM);
 
+    private static final Map<String, MeterColumn> COLUMN_OF_METER_FIELD = Map.of(
+            "plotNumber", MeterColumn.PLOT_NUMBER,
+            "resource", MeterColumn.RESOURCE,
+            "serial", MeterColumn.SERIAL,
+            "installedOn", MeterColumn.INSTALLED_ON,
+            "initialReading", MeterColumn.INITIAL_READING);
+
     private final PlotImport plotImport;
     private final MemberImport memberImport;
+    private final MeterImport meterImport;
 
-    ImportPlanner(PlotImport plotImport, MemberImport memberImport) {
+    ImportPlanner(PlotImport plotImport, MemberImport memberImport, MeterImport meterImport) {
         this.plotImport = plotImport;
         this.memberImport = memberImport;
+        this.meterImport = meterImport;
     }
 
     ImportPlan plan(UUID tenantId, UUID importId, PlotsSheet.Parsed plots, MembersSheet.Parsed members,
-            OwnershipSheet.Parsed ownership) {
+            OwnershipSheet.Parsed ownership, MetersSheet.Parsed meters) {
         List<RowProblem> problems = new ArrayList<>(plots.problems());
         problems.addAll(members.problems());
         problems.addAll(ownership.problems());
+        problems.addAll(meters.problems());
         List<PlotImportRow> plotInput = plots.rows().stream().map(PlotsSheet.ParsedRow::row).toList();
         PlotsPlanned plotsPlanned = planPlots(tenantId, importId, plots, plotInput, problems);
         List<MemberImportRow> memberInput = members.rows();
         MembersPlanned membersPlanned = planMembers(tenantId, importId, memberInput, problems);
         OwnershipPlanned ownershipPlanned = planOwnership(tenantId, plotInput, plotsPlanned.effective(), ownership,
                 membersPlanned, problems);
+        MetersPlanned metersPlanned = planMeters(tenantId, importId, plotInput, plotsPlanned.effective(), meters,
+                problems);
         problems.sort(Comparator.comparing((RowProblem problem) -> problem.sheet().ordinal())
                 .thenComparingInt(RowProblem::row));
 
-        PlanCounts counts = new PlanCounts(plotsPlanned.counts(), membersPlanned.counts(), ownershipPlanned.counts());
+        PlanCounts counts = new PlanCounts(plotsPlanned.counts(), membersPlanned.counts(), ownershipPlanned.counts(),
+                metersPlanned.counts());
         boolean clean = problems.isEmpty();
         return new ImportPlan(counts, problems,
-                clean ? storedRows(plotInput, memberInput, ownership.rows()) : Map.of(),
+                clean ? storedRows(plotInput, memberInput, ownership.rows(), meters.rows()) : Map.of(),
                 clean ? membersPlanned.ids() : Map.of(),
                 clean ? PlanDigest.of(plotInput, plotsPlanned.plan(), memberInput, membersPlanned.plan(),
-                        ownership.rows(), ownershipPlanned.plan()) : null,
+                        ownership.rows(), ownershipPlanned.plan(), meters.rows(), metersPlanned.plan()) : null,
                 clean ? new ImportPlan.Apply(plotInput, plotsPlanned.plan(), memberInput, membersPlanned.plan(),
-                        ownershipPlanned.input(), ownershipPlanned.plan()) : null);
+                        ownershipPlanned.input(), ownershipPlanned.plan(), meters.rows(), metersPlanned.plan())
+                        : null);
     }
 
     private record PlotsPlanned(PlanCounts.EntityCounts counts, PlotImportPlan plan, PlotImportPlan effective) {
@@ -111,6 +131,9 @@ class ImportPlanner {
 
     private record OwnershipPlanned(PlanCounts.EntityCounts counts, OwnershipImportPlan plan,
             List<OwnershipImportRow> input) {
+    }
+
+    private record MetersPlanned(PlanCounts.EntityCounts counts, MeterImportPlan plan) {
     }
 
     /**
@@ -249,6 +272,44 @@ class ImportPlanner {
         return new OwnershipPlanned(new PlanCounts.EntityCounts(created, 0, unchanged), plan, input);
     }
 
+    /**
+     * Adds the problems of the meter rows to {@code problems}: those of the meters module, except where the same cell
+     * already has a problem found while reading it (an unreadable date is not also {@code REQUIRED}). A row counts when
+     * it has no problem at all; meters are never updated.
+     */
+    private MetersPlanned planMeters(UUID tenantId, UUID importId, List<PlotImportRow> plotInput,
+            PlotImportPlan plotPlan, MetersSheet.Parsed sheet, List<RowProblem> problems) {
+        if (sheet.rows().isEmpty()) {
+            return new MetersPlanned(PlanCounts.EntityCounts.NONE, new MeterImportPlan(List.of()));
+        }
+        Set<String> reported = new HashSet<>();
+        Set<Integer> rowsWithProblems = new HashSet<>();
+        for (RowProblem problem : sheet.problems()) {
+            reported.add(problem.row() + "/" + problem.column());
+            rowsWithProblems.add(problem.row());
+        }
+        MeterImportPlan plan = meterImport.plan(tenantId, importId, plotInput, plotPlan, sheet.rows());
+        int created = 0;
+        int unchanged = 0;
+        for (MeterImportItem item : plan.items()) {
+            for (MeterImportProblem problem : item.problems()) {
+                String column = COLUMN_OF_METER_FIELD.get(problem.field()).key();
+                if (reported.add(item.row() + "/" + column)) {
+                    problems.add(new RowProblem(ImportSheet.METERS, item.row(), column, problem.code(),
+                            problem.params()));
+                }
+            }
+            if (item.action() == null || rowsWithProblems.contains(item.row())) {
+                continue;
+            }
+            switch (item.action()) {
+                case NEW -> created++;
+                case UNCHANGED -> unchanged++;
+            }
+        }
+        return new MetersPlanned(new PlanCounts.EntityCounts(created, 0, unchanged), plan);
+    }
+
     /** The key of a Members row or an Ownership row: trimmed, lower case; null when empty. */
     private static @Nullable String key(@Nullable String text) {
         return text == null || text.isBlank() ? null : text.strip().toLowerCase(Locale.ROOT);
@@ -262,7 +323,7 @@ class ImportPlanner {
 
     /** The rows as stored with a preview: only the cells that have a value, the area as plain decimal text. */
     private static Map<String, Object> storedRows(List<PlotImportRow> rows, List<MemberImportRow> memberRows,
-            List<OwnershipSheet.ParsedRow> ownershipRows) {
+            List<OwnershipSheet.ParsedRow> ownershipRows, List<MeterImportRow> meterRows) {
         List<Map<String, Object>> stored = new ArrayList<>(rows.size());
         for (PlotImportRow row : rows) {
             Map<String, Object> map = new LinkedHashMap<>();
@@ -281,7 +342,25 @@ class ImportPlanner {
         plan.put("plots", stored);
         plan.put("members", storedMembers(memberRows));
         plan.put("ownership", storedOwnership(ownershipRows));
+        plan.put("meters", storedMeters(meterRows));
         return plan;
+    }
+
+    /** The reading as plain decimal text, the date as an ISO date. */
+    private static List<Map<String, Object>> storedMeters(List<MeterImportRow> rows) {
+        List<Map<String, Object>> stored = new ArrayList<>(rows.size());
+        for (MeterImportRow row : rows) {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("row", row.row());
+            putIfPresent(map, "plotNumber", row.plotNumber());
+            putIfPresent(map, "resource", row.resource());
+            putIfPresent(map, "serial", row.serial());
+            putIfPresent(map, "installedOn", row.installedOn() == null ? null : row.installedOn().toString());
+            putIfPresent(map, "initialReading",
+                    row.initialReading() == null ? null : row.initialReading().toPlainString());
+            stored.add(map);
+        }
+        return stored;
     }
 
     /** The key is stored as typed; the member is found again from it when the plan is recomputed. */

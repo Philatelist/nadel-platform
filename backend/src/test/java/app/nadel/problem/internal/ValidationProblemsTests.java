@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import app.nadel.problem.FieldProblem;
 import app.nadel.problem.ValidationProblems;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.validation.FieldError;
 
@@ -32,6 +33,12 @@ class ValidationProblemsTests {
     }
 
     @Test
+    void anEmptyListIsRequiredAndAListOverItsLimitIsTooLong() {
+        assertThat(map("rows", "Size", List.of()).code()).isEqualTo("REQUIRED");
+        assertThat(map("rows", "Size", List.of(1, 2)).code()).isEqualTo("TOO_LONG");
+    }
+
+    @Test
     void aPatternOnAShareIsAnInvalidShareAndAnyOtherPatternIsInvalid() {
         assertThat(map("owners[0].share", "Pattern", "x").code()).isEqualTo("SHARE_INVALID");
         assertThat(map("email", "Pattern", "x").code()).isEqualTo("INVALID");
@@ -44,6 +51,16 @@ class ValidationProblemsTests {
         assertThat(map("firstVersion.rate", "Pattern", "-1").code()).isEqualTo("RATE_INVALID");
         assertThat(map("rate", "NotNull", null).code()).isEqualTo("REQUIRED");
         assertThat(map("corporate", "Pattern", "x").code()).isEqualTo("INVALID");
+    }
+
+    @Test
+    void aPatternOnAMeterReadingIsAnInvalidMeterValue() {
+        assertThat(map("initialReading", "Pattern", "1.2345").code()).isEqualTo("METER_VALUE_INVALID");
+        assertThat(map("finalReading", "Pattern", "-1").code()).isEqualTo("METER_VALUE_INVALID");
+        assertThat(map("value", "Pattern", "1e3").code()).isEqualTo("METER_VALUE_INVALID");
+        assertThat(map("rows[0].value", "Pattern", "x").code()).isEqualTo("METER_VALUE_INVALID");
+        assertThat(map("initialReading", "NotNull", null).code()).isEqualTo("REQUIRED");
+        assertThat(map("values", "Pattern", "x").code()).isEqualTo("INVALID");
     }
 
     @Test

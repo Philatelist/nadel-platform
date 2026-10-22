@@ -12,7 +12,17 @@ import { problemCode, problemFieldErrors } from '../problem';
 import { useDocumentTitle } from '../useDocumentTitle';
 
 const PAGE_SIZE = 50;
-const ENTITY_TYPES = ['MEMBER', 'ROLE', 'PLOT', 'SETTINGS', 'OWNERSHIP', 'CHARGE_TYPE', 'TARIFF'] as const;
+const ENTITY_TYPES = [
+  'MEMBER',
+  'ROLE',
+  'PLOT',
+  'SETTINGS',
+  'OWNERSHIP',
+  'CHARGE_TYPE',
+  'TARIFF',
+  'METER',
+  'METER_READING',
+] as const;
 
 /** Where a record of an entity type is shown; absent for types without a page of their own. */
 const entityHref: Readonly<Partial<Record<AuditEntityType, (entityId: string) => string>>> = {
@@ -21,6 +31,9 @@ const entityHref: Readonly<Partial<Record<AuditEntityType, (entityId: string) =>
   OWNERSHIP: (id) => `/plots/${id}`,
   CHARGE_TYPE: () => '/charge-types',
   TARIFF: (id) => `/tariffs/${id}`,
+  METER: (id) => `/meters/${id}`,
+  // the entity id of a reading's record is its meter
+  METER_READING: (id) => `/meters/${id}`,
 };
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -215,7 +228,12 @@ function AuditChanges({ entry }: { entry: AuditEntry }) {
     <ul className="flex flex-col gap-1">
       {entry.changes.map((change) => (
         <li key={change.field}>
-          <span className="text-ink-muted">{fieldNames[change.field] ?? change.field}: </span>
+          <span className="text-ink-muted">
+            {(entry.entityType === 'METER' && change.field === 'effectiveFrom'
+              ? a.fields.meterEffectiveFrom
+              : fieldNames[change.field]) ?? change.field}
+            :{' '}
+          </span>
           {auditValue(entry.entityType, change.field, change.oldValue, t, locale)} →{' '}
           {auditValue(entry.entityType, change.field, change.newValue, t, locale)}
         </li>

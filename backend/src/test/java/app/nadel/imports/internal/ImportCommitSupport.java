@@ -1,6 +1,7 @@
 package app.nadel.imports.internal;
 
 import static app.nadel.imports.internal.ImportWorkbooks.MEMBER_HEADER;
+import static app.nadel.imports.internal.ImportWorkbooks.METER_HEADER;
 import static app.nadel.imports.internal.ImportWorkbooks.OWNERSHIP_HEADER;
 import static app.nadel.imports.internal.ImportWorkbooks.PLOT_HEADER;
 import static app.nadel.imports.internal.ImportWorkbooks.member;
@@ -26,8 +27,9 @@ import tools.jackson.databind.json.JsonMapper;
 /**
  * Base of the tests that commit imports. Everything an import creates in the demo cooperative has a recognisable
  * name (plot numbers {@code CMT-}, {@code IMP-} and {@code LRG-}, member last names {@code Fixt}, e-mails at
- * {@code import.example.com}), and is removed after each test with the audit entries and owners that came with it,
- * so no test sees another's data and the demo data is as it was.
+ * {@code import.example.com}, meter serial numbers {@code IMT-} or meters of such plots), and is removed after each
+ * test with the audit entries and owners that came with it, so no test sees another's data and the demo data is as it
+ * was.
  */
 abstract class ImportCommitSupport extends ImportsIntegrationTest {
 
@@ -53,6 +55,54 @@ abstract class ImportCommitSupport extends ImportsIntegrationTest {
     /** A new member found by its e-mail on a later import. */
     protected List<Object> newMember(String key, String name) {
         return member(key, "Fixt" + tag + name, "Person", email(name.toLowerCase()));
+    }
+
+    /** A serial number the cleanup recognises. */
+    protected String serial(String name) {
+        return "IMT-" + tag + "-" + name;
+    }
+
+    /**
+     * A plot of the demo cooperative written by the owner role, numbered like a plot of an import ({@code CMT-}), so the
+     * cleanup removes it. Kind {@code PLOT}, 600 square metres.
+     */
+    protected UUID storedPlot(String name) {
+        UUID id = UUID.randomUUID();
+        ownerJdbc().update("insert into plot (id, tenant_id, number, kind, area_m2) values (?, ?, ?, 'PLOT', 600)",
+                id, DEMO_TENANT, plotNo(name));
+        return id;
+    }
+
+    /** A plot meter written by the owner role, active or removed on {@code removedOn}; removed by the cleanup. */
+    protected UUID storedMeter(UUID plot, String resource, String serial, String removedOn) {
+        UUID id = UUID.randomUUID();
+        ownerJdbc().update("insert into meter (id, tenant_id, kind, resource, serial, plot_id, installed_on, "
+                + "initial_value, removed_on, final_value) values (?, ?, 'PLOT', ?, ?, ?, date '2020-01-10', 100, "
+                + "?::date, case when ?::date is null then null else 200 end)", id, DEMO_TENANT, resource, serial,
+                plot, removedOn, removedOn);
+        return id;
+    }
+
+    /** The id the import gives the meter of a plot and resource: derived from the import id, the plot and the resource. */
+    protected static UUID meterId(String importId, String plotNumber, String resource) {
+        return UUID.nameUUIDFromBytes((importId + "/meter/" + plotNumber.toLowerCase() + "/" + resource)
+                .getBytes(StandardCharsets.UTF_8));
+    }
+
+    protected int metersLike(String serialPrefix) {
+        return ownerJdbc().queryForObject("select count(*) from meter where tenant_id = ? and serial like ?",
+                Integer.class, DEMO_TENANT, serialPrefix + "%");
+    }
+
+    /** A workbook with the three sheets of feature 008 and the Meters sheet. */
+    protected static byte[] workbook(List<List<?>> plots, List<List<?>> members, List<List<?>> ownership,
+            List<List<?>> meters) {
+        return ImportWorkbooks.builder()
+                .sheet("Plots", PLOT_HEADER, plots.toArray(List<?>[]::new))
+                .sheet("Members", MEMBER_HEADER, members.toArray(List<?>[]::new))
+                .sheet("Ownership", OWNERSHIP_HEADER, ownership.toArray(List<?>[]::new))
+                .sheet("Meters", METER_HEADER, meters.toArray(List<?>[]::new))
+                .build();
     }
 
     protected static byte[] workbook(List<List<?>> plots, List<List<?>> members, List<List<?>> ownership) {
@@ -152,10 +202,15 @@ abstract class ImportCommitSupport extends ImportsIntegrationTest {
         String members = ids(owner, "select id from member where tenant_id = ? and (last_name like 'Fixt%' "
                 + "or email like '%@import.example.com')");
         String freePlot = ids(owner, "select id from plot where tenant_id = ? and number = '" + FREE_DEMO_PLOT + "'");
+        String meters = ids(owner, "select m.id from meter m join plot p on p.id = m.plot_id where m.tenant_id = ? "
+                + "and (m.serial like 'IMT-%' or p.number ~ '^(CMT|IMP|LRG)-')");
         owner.update("delete from audit_entry where tenant_id = ? and (entity_type = 'IMPORT' "
                 + "or entity_id = any (string_to_array(?, ',')::uuid[]) "
                 + "or entity_id = any (string_to_array(?, ',')::uuid[]) "
-                + "or entity_id = any (string_to_array(?, ',')::uuid[]))", DEMO_TENANT, plots, members, freePlot);
+                + "or entity_id = any (string_to_array(?, ',')::uuid[]) "
+                + "or entity_id = any (string_to_array(?, ',')::uuid[]))", DEMO_TENANT, plots, members, freePlot,
+                meters);
+        owner.update("delete from meter where id = any (string_to_array(?, ',')::uuid[])", meters);
         owner.update("delete from ownership where plot_id = any (string_to_array(?, ',')::uuid[]) "
                 + "or member_id = any (string_to_array(?, ',')::uuid[]) "
                 + "or (plot_id = any (string_to_array(?, ',')::uuid[]) and id::text not like 'dddddddd-%')",

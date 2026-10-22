@@ -115,14 +115,15 @@ class MembersAccessAcceptanceTests extends IntegrationTest {
                 .isEqualTo(first.get("totalItems").asInt());
     }
 
-    /** §2.13 #2 and §2.4 demo users: five roles; Secretary is given to exactly one member; Electrician has none. */
+    /** §2.13 #2 and §2.4 demo users: five roles; Secretary is given to exactly one member; Electrician has the meter permissions. */
     @Test
     void demoChairmanSeesTheFiveRolesAndSecretaryIsGivenToOneMember() throws Exception {
         mvc.perform(get("/api/v1/roles").header(HttpHeaders.AUTHORIZATION, chairman()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[*].name", hasItems("Chairman", "Treasurer", "Member", "Секретар", "Електрик")))
                 .andExpect(jsonPath("$[?(@.name == 'Секретар')].memberCount").value(1))
-                .andExpect(jsonPath("$[?(@.name == 'Електрик')].permissions[0]").isEmpty());
+                .andExpect(jsonPath("$[?(@.name == 'Електрик')].permissions[*]",
+                        containsInAnyOrder("METERS_VIEW", "READINGS_ENTER")));
         mvc.perform(get("/api/v1/members/" + DEMO_SECRETARY_HOLDER).header(HttpHeaders.AUTHORIZATION, chairman()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.roles[*].name", hasItem("Секретар")));
@@ -172,7 +173,7 @@ class MembersAccessAcceptanceTests extends IntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.memberId").value(member.toString()))
                 .andExpect(jsonPath("$.permissions", containsInAnyOrder(
-                        "MEMBERS_VIEW", "MEMBERS_EDIT", "AUDIT_VIEW", "PLOTS_VIEW", "TARIFFS_VIEW")));
+                        "MEMBERS_VIEW", "MEMBERS_EDIT", "AUDIT_VIEW", "PLOTS_VIEW", "TARIFFS_VIEW", "METERS_VIEW")));
         mvc.perform(get("/api/v1/audit").header(HttpHeaders.AUTHORIZATION, person)).andExpect(status().isOk());
 
         // the new editor changes the postal address and the phone of the member
@@ -301,7 +302,8 @@ class MembersAccessAcceptanceTests extends IntegrationTest {
         } finally {
             doPut(chairman(), "/api/v1/roles/" + treasurerRole, Map.of("name", SEEDED_TREASURER_NAME,
                     "description", SEEDED_TREASURER_DESCRIPTION,
-                    "permissions", List.of("MEMBERS_VIEW", "PLOTS_VIEW", "AUDIT_VIEW", "TARIFFS_VIEW")))
+                    "permissions", List.of("MEMBERS_VIEW", "PLOTS_VIEW", "AUDIT_VIEW", "TARIFFS_VIEW",
+                            "METERS_VIEW")))
                     .andExpect(status().isOk());
         }
         mvc.perform(get("/api/v1/audit").header(HttpHeaders.AUTHORIZATION, treasurer)).andExpect(status().isOk());
@@ -312,7 +314,8 @@ class MembersAccessAcceptanceTests extends IntegrationTest {
         assertThat(restored.path("description").asString()).isEqualTo(SEEDED_TREASURER_DESCRIPTION);
         List<String> permissions = new ArrayList<>();
         restored.get("permissions").forEach(node -> permissions.add(node.asString()));
-        assertThat(permissions).containsExactlyInAnyOrder("MEMBERS_VIEW", "PLOTS_VIEW", "AUDIT_VIEW", "TARIFFS_VIEW");
+        assertThat(permissions).containsExactlyInAnyOrder("MEMBERS_VIEW", "PLOTS_VIEW", "AUDIT_VIEW", "TARIFFS_VIEW",
+                "METERS_VIEW");
     }
 
     /**

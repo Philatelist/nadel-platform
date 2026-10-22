@@ -12,10 +12,10 @@ vi.mock('../me', () => ({
   useOptionalMe: () => null,
 }));
 
-function renderGuard() {
+function renderGuard(any = false) {
   renderWithApp(
     <Routes>
-      <Route element={<RequirePermission permission={['PLOTS_VIEW', 'PLOTS_EDIT']} />}>
+      <Route element={<RequirePermission permission={['PLOTS_VIEW', 'PLOTS_EDIT']} any={any} />}>
         <Route path="/plots/new" element={<div>form</div>} />
       </Route>
     </Routes>,
@@ -34,5 +34,19 @@ describe('RequirePermission with several permissions', () => {
     permissions = ['PLOTS_VIEW', 'PLOTS_EDIT'];
     renderGuard();
     expect(screen.getByText('form')).toBeInTheDocument();
+  });
+});
+
+describe('RequirePermission with any', () => {
+  it('renders the route with one of the permissions', () => {
+    permissions = ['PLOTS_EDIT'];
+    renderGuard(true);
+    expect(screen.getByText('form')).toBeInTheDocument();
+  });
+
+  it('refuses a person with none of them', () => {
+    permissions = ['AUDIT_VIEW'];
+    renderGuard(true);
+    expect(screen.queryByText('form')).toBeNull();
   });
 });

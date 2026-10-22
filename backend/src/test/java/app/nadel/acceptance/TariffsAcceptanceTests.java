@@ -79,6 +79,7 @@ class TariffsAcceptanceTests extends IntegrationTest {
     void putTheDemoStateBack() {
         JdbcTemplate owner = ownerJdbc();
         for (UUID plot : createdPlots) {
+            owner.update("delete from meter where plot_id = ?", plot);
             owner.update("delete from ownership where plot_id = ?", plot);
             owner.update("delete from audit_entry where entity_id = ?", plot);
             owner.update("delete from plot_status where plot_id = ?", plot);
@@ -325,12 +326,22 @@ class TariffsAcceptanceTests extends IntegrationTest {
                 .andExpect(jsonPath("$.exclusions", hasSize(0)));
     }
 
-    /** §2.3 #5: a per-kWh tariff has no number of plots (it applies to plots with a meter). */
+    /**
+     * §2.3 #5, as changed by feature 010 (spec 010 §2.7): a per-kWh tariff applies to the plots with a meter, so its
+     * number of plots counts only the plots with an active electricity meter.
+     */
     @Test
-    void section23_aPerKwhTariffHasNoPlotCount() throws Exception {
+    void section23_aPerKwhTariffCountsOnlyThePlotsWithAnElectricityMeter() throws Exception {
         UUID tariff = newTariff(typeId("ELECTRICITY"), "By meter", version("2026-01-01", "PER_KWH", "MONTHLY", "4.32"));
-        send(chairman, get(TARIFFS + "/" + tariff), null).andExpect(jsonPath("$.plotCount").doesNotExist());
-        send(chairman, get(TARIFFS), null).andExpect(jsonPath("$[0].plotCount").doesNotExist());
+        long before = meteredPlots("ELECTRICITY");
+        send(chairman, get(TARIFFS + "/" + tariff), null).andExpect(jsonPath("$.plotCount").value(before));
+
+        meter(newPlot("600"), "ELECTRICITY");
+        meter(newPlot("600"), "WATER");
+        newPlot("600");
+
+        send(chairman, get(TARIFFS + "/" + tariff), null).andExpect(jsonPath("$.plotCount").value(before + 1));
+        send(chairman, get(TARIFFS), null).andExpect(jsonPath("$[0].plotCount").value(before + 1));
     }
 
     // ---- §2.4 Expected amount for a plot and a month
@@ -375,7 +386,10 @@ class TariffsAcceptanceTests extends IntegrationTest {
                 .andExpect(jsonPath("$.total").value("0.00"));
     }
 
-    /** §2.4 land tax row and the by-readings criterion, in one cooperative state. */
+    /**
+     * §2.4 land tax row and the by-readings criterion, in one cooperative state; as changed by feature 010 (spec 010
+     * §2.7) a plot without an electricity meter is "no meter" and one with a meter "by readings", neither with an amount.
+     */
     @Test
     void section24_landTaxAndMeterBasedTariffs() throws Exception {
         newTariff(typeId("LAND_TAX"), "Land", version("2026-01-01", "PER_AREA_SOTKA", "YEARLY", "35"));
@@ -383,6 +397,12 @@ class TariffsAcceptanceTests extends IntegrationTest {
         UUID plot = newPlot("600");
         preview(chairman, plot, "2026-11").andExpect(jsonPath("$.items", hasSize(2)))
                 .andExpect(jsonPath("$.items[?(@.tariffName == 'Land')].amount").value("17.50"))
+                .andExpect(jsonPath("$.items[?(@.tariffName == 'By meter')].status").value("NO_METER"))
+                .andExpect(jsonPath("$.items[?(@.tariffName == 'By meter')].amount").isEmpty())
+                .andExpect(jsonPath("$.total").value("17.50"));
+
+        meter(plot, "ELECTRICITY");
+        preview(chairman, plot, "2026-11")
                 .andExpect(jsonPath("$.items[?(@.tariffName == 'By meter')].status").value("BY_READINGS"))
                 .andExpect(jsonPath("$.items[?(@.tariffName == 'By meter')].amount").isEmpty())
                 .andExpect(jsonPath("$.total").value("17.50"));
@@ -611,6 +631,19 @@ class TariffsAcceptanceTests extends IntegrationTest {
 
     private UUID newPlot(String areaM2) throws Exception {
         return newPlot("PLOT", areaM2);
+    }
+
+    /** An active plot meter of the resource on a test plot, installed in January 2026 (removed with the plot). */
+    private void meter(UUID plot, String resource) {
+        ownerJdbc().update("insert into meter (tenant_id, kind, resource, serial, plot_id, installed_on, initial_value) "
+                + "select tenant_id, 'PLOT', ?, 'TA-1', id, date '2026-01-10', 0 from plot where id = ?", resource, plot);
+    }
+
+    /** Active, non-common plots of the demo cooperative with an active meter of the resource. */
+    private long meteredPlots(String resource) {
+        return ownerJdbc().queryForObject("select count(distinct p.id) from plot p join meter m on m.plot_id = p.id "
+                + "where p.tenant_id = ? and p.archived_at is null and p.kind <> 'COMMON' and m.resource = ? "
+                + "and m.removed_on is null", Long.class, DEMO_TENANT, resource);
     }
 
     private UUID newPlot(String kind, String areaM2) throws Exception {

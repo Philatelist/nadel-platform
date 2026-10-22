@@ -23,7 +23,9 @@
 | Exclusion | `TariffScopePlot` (kind `EXCLUDED`) | A plot of an `ALL_PLOTS` tariff that the tariff does not apply to, with a required reason (up to 500 characters). The expected amount shows it as excluded, with the reason, and not as zero |
 | Expected amount | `ExpectedCharge` | What a plot would be charged by its tariffs in a month, calculated on the server by `ChargeCalculator` from the versions valid in that month and the plot area: the days of each version over the days of the month, summed, rounded once. A one-time fee counts only in its due month. A `PER_KWH` or `PER_M3` tariff has no amount ("by readings"). A preview only: nothing is charged until feature 011. A member sees it only for plots they own |
 | Meter | `Meter` | Electricity meter of a plot, or the common transformer meter. A plot has zero or one active meter; a replaced meter keeps its history (money-rules 6.1–6.2) |
-| Meter reading | `MeterReading` | Meter value on a date. Source: admin, member, photo. Status: pending / approved / rejected |
+| Meter reading | `MeterReading` | A meter's value on a date (`MeterValue`: at most three decimals, not money). Source: `ENTERED` (board or electrician), `IMPORTED` (Excel), `MEMBER` (a plot owner). Status: `PENDING` (member, waits for approval), `APPROVED` (counts), `REJECTED` (with a reason), `SUPERSEDED` (replaced by a later entry for the same date or a correction, kept in the history). Money-rules 6.4 |
+| Interval consumption | — | The difference between a reading and the previous point of the same meter |
+| Range consumption | `RangeConsumption` | `value(to) − value(from)` clipped to the meter's working period and summed over the plot's chain of meters; a value between two readings is interpolated and marked calculated; unknown when a value cannot be determined (money-rules 6.4) |
 | Transformer losses | — | Common meter minus the sum of plot meters for the period |
 | Substation meter | `Meter` (kind `SUBSTATION`) | Meter at the cooperative's transformer; root of the meter tree |
 | Quarter meter | `Meter` (kind `QUARTER`) | Intermediate meter for a group of plots (a street or block); its losses are shared among those plots |
@@ -41,7 +43,7 @@
 | Treasurer | `TREASURER` | Base role. Admin who allocates payments; starts with View members, View plots and View audit log |
 | Chairman | `CHAIRMAN` | Base role. Head admin of the cooperative; always has every permission. A cooperative keeps at least one active chairman |
 | Member role | `MEMBER` | Base role every ordinary member holds; no permissions by default, sees only their own data |
-| Electrician | — | Admin who works only with meters. Not a base role: a custom role, given meter permissions when meters arrive |
+| Electrician | — | Admin who works only with meters. Not a base role: a custom role. In the demo cooperative the role "Електрик" (member `electrician@demo.local`) is granted `METERS_VIEW` and `READINGS_ENTER`: it sees the meters and the reading round and enters readings, but cannot register, replace or remove a meter or approve a member's reading |
 | Platform operator | `PLATFORM_OPERATOR` | Owner of the SaaS. Manages cooperatives and subscriptions, cannot see their data |
 | Permission | `Permission` | A single allowed action from a fixed list, for example `PAYMENTS_ALLOCATE` or `MEMBERS_EDIT` |
 | Role | `Role` | A named set of permissions stored per cooperative. Base roles (Chairman, Treasurer, Member) exist in every cooperative and cannot be deleted, but can be renamed (feature 004; the code stays, `Role.nameCustomized` tells a renamed role from one that still has its standard name); custom roles are added by anyone with `ROLES_MANAGE`. A member may hold several roles (table `member_role`) and gets the union of their permissions |

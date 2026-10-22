@@ -1,7 +1,7 @@
 ---
 name: spring-backend
 description: Backend specialist for the Nadel Spring Boot service. Delegate any task in backend/ — Spring Modulith modules under app.nadel.*, REST controllers implementing the generated OpenAPI interfaces, domain logic (Money, ledger, allocation, tariffs, meters), Spring Security and @PreAuthorize permission checks, JPA/Hibernate Spatial entities, domain events and JobRunr jobs, and their unit and Testcontainers integration tests.
-model: sonnet
+model: opus
 effort: high
 skills: []
 disallowedTools: Agent

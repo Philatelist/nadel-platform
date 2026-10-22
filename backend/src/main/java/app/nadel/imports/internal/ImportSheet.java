@@ -5,5 +5,6 @@ enum ImportSheet {
     FILE,
     PLOTS,
     MEMBERS,
-    OWNERSHIP
+    OWNERSHIP,
+    METERS
 }

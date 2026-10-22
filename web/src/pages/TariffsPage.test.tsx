@@ -95,7 +95,7 @@ describe('TariffsPage', () => {
     tariffs = [
       summary('t1', 'c1', 'Per sotka', { rate: '4.3200', basis: 'PER_AREA_SOTKA' }, 1),
       summary('t2', 'c1', 'Per plot', { rate: '120.5000', basis: 'PER_PLOT' }, 24),
-      summary('t3', 'c2', 'Lighting', { rate: '0.1000', basis: 'PER_KWH' }, undefined),
+      summary('t3', 'c2', 'Lighting', { rate: '0.1000', basis: 'PER_KWH' }, 3),
     ];
     renderWithApp(<TariffsPage />);
     const membership = within(screen.getByRole('heading', { name: 'Membership fee' }).closest('section')!);
@@ -105,7 +105,7 @@ describe('TariffsPage', () => {
     expect(membership.getByText(/₴120\.50 · Per plot/)).toBeInTheDocument();
     expect(membership.getByText(/24 plots$/)).toBeInTheDocument();
     const road = within(screen.getByRole('heading', { name: 'Road repair' }).closest('section')!);
-    expect(road.getByText(/applies to plots with a meter$/)).toBeInTheDocument();
+    expect(road.getByText(/3 plots$/)).toBeInTheDocument();
     expect(screen.getAllByText('No tariffs yet')).toHaveLength(1);
   });
 

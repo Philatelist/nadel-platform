@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { Me, Permission } from '@nadel/api-client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -81,6 +81,15 @@ describe('Layout', () => {
     expect(hrefs()).not.toContain('/settings');
   });
 
+  it('shows Settings with METERS_MANAGE alone', () => {
+    me = meWith(['METERS_VIEW', 'METERS_MANAGE']);
+    renderWithApp(<Layout />);
+    const hrefs = Array.from(screen.getByRole('navigation', { name: 'Main menu' }).querySelectorAll('a')).map(
+      (a) => a.getAttribute('href'),
+    );
+    expect(hrefs).toContain('/settings');
+  });
+
   it('shows Import after Members, only with IMPORT_RUN', () => {
     me = meWith(['MEMBERS_VIEW', 'IMPORT_RUN', 'ROLES_MANAGE']);
     const { unmount } = renderWithApp(<Layout />);
@@ -139,5 +148,53 @@ describe('Layout', () => {
     const inMenu = groups.find((g) => g.closest('#app-menu'))!;
     expect(inHeader.parentElement).toHaveClass('hidden', 'md:flex');
     expect(inMenu.parentElement).toHaveClass('md:hidden');
+  });
+
+  it('shows Meters in the menu only with METERS_VIEW', () => {
+    me = meWith([]);
+    const { unmount } = renderWithApp(<Layout />);
+    expect(screen.queryByRole('link', { name: 'Meters' })).toBeNull();
+    unmount();
+    me = meWith(['METERS_VIEW']);
+    renderWithApp(<Layout />);
+    expect(screen.getByRole('link', { name: 'Meters' })).toHaveAttribute('href', '/meters');
+  });
+
+  it('shows Readings only with READINGS_ENTER', () => {
+    renderWithApp(<Layout />);
+    expect(screen.queryByRole('link', { name: 'Readings' })).toBeNull();
+    cleanup();
+    me = meWith(['READINGS_ENTER']);
+    renderWithApp(<Layout />);
+    expect(screen.getByRole('link', { name: 'Readings' })).toHaveAttribute('href', '/readings');
+  });
+
+  it('shows To approve only with READINGS_APPROVE', () => {
+    renderWithApp(<Layout />);
+    expect(screen.queryByRole('link', { name: 'To approve' })).toBeNull();
+    cleanup();
+    me = meWith(['READINGS_APPROVE']);
+    renderWithApp(<Layout />);
+    expect(screen.getByRole('link', { name: 'To approve' })).toHaveAttribute('href', '/readings/approvals');
+  });
+
+  it('gives the electrician only Readings and Meters, without Plots', () => {
+    me = meWith(['READINGS_ENTER', 'METERS_VIEW']);
+    renderWithApp(<Layout />);
+    const nav = screen.getByRole('navigation', { name: 'Main menu' });
+    expect(Array.from(nav.querySelectorAll('a')).map((a) => a.getAttribute('href'))).toEqual([
+      '/readings',
+      '/meters',
+    ]);
+  });
+
+  it('keeps Plots for a meter reader who owns a plot or may view plots', () => {
+    me = { ...meWith(['METERS_VIEW']), ownedPlots: [{ plotId: 'p1', number: '7' }] } as unknown as Me;
+    const { unmount } = renderWithApp(<Layout />);
+    expect(screen.getByRole('link', { name: 'Plots' })).toBeInTheDocument();
+    unmount();
+    me = meWith(['METERS_VIEW', 'PLOTS_VIEW']);
+    renderWithApp(<Layout />);
+    expect(screen.getByRole('link', { name: 'Plots' })).toBeInTheDocument();
   });
 });

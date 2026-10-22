@@ -29,7 +29,7 @@ public final class DemoAccessChecks {
         chairmanHasEveryPermission(mvc);
         treasurerHasReadPermissions(mvc);
         memberHasNoPermissions(mvc);
-        electricianHasNoPermissions(mvc);
+        electricianHasTheMeterPermissions(mvc);
         permissionsAreEnforcedFromTheMembersRoles(mvc);
     }
 
@@ -40,7 +40,8 @@ public final class DemoAccessChecks {
                 .andExpect(jsonPath("$.roles[0].baseCode").value("CHAIRMAN"))
                 .andExpect(jsonPath("$.permissions", containsInAnyOrder("MEMBERS_VIEW", "MEMBERS_EDIT",
                         "ROLES_MANAGE", "AUDIT_VIEW", "PLOTS_VIEW", "PLOTS_EDIT", "OWNERSHIP_EDIT", "IMPORT_RUN",
-                        "SETTINGS_MANAGE", "TARIFFS_VIEW", "TARIFFS_MANAGE")));
+                        "SETTINGS_MANAGE", "TARIFFS_VIEW", "TARIFFS_MANAGE", "METERS_VIEW", "METERS_MANAGE", "READINGS_ENTER",
+                        "READINGS_APPROVE")));
     }
 
     public static void treasurerHasReadPermissions(MockMvc mvc) throws Exception {
@@ -48,7 +49,8 @@ public final class DemoAccessChecks {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.roles[0].baseCode").value("TREASURER"))
                 .andExpect(jsonPath("$.permissions",
-                        containsInAnyOrder("MEMBERS_VIEW", "PLOTS_VIEW", "AUDIT_VIEW", "TARIFFS_VIEW")));
+                        containsInAnyOrder("MEMBERS_VIEW", "PLOTS_VIEW", "AUDIT_VIEW", "TARIFFS_VIEW",
+                                "METERS_VIEW")));
     }
 
     public static void memberHasNoPermissions(MockMvc mvc) throws Exception {
@@ -58,14 +60,14 @@ public final class DemoAccessChecks {
                 .andExpect(jsonPath("$.permissions").isEmpty());
     }
 
-    /** The electrician is a Member plus the custom role "Electrician", which has no permissions yet. */
-    public static void electricianHasNoPermissions(MockMvc mvc) throws Exception {
+    /** The electrician is a Member plus the custom role "Electrician", which views meters and enters readings. */
+    public static void electricianHasTheMeterPermissions(MockMvc mvc) throws Exception {
         getAs(mvc, demo("electrician@demo.local"), "/api/v1/me")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.roles", hasSize(2)))
                 .andExpect(jsonPath("$.roles[?(@.name == 'Електрик')].baseCode").isEmpty())
                 .andExpect(jsonPath("$.roles[?(@.baseCode == 'MEMBER')]", hasSize(1)))
-                .andExpect(jsonPath("$.permissions").isEmpty());
+                .andExpect(jsonPath("$.permissions", containsInAnyOrder("METERS_VIEW", "READINGS_ENTER")));
     }
 
     /** Representative allowed and denied endpoints: members, audit and roles, for the three kinds of caller. */

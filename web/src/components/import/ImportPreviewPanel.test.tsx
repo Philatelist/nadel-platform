@@ -15,6 +15,7 @@ function preview(over: Partial<ImportPreview> = {}): ImportPreview {
       plots: { created: 5, updated: 3, unchanged: 7 },
       members: { created: 0, updated: 0, unchanged: 0 },
       ownerships: { created: 0, updated: 0, unchanged: 0 },
+      meters: { created: 0, updated: 0, unchanged: 0 },
     },
     problems: [],
     problemCount: 0,
@@ -68,6 +69,19 @@ describe('ImportPreviewPanel', () => {
     const row = screen.getAllByRole('row').slice(-1)[0];
     expect(row).toHaveTextContent('Ownership2Member key');
     expect(row).toHaveTextContent('no row with this member key');
+  });
+
+  it('explains a plot that has a meter instead of the unknown message', () => {
+    renderPanel(
+      preview({
+        committable: false,
+        problemCount: 1,
+        problems: [problem(3, { column: 'kind', code: 'PLOT_HAS_METER' })],
+      }),
+    );
+    const row = screen.getAllByRole('row').slice(-1)[0];
+    expect(row).toHaveTextContent('The plot has a meter — remove it first.');
+    expect(row).not.toHaveTextContent('The value is not valid.');
   });
 
   it('interpolates the plot number into the ownership conflict message', () => {

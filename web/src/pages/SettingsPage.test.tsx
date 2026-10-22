@@ -1,6 +1,6 @@
 import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { ApiError, type CooperativeSettings } from '@nadel/api-client';
+import { ApiError, type CooperativeSettings, type Permission } from '@nadel/api-client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderWithApp } from '../test/render';
@@ -12,6 +12,7 @@ interface Options {
 }
 
 let settingsQuery: { data?: CooperativeSettings; error: unknown; isPending: boolean; isError: boolean };
+let permissions: Permission[];
 let mutate: ReturnType<typeof vi.fn>;
 let isPending: boolean;
 let options: Options;
@@ -25,7 +26,10 @@ vi.mock('@nadel/api-client', async (importOriginal) => ({
     return { mutate, isPending };
   },
 }));
-vi.mock('../me', () => ({ useOptionalMe: () => null }));
+vi.mock('../me', () => ({
+  useCan: (p: Permission) => permissions.includes(p),
+  useOptionalMe: () => null,
+}));
 
 function renderPage() {
   renderWithApp(
@@ -37,6 +41,7 @@ function renderPage() {
 
 describe('SettingsPage', () => {
   beforeEach(() => {
+    permissions = ['SETTINGS_MANAGE'];
     settingsQuery = {
       data: { memberPlotStatusVisibility: 'OWN_ONLY' },
       error: null,
@@ -45,6 +50,26 @@ describe('SettingsPage', () => {
     };
     mutate = vi.fn();
     isPending = false;
+  });
+
+  it('shows only the sections the permissions allow', () => {
+    permissions = ['METERS_VIEW', 'METERS_MANAGE'];
+    renderPage();
+    expect(screen.getByRole('link', { name: 'Meter tree' })).toHaveAttribute('href', '/settings/meter-tree');
+    expect(screen.queryByRole('radio')).toBeNull();
+  });
+
+  it('hides the meter tree link without METERS_MANAGE', () => {
+    renderPage();
+    expect(screen.queryByRole('link', { name: 'Meter tree' })).toBeNull();
+    expect(screen.getAllByRole('radio').length).toBeGreaterThan(0);
+  });
+
+  it('shows both sections with both permissions', () => {
+    permissions = ['SETTINGS_MANAGE', 'METERS_VIEW', 'METERS_MANAGE'];
+    renderPage();
+    expect(screen.getByRole('link', { name: 'Meter tree' })).toBeInTheDocument();
+    expect(screen.getAllByRole('radio').length).toBeGreaterThan(0);
   });
 
   it('shows a loading state', () => {

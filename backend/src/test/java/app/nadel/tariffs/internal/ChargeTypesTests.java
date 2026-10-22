@@ -591,7 +591,8 @@ class ChargeTypesTests extends IntegrationTest {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("name", "Treasurer");
         body.put("description", "Read access to members, plots and audit");
-        body.put("permissions", List.of("MEMBERS_VIEW", "PLOTS_VIEW", "AUDIT_VIEW", "TARIFFS_VIEW", "TARIFFS_MANAGE"));
+        body.put("permissions", List.of("MEMBERS_VIEW", "PLOTS_VIEW", "AUDIT_VIEW", "TARIFFS_VIEW", "METERS_VIEW",
+                "TARIFFS_MANAGE"));
         try {
             send(chairman, put("/api/v1/roles/" + treasurerRole), body).andExpect(status().isOk());
 

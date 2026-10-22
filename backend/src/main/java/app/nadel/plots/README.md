@@ -14,7 +14,8 @@ Plots are matched by number among the active plots, ignoring case; a blank value
 matched plot keeps its stored spelling of the number; a new plot needs a kind and, unless it is common land (area 0), an
 area. Besides the rules of `PlotData`: a number repeated in the file is `DUPLICATE_IN_FILE` on the later rows, a cadastral
 number held by another plot (archived ones included) or claimed by an earlier row is `CADASTRAL_NUMBER_TAKEN`, and a plot
-with ownership history cannot become common land (`PLOT_HAS_OWNERSHIP_HISTORY`). The lookups are bulk queries (500
+with ownership history cannot become common land (`PLOT_HAS_OWNERSHIP_HISTORY`), nor can a plot that a `PlotChangeGuard`
+refuses (`PLOT_HAS_METER` from `meters`, on the `kind` column; see Guards). The lookups are bulk queries (500
 values per `IN` list). The id of a new plot is derived from the import id and the number, so planning the same import again
 gives the same ids. Applying a plan comes with a later slice.
 
@@ -47,7 +48,7 @@ status refresh, `OWNERSHIP_CHANGED` event and its texts) is `OwnershipRecorder`,
 import. A violation of the plot number, cadastral number or ownership overlap constraint at a flush, or a plan that no
 longer holds, is 409 `IMPORT_STALE`.
 
-`plots` also implements the SPIs `members.MemberArchiveGuard` (see Guards) and `identity.OwnedPlotsSource` (`GET /me` ownedPlots), serves the public read facade `PlotCatalog` (`JpaPlotCatalog`: `find`, `findAll`, `inNaturalOrder` (ids sorted by the natural order of the number, as in the plots list), `countChargeable`; plain `PlotFacts` records with number, common land, archived and area, used by `tariffs`; runs in the caller's transaction under RLS), and uses `members.MemberDirectory` and `settings.CooperativeSettings`.
+`plots` also implements the SPIs `members.MemberArchiveGuard` (see Guards) and `identity.OwnedPlotsSource` (`GET /me` ownedPlots), serves the public read facade `PlotCatalog` (`JpaPlotCatalog`: `find`, `findAll`, `findAndLockShared` (the plot `FOR SHARE`, `MANDATORY` transaction: taken by `meters` before it registers a plot meter, so it waits for a delete, archive or edit of the plot in progress and they wait for it), `findAllAndLockShared` (the same lock for many plots in id order, 500 per `IN` list: the Excel import's meters), `findActiveByNumbers` (active plots by number ignoring case, 500 values per `IN` list), `inNaturalOrder` (ids sorted by the natural order of the number, as in the plots list), `inStreetOrder` (ids by street in the Ukrainian alphabet with the ICU collation `uk-x-icu`, plots without a street last, then the natural order of the number: the meter register and round), `countChargeable`; plain `PlotFacts` records with number, street, common land, archived and area, used by `tariffs` and `meters`; runs in the caller's transaction under RLS), defines the veto SPI `PlotChangeGuard` (see Guards), and uses `members.MemberDirectory` and `settings.CooperativeSettings`.
 
 ## Endpoints
 
@@ -203,6 +204,13 @@ lock a change of owner takes), so a guard and an ownership change of one plot ru
   `ownership` (`ON DELETE RESTRICT`) stays as the database backstop.
 - Update: a plot that has any ownership row cannot become common land: 409 `PLOT_HAS_OWNERSHIP_HISTORY` with
   `errors[{field: kind}]`. Common land with no history can become a plot, and other edits are unaffected.
+- `PlotChangeGuard` (SPI of this module, ADR 0011; implemented by `meters.internal.MeterPlotGuard`): after the ownership
+  checks, `PlotCommands.delete`, `archive` and `update` (a `PLOT` becoming `COMMON`) ask every guard bean through
+  `PlotChangeGuards` with the plot already locked `FOR UPDATE`; the first refusal is a 409 with the guard's code
+  (`PLOT_HAS_METER`; `errors[{field: kind}]` for the update). The import's plan asks the guards in bulk about the matched
+  plots a row turns into common land and reports a refusal as a problem on `kind`; the commit plans again under the plot
+  locks. Guards return the refused plots instead of throwing, only read and take no locks. `meters` refuses delete and
+  common land while the plot has any meter (active or removed) and archive while it has an active one.
 - `OwnershipArchiveGuard` implements `members.MemberArchiveGuard`: 409 `MEMBER_OWNS_PLOT` when the member has a current
   ownership. Lock order: a change of owner takes the plot lock, then the members `FOR SHARE`; the member archive takes
   only the member row lock (after the chairman lock) and the guard takes no locks, so no cycle is possible. If the

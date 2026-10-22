@@ -12,8 +12,8 @@ import org.dhatim.fastexcel.Workbook;
 import org.dhatim.fastexcel.Worksheet;
 
 /**
- * Builds the import template in one of two languages: three sheets (Plots, Members, Ownership), one instruction row and
- * one example row. Both of those rows start with {@code #}, which the import skips. Columns that carry identifiers or
+ * Builds the import template in one of two languages: four sheets (Plots, Members, Ownership, Meters), one instruction
+ * row and one example row. Both of those rows start with {@code #}, which the import skips. Columns that carry identifiers or
  * phone numbers are formatted as text so that Excel keeps leading zeros and long digit strings.
  * <p>
  * The English template shows the canonical sheet and column names. In the Ukrainian template everything a person reads
@@ -47,7 +47,9 @@ final class TemplateWriter {
             new Sheet(ImportVocabulary.COLUMNS_MEMBERS, MembersSheet.NAME, columns(MemberColumn.values(),
                     MemberColumn.EXTERNAL_ID, MemberColumn.PHONES, MemberColumn.VIBER_PHONE)),
             new Sheet(ImportVocabulary.COLUMNS_OWNERSHIP, OwnershipSheet.NAME, columns(OwnershipColumn.values(),
-                    OwnershipColumn.PLOT_NUMBER, OwnershipColumn.MEMBER_EXTERNAL_ID, OwnershipColumn.SHARE)));
+                    OwnershipColumn.PLOT_NUMBER, OwnershipColumn.MEMBER_EXTERNAL_ID, OwnershipColumn.SHARE)),
+            new Sheet(ImportVocabulary.COLUMNS_METERS, MetersSheet.NAME, columns(MeterColumn.values(),
+                    MeterColumn.PLOT_NUMBER, MeterColumn.SERIAL)));
 
     private static List<Column> columns(SheetColumn[] all, SheetColumn... textColumns) {
         List<SheetColumn> text = List.of(textColumns);

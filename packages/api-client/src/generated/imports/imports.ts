@@ -81,12 +81,12 @@ export const getDownloadImportTemplateUrl = (params?: DownloadImportTemplatePara
 }
 
 /**
- * Returns the Excel template (`.xlsx`) with three sheets, one instruction row and one example row per sheet
+ * Returns the Excel template (`.xlsx`) with four sheets, one instruction row and one example row per sheet
  * (both rows start with `#` and are ignored by the import). It comes in two languages. The Ukrainian template
- * (`nadel-import-template-uk.xlsx`) has the sheets `Ділянки`, `Члени` and `Власність`, and everything a person
- * reads is Ukrainian: headers, instructions, example row and value words (`ДІЛЯНКА`, `так`). The English
- * template (`nadel-import-template-en.xlsx`) has the sheets `Plots`, `Members` and `Ownership` with the
- * canonical column names. The file name is always ASCII, in the `Content-Disposition` header.
+ * (`nadel-import-template-uk.xlsx`) has the sheets `Ділянки`, `Члени`, `Власність` and `Лічильники`, and
+ * everything a person reads is Ukrainian: headers, instructions, example row and value words (`ДІЛЯНКА`, `так`,
+ * `ЕЛЕКТРОЕНЕРГІЯ`). The English template (`nadel-import-template-en.xlsx`) has the sheets `Plots`, `Members`,
+ * `Ownership` and `Meters` with the canonical column names. The file name is always ASCII, in the `Content-Disposition` header.
  *
  * The language is the `lang` query parameter. Without it the best match of `uk` and `en` in the
  * `Accept-Language` header is used (`uk-UA` is `uk`, `en-US` is `en`), and without a match (`de`, no header)
@@ -310,20 +310,22 @@ export const getUploadImportUrl = () => {
 }
 
 /**
- * Parses and checks an Excel workbook (`.xlsx`, at most 10 MB, at most 2,000 plots, 3,000 members and 6,000 ownership rows) and
+ * Parses and checks an Excel workbook (`.xlsx`, at most 10 MB, at most 2,000 plots, 3,000 members, 6,000 ownership
+ * rows and 2,000 meter rows) and
  * returns a preview. Nothing is saved except the record of the upload itself. The preview can be committed for
  * 30 minutes (`expiresAt`) when `committable` is true, that is when there are no problems and something would be
  * created or updated. Requires the `IMPORT_RUN` permission; the platform operator has no cooperative data: 403.
  *
- * All three sheets are checked. The `Members` and `Ownership` sheets may be missing (a file may hold plots only, or
- * plots and members); the `Plots` sheet is required.
+ * All four sheets are checked. The `Members`, `Ownership` and `Meters` sheets may be missing (a file may hold
+ * plots only, or plots and members); the `Plots` sheet is required.
  * Rows whose first cell starts with `#` and empty rows are skipped. `problems` lists at most 1,000 problems
  * (`problemCount` is the total) in sheet and row order. `row` is the Excel row number (1 is the header row);
  * 0 means the problem is about the file or the whole sheet. `column` is the canonical column key
  * (Plots: `number`, `street`, `kind`, `area_m2`, `area_sotky`, `cadastral_number`, `has_building`, `notes`;
  * Members: `external_id`, `last_name`, `first_name`, `middle_name`, `phones`, `email`, `postal_address`,
  * `delivery_channel`, `telegram_username`, `viber_phone`;
- * Ownership: `plot_number`, `member_external_id`, `share`, `valid_from`).
+ * Ownership: `plot_number`, `member_external_id`, `share`, `valid_from`;
+ * Meters: `plot_number`, `resource`, `serial`, `installed_on`, `initial_reading`).
  * `code` is one of:
  *
  * - file and sheet level: `SHEET_MISSING` (no sheet of that name), `HEADER_MISSING` (a required column is not in
@@ -331,7 +333,8 @@ export const getUploadImportUrl = () => {
  * - cell level: `DATE_INVALID`, `NUMBER_INVALID`, `YES_NO_INVALID`, `AREA_BOTH_OR_NONE` (exactly one of
  *   `area_m2` and `area_sotky` must be filled for a new plot);
  * - plot rules, as when a plot is entered by hand: `REQUIRED`, `TOO_LONG`, `INVALID`, `AREA_INVALID`,
- *   `CADASTRAL_INVALID`, `CADASTRAL_NUMBER_TAKEN`, `PLOT_HAS_OWNERSHIP_HISTORY`;
+ *   `CADASTRAL_INVALID`, `CADASTRAL_NUMBER_TAKEN`, `PLOT_HAS_OWNERSHIP_HISTORY`, `PLOT_HAS_METER` (`kind`: a
+ *   plot that has a meter cannot become common land);
  * - member rules, as when a member is entered by hand: `REQUIRED`, `TOO_LONG`, `INVALID` (an e-mail that is
  *   not an address, an unknown `delivery_channel`), `PHONE_INVALID` (`phones` or `viber_phone`),
  *   `CHANNEL_CONTACT_MISSING` (the contact the delivery channel needs is empty: `email`, `telegram_username` or
@@ -371,6 +374,25 @@ export const getUploadImportUrl = () => {
  * owners are exactly the file's members and shares, the dates ignored, is skipped (counted as unchanged). A plot
  * whose own `Plots` row has a problem, and a plot with a row whose member has a problem, is not checked further.
  * Ownership is never updated, so `ownerships.updated` is always 0. At most 6,000 ownership rows.
+ *
+ * The `Meters` sheet (Ukrainian name `Лічильники`) adds plot meters only; the tree of electricity meters is set
+ * up on its own screen. All five columns are required, one row per meter: `plot_number` (a plot of the `Plots`
+ * sheet or an active plot of the cooperative), `resource` (`ELECTRICITY` or `WATER`, in Ukrainian
+ * `ЕЛЕКТРОЕНЕРГІЯ` or `ВОДА`), `serial` (at most 50 characters), `installed_on` (an Excel date or `DD.MM.YYYY`)
+ * and `initial_reading` (the reading on the installation date: not negative, at most 11 integer digits and 3
+ * decimals). A row whose plot already has an active meter of the resource with the same serial number (ignoring
+ * case) is unchanged (`meters.unchanged`; its dates and reading are not compared), any other row creates an
+ * active meter (`meters.created`). Meters are never updated, so `meters.updated` is always 0. Meter codes:
+ *
+ * - `UNKNOWN_PLOT`, `PLOT_COMMON_LAND` (`plot_number`), as on the `Ownership` sheet; a plot whose own `Plots` row
+ *   has a problem is not checked further;
+ * - `REQUIRED` (any column), `INVALID` (`resource`: not a resource word), `TOO_LONG` (`serial`),
+ *   `DATE_INVALID` (`installed_on`), `NUMBER_INVALID` (`initial_reading`: not a number),
+ *   `METER_VALUE_INVALID` (`initial_reading`: negative, more than 3 decimals or more than 11 integer digits);
+ * - `READING_DATE_IN_FUTURE` (`installed_on`: after today in Europe/Kyiv);
+ * - `DUPLICATE_IN_FILE` (`resource`: an earlier row names the same plot and resource);
+ * - `METER_ACTIVE_EXISTS` (`serial`, `params.plot`: the plot already has another active meter of that resource;
+ *   the import never replaces a meter, replace it in the register).
  *
  * A file that cannot be read at all is refused with 400 `FILE_NOT_XLSX` (not an `.xlsx` workbook, corrupt,
  * encrypted, or unpacking to an unreasonable size) or 400 `IMPORT_LIMIT_EXCEEDED` (too many rows); a file over
@@ -454,9 +476,10 @@ export const useUploadImport = <TError = BadRequestResponse | UnauthorizedRespon
  * `IMPORT_RUN` permission; the platform operator has no cooperative data: 403. An unknown id, and the id of
  * another cooperative's import, is 404.
  *
- * Before saving, the plan is computed again from the stored rows under locks on the plots and members it
- * touches and compared with the preview. Any difference (a plot with one of the file's numbers created
- * meanwhile, an owner changed, a member archived) refuses the commit with `IMPORT_STALE`, and so does a unique
+ * Before saving, the plan is computed again from the stored rows under locks on the plots, meters and members
+ * it touches and compared with the preview. Any difference (a plot with one of the file's numbers created
+ * meanwhile, an owner changed, a member archived, a meter registered or removed) refuses the commit with
+ * `IMPORT_STALE`, and so does a unique
  * or overlap rule broken while saving by a record created meanwhile; nothing is saved and the file has to be
  * uploaded again. Per-record audit entries are written as when the records are entered by hand, plus one
  * `IMPORT_COMMITTED` entry (entity type `IMPORT`, entity id = import id, label = file name, one field per

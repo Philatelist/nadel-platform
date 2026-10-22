@@ -69,18 +69,18 @@ describe('ScopeEditor', () => {
     expect(screen.getByText('archived')).toBeInTheDocument();
   });
 
-  it('shows selected plots and the meter text when the count is absent', () => {
+  it('shows selected plots and the count of plots with an active meter', () => {
     tariff = {
       ...base,
       scopeKind: 'SELECTED_PLOTS',
-      plotCount: undefined,
+      plotCount: 3,
       exclusions: [],
       selectedPlots: [{ plotId: 'p7', number: '7', archived: false }],
     };
     renderEditor();
     expect(screen.getByText('Selected plots')).toBeInTheDocument();
     expect(screen.getByText('7')).toBeInTheDocument();
-    expect(screen.getByText(/applies to plots with a meter/)).toBeInTheDocument();
+    expect(screen.getByText(/3 plots/)).toBeInTheDocument();
   });
 
   it('is read-only without TARIFFS_MANAGE', () => {

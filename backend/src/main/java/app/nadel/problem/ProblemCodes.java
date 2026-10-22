@@ -9,6 +9,11 @@ public final class ProblemCodes {
     public static final String MEMBER_NOT_LINKED = "MEMBER_NOT_LINKED";
     public static final String PERMISSION_DENIED = "PERMISSION_DENIED";
     public static final String NOT_FOUND = "NOT_FOUND";
+    /**
+     * 404 of the plot-scoped meter endpoints a member may call: the plot is unknown, of another cooperative or not one
+     * the caller may see. Every case is the same answer, so nothing leaks.
+     */
+    public static final String PLOT_NOT_FOUND = "PLOT_NOT_FOUND";
     public static final String INTERNAL_ERROR = "INTERNAL_ERROR";
     public static final String EMAIL_TAKEN = "EMAIL_TAKEN";
     public static final String LAST_CHAIRMAN = "LAST_CHAIRMAN";
@@ -55,6 +60,35 @@ public final class ProblemCodes {
     public static final String IMPORT_ALREADY_COMMITTED = "IMPORT_ALREADY_COMMITTED";
     /** 410: the preview is older than 30 minutes. */
     public static final String IMPORT_EXPIRED = "IMPORT_EXPIRED";
+    /** 409: a plot that has a meter is deleted or turned into common land, or a plot with an active meter is archived. */
+    public static final String PLOT_HAS_METER = "PLOT_HAS_METER";
+    /** 409: the plot already has an active meter of the resource. */
+    public static final String METER_ACTIVE_EXISTS = "METER_ACTIVE_EXISTS";
+    /** 409: common land has no plot meters. */
+    public static final String METER_COMMON_LAND = "METER_COMMON_LAND";
+    /** 409: a meter with readings is never deleted; it is removed instead. */
+    public static final String METER_HAS_READINGS = "METER_HAS_READINGS";
+    /** 409: the meter is removed, so it can be neither removed again nor deleted. */
+    public static final String METER_REMOVED = "METER_REMOVED";
+    /** 409: the meter has readings waiting for approval, so it is neither removed nor replaced until they are decided. */
+    public static final String METER_HAS_PENDING_READINGS = "METER_HAS_PENDING_READINGS";
+    /** 409: a change of the electricity tree breaks its rules; {@code errors[]} names the rule ({@code TREE_*}). */
+    public static final String METER_TREE_INVALID = "METER_TREE_INVALID";
+    /** 409: the meter has meters under it in the tree, so it is not deleted, nor removed while they work under it. */
+    public static final String METER_HAS_CHILDREN = "METER_HAS_CHILDREN";
+    /** 409: a reading (also the initial or final reading of a meter) dated after today (Europe/Kyiv). */
+    public static final String READING_DATE_IN_FUTURE = "READING_DATE_IN_FUTURE";
+    /** 409: a reading dated before the installation or after the removal of its meter. */
+    public static final String READING_DATE_OUTSIDE_METER = "READING_DATE_OUTSIDE_METER";
+    /** 409: a reading lower than the previous one or higher than the next one, or dated before a later one. */
+    public static final String READING_OUT_OF_ORDER = "READING_OUT_OF_ORDER";
+    /** 409: a charge uses the readings around the date, so they are no longer corrected, deleted or inserted into. */
+    public static final String READING_IN_USE = "READING_IN_USE";
+    /**
+     * 409: the reading is not counted (pending, rejected or superseded), so it can be neither corrected nor deleted; or it
+     * is not pending, so it can be neither approved nor rejected.
+     */
+    public static final String READING_STATUS_INVALID = "READING_STATUS_INVALID";
 
     /** Codes of single fields in {@code errors[]}. */
     public static final String REQUIRED = "REQUIRED";
@@ -75,6 +109,18 @@ public final class ProblemCodes {
     public static final String DUPLICATE = "DUPLICATE";
     public static final String MEMBER_NOT_FOUND = "MEMBER_NOT_FOUND";
     public static final String OWNERSHIP_NOT_FOUND = "OWNERSHIP_NOT_FOUND";
+    /** A meter reading that is not a non-negative number with at most 11 integer and 3 decimal digits. */
+    public static final String METER_VALUE_INVALID = "METER_VALUE_INVALID";
+    /** With {@link #METER_TREE_INVALID}: a water meter has no tree. */
+    public static final String TREE_WATER = "TREE_WATER";
+    /** With {@link #METER_TREE_INVALID}: a quarter meter under another quarter meter. */
+    public static final String TREE_QUARTER_UNDER_QUARTER = "TREE_QUARTER_UNDER_QUARTER";
+    /** With {@link #METER_TREE_INVALID}: the kinds of the meter and the parent do not allow the link. */
+    public static final String TREE_PARENT_KIND = "TREE_PARENT_KIND";
+    /** With {@link #METER_TREE_INVALID}: the parent is removed or not yet installed on the effective date. */
+    public static final String TREE_PARENT_INACTIVE = "TREE_PARENT_INACTIVE";
+    /** With {@link #METER_TREE_INVALID}: an effective date before the meter's latest change in the tree. */
+    public static final String TREE_DATE_BEFORE_LATEST = "TREE_DATE_BEFORE_LATEST";
 
     /** Codes of the rows of an import file (see {@code ImportProblem} in the API contract). */
     public static final String SHEET_MISSING = "SHEET_MISSING";

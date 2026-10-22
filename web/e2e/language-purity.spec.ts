@@ -205,6 +205,10 @@ const CHAIRMAN_SCREENS = [
   '/audit',
   '/roles',
   '/settings',
+  '/meters',
+  '/readings',
+  '/readings/approvals',
+  '/settings/meter-tree',
   '/no-such-screen',
 ];
 
@@ -236,6 +240,12 @@ for (const locale of ['uk', 'en'] as const) {
         const tariffHref = (await hrefs(page, /^\/tariffs\/[0-9a-f-]{36}$/))[0];
         expect(tariffHref, 'a tariff link on the tariffs list').toBeTruthy();
         findings.push(...(await auditScreen(page, tariffHref ?? '', locale)));
+
+        await page.goto('/meters');
+        await settle(page);
+        const meterHref = (await hrefs(page, /^\/meters\/[0-9a-f-]{36}$/))[0];
+        expect(meterHref, 'a meter link on the meters list').toBeTruthy();
+        findings.push(...(await auditScreen(page, meterHref ?? '', locale)));
 
         expect(report(findings), 'language mixes').toBe('');
       } finally {

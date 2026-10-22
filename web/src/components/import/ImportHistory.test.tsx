@@ -20,7 +20,12 @@ function row(over: Partial<ImportSummary> = {}): ImportSummary {
     uploadedBy: 'Olena Koval',
     uploadedAt: '2026-10-20T09:30:00Z',
     status: 'COMMITTED',
-    counts: { plots: { created: 5, updated: 2, unchanged: 1 }, members: zero, ownerships: zero },
+    counts: {
+      plots: { created: 5, updated: 2, unchanged: 1 },
+      members: zero,
+      ownerships: zero,
+      meters: { created: 3, updated: 0, unchanged: 1 },
+    },
     problemCount: 0,
     ...over,
   };

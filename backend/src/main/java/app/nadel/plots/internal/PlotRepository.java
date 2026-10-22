@@ -26,12 +26,42 @@ interface PlotRepository extends JpaRepository<Plot, UUID> {
     Optional<Plot> findByIdForUpdate(@Param("id") UUID id);
 
     /**
+     * The plot with a shared row lock ({@code FOR SHARE}) until the end of the transaction: a module that writes data
+     * depending on the plot (a plot meter) waits for a delete, archive or edit of the plot in progress, and they wait
+     * for it.
+     */
+    @Lock(LockModeType.PESSIMISTIC_READ)
+    @Query("select p from Plot p where p.id = :id")
+    Optional<Plot> findByIdForShare(@Param("id") UUID id);
+
+    /** The active plots whose lower-cased number is among {@code numbers} (already lower-cased); RLS limits them. */
+    @Query("select p from Plot p where lower(p.number) in :numbers and p.archivedAt is null")
+    List<Plot> findActiveWithLowerNumbers(@Param("numbers") Collection<String> numbers);
+
+    /**
+     * The given plots' ids by street (Ukrainian ICU collation, so "Ґ" follows "Г" and case is ignored; no street last),
+     * then natural order of the number.
+     */
+    @Query(value = "select p.id from plot p where p.id in (:ids) "
+            + "order by p.street collate \"uk-x-icu\" nulls last, p.number_sort_key, p.number, p.id",
+            nativeQuery = true)
+    List<UUID> findIdsInStreetOrder(@Param("ids") Collection<UUID> ids);
+
+    /**
      * The given plots with an exclusive row lock ({@code FOR UPDATE}), in id order, for the Excel import: the same
      * lock a change of owner takes first, so the two serialise.
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select p from Plot p where p.id in :ids order by p.id")
     List<Plot> lockAllForUpdate(@Param("ids") Collection<UUID> ids);
+
+    /**
+     * The given plots with a shared row lock ({@code FOR SHARE}), in id order, for the Excel import of meters: the lock
+     * a registration of a meter takes, so a delete, archive or edit of the plot waits for the import.
+     */
+    @Lock(LockModeType.PESSIMISTIC_READ)
+    @Query("select p from Plot p where p.id in :ids order by p.id")
+    List<Plot> lockAllForShare(@Param("ids") Collection<UUID> ids);
 
     // no tenant_id filter needed: RLS hides other cooperatives' rows
     @Query("""

@@ -52,6 +52,8 @@ abstract class TariffScopeSupport extends IntegrationTest {
     private void restoreTheSeededState() {
         JdbcTemplate owner = ownerJdbc();
         for (UUID plot : plots) {
+            owner.update("delete from meter where plot_id = ?", plot); // a plot with a meter is not deleted
+            owner.update("delete from ownership where plot_id = ?", plot); // nor one with owners
             owner.update("delete from plot where id = ?", plot); // scope rows cascade
         }
         plots.clear();
@@ -175,6 +177,28 @@ abstract class TariffScopeSupport extends IntegrationTest {
                 new BigDecimal("600.00"), archived);
         plots.add(id);
         return id;
+    }
+
+    /**
+     * A plot meter of the resource on a test plot (the owner role writes it), working from {@code installedOn} until
+     * {@code removedOn} (null: active); removed with the plot after the test.
+     */
+    void meter(UUID plot, String resource, String installedOn, String removedOn) {
+        ownerJdbc().update("insert into meter (tenant_id, kind, resource, serial, plot_id, installed_on, initial_value, "
+                + "removed_on, final_value) select tenant_id, 'PLOT', ?, 'TM-' || number, id, ?::date, 0, ?::date, "
+                + "case when ?::date is null then null else 0 end from plot where id = ?", resource, installedOn,
+                removedOn, removedOn, plot);
+    }
+
+    /**
+     * The number of plots of the demo cooperative a tariff of all plots charged by meter of the resource applies to:
+     * the active plots that are not common land and have an active meter of the resource (the demo cooperative may
+     * have meters of its own).
+     */
+    long meteredPlots(String resource) {
+        return ownerJdbc().queryForObject("select count(distinct p.id) from plot p join meter m on m.plot_id = p.id "
+                + "where p.tenant_id = ? and p.archived_at is null and p.kind <> 'COMMON' and m.resource = ? "
+                + "and m.removed_on is null", Long.class, DEMO_TENANT, resource);
     }
 
     void archivePlot(UUID plot) {

@@ -21,6 +21,6 @@ export interface TariffSummary {
   chargeTypeId: string;
   scopeKind: TariffScopeKind;
   version: TariffVersion;
-  /** Number of plots the tariff applies to; absent for a meter-based version (`PER_KWH`, `PER_M3`) */
+  /** Number of plots the tariff applies to; for a meter-based version (`PER_KWH`, `PER_M3`) only the plots with an active meter of the resource */
   plotCount?: number;
 }

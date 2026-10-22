@@ -12,6 +12,10 @@ import app.nadel.members.MemberImportAction;
 import app.nadel.members.MemberImportItem;
 import app.nadel.members.MemberImportPlan;
 import app.nadel.members.MemberImportRow;
+import app.nadel.meters.MeterImportAction;
+import app.nadel.meters.MeterImportItem;
+import app.nadel.meters.MeterImportPlan;
+import app.nadel.meters.MeterImportRow;
 import app.nadel.plots.OwnershipImportItem;
 import app.nadel.plots.OwnershipImportOutcome;
 import app.nadel.plots.OwnershipImportPlan;
@@ -161,7 +165,45 @@ class PlanDigestTests extends ImportsIntegrationTest {
                         List.of()))),
                 List.of(ownership),
                 new OwnershipImportPlan(List.of(new OwnershipImportItem(2, OwnershipImportOutcome.FIRST_OWNERS,
-                        ownedPlot, List.of()))));
+                        ownedPlot, List.of()))),
+                List.of(), new MeterImportPlan(List.of()));
+    }
+
+    /** One new plot and one meter row on it (or on an existing plot), with the given action and meter id. */
+    private static String meterDigest(UUID newPlot, MeterImportRow meter, MeterImportAction action, UUID meterId,
+            UUID meterPlot) {
+        return PlanDigest.of(List.of(plotRow("P-1", "600")),
+                new PlotImportPlan(List.of(new PlotImportItem(2, PlotImportAction.NEW, newPlot, List.of(), List.of()))),
+                List.of(), new MemberImportPlan(List.of()), List.of(), new OwnershipImportPlan(List.of()),
+                List.of(meter), new MeterImportPlan(List.of(new MeterImportItem(meter.row(), action, meterId,
+                        meterPlot, List.of()))));
+    }
+
+    private static MeterImportRow meterRow(String plot, String resource, String serial, String reading) {
+        return new MeterImportRow(2, plot, resource, serial, SINCE, new BigDecimal(reading));
+    }
+
+    @Test
+    void newMeterAndPlotIdsAreNotPartOfTheDigestButAnExistingMeterIsAndReadingsCompareByValue() {
+        UUID first = UUID.randomUUID();
+        UUID second = UUID.randomUUID();
+        MeterImportRow row = meterRow("P-1", "ELECTRICITY", "0456", "1250.5");
+
+        String one = meterDigest(first, row, MeterImportAction.NEW, first, first);
+        assertThat(meterDigest(second, row, MeterImportAction.NEW, second, second)).isEqualTo(one);
+        assertThat(meterDigest(first, meterRow(" p-1 ", "electricity", "0456", "1250.500"), MeterImportAction.NEW,
+                first, first)).isEqualTo(one);
+
+        assertThat(meterDigest(first, meterRow("P-1", "ELECTRICITY", "0456", "1250.6"), MeterImportAction.NEW, first,
+                first)).isNotEqualTo(one);
+        assertThat(meterDigest(first, meterRow("P-1", "WATER", "0456", "1250.5"), MeterImportAction.NEW, first,
+                first)).isNotEqualTo(one);
+        assertThat(meterDigest(first, meterRow("P-1", "ELECTRICITY", "0457", "1250.5"), MeterImportAction.NEW, first,
+                first)).isNotEqualTo(one);
+        // an existing meter that is unchanged: its id is part of the digest, so another meter means another plan
+        String unchanged = meterDigest(first, row, MeterImportAction.UNCHANGED, second, second);
+        assertThat(unchanged).isNotEqualTo(one)
+                .isNotEqualTo(meterDigest(first, row, MeterImportAction.UNCHANGED, UUID.randomUUID(), second));
     }
 
     @Test

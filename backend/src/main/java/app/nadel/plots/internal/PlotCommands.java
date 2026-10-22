@@ -3,6 +3,7 @@ package app.nadel.plots.internal;
 import app.nadel.audit.Actor;
 import app.nadel.audit.FieldChange;
 import app.nadel.identity.AccessProfile;
+import app.nadel.plots.PlotChangeGuard.Change;
 import app.nadel.problem.ApiProblemException;
 import app.nadel.problem.FieldProblem;
 import app.nadel.problem.ProblemCodes;
@@ -34,13 +35,15 @@ class PlotCommands {
     private final PlotStatusRepository statuses;
     private final OwnershipRepository ownerships;
     private final PlotAuditPublisher audit;
+    private final PlotChangeGuards guards;
 
     PlotCommands(PlotRepository plots, PlotStatusRepository statuses, OwnershipRepository ownerships,
-            PlotAuditPublisher audit) {
+            PlotAuditPublisher audit, PlotChangeGuards guards) {
         this.plots = plots;
         this.statuses = statuses;
         this.ownerships = ownerships;
         this.audit = audit;
+        this.guards = guards;
     }
 
     @Transactional
@@ -63,6 +66,9 @@ class PlotCommands {
             throw new ApiProblemException(HttpStatus.CONFLICT, ProblemCodes.PLOT_HAS_OWNERSHIP_HISTORY,
                     "A plot that has had owners cannot become common land.",
                     List.of(new FieldProblem("kind", ProblemCodes.PLOT_HAS_OWNERSHIP_HISTORY)));
+        }
+        if (plot.getKind() == PlotKind.PLOT && data.kind() == PlotKind.COMMON) {
+            guards.ensureAllowed(Change.BECOME_COMMON_LAND, id, "kind"); // for example a plot with a meter
         }
         if (plot.getArchivedAt() == null) {
             ensureNumberFree(actor.tenantId(), data.number(), plot.getId());
@@ -88,6 +94,7 @@ class PlotCommands {
                 throw new ApiProblemException(HttpStatus.CONFLICT, ProblemCodes.PLOT_HAS_OWNERS,
                         "A plot with a current owner cannot be archived; change the owner first.");
             }
+            guards.ensureAllowed(Change.ARCHIVE, id, null); // for example a plot with an active meter
             PlotSnapshot before = PlotSnapshot.of(plot);
             plot.archive(Instant.now());
             save(plot);
@@ -111,7 +118,8 @@ class PlotCommands {
 
     /**
      * Removes a plot created by mistake. Only an active plot can be deleted: an archived one must be restored first,
-     * and a plot with any ownership row, current or past, is refused ({@code PLOT_HAS_OWNERSHIP_HISTORY}).
+     * and a plot with any ownership row, current or past, is refused ({@code PLOT_HAS_OWNERSHIP_HISTORY}), as is a
+     * plot that a {@link app.nadel.plots.PlotChangeGuard} refuses (a plot with a meter: {@code PLOT_HAS_METER}).
      * The {@code plot_status} row goes with the plot through the foreign key's cascade.
      */
     @Transactional
@@ -126,6 +134,7 @@ class PlotCommands {
             throw new ApiProblemException(HttpStatus.CONFLICT, ProblemCodes.PLOT_HAS_OWNERSHIP_HISTORY,
                     "A plot that has had owners cannot be deleted.");
         }
+        guards.ensureAllowed(Change.DELETE, id, null); // for example a plot with a meter
         PlotSnapshot before = PlotSnapshot.of(plot);
         plots.delete(plot);
         plots.flush();

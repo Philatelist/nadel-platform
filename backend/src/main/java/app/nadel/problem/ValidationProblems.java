@@ -1,5 +1,6 @@
 package app.nadel.problem;
 
+import java.util.Collection;
 import org.jspecify.annotations.Nullable;
 import org.springframework.validation.FieldError;
 
@@ -15,19 +16,20 @@ public final class ValidationProblems {
 
     /**
      * {@code NotNull}, {@code NotBlank} and {@code NotEmpty} are {@code REQUIRED}; {@code Size}, {@code Max} and
-     * {@code Length} are {@code TOO_LONG}, or {@code REQUIRED} when the rejected value is an empty string;
-     * a {@code Pattern} on a share is {@code SHARE_INVALID}, on a tariff rate {@code RATE_INVALID}; everything else is
-     * {@code INVALID}.
+     * {@code Length} are {@code TOO_LONG}, or {@code REQUIRED} when the rejected value is an empty string or list;
+     * a {@code Pattern} on a share is {@code SHARE_INVALID}, on a tariff rate {@code RATE_INVALID}, on a meter reading
+     * {@code METER_VALUE_INVALID}; everything else is {@code INVALID}.
      */
     public static FieldProblem fieldProblem(FieldError error) {
         String constraint = error.getCode() == null ? "" : error.getCode();
         String code = switch (constraint) {
             case "NotNull", "NotBlank", "NotEmpty" -> ProblemCodes.REQUIRED;
-            case "Size", "Max", "Length" -> isEmptyText(error.getRejectedValue())
+            case "Size", "Max", "Length" -> isEmpty(error.getRejectedValue())
                     ? ProblemCodes.REQUIRED : ProblemCodes.TOO_LONG;
             // a share that does not look like n/d is the same mistake as one outside the bounds: SHARE_INVALID
             case "Pattern" -> error.getField().endsWith("share") ? ProblemCodes.SHARE_INVALID
-                    : isRate(error.getField()) ? ProblemCodes.RATE_INVALID : ProblemCodes.INVALID;
+                    : isRate(error.getField()) ? ProblemCodes.RATE_INVALID
+                    : isMeterValue(error.getField()) ? ProblemCodes.METER_VALUE_INVALID : ProblemCodes.INVALID;
             default -> ProblemCodes.INVALID;
         };
         return new FieldProblem(error.getField(), code);
@@ -38,8 +40,17 @@ public final class ValidationProblems {
         return field.equals("rate") || field.endsWith(".rate");
     }
 
-    /** An empty string that violates a minimum length is a missing value, not a short one. */
-    private static boolean isEmptyText(@Nullable Object value) {
-        return value instanceof CharSequence text && text.isEmpty();
+    /**
+     * Whether the field is a meter reading: {@code initialReading} or {@code finalReading} of a meter, or the
+     * {@code value} of a reading (also {@code rows[0].value} of a batch).
+     */
+    private static boolean isMeterValue(String field) {
+        return field.endsWith("Reading") || field.equals("value") || field.endsWith(".value");
+    }
+
+    /** An empty string or list that violates a minimum size is a missing value, not a short one. */
+    private static boolean isEmpty(@Nullable Object value) {
+        return value instanceof CharSequence text && text.isEmpty()
+                || value instanceof Collection<?> items && items.isEmpty();
     }
 }

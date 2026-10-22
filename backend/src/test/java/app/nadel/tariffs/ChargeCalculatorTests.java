@@ -1,6 +1,7 @@
 package app.nadel.tariffs;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import app.nadel.money.Rate;
 import java.math.BigDecimal;
@@ -194,8 +195,25 @@ class ChargeCalculatorTests {
             Optional<ExpectedCharge> charge = ChargeCalculator.calculate(
                     List.of(recurring("2026-01-01", basis, Frequency.MONTHLY, "4.3200")), area("600.00"), NOV_2026);
 
-            assertThat(charge).containsInstanceOf(ExpectedCharge.ByReadings.class);
+            assertThat(charge).contains(new ExpectedCharge.ByReadings(basis));
         }
+    }
+
+    @Test
+    void theBasisOfTheLatestMeterBasedVersionOfTheMonthNamesTheResource() {
+        List<VersionTerms> versions = List.of(
+                recurring("2026-01-01", Basis.PER_KWH, Frequency.MONTHLY, "4.3200"),
+                recurring("2026-11-10", Basis.PER_M3, Frequency.MONTHLY, "30.0000"),
+                recurring("2026-11-20", Basis.PER_PLOT, Frequency.MONTHLY, "300.0000"));
+
+        assertThat(ChargeCalculator.calculate(versions, area("600.00"), NOV_2026))
+                .contains(new ExpectedCharge.ByReadings(Basis.PER_M3));
+    }
+
+    @Test
+    void onlyAMeterBasisIsChargedByReadings() {
+        assertThatThrownBy(() -> new ExpectedCharge.ByReadings(Basis.PER_PLOT))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
@@ -205,7 +223,7 @@ class ChargeCalculatorTests {
                 recurring("2026-11-16", Basis.PER_PLOT, Frequency.MONTHLY, "300.0000"));
 
         assertThat(ChargeCalculator.calculate(versions, area("600.00"), NOV_2026))
-                .containsInstanceOf(ExpectedCharge.ByReadings.class);
+                .contains(new ExpectedCharge.ByReadings(Basis.PER_KWH));
         assertThat(amount(versions, "600.00", YearMonth.of(2026, 12))).isEqualTo("300.00");
     }
 

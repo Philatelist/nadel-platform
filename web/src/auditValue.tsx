@@ -1,6 +1,7 @@
 import type { AuditEntityType } from '@nadel/api-client';
 import {
   formatDay,
+  formatMeterValue,
   formatRateWithCurrency,
   formatShare,
   normalizeRateInput,
@@ -108,6 +109,8 @@ const NUMBER_FIELDS = new Set([
   'membersUnchanged',
   'ownershipsCreated',
   'ownershipsUnchanged',
+  'metersCreated',
+  'metersUnchanged',
 ]);
 
 function localeNumber(raw: string, locale: string): string {
@@ -139,7 +142,15 @@ export function auditValue(
     case 'active':
       return raw === 'true' ? a.yes : a.no;
     case 'kind':
-      return catalog(t.plot.kind);
+      return catalog(entityType === 'METER' ? t.meters.kind : t.plot.kind);
+    case 'resource':
+      return catalog(t.meters.resource);
+    case 'initialReading':
+    case 'finalReading':
+      return /^\d+(\.\d{1,3})?$/.test(raw) ? formatMeterValue(raw, locale) : raw;
+    case 'value':
+      if (entityType !== 'METER_READING') return user(raw);
+      return /^\d+(\.\d{1,3})?$/.test(raw) ? formatMeterValue(raw, locale) : raw;
     case 'rate':
       return normalizeRateInput(raw) === raw ? formatRateWithCurrency(raw, locale) : raw;
     case 'scope':
@@ -155,6 +166,9 @@ export function auditValue(
     case 'effectiveFrom':
     case 'validFrom':
     case 'dueDate':
+    case 'installedOn':
+    case 'removedOn':
+    case 'takenOn':
       return ISO_DAY.test(raw) ? formatDay(raw, locale) : raw;
     case 'permissions':
       return raw
@@ -167,6 +181,10 @@ export function auditValue(
       return roleNames(raw, t.roles);
     case 'chargeType':
       return auditChargeTypeName(raw, t);
+    case 'replacementMeter':
+    case 'parent':
+    case 'reason':
+      return user(raw);
     case 'name':
       if (entityType === 'ROLE') return baseToken(raw, t.roles);
       return entityType === 'CHARGE_TYPE' ? auditChargeTypeName(raw, t) : user(raw);

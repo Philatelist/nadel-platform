@@ -13,6 +13,8 @@ function Amount({ item }: { item: PlotTariffItem }) {
       return item.amount === undefined ? null : <Money amount={item.amount} />;
     case 'BY_READINGS':
       return <span className="text-ink-muted">{e.byReadings}</span>;
+    case 'NO_METER':
+      return <span className="text-ink-muted">{e.noMeter}</span>;
     case 'EXCLUDED':
       return (
         <span className="text-ink-muted">

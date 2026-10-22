@@ -45,7 +45,8 @@ public final class ChargeCalculator {
      * @param areaM2   the area of the plot in square metres
      * @param month    the billing month
      * @return empty when no version applies on any day of the month (the tariff is not listed for that month);
-     *         {@link ExpectedCharge.ByReadings} when a per-kWh or per-m3 version overlaps the month; otherwise the
+     *         {@link ExpectedCharge.ByReadings} (with the basis of the latest such version) when a per-kWh or
+     *         per-m3 version overlaps the month; otherwise the
      *         {@link ExpectedCharge.Amount}, rounded once
      */
     public static Optional<ExpectedCharge> calculate(List<VersionTerms> versions, BigDecimal areaM2, YearMonth month) {
@@ -55,8 +56,9 @@ public final class ChargeCalculator {
         if (overlaps.isEmpty()) {
             return Optional.empty();
         }
-        if (overlaps.stream().anyMatch(o -> isMeterBased(o.terms()))) {
-            return Optional.of(new ExpectedCharge.ByReadings());
+        Optional<Overlap> meterBased = overlaps.reversed().stream().filter(o -> isMeterBased(o.terms())).findFirst();
+        if (meterBased.isPresent()) {
+            return Optional.of(new ExpectedCharge.ByReadings(meterBased.get().terms().basis()));
         }
         BigDecimal daysInMonth = BigDecimal.valueOf(month.lengthOfMonth());
         BigDecimal sotkas = areaM2.movePointLeft(2); // exact: m2 / 100

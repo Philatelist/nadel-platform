@@ -4,6 +4,10 @@ import app.nadel.members.MemberImportAction;
 import app.nadel.members.MemberImportItem;
 import app.nadel.members.MemberImportPlan;
 import app.nadel.members.MemberImportRow;
+import app.nadel.meters.MeterImportAction;
+import app.nadel.meters.MeterImportItem;
+import app.nadel.meters.MeterImportPlan;
+import app.nadel.meters.MeterImportRow;
 import app.nadel.plots.OwnershipImportItem;
 import app.nadel.plots.OwnershipImportPlan;
 import app.nadel.plots.PlotImportAction;
@@ -28,8 +32,9 @@ import org.jspecify.annotations.Nullable;
  * plan is computed again from the stored rows and its digest must equal the one stored with the preview; any
  * difference (a plot added meanwhile, an owner changed) means the preview is stale.
  * <p>
- * The text has one line per plot row, member row and ownership row: sheet, natural key (lower case), action, the
- * matched record's id or {@code new}, the names of the changed fields and the values the file gives. Ids of records the
+ * The text has one line per plot row, member row, ownership row and meter row: sheet, natural key (lower case), action,
+ * the matched record's id or {@code new}, the names of the changed fields and the values the file gives. A plan without
+ * meter rows has no meter line, so a preview stored before the Meters sheet existed keeps its digest. Ids of records the
  * import creates are left out (they depend on the import's own id, so two previews of one file would differ); an
  * existing record is identified by its id. Every value is written with its length ({@code 3:abc;}), so no value can
  * be mistaken for a separator. The lines are sorted, so the digest does not depend on the order of the rows: the plan
@@ -44,7 +49,8 @@ final class PlanDigest {
     }
 
     static String of(List<PlotImportRow> plotRows, PlotImportPlan plots, List<MemberImportRow> memberRows,
-            MemberImportPlan members, List<OwnershipSheet.ParsedRow> ownershipRows, OwnershipImportPlan ownership) {
+            MemberImportPlan members, List<OwnershipSheet.ParsedRow> ownershipRows, OwnershipImportPlan ownership,
+            List<MeterImportRow> meterRows, MeterImportPlan meters) {
         Set<UUID> newPlots = new HashSet<>();
         List<String> lines = new ArrayList<>();
         for (int index = 0; index < plotRows.size(); index++) {
@@ -75,6 +81,18 @@ final class PlanDigest {
             lines.add(line("ownership", lower(row.plotNumber()), item.outcome(), ref(item.plotId(), newPlots),
                     lower(row.memberKey()), row.share(), row.validFrom()));
         }
+        Set<UUID> newMeters = new HashSet<>();
+        for (int index = 0; index < meterRows.size(); index++) {
+            MeterImportRow row = meterRows.get(index);
+            MeterImportItem item = meters.items().get(index);
+            if (item.action() == MeterImportAction.NEW) {
+                newMeters.add(item.meterId());
+            }
+            lines.add(line("meter", lower(row.plotNumber()),
+                    row.resource() == null ? null : row.resource().strip().toUpperCase(Locale.ROOT), item.action(),
+                    ref(item.meterId(), newMeters), ref(item.plotId(), newPlots), row.serial(),
+                    row.installedOn(), plain(row.initialReading())));
+        }
         lines.sort(null);
         return sha256(String.join("\n", lines));
     }
@@ -94,7 +112,12 @@ final class PlanDigest {
 
     /** 600, 600.0 and 6E+2 are one area. */
     private static @Nullable String area(@Nullable BigDecimal area) {
-        return area == null ? null : (area.signum() == 0 ? "0" : area.stripTrailingZeros().toPlainString());
+        return plain(area);
+    }
+
+    /** A number without trailing zeros: 1250.5 and 1250.500 are one reading. */
+    private static @Nullable String plain(@Nullable BigDecimal number) {
+        return number == null ? null : (number.signum() == 0 ? "0" : number.stripTrailingZeros().toPlainString());
     }
 
     private static String line(String sheet, Object... values) {

@@ -117,3 +117,46 @@
 | web/e2e/tariffs-acceptance.spec.ts | §2.1 empty list text and §2.4 #2, #3, #4, #6, §2.6 #2 the month picker changes the amounts | e2e | positive | yes | OK | §2.6 #1 too |
 | web/e2e/tariffs-acceptance.spec.ts | §2.5 #1-#5 in Ukrainian: the treasurer reads only, a member has no menu item and no page, "Що мені нараховуватимуть" shows own plots | e2e | positive+negative | yes | OK | spec wording "Недостатньо прав" differs from the product text, see report |
 | web/e2e/tariffs-acceptance.spec.ts | §2.7 #1 the audit log shows the rename, the new version and the exclusion with the author, old and new values and links | e2e | positive | yes | OK |  |
+| backend/src/test/java/app/nadel/acceptance/MetersAcceptanceTests.java | section21_aPlotMeterIsRegisteredAndListedUnderItsPlotAsActive | integration | positive+negative | yes | OK | spec 010-meters-and-readings, §2.1 #1 |
+| backend/src/test/java/app/nadel/acceptance/MetersAcceptanceTests.java | section21_aSecondActiveMeterOfTheResourceIsRefused | integration | negative | yes | OK | §2.1 #2 |
+| backend/src/test/java/app/nadel/acceptance/MetersAcceptanceTests.java | section21_commonLandHasNoPlotMeters | integration | negative | yes | OK | §2.1 #3 |
+| backend/src/test/java/app/nadel/acceptance/MetersAcceptanceTests.java | section21_aCommonConsumerAppearsInTheRegisterWithItsName | integration | positive+negative | yes | OK | §2.1 #4 |
+| backend/src/test/java/app/nadel/acceptance/MetersAcceptanceTests.java | section21_aReadingWithFourDecimalsIsRefusedAndThreeAreKeptExactly | integration | negative+positive | yes | OK | §2.1 #5 |
+| backend/src/test/java/app/nadel/acceptance/MetersAcceptanceTests.java | section21_aMeterWithReadingsIsRemovedInsteadOfDeleted | integration | negative+positive | yes | OK | §2.1 #6 |
+| backend/src/test/java/app/nadel/acceptance/MetersAcceptanceTests.java | section21_aRemovedMeterKeepsItsReadingsAndThePlotCanGetANewMeter | integration | positive+negative | yes | OK | §2.1 #7 |
+| backend/src/test/java/app/nadel/acceptance/MetersAcceptanceTests.java | section21_aPlotWithAnActiveMeterIsNotArchivedOrTurnedIntoCommonLand | integration | negative | yes | OK | §2.1 #8; RED shown with the plot guard disabled |
+| backend/src/test/java/app/nadel/acceptance/MetersAcceptanceTests.java | section22_theChairmanBuildsTheTreeAndAQuarterIsNotUnderAQuarter | integration | positive+negative | yes | OK | §2.2 #1, #2 |
+| backend/src/test/java/app/nadel/acceptance/MetersAcceptanceTests.java | section22_aMovedPlotIsCountedUnderEachQuarterForItsPartOfTheRangeAndThePastKeepsTheOldTree | integration | positive+negative | yes | OK | §2.2 #3, #4; row "Plot moved to another quarter" |
+| backend/src/test/java/app/nadel/acceptance/MetersAcceptanceTests.java | section23_aReplacementRemovesTheOldMeterAndInstallsTheNewOneInOneAction | integration | positive+negative | yes | OK | §2.3 #1 |
+| backend/src/test/java/app/nadel/acceptance/MetersAcceptanceTests.java | section23_aWrapAroundIsAReplacementOfTheMeterByItself | integration | positive+negative | yes | OK | §2.3 #2; RED shown with the order check disabled |
+| backend/src/test/java/app/nadel/acceptance/MetersAcceptanceTests.java | section24_aReadingWithoutADateIsDatedTodayAndOneRowMayDifferInDate | integration | positive | yes | OK | §2.4 #1, #2 |
+| backend/src/test/java/app/nadel/acceptance/MetersAcceptanceTests.java | section24_theDateIsNotInTheFutureAndInsideTheWorkingPeriod | integration | negative+positive | yes | OK | §2.4 #3, #4 |
+| backend/src/test/java/app/nadel/acceptance/MetersAcceptanceTests.java | section24_aLowerReadingIsRefusedAndAReadingBetweenTwoOthersSplitsTheInterval | integration | negative+positive | yes | OK | §2.4 #5, #6 |
+| backend/src/test/java/app/nadel/acceptance/MetersAcceptanceTests.java | section24_aSecondReadingOfTheSameDateSupersedesTheFirst | integration | positive | yes | OK | §2.4 #7 |
+| backend/src/test/java/app/nadel/acceptance/MetersAcceptanceTests.java | section24_anUnusualConsumptionIsSavedWithAWarning | integration | positive+negative | yes | OK | §2.4 #8; RED shown with the check disabled |
+| backend/src/test/java/app/nadel/acceptance/MetersAcceptanceTests.java | section24_aMemberReadingWaitsForApprovalThenCountsOrIsRejectedWithAReason | integration | positive+negative | yes | OK | §2.4 #9, #10; §2.6 #4 |
+| backend/src/test/java/app/nadel/acceptance/MetersAcceptanceTests.java | section24_aCorrectionOrADeletionRecalculatesTheIntervalsAround | integration | positive+negative | yes | OK | §2.4 #11 |
+| backend/src/test/java/app/nadel/acceptance/MetersAcceptanceTests.java | section25_normalAndLongIntervals | integration | positive | yes | OK | §2.5 table rows Normal, Long interval |
+| backend/src/test/java/app/nadel/acceptance/MetersAcceptanceTests.java | section25_replacementAddsUpBothMeters | integration | positive | yes | OK | §2.5 row Replacement |
+| backend/src/test/java/app/nadel/acceptance/MetersAcceptanceTests.java | section25_wrapAroundAddsUpBothParts | integration | positive | yes | OK | §2.5 row Wrap-around |
+| backend/src/test/java/app/nadel/acceptance/MetersAcceptanceTests.java | section25_aRecentlyInstalledMeterCountsFromItsInitialReading | integration | positive | yes | OK | §2.5 row Installed recently |
+| backend/src/test/java/app/nadel/acceptance/MetersAcceptanceTests.java | section25_aRangeIsCalculatedBetweenReadingsAndUnknownAfterTheLastOne | integration | positive+negative | yes | OK | §2.5 rows Range with calculation, Range without a later reading; criteria #2, #3 |
+| backend/src/test/java/app/nadel/acceptance/MetersAcceptanceTests.java | section25_aPlotWithoutAMeterIsNotOnTheRoundAndNeverWithoutAReading | integration | negative | yes | OK | §2.5 row Plot without a meter |
+| backend/src/test/java/app/nadel/acceptance/MetersAcceptanceTests.java | section26_theTreasurerOnlyViews | integration | negative | yes | OK | §2.6 #2 |
+| backend/src/test/java/app/nadel/acceptance/MetersAcceptanceTests.java | section26_theElectricianEntersReadingsAndManagesNothing | integration | positive+negative | yes | OK | §2.6 electrician |
+| backend/src/test/java/app/nadel/acceptance/MetersAcceptanceTests.java | section26_aMemberSeesOnlyTheMetersOfTheirOwnPlots | integration | negative | yes | OK | §2.6 #3; PLOT_NOT_FOUND |
+| backend/src/test/java/app/nadel/acceptance/MetersAcceptanceTests.java | section26_anotherCooperativeAndThePlatformOperatorSeeNothing | integration | negative | yes | OK | §2.6 #5, isolation |
+| backend/src/test/java/app/nadel/acceptance/MetersAcceptanceTests.java | section27_theStaleFilterListsMetersNotReadForSixtyDays | integration | positive+negative | yes | OK | §2.7 #2 |
+| backend/src/test/java/app/nadel/acceptance/MetersAcceptanceTests.java | section27_aMeterBasedTariffSaysPerPlotWhetherThereIsAMeter | integration | positive+negative | yes | OK | §2.7 #3 |
+| backend/src/test/java/app/nadel/acceptance/MetersAcceptanceTests.java | section29_theAuditLogShowsTheReplacementAndTheApprovalWithTheActor | integration | positive+negative | yes | OK | §2.9 #1 |
+| backend/src/test/java/app/nadel/acceptance/MetersAcceptanceTests.java | section210_theDemoCooperativeHasTheNetworkAndOnePendingReading | integration | positive | yes | OK | §2.10 #1; asserts exactly one pending reading (plot 7) |
+| web/e2e/meters-acceptance.spec.ts | §2.6 #1, §2.4 #1 #2, §2.7 #1 electrician: menu, hint, row date, phone width | e2e | positive | yes | OK | Ukrainian; RED shown with the hint text changed |
+| web/e2e/meters-acceptance.spec.ts | §2.1 #1 #2 #4 #5 #6 register, refuse a second, common consumer, 4 decimals, delete | e2e | positive+negative | yes | OK | Ukrainian |
+| web/e2e/meters-acceptance.spec.ts | §2.1 #7 #8, §2.3 #1 #2 removal, plot guard, replacement, wrap-around | e2e | positive+negative | yes | OK | Ukrainian; leaves removed meters on archived plots |
+| web/e2e/meters-acceptance.spec.ts | §2.2 #1-#4, §2.5 meter tree move, split range, calculated badge, "немає показу після" | e2e | positive+negative | yes | OK | Ukrainian; RED shown with the calculated badge hidden |
+| web/e2e/meters-acceptance.spec.ts | §2.4 #9 #10, §2.6 #4 member submits, chairman approves and rejects with a reason | e2e | positive+negative | yes | OK | Ukrainian |
+| web/e2e/meters-acceptance.spec.ts | §2.6 #2 #3 #5 treasurer read-only, member own meters, other cooperative | e2e | negative | yes | OK | Ukrainian |
+| web/e2e/meters-acceptance.spec.ts | §2.7 #2 #3 stale filter and "за показаннями" / "немає лічильника" | e2e | positive+negative | yes | OK | Ukrainian |
+| web/e2e/meters-acceptance.spec.ts | §2.8 #1-#3 import of the "Лічильники" sheet | e2e | positive+negative | yes | OK | Ukrainian |
+| web/e2e/meters-acceptance.spec.ts | §2.9 #1 audit log of a replacement and an approval | e2e | positive | yes | OK | Ukrainian, one language |
+| web/e2e/meters-acceptance.spec.ts | §2.10 #1 demo network and pending readings | e2e | positive | yes | OK | exactly one pending demo reading (plot 7) |

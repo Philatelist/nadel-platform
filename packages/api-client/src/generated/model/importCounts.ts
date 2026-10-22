@@ -18,4 +18,5 @@ export interface ImportCounts {
   plots: ImportEntityCounts;
   members: ImportEntityCounts;
   ownerships: ImportEntityCounts;
+  meters: ImportEntityCounts;
 }

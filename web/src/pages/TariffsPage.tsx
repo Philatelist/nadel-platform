@@ -84,7 +84,7 @@ function TariffRow({ tariff }: { tariff: TariffSummary }) {
       </span>
       <span className="text-sm text-ink-muted">
         {format(t.tariffs.validFromShort, { date: formatDay(version.validFrom, locale) })} ·{' '}
-        {tariff.plotCount === undefined ? t.tariffs.meterBased : plotCountText(tariff.plotCount)}
+        {plotCountText(tariff.plotCount ?? 0)}
       </span>
     </li>
   );

@@ -34,6 +34,12 @@ tags:
     description: Charge types (what the cooperative charges for)
   - name: tariffs
     description: Tariffs with dated versions (how much the cooperative charges)
+  - name: meters
+    description: The register of electricity and water meters
+  - name: readings
+    description: Meter readings, the reading round and the consumption between readings
+  - name: meter-tree
+    description: The electricity meter tree, its dated history and the consumption per node over a date range
 
 paths:
   /me:
@@ -762,7 +768,8 @@ paths:
         checked against the active plots, and restoring it checks the number again.
         The same rules apply as when creating: 409 `PLOT_NUMBER_TAKEN`, 409 `CADASTRAL_NUMBER_TAKEN`,
         400 `CADASTRAL_INVALID`, 400 `AREA_INVALID`. A plot that has ever had an owner cannot become common land
-        (409 `PLOT_HAS_OWNERSHIP_HISTORY`, `errors[{field: kind}]`). A change that alters nothing is accepted and not audited.
+        (409 `PLOT_HAS_OWNERSHIP_HISTORY`, `errors[{field: kind}]`), and neither can a plot that has a meter, active
+        or removed (409 `PLOT_HAS_METER`, `errors[{field: kind}]`). A change that alters nothing is accepted and not audited.
       parameters:
         - name: id
           in: path
@@ -801,7 +808,8 @@ paths:
       description: |
         Removes a plot that was created by mistake, together with its status. Requires `PLOTS_VIEW` and `PLOTS_EDIT`. Only an active
         plot can be deleted; an archived plot is refused with 409 `PLOT_ARCHIVED` and must be restored first, and a plot
-        that has ever had an owner is refused with 409 `PLOT_HAS_OWNERSHIP_HISTORY`. The deletion is audited.
+        that has ever had an owner is refused with 409 `PLOT_HAS_OWNERSHIP_HISTORY`, a plot that has a meter (active or
+        removed) with 409 `PLOT_HAS_METER`. The deletion is audited.
       parameters:
         - name: id
           in: path
@@ -831,7 +839,8 @@ paths:
       description: |
         Moves the plot to the archive: it is hidden from the default list and its number becomes free for a new
         plot. Archiving an already archived plot is a no-op and is not audited. A plot that has a current owner cannot
-        be archived (409 `PLOT_HAS_OWNERS`). Requires `PLOTS_VIEW` and `PLOTS_EDIT`.
+        be archived (409 `PLOT_HAS_OWNERS`), nor can a plot with an active meter (409 `PLOT_HAS_METER`; remove the
+        meter first). Requires `PLOTS_VIEW` and `PLOTS_EDIT`.
       parameters:
         - name: id
           in: path
@@ -1097,12 +1106,12 @@ paths:
       operationId: downloadImportTemplate
       summary: Download the import template
       description: |
-        Returns the Excel template (`.xlsx`) with three sheets, one instruction row and one example row per sheet
+        Returns the Excel template (`.xlsx`) with four sheets, one instruction row and one example row per sheet
         (both rows start with `#` and are ignored by the import). It comes in two languages. The Ukrainian template
-        (`nadel-import-template-uk.xlsx`) has the sheets `Ділянки`, `Члени` and `Власність`, and everything a person
-        reads is Ukrainian: headers, instructions, example row and value words (`ДІЛЯНКА`, `так`). The English
-        template (`nadel-import-template-en.xlsx`) has the sheets `Plots`, `Members` and `Ownership` with the
-        canonical column names. The file name is always ASCII, in the `Content-Disposition` header.
+        (`nadel-import-template-uk.xlsx`) has the sheets `Ділянки`, `Члени`, `Власність` and `Лічильники`, and
+        everything a person reads is Ukrainian: headers, instructions, example row and value words (`ДІЛЯНКА`, `так`,
+        `ЕЛЕКТРОЕНЕРГІЯ`). The English template (`nadel-import-template-en.xlsx`) has the sheets `Plots`, `Members`,
+        `Ownership` and `Meters` with the canonical column names. The file name is always ASCII, in the `Content-Disposition` header.
 
         The language is the `lang` query parameter. Without it the best match of `uk` and `en` in the
         `Accept-Language` header is used (`uk-UA` is `uk`, `en-US` is `en`), and without a match (`de`, no header)
@@ -1187,20 +1196,22 @@ paths:
       operationId: uploadImport
       summary: Upload an import file and get its preview
       description: |
-        Parses and checks an Excel workbook (`.xlsx`, at most 10 MB, at most 2,000 plots, 3,000 members and 6,000 ownership rows) and
+        Parses and checks an Excel workbook (`.xlsx`, at most 10 MB, at most 2,000 plots, 3,000 members, 6,000 ownership
+        rows and 2,000 meter rows) and
         returns a preview. Nothing is saved except the record of the upload itself. The preview can be committed for
         30 minutes (`expiresAt`) when `committable` is true, that is when there are no problems and something would be
         created or updated. Requires the `IMPORT_RUN` permission; the platform operator has no cooperative data: 403.
 
-        All three sheets are checked. The `Members` and `Ownership` sheets may be missing (a file may hold plots only, or
-        plots and members); the `Plots` sheet is required.
+        All four sheets are checked. The `Members`, `Ownership` and `Meters` sheets may be missing (a file may hold
+        plots only, or plots and members); the `Plots` sheet is required.
         Rows whose first cell starts with `#` and empty rows are skipped. `problems` lists at most 1,000 problems
         (`problemCount` is the total) in sheet and row order. `row` is the Excel row number (1 is the header row);
         0 means the problem is about the file or the whole sheet. `column` is the canonical column key
         (Plots: `number`, `street`, `kind`, `area_m2`, `area_sotky`, `cadastral_number`, `has_building`, `notes`;
         Members: `external_id`, `last_name`, `first_name`, `middle_name`, `phones`, `email`, `postal_address`,
         `delivery_channel`, `telegram_username`, `viber_phone`;
-        Ownership: `plot_number`, `member_external_id`, `share`, `valid_from`).
+        Ownership: `plot_number`, `member_external_id`, `share`, `valid_from`;
+        Meters: `plot_number`, `resource`, `serial`, `installed_on`, `initial_reading`).
         `code` is one of:
 
         - file and sheet level: `SHEET_MISSING` (no sheet of that name), `HEADER_MISSING` (a required column is not in
@@ -1208,7 +1219,8 @@ paths:
         - cell level: `DATE_INVALID`, `NUMBER_INVALID`, `YES_NO_INVALID`, `AREA_BOTH_OR_NONE` (exactly one of
           `area_m2` and `area_sotky` must be filled for a new plot);
         - plot rules, as when a plot is entered by hand: `REQUIRED`, `TOO_LONG`, `INVALID`, `AREA_INVALID`,
-          `CADASTRAL_INVALID`, `CADASTRAL_NUMBER_TAKEN`, `PLOT_HAS_OWNERSHIP_HISTORY`;
+          `CADASTRAL_INVALID`, `CADASTRAL_NUMBER_TAKEN`, `PLOT_HAS_OWNERSHIP_HISTORY`, `PLOT_HAS_METER` (`kind`: a
+          plot that has a meter cannot become common land);
         - member rules, as when a member is entered by hand: `REQUIRED`, `TOO_LONG`, `INVALID` (an e-mail that is
           not an address, an unknown `delivery_channel`), `PHONE_INVALID` (`phones` or `viber_phone`),
           `CHANNEL_CONTACT_MISSING` (the contact the delivery channel needs is empty: `email`, `telegram_username` or
@@ -1248,6 +1260,25 @@ paths:
         owners are exactly the file's members and shares, the dates ignored, is skipped (counted as unchanged). A plot
         whose own `Plots` row has a problem, and a plot with a row whose member has a problem, is not checked further.
         Ownership is never updated, so `ownerships.updated` is always 0. At most 6,000 ownership rows.
+
+        The `Meters` sheet (Ukrainian name `Лічильники`) adds plot meters only; the tree of electricity meters is set
+        up on its own screen. All five columns are required, one row per meter: `plot_number` (a plot of the `Plots`
+        sheet or an active plot of the cooperative), `resource` (`ELECTRICITY` or `WATER`, in Ukrainian
+        `ЕЛЕКТРОЕНЕРГІЯ` or `ВОДА`), `serial` (at most 50 characters), `installed_on` (an Excel date or `DD.MM.YYYY`)
+        and `initial_reading` (the reading on the installation date: not negative, at most 11 integer digits and 3
+        decimals). A row whose plot already has an active meter of the resource with the same serial number (ignoring
+        case) is unchanged (`meters.unchanged`; its dates and reading are not compared), any other row creates an
+        active meter (`meters.created`). Meters are never updated, so `meters.updated` is always 0. Meter codes:
+
+        - `UNKNOWN_PLOT`, `PLOT_COMMON_LAND` (`plot_number`), as on the `Ownership` sheet; a plot whose own `Plots` row
+          has a problem is not checked further;
+        - `REQUIRED` (any column), `INVALID` (`resource`: not a resource word), `TOO_LONG` (`serial`),
+          `DATE_INVALID` (`installed_on`), `NUMBER_INVALID` (`initial_reading`: not a number),
+          `METER_VALUE_INVALID` (`initial_reading`: negative, more than 3 decimals or more than 11 integer digits);
+        - `READING_DATE_IN_FUTURE` (`installed_on`: after today in Europe/Kyiv);
+        - `DUPLICATE_IN_FILE` (`resource`: an earlier row names the same plot and resource);
+        - `METER_ACTIVE_EXISTS` (`serial`, `params.plot`: the plot already has another active meter of that resource;
+          the import never replaces a meter, replace it in the register).
 
         A file that cannot be read at all is refused with 400 `FILE_NOT_XLSX` (not an `.xlsx` workbook, corrupt,
         encrypted, or unpacking to an unreasonable size) or 400 `IMPORT_LIMIT_EXCEEDED` (too many rows); a file over
@@ -1290,9 +1321,10 @@ paths:
         `IMPORT_RUN` permission; the platform operator has no cooperative data: 403. An unknown id, and the id of
         another cooperative's import, is 404.
 
-        Before saving, the plan is computed again from the stored rows under locks on the plots and members it
-        touches and compared with the preview. Any difference (a plot with one of the file's numbers created
-        meanwhile, an owner changed, a member archived) refuses the commit with `IMPORT_STALE`, and so does a unique
+        Before saving, the plan is computed again from the stored rows under locks on the plots, meters and members
+        it touches and compared with the preview. Any difference (a plot with one of the file's numbers created
+        meanwhile, an owner changed, a member archived, a meter registered or removed) refuses the commit with
+        `IMPORT_STALE`, and so does a unique
         or overlap rule broken while saving by a record created meanwhile; nothing is saved and the file has to be
         uploaded again. Per-record audit entries are written as when the records are entered by hand, plus one
         `IMPORT_COMMITTED` entry (entity type `IMPORT`, entity id = import id, label = file name, one field per
@@ -1510,9 +1542,9 @@ paths:
         Each tariff shows one version: the one valid today (Europe/Kyiv), otherwise the earliest future one.
         `plotCount` is the number of plots the tariff applies to: for `ALL_PLOTS` the active plots that are not
         common land minus the excluded active ones, for `SELECTED_PLOTS` the active selected plots that are not
-        common land. It is absent when the
-        shown version is meter-based (`PER_KWH`, `PER_M3`): such a tariff applies to the plots with a meter. Requires
-        `TARIFFS_VIEW`.
+        common land. When the shown version is meter-based (`PER_KWH` electricity, `PER_M3` water) only the plots
+        among those that have an active meter of that resource are counted: such a tariff applies to the plots with a
+        meter. Requires `TARIFFS_VIEW`.
       responses:
         '200':
           description: OK
@@ -1572,7 +1604,8 @@ paths:
         whose `validFrom` is before today (Europe/Kyiv). A tariff of another cooperative or an unknown id is 404.
         `selectedPlots` and `exclusions` hold the scope with plot numbers (and the reason of each exclusion) in natural
         order of the number; a plot archived after it was added is still listed, marked `archived`, and not counted
-        in `plotCount`. Requires `TARIFFS_VIEW`.
+        in `plotCount`. For a meter-based shown version `plotCount` counts only the plots with an active meter of the
+        resource, as in the list. Requires `TARIFFS_VIEW`.
       parameters:
         - name: id
           in: path
@@ -1796,7 +1829,9 @@ paths:
         403. Common land and archived plots answer 200 with no items and a total of `0.00`.
         Tariffs of archived or inactive charge types are left out, and so is a tariff none of whose versions overlaps
         the month. A tariff of all plots that excludes the plot is listed with status `EXCLUDED` and the reason, without
-        an amount. A tariff with a per-kWh or per-m3 version in the month is `BY_READINGS` without an amount. Every
+        an amount. A tariff with a per-kWh or per-m3 version in the month is `BY_READINGS` without an amount when
+        the plot has a meter of that resource (electricity for per-kWh, water for per-m3) working on any day of the
+        month, otherwise `NO_METER` without an amount (the tariff does not reach the plot). Every
         other tariff is `AMOUNT`, rounded once to kopecks (a one-time fee is 0.00 outside its due month). The rate,
         basis and frequency are those of the version valid on the last day of the month that the tariff covers (for a
         one-time fee, the version valid on its due date). Items are ordered by charge type position, then tariff name.
@@ -1830,6 +1865,847 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+
+  /meters:
+    get:
+      tags: [meters]
+      operationId: listMeters
+      summary: List the meters of the cooperative
+      description: |
+        The meter register. Plot meters come first, in street order (Ukrainian alphabet, plots without a street last)
+        and then natural order of the plot number, electricity before water; then the other meters by name. Removed
+        meters are left out unless `includeRemoved` is true. Filters combine with AND: `resource`, `kind`, `street`
+        (the plot's street, ignoring case and surrounding spaces; only plot meters have one) and `noReadingSince`
+        (active meters whose last reading, or the initial reading when there is none, is dated before that day;
+        removed meters never match). Requires `METERS_VIEW`.
+      parameters:
+        - name: resource
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/MeterResource'
+        - name: kind
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/MeterKind'
+        - name: street
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 200
+        - name: noReadingSince
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: includeRemoved
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Meter'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      tags: [meters]
+      operationId: registerMeter
+      summary: Register a meter
+      description: |
+        Registers a meter with its installation date and initial reading. A plot meter (`kind: PLOT`) needs `plotId`
+        and has no name; every other kind needs a `name` and has no plot and measures electricity only. Field codes of
+        400 `VALIDATION_FAILED`: `plotId` `REQUIRED`, `INVALID` (a plot for a meter that is not a plot meter) or
+        `UNKNOWN_PLOT` (no such plot in the cooperative); `name` `REQUIRED` or `INVALID` (a name for a plot meter);
+        `resource` `INVALID` (water for a meter that is not a plot meter); `serial` `REQUIRED` (blank) or `TOO_LONG`;
+        `initialReading` `METER_VALUE_INVALID`. Conflicts (409): the plot already has an active meter of the resource
+        (`METER_ACTIVE_EXISTS`); the plot is common land (`METER_COMMON_LAND`, `errors[{field: plotId}]`) or archived
+        (`PLOT_ARCHIVED`, `errors[{field: plotId}]`); the installation date is after today in Europe/Kyiv
+        (`READING_DATE_IN_FUTURE`, `errors[{field: installedOn}]`). Requires `METERS_VIEW` and `METERS_MANAGE`; written to
+        the audit log (`METER_REGISTERED`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MeterCreate'
+      responses:
+        '201':
+          description: Registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Meter'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /meters/{id}:
+    get:
+      tags: [meters]
+      operationId: getMeter
+      summary: A meter
+      description: |
+        The meter card. A meter of another cooperative or an unknown id is 404. Requires `METERS_VIEW`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Meter'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags: [meters]
+      operationId: updateMeter
+      summary: Change the serial number, name or note of a meter
+      description: |
+        Replaces the serial number, the name and the note (an absent note or name is cleared). Kind, resource, plot,
+        dates and readings never change here: a meter is removed or replaced instead. The name rules and field codes
+        are those of registration (`name` `REQUIRED` for a meter that is not a plot meter, `INVALID` for a plot meter).
+        A removed meter can still be corrected. A request that changes nothing is accepted and not audited. Requires
+        `METERS_VIEW` and `METERS_MANAGE`; written to the audit log (`METER_UPDATED`, old and new values of the changed
+        fields).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MeterUpdate'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Meter'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [meters]
+      operationId: deleteMeter
+      summary: Delete a meter entered by mistake
+      description: |
+        Deletes an active meter that has no readings (its initial reading does not count; see `deletable`). A meter
+        with readings of any status is refused with 409 `METER_HAS_READINGS` (remove it instead), a removed meter with
+        409 `METER_REMOVED`, a meter that is or was the parent of another meter in the electricity tree with 409
+        `METER_HAS_CHILDREN` (its children's history refers to it). Requires `METERS_VIEW` and `METERS_MANAGE`;
+        written to the audit log (`METER_DELETED`, the old values).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /meters/{id}/remove:
+    post:
+      tags: [meters]
+      operationId: removeMeter
+      summary: Remove a meter with its final reading
+      description: |
+        Ends the working period of the meter on `removedOn` with `finalReading`. The meter keeps its readings and
+        history; a plot meter frees its plot for a new meter of the resource. Conflicts (409): the meter is already
+        removed (`METER_REMOVED`); `removedOn` is after today in Europe/Kyiv (`READING_DATE_IN_FUTURE`) or before the
+        installation (`READING_DATE_OUTSIDE_METER`), both with `errors[{field: removedOn}]`; a counted reading is dated
+        after `removedOn` (`READING_OUT_OF_ORDER`, `errors[{field: removedOn}]`) or `finalReading` is lower than the
+        last counted reading up to that day or the initial reading (`READING_OUT_OF_ORDER`,
+        `errors[{field: finalReading}]`). 400 `VALIDATION_FAILED` with `finalReading` `METER_VALUE_INVALID` for a
+        malformed value. A meter with readings waiting for approval is refused with 409 `METER_HAS_PENDING_READINGS`
+        (approve or reject them first). A meter that still has working meters under it in the electricity tree after
+        `removedOn` is refused with 409 `METER_HAS_CHILDREN` (move them to another parent first, or replace the meter:
+        a replacement takes its children over). Requires `METERS_VIEW` and `METERS_MANAGE`; written to the audit log
+        (`METER_REMOVED`).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MeterRemoval'
+      responses:
+        '200':
+          description: The removed meter
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Meter'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /meters/{id}/replace:
+    post:
+      tags: [meters]
+      operationId: replaceMeter
+      summary: Replace a meter by a new one
+      description: |
+        One action: the meter is removed on `replacedOn` with `finalReading` (the rules of `removeMeter`, with the
+        date errors on `replacedOn`), and a new active meter of the same kind, resource, plot and name is installed on
+        the same day with `serial` and `initialReading`; it carries `replacesMeterId` and the board's note of the old
+        meter. A counter that wrapped around (99 999 to 00 012) is a replacement of the meter by itself: the same
+        serial, the final reading before the wrap and initial reading 0. In the electricity tree the new meter takes
+        the place of the old one from `replacedOn`: it gets the old meter's parent, and the meters under a meter that
+        is not a plot meter move under the new one. Consumption over a range adds up the meters of the chain (see
+        `getMeterConsumption`). Conflicts (409): the meter is already removed (`METER_REMOVED`); it has readings
+        waiting for approval (`METER_HAS_PENDING_READINGS`; approve or reject them first); `replacedOn` is after
+        today in Europe/Kyiv (`READING_DATE_IN_FUTURE`), before the installation (`READING_DATE_OUTSIDE_METER`) or
+        before a counted reading (`READING_OUT_OF_ORDER`), all with `errors[{field: replacedOn}]`; `finalReading` is
+        lower than the counted reading before it or the initial reading (`READING_OUT_OF_ORDER`,
+        `errors[{field: finalReading}]`). 400 `VALIDATION_FAILED`: `serial` `REQUIRED` or `TOO_LONG`, `finalReading`
+        or `initialReading` `METER_VALUE_INVALID`. Requires `METERS_VIEW` and `METERS_MANAGE`; written to the audit
+        log as `METER_REPLACED` about the old meter (`removedOn`, `finalReading`, `replacementMeter` = the new serial)
+        and `METER_REGISTERED` about the new one.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MeterReplacement'
+      responses:
+        '201':
+          description: The new meter
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Meter'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /meters/{id}/consumption:
+    get:
+      tags: [meters]
+      operationId: getMeterConsumption
+      summary: The consumption of a meter over a date range
+      description: |
+        The consumption from `from` to `to` (the value on `to` minus the value on `from`), added up over the chain of
+        the meter: the meter, the meters it replaced and the meters that replaced it, each counted in the days it
+        worked (a replacement, a counter that wrapped around). A value on a date without a reading is calculated in
+        proportion to the days between the nearest counted points and the result is marked `calculated`; the
+        consumption is then rounded once to three decimals. When a meter of the chain has no counted point after
+        the range's end, the consumption is not known (`known: false`) and `lastReadingOn` says after which day
+        there is no reading. Only counted (`APPROVED`) readings are used. 400 `VALIDATION_FAILED` with `to`
+        `INVALID` when `to` is before `from`. Requires `METERS_VIEW`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeterConsumption'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /meters/{id}/parent:
+    put:
+      tags: [meter-tree]
+      operationId: setMeterParent
+      summary: Put an electricity meter under another parent from a date
+      description: |
+        Puts the meter under `parentMeterId` in the electricity tree from `effectiveFrom`, or takes it out of the tree
+        from that day when `parentMeterId` is absent. The history is kept: the period the meter had ends on the day
+        before `effectiveFrom` and a new period starts on it, so a past date range shows the tree as it was. A change
+        on the date of the meter's latest change corrects that change instead of adding one (a return to the parent of
+        the period before joins the two periods again). The meters under the moved meter stay under it.
+
+        Rules: a substation has no parent; a quarter meter is under a substation; a plot meter or a common consumer is
+        under a substation or a quarter meter. So the tree has at most three levels and no cycle. Water meters have no
+        tree. The parent is active and installed on or before `effectiveFrom`. Refused with 409
+        `METER_TREE_INVALID` and one field error: on `parentMeterId` `TREE_WATER` (the meter measures water),
+        `TREE_QUARTER_UNDER_QUARTER` (a quarter meter under another quarter meter), `TREE_PARENT_KIND` (any other
+        parent that the kinds do not allow, the meter itself and any parent for a substation included) or
+        `TREE_PARENT_INACTIVE` (the parent is removed or installed after `effectiveFrom`); on `effectiveFrom`
+        `TREE_DATE_BEFORE_LATEST` (before the meter's latest change in the tree; such history is not rewritten) or
+        `READING_DATE_OUTSIDE_METER` (before the meter's installation). Also 409 `READING_DATE_IN_FUTURE` with
+        `errors[{field: effectiveFrom}]` for a date after today in Europe/Kyiv and 409 `METER_REMOVED` for a removed
+        meter. An unknown parent or one of another cooperative is 404 `NOT_FOUND` with
+        `errors[{field: parentMeterId}]`. A request that changes nothing is accepted and not audited. Requires
+        `METERS_VIEW` and `METERS_MANAGE`; written to the audit log (`METER_PARENT_CHANGED` about the meter: `parent`
+        old and new, the labels of the parents, and `effectiveFrom`).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MeterParentChange'
+      responses:
+        '200':
+          description: The parent periods of the meter after the change
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeterPlacement'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /meter-tree:
+    get:
+      tags: [meter-tree]
+      operationId: getMeterTree
+      summary: The electricity meter tree over a date range with the consumption per node
+      description: |
+        The electricity meter tree as it was from `from` to `to`, with the consumption of every node, calculated by the
+        server from counted (`APPROVED`) readings only.
+
+        A node is a meter together with the meters it replaced and the meters that replaced it (`meterIds`, oldest
+        installation first; `meter` is the one in place at the end of the range), so a replacement or a counter that
+        wrapped around does not split a node. A node is listed under every parent it had in the range, each time with
+        the slices of the range it spent under that parent: a plot meter moved from quarter A to quarter B on 15.10
+        and shown for 01.10 to 31.10 is under A with the slice 01.10-15.10 and under B with the slice 15.10-31.10.
+        Neighbouring slices share their boundary day and add up to the consumption over the whole range. The days a
+        meter had no parent put it among the roots (substations, and meters outside the tree such as the plot meters
+        of a cooperative without a tree). The children of a node are the meters under it during its own slices.
+        Meters that did not work in the range are left out; water meters are never in the tree.
+
+        Each slice has the value at its start and at its end: `REAL` (a counted reading, or the initial or final
+        reading), `CALCULATED` (interpolated in proportion to the days between the nearest counted points, rounded
+        once to three decimals) or `UNKNOWN` (with the day after which there is no reading), and the consumption of
+        the slice: known, and `calculated` when an end was interpolated, or not known with `lastReadingOn`. `total`
+        is the consumption of the node over its slices under that parent.
+
+        Order: substations, quarter meters and common consumers, each by name (Ukrainian alphabet), then plot meters
+        in street and number order. 400 `VALIDATION_FAILED` with `to` `INVALID` when `to` is before `from`. Requires
+        `METERS_VIEW`.
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeterTree'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /plots/{id}/readings:
+    post:
+      tags: [readings]
+      operationId: submitPlotReading
+      summary: Submit a reading of an own meter
+      description: |
+        A member submits the reading of an active meter of a plot they currently own. It waits for approval (status
+        `PENDING`, source `MEMBER`) and is never used for consumption until someone with `READINGS_APPROVE` approves
+        it. A pending reading of the same meter and date is replaced: it stays in the history as `SUPERSEDED` and its
+        id is in `supersededReadingIds`; the same value on the same date again changes nothing. A pending reading
+        never replaces a counted one. `takenOn` absent means today in Europe/Kyiv. The reading is checked as one the
+        board enters, against the counted readings: 409 `READING_DATE_IN_FUTURE` or `READING_DATE_OUTSIDE_METER`
+        (`errors[{field: takenOn}]`), `READING_OUT_OF_ORDER` (`errors[{field: value}]`), `METER_REMOVED` for a removed
+        meter of the plot. The warning `UNUSUAL_CONSUMPTION` follows the rule of `enterReadings`. No permission
+        annotation: only a current owner of the plot may submit; any other plot, an unknown id and a plot of another
+        cooperative are the same 404 `PLOT_NOT_FOUND`; a meter that is not a meter of the plot is 404 `NOT_FOUND`
+        (`errors[{field: meterId, code: NOT_FOUND}]`); the platform operator has no cooperative data: 403. 400 `VALIDATION_FAILED` with `value`
+        `METER_VALUE_INVALID` for a malformed value. Written to the audit log (`READING_SUBMITTED`).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReadingSubmission'
+      responses:
+        '201':
+          description: The submitted reading, waiting for approval
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadingSaved'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /plots/{id}/meters:
+    get:
+      tags: [meters]
+      operationId: listPlotMeters
+      summary: The meters of a plot
+      description: |
+        Every meter the plot has had, active and removed: active meters first (electricity before water), then removed
+        ones, newest installation first. No permission annotation: a caller with `METERS_VIEW` may ask for any plot of
+        the cooperative, anyone else only for a plot they currently own, and then `note` (the board's note) is left
+        out. Any other plot, an unknown id and a plot of another cooperative are the same 404 `PLOT_NOT_FOUND`; the
+        platform operator has no cooperative data: 403. Common land has no meters (an empty list).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Meter'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /meters/{id}/readings:
+    get:
+      tags: [readings]
+      operationId: listMeterReadings
+      summary: The readings of a meter with their intervals
+      description: |
+        Every reading of the meter, newest date first (on one date the counted reading first, then pending, rejected
+        and superseded ones), and the intervals between the counted points of the meter (initial reading, approved
+        readings, final reading), newest first. Each approved reading carries the interval that ends on it; a reading
+        on the installation date has none. Consumption is calculated by the server from exact values. No permission
+        annotation: a caller with `METERS_VIEW` may ask for any meter of the cooperative, anyone else only for a meter
+        of a plot they currently own. Any other meter, an unknown id and a meter of another cooperative are 404
+        `NOT_FOUND`; the platform operator has no cooperative data: 403.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeterReadingHistory'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /readings/round:
+    get:
+      tags: [readings]
+      operationId: getReadingRound
+      summary: The meters of a reading round
+      description: |
+        The active meters to read on a round: plot meters in street order (Ukrainian alphabet, plots without a street
+        last) and natural order of the plot number, electricity before water; then the other meters by name. A plot
+        without an active meter is never listed. Filters combine with AND: `resource`, `street` (the plot's street,
+        ignoring case and surrounding spaces; only plot meters have one) and `noReadingSince` (meters whose last
+        counted reading, or the initial reading when there is none, is dated before that day). `lastReading` of each
+        meter is the point to compare a new reading with. `note` is present only for a caller with `METERS_VIEW`.
+        Requires `READINGS_ENTER`.
+      parameters:
+        - name: resource
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/MeterResource'
+        - name: street
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 200
+        - name: noReadingSince
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Meter'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /readings:
+    get:
+      tags: [readings]
+      operationId: listReadings
+      summary: The readings waiting for approval
+      description: |
+        The readings members submitted that wait for approval, oldest reading date first. Only `status=PENDING` is
+        supported; any other status is 400 `VALIDATION_FAILED` with `status` `INVALID`. Each item has the meter and,
+        when the reading fits between the counted readings, the interval it would close once approved and its
+        warnings. `note` of the meter is present only for a caller with `METERS_VIEW`. Requires `READINGS_APPROVE`.
+      parameters:
+        - name: status
+          in: query
+          required: true
+          schema:
+            $ref: '#/components/schemas/ReadingStatus'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PendingReading'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      tags: [readings]
+      operationId: enterReadings
+      summary: Enter readings, one or a whole round
+      description: |
+        Enters up to 100 readings. Each row is saved in its own transaction, so one refused row never undoes another;
+        the answer is 200 with one result per row in request order (`SAVED` or `REJECTED` with `error`). A reading
+        counts at once (status `APPROVED`, source `ENTERED`). `takenOn` absent means today in Europe/Kyiv. A counted
+        reading of the same meter and date is replaced: it stays in the history as `SUPERSEDED` and its id is in
+        `supersededReadingIds`; the same value on the same date again changes nothing. Row error codes: `NOT_FOUND`
+        (`meterId`: no such meter in the cooperative), `READING_DATE_IN_FUTURE` (`takenOn`, params `today`),
+        `READING_DATE_OUTSIDE_METER` (`takenOn`, params `installedOn` and, for a removed meter, `removedOn`),
+        `READING_OUT_OF_ORDER` (`value`: lower than the previous counted point or higher than the next one; params
+        `previousTakenOn` and `previousValue`, or `nextTakenOn` and `nextValue`), `READING_IN_USE` (a charge uses the
+        readings around the date). A saved row may carry the warning `UNUSUAL_CONSUMPTION`: the daily consumption of
+        the interval it closes is more than 3 times the daily average over the meter's counted intervals that ended in
+        the 180 days before it (none without such an interval). 400 `VALIDATION_FAILED` for the whole request when a
+        row is malformed (`rows[i].value` `METER_VALUE_INVALID`, `rows` `REQUIRED` or `TOO_LONG`). Requires
+        `READINGS_ENTER`; each saved row is written to the audit log (`READING_ENTERED`, or `READING_REPLACED` when it
+        replaced a reading of the same date).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReadingBatch'
+      responses:
+        '200':
+          description: One result per row
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadingBatchResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /readings/{id}:
+    put:
+      tags: [readings]
+      operationId: correctReading
+      summary: Correct the value or date of a counted reading
+      description: |
+        Corrects a counted (`APPROVED`) reading: a new reading with the given date and value takes its place and the
+        old one stays in the history as `SUPERSEDED`, as does a counted reading on the new date; their ids are in
+        `supersededReadingIds`. A request that changes nothing is accepted and not audited. Conflicts (409): the
+        reading is not counted (`READING_STATUS_INVALID`); the new date is after today (`READING_DATE_IN_FUTURE`) or
+        outside the meter's working period (`READING_DATE_OUTSIDE_METER`), both with `errors[{field: takenOn}]`; the
+        value does not fit between the neighbouring counted points (`READING_OUT_OF_ORDER`, `errors[{field: value}]`);
+        a charge uses the readings around the old or the new date (`READING_IN_USE`). The warning
+        `UNUSUAL_CONSUMPTION` follows the rule of `enterReadings`. Requires `READINGS_ENTER`; written to the audit log
+        (`READING_CORRECTED`).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReadingCorrection'
+      responses:
+        '200':
+          description: The reading that took the place of the corrected one
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadingSaved'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+    delete:
+      tags: [readings]
+      operationId: deleteReading
+      summary: Delete a counted reading
+      description: |
+        Deletes a counted (`APPROVED`) reading; the intervals around it join. A reading it had replaced stays
+        `SUPERSEDED`. Conflicts (409): the reading is not counted (`READING_STATUS_INVALID`) or a charge uses the
+        readings around it (`READING_IN_USE`). Requires `READINGS_ENTER`; written to the audit log (`READING_DELETED`,
+        the old date and value).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /readings/{id}/approve:
+    post:
+      tags: [readings]
+      operationId: approveReading
+      summary: Approve a reading a member submitted
+      description: |
+        A `PENDING` reading starts to count (`APPROVED`; its source stays `MEMBER`). It is checked again against the
+        counted readings as they are now: 409 `READING_DATE_OUTSIDE_METER` (`errors[{field: takenOn}]`),
+        `READING_OUT_OF_ORDER` (`errors[{field: value}]`) or `READING_IN_USE` (a charge uses the readings around the
+        date). A counted reading of the same date is replaced: it stays in the history as `SUPERSEDED` and its id is in
+        `supersededReadingIds`. A reading that is not pending is 409 `READING_STATUS_INVALID`. The answer carries the
+        interval the reading now closes and the warning `UNUSUAL_CONSUMPTION` by the rule of `enterReadings`.
+        Requires `READINGS_APPROVE`; written to the audit log (`READING_APPROVED`).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The approved reading
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadingSaved'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /readings/{id}/reject:
+    post:
+      tags: [readings]
+      operationId: rejectReading
+      summary: Reject a reading a member submitted
+      description: |
+        A `PENDING` reading is not approved (`REJECTED`) with a reason the member sees in the history of the meter
+        (`rejectReason`). It never counts. A reading that is not pending is 409 `READING_STATUS_INVALID`. 400
+        `VALIDATION_FAILED` with `reason` `REQUIRED` (absent or blank) or `TOO_LONG`. Requires `READINGS_APPROVE`;
+        written to the audit log (`READING_REJECTED` with the reason).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReadingRejection'
+      responses:
+        '200':
+          description: The rejected reading
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeterReading'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
 
 components:
   securitySchemes:
@@ -1869,7 +2745,10 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
     NotFound:
-      description: The resource does not exist or is not visible to the caller (code `NOT_FOUND`)
+      description: >-
+        The resource does not exist or is not visible to the caller (code `NOT_FOUND`; `PLOT_NOT_FOUND` from the
+        plot-scoped meter operations `listPlotMeters` and `submitPlotReading` when the plot is unknown, of another
+        cooperative or not the caller's)
       content:
         application/problem+json:
           schema:
@@ -1913,7 +2792,22 @@ components:
         `TARIFF_VERSION_DATE_TAKEN`, with `errors[{field: validFrom}]`), a tariff version is corrected or deleted
         although a charge uses it (code `TARIFF_VERSION_IN_USE`), the only version of a tariff is deleted (code
         `TARIFF_LAST_VERSION`), or a tariff is added to, a version is added to, corrected or deleted, or the scope is
-        changed of a tariff under an archived charge type (code `CHARGE_TYPE_ARCHIVED`)
+        changed of a tariff under an archived charge type (code `CHARGE_TYPE_ARCHIVED`), or a plot that has a meter is
+        deleted or turned into common land, or a plot with an active meter is archived (code `PLOT_HAS_METER`, with
+        `errors[{field: kind}]` for the update), or a meter is registered for a plot that already has an active meter
+        of the resource (code `METER_ACTIVE_EXISTS`) or for common land (code `METER_COMMON_LAND`) or an archived plot
+        (code `PLOT_ARCHIVED`), both with `errors[{field: plotId}]`, a meter with readings is deleted (code
+        `METER_HAS_READINGS`), a removed meter is removed again or deleted (code `METER_REMOVED`), or a date or value
+        of a reading (the initial or final reading of a meter) is refused: the date is in the future (code
+        `READING_DATE_IN_FUTURE`), outside the working period of the meter (code `READING_DATE_OUTSIDE_METER`), or the
+        value is lower than the previous reading or the date before a later one (code `READING_OUT_OF_ORDER`), each
+        with `errors[{field}]` naming the date or value, or a reading that is not counted is corrected or deleted (code
+        `READING_STATUS_INVALID`), or a reading is corrected or deleted although a charge uses the readings around it
+        (code `READING_IN_USE`), or a meter with readings waiting for approval is removed or replaced (code
+        `METER_HAS_PENDING_READINGS`), or a reading that is not pending is approved or rejected (code
+        `READING_STATUS_INVALID`), or a change of the electricity tree breaks its rules (code `METER_TREE_INVALID`,
+        with `errors[{field, code}]` naming the rule, see `setMeterParent`), or a meter that has meters under it in the
+        tree is deleted, or removed while they still work under it (code `METER_HAS_CHILDREN`)
       content:
         application/problem+json:
           schema:
@@ -1944,6 +2838,10 @@ components:
         - SETTINGS_MANAGE
         - TARIFFS_VIEW
         - TARIFFS_MANAGE
+        - METERS_VIEW
+        - METERS_MANAGE
+        - READINGS_ENTER
+        - READINGS_APPROVE
 
     PlotStatusVisibility:
       type: string
@@ -2265,11 +3163,24 @@ components:
         - TARIFF_SCOPE_CHANGED
         - TARIFF_EXCLUSION_ADDED
         - TARIFF_EXCLUSION_REMOVED
+        - METER_REGISTERED
+        - METER_UPDATED
+        - METER_REMOVED
+        - METER_DELETED
+        - METER_REPLACED
+        - METER_PARENT_CHANGED
+        - READING_ENTERED
+        - READING_REPLACED
+        - READING_CORRECTED
+        - READING_DELETED
+        - READING_SUBMITTED
+        - READING_APPROVED
+        - READING_REJECTED
 
     AuditEntityType:
       type: string
       description: Kind of the entity an audit entry is about
-      enum: [MEMBER, ROLE, PLOT, SETTINGS, OWNERSHIP, IMPORT, CHARGE_TYPE, TARIFF]
+      enum: [MEMBER, ROLE, PLOT, SETTINGS, OWNERSHIP, IMPORT, CHARGE_TYPE, TARIFF, METER, METER_READING]
 
     AuditFieldChange:
       type: object
@@ -2278,8 +3189,9 @@ components:
         Values are codes and parameters, not display text: enum codes, ISO dates (`2026-01-01`), plain decimal
         numbers, `true`/`false`, `base:<CODE>` tokens for a standard role or charge type name (also in the `roles`
         list joined by ", "), and for `owners` a JSON array of `{"member": "Last First", "share": "1/2"}` (a
-        correction adds `from` and `to`, ISO dates, `to` absent while the record is open). Values written before
-        this format are plain text and are shown as stored.
+        correction adds `from` and `to`, ISO dates, `to` absent while the record is open). Meter readings are plain
+        decimals with three decimals (`8205.000`). Values written before this format are plain text and are shown as
+        stored.
       required: [field]
       properties:
         field:
@@ -2319,7 +3231,8 @@ components:
           type: string
           description: >-
             Name of the entity at the time of the change, as a code or user content, never a display phrase:
-            the member name, plot number, tariff name or import file name as typed; for a role or a charge type
+            the member name, plot number, tariff name, meter name (or a plot meter's serial number) or import file
+            name as typed; for a role or a charge type
             the token `base:<CODE>` (for example `base:TREASURER`, `base:MEMBERSHIP`) while it keeps its standard
             name, otherwise its stored name; `settings` for the cooperative settings. The client shows the
             catalog text for a token in the user's language and any other value as is.
@@ -2923,13 +3836,15 @@ components:
     ImportCounts:
       type: object
       description: Records per sheet. Rows with a problem are not counted.
-      required: [plots, members, ownerships]
+      required: [plots, members, ownerships, meters]
       properties:
         plots:
           $ref: '#/components/schemas/ImportEntityCounts'
         members:
           $ref: '#/components/schemas/ImportEntityCounts'
         ownerships:
+          $ref: '#/components/schemas/ImportEntityCounts'
+        meters:
           $ref: '#/components/schemas/ImportEntityCounts'
 
     ImportEntityCounts:
@@ -2952,7 +3867,7 @@ components:
       properties:
         sheet:
           type: string
-          enum: [FILE, PLOTS, MEMBERS, OWNERSHIP]
+          enum: [FILE, PLOTS, MEMBERS, OWNERSHIP, METERS]
         row:
           type: integer
           minimum: 0
@@ -2987,7 +3902,8 @@ components:
           type: string
         code:
           type: string
-          description: Stable machine-readable error code, for example `VALIDATION_FAILED` or `NOT_FOUND`
+          description: >-
+            Stable machine-readable error code, for example `VALIDATION_FAILED`, `NOT_FOUND` or `PLOT_NOT_FOUND`
         errors:
           type: array
           description: Field-level validation errors
@@ -3013,7 +3929,12 @@ components:
             not a non-negative number with at most 10 integer and 4 decimal digits), `FREQUENCY_BASIS_MISMATCH`
             (`ONE_OFF` without `FIXED_ONE_TIME`, or `FIXED_ONE_TIME` without `ONE_OFF`), `TARIFF_COMMON_LAND` (common
             land cannot be in the scope of a tariff), `PLOT_ARCHIVED` (an archived plot), `UNKNOWN_PLOT` (no such plot
-            in the cooperative), `DUPLICATE` (the same plot listed twice)
+            in the cooperative), `DUPLICATE` (the same plot listed twice), `METER_VALUE_INVALID` (a meter reading that
+            is not a non-negative number with at most 11 integer and 3 decimal digits); with `METER_TREE_INVALID`:
+            `TREE_WATER` (a water meter has no tree), `TREE_QUARTER_UNDER_QUARTER` (a quarter meter under another
+            quarter meter), `TREE_PARENT_KIND` (the kinds do not allow this parent), `TREE_PARENT_INACTIVE` (the parent
+            is removed or not yet installed on the date), `TREE_DATE_BEFORE_LATEST` (a date before the meter's latest
+            change in the tree), `READING_DATE_OUTSIDE_METER` (a date before the meter's installation)
         message:
           type: string
 
@@ -3274,7 +4195,9 @@ components:
         plotCount:
           type: integer
           format: int64
-          description: Number of plots the tariff applies to; absent for a meter-based version (`PER_KWH`, `PER_M3`)
+          description: >-
+            Number of plots the tariff applies to; for a meter-based version (`PER_KWH`, `PER_M3`) only the plots
+            with an active meter of the resource
 
     Tariff:
       type: object
@@ -3310,15 +4233,16 @@ components:
           format: int64
           description: >-
             Number of plots the tariff applies to, as in the list (exclusions subtracted, archived plots and common
-            land never counted); absent when the shown version (the one valid today, else the earliest future one) is
-            meter-based
+            land never counted); when the shown version (the one valid today, else the earliest future one) is
+            meter-based, only the plots with an active meter of its resource
 
     ExpectedChargeStatus:
       type: string
       description: >-
         `AMOUNT` the plot is charged `amount`; `BY_READINGS` the amount depends on meter readings and is not known here;
-        `EXCLUDED` the tariff does not apply to the plot (see `reason`)
-      enum: [AMOUNT, BY_READINGS, EXCLUDED]
+        `NO_METER` the tariff is charged by meter and the plot has no meter of that resource in the month, so nothing
+        is charged and it is not in `total`; `EXCLUDED` the tariff does not apply to the plot (see `reason`)
+      enum: [AMOUNT, BY_READINGS, NO_METER, EXCLUDED]
 
     PlotTariffItem:
       type: object
@@ -3380,3 +4304,646 @@ components:
             $ref: '#/components/schemas/PlotTariffItem'
         total:
           $ref: '#/components/schemas/Money'
+
+    MeterKind:
+      type: string
+      description: >-
+        `PLOT` belongs to one plot; `SUBSTATION`, `QUARTER` (feeds a group of plots) and `COMMON_CONSUMER` (a well
+        pump, street lighting) are named meters of the electricity tree
+      enum: [PLOT, SUBSTATION, QUARTER, COMMON_CONSUMER]
+
+    MeterResource:
+      type: string
+      description: What a meter measures, `ELECTRICITY` in kWh or `WATER` in cubic metres
+      enum: [ELECTRICITY, WATER]
+
+    MeterValue:
+      type: string
+      pattern: '^\d{1,11}(\.\d{1,3})?$'
+      description: >-
+        A meter reading as a string: not negative, at most 11 integer digits and at most 3 digits after the decimal
+        point. It is never rounded; the server returns it with exactly three decimals (`"8205.000"`). Not money.
+        Field code `METER_VALUE_INVALID` when it does not match.
+      examples: ['8205.000']
+
+    MeterPoint:
+      type: object
+      description: A value of a meter on a date
+      required: [takenOn, value]
+      properties:
+        takenOn:
+          type: string
+          format: date
+        value:
+          $ref: '#/components/schemas/MeterValue'
+
+    MeterPlot:
+      type: object
+      description: The plot of a plot meter
+      required: [id, number]
+      properties:
+        id:
+          type: string
+          format: uuid
+        number:
+          type: string
+        street:
+          type: string
+
+    Meter:
+      type: object
+      description: A meter of the register
+      required: [id, kind, resource, serial, installedOn, initialReading, active, deletable, lastReading]
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          $ref: '#/components/schemas/MeterKind'
+        resource:
+          $ref: '#/components/schemas/MeterResource'
+        serial:
+          type: string
+        name:
+          type: string
+          description: The name of a meter that is not a plot meter; absent for a plot meter
+        plot:
+          $ref: '#/components/schemas/MeterPlot'
+        installedOn:
+          type: string
+          format: date
+        initialReading:
+          $ref: '#/components/schemas/MeterValue'
+        removedOn:
+          type: string
+          format: date
+          description: Present once the meter is removed, together with `finalReading`
+        finalReading:
+          $ref: '#/components/schemas/MeterValue'
+        note:
+          type: string
+          description: The board's note; absent for a member who sees the meter of their own plot
+        replacesMeterId:
+          type: string
+          format: uuid
+          description: The meter this one replaced
+        active:
+          type: boolean
+          description: True until the meter is removed
+        deletable:
+          type: boolean
+          description: True when the meter may be deleted (active and without readings); otherwise it is removed instead
+        lastReading:
+          $ref: '#/components/schemas/MeterPoint'
+          description: >-
+            The latest point of the meter: its final reading once removed, otherwise its latest counted reading, or
+            the initial reading when there is none
+
+    MeterCreate:
+      type: object
+      description: A new meter
+      required: [kind, resource, serial, installedOn, initialReading]
+      properties:
+        kind:
+          $ref: '#/components/schemas/MeterKind'
+        resource:
+          $ref: '#/components/schemas/MeterResource'
+        plotId:
+          type: string
+          format: uuid
+          description: Required for a plot meter, absent for any other kind
+        serial:
+          type: string
+          minLength: 1
+          maxLength: 50
+          description: 1 to 50 characters; surrounding whitespace is trimmed
+        name:
+          type: string
+          maxLength: 100
+          description: Required for a meter that is not a plot meter (1 to 100 characters, trimmed); absent for a plot meter
+        installedOn:
+          type: string
+          format: date
+          description: The installation date, the date of the initial reading; not after today
+        initialReading:
+          $ref: '#/components/schemas/MeterValue'
+        note:
+          type: string
+          maxLength: 500
+          description: Optional; blank text is not stored
+
+    MeterUpdate:
+      type: object
+      description: The descriptive fields of a meter
+      required: [serial]
+      properties:
+        serial:
+          type: string
+          minLength: 1
+          maxLength: 50
+        name:
+          type: string
+          maxLength: 100
+        note:
+          type: string
+          maxLength: 500
+
+    MeterRemoval:
+      type: object
+      description: The end of a meter's working period
+      required: [removedOn, finalReading]
+      properties:
+        removedOn:
+          type: string
+          format: date
+        finalReading:
+          $ref: '#/components/schemas/MeterValue'
+
+    ReadingStatus:
+      type: string
+      description: >-
+        `APPROVED` counts for consumption; `PENDING` waits for approval (a member's submission); `REJECTED` was not
+        approved (with a reason); `SUPERSEDED` was replaced by a later reading of the same date or by a correction
+      enum: [APPROVED, PENDING, REJECTED, SUPERSEDED]
+
+    ReadingSource:
+      type: string
+      description: Who brought the reading in, the board or the electrician (`ENTERED`), the Excel import or a member
+      enum: [ENTERED, IMPORTED, MEMBER]
+
+    ReadingWarning:
+      type: string
+      description: >-
+        `UNUSUAL_CONSUMPTION`: the daily consumption of the interval the reading closes is more than 3 times the
+        meter's usual daily consumption over the last 180 days. The reading is saved
+      enum: [UNUSUAL_CONSUMPTION]
+
+    ReadingInterval:
+      type: object
+      description: >-
+        The consumption between two neighbouring counted points of a meter (initial reading, approved readings, final
+        reading), calculated by the server
+      required: [from, to, days, consumption]
+      properties:
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+        days:
+          type: integer
+          format: int32
+          description: The number of days from `from` to `to`
+        consumption:
+          $ref: '#/components/schemas/MeterValue'
+
+    MeterReading:
+      type: object
+      description: A reading of a meter
+      required: [id, meterId, takenOn, value, status, source, changeable]
+      properties:
+        id:
+          type: string
+          format: uuid
+        meterId:
+          type: string
+          format: uuid
+        takenOn:
+          type: string
+          format: date
+        value:
+          $ref: '#/components/schemas/MeterValue'
+        status:
+          $ref: '#/components/schemas/ReadingStatus'
+        source:
+          $ref: '#/components/schemas/ReadingSource'
+        supersededById:
+          type: string
+          format: uuid
+          description: The reading that replaced this one; absent when it was deleted since
+        rejectReason:
+          type: string
+          description: Why a `REJECTED` reading was not approved (user content)
+        interval:
+          $ref: '#/components/schemas/ReadingInterval'
+          description: The interval this approved reading closes; absent for other statuses and on the installation date
+        changeable:
+          type: boolean
+          description: >-
+            True when the caller may correct or delete the reading now: it is approved, the caller has
+            `READINGS_ENTER` and no charge uses it
+
+    MeterReadingHistory:
+      type: object
+      description: The readings of one meter and its intervals
+      required: [meterId, readings, intervals]
+      properties:
+        meterId:
+          type: string
+          format: uuid
+        readings:
+          type: array
+          items:
+            $ref: '#/components/schemas/MeterReading'
+        intervals:
+          type: array
+          description: Newest first
+          items:
+            $ref: '#/components/schemas/ReadingInterval'
+
+    ReadingEntry:
+      type: object
+      description: One reading to enter
+      required: [meterId, value]
+      properties:
+        meterId:
+          type: string
+          format: uuid
+        takenOn:
+          type: string
+          format: date
+          description: The day the meter was read; absent means today in Europe/Kyiv
+        value:
+          $ref: '#/components/schemas/MeterValue'
+
+    ReadingBatch:
+      type: object
+      description: Readings to enter, each saved on its own
+      required: [rows]
+      properties:
+        rows:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/ReadingEntry'
+
+    ReadingRowOutcome:
+      type: string
+      enum: [SAVED, REJECTED]
+
+    ReadingRowError:
+      type: object
+      description: Why a row was not saved, as a code with parameters (never display text)
+      required: [code]
+      properties:
+        code:
+          type: string
+          description: >-
+            `NOT_FOUND`, `VALIDATION_FAILED`, `READING_DATE_IN_FUTURE`, `READING_DATE_OUTSIDE_METER`,
+            `READING_OUT_OF_ORDER` or `READING_IN_USE`
+        field:
+          type: string
+          description: The field of the row the error is about (`meterId`, `takenOn` or `value`)
+        params:
+          type: object
+          description: >-
+            Values for the message: ISO dates (`today`, `installedOn`, `removedOn`, `previousTakenOn`, `nextTakenOn`)
+            and meter values with three decimals (`previousValue`, `nextValue`)
+          additionalProperties:
+            type: string
+
+    ReadingRowResult:
+      type: object
+      description: The result of one row of a batch
+      required: [index, meterId, outcome, supersededReadingIds, warnings]
+      properties:
+        index:
+          type: integer
+          format: int32
+          description: The position of the row in the request, from 0
+        meterId:
+          type: string
+          format: uuid
+        outcome:
+          $ref: '#/components/schemas/ReadingRowOutcome'
+        reading:
+          $ref: '#/components/schemas/MeterReading'
+          description: The saved reading with the interval it closes; present when `SAVED`
+        supersededReadingIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        warnings:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReadingWarning'
+        error:
+          $ref: '#/components/schemas/ReadingRowError'
+          description: Present when `REJECTED`
+
+    ReadingBatchResult:
+      type: object
+      required: [rows]
+      properties:
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReadingRowResult'
+
+    ReadingCorrection:
+      type: object
+      description: The corrected date and value of a reading
+      required: [takenOn, value]
+      properties:
+        takenOn:
+          type: string
+          format: date
+        value:
+          $ref: '#/components/schemas/MeterValue'
+
+    ReadingSaved:
+      type: object
+      description: A saved reading, the readings it replaced and its warnings
+      required: [reading, supersededReadingIds, warnings]
+      properties:
+        reading:
+          $ref: '#/components/schemas/MeterReading'
+        supersededReadingIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        warnings:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReadingWarning'
+
+    ReadingSubmission:
+      type: object
+      description: A reading a member submits for a meter of their own plot
+      required: [meterId, value]
+      properties:
+        meterId:
+          type: string
+          format: uuid
+        takenOn:
+          type: string
+          format: date
+          description: The day the meter was read; absent means today in Europe/Kyiv
+        value:
+          $ref: '#/components/schemas/MeterValue'
+
+    ReadingRejection:
+      type: object
+      description: Why a submitted reading is not approved
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+          description: Shown to the member as typed (user content); surrounding whitespace is trimmed
+
+    PendingReading:
+      type: object
+      description: A reading waiting for approval, with its meter
+      required: [reading, meter, warnings]
+      properties:
+        reading:
+          $ref: '#/components/schemas/MeterReading'
+        meter:
+          $ref: '#/components/schemas/Meter'
+        interval:
+          $ref: '#/components/schemas/ReadingInterval'
+          description: >-
+            The interval the reading would close once approved, from the counted point before it; absent when the
+            reading does not fit between the counted readings (approval would be refused) or is on the installation
+            date
+        warnings:
+          type: array
+          description: The warnings the reading would carry once approved
+          items:
+            $ref: '#/components/schemas/ReadingWarning'
+
+    MeterReplacement:
+      type: object
+      description: The replacement of a meter by a new one on one day
+      required: [replacedOn, finalReading, serial, initialReading]
+      properties:
+        replacedOn:
+          type: string
+          format: date
+          description: The day the old meter is removed and the new one installed; not after today
+        finalReading:
+          $ref: '#/components/schemas/MeterValue'
+          description: The final reading of the old meter
+        serial:
+          type: string
+          minLength: 1
+          maxLength: 50
+          description: The serial number of the new meter (the same one for a counter that wrapped around); trimmed
+        initialReading:
+          $ref: '#/components/schemas/MeterValue'
+          description: The initial reading of the new meter (0 for a counter that wrapped around)
+
+    MeterConsumption:
+      type: object
+      description: The consumption of a meter's chain over a date range, calculated by the server
+      required: [meterId, from, to, meterIds, known, calculated]
+      properties:
+        meterId:
+          type: string
+          format: uuid
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+        meterIds:
+          type: array
+          description: The meters whose consumption is added up, oldest installation first
+          items:
+            type: string
+            format: uuid
+        known:
+          type: boolean
+          description: False when a meter of the chain has no counted point after the end of its part of the range
+        consumption:
+          $ref: '#/components/schemas/MeterValue'
+          description: Present when `known`; rounded once to three decimals when `calculated`
+        calculated:
+          type: boolean
+          description: True when a value at an end of the range was calculated between two readings
+        lastReadingOn:
+          type: string
+          format: date
+          description: When not `known`, the day after which there is no reading; absent when there is none before either
+
+    MeterParentChange:
+      type: object
+      description: A move of an electricity meter in the tree
+      required: [effectiveFrom]
+      properties:
+        parentMeterId:
+          type: string
+          format: uuid
+          description: The new parent; absent to take the meter out of the tree from `effectiveFrom`
+        effectiveFrom:
+          type: string
+          format: date
+          description: The first day under the new parent; not after today, not before the meter's latest change
+
+    MeterParentPeriod:
+      type: object
+      description: A period in which a meter had one parent; both dates are days of the period
+      required: [parentMeterId, validFrom]
+      properties:
+        parentMeterId:
+          type: string
+          format: uuid
+        validFrom:
+          type: string
+          format: date
+        validTo:
+          type: string
+          format: date
+          description: The last day under this parent; absent while the period lasts
+
+    MeterPlacement:
+      type: object
+      description: The parent periods of a meter in the electricity tree, oldest first
+      required: [meterId, periods]
+      properties:
+        meterId:
+          type: string
+          format: uuid
+        periods:
+          type: array
+          items:
+            $ref: '#/components/schemas/MeterParentPeriod'
+
+    MeterValueAtKind:
+      type: string
+      description: >-
+        `REAL` a counted reading or the initial or final reading on that day; `CALCULATED` interpolated by days between
+        the nearest counted points (shown as calculated); `UNKNOWN` no counted point after the day (or none before it)
+      enum: [REAL, CALCULATED, UNKNOWN]
+
+    MeterValueAt:
+      type: object
+      description: The value of a node's meter on a day, calculated by the server
+      required: [kind, meterId]
+      properties:
+        kind:
+          $ref: '#/components/schemas/MeterValueAtKind'
+        meterId:
+          type: string
+          format: uuid
+          description: The meter of the node's chain the value belongs to (the old one at the end of a slice that ends on a replacement day)
+        value:
+          $ref: '#/components/schemas/MeterValue'
+          description: Present unless `UNKNOWN`; a `CALCULATED` value is rounded once to three decimals
+        lastReadingOn:
+          type: string
+          format: date
+          description: For `UNKNOWN`, the day after which there is no reading; absent when there is none before either
+
+    MeterRangeConsumption:
+      type: object
+      description: The consumption over a part of a date range, calculated by the server
+      required: [known, calculated]
+      properties:
+        known:
+          type: boolean
+          description: False when a value at an end is not known
+        consumption:
+          $ref: '#/components/schemas/MeterValue'
+          description: Present when `known`; rounded once to three decimals when `calculated`
+        calculated:
+          type: boolean
+          description: True when a value at an end was calculated between two readings
+        lastReadingOn:
+          type: string
+          format: date
+          description: When not `known`, the day after which there is no reading; absent when there is none before either
+
+    MeterTreeSlice:
+      type: object
+      description: >-
+        A part of the range that a node spent under one parent, from `from` to `to` (the consumption is the value on
+        `to` minus the value on `from`)
+      required: [from, to, start, end, consumption]
+      properties:
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+        start:
+          $ref: '#/components/schemas/MeterValueAt'
+        end:
+          $ref: '#/components/schemas/MeterValueAt'
+        consumption:
+          $ref: '#/components/schemas/MeterRangeConsumption'
+
+    MeterTreeMeter:
+      type: object
+      description: The meter a node of the tree shows
+      required: [id, kind, serial, installedOn, active]
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          $ref: '#/components/schemas/MeterKind'
+        serial:
+          type: string
+        name:
+          type: string
+          description: The name of a meter that is not a plot meter
+        plot:
+          $ref: '#/components/schemas/MeterPlot'
+        installedOn:
+          type: string
+          format: date
+        removedOn:
+          type: string
+          format: date
+        active:
+          type: boolean
+
+    MeterTreeNode:
+      type: object
+      description: A node of the electricity tree under one parent (or among the roots) in a date range
+      required: [meter, meterIds, slices, total, children]
+      properties:
+        meter:
+          $ref: '#/components/schemas/MeterTreeMeter'
+        meterIds:
+          type: array
+          description: The meters of the node's chain of replacements, oldest installation first
+          items:
+            type: string
+            format: uuid
+        slices:
+          type: array
+          description: The parts of the range the node spent here, in date order
+          items:
+            $ref: '#/components/schemas/MeterTreeSlice'
+        total:
+          $ref: '#/components/schemas/MeterRangeConsumption'
+        children:
+          type: array
+          items:
+            $ref: '#/components/schemas/MeterTreeNode'
+
+    MeterTree:
+      type: object
+      description: The electricity meter tree as it was over a date range
+      required: [from, to, roots]
+      properties:
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+        roots:
+          type: array
+          items:
+            $ref: '#/components/schemas/MeterTreeNode'

@@ -77,10 +77,13 @@ class ImportHistory {
         };
     }
 
-    /** The stored {@code {"plots": {"created", "updated", "unchanged"}, ...}}; a missing part counts as zero. */
+    /**
+     * The stored {@code {"plots": {"created", "updated", "unchanged"}, ...}}; a missing part counts as zero (an upload
+     * from before the Meters sheet has no {@code meters}).
+     */
     private static ImportCounts countsOf(Map<String, Object> stored) {
         return new ImportCounts(entityCounts(stored.get("plots")), entityCounts(stored.get("members")),
-                entityCounts(stored.get("ownerships")));
+                entityCounts(stored.get("ownerships")), entityCounts(stored.get("meters")));
     }
 
     private static ImportEntityCounts entityCounts(Object stored) {

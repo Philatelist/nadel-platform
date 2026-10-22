@@ -14,6 +14,7 @@ const result: ImportResult = {
     plots: { created: 5, updated: 3, unchanged: 7 },
     members: { created: 2, updated: 0, unchanged: 1 },
     ownerships: { created: 4, updated: 0, unchanged: 0 },
+    meters: { created: 6, updated: 0, unchanged: 2 },
   },
 };
 
@@ -26,6 +27,8 @@ describe('ImportResultPanel', () => {
     renderWithApp(<ImportResultPanel result={result} onReset={vi.fn()} />);
     const row = within(screen.getByRole('row', { name: /Plots/ })).getAllByRole('cell');
     expect(row.map((c) => c.textContent)).toEqual(['Plots', '5', '3', '7']);
+    const meters = within(screen.getByRole('row', { name: /Meters/ })).getAllByRole('cell');
+    expect(meters.map((c) => c.textContent)).toEqual(['Meters', '6', '0', '2']);
     expect(screen.getByRole('link', { name: 'Go to plots' })).toHaveAttribute('href', '/plots');
     expect(screen.getByRole('link', { name: 'Go to members' })).toHaveAttribute('href', '/members');
   });

@@ -4,7 +4,7 @@ import { buttonClass, Button, DataTable, Notice, Panel, type Column } from '../u
 import { useT } from '../../i18n';
 import { useCan } from '../../me';
 
-const entities = ['plots', 'members', 'ownerships'] as const;
+const entities = ['plots', 'members', 'ownerships', 'meters'] as const;
 
 export function ImportResultPanel({ result, onReset }: { result: ImportResult; onReset: () => void }) {
   const t = useT();

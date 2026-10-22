@@ -83,6 +83,37 @@ const router = createBrowserRouter([
         ],
       },
       {
+        element: <RequirePermission permission="METERS_VIEW" />,
+        children: [
+          {
+            path: 'meters',
+            lazy: () => import('./pages/MetersPage').then((m) => ({ Component: m.MetersPage })),
+          },
+          {
+            path: 'meters/:id',
+            lazy: () => import('./pages/MeterPage').then((m) => ({ Component: m.MeterPage })),
+          },
+        ],
+      },
+      {
+        element: <RequirePermission permission="READINGS_ENTER" />,
+        children: [
+          {
+            path: 'readings',
+            lazy: () => import('./pages/ReadingsRoundPage').then((m) => ({ Component: m.ReadingsRoundPage })),
+          },
+        ],
+      },
+      {
+        element: <RequirePermission permission="READINGS_APPROVE" />,
+        children: [
+          {
+            path: 'readings/approvals',
+            lazy: () => import('./pages/ApprovalsPage').then((m) => ({ Component: m.ApprovalsPage })),
+          },
+        ],
+      },
+      {
         element: <RequirePermission permission="IMPORT_RUN" />,
         children: [
           {
@@ -110,11 +141,20 @@ const router = createBrowserRouter([
         ],
       },
       {
-        element: <RequirePermission permission="SETTINGS_MANAGE" />,
+        element: <RequirePermission permission={['SETTINGS_MANAGE', 'METERS_MANAGE']} any />,
         children: [
           {
             path: 'settings',
             lazy: () => import('./pages/SettingsPage').then((m) => ({ Component: m.SettingsPage })),
+          },
+        ],
+      },
+      {
+        element: <RequirePermission permission={['METERS_VIEW', 'METERS_MANAGE']} />,
+        children: [
+          {
+            path: 'settings/meter-tree',
+            lazy: () => import('./pages/MeterTreePage').then((m) => ({ Component: m.MeterTreePage })),
           },
         ],
       },
