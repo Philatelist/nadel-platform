@@ -12,7 +12,9 @@
 import type { MeterKind } from './meterKind';
 import type { MeterPlot } from './meterPlot';
 import type { MeterPoint } from './meterPoint';
+import type { MeterPredecessor } from './meterPredecessor';
 import type { MeterResource } from './meterResource';
+import type { MeterSuccessor } from './meterSuccessor';
 import type { MeterValue } from './meterValue';
 
 /**
@@ -33,8 +35,12 @@ export interface Meter {
   finalReading?: MeterValue;
   /** The board's note; absent for a member who sees the meter of their own plot */
   note?: string;
-  /** The meter this one replaced */
+  /** The meter this one replaced; the same id as `replaces.id`, kept for older clients */
   replacesMeterId?: string;
+  /** The meter this one replaced, with the day it was removed and its final reading; absent for a meter that replaced nothing. For a counter that wrapped around its serial is this meter's own */
+  replaces?: MeterPredecessor;
+  /** The meter that replaced this one; the day and the final reading of the replacement are this meter's own `removedOn` and `finalReading`. Absent for a meter that was not replaced (active, or removed without a replacement) */
+  replacedBy?: MeterSuccessor;
   /** True until the meter is removed */
   active: boolean;
   /** True when the meter may be deleted (active and without readings); otherwise it is removed instead */

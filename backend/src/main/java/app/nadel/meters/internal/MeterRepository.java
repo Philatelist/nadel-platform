@@ -49,6 +49,9 @@ interface MeterRepository extends JpaRepository<MeterRecord, UUID> {
     /** The meters that replaced the meter (one at most: only an active meter is replaced). */
     List<MeterRecord> findByReplacesMeterId(UUID replacesMeterId);
 
+    /** The meters that replaced any of the meters, for the replacement links of a list in one query. */
+    List<MeterRecord> findByReplacesMeterIdIn(Collection<UUID> replacesMeterIds);
+
     /** Every meter of the resource, active and removed. */
     List<MeterRecord> findByResource(MeterResource resource);
 

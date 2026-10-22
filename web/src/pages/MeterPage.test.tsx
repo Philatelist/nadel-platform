@@ -152,4 +152,48 @@ describe('MeterPage', () => {
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete reading' }));
     expect(deleteReading).toHaveBeenCalledWith({ id: 'r2' });
   });
+  describe('replacement chain', () => {
+    const replacedBy = { id: 'm5', serial: 'EM-NEW' };
+    const replaces = { id: 'm0', serial: 'EM-OLD', removedOn: '2026-05-01', finalReading: '4100.500' };
+
+    it("names the successor with this meter's removal day and final reading", () => {
+      meter = { ...plotMeter, active: false, removedOn: '2026-06-01', finalReading: '8205.000', replacedBy };
+      renderCard();
+      expect(screen.getByTestId('replaced-by')).toHaveTextContent(
+        'Replaced by EM-NEW: removed 1 Jun 2026, final reading 8,205 kWh',
+      );
+      expect(within(screen.getByTestId('replaced-by')).getByRole('link', { name: 'EM-NEW' })).toHaveAttribute(
+        'href',
+        '/meters/m5',
+      );
+      expect(screen.queryByTestId('replaces')).toBeNull();
+    });
+
+    it('names the predecessor with its removal day and final reading', () => {
+      meter = { ...plotMeter, replaces, replacesMeterId: 'm0' };
+      renderCard();
+      expect(screen.getByTestId('replaces')).toHaveTextContent(
+        'Replaced meter EM-OLD: removed 1 May 2026, final reading 4,100.5 kWh',
+      );
+      expect(within(screen.getByTestId('replaces')).getByRole('link', { name: 'EM-OLD' })).toHaveAttribute(
+        'href',
+        '/meters/m0',
+      );
+      expect(screen.queryByTestId('replaced-by')).toBeNull();
+    });
+
+    it('shows both lines in the middle of a chain', () => {
+      meter = {
+        ...plotMeter,
+        active: false,
+        removedOn: '2026-06-01',
+        finalReading: '8205.000',
+        replaces,
+        replacedBy,
+      };
+      renderCard();
+      expect(screen.getByTestId('replaced-by')).toBeInTheDocument();
+      expect(screen.getByTestId('replaces')).toBeInTheDocument();
+    });
+  });
 });

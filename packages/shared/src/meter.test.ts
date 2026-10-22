@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { en } from './i18n/en';
 import { uk } from './i18n/uk';
-import { formatMeterValue, parseMeterValue } from './meter';
+import { formatMeterValue, parseMeterValue, roundMeterValue } from './meter';
 
 describe('parseMeterValue', () => {
   it.each([
@@ -63,5 +63,28 @@ describe('meter unit labels', () => {
     expect(uk.units.m3).toBe('м³');
     expect(en.units.kwh).toBe('kWh');
     expect(en.units.m3).toBe('m³');
+  });
+});
+
+describe('roundMeterValue', () => {
+  it.each([
+    ['1234.499', 0, '1234'],
+    ['1234.500', 0, '1235'],
+    ['999.500', 0, '1000'],
+    ['0.400', 0, '0'],
+    ['12.345', 2, '12.35'],
+    ['12.344', 2, '12.34'],
+    ['0.005', 2, '0.01'],
+    ['0.004', 2, '0.00'],
+    ['9.995', 2, '10.00'],
+    ['7', 2, '7.00'],
+    ['7.1', 3, '7.100'],
+  ])('rounds %s to %i decimals as %s', (value, decimals, expected) => {
+    expect(roundMeterValue(value, decimals)).toBe(expected);
+  });
+
+  it('rejects an invalid value or precision', () => {
+    expect(() => roundMeterValue('-1', 0)).toThrow();
+    expect(() => roundMeterValue('1', 4)).toThrow();
   });
 });

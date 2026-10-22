@@ -345,7 +345,7 @@ WHERE s.tariff_id = 'ffffffff-0000-0000-0000-000000000001' AND s.reason = 'Exemp
 -- Meters, the electricity tree and readings (spec 010), demo cooperative plus one meter of the other cooperative.
 -- Counts (demo cooperative): 38 meters = 5 network meters (substation, 2 quarters, well, street lighting) + 29 electricity
 -- plot meters (28 plots; plots 25 and 28 have none; plot 9 has the replaced meter and its successor) + 4 water meters;
--- 33 tree periods (water meters are outside the tree); 168 readings = 165 approved + 1 pending + 1 rejected + 1 superseded
+-- 33 tree periods (water meters are outside the tree); 186 readings = 183 approved + 1 pending + 1 rejected + 1 superseded
 -- (asserted by DemoMeterDataTests). The other cooperative: 1 meter, 1 reading.
 -- Dates are relative to CURRENT_DATE (one anchor per statement), so the data looks fresh whenever it is first loaded:
 --  - plot meters are 150 days old, the network meters 400 days; readings are spread over ~120 days with irregular gaps
@@ -420,12 +420,40 @@ JOIN plot p ON p.tenant_id = m.tenant_id AND p.id = m.plot_id
 WHERE m.tenant_id = '11111111-1111-1111-1111-111111111111' AND m.kind = 'PLOT' AND m.resource = 'ELECTRICITY'
 ON CONFLICT DO NOTHING;
 
+-- The day the readings are counted from. A database that loaded this script on an earlier day keeps its rows dated from
+-- that day (the ids encode only the number of days back), so the anchor is read back from a stored reading (plot 20's
+-- series, 75 days back); a fresh database anchors on today. New rows then share the dates of the stored ones.
+DROP TABLE IF EXISTS pg_temp.demo_anchor;
+CREATE TEMP TABLE demo_anchor AS
+SELECT coalesce((SELECT r.taken_on + 75 FROM meter_reading r
+                 WHERE r.id = md5('demo-reading:' || md5('demo-meter:11111111-1111-1111-1111-111111111111:20:ELECTRICITY')::uuid || ':75')::uuid),
+                CURRENT_DATE) AS day;
+
+-- Earlier versions of this script used other reading days (plot templates 0-2, plot 9's new meter, the network meters).
+-- Remove those rows by their derived ids so existing databases converge; the days that stay are never touched.
+DELETE FROM meter_reading r
+USING meter m, plot p, (VALUES (0, 9), (1, 19), (1, 6), (2, 12)) AS o(tpl, d)
+WHERE m.id = r.meter_id AND p.tenant_id = m.tenant_id AND p.id = m.plot_id AND r.status = 'APPROVED'
+  AND m.tenant_id = '11111111-1111-1111-1111-111111111111' AND m.kind = 'PLOT' AND m.resource = 'ELECTRICITY'
+  AND m.replaces_meter_id IS NULL AND p.number <> '20'
+  AND o.tpl = regexp_replace(p.number, '\D', '', 'g')::int % 4
+  AND r.id = md5('demo-reading:' || m.id || ':' || o.d)::uuid;
+DELETE FROM meter_reading r
+USING (VALUES (112), (85), (63), (30), (9)) AS o(d)
+WHERE r.status = 'APPROVED' AND r.tenant_id = '11111111-1111-1111-1111-111111111111'
+  AND r.meter_id::text LIKE '99999999-0000-0000-0001-00000000000%'
+  AND r.id = md5('demo-reading:' || r.meter_id || ':' || o.d)::uuid;
+DELETE FROM meter_reading r
+USING meter m, (VALUES (18), (4)) AS o(d)
+WHERE m.id = r.meter_id AND m.id = md5('demo-meter:11111111-1111-1111-1111-111111111111:9:NEW')::uuid
+  AND r.status = 'APPROVED' AND r.id = md5('demo-reading:' || m.id || ':' || o.d)::uuid;
+
 -- Approved readings. Each series is an initial value plus a daily rate over the days since installation, so values only
 -- grow; the template (0-3, or 4 for plot 20) picks the reading days (days before today): gaps of 6-55 days.
 -- Template 4 (plot 20) ends 75 days ago.
 INSERT INTO meter_reading (id, tenant_id, meter_id, taken_on, value, source, status, entered_by_member_id, decided_by_member_id, decided_at)
-SELECT md5('demo-reading:' || s.id || ':' || t.d)::uuid, s.tenant_id, s.id, CURRENT_DATE - t.d,
-       s.initial_value + round(s.rate * ((CURRENT_DATE - t.d) - s.installed_on) + ((s.n * 7 + t.d) % 10) / 10.0, 3),
+SELECT md5('demo-reading:' || s.id || ':' || t.d)::uuid, s.tenant_id, s.id, (SELECT day FROM demo_anchor) - t.d,
+       s.initial_value + round(s.rate * (((SELECT day FROM demo_anchor) - t.d) - s.installed_on) + ((s.n * 7 + t.d) % 10) / 10.0, 3),
        'ENTERED', 'APPROVED', 'aaaaaaaa-0000-0000-0000-000000000004', 'aaaaaaaa-0000-0000-0000-000000000004', now()
 FROM (
     SELECT m.id, m.tenant_id, m.installed_on, m.initial_value,
@@ -436,26 +464,24 @@ FROM (
     WHERE m.tenant_id = '11111111-1111-1111-1111-111111111111' AND m.resource = 'ELECTRICITY' AND m.removed_on IS NULL
       AND m.replaces_meter_id IS NULL
     UNION ALL
-    SELECT m.id, m.tenant_id, m.installed_on, m.initial_value, v.n, v.rate, 0
+    SELECT m.id, m.tenant_id, m.installed_on, m.initial_value, v.n, v.rate, 5
     FROM meter m
-    JOIN (VALUES ('99999999-0000-0000-0001-000000000001'::uuid, 1, 260::numeric),
-                 ('99999999-0000-0000-0001-000000000002'::uuid, 2, 120::numeric),
-                 ('99999999-0000-0000-0001-000000000003'::uuid, 3, 100::numeric),
-                 ('99999999-0000-0000-0001-000000000004'::uuid, 4, 25::numeric),
+    JOIN (VALUES ('99999999-0000-0000-0001-000000000004'::uuid, 4, 25::numeric),
                  ('99999999-0000-0000-0001-000000000005'::uuid, 5, 8::numeric)) AS v(id, n, rate) ON v.id = m.id
 ) s
-JOIN (VALUES (0, 112), (0, 85), (0, 63), (0, 30), (0, 9),
-             (1, 118), (1, 90), (1, 41), (1, 19), (1, 6),
-             (2, 100), (2, 58), (2, 27), (2, 12),
+JOIN (VALUES (0, 112), (0, 85), (0, 63), (0, 30), (0, 20), (0, 5),
+             (1, 118), (1, 90), (1, 41), (1, 20), (1, 5),
+             (2, 100), (2, 58), (2, 27), (2, 20), (2, 5),
              (3, 105), (3, 74), (3, 20), (3, 5),
-             (4, 118), (4, 96), (4, 75)) AS t(tpl, d) ON t.tpl = s.tpl
+             (4, 118), (4, 96), (4, 75),
+             (5, 118), (5, 100), (5, 74), (5, 41), (5, 20), (5, 5)) AS t(tpl, d) ON t.tpl = s.tpl
 ON CONFLICT DO NOTHING;
 
 -- Water: fractional cubic metres; odd plot numbers are read on 4 days, even ones on 3.
 INSERT INTO meter_reading (id, tenant_id, meter_id, taken_on, value, source, status, entered_by_member_id, decided_by_member_id, decided_at)
-SELECT md5('demo-reading:' || m.id || ':' || t.d)::uuid, m.tenant_id, m.id, CURRENT_DATE - t.d,
+SELECT md5('demo-reading:' || m.id || ':' || t.d)::uuid, m.tenant_id, m.id, (SELECT day FROM demo_anchor) - t.d,
        m.initial_value + round((0.25 + (regexp_replace(p.number, '\D', '', 'g')::int % 5) * 0.037)
-                               * ((CURRENT_DATE - t.d) - m.installed_on), 3),
+                               * (((SELECT day FROM demo_anchor) - t.d) - m.installed_on), 3),
        'ENTERED', 'APPROVED', 'aaaaaaaa-0000-0000-0000-000000000004', 'aaaaaaaa-0000-0000-0000-000000000004', now()
 FROM meter m
 JOIN plot p ON p.tenant_id = m.tenant_id AND p.id = m.plot_id
@@ -466,11 +492,90 @@ ON CONFLICT DO NOTHING;
 
 -- Plot 9: readings of the old meter (the final value is its last point) and of the new one.
 INSERT INTO meter_reading (id, tenant_id, meter_id, taken_on, value, source, status, entered_by_member_id, decided_by_member_id, decided_at)
-SELECT md5('demo-reading:' || m.id || ':' || v.d)::uuid, m.tenant_id, m.id, CURRENT_DATE - v.d,
+SELECT md5('demo-reading:' || m.id || ':' || v.d)::uuid, m.tenant_id, m.id, (SELECT day FROM demo_anchor) - v.d,
        v.value, 'ENTERED', 'APPROVED', 'aaaaaaaa-0000-0000-0000-000000000004', 'aaaaaaaa-0000-0000-0000-000000000004', now()
 FROM (VALUES ('OLD', 118, 2233.000 + 0), ('OLD', 84, 2640.500), ('OLD', 52, 2987.250), ('OLD', 33, 3250.000),
-             ('NEW', 18, 112.400), ('NEW', 4, 205.700)) AS v(which, d, value)
+             ('NEW', 20, 112.400), ('NEW', 5, 190.700)) AS v(which, d, value)
 JOIN meter m ON m.id = md5('demo-meter:11111111-1111-1111-1111-111111111111:9:' || v.which)::uuid
+ON CONFLICT DO NOTHING;
+
+-- The node meters (substation and the two quarters) are read on the same days as the plot rounds (118, 100, 74, 41, 20
+-- and 5 days ago). Each node's consumption in an interval is the children's consumption in that interval, as the tree
+-- computes it (proportional to the days between the nearest readings, across the replacement on plot 9), times a loss
+-- factor of 5-15 % that differs per interval. The substation's children are the two quarters and the well; the street
+-- lighting hangs under quarter A. Plot 20 has no reading after 75 days ago and adds nothing in the latest rounds.
+INSERT INTO meter_reading (id, tenant_id, meter_id, taken_on, value, source, status, entered_by_member_id, decided_by_member_id, decided_at)
+WITH dates(i, d) AS (
+    VALUES (0, 118), (1, 100), (2, 74), (3, 41), (4, 20), (5, 5)
+), leaf AS (
+    SELECT m.id AS key,
+           CASE WHEN p.street = 'вул. Садова' THEN '99999999-0000-0000-0001-000000000002'::uuid
+                ELSE '99999999-0000-0000-0001-000000000003'::uuid END AS parent
+    FROM meter m JOIN plot p ON p.tenant_id = m.tenant_id AND p.id = m.plot_id
+    WHERE m.tenant_id = '11111111-1111-1111-1111-111111111111' AND m.kind = 'PLOT' AND m.resource = 'ELECTRICITY'
+      AND m.replaces_meter_id IS NULL
+    UNION ALL
+    SELECT '99999999-0000-0000-0001-000000000005'::uuid, '99999999-0000-0000-0001-000000000002'::uuid
+    UNION ALL
+    SELECT '99999999-0000-0000-0001-000000000004'::uuid, '99999999-0000-0000-0001-000000000001'::uuid
+), pts AS (
+    SELECT l.key, r.taken_on, r.value - m.initial_value AS cum
+    FROM leaf l JOIN meter m ON m.id = l.key
+    JOIN meter_reading r ON r.meter_id = m.id AND r.status = 'APPROVED'
+    UNION
+    SELECT l.key, m.installed_on, 0 FROM leaf l JOIN meter m ON m.id = l.key
+    UNION
+    SELECT l.key, m.removed_on, m.final_value - m.initial_value
+    FROM leaf l JOIN meter m ON m.id = l.key WHERE m.removed_on IS NOT NULL
+    UNION
+    SELECT l.key, r.taken_on, r.value - n.initial_value + (m.final_value - m.initial_value)
+    FROM leaf l JOIN meter m ON m.id = l.key JOIN meter n ON n.replaces_meter_id = m.id
+    JOIN meter_reading r ON r.meter_id = n.id AND r.status = 'APPROVED'
+    UNION
+    SELECT l.key, n.installed_on, m.final_value - m.initial_value
+    FROM leaf l JOIN meter m ON m.id = l.key JOIN meter n ON n.replaces_meter_id = m.id
+), leafcum AS (
+    SELECT l.key, l.parent, dt.i,
+           CASE WHEN pr.taken_on IS NULL THEN 0
+                WHEN nx.taken_on IS NULL OR nx.taken_on = pr.taken_on THEN pr.cum
+                ELSE pr.cum + (nx.cum - pr.cum) * (((SELECT day FROM demo_anchor) - dt.d) - pr.taken_on)::numeric
+                              / (nx.taken_on - pr.taken_on) END AS cum
+    FROM leaf l CROSS JOIN dates dt
+    LEFT JOIN LATERAL (SELECT q.taken_on, q.cum FROM pts q WHERE q.key = l.key AND q.taken_on <= (SELECT day FROM demo_anchor) - dt.d
+                       ORDER BY q.taken_on DESC LIMIT 1) pr ON true
+    LEFT JOIN LATERAL (SELECT q.taken_on, q.cum FROM pts q WHERE q.key = l.key AND q.taken_on >= (SELECT day FROM demo_anchor) - dt.d
+                       ORDER BY q.taken_on LIMIT 1) nx ON true
+), leafinc AS (
+    SELECT parent, i, cum - coalesce(lag(cum) OVER (PARTITION BY key ORDER BY i), 0) AS inc FROM leafcum
+), loss(node, i, f) AS (
+    VALUES ('99999999-0000-0000-0001-000000000002'::uuid, 0, 1.09), ('99999999-0000-0000-0001-000000000002'::uuid, 1, 1.07),
+           ('99999999-0000-0000-0001-000000000002'::uuid, 2, 1.12), ('99999999-0000-0000-0001-000000000002'::uuid, 3, 1.08),
+           ('99999999-0000-0000-0001-000000000002'::uuid, 4, 1.10), ('99999999-0000-0000-0001-000000000002'::uuid, 5, 1.07),
+           ('99999999-0000-0000-0001-000000000003'::uuid, 0, 1.06), ('99999999-0000-0000-0001-000000000003'::uuid, 1, 1.09),
+           ('99999999-0000-0000-0001-000000000003'::uuid, 2, 1.11), ('99999999-0000-0000-0001-000000000003'::uuid, 3, 1.07),
+           ('99999999-0000-0000-0001-000000000003'::uuid, 4, 1.12), ('99999999-0000-0000-0001-000000000003'::uuid, 5, 1.08),
+           ('99999999-0000-0000-0001-000000000001'::uuid, 0, 1.06), ('99999999-0000-0000-0001-000000000001'::uuid, 1, 1.08),
+           ('99999999-0000-0000-0001-000000000001'::uuid, 2, 1.05), ('99999999-0000-0000-0001-000000000001'::uuid, 3, 1.09),
+           ('99999999-0000-0000-0001-000000000001'::uuid, 4, 1.07), ('99999999-0000-0000-0001-000000000001'::uuid, 5, 1.10)
+), quarter AS (
+    SELECT li.parent AS node, li.i, round(sum(li.inc) * lo.f, 3) AS inc
+    FROM leafinc li JOIN loss lo ON lo.node = li.parent AND lo.i = li.i
+    WHERE li.parent <> '99999999-0000-0000-0001-000000000001'::uuid
+    GROUP BY li.parent, li.i, lo.f
+), substation AS (
+    SELECT '99999999-0000-0000-0001-000000000001'::uuid AS node, x.i, round(sum(x.inc) * lo.f, 3) AS inc
+    FROM (SELECT node, i, inc FROM quarter
+          UNION ALL SELECT parent, i, inc FROM leafinc WHERE parent = '99999999-0000-0000-0001-000000000001'::uuid) x
+    JOIN loss lo ON lo.node = '99999999-0000-0000-0001-000000000001'::uuid AND lo.i = x.i
+    GROUP BY x.i, lo.f
+), series AS (
+    SELECT node, i, sum(inc) OVER (PARTITION BY node ORDER BY i) AS cum FROM (
+        SELECT node, i, inc FROM quarter UNION ALL SELECT node, i, inc FROM substation) u
+)
+SELECT md5('demo-reading:' || m.id || ':' || dt.d)::uuid, m.tenant_id, m.id, (SELECT day FROM demo_anchor) - dt.d,
+       m.initial_value + se.cum, 'ENTERED', 'APPROVED',
+       'aaaaaaaa-0000-0000-0000-000000000004', 'aaaaaaaa-0000-0000-0000-000000000004', now()
+FROM series se JOIN meter m ON m.id = se.node JOIN dates dt ON dt.i = se.i
 ON CONFLICT DO NOTHING;
 
 -- The other cooperative.
@@ -515,7 +620,7 @@ FROM meter_reading r
 JOIN meter m ON m.id = r.meter_id AND m.tenant_id = r.tenant_id
 JOIN plot p ON p.tenant_id = m.tenant_id AND p.id = m.plot_id
 WHERE p.tenant_id = '11111111-1111-1111-1111-111111111111' AND p.number = '2' AND m.resource = 'ELECTRICITY'
-  AND r.status = 'APPROVED' AND r.taken_on = CURRENT_DATE - 58
+  AND r.status = 'APPROVED' AND r.taken_on = (SELECT day FROM demo_anchor) - 58
 ON CONFLICT DO NOTHING;
 
 -- The custom role Електрик reads the meters and enters readings. Legacy text: the earlier descriptions become the new one
@@ -528,4 +633,5 @@ ON CONFLICT DO NOTHING;
 UPDATE role SET description = 'Вносить покази лічильників на обході'
 WHERE id = 'cccccccc-0000-0000-0000-000000000001'
   AND description IN ('Роль без дозволів до появи лічильників', 'Custom role without permissions');
+DROP TABLE pg_temp.demo_anchor;
 -- END demo meters

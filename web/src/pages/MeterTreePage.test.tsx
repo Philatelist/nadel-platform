@@ -118,7 +118,7 @@ describe('MeterTreePage', () => {
     const lists = screen.getAllByRole('list', { name: 'Meter tree' });
     expect(lists).toHaveLength(3);
     const quarter = screen.getByText('Quarter A').closest('li') as HTMLElement;
-    expect(within(quarter).getAllByText('Consumption: 600.25 kWh')[0]).toBeInTheDocument();
+    expect(within(quarter).getAllByText('Consumption: 600 kWh')[0]).toBeInTheDocument();
     expect(within(quarter).getByText('calculated')).toBeInTheDocument();
     expect(screen.getByText('Consumption: 1,300.5 kWh')).toBeInTheDocument();
     expect(screen.getByText('no reading after 20 Sep 2026')).toBeInTheDocument();
