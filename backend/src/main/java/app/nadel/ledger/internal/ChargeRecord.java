@@ -69,6 +69,12 @@ class ChargeRecord {
     @Column(columnDefinition = "jsonb", updatable = false)
     private Map<String, Object> calculation;
 
+    @Column(name = "source_key", updatable = false)
+    private String sourceKey;
+
+    @Column(name = "tariff_id", updatable = false)
+    private UUID tariffId;
+
     @Column(name = "reverses_charge_id", updatable = false)
     private UUID reversesChargeId;
 
@@ -105,6 +111,33 @@ class ChargeRecord {
         charge.accruedOn = date;
         charge.reason = reason;
         charge.calculation = calculation;
+        charge.createdBy = createdBy;
+        charge.createdAt = now;
+        return charge;
+    }
+
+    /**
+     * A charge of the month run (kind {@code REGULAR}, source {@code TARIFF}): one tariff for one plot and one month,
+     * identified by {@code sourceKey} ({@code TARIFF:{tariff}:{plot}:{YYYY-MM}}), so a rerun never books it twice.
+     */
+    static ChargeRecord tariff(UUID tenantId, UUID plotId, UUID chargeTypeId, UUID billingMonthId, UUID tariffId,
+            Money amount, LocalDate serviceFrom, LocalDate serviceTo, LocalDate accruedOn, String sourceKey,
+            Map<String, Object> calculation, @Nullable UUID createdBy, Instant now) {
+        ChargeRecord charge = new ChargeRecord();
+        charge.id = UUID.randomUUID();
+        charge.tenantId = tenantId;
+        charge.plotId = plotId;
+        charge.chargeTypeId = chargeTypeId;
+        charge.billingMonthId = billingMonthId;
+        charge.kind = ChargeKind.REGULAR;
+        charge.source = ChargeSource.TARIFF;
+        charge.amount = amount.value();
+        charge.serviceFrom = serviceFrom;
+        charge.serviceTo = serviceTo;
+        charge.accruedOn = accruedOn;
+        charge.calculation = calculation;
+        charge.sourceKey = sourceKey;
+        charge.tariffId = tariffId;
         charge.createdBy = createdBy;
         charge.createdAt = now;
         return charge;
@@ -178,6 +211,14 @@ class ChargeRecord {
 
     @Nullable Map<String, Object> getCalculation() {
         return calculation;
+    }
+
+    @Nullable String getSourceKey() {
+        return sourceKey;
+    }
+
+    @Nullable UUID getTariffId() {
+        return tariffId;
     }
 
     @Nullable UUID getReversesChargeId() {

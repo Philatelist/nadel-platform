@@ -130,6 +130,10 @@ const router = createBrowserRouter([
             lazy: () => import('./pages/ChargesPage').then((m) => ({ Component: m.ChargesPage })),
           },
           {
+            path: 'charges/not-charged',
+            lazy: () => import('./pages/NotChargedPage').then((m) => ({ Component: m.NotChargedPage })),
+          },
+          {
             path: 'charges/months/:ym',
             lazy: () => import('./pages/ChargesMonthPage').then((m) => ({ Component: m.ChargesMonthPage })),
           },

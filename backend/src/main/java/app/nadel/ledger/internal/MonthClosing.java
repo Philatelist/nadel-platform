@@ -70,7 +70,7 @@ class MonthClosing {
         }
         months.close(month.atDay(1), clock.instant(), actor.memberId());
         UUID monthId = byMonth.get(month).id();
-        audit.publishMonth(actor, "BILLING_MONTH_CLOSED", monthId, month.toString(),
+        audit.publishMonth(actor, LedgerAuditPublisher.Action.BILLING_MONTH_CLOSED, monthId, month.toString(),
                 List.of(new FieldChange("status", BillingMonthRecord.Status.OPEN.name(),
                         BillingMonthRecord.Status.CLOSED.name())));
         return queries.details(month);

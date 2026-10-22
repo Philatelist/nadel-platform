@@ -60,6 +60,16 @@ interface BillingMonthRepository extends JpaRepository<BillingMonthRecord, UUID>
     int insertIfAbsent(@Param("tenantId") UUID tenantId, @Param("month") LocalDate month);
 
     /**
+     * Marks the open month starting on {@code month} as run (the month run of recurring tariffs was booked). The caller
+     * holds its {@code FOR SHARE} lock, so it is not being closed. Clears the persistence context so no stale instance
+     * of the month survives.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = "update billing_month set run_at = :runAt where month = :month and status = 'OPEN'",
+            nativeQuery = true)
+    int markRun(@Param("month") LocalDate month, @Param("runAt") Instant runAt);
+
+    /**
      * Closes the open month starting on {@code month}. The caller holds its {@code FOR UPDATE} lock. Clears the
      * persistence context so no stale instance of the month survives.
      */

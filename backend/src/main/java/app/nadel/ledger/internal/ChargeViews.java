@@ -95,7 +95,7 @@ class ChargeViews {
         return json.convertValue(stored, ChargeCalculation.class);
     }
 
-    private static ChargeTypeRef typeRef(ChargeTypeFacts type) {
+    static ChargeTypeRef typeRef(ChargeTypeFacts type) {
         ChargeTypeRef ref = new ChargeTypeRef(type.id(), type.name(), type.nameCustomized());
         if (type.code() != null) {
             ref.setCode(ChargeTypeCode.fromValue(type.code()));

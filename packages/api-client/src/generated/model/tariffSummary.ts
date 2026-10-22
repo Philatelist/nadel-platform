@@ -9,6 +9,7 @@
  *
  * OpenAPI spec version: 0.1.0
  */
+import type { TariffConflict } from './tariffConflict';
 import type { TariffScopeKind } from './tariffScopeKind';
 import type { TariffVersion } from './tariffVersion';
 
@@ -23,4 +24,6 @@ export interface TariffSummary {
   version: TariffVersion;
   /** Number of plots the tariff applies to; for a meter-based version (`PER_KWH`, `PER_M3`) only the plots with an active meter of the resource */
   plotCount?: number;
+  /** The other tariffs of the same charge type that apply to some of the same active plots, ordered by name; empty when there is no conflict or the charge type is inactive */
+  conflicts: TariffConflict[];
 }

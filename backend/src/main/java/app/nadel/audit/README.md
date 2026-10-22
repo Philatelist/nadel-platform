@@ -88,15 +88,15 @@ the root `CLAUDE.md`). A server never writes an English phrase into `entity_labe
 | Meter readings (`initialReading`, `finalReading`, `value` of a reading) | plain decimal with three decimals (`8205.000`) | format meter value |
 | `plot` of a meter | the plot number (user content) | as is |
 | `replacementMeter` of `METER_REPLACED` | the serial number of the new meter (user content) | as is |
-| `CHARGE` label (`CHARGE_REVERSED`, `OPENING_BALANCE_ENTERED`) | the plot number (user content); the entity id is the plot, whose account changed | as is |
-| Money amounts (`amount` of a reversal or an opening balance, `redAmount` of the settings) | plain decimal with two decimals (`-25.00`, `1500.00`) | format money |
-| `billingMonth` of a ledger entry | `YYYY-MM` | format month |
-| `BILLING_MONTH` label (`BILLING_MONTH_CLOSED`, field `status` `OPEN` -> `CLOSED`) | the month `YYYY-MM`; the entity id is the `billing_month` row | format month |
+| `CHARGE` label (`CHARGE_REVERSED`, `OPENING_BALANCE_ENTERED`, `NOT_CHARGED_RETRIED`) | the plot number (user content); the entity id is the plot, whose account changed | as is |
+| Money amounts (`amount` of a reversal or an opening balance, `total` of a month run, `redAmount` of the settings) | plain decimal with two decimals (`-25.00`, `1500.00`) | format money |
+| `billingMonth` of a ledger entry, `month` of a not-charged retry | `YYYY-MM` | format month |
+| `BILLING_MONTH` label (`BILLING_MONTH_CLOSED`, field `status` `OPEN` -> `CLOSED`; `BILLING_MONTH_RUN`, fields `count` and `total`) | the month `YYYY-MM`; the entity id is the `billing_month` row | format month |
 | `SETTINGS` label | the code `settings` | catalog name |
-| `lossesPercent`, `redDays` of the settings | plain decimal (`5.00`), integer days (`90`) | format number |
+| `lossesPercent`, `redDays` of the settings, `count` of a month run | plain decimal (`5.00`), integer (`90`) | format number |
 | `owners` of `OWNERSHIP_CHANGED` / `OWNERSHIP_CORRECTED` | JSON array of `{"member": "Last First", "share": "1/2"}`; a correction adds `"from"` and, unless the record is open, `"to"` (ISO dates) | parse, format dates and names |
 | `effectiveFrom`, `validFrom`, `dueDate`, `installedOn`, `removedOn`, `takenOn`, `serviceFrom`, `serviceTo`, `date` | ISO date `2026-01-01` | format date |
-| Enums (`kind`, `basis`/`frequency` of a tariff version, `scope`, `deliveryChannel`, `memberPlotStatusVisibility`, `lossesMode`, `commonConsumerDefaultSplit`, `status` of a billing month, `kind`/`resource` of a meter) | the enum code | catalog |
+| Enums (`kind`, `basis`/`frequency` of a tariff version, `scope`, `deliveryChannel`, `memberPlotStatusVisibility`, `lossesMode`, `commonConsumerDefaultSplit`, `status` of a billing month, `kind`/`resource` of a meter, `kind`/`reason`/`outcome` of a not-charged retry) | the enum code | catalog |
 | `permissions` | permission codes sorted and joined by ", " | catalog |
 | Flags (`active`, `archived`, `hasBuilding`) | `true` / `false` | yes/no |
 | Numbers (`areaM2` `600.00`, `rate`, `position`, import counts) | plain decimal text | format number |

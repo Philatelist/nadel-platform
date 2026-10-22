@@ -99,7 +99,7 @@ class Reversals {
         }
         String plotNumber = plots.find(original.getPlotId()).orElseThrow().number();
         String chargeType = chargeTypes.find(original.getChargeTypeId()).orElseThrow().auditName();
-        audit.publish(actor, "CHARGE_REVERSED", original.getPlotId(), plotNumber, List.of(
+        audit.publish(actor, LedgerAuditPublisher.Action.CHARGE_REVERSED, original.getPlotId(), plotNumber, List.of(
                 new FieldChange("chargeType", null, chargeType),
                 new FieldChange("amount", null, reversal.getAmount().toString()),
                 new FieldChange("serviceFrom", null, reversal.getServiceFrom().toString()),

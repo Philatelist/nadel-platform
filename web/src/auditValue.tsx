@@ -103,6 +103,7 @@ function ownersList(raw: string, t: Messages, locale: string): ReactNode {
 
 const PLAIN_NUMBER = /^-?\d+(\.\d+)?$/;
 const NUMBER_FIELDS = new Set([
+  'count',
   'areaM2',
   'position',
   'plotsCreated',
@@ -146,6 +147,7 @@ export function auditValue(
     case 'active':
       return raw === 'true' ? a.yes : a.no;
     case 'kind':
+      if (Object.hasOwn(t.billing.notCharged.kind, raw)) return catalog(t.billing.notCharged.kind);
       return catalog(entityType === 'METER' ? t.meters.kind : t.plot.kind);
     case 'resource':
       return catalog(t.meters.resource);
@@ -187,8 +189,10 @@ export function auditValue(
       return ISO_DAY.test(raw) ? formatDay(raw, locale) : raw;
     case 'amount':
     case 'redAmount':
+    case 'total':
       return isMoney(raw) ? formatMoney(raw, locale) : raw;
     case 'billingMonth':
+    case 'month':
       return /^\d{4}-\d{2}$/.test(raw) ? formatMonth(raw, locale) : raw;
     case 'permissions':
       return raw
@@ -201,9 +205,13 @@ export function auditValue(
       return roleNames(raw, t.roles);
     case 'chargeType':
       return auditChargeTypeName(raw, t);
+    case 'reason':
+      if (Object.hasOwn(t.billing.notCharged.reason, raw)) return catalog(t.billing.notCharged.reason);
+      return user(raw);
+    case 'outcome':
+      return catalog(a.outcome);
     case 'replacementMeter':
     case 'parent':
-    case 'reason':
       return user(raw);
     case 'name':
       if (entityType === 'ROLE') return baseToken(raw, t.roles);

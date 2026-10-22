@@ -104,6 +104,9 @@ public final class ProblemCodes {
     /** 409: a month after the current one (Europe/Kyiv) cannot be closed or charged. */
     public static final String PERIOD_IN_FUTURE = "PERIOD_IN_FUTURE";
 
+    /** 409: a run is booked with the digest of a preview that no longer matches what it would create. */
+    public static final String PREVIEW_OUTDATED = "PREVIEW_OUTDATED";
+
     /** Codes of single fields in {@code errors[]}. */
     public static final String REQUIRED = "REQUIRED";
     public static final String TOO_LONG = "TOO_LONG";

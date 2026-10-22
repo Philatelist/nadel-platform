@@ -34,7 +34,10 @@ import type {
   BillingMonthSummary,
   ConflictResponse,
   ForbiddenResponse,
+  MonthRunRequest,
+  MonthRunResult,
   NotFoundResponse,
+  RunBillingMonthParams,
   UnauthorizedResponse
 } from '../model';
 
@@ -350,4 +353,115 @@ export const useCloseBillingMonth = <TError = BadRequestResponse | UnauthorizedR
         TContext
       > => {
       return useMutation(getCloseBillingMonthMutationOptions(options), queryClient);
+    }
+    export const getRunBillingMonthUrl = (month: string,
+    params: RunBillingMonthParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/v1/billing-months/${month}/run?${stringifiedParams}` : `/api/v1/billing-months/${month}/run`
+}
+
+/**
+ * Charges every active plot that is not common land every recurring or one-off tariff (`PER_PLOT`,
+ * `PER_AREA_SOTKA`, `FIXED_ONE_TIME`) of every active, non-archived charge type that applies to it in the month
+ * (scope, exclusions), with the amount of the tariff calculation (money rules section 4.1). Tariffs charged by
+ * meter readings (`PER_KWH`, `PER_M3`) are not part of the run. One charge per plot, tariff and month: a rerun
+ * creates only what is missing, never a duplicate, and never re-creates a reversed charge. An amount of `0.00`
+ * creates nothing. When two tariffs of the same charge type apply to a plot in the month neither is charged and
+ * a "not charged" item (`TARIFF_MONTH`, `CONFLICTING_TARIFFS`) names both; the run also resolves the open
+ * `TARIFF_MONTH` items of the month that it can now charge. With `preview=true` nothing is written: the answer
+ * shows what the run would create (`created` is 0) and a `digest` of it. With `preview=false` the run is booked:
+ * the charges are written in the month, the month is marked as run and the answer shows what was created;
+ * a `digest` from an earlier preview that no longer matches is refused with 409 `PREVIEW_OUTDATED` and nothing
+ * is written. Conflicts (409): a month after the current one in Europe/Kyiv (`PERIOD_IN_FUTURE`), a closed
+ * month (`PERIOD_CLOSED`). Requires `CHARGES_RUN`; a booking is written to the audit log
+ * (`BILLING_MONTH_RUN`, entity type `BILLING_MONTH`, label `YYYY-MM`, values `count` and `total`).
+ * @summary Preview or book the month run of recurring tariffs
+ */
+export const runBillingMonth = async (month: string,
+    params: RunBillingMonthParams,
+    monthRunRequest?: MonthRunRequest, options?: Parameters<typeof nadelFetch>[1]): Promise<MonthRunResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return nadelFetch<MonthRunResult>(getRunBillingMonthUrl(month,params),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(monthRunRequest)
+  }
+);}
+
+
+
+
+
+export const getRunBillingMonthMutationKey = () => ['runBillingMonth'] as const;
+
+export const getRunBillingMonthMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof runBillingMonth>>, TError,RunBillingMonthMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof runBillingMonth>>, TError,RunBillingMonthMutationVariables, TContext> => {
+
+const mutationKey = getRunBillingMonthMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof runBillingMonth>>, RunBillingMonthMutationVariables> = (props) => {
+          const {month,params,data} = props ?? {};
+
+          return  runBillingMonth(month,params,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RunBillingMonthMutationResult = NonNullable<Awaited<ReturnType<typeof runBillingMonth>>>
+    export type RunBillingMonthMutationBody = MonthRunRequest | undefined
+    export type RunBillingMonthMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse
+    export type RunBillingMonthMutationVariables = {month: string;params: RunBillingMonthParams;data?: MonthRunRequest}
+
+    /**
+ * @summary Preview or book the month run of recurring tariffs
+ */
+export const useRunBillingMonth = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof runBillingMonth>>, TError,RunBillingMonthMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof runBillingMonth>>,
+        TError,
+        RunBillingMonthMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRunBillingMonthMutationOptions(options), queryClient);
     }

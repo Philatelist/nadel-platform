@@ -12,7 +12,15 @@ export function MonthChecklist({ checklist }: { checklist: BillingMonthChecklist
   return (
     <ul className="flex flex-col gap-3 text-[15px]">
       <li>{checklist.runDone ? c.runDone : c.runNotDone}</li>
-      <li>{format(c.notChargedCount, { count: checklist.notChargedCount })}</li>
+      <li>
+        {checklist.notChargedCount > 0 ? (
+          <Link to="/charges/not-charged" className="text-accent underline">
+            {format(c.notChargedCount, { count: checklist.notChargedCount })}
+          </Link>
+        ) : (
+          format(c.notChargedCount, { count: checklist.notChargedCount })
+        )}
+      </li>
       <li>
         <p className="font-semibold">{checklist.staleMeters.length === 0 ? c.noStale : c.stale}</p>
         {checklist.staleMeters.length > 0 && (

@@ -11,3 +11,10 @@
 |---|---|---|---|---|
 | 1 | `0f406a9..32ed18c` | MAJOR_ISSUES | M1 negative opening amount shows the format error instead of "Сума має бути більшою за нуль"; M2 V13 `seed_charge_types` `ON CONFLICT DO NOTHING` hides a name clash with an existing custom type | minor: form needs TARIFFS_VIEW for types; empty date silent; button on archived plot; BillingCalendar next month after a closed current month; audit rows after cleanup; slice 2 DELETE trigger vs test cleanups; full suite needed for a migration |
 | 2 | + `303f4ff` | PASS | M1, M2 resolved | fixes: M1 not-positive text in the form (+tests); M2 explicit conflict target and rename of clashing custom types in V13 (+migration test, RED checked); minor: archived custom type with a default name not renamed; rename not audited (mention in PR); form passes `amount` vs `trimmed` |
+
+## Slice 2 — Billing months, closing and the plot status
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `303f4ff..057fbd4` | MAJOR_ISSUES | M1 late booking skips a listed-open month without a row (BillingCalendar uses min existing open row); M2 BILLING_MONTH status values shown raw in the audit log | minor: losses/common-consumer settings fields raw in audit; JpaPlotDebtCache.record ~4 queries per plot; settings partial update without a row lock; PERIOD_IN_FUTURE wording for closing; LedgerAuditPublisher javadoc |
+| 2 | + `4a0698d` | PASS | M1, M2 resolved | fixes: M1 calendar books into lastClosed+1 (+pure and API gap tests, RED checked); M2 audit status via catalog (+ losses/split settings labels); minor: BillingCalendar javadoc repeats; settings labels added beyond M1/M2 (harmless) |

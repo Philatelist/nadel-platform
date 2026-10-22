@@ -7,6 +7,7 @@ export * from './me/me';
 export * from './members/members';
 export * from './meter-tree/meter-tree';
 export * from './meters/meters';
+export * from './not-charged/not-charged';
 export * from './ownerships/ownerships';
 export * from './permissions/permissions';
 export * from './plots/plots';

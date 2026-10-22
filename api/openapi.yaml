@@ -43,7 +43,9 @@ tags:
   - name: charges
     description: The ledger of a plot (its account), reversals of charges and opening balances
   - name: billing
-    description: Billing months, their totals, the closing check list and closing
+    description: Billing months, their totals, the closing check list, the month run and closing
+  - name: not-charged
+    description: The "not charged" queue (what the app could not charge, with the reason) and its retry
 
 paths:
   /me:
@@ -2961,6 +2963,121 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
 
+  /billing-months/{month}/run:
+    post:
+      tags: [billing]
+      operationId: runBillingMonth
+      summary: Preview or book the month run of recurring tariffs
+      description: |
+        Charges every active plot that is not common land every recurring or one-off tariff (`PER_PLOT`,
+        `PER_AREA_SOTKA`, `FIXED_ONE_TIME`) of every active, non-archived charge type that applies to it in the month
+        (scope, exclusions), with the amount of the tariff calculation (money rules section 4.1). Tariffs charged by
+        meter readings (`PER_KWH`, `PER_M3`) are not part of the run. One charge per plot, tariff and month: a rerun
+        creates only what is missing, never a duplicate, and never re-creates a reversed charge. An amount of `0.00`
+        creates nothing. When two tariffs of the same charge type apply to a plot in the month neither is charged and
+        a "not charged" item (`TARIFF_MONTH`, `CONFLICTING_TARIFFS`) names both; the run also resolves the open
+        `TARIFF_MONTH` items of the month that it can now charge. With `preview=true` nothing is written: the answer
+        shows what the run would create (`created` is 0) and a `digest` of it. With `preview=false` the run is booked:
+        the charges are written in the month, the month is marked as run and the answer shows what was created;
+        a `digest` from an earlier preview that no longer matches is refused with 409 `PREVIEW_OUTDATED` and nothing
+        is written. Conflicts (409): a month after the current one in Europe/Kyiv (`PERIOD_IN_FUTURE`), a closed
+        month (`PERIOD_CLOSED`). Requires `CHARGES_RUN`; a booking is written to the audit log
+        (`BILLING_MONTH_RUN`, entity type `BILLING_MONTH`, label `YYYY-MM`, values `count` and `total`).
+      parameters:
+        - name: month
+          in: path
+          required: true
+          description: The billing month, `YYYY-MM`
+          schema:
+            type: string
+            pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+        - name: preview
+          in: query
+          required: true
+          description: '`true` shows what the run would create without writing anything; `false` books it'
+          schema:
+            type: boolean
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MonthRunRequest'
+      responses:
+        '200':
+          description: What the run would create (preview) or created (booking)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MonthRunResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /not-charged:
+    get:
+      tags: [not-charged]
+      operationId: listNotCharged
+      summary: The open "not charged" items
+      description: |
+        Everything the app could not charge and that is still open, each with its reason and what to fix: the plot,
+        the charge type, the month (or the date range) and the tariffs involved (for `CONFLICTING_TARIFFS` both
+        tariffs). Newest month first, then in the natural order of the plot numbers. An item disappears when a retry
+        or a later run charges it or finds nothing left to charge. Requires `CHARGES_VIEW`.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/NotChargedItem'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /not-charged/{id}/retry:
+    post:
+      tags: [not-charged]
+      operationId: retryNotCharged
+      summary: Retry one "not charged" item
+      description: |
+        Tries again to charge what the item is about (for `TARIFF_MONTH`: the tariffs of its charge type for its plot
+        and month, as the month run does). When the charge is created, or exists already, or nothing is left to
+        charge (the plot left the scope of the tariffs, the amount is `0.00`), the item is closed and `resolved` is
+        true; otherwise it stays open with its (possibly updated) reason and tariffs and is returned as `item`. A
+        charge for a month that was closed in the meantime is booked in the earliest open month after it. An item that
+        is no longer open answers `resolved: true` and changes nothing. An unknown item, or one of another
+        cooperative, is 404 `NOT_FOUND`. Requires `CHARGES_RUN`; written to the audit log (`NOT_CHARGED_RETRIED`,
+        entity type `CHARGE` about the plot).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The outcome of the retry
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotChargedRetryResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -3067,7 +3184,9 @@ components:
         `CHARGE_ALREADY_REVERSED`), a reversal is reversed (code `REVERSAL_NOT_REVERSIBLE`), or a charge booked in a
         closed billing month is reversed (code `CHARGE_IN_CLOSED_MONTH`), or a billing month is closed while an
         earlier month is open (code `PERIOD_CLOSE_ORDER`), a closed month is closed again (code `PERIOD_CLOSED`) or a
-        month after the current one is closed (code `PERIOD_IN_FUTURE`)
+        month after the current one is closed (code `PERIOD_IN_FUTURE`), or the month run is asked for a closed month
+        (code `PERIOD_CLOSED`) or a month after the current one (code `PERIOD_IN_FUTURE`), or a booking is sent with
+        the digest of a preview that no longer matches what the run would create (code `PREVIEW_OUTDATED`)
       content:
         application/problem+json:
           schema:
@@ -3515,13 +3634,16 @@ components:
         - CHARGE_REVERSED
         - OPENING_BALANCE_ENTERED
         - BILLING_MONTH_CLOSED
+        - BILLING_MONTH_RUN
+        - NOT_CHARGED_RETRIED
 
     AuditEntityType:
       type: string
       description: >-
-        Kind of the entity an audit entry is about. A `CHARGE` entry (a reversal, an opening balance) is about the
-        plot whose account changed: its `entityId` is the plot id and its label the plot number. A `BILLING_MONTH`
-        entry is about a billing month: its label is the month as `YYYY-MM`.
+        Kind of the entity an audit entry is about. A `CHARGE` entry (a reversal, an opening balance, a retried
+        "not charged" item) is about the plot whose account changed: its `entityId` is the plot id and its label the
+        plot number. A `BILLING_MONTH` entry (a closing, a month run) is about a billing month: its label is the month
+        as `YYYY-MM`.
       enum:
         [
           MEMBER,
@@ -4533,10 +4655,47 @@ components:
         firstVersion:
           $ref: '#/components/schemas/TariffVersionCreate'
 
+    TariffConflictPlot:
+      type: object
+      description: A plot on which two tariffs conflict
+      required: [plotId, number]
+      properties:
+        plotId:
+          type: string
+          format: uuid
+        number:
+          type: string
+          description: User content, as the cooperative writes it
+
+    TariffConflict:
+      type: object
+      description: >-
+        Another tariff of the same charge type that applies to some of the same plots from today on: on those plots
+        neither tariff is charged (the case goes to the "not charged" queue) until a scope is changed. A warning only;
+        both tariffs stay valid.
+      required: [otherTariffId, otherTariffName, plotCount, plots]
+      properties:
+        otherTariffId:
+          type: string
+          format: uuid
+        otherTariffName:
+          type: string
+          description: User content
+        plotCount:
+          type: integer
+          format: int64
+          description: The number of plots both tariffs apply to
+        plots:
+          type: array
+          maxItems: 10
+          description: The first of those plots in the natural order of the numbers (at most 10)
+          items:
+            $ref: '#/components/schemas/TariffConflictPlot'
+
     TariffSummary:
       type: object
       description: A tariff in the list, with the version that is shown
-      required: [id, name, chargeTypeId, scopeKind, version]
+      required: [id, name, chargeTypeId, scopeKind, version, conflicts]
       properties:
         id:
           type: string
@@ -4556,11 +4715,18 @@ components:
           description: >-
             Number of plots the tariff applies to; for a meter-based version (`PER_KWH`, `PER_M3`) only the plots
             with an active meter of the resource
+        conflicts:
+          type: array
+          description: >-
+            The other tariffs of the same charge type that apply to some of the same active plots, ordered by name;
+            empty when there is no conflict or the charge type is inactive
+          items:
+            $ref: '#/components/schemas/TariffConflict'
 
     Tariff:
       type: object
       description: A tariff with its charge type, all versions and its scope
-      required: [id, name, chargeType, scopeKind, versions, selectedPlots, exclusions]
+      required: [id, name, chargeType, scopeKind, versions, selectedPlots, exclusions, conflicts]
       properties:
         id:
           type: string
@@ -4593,6 +4759,11 @@ components:
             Number of plots the tariff applies to, as in the list (exclusions subtracted, archived plots and common
             land never counted); when the shown version (the one valid today, else the earliest future one) is
             meter-based, only the plots with an active meter of its resource
+        conflicts:
+          type: array
+          description: As in the list
+          items:
+            $ref: '#/components/schemas/TariffConflict'
 
     ExpectedChargeStatus:
       type: string
@@ -5735,3 +5906,149 @@ components:
           $ref: '#/components/schemas/Money'
         checklist:
           $ref: '#/components/schemas/BillingMonthChecklist'
+
+    MonthRunRequest:
+      type: object
+      description: The booking of a month run; `digest` is the one of the preview the user confirmed
+      properties:
+        digest:
+          type: string
+          maxLength: 128
+          description: >-
+            The `digest` of the preview; when present and the run would now create something else, the booking is
+            refused with 409 `PREVIEW_OUTDATED`
+
+    NotChargedKind:
+      type: string
+      description: >-
+        What could not be charged: `TARIFF_MONTH` the tariffs of a charge type for a plot and a billing month,
+        `INTERVAL` a meter reading interval, `LOSSES_NODE` the losses of a node of the meter tree, `COMMON_CONSUMER` a
+        common consumer
+      enum: [TARIFF_MONTH, INTERVAL, LOSSES_NODE, COMMON_CONSUMER]
+
+    NotChargedReason:
+      type: string
+      description: >-
+        Why: `NO_TARIFF_FOR_ALL_DAYS` no tariff covers every day, `CONFLICTING_TARIFFS` two tariffs of the charge type
+        apply on the same day, `OUTSIDE_SCOPE` the plot is outside the scope of every tariff, `EXCLUDED` the plot is
+        excluded, `UNKNOWN_NODE_VALUE` / `UNKNOWN_CONSUMER_VALUE` a meter value of the range is unknown
+      enum:
+        - NO_TARIFF_FOR_ALL_DAYS
+        - CONFLICTING_TARIFFS
+        - OUTSIDE_SCOPE
+        - EXCLUDED
+        - UNKNOWN_NODE_VALUE
+        - UNKNOWN_CONSUMER_VALUE
+
+    NotChargedTariff:
+      type: object
+      description: A tariff an item is about (the link to fix it)
+      required: [id, name]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          description: User content
+
+    NotChargedItem:
+      type: object
+      description: >-
+        Something the app could not charge, with the reason and what to fix. Codes and ids only; the client builds the
+        text.
+      required: [kind, reason, tariffs]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Absent in a preview for an item that does not exist yet
+        kind:
+          $ref: '#/components/schemas/NotChargedKind'
+        reason:
+          $ref: '#/components/schemas/NotChargedReason'
+        plotId:
+          type: string
+          format: uuid
+        plotNumber:
+          type: string
+          description: User content, as the cooperative writes it
+        chargeType:
+          $ref: '#/components/schemas/ChargeTypeRef'
+        meterId:
+          type: string
+          format: uuid
+          description: The meter to fix (an interval, a node, a common consumer)
+        month:
+          type: string
+          pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+          description: The billing month of a `TARIFF_MONTH` item, `YYYY-MM`
+        from:
+          type: string
+          format: date
+          description: The first day of the days the item is about
+        to:
+          type: string
+          format: date
+          description: The last day of the days the item is about
+        tariffs:
+          type: array
+          description: The tariffs involved, ordered by name (both tariffs for `CONFLICTING_TARIFFS`); may be empty
+          items:
+            $ref: '#/components/schemas/NotChargedTariff'
+        createdAt:
+          type: string
+          format: date-time
+          description: When the item was first opened; absent in a preview for a new item
+
+    NotChargedRetryResult:
+      type: object
+      description: The outcome of a retry
+      required: [resolved]
+      properties:
+        resolved:
+          type: boolean
+          description: True when the item is closed (charged now or before, or nothing left to charge)
+        item:
+          $ref: '#/components/schemas/NotChargedItem'
+
+    MonthRunResult:
+      type: object
+      description: >-
+        What a month run would create (preview) or created (booking): the new charges only, never those of an earlier
+        run
+      required: [month, preview, plots, totals, total, notCharged, created, digest]
+      properties:
+        month:
+          type: string
+          pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+          description: The month, `YYYY-MM`
+        preview:
+          type: boolean
+        plots:
+          type: integer
+          format: int32
+          minimum: 0
+          description: The number of plots that get at least one new charge
+        totals:
+          type: array
+          description: The new charges per charge type, in the order of the charge types
+          items:
+            $ref: '#/components/schemas/ChargeTypeTotal'
+        total:
+          $ref: '#/components/schemas/Money'
+        notCharged:
+          type: array
+          description: >-
+            The items the run cannot charge (opened by a booking, or kept open when they exist), in the natural order
+            of the plot numbers, then by charge type
+          items:
+            $ref: '#/components/schemas/NotChargedItem'
+        created:
+          type: integer
+          format: int32
+          minimum: 0
+          description: The number of charges written; 0 in a preview
+        digest:
+          type: string
+          description: Identifies what the run would create; send it with the booking to make sure nothing changed

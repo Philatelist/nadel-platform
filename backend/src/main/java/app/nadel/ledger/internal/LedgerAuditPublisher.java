@@ -11,8 +11,9 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 
 /**
- * Publishes the audit event of a manual change to the ledger: a reversal or an opening balance (entity type
- * {@code CHARGE}), or the closing of a billing month (entity type {@code BILLING_MONTH}). The entry is about the plot whose account changed: the entity id is the plot's id, so the log links to the
+ * Publishes the audit event of a change to the ledger: a reversal, an opening balance or a retried "not charged" item
+ * (entity type {@code CHARGE}), or the closing or the run of a billing month (entity type {@code BILLING_MONTH}). A
+ * {@code CHARGE} entry is about the plot whose account changed: the entity id is the plot's id, so the log links to the
  * plot card, and the label its number (user content). Values are codes and parameters: the charge type as
  * {@code base:<CODE>} or its stored name, amounts with two decimals, ISO dates, the billing month as {@code YYYY-MM},
  * the reason as typed. The charges themselves are the ledger and are not repeated in the log. The publication is stored
@@ -24,25 +25,37 @@ class LedgerAuditPublisher {
     static final String CHARGE = "CHARGE";
     static final String BILLING_MONTH = "BILLING_MONTH";
 
+    /**
+     * Every action the ledger writes to the audit log. Each must also be a value of the contract's {@code AuditAction},
+     * or the audit listing cannot read the entry back ({@code LedgerAuditActionsTests}).
+     */
+    enum Action {
+        CHARGE_REVERSED,
+        OPENING_BALANCE_ENTERED,
+        NOT_CHARGED_RETRIED,
+        BILLING_MONTH_CLOSED,
+        BILLING_MONTH_RUN
+    }
+
     private final ApplicationEventPublisher events;
 
     LedgerAuditPublisher(ApplicationEventPublisher events) {
         this.events = events;
     }
 
-    void publish(AccessProfile actor, String action, UUID plotId, String plotNumber, List<FieldChange> changes) {
+    void publish(AccessProfile actor, Action action, UUID plotId, String plotNumber, List<FieldChange> changes) {
         events.publishEvent(AuditEvent.now(Objects.requireNonNull(actor.tenantId()),
-                new Actor(actor.memberId(), actor.subject(), actor.displayName()), action, CHARGE, plotId, plotNumber,
-                changes));
+                new Actor(actor.memberId(), actor.subject(), actor.displayName()), action.name(), CHARGE, plotId,
+                plotNumber, changes));
     }
 
     /**
      * An entry about a billing month (entity type {@code BILLING_MONTH}): the entity id is the month's row, the label
      * the month as {@code YYYY-MM} (a code).
      */
-    void publishMonth(AccessProfile actor, String action, UUID monthId, String month, List<FieldChange> changes) {
+    void publishMonth(AccessProfile actor, Action action, UUID monthId, String month, List<FieldChange> changes) {
         events.publishEvent(AuditEvent.now(Objects.requireNonNull(actor.tenantId()),
-                new Actor(actor.memberId(), actor.subject(), actor.displayName()), action, BILLING_MONTH, monthId,
-                month, changes));
+                new Actor(actor.memberId(), actor.subject(), actor.displayName()), action.name(), BILLING_MONTH,
+                monthId, month, changes));
     }
 }

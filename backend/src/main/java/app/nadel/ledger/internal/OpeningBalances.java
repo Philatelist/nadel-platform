@@ -119,7 +119,7 @@ class OpeningBalances {
         if (reason != null) {
             changes.add(new FieldChange("reason", null, reason));
         }
-        audit.publish(actor, "OPENING_BALANCE_ENTERED", plotId, plot.number(), changes);
+        audit.publish(actor, LedgerAuditPublisher.Action.OPENING_BALANCE_ENTERED, plotId, plot.number(), changes);
         events.publishEvent(new ChargesBooked(tenantId, Set.of(plotId)));
         return views.view(charge, null, views.context(List.of(charge), actor));
     }

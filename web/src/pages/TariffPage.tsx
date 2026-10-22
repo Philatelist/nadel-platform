@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router';
 import { ChargeTypeName } from '../components/ChargeTypeName';
 import { UserContent } from '../components/UserContent';
 import { QueryBoundary } from '../components/QueryBoundary';
+import { TariffConflicts } from '../components/tariffs/TariffConflicts';
 import { ScopeEditor } from '../components/tariffs/ScopeEditor';
 import { NewVersionForm } from '../components/tariffs/NewVersionForm';
 import { VersionHistory } from '../components/tariffs/VersionHistory';
@@ -38,6 +39,7 @@ export function TariffPage() {
               }
               badge={!tariff.chargeType.active && <Badge tone="neutral">{t.tariffs.inactive}</Badge>}
             />
+            <TariffConflicts conflicts={tariff.conflicts} />
             <ScopeEditor tariff={tariff} />
             <Panel title={c.history}>
               <VersionHistory tariff={tariff} />

@@ -41,7 +41,7 @@ class TariffVersionCorrectionTests extends TariffScopeSupport {
 
     private static final LocalDate TODAY = LocalDate.now(ZoneId.of("Europe/Kyiv"));
 
-    /** A usage that a test switches on for chosen versions, in addition to the default that says "never used". */
+    /** A usage that a test switches on for chosen versions, in addition to the ledger's (no charge uses them here). */
     @TestConfiguration(proxyBeanMethods = false)
     static class UsedVersions {
 

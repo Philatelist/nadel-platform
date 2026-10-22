@@ -1,6 +1,7 @@
 import { useListChargeTypes, useListTariffs, type TariffSummary } from '@nadel/api-client';
 import { format, formatDay, formatRateWithCurrency } from '@nadel/shared';
 import { Link } from 'react-router';
+import { TariffConflicts } from '../components/tariffs/TariffConflicts';
 import { ChargeTypeName } from '../components/ChargeTypeName';
 import { UserContent } from '../components/UserContent';
 import { QueryBoundary } from '../components/QueryBoundary';
@@ -86,6 +87,7 @@ function TariffRow({ tariff }: { tariff: TariffSummary }) {
         {format(t.tariffs.validFromShort, { date: formatDay(version.validFrom, locale) })} ·{' '}
         {plotCountText(tariff.plotCount ?? 0)}
       </span>
+      <TariffConflicts conflicts={tariff.conflicts} />
     </li>
   );
 

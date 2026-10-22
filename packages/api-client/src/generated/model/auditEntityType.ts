@@ -11,7 +11,7 @@
  */
 
 /**
- * Kind of the entity an audit entry is about. A `CHARGE` entry (a reversal, an opening balance) is about the plot whose account changed: its `entityId` is the plot id and its label the plot number. A `BILLING_MONTH` entry is about a billing month: its label is the month as `YYYY-MM`.
+ * Kind of the entity an audit entry is about. A `CHARGE` entry (a reversal, an opening balance, a retried "not charged" item) is about the plot whose account changed: its `entityId` is the plot id and its label the plot number. A `BILLING_MONTH` entry (a closing, a month run) is about a billing month: its label is the month as `YYYY-MM`.
  */
 export type AuditEntityType = typeof AuditEntityType[keyof typeof AuditEntityType];
 

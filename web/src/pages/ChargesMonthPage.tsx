@@ -6,6 +6,7 @@ import { billingMonthLabel } from '../components/charges/billingMonth';
 import { ChargesTabs } from '../components/charges/ChargesTabs';
 import { CloseMonthDialog } from '../components/charges/CloseMonthDialog';
 import { MonthChecklist } from '../components/charges/MonthChecklist';
+import { RunPreviewDialog } from '../components/charges/RunPreviewDialog';
 import { MonthTotals } from '../components/charges/MonthTotals';
 import { QueryBoundary } from '../components/QueryBoundary';
 import { UserContent } from '../components/UserContent';
@@ -34,7 +35,9 @@ function MonthView({ month }: { month: BillingMonthDetails }) {
   const t = useT();
   const { locale } = useLocale();
   const canClose = useCan('PERIODS_CLOSE');
+  const canRun = useCan('CHARGES_RUN');
   const [closing, setClosing] = useState(false);
+  const [running, setRunning] = useState(false);
   const closed = month.status === 'CLOSED';
   return (
     <>
@@ -55,8 +58,15 @@ function MonthView({ month }: { month: BillingMonthDetails }) {
           ) : undefined
         }
         actions={
-          canClose && !closed ? (
-            <Button onClick={() => setClosing(true)}>{t.billing.close.action}</Button>
+          !closed && (canRun || canClose) ? (
+            <>
+              {canRun && <Button onClick={() => setRunning(true)}>{t.billing.run.action}</Button>}
+              {canClose && (
+                <Button variant="secondary" onClick={() => setClosing(true)}>
+                  {t.billing.close.action}
+                </Button>
+              )}
+            </>
           ) : undefined
         }
       />
@@ -66,6 +76,7 @@ function MonthView({ month }: { month: BillingMonthDetails }) {
       <Panel title={t.billing.checklist.title}>
         <MonthChecklist checklist={month.checklist} />
       </Panel>
+      {running && <RunPreviewDialog month={month.month} onClose={() => setRunning(false)} />}
       {closing && (
         <CloseMonthDialog
           month={month.month}

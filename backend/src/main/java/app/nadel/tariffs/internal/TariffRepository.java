@@ -31,4 +31,17 @@ interface TariffRepository extends JpaRepository<TariffRecord, UUID> {
 
     /** The tariffs of these charge types, in no particular order. */
     List<TariffRecord> findByChargeTypeIdIn(Collection<UUID> chargeTypeIds);
+
+    /** The ids of every tariff of the cooperative. */
+    @Query("select t.id from TariffRecord t")
+    List<UUID> findAllIds();
+
+    /**
+     * Locks the tariffs with a shared row lock ({@code FOR SHARE}) until the end of the transaction, in id order: a
+     * correction of a version or a change of scope ({@code FOR UPDATE}) waits for the transaction that charges from
+     * them.
+     */
+    @Lock(LockModeType.PESSIMISTIC_READ)
+    @Query("select t from TariffRecord t where t.id in :ids order by t.id")
+    List<TariffRecord> lockAllForShare(@Param("ids") Collection<UUID> ids);
 }

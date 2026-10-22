@@ -42,7 +42,7 @@ import org.springframework.transaction.annotation.Transactional;
  * added exactly in the database ({@code numeric(14,2)}), nothing rounded.
  * <p>
  * The check list of one month: the month run is done ({@code run_at}), the open "not charged" items of the month
- * ({@link #notChargedCount}, zero until the queue arrives with slice 3) and the stale plot meters
+ * ({@link #notChargedCount}) and the stale plot meters
  * ({@link MeterNetwork#staleMeters}, more than {@value #STALE_DAYS} days without a reading as of the month's last day
  * or today, whichever is earlier).
  */
@@ -58,16 +58,19 @@ class BillingMonthQueries {
     private final MeterNetwork meterNetwork;
     private final PlotCatalog plots;
     private final ActorNames actorNames;
+    private final NotChargedItemRepository items;
     private final Clock clock;
 
     BillingMonthQueries(BillingMonthRepository months, ChargeRepository charges, ChargeTypeCatalog chargeTypes,
-            MeterNetwork meterNetwork, PlotCatalog plots, ActorNames actorNames, Clock clock) {
+            MeterNetwork meterNetwork, PlotCatalog plots, ActorNames actorNames, NotChargedItemRepository items,
+            Clock clock) {
         this.months = months;
         this.charges = charges;
         this.chargeTypes = chargeTypes;
         this.meterNetwork = meterNetwork;
         this.plots = plots;
         this.actorNames = actorNames;
+        this.items = items;
         this.clock = clock;
     }
 
@@ -124,11 +127,11 @@ class BillingMonthQueries {
     }
 
     /**
-     * The open "not charged" items of the month. The queue arrives with slice 3 (spec 011), which counts its items
-     * here; until then nothing is ever queued.
+     * The open "not charged" items of the month: those about the month itself (the month run) and those without a
+     * month whose days end in it.
      */
     int notChargedCount(YearMonth month) {
-        return 0;
+        return Math.toIntExact(items.countOpenOfMonth(month.atDay(1), month.atEndOfMonth()));
     }
 
     /** The current month, or the last row when a month after it exists (a late booking opened it). */
@@ -161,7 +164,7 @@ class BillingMonthQueries {
         return summary;
     }
 
-    private static ChargeTypeTotal total(ChargeTypeFacts type, Money amount) {
+    static ChargeTypeTotal total(ChargeTypeFacts type, Money amount) {
         ChargeTypeTotal total = new ChargeTypeTotal(type.id(), type.name(), type.nameCustomized(), amount.toString());
         if (type.code() != null) {
             total.setChargeTypeCode(ChargeTypeCode.fromValue(type.code()));

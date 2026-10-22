@@ -291,4 +291,140 @@ class ChargeCalculatorTests {
 
         assertThat(ChargeCalculator.shownVersion(List.of(fee, later), NOV_2026)).containsSame(fee);
     }
+
+    // ---- the breakdown behind a charge (feature 011: the month run)
+
+    private static final YearMonth OCT_2026 = YearMonth.of(2026, 10);
+
+    private static ChargeCalculator.Breakdown breakdown(List<VersionTerms> versions, String m2, YearMonth month,
+            DaySet applicable) {
+        return ChargeCalculator.breakdown(versions, area(m2), month, applicable).orElseThrow();
+    }
+
+    @Test
+    void theBreakdownOfAFullMonthHasOnePartWithTheSotkasAndTheDays() {
+        VersionTerms membership = recurring("2026-01-01", Basis.PER_AREA_SOTKA, Frequency.YEARLY, "50.0000");
+
+        ChargeCalculator.Breakdown result = breakdown(List.of(membership), "600.00", OCT_2026, DaySet.ALL);
+
+        assertThat(result.amount().toString()).isEqualTo("25.00");
+        assertThat(result.parts()).singleElement().satisfies(part -> {
+            assertThat(part.terms()).isSameAs(membership);
+            assertThat(part.days()).isEqualTo(31);
+            assertThat(part.units()).isEqualByComparingTo("6");
+            assertThat(part.from()).isEqualTo(LocalDate.parse("2026-10-01"));
+            assertThat(part.to()).isEqualTo(LocalDate.parse("2026-10-31"));
+        });
+    }
+
+    @Test
+    void theBreakdownOfAVersionChangeHasAPartPerVersionAndOneRounding() {
+        VersionTerms first = recurring("2026-01-01", Basis.PER_AREA_SOTKA, Frequency.YEARLY, "50.0000");
+        VersionTerms second = recurring("2026-11-16", Basis.PER_AREA_SOTKA, Frequency.YEARLY, "60.0000");
+
+        ChargeCalculator.Breakdown result = breakdown(List.of(second, first), "600.00", NOV_2026, DaySet.ALL);
+
+        assertThat(result.amount().toString()).isEqualTo("27.50");
+        assertThat(result.parts()).extracting(ChargeCalculator.Part::terms).containsExactly(first, second);
+        assertThat(result.parts()).extracting(ChargeCalculator.Part::days).containsExactly(15L, 15L);
+        assertThat(result.parts().get(0).to()).isEqualTo(LocalDate.parse("2026-11-15"));
+        assertThat(result.parts().get(1).from()).isEqualTo(LocalDate.parse("2026-11-16"));
+    }
+
+    @Test
+    void waterPerPlotYearlyBilledMonthlyForAFullMonthIs25() {
+        // 300 per plot per year, P1 connected all of October: 300 / 12
+        VersionTerms water = recurring("2026-01-01", Basis.PER_PLOT, Frequency.YEARLY, "300.0000");
+
+        ChargeCalculator.Breakdown result = breakdown(List.of(water), "600.00", OCT_2026,
+                DaySet.of(LocalDate.parse("2020-05-01"), LocalDate.MAX));
+
+        assertThat(result.amount().toString()).isEqualTo("25.00");
+        assertThat(result.parts()).singleElement().satisfies(part -> {
+            assertThat(part.days()).isEqualTo(31);
+            assertThat(part.units()).isEqualByComparingTo("1");
+        });
+    }
+
+    @Test
+    void waterForAPlotConnectedFromTheSixteenthCountsOnlyTheConnectedDays() {
+        // P3 connected from 16.10: 300 / 12 x 16 / 31 = 12.903 -> 12.90
+        VersionTerms water = recurring("2026-01-01", Basis.PER_PLOT, Frequency.YEARLY, "300.0000");
+
+        ChargeCalculator.Breakdown result = breakdown(List.of(water), "600.00", OCT_2026,
+                DaySet.of(LocalDate.parse("2026-10-16"), LocalDate.MAX));
+
+        assertThat(result.amount().toString()).isEqualTo("12.90");
+        assertThat(result.parts()).singleElement().satisfies(part -> {
+            assertThat(part.days()).isEqualTo(16);
+            assertThat(part.from()).isEqualTo(LocalDate.parse("2026-10-16"));
+            assertThat(part.to()).isEqualTo(LocalDate.parse("2026-10-31"));
+        });
+    }
+
+    @Test
+    void aPlotWithoutApplicableDaysHasNoBreakdown() {
+        VersionTerms water = recurring("2026-01-01", Basis.PER_PLOT, Frequency.YEARLY, "300.0000");
+
+        assertThat(ChargeCalculator.breakdown(List.of(water), area("600.00"), OCT_2026, DaySet.NONE)).isEmpty();
+        assertThat(ChargeCalculator.breakdown(List.of(water), area("600.00"), OCT_2026,
+                DaySet.of(LocalDate.parse("2026-11-01"), LocalDate.MAX))).isEmpty();
+    }
+
+    @Test
+    void aOneTimeFeeCountsOnlyWhenItsDueDateIsApplicable() {
+        VersionTerms fee = fixed("2026-01-01", "1200.0000", "2026-10-10");
+
+        ChargeCalculator.Breakdown charged = breakdown(List.of(fee), "600.00", OCT_2026, DaySet.ALL);
+        ChargeCalculator.Breakdown notDue = breakdown(List.of(fee), "600.00", OCT_2026,
+                DaySet.of(LocalDate.parse("2026-10-16"), LocalDate.MAX));
+
+        assertThat(charged.amount().toString()).isEqualTo("1200.00");
+        assertThat(charged.parts()).singleElement().satisfies(part -> {
+            assertThat(part.days()).isEqualTo(1);
+            assertThat(part.from()).isEqualTo(LocalDate.parse("2026-10-10"));
+            assertThat(part.to()).isEqualTo(LocalDate.parse("2026-10-10"));
+        });
+        assertThat(notDue.amount().toString()).isEqualTo("0.00");
+        assertThat(notDue.parts()).isEmpty();
+    }
+
+    @Test
+    void aOneTimeFeeInAnotherMonthBreaksDownToZeroWithoutParts() {
+        ChargeCalculator.Breakdown result = breakdown(List.of(fixed("2026-01-01", "1200.0000", "2026-12-01")),
+                "600.00", OCT_2026, DaySet.ALL);
+
+        assertThat(result.amount().toString()).isEqualTo("0.00");
+        assertThat(result.parts()).isEmpty();
+    }
+
+    @Test
+    void aTariffChargedByReadingsHasNoBreakdown() {
+        List<VersionTerms> versions = List.of(recurring("2026-01-01", Basis.PER_KWH, Frequency.MONTHLY, "4.3200"));
+
+        assertThat(ChargeCalculator.breakdown(versions, area("600.00"), OCT_2026, DaySet.ALL)).isEmpty();
+    }
+
+    @Test
+    void aMonthBeforeTheFirstVersionHasNoBreakdown() {
+        List<VersionTerms> versions = List.of(
+                recurring("2026-11-01", Basis.PER_AREA_SOTKA, Frequency.YEARLY, "50.0000"));
+
+        assertThat(ChargeCalculator.breakdown(versions, area("600.00"), OCT_2026, DaySet.ALL)).isEmpty();
+    }
+
+    @Test
+    void everyExampleGivesTheSameAmountByCalculateAndByTheBreakdownOnEveryDay() {
+        List<List<VersionTerms>> examples = List.of(
+                List.of(recurring("2026-01-01", Basis.PER_AREA_SOTKA, Frequency.YEARLY, "33.3333")),
+                List.of(recurring("2026-01-01", Basis.PER_PLOT, Frequency.QUARTERLY, "300.0000")),
+                List.of(recurring("2026-01-01", Basis.PER_AREA_SOTKA, Frequency.YEARLY, "50.0000"),
+                        recurring("2026-11-16", Basis.PER_AREA_SOTKA, Frequency.YEARLY, "60.0000")),
+                List.of(fixed("2026-01-01", "1200.0000", "2026-11-05")));
+
+        for (List<VersionTerms> versions : examples) {
+            assertThat(breakdown(versions, "700.00", NOV_2026, DaySet.ALL).amount().toString())
+                    .isEqualTo(amount(versions, "700.00", NOV_2026));
+        }
+    }
 }

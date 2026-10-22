@@ -35,6 +35,13 @@ interface ChargeRepository extends JpaRepository<ChargeRecord, UUID> {
     /** Whether a reversal of the charge exists (a charge is reversed at most once). */
     boolean existsByReversesChargeId(UUID chargeId);
 
+    /**
+     * The source keys among {@code keys} that a charge has (a reversed charge keeps its key, so it is never booked
+     * again). Reversals have no key.
+     */
+    @Query("select c.sourceKey from ChargeRecord c where c.sourceKey in :keys")
+    List<String> existingSourceKeys(@Param("keys") Collection<String> keys);
+
     /** The plots among {@code plotIds} that have at least one charge of any kind. */
     @Query("select distinct c.plotId from ChargeRecord c where c.plotId in :plotIds")
     List<UUID> plotIdsWithCharges(@Param("plotIds") Collection<UUID> plotIds);

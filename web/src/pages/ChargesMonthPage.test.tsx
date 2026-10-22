@@ -19,6 +19,7 @@ vi.mock('../me', () => ({
 vi.mock('@nadel/api-client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@nadel/api-client')>()),
   useGetBillingMonth: () => queryResult(month),
+  useRunBillingMonth: () => ({ mutate: vi.fn(), isPending: false }),
   useCloseBillingMonth: () => ({ mutate: vi.fn(), isPending: false }),
   useListChargeTypes: () => queryResult([]),
 }));
@@ -69,5 +70,14 @@ describe('ChargesMonthPage', () => {
     renderPage();
     expect(screen.getByText('Closed')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Close the month' })).toBeNull();
+  });
+
+  it('offers the month run only with CHARGES_RUN and for an open month', async () => {
+    renderPage();
+    expect(screen.queryByRole('button', { name: 'Charge the month' })).not.toBeInTheDocument();
+    permissions = ['CHARGES_VIEW', 'CHARGES_RUN'];
+    renderPage();
+    await userEvent.click(screen.getByRole('button', { name: 'Charge the month' }));
+    expect(screen.getByRole('heading', { name: 'Charge September 2026' })).toBeInTheDocument();
   });
 });

@@ -8,8 +8,10 @@
  * {@link app.nadel.tariffs.VersionTerms} (the terms of one tariff version and the one-off rule) and the calculation
  * {@link app.nadel.tariffs.ChargeCalculator} with its result {@link app.nadel.tariffs.ExpectedCharge}, and the port
  * {@link app.nadel.tariffs.TariffVersionUsage} that the ledger implements so that a version a charge uses is no longer
- * corrected or deleted, and the read API {@link app.nadel.tariffs.ChargeTypeCatalog} (facts about charge types for the
- * ledger). The endpoints of tags
+ * corrected or deleted, the read API {@link app.nadel.tariffs.ChargeTypeCatalog} (facts about charge types for the
+ * ledger), and for charging (feature 011) the read API {@link app.nadel.tariffs.TariffBook} (the tariffs with scopes
+ * and versions, and their shared lock), the pure {@link app.nadel.tariffs.TariffResolver} (which tariff charges a plot,
+ * or a conflict) and {@link app.nadel.tariffs.DaySet} (the days a tariff may charge). The endpoints of tags
  * {@code charge-types} and {@code tariffs} are internal. It depends on {@code identity}, {@code audit},
  * {@code problem}, {@code money}, {@code plots} (the public {@code PlotCatalog}) and {@code meters} (the public
  * {@code MeterCatalog}: a tariff charged by meter reaches only the plots with a meter of its resource).

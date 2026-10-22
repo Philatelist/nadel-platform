@@ -94,6 +94,11 @@ interface PlotRepository extends JpaRepository<Plot, UUID> {
             """)
     List<PlotRow> findRowsByIds(@Param("ids") Collection<UUID> ids);
 
+    /** The active plots that are not common land, in natural order of the number. */
+    @Query(value = "select * from plot p where p.archived_at is null and p.kind <> 'COMMON' "
+            + "order by p.number_sort_key, p.number, p.id", nativeQuery = true)
+    List<Plot> findChargeableInNaturalOrder();
+
     /** The given plots' ids in natural order of the number (the order of the plots list). */
     @Query(value = "select p.id from plot p where p.id in (:ids) order by p.number_sort_key, p.number, p.id",
             nativeQuery = true)

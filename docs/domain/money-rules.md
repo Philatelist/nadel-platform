@@ -56,6 +56,14 @@ PER_KWH/PER_M3 not calculated here: needs readings (features 010–011); the plo
 - **Meter-based tariffs.** A month in which any overlapping version is `PER_KWH` or `PER_M3` is "by readings" for the whole tariff, with no amount.
 - **Per plot, not per owner.** The amount is per plot; the ownership share of a co-owner does not change it (section 8).
 - **Month total** = the sum of the per-tariff amounts, each rounded once.
+- **The ledger's month run (feature 011)** charges this amount through `ChargeCalculator.breakdown`, which counts only
+  the days the tariff may charge the plot (every day, or for water the days the plot is connected): each recurring
+  version counts for its valid **and** applicable days over `D`, a one-time fee only when its due date is applicable;
+  one rounding as above. It stores the parts (version, days, sotkas or one plot, rate). An amount of `0.00` creates no
+  charge. One charge per plot, tariff and month: a rerun never charges twice and never re-creates a reversed charge.
+- **Conflicting tariffs.** When two tariffs of the same charge type apply to one plot (its scope, not excluded) on the
+  same day, neither is charged for that plot; the month run puts the case in the "not charged" queue naming both
+  tariffs, and the tariffs page warns. Versions never end, so two such tariffs conflict from the later first version on.
 
 Worked examples (each is a unit test of `ChargeCalculator`):
 

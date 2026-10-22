@@ -8,13 +8,13 @@ import java.util.UUID;
  * <p>
  * This is a port: the tariffs module defines it and never depends on the module that knows the answer. The ledger
  * (feature 011) depends on tariffs, so it provides a Spring bean implementing this interface and the tariffs module
- * finds it by type. Every implementation is asked and the version counts as used when any says so; the bundled default
- * ({@code NoChargesYetUsage}) always answers {@code false} and stays harmless when a real implementation arrives.
+ * finds it by type. Every implementation is asked and the version counts as used when any says so.
  * <p>
  * The method runs inside the caller's tenant-aware transaction, with the tariff row locked {@code FOR UPDATE}, so an
  * implementation may query its own tables (under row level security) without opening a transaction of its own. To
  * make the check race-free, whatever creates charges from a version must take a lock on the tariff row that conflicts
- * with that one, or write its charge in a transaction that the correction's lock waits for.
+ * with that one ({@link TariffBook#lockShared}), or write its charge in a transaction that the correction's lock waits
+ * for.
  */
 public interface TariffVersionUsage {
 

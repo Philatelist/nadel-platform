@@ -94,6 +94,12 @@ class JpaPlotCatalog implements PlotCatalog {
         return plots.countByArchivedAtIsNullAndKindNot(PlotKind.COMMON);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<PlotFacts> findChargeable() {
+        return plots.findChargeableInNaturalOrder().stream().map(JpaPlotCatalog::facts).toList();
+    }
+
     private static PlotFacts facts(Plot plot) {
         return new PlotFacts(plot.getId(), plot.getNumber(), plot.getStreet(), plot.getKind() == PlotKind.COMMON,
                 plot.getArchivedAt() != null, plot.getAreaM2());

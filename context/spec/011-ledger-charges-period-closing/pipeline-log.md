@@ -76,3 +76,17 @@ Same as 004–010 (see `context/spec/010-meters-and-readings/pipeline-log.md`). 
 - AUTO: `PUT /settings` is a partial update (`CooperativeSettingsUpdate`), `{}` → 200 no change (rule: new sections save independently).
 - AUTO: settings read without a bound cooperative return defaults (rule: RLS shows no row anyway; no tenant data exposed).
 - Slice 2 verified by orchestrator: backend 849 (ledger, plots, settings, meters, modularity) green; clients shared 130, web 466, typecheck/lint/format green; gen stable.
+- Slice 2 committed `057fbd4` — tests green; review round 1 running.
+- Slice 2 review round 1: MAJOR_ISSUES (M1 calendar gap month, M2 audit status raw). Fixes in the review worktree (spring-backend M1, react-frontend M2).
+- Slice 2 review fixes committed `4a0698d` (cherry-picked); M1 50 tests green + RED per builder (log checked); M2 clients green + RED; round 2 running.
+- Slice 2 review round 2: PASS.
+- Slice 3 backend (spring-backend): V15 not_charged_item, DaySet, ChargeCalculator.breakdown, TariffBook/TariffResolver, conflict warning, MonthRun, NotChargedQueue, LedgerTariffVersionUsage; slice 416 + full verify 1,929 green, coverage 0.9796 (builder); RED checks on source-key skip, conflict queueing, version usage, water mask. gen stable (orchestrator). Web task delegated to react-frontend.
+- AUTO: chargeable plots = active, not common land (`PlotCatalog.findChargeable`) (rule: money-rules — common land is never charged).
+- AUTO: the month run queues only conflicts where at least one tariff charges > 0.00 that month; "no tariff / outside scope / excluded / type inactive" are not queue items (rule: the queue lists what should have been charged but was not; nothing is owed in those cases).
+- AUTO: a meter tariff whose version is per-kWh/per-m³ in the month gets no tariff-run charge (money-rules §4.1 "by readings" for the whole tariff; slice 4 charges readings).
+- AUTO: a preview writes nothing; a booking marks `run_at` even with 0 charges (rule: a GET-like preview must not write; the check list needs "run done").
+- AUTO: a retry of an item whose month was closed books into the earliest open month with its own service period (rule: same as Slice 2 late booking).
+- User instruction (2026-10-23): builders never run the full backend suite inside a slice — only the slice Verify command and the tests of changed classes; the full suite runs once in Phase 4. Added to delegation-rules.md and passed in every builder prompt.
+- Slice 3 web (react-frontend): RunPreviewDialog, NotChargedPage, TariffConflicts, audit labels; clients green (web 478) per builder. Found: AuditAction enum lacks BILLING_MONTH_RUN / NOT_CHARGED_RETRIED (audit listing would fail on fromValue) — fix delegated to spring-backend.
+- Slice 3 audit fix (spring-backend): AuditAction enum gains BILLING_MONTH_RUN, NOT_CHARGED_RETRIED (audit listing returned 500 — RED shown); typed `LedgerAuditPublisher.Action` + `LedgerAuditActionsTests` guard; ledger+audit 205 green per builder.
+- Slice 3 verified by orchestrator: backend 416 (ledger, tariffs, modularity) green before the audit fix; clients ui-tokens 56, api-client 7, shared 130, web 478, typecheck/lint/format green; gen stable; web RED checked (digest dropped → booking test fails; gating removed → Retry test fails).

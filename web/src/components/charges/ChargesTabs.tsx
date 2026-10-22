@@ -5,14 +5,17 @@ import { useMe } from '../../me';
 
 interface Tab {
   to: string;
-  label: 'months';
+  label: 'months' | 'notCharged';
   /** Omitted: every holder of CHARGES_VIEW sees the tab. */
   permission?: Permission;
   end?: boolean;
 }
 
-/** Later slices add their tabs here (losses, common consumers, not charged), each behind its permission. */
-const TABS: readonly Tab[] = [{ to: '/charges', label: 'months' }];
+/** Later slices add their tabs here (losses, common consumers), each behind its permission. */
+const TABS: readonly Tab[] = [
+  { to: '/charges', label: 'months' },
+  { to: '/charges/not-charged', label: 'notCharged' },
+];
 
 const tabClass = ({ isActive }: { isActive: boolean }) =>
   `flex min-h-11 items-center border-b-2 px-3 text-[15px] no-underline ${
