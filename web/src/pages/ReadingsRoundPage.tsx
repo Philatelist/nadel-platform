@@ -7,11 +7,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { QueryBoundary } from '../components/QueryBoundary';
 import { ReadingDateField } from '../components/readings/ReadingDateField';
-import { RoundRow } from '../components/readings/RoundRow';
 import { PageHeader, Panel, SearchField, Select, TextField } from '../components/ui';
+import { RoundCard } from '../components/readings/RoundCard';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useT } from '../i18n';
 import { kyivDaysAgo, kyivToday } from '../kyivToday';
+import { groupRound, readStoredResource, storeResource } from '../readingsRound';
 import { useDocumentTitle } from '../useDocumentTitle';
 
 const RESOURCES = Object.values(MeterResource);
@@ -31,7 +32,11 @@ export function ReadingsRoundPage() {
   const m = t.meters;
   useDocumentTitle(r.title);
   const [params, setParams] = useSearchParams();
-  const resource: MeterResourceValue | undefined = oneOf(RESOURCES, params.get('resource'));
+  // the URL wins; without it the choice this browser remembered (any storage failure means "all")
+  const resourceParam = params.get('resource');
+  const [stored] = useState(readStoredResource);
+  const resource: MeterResourceValue | undefined =
+    resourceParam === null ? stored : oneOf(RESOURCES, resourceParam);
   const street = params.get('street') ?? '';
   const sinceParam = params.get('noReadingSince');
   const noReadingSince = sinceParam !== null && DAY.test(sinceParam) ? sinceParam : undefined;
@@ -85,12 +90,14 @@ export function ReadingsRoundPage() {
           <Select
             label={m.filterResource}
             value={resource ?? ''}
-            onChange={(e) =>
+            onChange={(e) => {
+              const chosen = oneOf(RESOURCES, e.target.value);
+              storeResource(chosen);
               update((next) => {
-                if (e.target.value) next.set('resource', e.target.value);
-                else next.delete('resource');
-              })
-            }
+                // "all" is written to the URL too, so it wins over the remembered value until the next visit
+                next.set('resource', chosen ?? 'all');
+              });
+            }}
           >
             <option value="">{m.allResources}</option>
             {RESOURCES.map((value) => (
@@ -145,8 +152,8 @@ export function ReadingsRoundPage() {
       >
         {(meters) => (
           <ul ref={list} aria-label={r.listLabel} className="flex flex-col gap-3">
-            {meters.map((meter) => (
-              <RoundRow key={meter.id} meter={meter} roundDate={roundDate} onSaved={focusNext} />
+            {groupRound(meters).map((group) => (
+              <RoundCard key={group.key} group={group} roundDate={roundDate} onSaved={focusNext} />
             ))}
           </ul>
         )}

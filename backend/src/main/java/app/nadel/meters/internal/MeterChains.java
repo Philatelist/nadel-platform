@@ -11,8 +11,10 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 
 /**
@@ -93,6 +95,61 @@ class MeterChains {
             chains.add(List.copyOf(chain));
         }
         return chains;
+    }
+
+    /**
+     * The neighbours of each of {@code meters} in its chain: the meter it replaced and the meter that replaced it, with
+     * two queries whatever the number of meters. A neighbour is given only when it belongs to the same plot (or is, like
+     * the meter, not a plot meter): a replacement keeps the plot, and the check makes sure a link never shows a viewer a
+     * meter of a plot they could not see. Meters without neighbours are left out of the map.
+     */
+    Map<UUID, Neighbours> neighboursOf(Collection<MeterRecord> meters) {
+        if (meters.isEmpty()) {
+            return Map.of();
+        }
+        Set<UUID> predecessorIds = new HashSet<>();
+        meters.forEach(meter -> {
+            if (meter.getReplacesMeterId() != null) {
+                predecessorIds.add(meter.getReplacesMeterId());
+            }
+        });
+        Map<UUID, MeterRecord> predecessors = new HashMap<>();
+        if (!predecessorIds.isEmpty()) {
+            this.meters.findAllById(predecessorIds).forEach(meter -> predecessors.put(meter.getId(), meter));
+        }
+        Map<UUID, MeterRecord> successors = new HashMap<>();
+        this.meters.findByReplacesMeterIdIn(meters.stream().map(MeterRecord::getId).distinct().toList())
+                .forEach(meter -> successors.putIfAbsent(meter.getReplacesMeterId(), meter));
+        Map<UUID, Neighbours> result = new HashMap<>();
+        for (MeterRecord meter : meters) {
+            MeterRecord predecessor = meter.getReplacesMeterId() == null ? null
+                    : samePlace(meter, predecessors.get(meter.getReplacesMeterId()));
+            MeterRecord successor = samePlace(meter, successors.get(meter.getId()));
+            if (predecessor != null || successor != null) {
+                result.put(meter.getId(), new Neighbours(predecessor, successor));
+            }
+        }
+        return result;
+    }
+
+    /** The neighbours of one meter, {@link Neighbours#NONE} when it has none. */
+    Neighbours neighboursOf(MeterRecord meter) {
+        return neighboursOf(List.of(meter)).getOrDefault(meter.getId(), Neighbours.NONE);
+    }
+
+    private static @Nullable MeterRecord samePlace(MeterRecord meter, @Nullable MeterRecord neighbour) {
+        return neighbour != null && Objects.equals(neighbour.getPlotId(), meter.getPlotId()) ? neighbour : null;
+    }
+
+    /**
+     * The meter a meter replaced and the meter that replaced it, each null when there is none.
+     *
+     * @param predecessor the meter it replaced ({@code replaces_meter_id})
+     * @param successor   the meter that replaced it
+     */
+    record Neighbours(@Nullable MeterRecord predecessor, @Nullable MeterRecord successor) {
+
+        static final Neighbours NONE = new Neighbours(null, null);
     }
 
     /** What the calculation needs of each meter: its working period and its approved readings, in the same order. */

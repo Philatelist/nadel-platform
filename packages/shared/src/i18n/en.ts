@@ -866,6 +866,8 @@ export const en = {
     plotPanelTitle: 'Meters',
     plotPanelEmpty: 'The plot has no meters',
     replacedHint: 'Replaced a previous meter',
+    chainReplacedBy: 'Replaced by {serial}: removed {date}, final reading {value}',
+    chainReplaced: 'Replaced meter {serial}: removed {date}, final reading {value}',
     periodOpen: 'In service from {from}',
     periodClosed: 'In service {from} – {to}',
     replace: 'Replace meter',

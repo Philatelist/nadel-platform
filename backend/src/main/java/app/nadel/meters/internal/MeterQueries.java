@@ -4,6 +4,7 @@ import app.nadel.identity.AccessProfile;
 import app.nadel.meters.ConsumptionCalculator.Reading;
 import app.nadel.meters.MeterKind;
 import app.nadel.meters.MeterResource;
+import app.nadel.meters.internal.MeterChains.Neighbours;
 import app.nadel.plots.PlotCatalog;
 import app.nadel.plots.PlotCatalog.PlotFacts;
 import app.nadel.problem.ApiProblemException;
@@ -25,7 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Reads the meter register, a meter card and the meters of a plot. The number of queries does not grow with the number
- * of meters: the plots, the latest readings and the meters with readings are loaded in bulk.
+ * of meters: the plots, the latest readings, the meters with readings and the replacement links are loaded in bulk.
  */
 @Service
 class MeterQueries {
@@ -41,12 +42,15 @@ class MeterQueries {
     private final PlotCatalog plots;
     private final MeterAccess access;
     private final ReadingFacts readings;
+    private final MeterChains chains;
 
-    MeterQueries(MeterRepository meters, PlotCatalog plots, MeterAccess access, ReadingFacts readings) {
+    MeterQueries(MeterRepository meters, PlotCatalog plots, MeterAccess access, ReadingFacts readings,
+            MeterChains chains) {
         this.meters = meters;
         this.plots = plots;
         this.access = access;
         this.readings = readings;
+        this.chains = chains;
     }
 
     /**
@@ -92,10 +96,12 @@ class MeterQueries {
                     .toList();
         }
         Set<UUID> withReadings = readings.withReadings(candidates.stream().map(MeterRecord::getId).toList());
+        Map<UUID, Neighbours> neighbours = chains.neighboursOf(candidates);
         return inRegisterOrder(candidates).stream()
                 .map(meter -> MeterDtoMapper.toDto(meter,
                         meter.getPlotId() == null ? null : plotFacts.get(meter.getPlotId()), latest.get(meter.getId()),
-                        withReadings.contains(meter.getId()), withNote))
+                        withReadings.contains(meter.getId()), withNote,
+                        neighbours.getOrDefault(meter.getId(), Neighbours.NONE)))
                 .toList();
     }
 
@@ -122,9 +128,11 @@ class MeterQueries {
         List<UUID> ids = found.stream().map(MeterRecord::getId).toList();
         Map<UUID, Reading> latest = readings.latestApproved(ids);
         Set<UUID> withReadings = readings.withReadings(ids);
+        Map<UUID, Neighbours> neighbours = chains.neighboursOf(found);
         return found.stream()
                 .map(meter -> MeterDtoMapper.toDto(meter, plot, latest.get(meter.getId()),
-                        withReadings.contains(meter.getId()), full))
+                        withReadings.contains(meter.getId()), full,
+                        neighbours.getOrDefault(meter.getId(), Neighbours.NONE)))
                 .toList();
     }
 
@@ -133,7 +141,7 @@ class MeterQueries {
         PlotFacts plot = meter.getPlotId() == null ? null : plots.find(meter.getPlotId()).orElse(null);
         Reading latest = readings.latestApproved(meter.getId()).orElse(null);
         boolean hasReadings = !readings.withReadings(List.of(meter.getId())).isEmpty();
-        return MeterDtoMapper.toDto(meter, plot, latest, hasReadings, withNote);
+        return MeterDtoMapper.toDto(meter, plot, latest, hasReadings, withNote, chains.neighboursOf(meter));
     }
 
     /** Plot meters in street and number order, then the other meters by name (Ukrainian alphabet). */

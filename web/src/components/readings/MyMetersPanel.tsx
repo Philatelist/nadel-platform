@@ -15,6 +15,7 @@ import { QueryBoundary } from '../QueryBoundary';
 import { UserContent, formatUser } from '../UserContent';
 import { Badge, Button, Notice, Panel, type BadgeTone } from '../ui';
 import { SubmitReadingDialog } from './SubmitReadingDialog';
+import { ResourceIcon } from '../meters/ResourceIcon';
 
 const STATUS_TONE: Readonly<Record<ReadingStatus, BadgeTone>> = {
   APPROVED: 'success',
@@ -67,6 +68,7 @@ function MyMeterCard({ plotId, meter }: { plotId: string; meter: Meter }) {
     <li className="flex flex-col gap-3 rounded-control border border-line bg-surface p-4">
       <div className="flex flex-wrap items-center gap-2">
         <h4 className="font-semibold">
+          <ResourceIcon resource={meter.resource} className="mr-1.5" />
           {t.meters.resource[meter.resource]}, <UserContent>{meterLabel(meter)}</UserContent>
         </h4>
         <Badge tone={meter.active ? 'success' : 'neutral'}>

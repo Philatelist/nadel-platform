@@ -7,6 +7,8 @@ import { useCan } from '../../me';
 import { QueryBoundary } from '../QueryBoundary';
 import { UserContent } from '../UserContent';
 import { Badge, Panel } from '../ui';
+import { ReplacementChain } from './ReplacementChain';
+import { ResourceIcon } from './ResourceIcon';
 
 function MeterRow({ meter }: { meter: Meter }) {
   const t = useT();
@@ -16,6 +18,7 @@ function MeterRow({ meter }: { meter: Meter }) {
   const unit = resourceUnit(t, meter.resource);
   const title = (
     <>
+      <ResourceIcon resource={meter.resource} className="mr-1.5" />
       {m.resource[meter.resource]}, <UserContent>{meter.serial}</UserContent>
     </>
   );
@@ -46,6 +49,9 @@ function MeterRow({ meter }: { meter: Meter }) {
               to: formatDay(meter.removedOn, locale),
             })
           : format(m.periodOpen, { from: formatDay(meter.installedOn, locale) })}
+      </div>
+      <div className="flex flex-col gap-0.5 text-sm text-ink-muted">
+        <ReplacementChain meter={meter} link={canView} />
       </div>
     </li>
   );

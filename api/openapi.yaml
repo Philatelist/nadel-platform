@@ -4386,7 +4386,18 @@ components:
         replacesMeterId:
           type: string
           format: uuid
-          description: The meter this one replaced
+          description: The meter this one replaced; the same id as `replaces.id`, kept for older clients
+        replaces:
+          $ref: '#/components/schemas/MeterPredecessor'
+          description: >-
+            The meter this one replaced, with the day it was removed and its final reading; absent for a meter that
+            replaced nothing. For a counter that wrapped around its serial is this meter's own
+        replacedBy:
+          $ref: '#/components/schemas/MeterSuccessor'
+          description: >-
+            The meter that replaced this one; the day and the final reading of the replacement are this meter's own
+            `removedOn` and `finalReading`. Absent for a meter that was not replaced (active, or removed without a
+            replacement)
         active:
           type: boolean
           description: True until the meter is removed
@@ -4398,6 +4409,38 @@ components:
           description: >-
             The latest point of the meter: its final reading once removed, otherwise its latest counted reading, or
             the initial reading when there is none
+
+    MeterPredecessor:
+      type: object
+      description: >-
+        The meter a meter replaced: the previous meter of the same chain, of the same plot (or the same named meter).
+        A replacement removes it on the day the new meter is installed, so it always has a removal day and a final
+        reading
+      required: [id, serial, removedOn, finalReading]
+      properties:
+        id:
+          type: string
+          format: uuid
+        serial:
+          type: string
+        removedOn:
+          type: string
+          format: date
+          description: The day the predecessor was removed, the installation day of the meter that replaced it
+        finalReading:
+          $ref: '#/components/schemas/MeterValue'
+          description: The final reading of the predecessor
+
+    MeterSuccessor:
+      type: object
+      description: The meter that replaced a meter, the next meter of the same chain, of the same plot
+      required: [id, serial]
+      properties:
+        id:
+          type: string
+          format: uuid
+        serial:
+          type: string
 
     MeterCreate:
       type: object

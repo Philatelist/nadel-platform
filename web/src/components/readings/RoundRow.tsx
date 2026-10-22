@@ -10,15 +10,16 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
 import { useLocale, useT } from '../../i18n';
-import { meterLabel, resourceUnit } from '../../meters';
+import { resourceUnit } from '../../meters';
 import { problemMessage } from '../../problem';
 import { readingErrorMessage } from '../../readings';
-import { UserContent, formatUser } from '../UserContent';
+import { ResourceIcon } from '../meters/ResourceIcon';
+import { UserContent } from '../UserContent';
 import { Badge, Button, Notice, TextField } from '../ui';
 import { ReadingDateField } from './ReadingDateField';
 
 /**
- * One meter of the round as a card: the value, the date of this reading (the round date unless changed here) and its
+ * One meter of the round as a row of its card: the value, the date of this reading (the round date unless changed here) and its
  * own save. After a save it shows the interval and warnings from the server; nothing is calculated here.
  */
 export function RoundRow({
@@ -84,21 +85,15 @@ export function RoundRow({
   const interval = saved?.reading?.interval;
 
   return (
-    <li className="min-w-0 rounded-panel border border-line bg-surface p-4">
+    <div className="min-w-0">
       <form className="flex flex-col gap-3" onSubmit={submit} noValidate>
         <div className="flex min-w-0 flex-col gap-0.5">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-semibold break-words">
-            <Link to={`/meters/${meter.id}`} className="text-accent underline">
-              {meter.plot ? (
-                formatUser(r.plotNumber, { number: meter.plot.number })
-              ) : (
-                <UserContent>{meterLabel(meter)}</UserContent>
-              )}
-            </Link>
-            {meter.plot?.street && (
-              <span className="font-normal text-ink-muted">
-                <UserContent>{meter.plot.street}</UserContent>
-              </span>
+            <ResourceIcon resource={meter.resource} />
+            {meter.plot && (
+              <Link to={`/meters/${meter.id}`} className="text-accent underline">
+                <UserContent>{meter.serial}</UserContent>
+              </Link>
             )}
             {saved && <Badge tone="success">{r.saved}</Badge>}
           </div>
@@ -157,6 +152,6 @@ export function RoundRow({
           </Notice>
         ))}
       </form>
-    </li>
+    </div>
   );
 }

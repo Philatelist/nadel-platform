@@ -130,6 +130,157 @@ class MeterReplacementTests extends MeterTestSupport {
                 .andExpect(jsonPath("$.plot").doesNotExist());
     }
 
+    // ---- the replacement links (the meter card and the plot card show the chain)
+
+    @Test
+    void theReplacedMeterLinksToItsSuccessorAndTheNewMeterToItsPredecessor() throws Exception {
+        UUID plot = newPlot(STREET);
+        UUID old = register(plotMeter(plot, "ELECTRICITY", "MT-ЕЛ-9/1", "2026-06-01", "8000"));
+
+        JsonNode created = body(send(chairman(), post(METERS + "/" + old + "/replace"),
+                replacement("2026-09-20", "8205", "MT-ЕЛ-9/2", "3")).andExpect(status().isCreated()));
+        UUID replacement = UUID.fromString(created.get("id").asString());
+        // the answer to the replacement already carries the link back, with the old meter's removal
+        assertThat(created.get("replaces").get("id").asString()).isEqualTo(old.toString());
+        assertThat(created.get("replaces").get("serial").asString()).isEqualTo("MT-ЕЛ-9/1");
+        assertThat(created.get("replaces").get("removedOn").asString()).isEqualTo("2026-09-20");
+        assertThat(created.get("replaces").get("finalReading").asString()).isEqualTo("8205.000");
+        assertThat(created.has("replacedBy")).isFalse();
+
+        // the old meter's card: "replaced by MT-ЕЛ-9/2", the day and value are its own removal
+        send(chairman(), get(METERS + "/" + old), null).andExpect(status().isOk())
+                .andExpect(jsonPath("$.replacedBy.id").value(replacement.toString()))
+                .andExpect(jsonPath("$.replacedBy.serial").value("MT-ЕЛ-9/2"))
+                .andExpect(jsonPath("$.replacedBy.removedOn").doesNotExist())
+                .andExpect(jsonPath("$.removedOn").value("2026-09-20"))
+                .andExpect(jsonPath("$.finalReading").value("8205.000"))
+                .andExpect(jsonPath("$.replaces").doesNotExist());
+        // the new meter's card: "replaced MT-ЕЛ-9/1", with the old meter's removal
+        send(chairman(), get(METERS + "/" + replacement), null).andExpect(status().isOk())
+                .andExpect(jsonPath("$.replaces.id").value(old.toString()))
+                .andExpect(jsonPath("$.replaces.serial").value("MT-ЕЛ-9/1"))
+                .andExpect(jsonPath("$.replaces.removedOn").value("2026-09-20"))
+                .andExpect(jsonPath("$.replaces.finalReading").value("8205.000"))
+                .andExpect(jsonPath("$.replacesMeterId").value(old.toString()))
+                .andExpect(jsonPath("$.replacedBy").doesNotExist());
+        // the plot card, the register and the round carry the same links
+        send(chairman(), get("/api/v1/plots/" + plot + "/meters"), null).andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(replacement.toString()))
+                .andExpect(jsonPath("$[0].replaces.id").value(old.toString()))
+                .andExpect(jsonPath("$[0].replacedBy").doesNotExist())
+                .andExpect(jsonPath("$[1].id").value(old.toString()))
+                .andExpect(jsonPath("$[1].replacedBy.id").value(replacement.toString()))
+                .andExpect(jsonPath("$[1].replaces").doesNotExist());
+        JsonNode register = body(send(chairman(), get(METERS).param("street", STREET)
+                .param("includeRemoved", "true"), null).andExpect(status().isOk()));
+        assertThat(byId(register, old).get("replacedBy").get("serial").asString()).isEqualTo("MT-ЕЛ-9/2");
+        assertThat(byId(register, replacement).get("replaces").get("finalReading").asString())
+                .isEqualTo("8205.000");
+        JsonNode round = body(send(chairman(), get(READINGS + "/round").param("street", STREET), null)
+                .andExpect(status().isOk()));
+        assertThat(byId(round, replacement).get("replaces").get("removedOn").asString()).isEqualTo("2026-09-20");
+    }
+
+    @Test
+    void aMeterInTheMiddleOfAChainLinksBothWays() throws Exception {
+        UUID first = register(plotMeter(newPlot(STREET), "WATER", "MT-W-1", "2026-01-01", "10"));
+        UUID second = replace(first, "2026-04-01", "40", "MT-W-2", "0");
+        UUID third = replace(second, "2026-08-01", "25.5", "MT-W-3", "1");
+
+        send(chairman(), get(METERS + "/" + second), null).andExpect(status().isOk())
+                .andExpect(jsonPath("$.replaces.id").value(first.toString()))
+                .andExpect(jsonPath("$.replaces.removedOn").value("2026-04-01"))
+                .andExpect(jsonPath("$.replaces.finalReading").value("40.000"))
+                .andExpect(jsonPath("$.replacedBy.id").value(third.toString()))
+                .andExpect(jsonPath("$.replacedBy.serial").value("MT-W-3"))
+                .andExpect(jsonPath("$.removedOn").value("2026-08-01"))
+                .andExpect(jsonPath("$.finalReading").value("25.500"));
+        send(chairman(), get(METERS + "/" + third), null)
+                .andExpect(jsonPath("$.replaces.id").value(second.toString()))
+                .andExpect(jsonPath("$.replaces.removedOn").value("2026-08-01"))
+                .andExpect(jsonPath("$.replaces.finalReading").value("25.500"));
+    }
+
+    @Test
+    void aCounterThatWrappedAroundLinksToItselfUnderTheSameSerial() throws Exception {
+        UUID meter = register(plotMeter(newPlot(STREET), "ELECTRICITY", "MT-ЕМ-9", "2026-06-01", "99000"));
+        UUID wrapped = replace(meter, "2026-09-15", "99999", "MT-ЕМ-9", "0");
+
+        send(chairman(), get(METERS + "/" + meter), null)
+                .andExpect(jsonPath("$.replacedBy.id").value(wrapped.toString()))
+                .andExpect(jsonPath("$.replacedBy.serial").value("MT-ЕМ-9"));
+        send(chairman(), get(METERS + "/" + wrapped), null)
+                .andExpect(jsonPath("$.replaces.id").value(meter.toString()))
+                .andExpect(jsonPath("$.replaces.serial").value("MT-ЕМ-9"))
+                .andExpect(jsonPath("$.replaces.removedOn").value("2026-09-15"))
+                .andExpect(jsonPath("$.replaces.finalReading").value("99999.000"));
+    }
+
+    @Test
+    void aNamedMeterAndAMeterWaitingForApprovalCarryTheirLinks() throws Exception {
+        UUID pump = register(namedMeter("COMMON_CONSUMER", "MT Свердловина №2", "MT-P-1", "2026-06-01", "100"));
+        UUID newPump = replace(pump, "2026-09-01", "150", "MT-P-2", "0");
+        reading(newPump, "2026-09-10", "7", "PENDING");
+
+        send(chairman(), get(METERS + "/" + pump), null)
+                .andExpect(jsonPath("$.replacedBy.id").value(newPump.toString()));
+        JsonNode pending = body(send(chairman(), get(READINGS).param("status", "PENDING"), null)
+                .andExpect(status().isOk()));
+        JsonNode item = null;
+        for (JsonNode candidate : pending) {
+            if (candidate.get("meter").get("id").asString().equals(newPump.toString())) {
+                item = candidate;
+            }
+        }
+        assertThat(item).isNotNull();
+        assertThat(item.get("meter").get("replaces").get("id").asString()).isEqualTo(pump.toString());
+        assertThat(item.get("meter").get("replaces").get("finalReading").asString()).isEqualTo("150.000");
+    }
+
+    @Test
+    void aMemberSeesTheChainOfTheirOwnPlotOnly() throws Exception {
+        UUID plot = newPlot(STREET);
+        UUID old = register(plotMeter(plot, "ELECTRICITY", "MT-1", "2026-06-01", "0"));
+        UUID replacement = replace(old, "2026-09-01", "120", "MT-2", "0");
+        RoleMember owner = customRoleMember();
+        own(owner.id(), plot);
+        String member = TestTokens.bearer(DEMO_TENANT, UUID.randomUUID().toString(), owner.email());
+
+        send(member, get("/api/v1/plots/" + plot + "/meters"), null).andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(2)))
+                .andExpect(jsonPath("$[0].replaces.id").value(old.toString()))
+                .andExpect(jsonPath("$[0].replaces.serial").value("MT-1"))
+                .andExpect(jsonPath("$[0].replaces.finalReading").value("120.000"))
+                .andExpect(jsonPath("$[1].replacedBy.id").value(replacement.toString()))
+                .andExpect(jsonPath("$[1].replacedBy.serial").value("MT-2"));
+        // another member's plot stays hidden, links included
+        RoleMember stranger = customRoleMember();
+        own(stranger.id(), newPlot(STREET));
+        send(TestTokens.bearer(DEMO_TENANT, UUID.randomUUID().toString(), stranger.email()),
+                get("/api/v1/plots/" + plot + "/meters"), null).andExpect(status().isNotFound());
+    }
+
+    @Test
+    void aLinkToAMeterOfAnotherPlotIsNeverShown() throws Exception {
+        // not possible through the API (a replacement keeps the plot); a row written by hand must not leak the meter
+        UUID foreign = register(plotMeter(newPlot(STREET), "ELECTRICITY", "MT-F", "2026-01-01", "0"));
+        send(chairman(), post(METERS + "/" + foreign + "/remove"),
+                Map.of("removedOn", "2026-03-01", "finalReading", "50")).andExpect(status().isOk());
+        UUID plot = newPlot(STREET);
+        UUID meter = UUID.randomUUID();
+        ownerJdbc().update("insert into meter (id, tenant_id, kind, resource, serial, plot_id, installed_on, "
+                + "initial_value, replaces_meter_id) values (?, ?, 'PLOT', 'ELECTRICITY', 'MT-OWN', ?, "
+                + "date '2026-03-01', 0, ?)", meter, DEMO_TENANT, plot, foreign);
+        RoleMember owner = customRoleMember();
+        own(owner.id(), plot);
+
+        send(TestTokens.bearer(DEMO_TENANT, UUID.randomUUID().toString(), owner.email()),
+                get("/api/v1/plots/" + plot + "/meters"), null).andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(meter.toString()))
+                .andExpect(jsonPath("$[0].replaces").doesNotExist());
+        send(chairman(), get(METERS + "/" + foreign), null).andExpect(jsonPath("$.replacedBy").doesNotExist());
+    }
+
     // ---- the tree
 
     @Test
@@ -337,6 +488,16 @@ class MeterReplacementTests extends MeterTestSupport {
         send(chairman(), get(METERS + "/" + meter), null).andExpect(jsonPath("$.active").value(true))
                 .andExpect(jsonPath("$.removedOn").doesNotExist());
         assertThat(successors(meter)).isZero();
+    }
+
+    /** The element of a list of meters with that id. */
+    private static JsonNode byId(JsonNode meters, UUID id) {
+        for (JsonNode meter : meters) {
+            if (meter.get("id").asString().equals(id.toString())) {
+                return meter;
+            }
+        }
+        throw new AssertionError("No meter " + id + " in " + meters);
     }
 
     private static List<UUID> ids(JsonNode array) {

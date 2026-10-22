@@ -38,3 +38,32 @@ export function formatMeterValue(value: MeterValueString, locale: string): strin
   const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, english ? ',' : NBSP);
   return fraction ? `${grouped}${english ? '.' : ','}${fraction}` : grouped;
 }
+
+/**
+ * Rounds a server meter value half-up to `decimals` places (0..3) on the decimal string, for display of calculated
+ * (interpolated) consumption: electricity to whole kWh (0), water to 0.01 m3 (2). Text only, no floating point.
+ * The result is canonical for `formatMeterValue` ("1234.567", 0 -> "1235"; "0.005", 2 -> "0.01").
+ */
+export function roundMeterValue(value: MeterValueString, decimals: number): MeterValueString {
+  const match = METER_VALUE.exec(value);
+  if (!match) throw new Error(`Invalid meter value: ${value}`);
+  if (!Number.isInteger(decimals) || decimals < 0 || decimals > 3)
+    throw new Error(`Invalid decimals: ${decimals}`);
+  const whole = match[1] ?? '0';
+  const fraction = (match[2] ?? '').padEnd(3, '0');
+  const keep = fraction.slice(0, decimals);
+  const roundUp = (fraction[decimals] ?? '0') >= '5';
+  let digits = `${whole}${keep}`;
+  if (roundUp) {
+    const chars = digits.split('');
+    let i = chars.length - 1;
+    while (i >= 0 && chars[i] === '9') chars[i--] = '0';
+    if (i < 0) chars.unshift('1');
+    else chars[i] = String(Number(chars[i]) + 1);
+    digits = chars.join('');
+  }
+  const padded = digits.padStart(decimals + 1, '0');
+  const intPart = padded.slice(0, padded.length - decimals).replace(/^0+(?=\d)/, '');
+  const fracPart = padded.slice(padded.length - decimals);
+  return decimals === 0 ? intPart : `${intPart}.${fracPart}`;
+}

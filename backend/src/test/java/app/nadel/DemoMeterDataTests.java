@@ -110,7 +110,7 @@ class DemoMeterDataTests extends IntegrationTest {
         assertThat(count("meter where tenant_id in (?, ?)", DEMO_TENANT, OTHER_TENANT)).isEqualTo(39);
     }
 
-    private static final int READINGS = 168;
+    private static final int READINGS = 186;
 
     private int count(String from, Object... args) {
         return owner.queryForObject("select count(*) from " + from, Integer.class, args);

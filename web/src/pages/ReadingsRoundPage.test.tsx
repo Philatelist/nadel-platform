@@ -194,6 +194,44 @@ describe('ReadingsRoundPage', () => {
     expect(roundParams.at(-1)).toMatchObject({ noReadingSince: '2026-08-22' });
   });
 
+  it('shows a plot with two meters as one card with a row per meter and an icon each', () => {
+    meters = [plotMeter, { ...plotMeter, id: 'm9', serial: 'WT-1', resource: 'WATER' }, second];
+    renderRound();
+    const cards = screen.getAllByRole('listitem');
+    expect(cards).toHaveLength(2);
+    expect(within(cards[0]!).getAllByRole('button', { name: 'Зберегти' })).toHaveLength(2);
+    expect(within(cards[0]!).getByRole('img', { name: 'Електроенергія' })).toBeInTheDocument();
+    expect(within(cards[0]!).getByRole('img', { name: 'Вода' })).toBeInTheDocument();
+    expect(within(cards[1]!).getAllByRole('button', { name: 'Зберегти' })).toHaveLength(1);
+  });
+
+  it('uses the remembered resource when the URL has none, and the URL wins when it has one', () => {
+    window.localStorage.setItem('nadel.readings.resource', 'WATER');
+    renderRound();
+    expect(roundParams.at(-1)).toMatchObject({ resource: 'WATER' });
+  });
+
+  it('remembers a changed filter and lets "all" clear it', async () => {
+    const user = userEvent.setup();
+    renderRound('/readings?resource=ELECTRICITY');
+    expect(roundParams.at(-1)).toMatchObject({ resource: 'ELECTRICITY' });
+    await user.selectOptions(screen.getByLabelText('Ресурс'), 'WATER');
+    expect(window.localStorage.getItem('nadel.readings.resource')).toBe('WATER');
+    await user.selectOptions(screen.getByLabelText('Ресурс'), '');
+    expect(window.localStorage.getItem('nadel.readings.resource')).toBeNull();
+    expect(roundParams.at(-1)).toMatchObject({ resource: undefined });
+  });
+
+  it('falls back to all when storage fails', () => {
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation((key) => {
+      if (key === 'nadel.readings.resource') throw new Error('blocked');
+      return null;
+    });
+    renderRound();
+    expect(roundParams.at(-1)).toMatchObject({ resource: undefined });
+    vi.restoreAllMocks();
+  });
+
   it('lists the meters as cards with marked user content and no table', () => {
     renderRound();
     expect(screen.queryByRole('table')).not.toBeInTheDocument();

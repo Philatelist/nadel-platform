@@ -197,6 +197,14 @@ replacement), `MeterChains` (the chain of a meter and the histories the calculat
   `replacedOn`, `replaces_meter_id` = the old meter. A counter that wrapped around is a replacement by itself: the same
   serial, initial reading 0. Answer 201 with the new meter. Locks: the plot `FOR SHARE` (as a registration), the meter
   `FOR UPDATE`, then the meters under it (`FOR UPDATE`, id order).
+- **Replacement links.** Every `Meter` the API returns (register, card, plot meters, round, pending approvals, the
+  answers to register, update, remove and replace) carries its neighbours in the chain so the cards can show it:
+  `replaces` (`MeterPredecessor`: id, serial, `removedOn`, `finalReading` of the meter it replaced) and `replacedBy`
+  (`MeterSuccessor`: id, serial; the day and value of that replacement are the meter's own `removedOn` and
+  `finalReading`). `replacesMeterId` stays for older clients. A wrap-around links to a meter with the same serial.
+  `MeterChains.neighboursOf` loads them with two queries per answer, whatever the number of meters, and links only a
+  neighbour of the same plot (a replacement keeps the plot), so a member who sees the meters of their own plot never
+  sees a meter of another plot through a link.
 - **Pending readings, decided conservatively.** Both a removal and a replacement are refused while the meter has a
   `PENDING` reading, whatever its date: approving it later could put a counted reading after the removal or make the
   final reading out of order, and a member's reading is never moved to another meter silently. The approvals screen

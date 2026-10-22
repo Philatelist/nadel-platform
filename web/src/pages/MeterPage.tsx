@@ -24,6 +24,8 @@ import { meterLabel, resourceUnit } from '../meters';
 import { problemMessage } from '../problem';
 import { useDocumentTitle } from '../useDocumentTitle';
 import { NotFoundPage } from './NotFoundPage';
+import { ReplacementChain } from '../components/meters/ReplacementChain';
+import { ResourceIcon } from '../components/meters/ResourceIcon';
 
 export function MeterPage() {
   const t = useT();
@@ -74,7 +76,13 @@ function MeterView({ meter }: { meter: Meter }) {
 
   const rows: [string, ReactNode][] = [
     [f.kind, m.kind[meter.kind]],
-    [f.resource, m.resource[meter.resource]],
+    [
+      f.resource,
+      <span key="resource" className="inline-flex items-center gap-1.5">
+        <ResourceIcon resource={meter.resource} />
+        {m.resource[meter.resource]}
+      </span>,
+    ],
   ];
   if (meter.plot) {
     rows.push([
@@ -163,6 +171,11 @@ function MeterView({ meter }: { meter: Meter }) {
             </div>
           ))}
         </dl>
+        {(meter.replaces || meter.replacedBy) && (
+          <div className="mt-3 flex flex-col gap-1 border-t border-line pt-3">
+            <ReplacementChain meter={meter} />
+          </div>
+        )}
       </Panel>
       <Panel title={m.historyTitle}>
         <ReadingHistory meter={meter} />

@@ -965,4 +965,123 @@ test.describe('meters and readings: acceptance', () => {
     await expect(pending.filter({ hasText: /^Ділянка 7\b/ })).toHaveCount(1);
     await expect(pending.filter({ hasText: /^Ділянка \d+(?!\d|-)/ })).toHaveCount(1);
   });
+  test('review: a resource icon names electricity and water, a plot with two meters is one round card, the resource filter is remembered', async ({
+    page,
+  }) => {
+    await signIn(page, 'chairman@demo.local');
+    // demo plot 7 has an electricity and a water meter
+    await page.goto('/readings');
+    const list = main(page).getByRole('list', { name: 'Лічильники обходу' });
+    const card = list.getByRole('listitem').filter({ hasText: /^Ділянка 7\b/ });
+    await expect(card).toHaveCount(1);
+    await expect(card.getByRole('button', { name: 'Зберегти' })).toHaveCount(2);
+    await expect(card.getByRole('img', { name: 'Електроенергія' })).toHaveCount(1);
+    await expect(card.getByRole('img', { name: 'Вода' })).toHaveCount(1);
+    await expect(card.getByRole('img', { name: 'Вода' })).toHaveAttribute('title', 'Вода');
+
+    // the filter is remembered per browser: it survives a reload of the bare address
+    await main(page).getByLabel('Ресурс', { exact: true }).selectOption('WATER');
+    await expect(page).toHaveURL(/resource=WATER/);
+    await expect(card.getByRole('img', { name: 'Електроенергія' })).toHaveCount(0);
+    await page.goto('/readings');
+    await expect(main(page).getByLabel('Ресурс', { exact: true })).toHaveValue('WATER');
+    await expect(card.getByRole('img', { name: 'Вода' })).toHaveCount(1);
+    await expect(card.getByRole('img', { name: 'Електроенергія' })).toHaveCount(0);
+    // an address with its own choice wins; "all" clears the memory
+    await page.goto('/readings?resource=ELECTRICITY');
+    await expect(main(page).getByLabel('Ресурс', { exact: true })).toHaveValue('ELECTRICITY');
+    await main(page).getByLabel('Ресурс', { exact: true }).selectOption('');
+    await page.goto('/readings');
+    await expect(main(page).getByLabel('Ресурс', { exact: true })).toHaveValue('');
+
+    // the register shows the icons too
+    await page.goto('/meters');
+    await expect(main(page).getByRole('img', { name: 'Вода' }).first()).toBeVisible();
+    await expect(main(page).getByRole('img', { name: 'Електроенергія' }).first()).toBeVisible();
+  });
+
+  test('review: a calculated value in the meter tree is shown to whole kWh, a real one as it is', async ({
+    page,
+  }) => {
+    const stamp = Date.now().toString(36);
+    const plots: CreatedPlot[] = [];
+    let meterId: string | undefined;
+    await signIn(page, 'chairman@demo.local');
+    try {
+      const fixture = await createFixture(page, stamp, { daysAgo: 30, initial: '100' });
+      plots.push(fixture.plot);
+      meterId = fixture.meterId;
+      // 185 kWh over 18 days: the value 10 days ago is 302.777..., so the range ends calculated at 102.777... kWh
+      for (const [takenOn, value] of [
+        [kyivDay(-20), '200'],
+        [kyivDay(-2), '385'],
+      ] as const)
+        expectCreated(
+          await api(page, 'POST', '/readings', { rows: [{ meterId: fixture.meterId, takenOn, value }] }),
+          200,
+        );
+      await page.goto('/settings/meter-tree');
+      await main(page).getByLabel('З', { exact: true }).fill(kyivDay(-20));
+      await main(page).getByLabel('По', { exact: true }).fill(kyivDay(-10));
+      const places = main(page)
+        .getByRole('listitem')
+        .filter({ hasText: fixture.serial })
+        .filter({ hasNotText: 'Квартал' });
+      await places.last().getByRole('button', { name: 'Перемістити' }).click();
+      const dialog = page.getByRole('dialog');
+      await dialog.getByLabel('Батьківський лічильник').selectOption({ label: 'Квартал А' });
+      await dialog.getByLabel('Діє з').fill(kyivDay(-30));
+      await dialog.getByRole('button', { name: 'Перемістити', exact: true }).click();
+      await expect(dialog).toHaveCount(0);
+
+      const part = places.first();
+      await expect(part).toContainText('Споживання: 103 кВт·год');
+      await expect(part).toContainText('розрахунковий');
+      await expect(part).not.toContainText('102,7');
+      // a range that starts and ends on readings is real, shown as it is
+      await main(page).getByLabel('По', { exact: true }).fill(kyivDay(-2));
+      await expect(places.first()).toContainText('Споживання: 185 кВт·год');
+    } finally {
+      if (meterId) {
+        await api(page, 'PUT', `/meters/${meterId}/parent`, { effectiveFrom: kyivDay(0) }).catch(
+          () => undefined,
+        );
+      }
+      await cleanup(page, plots);
+    }
+  });
+  test('review: the replacement chain of demo plot 9 is on both meter cards and on the plot card, with links', async ({
+    page,
+  }) => {
+    await signIn(page, 'chairman@demo.local');
+    const found = expectCreated<{ items: { id: string; number: string }[] }>(
+      await api(page, 'GET', '/plots?q=9'),
+      200,
+    );
+    const plot = found.items.find((p) => p.number === '9');
+    expect(plot, 'demo plot 9').toBeDefined();
+    const removed = dayUk(kyivDay(-30));
+    // old meter "ЕЛ-9" (final reading 3340) was replaced by "ЕЛ-9/2"
+    const replacedLine = new RegExp(`^Замінено на ЕЛ-9/2: знято ${removed}, кінцевий показ 3\\s340 кВт·год$`);
+    const replacesLine = new RegExp(
+      `^Замінив лічильник ЕЛ-9: знято ${removed}, кінцевий показ 3\\s340 кВт·год$`,
+    );
+
+    // the plot card lists both meters with the chain lines
+    await page.goto(`/plots/${plot!.id}`);
+    await expect(main(page).getByTestId('replaced-by')).toHaveText(replacedLine);
+    await expect(main(page).getByTestId('replaces')).toHaveText(replacesLine);
+
+    // the new meter's card links back to the old one
+    await main(page).getByTestId('replaces').getByRole('link', { name: 'ЕЛ-9', exact: true }).click();
+    await expect(page).toHaveURL(/\/meters\//);
+    await expect(main(page).getByTestId('replaced-by')).toHaveText(replacedLine);
+    await expect(main(page).getByTestId('replaces')).toHaveCount(0);
+
+    // and the old meter's card links forward to the new one
+    await main(page).getByTestId('replaced-by').getByRole('link', { name: 'ЕЛ-9/2' }).click();
+    await expect(page).toHaveURL(/\/meters\//);
+    await expect(main(page).getByTestId('replaces')).toHaveText(replacesLine);
+    await expect(main(page).getByTestId('replaced-by')).toHaveCount(0);
+  });
 });
