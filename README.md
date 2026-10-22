@@ -41,7 +41,7 @@ make e2e-install        # once: download the chromium browser for Playwright
 make e2e                # starts infra, the backend jar and web, runs web/e2e, then stops backend and web
 ```
 
-`make e2e` needs JDK 25 and free ports 8080 and 5173; logs go to `backend/target/e2e-*.log`. CI runs the same specs in the `e2e` job.
+`make e2e` needs JDK 25 and free ports 8080 and 5173; it runs against a throwaway database `nadel_e2e` (dropped afterwards), never your demo `nadel` database; logs go to `backend/target/e2e-*.log`. CI runs the same specs in the `e2e` job.
 
 Sign in as `treasurer@demo.local` / `nadel`. Other test users are listed in [CLAUDE.md](CLAUDE.md). Each test user is
 linked to a demo member by email; what they may do comes from that member's roles in the database (Chairman,

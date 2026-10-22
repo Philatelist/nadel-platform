@@ -879,6 +879,8 @@ export const uk: Messages = {
     plotPanelTitle: 'Лічильники',
     plotPanelEmpty: 'У ділянки немає лічильників',
     replacedHint: 'Замінив попередній лічильник',
+    chainReplacedBy: 'Замінено на {serial}: знято {date}, кінцевий показ {value}',
+    chainReplaced: 'Замінив лічильник {serial}: знято {date}, кінцевий показ {value}',
     periodOpen: 'Працює з {from}',
     periodClosed: 'Працював {from} – {to}',
     replace: 'Замінити лічильник',

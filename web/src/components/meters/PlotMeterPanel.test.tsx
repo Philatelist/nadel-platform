@@ -69,4 +69,46 @@ describe('PlotMeterPanel', () => {
     const { container } = renderWithApp(<PlotMeterPanel plotId="p7" />);
     expect(container).toBeEmptyDOMElement();
   });
+  it('shows the chain lines of each meter, with links for viewers', () => {
+    useListPlotMeters.mockReturnValue(
+      queryResult([
+        {
+          ...plotMeter,
+          id: 'm3',
+          serial: 'EM-2',
+          replaces: { id: 'm1', serial: 'EM-1', removedOn: '2026-09-20', finalReading: '8205.000' },
+        },
+        {
+          ...plotMeter,
+          active: false,
+          removedOn: '2026-09-20',
+          finalReading: '8205.000',
+          replacedBy: { id: 'm3', serial: 'EM-2' },
+        },
+      ]),
+    );
+    renderWithApp(<PlotMeterPanel plotId="p7" />);
+    expect(screen.getByTestId('replaces')).toHaveTextContent(
+      'Replaced meter EM-1: removed 20 Sep 2026, final reading 8,205 kWh',
+    );
+    expect(screen.getByTestId('replaced-by')).toHaveTextContent(
+      'Replaced by EM-2: removed 20 Sep 2026, final reading 8,205 kWh',
+    );
+    expect(screen.getByRole('link', { name: 'EM-1' })).toHaveAttribute('href', '/meters/m1');
+  });
+
+  it('shows the chain as plain text to a member without METERS_VIEW', () => {
+    permissions = [];
+    useListPlotMeters.mockReturnValue(
+      queryResult([
+        {
+          ...plotMeter,
+          replaces: { id: 'm0', serial: 'EM-0', removedOn: '2026-05-01', finalReading: '1.000' },
+        },
+      ]),
+    );
+    renderWithApp(<PlotMeterPanel plotId="p7" />);
+    expect(screen.getByTestId('replaces')).toHaveTextContent('Replaced meter EM-0');
+    expect(screen.queryByRole('link')).toBeNull();
+  });
 });

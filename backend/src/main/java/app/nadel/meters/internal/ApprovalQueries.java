@@ -2,6 +2,7 @@ package app.nadel.meters.internal;
 
 import app.nadel.identity.AccessProfile;
 import app.nadel.meters.ConsumptionCalculator.Reading;
+import app.nadel.meters.internal.MeterChains.Neighbours;
 import app.nadel.meters.internal.MeterReadingRecord.Status;
 import app.nadel.meters.internal.ReadingValidator.MeterSpan;
 import app.nadel.plots.PlotCatalog;
@@ -37,15 +38,17 @@ class ApprovalQueries {
     private final PlotCatalog plots;
     private final ReadingFacts facts;
     private final MeterAccess access;
+    private final MeterChains chains;
     private final Clock clock;
 
     ApprovalQueries(MeterReadingRepository readings, MeterRepository meters, PlotCatalog plots, ReadingFacts facts,
-            MeterAccess access, Clock clock) {
+            MeterAccess access, MeterChains chains, Clock clock) {
         this.readings = readings;
         this.meters = meters;
         this.plots = plots;
         this.facts = facts;
         this.access = access;
+        this.chains = chains;
         this.clock = clock;
     }
 
@@ -70,6 +73,7 @@ class ApprovalQueries {
                 .filter(Objects::nonNull).distinct().toList());
         Map<UUID, Reading> latest = facts.latestApproved(meterIds);
         Map<UUID, List<Reading>> counted = facts.approvedByMeter(meterIds);
+        Map<UUID, Neighbours> neighbours = chains.neighboursOf(byId.values());
         boolean withNote = access.seesEveryMeter(viewer);
         LocalDate today = LocalDate.now(clock);
 
@@ -79,7 +83,8 @@ class ApprovalQueries {
             PlotFacts plot = meter.getPlotId() == null ? null : plotFacts.get(meter.getPlotId());
             // a pending reading is a reading: the meter is no longer deletable
             PendingReading item = new PendingReading(ReadingDtoMapper.toDto(reading, null, false),
-                    MeterDtoMapper.toDto(meter, plot, latest.get(meter.getId()), true, withNote), List.of());
+                    MeterDtoMapper.toDto(meter, plot, latest.get(meter.getId()), true, withNote,
+                            neighbours.getOrDefault(meter.getId(), Neighbours.NONE)), List.of());
             MeterSpan span = MeterSpan.of(meter);
             List<Reading> others = counted.get(meter.getId());
             if (ReadingValidator.check(span, others, today, reading.getTakenOn(), reading.getValue()).isEmpty()) {

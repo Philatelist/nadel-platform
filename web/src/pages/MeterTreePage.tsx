@@ -4,7 +4,8 @@ import {
   type MeterTreeMeter,
   type MeterTreeNode,
 } from '@nadel/api-client';
-import { format, formatDay, formatMeterValue } from '@nadel/shared';
+import { format, formatDay, formatMeterValue, roundMeterValue } from '@nadel/shared';
+import { ResourceIcon } from '../components/meters/ResourceIcon';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { MoveMeterDialog } from '../components/meterTree/MoveMeterDialog';
@@ -130,6 +131,8 @@ function NodeItem({ node, rangeFrom, rangeTo, parentId, onMove }: NodeContext & 
     <li className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-control border border-line px-3 py-2">
         <span className="font-semibold">
+          {/* the tree holds electricity meters only (water is not part of it) */}
+          <ResourceIcon resource="ELECTRICITY" className="mr-1.5" />
           <UserContent>{meterLabel(meter)}</UserContent>
         </span>
         <Badge tone="neutral">{t.meters.kind[meter.kind]}</Badge>
@@ -193,11 +196,11 @@ function Consumption({ value }: { value: MeterRangeConsumption }) {
       </span>
     );
   }
+  // a calculated (interpolated) value is shown to whole kWh; the server keeps the full precision
+  const shown = value.calculated ? roundMeterValue(value.consumption, 0) : value.consumption;
   return (
     <>
-      <span>
-        {format(m.consumption, { value: formatMeterValue(value.consumption, locale), unit: t.units.kwh })}
-      </span>
+      <span>{format(m.consumption, { value: formatMeterValue(shown, locale), unit: t.units.kwh })}</span>
       {value.calculated && <Badge tone="info">{m.calculated}</Badge>}
     </>
   );

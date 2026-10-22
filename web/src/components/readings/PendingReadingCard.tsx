@@ -15,6 +15,7 @@ import { problemMessage } from '../../problem';
 import { UserContent, formatUser } from '../UserContent';
 import { Badge, Button, Notice } from '../ui';
 import { RejectReadingDialog } from './RejectReadingDialog';
+import { ResourceIcon } from '../meters/ResourceIcon';
 
 /** One reading waiting for approval with the interval it would close and its warnings; approve or reject it. */
 export function PendingReadingCard({ item }: { item: PendingReading }) {
@@ -55,6 +56,7 @@ export function PendingReadingCard({ item }: { item: PendingReading }) {
           {title}
         </Link>
         <span className="text-sm text-ink-muted">
+          <ResourceIcon resource={meter.resource} className="mr-1.5" />
           {t.meters.resource[meter.resource]}, <UserContent>{meter.serial}</UserContent>
         </span>
       </div>

@@ -27,6 +27,7 @@ import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useLocale, useT } from '../i18n';
 import { meterLabel, resourceUnit } from '../meters';
 import { useDocumentTitle } from '../useDocumentTitle';
+import { ResourceIcon } from '../components/meters/ResourceIcon';
 
 const KINDS = Object.values(MeterKind);
 const RESOURCES = Object.values(MeterResource);
@@ -101,7 +102,16 @@ export function MetersPage() {
       cell: (meter) => <UserContent>{meter.serial}</UserContent>,
     },
     { key: 'kind', header: c.kind, cell: (meter) => m.kind[meter.kind] },
-    { key: 'resource', header: c.resource, cell: (meter) => m.resource[meter.resource] },
+    {
+      key: 'resource',
+      header: c.resource,
+      cell: (meter) => (
+        <span className="inline-flex items-center gap-1.5">
+          <ResourceIcon resource={meter.resource} />
+          {m.resource[meter.resource]}
+        </span>
+      ),
+    },
     {
       key: 'lastReading',
       header: c.lastReading,
