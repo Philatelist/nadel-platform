@@ -67,6 +67,19 @@ Numbering: a feature document `docs/features/NNN-name.md` and its AWOS spec fold
 
 ## Hard rules (a violation means the review is rejected)
 
+**Verification levels**
+
+- New feature (pipeline Phase 4): run the full local suite (`make check`, then `make e2e`) before the first push.
+- Fix on an open PR (review notes, small changes, CI fixes): run locally only what the change touches, then push and
+  let CI run the full suite:
+  - backend: the tests of the changed modules, for example `cd backend && ./mvnw test -Dtest='app.nadel.meters.**'`
+    (add each changed module; a change in shared code such as `app.nadel` base classes, security or migrations
+    means the whole backend suite);
+  - clients: `pnpm -r typecheck && pnpm -r lint && pnpm -r test`;
+  - e2e: only the Playwright specs of the changed screens, for example `pnpm --filter web exec playwright test meters`.
+- Run the full local suite for a fix only to reproduce a CI failure that the narrow run does not show.
+- CI is the gate: a PR is merged only with all checks green.
+
 **Language**
 - Everything in the repository is in English: code, comments, docs, commit messages, test names, SQL comments.
 - The UI shows exactly one language, the one the user selected. Every text the system produces (labels, enum values,
