@@ -167,6 +167,14 @@ export function auditValue(
       return catalog(t.channel);
     case 'memberPlotStatusVisibility':
       return t.settings.visibility[raw as keyof Messages['settings']['visibility']]?.label ?? raw;
+    case 'status':
+      return entityType === 'BILLING_MONTH' ? catalog(t.billing.status) : user(raw);
+    case 'lossesMode':
+      return catalog(a.lossesMode);
+    case 'commonConsumerDefaultSplit':
+      return catalog(a.split);
+    case 'lossesPercent':
+      return PLAIN_NUMBER.test(raw) ? `${localeNumber(raw, locale)} %` : raw;
     case 'effectiveFrom':
     case 'validFrom':
     case 'dueDate':

@@ -13,9 +13,13 @@ import java.util.Optional;
  * <p>
  * The rule: the month of the charge's date, but never a month after the current one. When that month is open (or does
  * not exist yet, so it is opened) the charge goes there. When it is closed (months close in order, so a month that does
- * not exist before the last closed month counts as closed), the charge goes to the earliest open month after it that is
- * not after the current month, and when there is none, to a new month right after the last closed one. The charge keeps
- * its own service period and date; only the month it is booked in moves.
+ * not exist before the last closed month counts as closed), the charge goes to the earliest open month after it. Months
+ * close in order, so every month after the last closed one is open whether it has a row or not: the earliest open month
+ * is always the one right after the last closed month (opened when it has no row), never a later month that merely has
+ * a row. That month is after the current one only when the current month itself is closed; then no month up to the
+ * current one can take the charge and it goes to the next month, which is opened for it (closing a month after the
+ * current one is refused, so the last closed month is never later than the current one). The charge keeps its own
+ * service period and date; only the month it is booked in moves.
  */
 final class BillingCalendar {
 
@@ -49,9 +53,7 @@ final class BillingCalendar {
         if (wantedIsOpen) {
             return wanted;
         }
-        return months.stream()
-                .filter(m -> !m.closed() && m.month().isAfter(wanted) && !m.month().isAfter(current))
-                .map(MonthState::month).min(Comparator.naturalOrder())
-                .orElseGet(() -> lastClosed.orElseThrow().plusMonths(1));
+        // the wanted month is closed, so a closed month exists; every month after the last closed one is open
+        return lastClosed.orElseThrow().plusMonths(1);
     }
 }

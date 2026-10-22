@@ -25,3 +25,26 @@ describe('auditValue for charges', () => {
     expect(reason.container.querySelector('[data-user-content]')?.textContent).toBe('Помилка');
   });
 });
+
+describe('auditValue for billing months and settings', () => {
+  const uk = messages('uk');
+  const en = messages('en');
+
+  it('shows the billing month status by its catalog label', () => {
+    expect(text(auditValue('BILLING_MONTH', 'status', 'OPEN', uk, 'uk'))).toBe('Відкритий');
+    expect(text(auditValue('BILLING_MONTH', 'status', 'CLOSED', uk, 'uk'))).toBe('Закритий');
+    expect(text(auditValue('BILLING_MONTH', 'status', 'CLOSED', en, 'en'))).toBe('Closed');
+  });
+
+  it('shows the losses and split settings by catalog labels', () => {
+    expect(text(auditValue('SETTINGS', 'lossesMode', 'FIXED_PERCENT', uk, 'uk'))).toBe('Фіксований відсоток');
+    expect(text(auditValue('SETTINGS', 'lossesMode', 'PROPORTIONAL', en, 'en'))).toBe('Proportional');
+    expect(text(auditValue('SETTINGS', 'commonConsumerDefaultSplit', 'EQUAL_PER_PLOT', uk, 'uk'))).toBe(
+      'Порівну на ділянку',
+    );
+    expect(text(auditValue('SETTINGS', 'commonConsumerDefaultSplit', 'NOT_CHARGED', en, 'en'))).toBe(
+      'Not charged',
+    );
+    expect(text(auditValue('SETTINGS', 'lossesPercent', '5.5', en, 'en'))).toBe('5.5 %');
+  });
+});

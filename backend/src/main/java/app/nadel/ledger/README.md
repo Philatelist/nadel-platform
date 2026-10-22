@@ -36,8 +36,9 @@ Everything else is in `internal`.
 
 - `BillingCalendar.bookingMonth(date, months, today)`: the month of `date`, never after the current month. Open (or not
   existing yet after the last closed month) -> that month. Closed (months close in order, so a missing month before the
-  last closed one counts as closed) -> the earliest open month after it that is not after the current month, else a new
-  month right after the last closed one. The charge keeps its own service period and `accrued_on`. Tests:
+  last closed one counts as closed) -> the earliest open month after it, which is always the month right after the last
+  closed one (opened when it has no row; a later month that has a row is never preferred). It is after the current
+  month only when the current month itself is closed. The charge keeps its own service period and `accrued_on`. Tests:
   `BillingCalendarTests`.
 - `DebtCalculator.of(lines)`: debt per charge type = the sum of the plot's charges of the type, reversals negative;
   total = their sum; the oldest unpaid accrual = the oldest `accrued_on` among positive charges that were not reversed

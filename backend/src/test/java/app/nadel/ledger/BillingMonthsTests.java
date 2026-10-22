@@ -269,6 +269,30 @@ class BillingMonthsTests extends LedgerApiSupport {
     }
 
     @Test
+    void aLateChargeGoesToTheMonthAfterTheLastClosedOneEvenWhenItHasNoRowAndALaterMonthIsOpen() throws Exception {
+        // two months ago CLOSED, last month without a row, the current month OPEN
+        UUID plot = newPlot();
+        tariffCharge(plot, "MEMBERSHIP", "25.00", ym(2));
+        tariffCharge(plot, "LAND_TAX", "17.50", ym(0));
+        send(chairman(), post(CLOSE.formatted(ym(2))), null).andExpect(status().isOk());
+        assertThat(ownerJdbc().queryForObject("select count(*) from billing_month where tenant_id = ? and month = ?",
+                Integer.class, DEMO_TENANT, current().minusMonths(1).atDay(1))).isZero();
+
+        LocalDate lateDay = current().minusMonths(2).atDay(28);
+        JsonNode late = body(send(chairman(), post(OPENING.formatted(plot)),
+                opening(typeId(DEMO_TENANT, "MEMBERSHIP"), "40.00", lateDay.toString(), null))
+                .andExpect(status().isCreated()));
+
+        // the month without a row is open (months close in order): it is opened for the charge
+        assertThat(late.get("billingMonth").asString()).isEqualTo(ym(1));
+        assertThat(late.get("accruedOn").asString()).isEqualTo(lateDay.toString());
+        assertThat(monthStatus(ym(1))).isEqualTo("OPEN");
+        JsonNode months = list(chairman());
+        assertThat(entry(months, ym(1)).get("total").asString()).isEqualTo("40.00");
+        assertThat(entry(months, ym(0)).get("total").asString()).isEqualTo("17.50");
+    }
+
+    @Test
     void whenEveryMonthUpToNowIsClosedALateChargeOpensTheNextMonth() throws Exception {
         UUID plot = newPlot();
         tariffCharge(plot, "MEMBERSHIP", "25.00", ym(0));

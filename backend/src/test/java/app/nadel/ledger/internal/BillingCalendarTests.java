@@ -10,7 +10,8 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Which month a charge is booked in (feature 011 §2.2): its own month while open, otherwise the earliest open month
- * after it, otherwise a new month after the last closed one; never a month after the current one.
+ * after it, which is always the month right after the last closed one (with a row or not); never a month after the
+ * current one unless the current month itself is closed.
  */
 class BillingCalendarTests {
 
@@ -57,12 +58,26 @@ class BillingCalendarTests {
     }
 
     @Test
-    void theEarliestOpenMonthIsChosenAlsoWhenAGapPrecedesIt() {
-        // September closed, October never opened, November open: an existing open month comes first
+    void aMonthWithoutARowRightAfterTheLastClosedOneIsTheEarliestOpenMonth() {
+        // September closed, October has no row, November open: October is open too (months close in order), so a late
+        // charge about September is booked in October, not in November
         List<MonthState> months = List.of(open("2026-11"), closed("2026-09"));
+        LocalDate november = LocalDate.parse("2026-11-03");
 
-        assertThat(BillingCalendar.bookingMonth(LocalDate.parse("2026-09-10"), months, LocalDate.parse("2026-11-03")))
-                .isEqualTo(YearMonth.of(2026, 11));
+        assertThat(BillingCalendar.bookingMonth(LocalDate.parse("2026-09-10"), months, november))
+                .isEqualTo(YearMonth.of(2026, 10));
+        assertThat(BillingCalendar.bookingMonth(LocalDate.parse("2026-07-01"), months, november))
+                .isEqualTo(YearMonth.of(2026, 10));
+    }
+
+    @Test
+    void whenTheCurrentMonthIsClosedTheChargeOpensTheNextMonth() {
+        // no month up to the current one can take it: the month after the last closed one, although it is in the future
+        List<MonthState> months = List.of(closed("2026-09"), closed("2026-10"));
+
+        assertThat(book("2026-10-22", months)).isEqualTo(YearMonth.of(2026, 11));
+        assertThat(book("2026-09-01", months)).isEqualTo(YearMonth.of(2026, 11));
+        assertThat(book("2027-01-15", months)).isEqualTo(YearMonth.of(2026, 11));
     }
 
     @Test
