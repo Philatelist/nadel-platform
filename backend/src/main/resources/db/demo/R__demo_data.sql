@@ -450,7 +450,8 @@ WHERE m.id = r.meter_id AND m.id = md5('demo-meter:11111111-1111-1111-1111-11111
 
 -- Approved readings. Each series is an initial value plus a daily rate over the days since installation, so values only
 -- grow; the template (0-3, or 4 for plot 20) picks the reading days (days before today): gaps of 6-55 days.
--- Template 4 (plot 20) ends 75 days ago.
+-- Template 4 (plot 20) ends 75 days ago. Plot 25's meter (if the demo ledger block below created it) has a reading of
+-- its own and gets none here.
 INSERT INTO meter_reading (id, tenant_id, meter_id, taken_on, value, source, status, entered_by_member_id, decided_by_member_id, decided_at)
 SELECT md5('demo-reading:' || s.id || ':' || t.d)::uuid, s.tenant_id, s.id, (SELECT day FROM demo_anchor) - t.d,
        s.initial_value + round(s.rate * (((SELECT day FROM demo_anchor) - t.d) - s.installed_on) + ((s.n * 7 + t.d) % 10) / 10.0, 3),
@@ -462,7 +463,7 @@ FROM (
            CASE WHEN p.number = '20' THEN 4 ELSE regexp_replace(p.number, '\D', '', 'g')::int % 4 END AS tpl
     FROM meter m JOIN plot p ON p.tenant_id = m.tenant_id AND p.id = m.plot_id
     WHERE m.tenant_id = '11111111-1111-1111-1111-111111111111' AND m.resource = 'ELECTRICITY' AND m.removed_on IS NULL
-      AND m.replaces_meter_id IS NULL
+      AND m.replaces_meter_id IS NULL AND p.number <> '25'
     UNION ALL
     SELECT m.id, m.tenant_id, m.installed_on, m.initial_value, v.n, v.rate, 5
     FROM meter m
@@ -503,7 +504,8 @@ ON CONFLICT DO NOTHING;
 -- and 5 days ago). Each node's consumption in an interval is the children's consumption in that interval, as the tree
 -- computes it (proportional to the days between the nearest readings, across the replacement on plot 9), times a loss
 -- factor of 5-15 % that differs per interval. The substation's children are the two quarters and the well; the street
--- lighting hangs under quarter A. Plot 20 has no reading after 75 days ago and adds nothing in the latest rounds.
+-- lighting hangs under quarter A. Plot 20 has no reading after 75 days ago and adds nothing in the latest rounds. Plot
+-- 25's meter (the demo ledger block's) is left out, so a re-run gives the same values whether or not it exists.
 INSERT INTO meter_reading (id, tenant_id, meter_id, taken_on, value, source, status, entered_by_member_id, decided_by_member_id, decided_at)
 WITH dates(i, d) AS (
     VALUES (0, 118), (1, 100), (2, 74), (3, 41), (4, 20), (5, 5)
@@ -513,7 +515,7 @@ WITH dates(i, d) AS (
                 ELSE '99999999-0000-0000-0001-000000000003'::uuid END AS parent
     FROM meter m JOIN plot p ON p.tenant_id = m.tenant_id AND p.id = m.plot_id
     WHERE m.tenant_id = '11111111-1111-1111-1111-111111111111' AND m.kind = 'PLOT' AND m.resource = 'ELECTRICITY'
-      AND m.replaces_meter_id IS NULL
+      AND m.replaces_meter_id IS NULL AND p.number <> '25'
     UNION ALL
     SELECT '99999999-0000-0000-0001-000000000005'::uuid, '99999999-0000-0000-0001-000000000002'::uuid
     UNION ALL
@@ -635,3 +637,524 @@ WHERE id = 'cccccccc-0000-0000-0000-000000000001'
   AND description IN ('Роль без дозволів до появи лічильників', 'Custom role without permissions');
 DROP TABLE pg_temp.demo_anchor;
 -- END demo meters
+
+-- BEGIN demo ledger
+-- The ledger of the demo cooperative (spec 011): what the board would have booked by now, so every screen of the
+-- feature has something to show. Dates follow the demo meters: the anchor is the day their readings count from (read back from
+-- plot 20's stored reading, as in the meters block), "the open month" is the anchor's month and "the closed month" the
+-- one before it (on the first load, October and September 2026):
+--  - the closed month: its month run (membership and land tax), the electricity charges of the readings taken in it,
+--    plot 12's opening balance of 1 500,00 (membership, "Борг за 2025 рік") on its first day; closed by the chairman;
+--  - the open month: its month run, the electricity charges of its readings, one proportional losses run and one
+--    common consumers run over the latest round of readings (the 19th to the 5th day before the anchor), and one
+--    reversal (plot 14's membership of the open month, "Помилкове нарахування"). Nothing is charged before the closed
+--    month;
+--  - the losses run books quarter А (losses of about 6.5 %, shared by consumption) and lists quarter Б with a warning:
+--    plot 20's meter has no reading after 75 days ago, so quarter Б's value is unknown and is queued ("Не нараховано");
+--  - the common consumers run: the well pump among the plots connected to it (by plot-days) and the street lighting
+--    equally among all plots, at the "Спільні споживачі" tariff (created here, 4,3200 per kWh);
+--  - water: every plot is connected to "Свердловина №1" since 01.05.2020 except 12а, 27 and 29; plot 19 only from the
+--    12th day before the anchor;
+--  - plot 25 gets a meter installed on 15.12.2025, before the first electricity tariff version (01.01.2026), read once,
+--    5 days before the anchor: its interval cannot be charged and is the "not charged" item "Немає тарифу на всі дні";
+--  - settings: proportional losses, the red threshold at 2 000,00 or 90 days; plot_status holds every plot's debt.
+-- Every amount is what the application calculates from the same rows (DemoLedgerDataTests recalculates them with the
+-- calculators and compares). The block assumes one version per demo tariff and real readings on the ends of the runs.
+-- Re-runnable: it first removes every ledger row of the demo cooperative (charges are append-only, so as nadel_owner
+-- with app.ledger_maintenance on, the owner-only bypass of the triggers), its water connections and common consumer
+-- settings, then books everything again; a change the chairman made to the demo ledger is lost on a re-run. It runs only when the
+-- Flyway placeholder demoledger is 'on' (the dev profile); integration tests keep it off so the demo cooperative they
+-- share stays without charges, and load it on purpose (see DemoLedgerData).
+DO $demo_ledger$
+DECLARE
+    demo         constant uuid := '11111111-1111-1111-1111-111111111111';
+    chairman     constant uuid := 'aaaaaaaa-0000-0000-0000-000000000001';
+    electrician  constant uuid := 'aaaaaaaa-0000-0000-0000-000000000004';
+    quarter_a    constant uuid := '99999999-0000-0000-0001-000000000002';
+    quarter_b    constant uuid := '99999999-0000-0000-0001-000000000003';
+    well         constant uuid := '99999999-0000-0000-0001-000000000004';
+    lighting     constant uuid := '99999999-0000-0000-0001-000000000005';
+    el_tariff    constant uuid := 'ffffffff-0000-0000-0000-000000000003';
+    cc_tariff    constant uuid := 'ffffffff-0000-0000-0000-000000000005';
+    cc_version   constant uuid := 'ffffffff-0000-0000-0001-000000000005';
+    electricity  uuid := md5('11111111-1111-1111-1111-111111111111:CHARGE_TYPE:ELECTRICITY')::uuid;
+    membership   uuid := md5('11111111-1111-1111-1111-111111111111:CHARGE_TYPE:MEMBERSHIP')::uuid;
+    common       uuid := md5('11111111-1111-1111-1111-111111111111:CHARGE_TYPE:COMMON_CONSUMERS')::uuid;
+    meter25      uuid := md5('demo-meter:11111111-1111-1111-1111-111111111111:25:ELECTRICITY')::uuid;
+    losses_run   uuid := md5('demo-losses-run:11111111-1111-1111-1111-111111111111')::uuid;
+    cc_run       uuid := md5('demo-common-consumer-run:11111111-1111-1111-1111-111111111111')::uuid;
+    anchor       date;
+    open_month   date;
+    closed_month date;
+    open_id      uuid;
+    closed_id    uuid;
+    run_from     date;
+    run_to       date;
+    run_month    uuid;
+    el_version   uuid;
+    el_rate      numeric;
+    cc_rate      numeric;
+BEGIN
+    IF '${demoledger}' <> 'on' THEN
+        RETURN;
+    END IF;
+    PERFORM set_config('app.ledger_maintenance', 'on', true);
+
+    -- Remove the ledger of the demo cooperative (reversals before what they reverse).
+    DELETE FROM meter_value_use WHERE tenant_id = demo;
+    DELETE FROM charge_part WHERE tenant_id = demo;
+    DELETE FROM charge WHERE tenant_id = demo AND reverses_charge_id IS NOT NULL;
+    DELETE FROM charge WHERE tenant_id = demo;
+    DELETE FROM losses_run_node WHERE tenant_id = demo;
+    DELETE FROM losses_run WHERE tenant_id = demo;
+    DELETE FROM common_consumer_run_line WHERE tenant_id = demo;
+    DELETE FROM common_consumer_run WHERE tenant_id = demo;
+    DELETE FROM not_charged_item WHERE tenant_id = demo;
+    DELETE FROM billing_month WHERE tenant_id = demo;
+    DELETE FROM common_consumer_billing WHERE tenant_id = demo;
+    DELETE FROM common_consumer_user WHERE tenant_id = demo;
+    DELETE FROM plot_water_connection WHERE tenant_id = demo;
+
+    anchor := coalesce((SELECT r.taken_on + 75 FROM meter_reading r
+                        WHERE r.id = md5('demo-reading:' || md5('demo-meter:' || demo || ':20:ELECTRICITY')::uuid
+                                         || ':75')::uuid), CURRENT_DATE);
+    open_month := date_trunc('month', anchor)::date;
+    closed_month := (open_month - interval '1 month')::date;
+    run_from := anchor - 19;
+    run_to := anchor - 5;
+
+    -- Settings: proportional losses (runs), the default split of common consumers, the red threshold.
+    INSERT INTO cooperative_settings (tenant_id, losses_mode, losses_percent, common_consumer_default_split, red_amount,
+                                      red_days)
+    VALUES (demo, 'PROPORTIONAL', 0, 'CONNECTED_PLOTS', 2000.00, 90)
+    ON CONFLICT (tenant_id) DO UPDATE SET
+        losses_mode = EXCLUDED.losses_mode, losses_percent = EXCLUDED.losses_percent,
+        common_consumer_default_split = EXCLUDED.common_consumer_default_split, red_amount = EXCLUDED.red_amount,
+        red_days = EXCLUDED.red_days, updated_at = now();
+
+    -- The tariff of the "Спільні споживачі" charge type (seeded by seed_charge_types).
+    INSERT INTO tariff (id, tenant_id, charge_type_id, name, scope_kind)
+    VALUES (cc_tariff, demo, common, 'Спільні споживачі за лічильником', 'ALL_PLOTS')
+    ON CONFLICT DO NOTHING;
+    INSERT INTO tariff_version (id, tenant_id, tariff_id, valid_from, basis, frequency, rate, note)
+    VALUES (cc_version, demo, cc_tariff, DATE '2026-01-01', 'PER_KWH', 'MONTHLY', 4.3200,
+            'Насос свердловини та вуличне освітлення')
+    ON CONFLICT DO NOTHING;
+
+    -- Plot 25: a meter installed before the electricity tariff, under quarter Б, read once.
+    INSERT INTO meter (id, tenant_id, kind, resource, serial, plot_id, installed_on, initial_value, note)
+    SELECT meter25, demo, 'PLOT', 'ELECTRICITY', 'ЕЛ-25', p.id, DATE '2025-12-15', 0.000,
+           'Встановлено до появи тарифу на електроенергію'
+    FROM plot p
+    WHERE p.tenant_id = demo AND p.number = '25' AND p.archived_at IS NULL
+    ON CONFLICT DO NOTHING;
+    INSERT INTO meter_parent (id, tenant_id, meter_id, parent_meter_id, valid_from)
+    SELECT md5('demo-parent:' || m.id)::uuid, demo, m.id, quarter_b, m.installed_on
+    FROM meter m WHERE m.id = meter25
+    ON CONFLICT DO NOTHING;
+    INSERT INTO meter_reading (id, tenant_id, meter_id, taken_on, value, source, status, entered_by_member_id,
+                               decided_by_member_id, decided_at)
+    SELECT md5('demo-reading:' || m.id || ':5')::uuid, demo, m.id, anchor - 5,
+           round(1.25 * ((anchor - 5) - m.installed_on), 3), 'ENTERED', 'APPROVED', electrician, electrician, now()
+    FROM meter m WHERE m.id = meter25
+    ON CONFLICT DO NOTHING;
+
+    -- Water connections to the well.
+    INSERT INTO plot_water_connection (tenant_id, plot_id, source_meter_id, valid_from)
+    SELECT demo, p.id, well, CASE WHEN p.number = '19' THEN anchor - 12 ELSE DATE '2020-05-01' END
+    FROM plot p
+    WHERE p.tenant_id = demo AND p.kind = 'PLOT' AND p.archived_at IS NULL AND p.number NOT IN ('12а', '27', '29')
+      AND EXISTS (SELECT 1 FROM meter m WHERE m.id = well);
+
+    -- The street lighting is shared equally per plot; the well keeps the cooperative's default (connected plots).
+    INSERT INTO common_consumer_billing (tenant_id, consumer_meter_id, split)
+    SELECT demo, lighting, 'EQUAL_PER_PLOT' WHERE EXISTS (SELECT 1 FROM meter m WHERE m.id = lighting);
+
+    -- The two months: the closed one and the open one, both run.
+    closed_id := md5('demo-billing-month:' || demo || ':' || closed_month)::uuid;
+    open_id := md5('demo-billing-month:' || demo || ':' || open_month)::uuid;
+    INSERT INTO billing_month (id, tenant_id, month, status, run_at, closed_at, closed_by, created_at) VALUES
+        (closed_id, demo, closed_month, 'CLOSED', least(closed_month + 1 + time '09:30', now()),
+         least(open_month + 3 + time '18:00', now()), chairman, least(closed_month + 1 + time '09:30', now())),
+        (open_id, demo, open_month, 'OPEN', least(open_month + 1 + time '09:30', now()), NULL, NULL,
+         least(open_month + 1 + time '09:30', now()));
+
+    -- The month runs: every chargeable plot (active, not common land) times every tariff of an active charge type
+    -- with a recurring basis, or a one-time fee due in the month; a tariff charged by readings is left to them. The
+    -- version is the one valid on the month's first day.
+    DROP TABLE IF EXISTS pg_temp.demo_tariff_charge;
+    CREATE TEMP TABLE demo_tariff_charge AS
+    SELECT gen_random_uuid() AS id, x.*,
+           CASE WHEN x.basis = 'FIXED_ONE_TIME' THEN round(x.rate, 2)
+                ELSE round(x.rate * x.units * x.factor / 12, 2) END AS amount,
+           CASE WHEN x.basis = 'FIXED_ONE_TIME' THEN 1 ELSE x.service_to - x.service_from + 1 END AS days,
+           CASE WHEN x.basis <> 'PER_AREA_SOTKA' THEN trim_scale(x.units)::text
+                WHEN scale(trim_scale(x.units)) < 2 THEN round(x.units, 2)::text
+                ELSE trim_scale(x.units)::text END AS quantity
+    FROM (
+        SELECT p.id AS plot_id, t.charge_type_id, t.id AS tariff_id, v.id AS version_id, v.basis, v.frequency, v.rate,
+               mo.month, mo.billing_month_id,
+               CASE WHEN v.basis = 'PER_AREA_SOTKA' THEN p.area_m2 / 100 ELSE 1 END AS units,
+               CASE v.frequency WHEN 'MONTHLY' THEN 12 WHEN 'QUARTERLY' THEN 4 ELSE 1 END AS factor,
+               CASE WHEN v.basis = 'FIXED_ONE_TIME' THEN v.due_date ELSE mo.month END AS service_from,
+               CASE WHEN v.basis = 'FIXED_ONE_TIME' THEN v.due_date
+                    ELSE (mo.month + interval '1 month' - interval '1 day')::date END AS service_to
+        FROM plot p
+        CROSS JOIN (VALUES (closed_month, closed_id), (open_month, open_id)) AS mo(month, billing_month_id)
+        JOIN tariff t ON t.tenant_id = p.tenant_id
+        JOIN charge_type c ON c.id = t.charge_type_id AND c.active AND c.archived_at IS NULL
+        JOIN tariff_version v ON v.tariff_id = t.id
+             AND v.valid_from = (SELECT max(w.valid_from) FROM tariff_version w
+                                 WHERE w.tariff_id = t.id AND w.valid_from <= mo.month)
+        WHERE p.tenant_id = demo AND p.kind = 'PLOT' AND p.archived_at IS NULL
+          AND v.basis IN ('PER_PLOT', 'PER_AREA_SOTKA', 'FIXED_ONE_TIME')
+          AND (v.basis <> 'FIXED_ONE_TIME' OR date_trunc('month', v.due_date) = mo.month)
+          AND CASE WHEN t.scope_kind = 'ALL_PLOTS'
+                   THEN NOT EXISTS (SELECT 1 FROM tariff_scope_plot s
+                                    WHERE s.tariff_id = t.id AND s.plot_id = p.id AND s.kind = 'EXCLUDED')
+                   ELSE EXISTS (SELECT 1 FROM tariff_scope_plot s
+                                WHERE s.tariff_id = t.id AND s.plot_id = p.id AND s.kind = 'SELECTED') END
+    ) x;
+
+    INSERT INTO charge (id, tenant_id, plot_id, charge_type_id, billing_month_id, kind, source, amount, service_from,
+                        service_to, accrued_on, calculation, source_key, tariff_id, created_by, created_at)
+    SELECT c.id, demo, c.plot_id, c.charge_type_id, c.billing_month_id, 'REGULAR', 'TARIFF', c.amount, c.service_from,
+           c.service_to, CASE WHEN c.basis = 'FIXED_ONE_TIME' THEN c.service_from ELSE c.month END,
+           jsonb_build_object('amount', c.amount::text, 'readings', '[]'::jsonb, 'parts', jsonb_build_array(
+               jsonb_build_object('tariffVersionId', c.version_id, 'basis', c.basis, 'frequency', c.frequency,
+                                  'quantity', c.quantity,
+                                  'unit', CASE WHEN c.basis = 'PER_AREA_SOTKA' THEN 'SOTKA' ELSE 'PLOT' END,
+                                  'rate', c.rate::text, 'days', c.days, 'from', c.service_from, 'to', c.service_to))),
+           'TARIFF:' || c.tariff_id || ':' || c.plot_id || ':' || to_char(c.month, 'YYYY-MM'), c.tariff_id, chairman,
+           b.run_at
+    FROM demo_tariff_charge c
+    JOIN billing_month b ON b.id = c.billing_month_id
+    WHERE c.amount > 0;
+
+    INSERT INTO charge_part (tenant_id, charge_id, tariff_version_id, days, units_num, units_den, rate)
+    SELECT demo, c.id, c.version_id, c.days, c.units, 1, c.rate
+    FROM demo_tariff_charge c
+    WHERE c.amount > 0;
+
+    -- Electricity by readings. The points of every plot electricity meter (the initial value, the approved readings,
+    -- the final value; a reading on the installation or removal day takes that point's place) and the intervals between
+    -- neighbouring points that end in the closed month or later.
+    SELECT v.id, v.rate INTO el_version, el_rate FROM tariff_version v WHERE v.tariff_id = el_tariff;
+
+    DROP TABLE IF EXISTS pg_temp.demo_interval;
+    CREATE TEMP TABLE demo_interval AS
+    WITH point AS (
+        SELECT DISTINCT ON (q.meter_id, q.on_date) q.*
+        FROM (
+            SELECT m.id AS meter_id, m.plot_id, m.installed_on AS on_date, m.initial_value AS value,
+                   'INSTALL:' || m.id AS key, 1 AS rank
+            FROM meter m
+            UNION ALL
+            SELECT m.id, m.plot_id, r.taken_on, r.value, r.id::text, 0
+            FROM meter m JOIN meter_reading r ON r.meter_id = m.id AND r.status = 'APPROVED'
+            UNION ALL
+            SELECT m.id, m.plot_id, m.removed_on, m.final_value, 'REMOVAL:' || m.id, 1
+            FROM meter m WHERE m.removed_on IS NOT NULL
+        ) q
+        JOIN meter m ON m.id = q.meter_id
+        WHERE m.tenant_id = demo AND m.kind = 'PLOT' AND m.resource = 'ELECTRICITY'
+        ORDER BY q.meter_id, q.on_date, q.rank
+    ), step AS (
+        SELECT p.*, lag(p.on_date) OVER w AS from_on, lag(p.value) OVER w AS from_value, lag(p.key) OVER w AS from_key
+        FROM point p
+        WINDOW w AS (PARTITION BY p.meter_id ORDER BY p.on_date)
+    )
+    SELECT gen_random_uuid() AS id, s.meter_id, s.plot_id, s.from_on, s.from_value, s.from_key,
+           s.on_date AS to_on, s.value AS to_value, s.key AS to_key, s.value - s.from_value AS kwh,
+           round((s.value - s.from_value) * 1000) AS milli,
+           s.from_on + 1 >= (SELECT min(v.valid_from) FROM tariff_version v WHERE v.tariff_id = el_tariff) AS covered,
+           round((s.value - s.from_value) * el_rate, 2) AS amount
+    FROM step s
+    WHERE s.from_on IS NOT NULL AND s.on_date >= closed_month AND s.value > s.from_value;
+
+    INSERT INTO charge (id, tenant_id, plot_id, charge_type_id, billing_month_id, kind, source, amount, service_from,
+                        service_to, accrued_on, calculation, source_key, tariff_id, meter_id, created_at)
+    SELECT i.id, demo, i.plot_id, electricity, CASE WHEN i.to_on < open_month THEN closed_id ELSE open_id END,
+           'REGULAR', 'CONSUMPTION', i.amount, i.from_on + 1, i.to_on, i.to_on,
+           jsonb_build_object('amount', i.amount::text,
+               'parts', jsonb_build_array(jsonb_build_object('tariffVersionId', el_version, 'basis', 'PER_KWH',
+                   'frequency', 'MONTHLY', 'quantity', i.kwh::text, 'unit', 'KWH', 'rate', el_rate::text,
+                   'days', i.to_on - i.from_on, 'from', i.from_on + 1, 'to', i.to_on)),
+               'readings', jsonb_build_array(
+                   jsonb_build_object('meterId', i.meter_id, 'takenOn', i.from_on, 'value', i.from_value::text),
+                   jsonb_build_object('meterId', i.meter_id, 'takenOn', i.to_on, 'value', i.to_value::text))),
+           'CONSUMPTION:' || i.from_key || ':' || i.to_key, el_tariff, i.meter_id,
+           least(i.to_on + time '19:00', now())
+    FROM demo_interval i
+    WHERE i.covered AND i.amount > 0;
+
+    INSERT INTO charge_part (tenant_id, charge_id, tariff_version_id, days, units_num, units_den, rate)
+    SELECT demo, i.id, el_version, i.to_on - i.from_on, div(i.milli, gcd(i.milli, 1000)), div(1000, gcd(i.milli, 1000)),
+           el_rate
+    FROM demo_interval i
+    WHERE i.covered AND i.amount > 0;
+
+    INSERT INTO meter_value_use (tenant_id, meter_id, used_on, charge_id)
+    SELECT demo, i.meter_id, d.used_on, i.id
+    FROM demo_interval i CROSS JOIN LATERAL (VALUES (i.from_on), (i.to_on)) AS d(used_on)
+    WHERE i.covered AND i.amount > 0;
+
+    -- An interval that starts before the first electricity tariff version is not charged: the "not charged" item.
+    INSERT INTO not_charged_item (tenant_id, item_key, kind, plot_id, charge_type_id, meter_id, from_date, to_date,
+                                  reason, params, status, created_at, updated_at)
+    SELECT demo, 'INTERVAL:' || i.meter_id || ':' || i.to_key, 'INTERVAL', i.plot_id, electricity, i.meter_id,
+           i.from_on + 1, i.to_on, 'NO_TARIFF_FOR_ALL_DAYS',
+           jsonb_build_object('tariffIds', jsonb_build_array(el_tariff::text), 'fromKey', i.from_key,
+                              'toKey', i.to_key),
+           'OPEN', least(i.to_on + time '19:00', now()), least(i.to_on + time '19:00', now())
+    FROM demo_interval i
+    WHERE NOT i.covered;
+
+    -- The values the runs read: every electricity meter's value at the end of the day before the range and at the end
+    -- of its last day. REAL on a point's day, CALCULATED between two points, UNKNOWN without a point after the day.
+    DROP TABLE IF EXISTS pg_temp.demo_end;
+    CREATE TEMP TABLE demo_end AS
+    SELECT m.id AS meter_id, m.kind, m.plot_id, m.name, d.day,
+           (SELECT r.value FROM meter_reading r
+            WHERE r.meter_id = m.id AND r.status = 'APPROVED' AND r.taken_on = d.day) AS value,
+           CASE WHEN EXISTS (SELECT 1 FROM meter_reading r
+                             WHERE r.meter_id = m.id AND r.status = 'APPROVED' AND r.taken_on = d.day)
+                     OR m.installed_on = d.day OR m.removed_on = d.day THEN 'REAL'
+                WHEN EXISTS (SELECT 1 FROM meter_reading r
+                             WHERE r.meter_id = m.id AND r.status = 'APPROVED' AND r.taken_on > d.day)
+                     OR m.removed_on > d.day THEN 'CALCULATED'
+                ELSE 'UNKNOWN' END AS state,
+           (SELECT max(r.taken_on) FROM meter_reading r
+            WHERE r.meter_id = m.id AND r.status = 'APPROVED' AND r.taken_on < d.day) AS last_reading_on
+    FROM meter m CROSS JOIN (VALUES (run_from - 1), (run_to)) AS d(day)
+    WHERE m.tenant_id = demo AND m.resource = 'ELECTRICITY' AND m.installed_on <= run_from - 1
+      AND (m.removed_on IS NULL OR m.removed_on >= run_to);
+
+    -- The two quarters and their children over the range (no meter moved inside it).
+    DROP TABLE IF EXISTS pg_temp.demo_child;
+    CREATE TEMP TABLE demo_child AS
+    SELECT mp.parent_meter_id AS node, s.meter_id, s.kind, s.plot_id,
+           e.value - s.value AS kwh, s.state AS start_state, e.state AS end_state, e.last_reading_on
+    FROM meter_parent mp
+    JOIN demo_end s ON s.meter_id = mp.meter_id AND s.day = run_from - 1
+    JOIN demo_end e ON e.meter_id = mp.meter_id AND e.day = run_to
+    WHERE mp.tenant_id = demo AND mp.parent_meter_id IN (quarter_a, quarter_b)
+      AND mp.valid_from <= run_from AND (mp.valid_to IS NULL OR mp.valid_to >= run_to);
+
+    IF EXISTS (SELECT 1 FROM demo_child WHERE node = quarter_a AND (start_state <> 'REAL' OR end_state <> 'REAL'))
+       OR EXISTS (SELECT 1 FROM demo_end
+                  WHERE meter_id IN (quarter_a, quarter_b, well, lighting) AND state <> 'REAL') THEN
+        RAISE EXCEPTION 'the demo runs expect real readings on % and %', run_from - 1, run_to;
+    END IF;
+
+    -- The losses run: quarter А charged, quarter Б unknown. One charge per plot under quarter А with a share of the
+    -- losses in proportion to its consumption (exact fraction milli-kWh), priced at the electricity rate, rounded once.
+    run_month := CASE WHEN run_to < open_month THEN closed_id ELSE open_id END;
+
+    DROP TABLE IF EXISTS pg_temp.demo_losses;
+    CREATE TEMP TABLE demo_losses AS
+    WITH node AS (
+        SELECT n.meter_id AS node,
+               (SELECT e.value FROM demo_end e WHERE e.meter_id = n.meter_id AND e.day = run_to)
+               - (SELECT e.value FROM demo_end e WHERE e.meter_id = n.meter_id AND e.day = run_from - 1) AS consumption,
+               (SELECT sum(c.kwh) FROM demo_child c WHERE c.node = n.meter_id) AS children,
+               (SELECT sum(c.kwh) FROM demo_child c WHERE c.node = n.meter_id AND c.kind = 'PLOT') AS plots
+        FROM (VALUES (quarter_a)) AS n(meter_id)
+    )
+    SELECT gen_random_uuid() AS id, c.plot_id, c.meter_id, round(c.kwh * 1000) AS used_milli,
+           round((n.consumption - n.children) * 1000) AS losses_milli, round(n.plots * 1000) AS plots_milli
+    FROM node n JOIN demo_child c ON c.node = n.node AND c.kind = 'PLOT' AND c.kwh > 0;
+
+    -- share = losses x used / plots, in kWh: (losses_milli x used_milli) / (plots_milli x 1000)
+    ALTER TABLE demo_losses ADD COLUMN num numeric, ADD COLUMN den numeric, ADD COLUMN amount numeric;
+    UPDATE demo_losses SET num = losses_milli * used_milli, den = plots_milli * 1000;
+    UPDATE demo_losses SET num = div(num, gcd(num, den)), den = div(den, gcd(num, den));
+    UPDATE demo_losses SET amount = round(num * el_rate / den, 2);
+
+    INSERT INTO losses_run (id, tenant_id, from_date, to_date, status, billing_month_id, total, created_by, created_at)
+    SELECT losses_run, demo, run_from, run_to, 'BOOKED', run_month,
+           coalesce((SELECT sum(l.amount) FROM demo_losses l WHERE l.amount > 0), 0), chairman,
+           least(run_to + 1 + time '10:00', now());
+
+    INSERT INTO losses_run_node (tenant_id, run_id, node_meter_id, node_kind, node_name, from_date, to_date, position,
+                                 outcome, consumption, children, losses, pct, calculated, amount, warning, plots)
+    SELECT demo, losses_run, quarter_a, 'QUARTER', (SELECT name FROM meter WHERE id = quarter_a), run_from, run_to, 0,
+           'CHARGED', a.consumption, a.children, a.consumption - a.children,
+           round((a.consumption - a.children) * 100 / a.consumption, 2), false,
+           (SELECT coalesce(sum(l.amount), 0) FROM demo_losses l),
+           NULL,
+           coalesce((SELECT jsonb_agg(jsonb_build_object('plotId', l.plot_id,
+                                                         'kwh', round(l.num / l.den, 3)::text,
+                                                         'amount', l.amount::text) ORDER BY l.plot_id)
+                     FROM demo_losses l), '[]'::jsonb)
+    FROM (SELECT (SELECT e.value FROM demo_end e WHERE e.meter_id = quarter_a AND e.day = run_to)
+                 - (SELECT e.value FROM demo_end e WHERE e.meter_id = quarter_a AND e.day = run_from - 1)
+                 AS consumption,
+                 (SELECT sum(c.kwh) FROM demo_child c WHERE c.node = quarter_a) AS children) a;
+
+    INSERT INTO losses_run_node (tenant_id, run_id, node_meter_id, node_kind, node_name, from_date, to_date, position,
+                                 outcome, consumption, children, losses, pct, calculated, amount, warning, plots)
+    SELECT demo, losses_run, quarter_b, 'QUARTER', (SELECT name FROM meter WHERE id = quarter_b), run_from, run_to, 1,
+           'UNKNOWN',
+           (SELECT e.value FROM demo_end e WHERE e.meter_id = quarter_b AND e.day = run_to)
+           - (SELECT e.value FROM demo_end e WHERE e.meter_id = quarter_b AND e.day = run_from - 1),
+           NULL, NULL, NULL,
+           EXISTS (SELECT 1 FROM demo_child c WHERE c.node = quarter_b AND c.start_state <> 'UNKNOWN'
+                   AND c.end_state <> 'UNKNOWN' AND (c.start_state = 'CALCULATED' OR c.end_state = 'CALCULATED')),
+           0,
+           (SELECT jsonb_build_object('code', 'UNKNOWN_VALUE', 'meterId', c.meter_id, 'meterKind', c.kind,
+                                      'plotId', c.plot_id, 'lastReadingOn', c.last_reading_on)
+            FROM demo_child c WHERE c.node = quarter_b AND c.end_state = 'UNKNOWN' ORDER BY c.meter_id LIMIT 1),
+           '[]'::jsonb;
+
+    INSERT INTO charge (id, tenant_id, plot_id, charge_type_id, billing_month_id, kind, source, amount, service_from,
+                        service_to, accrued_on, calculation, source_key, tariff_id, run_id, created_by, created_at)
+    SELECT l.id, demo, l.plot_id, electricity, run_month, 'REGULAR', 'LOSSES', l.amount, run_from, run_to, run_to,
+           jsonb_build_object('amount', l.amount::text, 'readings', '[]'::jsonb, 'runId', losses_run,
+               'nodeMeterId', quarter_a,
+               'parts', jsonb_build_array(jsonb_build_object('tariffVersionId', el_version, 'basis', 'PER_KWH',
+                   'frequency', 'MONTHLY', 'quantity', round(l.num / l.den, 3)::text, 'unit', 'KWH',
+                   'rate', el_rate::text, 'days', run_to - run_from + 1, 'from', run_from, 'to', run_to,
+                   'nodeMeterId', quarter_a, 'calculated', false))),
+           'LOSSES_RUN:' || losses_run || ':' || l.plot_id, el_tariff, losses_run, chairman,
+           least(run_to + 1 + time '10:00', now())
+    FROM demo_losses l
+    WHERE l.amount > 0;
+
+    INSERT INTO charge_part (tenant_id, charge_id, tariff_version_id, days, units_num, units_den, rate, node_meter_id)
+    SELECT demo, l.id, el_version, run_to - run_from + 1, l.num, l.den, el_rate, quarter_a
+    FROM demo_losses l
+    WHERE l.amount > 0;
+
+    -- The values the charged node read: its own and its children's, at both ends.
+    INSERT INTO meter_value_use (tenant_id, meter_id, used_on, run_id)
+    SELECT demo, u.meter_id, u.day, losses_run
+    FROM (SELECT quarter_a AS meter_id UNION SELECT c.meter_id FROM demo_child c WHERE c.node = quarter_a) AS m
+    JOIN demo_end u ON u.meter_id = m.meter_id;
+
+    INSERT INTO not_charged_item (tenant_id, item_key, kind, charge_type_id, meter_id, from_date, to_date, reason,
+                                  params, status, created_at, updated_at)
+    VALUES (demo, 'LOSSES_NODE:' || quarter_b || ':' || run_from || ':' || run_to, 'LOSSES_NODE', electricity,
+            quarter_b, run_from, run_to, 'UNKNOWN_NODE_VALUE', jsonb_build_object('tariffIds', '[]'::jsonb), 'OPEN',
+            least(run_to + 1 + time '10:00', now()), least(run_to + 1 + time '10:00', now()));
+
+    -- The common consumers run over the same days: the street lighting equally per plot (every chargeable plot), the
+    -- well pump by plot-days among the plots connected to it.
+    SELECT v.rate INTO cc_rate FROM tariff_version v WHERE v.id = cc_version;
+
+    DROP TABLE IF EXISTS pg_temp.demo_share;
+    CREATE TEMP TABLE demo_share AS
+    WITH consumer AS (
+        SELECT c.meter_id, c.split, c.position, m.name,
+               (SELECT e.value FROM demo_end e WHERE e.meter_id = c.meter_id AND e.day = run_to)
+               - (SELECT e.value FROM demo_end e WHERE e.meter_id = c.meter_id AND e.day = run_from - 1) AS consumption
+        FROM (VALUES (lighting, 'EQUAL_PER_PLOT', 0), (well, 'CONNECTED_PLOTS', 1)) AS c(meter_id, split, position)
+        JOIN meter m ON m.id = c.meter_id
+    ), eligible AS (
+        SELECT c.meter_id, p.id AS plot_id, run_from AS first_day, run_to AS last_day
+        FROM consumer c JOIN plot p ON p.tenant_id = demo AND p.kind = 'PLOT' AND p.archived_at IS NULL
+        WHERE c.split = 'EQUAL_PER_PLOT'
+        UNION ALL
+        SELECT c.meter_id, w.plot_id, greatest(w.valid_from, run_from), least(coalesce(w.valid_to, run_to), run_to)
+        FROM consumer c
+        JOIN plot_water_connection w ON w.tenant_id = demo AND w.source_meter_id = c.meter_id
+        JOIN plot p ON p.id = w.plot_id AND p.kind = 'PLOT' AND p.archived_at IS NULL
+        WHERE c.split = 'CONNECTED_PLOTS' AND w.valid_from <= run_to AND (w.valid_to IS NULL OR w.valid_to >= run_from)
+    ), counted AS (
+        SELECT e.*, e.last_day - e.first_day + 1 AS days,
+               count(*) OVER (PARTITION BY e.meter_id) AS plots,
+               sum(e.last_day - e.first_day + 1) OVER (PARTITION BY e.meter_id) AS plot_days
+        FROM eligible e
+    )
+    SELECT gen_random_uuid() AS id, c.meter_id, c.split, c.position, c.name, c.consumption, e.plot_id, e.first_day,
+           e.last_day, e.days, e.plot_days,
+           round(c.consumption * 1000) * CASE WHEN c.split = 'CONNECTED_PLOTS' THEN e.days ELSE 1 END AS num,
+           1000 * CASE WHEN c.split = 'CONNECTED_PLOTS' THEN e.plot_days ELSE e.plots END AS den
+    FROM consumer c JOIN counted e ON e.meter_id = c.meter_id;
+
+    ALTER TABLE demo_share ADD COLUMN amount numeric;
+    UPDATE demo_share SET num = div(num, gcd(num, den)), den = div(den, gcd(num, den));
+    UPDATE demo_share SET amount = round(num * cc_rate / den, 2);
+
+    INSERT INTO common_consumer_run (id, tenant_id, from_date, to_date, status, billing_month_id, total, created_by,
+                                     created_at)
+    SELECT cc_run, demo, run_from, run_to, 'BOOKED', run_month,
+           coalesce((SELECT sum(s.amount) FROM demo_share s WHERE s.amount > 0), 0), chairman,
+           least(run_to + 1 + time '10:30', now());
+
+    INSERT INTO common_consumer_run_line (tenant_id, run_id, consumer_meter_id, consumer_name, from_date, to_date,
+                                          position, split, outcome, consumption, calculated, plot_days, amount,
+                                          warning, plots)
+    SELECT demo, cc_run, s.meter_id, s.name, run_from, run_to, s.position, s.split, 'CHARGED', s.consumption, false,
+           sum(s.days), sum(s.amount) FILTER (WHERE s.amount > 0), NULL,
+           jsonb_agg(jsonb_build_object('plotId', s.plot_id, 'days', s.days, 'kwh', round(s.num / s.den, 3)::text,
+                                        'amount', s.amount::text) ORDER BY s.plot_id)
+    FROM demo_share s
+    GROUP BY s.meter_id, s.name, s.position, s.split, s.consumption;
+
+    INSERT INTO charge (id, tenant_id, plot_id, charge_type_id, billing_month_id, kind, source, amount, service_from,
+                        service_to, accrued_on, calculation, source_key, tariff_id, run_id, created_by, created_at)
+    SELECT s.id, demo, s.plot_id, common, run_month, 'REGULAR', 'COMMON_CONSUMER', s.amount, run_from, run_to, run_to,
+           jsonb_build_object('amount', s.amount::text, 'readings', '[]'::jsonb, 'runId', cc_run,
+               'consumerMeterId', s.meter_id, 'consumerName', s.name, 'split', s.split,
+               'parts', jsonb_build_array(jsonb_build_object('tariffVersionId', cc_version, 'basis', 'PER_KWH',
+                   'frequency', 'MONTHLY', 'quantity', round(s.num / s.den, 3)::text, 'unit', 'KWH',
+                   'rate', cc_rate::text, 'days', s.days, 'from', s.first_day, 'to', s.last_day,
+                   'calculated', false))),
+           'COMMON_CONSUMER_RUN:' || cc_run || ':' || s.meter_id || ':' || s.plot_id, cc_tariff, cc_run, chairman,
+           least(run_to + 1 + time '10:30', now())
+    FROM demo_share s
+    WHERE s.amount > 0;
+
+    INSERT INTO charge_part (tenant_id, charge_id, tariff_version_id, days, units_num, units_den, rate)
+    SELECT demo, s.id, cc_version, s.days, s.num, s.den, cc_rate
+    FROM demo_share s
+    WHERE s.amount > 0;
+
+    INSERT INTO meter_value_use (tenant_id, meter_id, used_on, run_id)
+    SELECT demo, e.meter_id, e.day, cc_run
+    FROM demo_end e WHERE e.meter_id IN (lighting, well);
+
+    -- Plot 12's opening balance on the first day of the closed month.
+    INSERT INTO charge (tenant_id, plot_id, charge_type_id, billing_month_id, kind, source, amount, service_from,
+                        service_to, accrued_on, calculation, reason, created_by, created_at)
+    SELECT demo, p.id, membership, closed_id, 'OPENING', 'OPENING', 1500.00, closed_month, closed_month, closed_month,
+           jsonb_build_object('amount', '1500.00', 'parts', '[]'::jsonb, 'readings', '[]'::jsonb), 'Борг за 2025 рік',
+           chairman, least(closed_month + time '10:00', now())
+    FROM plot p
+    WHERE p.tenant_id = demo AND p.number = '12' AND p.archived_at IS NULL;
+
+    -- Plot 14's membership of the open month, reversed.
+    INSERT INTO charge (tenant_id, plot_id, charge_type_id, billing_month_id, kind, source, amount, service_from,
+                        service_to, accrued_on, calculation, reverses_charge_id, reason, created_by, created_at)
+    SELECT demo, c.plot_id, c.charge_type_id, c.billing_month_id, 'REVERSAL', 'MANUAL_REVERSAL', -c.amount,
+           c.service_from, c.service_to, c.accrued_on,
+           jsonb_build_object('amount', (-c.amount)::text, 'parts', '[]'::jsonb, 'readings', '[]'::jsonb), c.id,
+           'Помилкове нарахування', chairman, least(greatest(open_month + 2, anchor - 3) + time '11:00', now())
+    FROM charge c
+    JOIN plot p ON p.id = c.plot_id AND p.number = '14'
+    WHERE c.tenant_id = demo AND c.source = 'TARIFF' AND c.charge_type_id = membership
+      AND c.billing_month_id = open_id;
+
+    -- The plot status cache: the debt, the day its oldest unreversed charge counts from, and the colour as of today.
+    UPDATE plot_status s
+    SET debt = d.debt, oldest_debt_date = d.oldest,
+        status = CASE WHEN p.kind <> 'PLOT' OR NOT EXISTS (SELECT 1 FROM ownership o
+                                                           WHERE o.plot_id = p.id AND o.valid_to IS NULL) THEN 'GREY'
+                      WHEN d.debt <= 0 THEN 'GREEN'
+                      WHEN d.debt > 2000.00 OR CURRENT_DATE - d.oldest > 90 THEN 'RED'
+                      ELSE 'YELLOW' END,
+        updated_at = now()
+    FROM plot p
+    CROSS JOIN LATERAL (
+        SELECT coalesce(sum(c.amount), 0) AS debt,
+               min(c.accrued_on) FILTER (WHERE c.amount > 0 AND NOT EXISTS (
+                   SELECT 1 FROM charge r WHERE r.reverses_charge_id = c.id)) AS oldest
+        FROM charge c WHERE c.plot_id = p.id
+    ) d
+    WHERE p.tenant_id = demo AND s.plot_id = p.id;
+
+    PERFORM set_config('app.ledger_maintenance', 'off', true);
+END
+$demo_ledger$;
+-- END demo ledger

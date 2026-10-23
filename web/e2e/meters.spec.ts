@@ -6,7 +6,15 @@
 // the round at phone width. Demo meters are only read. Every test CREATES its own plot (unique street and number),
 // owner and meter and removes its readings and the meter in `finally`; the plot is archived. Reruns never collide.
 import { expect, test, type Browser, type Page } from '@playwright/test';
-import { api, archiveLeftovers, expectCreated, kyivDay, shortDay, type CreatedPlot } from './support/api';
+import {
+  api,
+  archiveLeftovers,
+  expectCreated,
+  kyivDay,
+  retireMeter,
+  shortDay,
+  type CreatedPlot,
+} from './support/api';
 import { loginAs } from './support/login';
 
 const main = (page: Page) => page.getByRole('main');
@@ -72,17 +80,10 @@ async function createFixture(chairman: Page, stamp: string, ownerId?: string): P
   }
 }
 
-/** Best effort: deletes the counted readings and the meter, ends the ownership and archives the plot. */
+/** Best effort: retires the meter (readings a charge uses stay), ends the ownership and archives the plot. */
 async function cleanup(chairman: Page, fixtures: Fixture[]): Promise<void> {
   for (const f of fixtures) {
-    const history = await api(chairman, 'GET', `/meters/${f.meterId}/readings`).catch(() => undefined);
-    if (history?.status === 200) {
-      const readings = (JSON.parse(history.body) as { readings: { id: string; status: string }[] }).readings;
-      for (const r of readings)
-        if (r.status === 'APPROVED')
-          await api(chairman, 'DELETE', `/readings/${r.id}`).catch(() => undefined);
-    }
-    await api(chairman, 'DELETE', `/meters/${f.meterId}`).catch(() => undefined);
+    await retireMeter(chairman, f.meterId);
   }
   await archiveLeftovers(
     chairman,
@@ -143,19 +144,22 @@ test.describe('meters and readings', () => {
 
         // the default date is today
         await expect(card.getByLabel('Reading date for this meter')).toHaveValue(kyivDay(0));
-        await card.getByLabel('Reading, kWh', { exact: true }).fill('130');
-        await card.getByRole('button', { name: 'Save', exact: true }).click();
-        await expect(card.getByText('Saved', { exact: true })).toBeVisible();
-        await expect(card).toContainText(
-          `Interval ${shortDay(kyivDay(-30))} – ${shortDay(kyivDay(0))}: 30 kWh in 30 d`,
-        );
 
-        // a reading on another day lands between the two points and splits the interval
+        // a reading on another day first: the date field changes the day of this row only
         await card.getByLabel('Reading date for this meter').fill(kyivDay(-10));
         await card.getByLabel('Reading, kWh', { exact: true }).fill('110');
         await card.getByRole('button', { name: 'Save', exact: true }).click();
         await expect(card).toContainText(
           `Interval ${shortDay(kyivDay(-30))} – ${shortDay(kyivDay(-10))}: 10 kWh in 20 d`,
+        );
+
+        // the default date is today; the interval runs from the previous reading (once charged, a reading
+        // cannot be inserted inside a charged interval, so the order matters)
+        await card.getByLabel('Reading date for this meter').fill(kyivDay(0));
+        await card.getByLabel('Reading, kWh', { exact: true }).fill('130');
+        await card.getByRole('button', { name: 'Save', exact: true }).click();
+        await expect(card).toContainText(
+          `Interval ${shortDay(kyivDay(-10))} – ${shortDay(kyivDay(0))}: 20 kWh in 10 d`,
         );
 
         // both readings are in the meter's history for the chairman

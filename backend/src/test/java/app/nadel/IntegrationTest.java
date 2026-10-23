@@ -49,6 +49,9 @@ public abstract class IntegrationTest {
         registry.add("spring.flyway.user", POSTGRES::getUsername);
         registry.add("spring.flyway.password", POSTGRES::getPassword);
         registry.add("spring.flyway.locations", () -> "classpath:db/migration,classpath:db/demo");
+        // The demo cooperative the tests share starts without a ledger (no charges, debts or water connections);
+        // DemoLedgerData loads the demo ledger block for the tests that want it
+        registry.add("spring.flyway.placeholders.demoledger", () -> "off");
         registry.add("spring.security.oauth2.resourceserver.jwt.issuer-uri", () -> "http://localhost:0/realms/test");
     }
 

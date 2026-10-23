@@ -872,8 +872,114 @@ END $$;</pre>
             <td>With a reason the owner sees</td>
             <td>Approve readings</td>
           </tr>
+          <tr>
+            <td>View charges</td>
+            <td>yes</td>
+            <td>yes</td>
+            <td>—</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>Run charges</td>
+            <td>yes</td>
+            <td>—</td>
+            <td>—</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>Reverse charges</td>
+            <td>yes</td>
+            <td>—</td>
+            <td>—</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>Close periods</td>
+            <td>yes</td>
+            <td>—</td>
+            <td>—</td>
+            <td>—</td>
+          </tr>
         </tbody>
       </table>
+
+      <h3>Charges</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Element</th>
+            <th>What it does</th>
+            <th>Permission</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Charges → Months → month</td>
+            <td>Totals, the check list, history of the month</td>
+            <td>View charges</td>
+          </tr>
+          <tr>
+            <td>Month → Charge the month</td>
+            <td>Preview, then "Book"</td>
+            <td>Run charges</td>
+          </tr>
+          <tr>
+            <td>Month → Close the month</td>
+            <td>Confirms with the check list; only the earliest open month</td>
+            <td>Close periods</td>
+          </tr>
+          <tr>
+            <td>Not charged → Retry</td>
+            <td>Retries one item</td>
+            <td>Run charges</td>
+          </tr>
+          <tr>
+            <td>Losses / Common consumers → From, To, Preview, Book</td>
+            <td>A range run: preview, then booking of exactly that preview</td>
+            <td>Run charges</td>
+          </tr>
+          <tr>
+            <td>Past runs → Details, Reverse the run</td>
+            <td>The lines of a run; reversal with a reason</td>
+            <td>View charges / Reverse charges</td>
+          </tr>
+          <tr>
+            <td>Plot card → Account → Details</td>
+            <td>The calculation of a charge</td>
+            <td>View charges (or own plot)</td>
+          </tr>
+          <tr>
+            <td>Account → Reverse</td>
+            <td>A reversal with a reason (not offered in a closed month)</td>
+            <td>Reverse charges</td>
+          </tr>
+          <tr>
+            <td>Account → Enter an opening balance</td>
+            <td>Charge type, amount, date, reason</td>
+            <td>Run charges</td>
+          </tr>
+          <tr>
+            <td>Plot card → Water → Connect / Disconnect</td>
+            <td>A water connection with its dates</td>
+            <td>Manage meters</td>
+          </tr>
+          <tr>
+            <td>Settings → red threshold, Losses, Common consumers, Water supply</td>
+            <td>Thresholds, losses mode, splits, bulk water connections</td>
+            <td>Manage settings / Manage meters</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="warn">
+        <span class="callout-title">Known gaps</span>
+        <ul>
+          <li>The lasting connections of a removed well can only be ended on each plot's card.</li>
+          <li>
+            Archiving a plot or making it common land does not end its lasting water connection: end it on the
+            plot card first.
+          </li>
+        </ul>
+      </div>
 
       <h3>Audit log and account</h3>
       <table>
@@ -1028,7 +1134,12 @@ END $$;</pre>
         <li>The chairman always holds every permission, including any new one.</li>
         <li>The chairman changes the treasurer's and other roles' permissions in "Roles".</li>
         <li>A member without permissions sees only their own data — enforced by the server.</li>
-        <li>With charges come permissions to view and run charges, reverse them and close months.</li>
+        <li>
+          Charges: "View charges" opens the Charges screens and every plot account (the treasurer has it,
+          read-only); "Run charges" runs months, losses and common consumers, retries "Not charged" and enters
+          opening balances; "Reverse charges" reverses a charge or a run; "Close periods" closes a month. A
+          member sees only their own accounts, whatever the permissions.
+        </li>
       </ul>
     </section>
 

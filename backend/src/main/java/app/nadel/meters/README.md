@@ -398,6 +398,13 @@ Internal: `WaterConnectionRecord`, `WaterConnectionRepository`, `WaterConnection
 - Tests: `WaterConnectionsTests` (history, one lasting connection, overlap 409, bulk, sources, permissions, audit,
   missing readings, the facade, the delete guard), `MeterNetworkTests` (stale water meters); the import column in
   `imports` (`ImportPlotsWaterTests`).
+- **Known gaps (not guarded, review of slice 5).** A well meter that is removed keeps the lasting connections to it,
+  and the settings page lists only active wells, so those connections can be ended only on each plot card. Archiving
+  a plot or turning it into common land is not refused while it has a lasting water connection (`MeterPlotGuard`
+  looks at meters only); the connection then stays in the plot's history and charges nothing, since archived plots and
+  common land are never charged. A guard needs a new problem code in the contract and the clients; it is left for a
+  later feature. A replaced well meter keeps its connections on the old meter's id (a run of the pump reads the whole
+  chain, `WaterConnections.connectedToSource` per meter).
 
 ## Permissions
 
@@ -416,12 +423,22 @@ derived ids, every insert `ON CONFLICT DO NOTHING`, dates relative to `CURRENT_D
 - 29 electricity plot meters in the tree (plots 1-14 and 12а under quarter A, 15-29 under quarter B; plots 25 and 28 have no
   meter) and 4 water meters (plots 1, 7, 15, 22, outside the tree). Plot 9's meter was replaced 30 days ago (old meter removed
   with a final value, the new one `replaces_meter_id`); plot 20's last reading is 75 days old;
-- 168 readings with irregular gaps of 6-55 days over about 120 days (any range that starts or ends between two readings is an
-  interpolation case): 165 approved, 1 pending (member@demo.local's plot 7, for the approvals screen), 1 rejected
-  (plot 1) and 1 superseded (plot 2, replaced by its correction);
+- 186 readings with irregular gaps of 6-55 days over about 120 days (any range that starts or ends between two readings is an
+  interpolation case): 183 approved (plot meters, the node meters on the plot rounds' days, the well and the lighting,
+  the water meters), 1 pending (member@demo.local's plot 7, for the approvals screen), 1 rejected (plot 1) and 1
+  superseded (plot 2, replaced by its correction);
 - the other cooperative: one meter and one reading (isolation checks);
 - the permissions `METERS_VIEW` and `READINGS_ENTER` for the custom role "Електрик" and its description
   "Вносить покази лічильників на обході" (the earlier text is replaced only while the chairman has not edited it).
 
 `DemoMeterDataTests` asserts these numbers. Tests that need an empty meter state call `DemoMeterData.clear` and
 `DemoMeterData.restore` (like `DemoTariffData`); the rest of the meter tests use throw-away data (serials `MT-...`).
+`DemoMeterData.clear` first removes the demo ledger (`DemoLedgerData.clear`), whose rows refer to meters.
+
+The block `demo ledger` (feature 011; runs only in the dev profile, see the ledger README) adds to the meters: the water
+connections of the demo cooperative (every plot to "Свердловина №1" since 01.05.2020 except 12а, 27 and 29, plot 19
+only from the 12th day before the readings' anchor; so the four water meters are in the missing-readings filters again)
+and a meter of plot 25 installed on 15.12.2025 under quarter Б with one reading 5 days before the anchor (its interval
+starts before the first electricity tariff version and is the demo's "not charged" item). The template readings and
+the node readings of this block leave plot 25 out, so a re-run gives the same values whether or not that meter exists.
+In the dev demo the readings of the charged intervals and of the runs are in use (`READING_IN_USE` on a correction).

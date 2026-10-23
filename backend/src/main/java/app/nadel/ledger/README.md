@@ -3,10 +3,12 @@
 The ledger of the cooperative (feature 011): the **charges** of plots, the **billing months** they are booked in,
 **reversals**, **opening balances**, the **account** of a plot with the debt per charge type, the **month run** of
 recurring tariffs, the **charges from meter readings**, the **proportional losses runs**, the **common consumer runs**
-and the **"not charged" queue**. Slices 1 to 7 of spec 011 are in code (slice 2: the billing months with their totals
-and check list, closing in order, and the plot status refresh; slice 3: the month run and the queue; slice 4: a charge
-per interval of a plot meter and fixed-percentage losses; slice 5: water tariffs charge only the days a plot is
-connected to water; slice 6: proportional losses runs; slice 7: common consumer runs and the split of each consumer).
+and the **"not charged" queue**. Spec 011 is in code (slice 2: the billing months with their totals and check list,
+closing in order, and the plot status refresh; slice 3: the month run and the queue; slice 4: a charge per interval of
+a plot meter and fixed-percentage losses; slice 5: water tariffs charge only the days a plot is connected to water;
+slice 6: proportional losses runs; slice 7: common consumer runs and the split of each consumer; slice 8: the opening
+balances sheet of the import; slice 9: the demo ledger). The money rules are `docs/domain/money-rules.md` sections 2, 3,
+4.1, 6.5 to 6.7, 9 and 11.
 
 Tables (V13, all under RLS `tenant_isolation`, an index leading with `tenant_id`, composite foreign keys on
 `(tenant_id, id)`):
@@ -530,6 +532,50 @@ Every action is a constant of `LedgerAuditPublisher.Action` and must also be a v
 `api/openapi.yaml`: the audit listing maps stored entries with `AuditAction.fromValue`, so a missing value breaks it
 (guarded by `LedgerAuditActionsTests`).
 
+## Demo data
+
+The repeatable demo script `db/demo/R__demo_data.sql` has a block `-- BEGIN demo ledger` ... `-- END demo ledger`: one
+PL/pgSQL `DO` block that books the demo cooperative's ledger as the application would have booked it. Its dates follow
+the demo meters (the anchor is read back from plot 20's stored reading, as in the meters block): the anchor's month is
+open, the month before it closed (September and October 2026 on the first load).
+
+- **Settings:** losses mode `PROPORTIONAL`, the common consumers split `CONNECTED_PLOTS` by default and `EQUAL_PER_PLOT`
+  for the street lighting, the red threshold 2 000,00 or 90 days (so the map shows red and yellow plots).
+- **Months:** the closed month with its month run (membership and land tax; 59 charges on the first load), its
+  reading charges and plot 12's opening balance of 1 500,00 ("Борг за 2025 рік", membership, its first day), closed by
+  the chairman; the open month with its month run and its reading charges. Nothing is charged before the closed month.
+- **Electricity by readings:** one `CONSUMPTION` charge per interval of a plot meter that ends in the closed month or
+  later (keys, parts, readings and value uses as `IntervalCharging` writes them). Plot 25's meter (installed
+  15.12.2025, before the first electricity tariff version) has one interval that cannot be charged: the open
+  `INTERVAL` item "Немає тарифу на всі дні" of plot 25.
+- **The losses run** over the latest round of readings (the 19th to the 5th day before the anchor): quarter А charged
+  (losses of about 6.5 % of its consumption, one `LOSSES` charge per plot of Садова street), quarter Б `UNKNOWN` with
+  the warning `UNKNOWN_VALUE` (plot 20's meter has no reading after 75 days before the anchor) and its open
+  `LOSSES_NODE` item.
+  The substation is not part of the run (it would be `SKIPPED_ABOVE` and queued too).
+- **The common consumers run** over the same days: "Освітлення вул. Вишнева" equally among the 30 chargeable plots and
+  "Свердловина №1" among the 27 connected plots by plot-days (plot 19 connected for 8 of the 15 days), at the
+  "Спільні споживачі за лічильником" tariff the block creates (4.3200 per kWh).
+- **Water connections:** every plot to the well since 01.05.2020 except 12а, 27 and 29; plot 19 from the 12th day
+  before the anchor.
+- **One reversal:** plot 14's membership of the open month, "Помилкове нарахування".
+- **The plot status cache:** every plot's debt and oldest debt date, and the colour as the refresher would record it.
+
+So "Не нараховано" shows two items: exactly one "Немає тарифу на всі дні" (plot 25) and quarter Б's unknown value.
+Re-runnable: the block first deletes every ledger row of the demo cooperative (as `nadel_owner` with
+`app.ledger_maintenance = 'on'`), its water connections and common consumer settings, then books everything again; a
+change made to the demo ledger by hand is lost on a re-run. It assumes one version per demo tariff and real readings
+at both ends of the runs (it raises an exception otherwise).
+
+It runs only when the Flyway placeholder `demoledger` is `on` (`application.yml`, dev profile). Integration tests set it
+`off` (`IntegrationTest`), so the demo cooperative the tests share has no charges, debts, water connections or ledger
+settings; `DemoLedgerData.restore` loads the block on purpose and `DemoLedgerData.clear` removes it (and
+`DemoMeterData.clear` and `DemoTariffData.clear` call it first). `DemoLedgerDataTests` recalculates every demo charge
+with the ledger's own planning code (`TariffMonthPlanning`, `ReadingChargePlanning`, `LossesCalculator` with
+`LossesPlanning`, `CommonConsumerPlanning`) and compares amounts, parts, the stored calculation, value uses, run rows
+and queue items; republishes `ChargesBooked` and checks the status refresher records the same debts; and checks the
+screens (months, the queue, the map, accounts) and that the block is re-runnable.
+
 ## Dependencies
 
 `tariffs` (the read facade `ChargeTypeCatalog`: `find`, `findAndLockShared`, `all`, `findByNames`; `TariffBook`: `snapshot`,
@@ -586,7 +632,7 @@ a connected plot, nothing and nothing queued for one that is not, 12.90 from the
 plot) and of `ReadingChargesTests` (a plot not connected for the whole interval: nothing and nothing queued; the
 connected days only),
 `TariffConflictWarningTests` (the tariffs page), `NotChargedTenantIsolationTests` (V15) - these run in a cooperative of
-their own (`FreshCooperativeSupport`); `BillingMonthsTests` (the list and totals, the month page and its
+their own (`FreshCooperativeSupport`); `DemoLedgerDataTests` (the demo ledger, see Demo data); `BillingMonthsTests` (the list and totals, the month page and its
 check list, closing in order, a closed month that gets nothing more, late bookings, future months, permissions, audit,
 the `billing_month_guard` trigger); `PlotStatusRefreshTests`; `LedgerAccountTests` (the account, debts per type, the reversal
 rules of §3, opening balances, booking after a closed month, the plot guard, allowed and denied per endpoint for the

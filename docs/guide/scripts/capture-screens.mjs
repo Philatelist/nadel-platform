@@ -18,7 +18,29 @@ const PASSWORD = process.env.GUIDE_DEMO_PASSWORD ?? 'nadel';
 const DESKTOP = { width: 1280, height: 860 };
 const PHONE = { width: 390, height: 844 };
 
-/** name, demo user, path, optional link to follow (CSS selector, optional exact text), optional phone viewport. */
+/** A text in both languages (the guide screenshots are taken in each). */
+const T = (uk, en) => ({ uk, en });
+const thisMonth = kyivDay(0).slice(0, 7);
+/** The first and the last day of the month `offset` months from now, for a past range the demo ledger covers. */
+function monthRange(offset) {
+  const [year, month] = thisMonth.split('-').map(Number);
+  const first = new Date(Date.UTC(year, month - 1 + offset, 1));
+  const last = new Date(Date.UTC(year, month + offset, 0));
+  return { from: first.toISOString().slice(0, 10), to: last.toISOString().slice(0, 10) };
+}
+const augustLike = monthRange(-2);
+/** Fills the two dates of a range run page and previews it (a preview writes nothing). */
+const previewRange = [
+  { fill: { label: T('З', 'From'), value: augustLike.from } },
+  { fill: { label: T('По', 'To'), value: augustLike.to } },
+  { click: T('Переглянути', 'Preview') },
+];
+
+/**
+ * name, demo user, path, optional link to follow (CSS selector, optional exact text), optional phone viewport.
+ * Also optional: `steps` ({ fill: { label, value } } or { click: button name }, nothing is ever saved) and `element`
+ * (screenshot only the panel with this heading, or the element of a CSS selector).
+ */
 const SHOTS = [
   { name: 'plots', user: 'chairman', path: '/plots' },
   {
@@ -68,6 +90,76 @@ const SHOTS = [
   { name: 'member-account', user: 'member', path: '/account' },
   { name: 'member-account-phone', user: 'member', path: '/account', phone: true },
   { name: 'treasurer-plots', user: 'treasurer', path: '/plots' },
+  // feature 011: charges, the plot account, water, the settings sections
+  { name: 'charges', user: 'chairman', path: '/charges' },
+  { name: 'charges-month', user: 'chairman', path: `/charges/months/${thisMonth}` },
+  {
+    name: 'charges-run',
+    user: 'chairman',
+    path: `/charges/months/${thisMonth}`,
+    steps: [{ click: T('Нарахувати місяць', 'Charge the month') }],
+  },
+  {
+    name: 'charges-close',
+    user: 'chairman',
+    path: `/charges/months/${thisMonth}`,
+    steps: [{ click: T('Закрити місяць', 'Close the month') }],
+  },
+  { name: 'charges-not-charged', user: 'chairman', path: '/charges/not-charged' },
+  { name: 'charges-losses', user: 'chairman', path: '/charges/losses', steps: previewRange },
+  { name: 'charges-common', user: 'chairman', path: '/charges/common', steps: previewRange },
+  {
+    name: 'plot-account',
+    user: 'chairman',
+    path: '/plots',
+    open: { css: 'main a[href^="/plots/"]', text: '7' },
+    element: { heading: T('Рахунок', 'Account') },
+  },
+  {
+    name: 'plot-account-charge',
+    user: 'chairman',
+    path: '/plots',
+    open: { css: 'main a[href^="/plots/"]', text: '7' },
+    steps: [{ click: T('Подробиці', 'Details') }],
+  },
+  {
+    name: 'plot-water',
+    user: 'chairman',
+    path: '/plots',
+    open: { css: 'main a[href^="/plots/"]', text: '7' },
+    element: { heading: T('Вода', 'Water') },
+  },
+  {
+    name: 'settings-thresholds',
+    user: 'chairman',
+    path: '/settings',
+    element: { heading: T('Поріг червоного статусу', 'Red status threshold') },
+  },
+  {
+    name: 'settings-losses',
+    user: 'chairman',
+    path: '/settings',
+    element: { heading: T('Втрати', 'Losses') },
+  },
+  {
+    name: 'settings-common',
+    user: 'chairman',
+    path: '/settings',
+    element: { heading: T('Спільні споживачі', 'Common consumers') },
+  },
+  {
+    name: 'settings-water',
+    user: 'chairman',
+    path: '/settings',
+    element: { heading: T('Водопостачання', 'Water supply') },
+  },
+  { name: 'treasurer-charges', user: 'treasurer', path: `/charges/months/${thisMonth}` },
+  {
+    name: 'member-charges',
+    user: 'member',
+    path: '/account',
+    element: { css: 'section[aria-labelledby="my-charges"]' },
+  },
 ];
 
 /** A calendar day in Kyiv as YYYY-MM-DD, shifted by offsetDays. */
@@ -143,8 +235,38 @@ try {
               await dates.nth(1).fill(kyivDay(-shot.range.toDaysAgo));
               await page.waitForLoadState('networkidle');
             }
+            for (const step of shot.steps ?? []) {
+              if (step.fill) {
+                await page.getByLabel(step.fill.label[lang], { exact: true }).fill(step.fill.value);
+              } else {
+                await page
+                  .getByRole('button', { name: step.click[lang], exact: true })
+                  .first()
+                  .click({ timeout: 10000 });
+                await page.waitForLoadState('networkidle');
+              }
+            }
+            if (shot.steps?.some((step) => step.click)) await page.waitForTimeout(1200);
             await page.waitForTimeout(400);
-            await page.screenshot({ path: join(outDir, `${shot.name}.png`) });
+            const file = join(outDir, `${shot.name}.png`);
+            if (shot.element) {
+              const target = shot.element.heading
+                ? page
+                    .locator('main section')
+                    .filter({
+                      has: page.getByRole('heading', {
+                        level: 2,
+                        name: shot.element.heading[lang],
+                        exact: true,
+                      }),
+                    })
+                    .first()
+                : page.locator(shot.element.css).first();
+              await target.scrollIntoViewIfNeeded();
+              await target.screenshot({ path: file });
+            } else {
+              await page.screenshot({ path: file });
+            }
             console.log(`${lang}/${shot.name}.png`);
           } catch (error) {
             failed.push(`${lang}/${shot.name}: ${error.message.split('\n')[0]}`);

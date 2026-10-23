@@ -76,3 +76,16 @@
 - Minor: `UnchargedDays` has no unit test. → Slice 10.
 - Minor: `CommonConsumerBillings.java:84-86` chain read before the advisory lock (harmless). → noted.
 - Minor: openapi description line wrap. → noted.
+
+## Slice 8 — round 1 (e5647b2): MAJOR_ISSUES
+- M1 `OpeningBalanceImportService.java:657`: one ChargesBooked for all booked plots (spec: ≤ 500 per event). → fixing in the review worktree.
+- Minor 1 `import.sheetsHelp` says one row per plot and type (rule includes the date). → fixing.
+- Minor 2 `OpeningBalanceImportService.java:499-512` OPENING_BALANCE_EXISTS amount picked from an unordered list. → fixing.
+- Minor 3 `WaterConnectionImportService.java:794` null audit label fallback. → fixing.
+- Minor 4 `OpeningBalanceImportService.java:364` long line. → fixing.
+- Minor 5 no import test for a row dated in a closed month. → Slice 10.
+
+## Slice 8 — round 2 (9981f52): PASS
+- M1 and minors 1-4 resolved.
+- Minor: `OpeningBalanceImportServiceTests.java:97` the id tie-breaker for equal created_at is untested. → Slice 10.
+- Minor: `WaterConnectionImportService.java:199` rows/items index alignment assumed. → noted.

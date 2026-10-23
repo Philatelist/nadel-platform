@@ -104,3 +104,29 @@ export async function archiveLeftovers(
   for (const member of members)
     await api(page, 'POST', `/members/${member.id}/archive`).catch(() => undefined);
 }
+
+/**
+ * Best effort: gets rid of a test meter. Readings a charge uses cannot be deleted and a meter with readings cannot
+ * be deleted, so it is deleted when possible and otherwise removed with its last reading as the final one (a
+ * removed meter no longer blocks archiving its plot). Never throws.
+ */
+export async function retireMeter(page: Page, meterId: string): Promise<void> {
+  const history = await api(page, 'GET', `/meters/${meterId}/readings`).catch(() => undefined);
+  if (history?.status === 200)
+    for (const r of (JSON.parse(history.body) as { readings: { id: string; status: string }[] }).readings) {
+      if (r.status === 'PENDING')
+        await api(page, 'POST', `/readings/${r.id}/reject`, { reason: 'E2E cleanup' }).catch(() => undefined);
+      if (r.status === 'APPROVED') await api(page, 'DELETE', `/readings/${r.id}`).catch(() => undefined);
+    }
+  const deleted = await api(page, 'DELETE', `/meters/${meterId}`).catch(() => undefined);
+  if (deleted?.status === 204) return;
+  const current = await api(page, 'GET', `/meters/${meterId}`).catch(() => undefined);
+  const last =
+    current?.status === 200
+      ? (JSON.parse(current.body) as { lastReading?: { value?: string } }).lastReading?.value
+      : undefined;
+  await api(page, 'POST', `/meters/${meterId}/remove`, {
+    removedOn: kyivDay(0),
+    finalReading: last ?? '0',
+  }).catch(() => undefined);
+}

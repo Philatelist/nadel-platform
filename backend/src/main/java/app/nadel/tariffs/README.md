@@ -244,7 +244,10 @@ stands in (`TariffVersionCorrectionTests`).
   `OwnedPlotsSource`, meter presence through `MeterCatalog`.
 - **Demo data.** `R__demo_data.sql` adds membership (50.0000 per sotka yearly, plot 28 excluded), land tax (35.0000
   per sotka yearly), electricity (4.3200 per kWh monthly) and a custom "Road repair" type with a fixed one-time fee of
-  1200.0000 due 2026-12-01, all from 2026-01-01 for the demo cooperative.
+  1200.0000 due 2026-12-01, all from 2026-01-01 for the demo cooperative (block `demo tariffs`). The block `demo ledger`
+  (feature 011, dev profile only) adds the "Спільні споживачі за лічильником" tariff of the common consumers type (4.3200
+  per kWh from 2026-01-01) and books the month runs, so in the dev demo the membership, land tax and electricity
+  versions are in use (`TARIFF_VERSION_IN_USE` on a correction).
 
 ## Audit
 
