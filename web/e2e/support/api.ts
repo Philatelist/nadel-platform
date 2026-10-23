@@ -85,7 +85,7 @@ export function shiftDay(isoDay: string, offsetDays: number): string {
 /**
  * A past range for the losses and common consumers previews, counted back from the demo anchor and not from today (a
  * reused local database keeps the day it was first loaded): the demo losses run ends 5 days before the anchor, and
- * the range is 78 to 48 days before that end. It ends after the last reading of plot 20 (70 days before the anchor
+ * the range is 78 to 48 days before that end. It ends after the last reading of plot 20 (75 days before the anchor
  * in the demo), so quarter Б has no reading after the range and is a warning, while quarter А has readings inside
  * it. It lies wholly before the demo runs (14 to 0 days before their end).
  */

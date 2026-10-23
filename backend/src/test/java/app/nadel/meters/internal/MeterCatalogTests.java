@@ -37,12 +37,12 @@ class MeterCatalogTests extends IntegrationTest {
         }
         for (UUID plot : plots) {
             // a replacement points at the meter it replaced: the chain is deleted from its end
-            ownerJdbc().update("delete from meter where plot_id = ? and id not in "
-                    + "(select replaces_meter_id from meter where plot_id = ? and replaces_meter_id is not null)",
-                    plot, plot);
-            ownerJdbc().update("delete from meter where plot_id = ? and id not in "
-                    + "(select replaces_meter_id from meter where plot_id = ? and replaces_meter_id is not null)",
-                    plot, plot);
+            int deleted;
+            do {
+                deleted = ownerJdbc().update("delete from meter where plot_id = ? and id not in "
+                        + "(select replaces_meter_id from meter where plot_id = ? and replaces_meter_id is not null)",
+                        plot, plot);
+            } while (deleted > 0);
             ownerJdbc().update("delete from meter where plot_id = ?", plot);
             ownerJdbc().update("delete from plot where id = ?", plot);
         }

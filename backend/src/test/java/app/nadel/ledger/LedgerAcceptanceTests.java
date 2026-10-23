@@ -195,15 +195,16 @@ class LedgerAcceptanceTests extends ReadingChargeSupport {
         send(chairman, post(CLOSE.formatted(lastMonth)), null).andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("CLOSED"));
         send(chairman, post(REVERSE.formatted(small.get("id").asString())), Map.of("reason", "Помилка"))
-                .andExpect(jsonPath("$.code").value("CHARGE_IN_CLOSED_MONTH"));
-        send(chairman, post(RUN.formatted(lastMonth.toString(), false)), null).andExpect(status().isConflict());
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("CHARGE_IN_CLOSED_MONTH"));
+        send(chairman, post(RUN.formatted(lastMonth.toString(), false)), null).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("PERIOD_CLOSED"));
         send(chairman, post(RUN.formatted(thisMonth.plusMonths(1).toString(), false)), null)
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("PERIOD_IN_FUTURE"));
 
         // a reading about the closed month is booked in the earliest open month with its own days
         UUID late = electricityMeter(plot12, lastMonth.atDay(1).toString(), "0");
         entered(late, lastMonth.atEndOfMonth().toString(), "100");
-        awaitCharges(11);
+        awaitCharges(12);
         JsonNode lateCharge = null;
         for (JsonNode charge : account(chairman, plot12).get("charges")) {
             if (charge.get("source").asString().equals("CONSUMPTION")) {

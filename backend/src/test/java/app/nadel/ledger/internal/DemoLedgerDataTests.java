@@ -421,7 +421,7 @@ class DemoLedgerDataTests extends IntegrationTest {
         assertThat(owner.queryForList(snapshot, String.class, DEMO_TENANT)).isEqualTo(demo);
         // the colours follow the rule for today whatever today is (a debt older than the red days is red, so the
         // mix of red and yellow moves with the date); plot 12's opening balance is above the red amount on any date
-        Map<String, String> expected = expectedStatuses();
+        Map<String, String> expected = expectedStatuses(false);
         assertThat(owner.queryForList("select p.number || '|' || s.status from plot_status s join plot p "
                 + "on p.id = s.plot_id where p.tenant_id = ? order by p.number", String.class, DEMO_TENANT))
                 .isEqualTo(expected.entrySet().stream().sorted(Map.Entry.comparingByKey())
@@ -434,8 +434,11 @@ class DemoLedgerDataTests extends IntegrationTest {
      * The status of every demo plot by the rule of the plot map for today (Kyiv), computed in SQL from the cached debt:
      * grey for common land and a plot without a current owner, green without a debt, red when the debt is above the red
      * amount or its oldest charge is older than the red days, yellow otherwise.
+     *
+     * @param onlyOnMap only the plots the map shows (active, with a boundary), so rows left by other test classes
+     *                  cannot change the result
      */
-    private Map<String, String> expectedStatuses() {
+    private Map<String, String> expectedStatuses(boolean onlyOnMap) {
         Map<String, String> statuses = new HashMap<>();
         owner.queryForList("""
                 select p.number,
@@ -449,7 +452,8 @@ class DemoLedgerDataTests extends IntegrationTest {
                 from plot p
                 join plot_status s on s.plot_id = p.id
                 left join cooperative_settings cs on cs.tenant_id = p.tenant_id
-                where p.tenant_id = ?""", DEMO_TENANT).forEach(row -> statuses.put((String) row.get("number"),
+                where p.tenant_id = ?""" + (onlyOnMap ? " and p.archived_at is null and p.boundary is not null" : ""),
+                DEMO_TENANT).forEach(row -> statuses.put((String) row.get("number"),
                 (String) row.get("status")));
         return statuses;
     }
@@ -489,7 +493,7 @@ class DemoLedgerDataTests extends IntegrationTest {
         map.get("features").forEach(f -> statuses.put(f.get("properties").get("number").asString(),
                 f.get("properties").get("status").asString()));
         // red, yellow and green by debt and age (which of them show depends on today); grey for common land
-        assertThat(statuses).isEqualTo(expectedStatuses());
+        assertThat(statuses).isEqualTo(expectedStatuses(true));
         assertThat(statuses.values()).contains("RED", "GREY");
         assertThat(statuses.get("12")).isEqualTo("RED");
 

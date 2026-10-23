@@ -14,13 +14,13 @@ cooperative); `ledger-acceptance.spec.ts` is the two browser flows that had no e
 | Measure                                                           | Count |
 | ----------------------------------------------------------------- | ----- |
 | Acceptance criteria                                               | 75    |
-| Covered by an existing slice test before Slice 10                 | 74    |
-| Covered only at calculator level (no API/browser) before Slice 10 | 1     |
+| Covered by an existing slice test above calculator level          | 70    |
+| Covered only at calculator level (no API/browser) before Slice 10 | 5     |
 | Gaps closed in Slice 10 (new tests)                               | 1     |
 | Criteria with an additional whole-feature test (cross-slice)      | 19    |
 | Still uncovered                                                   | 0     |
 
-Besides the criteria, the slice-review gaps were closed (listed at the end).
+The five calculator-only criteria are 2.4 #2 and #3, 2.5 #3, 2.6 #3 and #4; the gap closed in Slice 10 is 2.5 #3 (an API test was added), the other four are covered by calculator unit tests that carry the worked numbers. Besides the criteria, the slice-review gaps were closed (listed at the end).
 
 ## 2.1 Charges and the plot account
 

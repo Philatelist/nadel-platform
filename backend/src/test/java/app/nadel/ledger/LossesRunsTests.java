@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.JsonNode;
 
@@ -388,6 +389,7 @@ class LossesRunsTests extends FreshCooperativeSupport {
 
     // @spec: 011-ledger-charges-period-closing (§2.5 "a quarter shows 950 kWh and its children 1 000 kWh")
     // @regression
+    @Tag("regression")
     @Test
     void aQuarterShowingLessThanItsChildrenChargesNothingAndWarnsWithTheNumbers() throws Exception {
         quarterA = namedMeter("QUARTER", "Квартал А", null, 5000, 5950);

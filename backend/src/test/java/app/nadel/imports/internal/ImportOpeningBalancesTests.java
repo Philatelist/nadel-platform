@@ -320,14 +320,15 @@ class ImportOpeningBalancesTests extends ImportCommitSupport {
                 balance(plotNo("p"), "Land tax", 200, second, null),
                 balance(plotNo("q"), "Membership fee", 300, first, null)));
 
+        // the month right after the last closed one, read before the commit so that the commit cannot influence it
+        String earliestOpen = ownerJdbc().queryForObject("select to_char(max(month) + interval '1 month', 'YYYY-MM') "
+                + "from billing_month where tenant_id = ? and status = 'CLOSED'", String.class, DEMO_TENANT);
+        assertThat(earliestOpen).isNotNull().isNotEqualTo("2024-03");
+
         JsonNode preview = preview(workbook);
         assertThat(problems(preview)).isEmpty();
         commit(preview.get("id").asString()).andExpect(status().isOk());
 
-        String earliestOpen = ownerJdbc().queryForObject("select to_char(min(month), 'YYYY-MM') from billing_month "
-                + "where tenant_id = ? and status = 'OPEN' and month > (select max(month) from billing_month "
-                + "where tenant_id = ? and status = 'CLOSED')", String.class, DEMO_TENANT, DEMO_TENANT);
-        assertThat(earliestOpen).isNotNull().isNotEqualTo("2024-03");
         for (Map<String, Object> opening : openings(p)) {
             assertThat(opening.get("month")).isEqualTo(earliestOpen);
         }
