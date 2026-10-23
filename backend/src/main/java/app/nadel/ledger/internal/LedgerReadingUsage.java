@@ -20,8 +20,10 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>
  * Race-free by the port's lock contract: the reading write holds the meter {@code FOR UPDATE} while it asks, and every
  * path that charges from the points holds the meter {@code FOR SHARE} ({@code MeterNetwork.lockSharedPoints}) until it
- * commits. Runs in the caller's transaction, under RLS. Losses and common consumer runs (later slices) add their rows
- * with {@code run_id}.
+ * commits. Runs in the caller's transaction, under RLS. A losses run reads every meter of its charged nodes on the
+ * closed range between the first and the last point its values rest on (rows with {@code run_id}: the points at, or
+ * around, the end of the day before its range and the end of its range); the rows of a reversed run are ignored.
+ * Common consumer runs (a later slice) add theirs the same way.
  */
 @Component
 class LedgerReadingUsage implements ReadingUsage {
@@ -41,6 +43,12 @@ class LedgerReadingUsage implements ReadingUsage {
                     where u.meter_id = :meter and u.charge_id is not null
                       and not exists (select 1 from charge r where r.reverses_charge_id = u.charge_id)
                     group by u.charge_id
+                    having min(u.used_on) <= :to and max(u.used_on) >= :from)
+                or exists (
+                    select 1 from meter_value_use u
+                    join losses_run l on l.id = u.run_id and l.status = 'BOOKED'
+                    where u.meter_id = :meter
+                    group by u.run_id
                     having min(u.used_on) <= :to and max(u.used_on) >= :from)
                 """)
                 .setParameter("meter", meterId)

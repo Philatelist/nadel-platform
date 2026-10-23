@@ -51,6 +51,17 @@ const intervalItem: NotChargedItem = {
   tariffs: [],
 };
 
+const lossesItem: NotChargedItem = {
+  id: 'n3',
+  kind: 'LOSSES_NODE',
+  reason: 'UNKNOWN_NODE_VALUE',
+  meterId: 'qc',
+  chargeType: { id: 't1', code: 'ELECTRICITY', name: 'Electricity', nameCustomized: false },
+  from: '2026-10-01',
+  to: '2026-10-23',
+  tariffs: [],
+};
+
 describe('NotChargedPage', () => {
   beforeEach(() => {
     window.localStorage.setItem('nadel.locale', 'en');
@@ -72,6 +83,16 @@ describe('NotChargedPage', () => {
     renderWithApp(withQueries(<NotChargedPage />));
     expect(screen.getByText('23 Sep 2026 – 4 Oct 2026')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Meter' })).toHaveAttribute('href', '/meters/m9');
+  });
+
+  it('shows a losses node with its node link, the period and a retry', async () => {
+    notCharged = [lossesItem];
+    renderWithApp(withQueries(<NotChargedPage />));
+    expect(screen.getByRole('link', { name: 'Node' })).toHaveAttribute('href', '/meters/qc');
+    expect(screen.getByText('1 Oct 2026 – 23 Oct 2026')).toBeInTheDocument();
+    expect(screen.getByText('A meter value of the period is unknown')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(mutate).toHaveBeenCalledWith({ id: 'n3' });
   });
 
   it('retries and reports an item that is still not charged', async () => {

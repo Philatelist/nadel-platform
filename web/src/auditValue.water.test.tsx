@@ -8,7 +8,7 @@ const text = (node: ReturnType<typeof auditValue>) => render(<>{node}</>).contai
 describe('auditValue for water connections', () => {
   it('translates the cooperative supply token and shows a meter name as user content', () => {
     expect(text(auditValue('PLOT', 'source', 'base:COOPERATIVE_SUPPLY', messages('uk'), 'uk'))).toBe(
-      'Водопостачання кооперативу',
+      'Водопровід кооперативу',
     );
     expect(text(auditValue('PLOT', 'source', 'base:COOPERATIVE_SUPPLY', messages('en'), 'en'))).toBe(
       'Cooperative water supply',

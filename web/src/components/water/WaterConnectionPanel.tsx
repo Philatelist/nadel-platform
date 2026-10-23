@@ -39,46 +39,46 @@ export function WaterConnectionPanel({ plotId, archived = false }: { plotId: str
   return (
     <Panel title={w.title}>
       <QueryBoundary query={query}>
-        {(data) => (
-          <div className="flex flex-col gap-3">
-            <p className="font-medium">
-              {data.current && data.connected
-                ? formatWaterLine(w.connectedTo, data.current, locale)
-                : w.notConnected}
-            </p>
-            {canManage && !archived && (
-              <div className="flex flex-wrap gap-2">
-                {!data.current && <Button onClick={() => setDialog('connect')}>{w.connect}</Button>}
-                {data.current && (
-                  <Button variant="secondary" onClick={() => setDialog('disconnect')}>
-                    {w.disconnect}
-                  </Button>
-                )}
-              </div>
-            )}
-            <h3 className="text-sm font-medium text-ink-muted">{w.historyTitle}</h3>
-            {data.connections.length === 0 ? (
-              <p className="text-ink-muted">{w.noHistory}</p>
-            ) : (
-              <ul className="divide-y divide-line-subtle">
-                {data.connections.map((c) => (
-                  <li key={c.id} className="flex flex-wrap items-center gap-2 py-2">
-                    <WaterSourceName source={c.source} />
-                    <span className="text-ink-muted">{period(c)}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-            {dialog === 'connect' && <ConnectDialog plotId={plotId} onClose={() => setDialog(undefined)} />}
-            {dialog === 'disconnect' && data.current && (
-              <DisconnectDialog
-                plotId={plotId}
-                connection={data.current}
-                onClose={() => setDialog(undefined)}
-              />
-            )}
-          </div>
-        )}
+        {(data) => {
+          // the lasting connection (no end) decides the buttons: it can be ended, and while it exists a new one cannot start
+          const lasting = data.connections.find((c) => c.until === undefined);
+          return (
+            <div className="flex flex-col gap-3">
+              <p className="font-medium">
+                {data.current && data.connected
+                  ? formatWaterLine(w.connectedTo, data.current, locale)
+                  : w.notConnected}
+              </p>
+              {canManage && !archived && (
+                <div className="flex flex-wrap gap-2">
+                  {!lasting && <Button onClick={() => setDialog('connect')}>{w.connect}</Button>}
+                  {lasting && (
+                    <Button variant="secondary" onClick={() => setDialog('disconnect')}>
+                      {w.disconnect}
+                    </Button>
+                  )}
+                </div>
+              )}
+              <h3 className="text-sm font-medium text-ink-muted">{w.historyTitle}</h3>
+              {data.connections.length === 0 ? (
+                <p className="text-ink-muted">{w.noHistory}</p>
+              ) : (
+                <ul className="divide-y divide-line-subtle">
+                  {data.connections.map((c) => (
+                    <li key={c.id} className="flex flex-wrap items-center gap-2 py-2">
+                      <WaterSourceName source={c.source} />
+                      <span className="text-ink-muted">{period(c)}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {dialog === 'connect' && <ConnectDialog plotId={plotId} onClose={() => setDialog(undefined)} />}
+              {dialog === 'disconnect' && lasting && (
+                <DisconnectDialog plotId={plotId} connection={lasting} onClose={() => setDialog(undefined)} />
+              )}
+            </div>
+          );
+        }}
       </QueryBoundary>
     </Panel>
   );

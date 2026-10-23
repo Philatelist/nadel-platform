@@ -10,7 +10,8 @@
  * records, the port {@link app.nadel.meters.ReadingUsage} that the ledger implements so that readings a charge uses
  * are no longer corrected or deleted (ADR 0014), the read API {@link app.nadel.meters.MeterCatalog} (which plots have a
  * meter of a resource; the tariffs module asks it), the read API {@link app.nadel.meters.MeterNetwork} for the ledger
- * (the plot meters not read for a while, the locked points of a meter), the event
+ * (the plot meters not read for a while, the locked points of a meter, the electricity tree with the histories of its
+ * meters over a range), the event
  * {@link app.nadel.meters.PlotMeterPointsChanged} (the points of a plot meter changed; the ledger charges the intervals),
  * the read API {@link app.nadel.meters.WaterConnections} (the days plots are connected to water, for the ledger)
  * and the import facade {@link app.nadel.meters.MeterImport} with its

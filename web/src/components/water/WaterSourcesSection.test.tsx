@@ -105,9 +105,7 @@ describe('WaterSourcesSection', () => {
     (connect.mock.calls[0]?.[1] as Callbacks).onError?.(
       new ApiError(409, { code: 'WATER_ALREADY_CONNECTED' }),
     );
-    expect(
-      await within(dialog).findByText('The plot is already connected to water on these dates'),
-    ).toBeInTheDocument();
+    expect(await within(dialog).findByText('The plot is already connected to water')).toBeInTheDocument();
   });
 
   it('disconnects the chosen connected plots after the chosen day', async () => {

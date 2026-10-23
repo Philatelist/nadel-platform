@@ -20,8 +20,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 /**
  * {@link MeterNetwork#staleMeters}: the plot meters that worked on the check date and whose last point on or before it
  * (the latest approved reading, else the installation) is more than the given days before it (feature 011 §2.2, the
- * closing check list). Fixtures are written as the database owner with serials {@code MT-...}, which the base class
- * removes.
+ * closing check list); {@link MeterNetwork#network}: the electricity chains of a range with their histories and their
+ * places in the tree by days (feature 011 §2.5, the losses runs). Fixtures are written as the database owner with
+ * serials {@code MT-...}, which the base class removes.
  */
 class MeterNetworkTests extends MeterTestSupport {
 
@@ -125,6 +126,62 @@ class MeterNetworkTests extends MeterTestSupport {
         Map<UUID, StaleMeter> stale = stale(DEMO_TENANT, AS_OF);
 
         assertThat(stale).doesNotContainKeys(removed, node).containsKey(removedLater);
+    }
+
+    @Test
+    void theNetworkHasTheChainsOfTheRangeWithTheirPlacesByDaysThroughTheRemovalDay() {
+        UUID quarter = meter(null, "QUARTER", "ELECTRICITY", "2026-01-10", null);
+        UUID old = meter(newPlot("Мережа"), "PLOT", "ELECTRICITY", "2026-01-10", "2026-09-20");
+        UUID plot = ownerJdbc().queryForObject("select plot_id from meter where id = ?", UUID.class, old);
+        UUID successor = UUID.randomUUID();
+        ownerJdbc().update("insert into meter (id, tenant_id, kind, resource, serial, plot_id, installed_on, "
+                + "initial_value, replaces_meter_id) values (?, ?, 'PLOT', 'ELECTRICITY', ?, ?, date '2026-09-20', 3, ?)",
+                successor, DEMO_TENANT, "MT-" + successor.toString().substring(0, 8), plot, old);
+        UUID gone = meter(newPlot("Мережа"), "PLOT", "ELECTRICITY", "2026-01-10", "2026-09-15");
+        parent(old, quarter, "2026-01-10", "2026-09-19");
+        parent(successor, quarter, "2026-09-20", null);
+        parent(gone, quarter, "2026-01-10", null);
+        reading(old, "2026-08-31", "5", "APPROVED");
+        reading(old, "2026-08-15", "4", "PENDING");
+
+        Map<UUID, MeterNetwork.NetworkChain> september = chains(DEMO_TENANT, "2026-09-01", "2026-09-30");
+
+        MeterNetwork.NetworkChain replaced = september.get(old);
+        assertThat(replaced.meterIds()).containsExactly(old, successor);
+        assertThat(replaced.shownMeterId()).isEqualTo(successor);
+        assertThat(replaced.plotId()).isEqualTo(plot);
+        assertThat(replaced.histories().getFirst().readings()).extracting(r -> r.takenOn().toString())
+                .containsExactly("2026-08-31");
+        // the periods of the replaced meter and its successor under the same quarter are one place
+        assertThat(replaced.placements()).containsExactly(
+                new MeterNetwork.Placement(quarter, LocalDate.of(2026, 1, 10), null));
+        // a meter removed on 15.09 still counts under its parent on that day
+        assertThat(september.get(gone).placements()).containsExactly(
+                new MeterNetwork.Placement(quarter, LocalDate.of(2026, 1, 10), LocalDate.of(2026, 9, 15)));
+        assertThat(september.get(quarter).placements()).containsExactly(
+                new MeterNetwork.Placement(null, LocalDate.of(2026, 1, 10), null));
+        assertThat(september.get(quarter).name()).isEqualTo("Node " + quarter);
+        // a chain that did not work in the range is left out
+        assertThat(chains(DEMO_TENANT, "2026-10-01", "2026-10-31")).containsKey(old).doesNotContainKey(gone);
+        assertThat(chains(OTHER_TENANT, "2026-09-01", "2026-09-30")).doesNotContainKeys(old, quarter, gone);
+        // the locked read gives the same network
+        Map<UUID, MeterNetwork.NetworkChain> locked = TenantContext.runAs(DEMO_TENANT,
+                () -> new TransactionTemplate(transactionManager).execute(s -> network.lockSharedNetwork(
+                        LocalDate.of(2026, 9, 1), LocalDate.of(2026, 9, 30)))).chains().stream()
+                .collect(Collectors.toMap(MeterNetwork.NetworkChain::key, Function.identity()));
+        assertThat(locked.get(old)).isEqualTo(replaced);
+    }
+
+    private void parent(UUID meter, UUID parent, String from, String to) {
+        ownerJdbc().update("insert into meter_parent (tenant_id, meter_id, parent_meter_id, valid_from, valid_to) "
+                + "values (?, ?, ?, ?::date, ?::date)", DEMO_TENANT, meter, parent, from, to);
+    }
+
+    private Map<UUID, MeterNetwork.NetworkChain> chains(UUID tenant, String from, String to) {
+        MeterNetwork.Network found = TenantContext.runAs(tenant, () -> new TransactionTemplate(transactionManager)
+                .execute(s -> network.network(LocalDate.parse(from), LocalDate.parse(to))));
+        return found.chains().stream().collect(Collectors.toMap(MeterNetwork.NetworkChain::key,
+                Function.identity()));
     }
 
     @Test

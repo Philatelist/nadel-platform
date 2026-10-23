@@ -147,13 +147,33 @@ describe('WaterConnectionPanel', () => {
     await user.click(screen.getByRole('button', { name: 'Save' }));
     const callbacks = connect.mock.calls[0]?.[1] as Callbacks;
     callbacks.onError?.(new ApiError(409, { code: 'WATER_ALREADY_CONNECTED' }));
-    expect(
-      await screen.findByText('The plot is already connected to water on these dates'),
-    ).toBeInTheDocument();
+    expect(await screen.findByText('The plot is already connected to water')).toBeInTheDocument();
     callbacks.onError?.(
       new ApiError(400, { code: 'VALIDATION_FAILED', errors: [{ field: 'from', code: 'REQUIRED' }] }),
     );
     expect(await screen.findByText('This field is required.')).toBeInTheDocument();
+  });
+
+  it('offers Connect, not Disconnect, when the only connection has an end day in the future', () => {
+    const ending = { ...coop, until: '2026-12-31' };
+    plotWater = queryResult({ plotId: 'p7', connected: true, current: ending, connections: [ending] });
+    renderPanel();
+    expect(screen.getByRole('button', { name: 'Connect' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Disconnect' })).toBeNull();
+  });
+
+  it('offers Disconnect, not Connect, for a lasting connection that starts in the future', async () => {
+    const future = { ...coop, from: '2026-11-01' };
+    plotWater = queryResult({ plotId: 'p7', connected: false, connections: [future] });
+    const user = userEvent.setup();
+    renderPanel();
+    expect(screen.queryByRole('button', { name: 'Connect' })).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Disconnect' }));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(end).toHaveBeenCalledWith(
+      { id: 'p7', connectionId: 'c1', data: { until: '2026-10-23' } },
+      expect.any(Object),
+    );
   });
 
   it('has no buttons without METERS_MANAGE', () => {

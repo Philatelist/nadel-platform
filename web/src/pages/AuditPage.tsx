@@ -23,6 +23,7 @@ const ENTITY_TYPES = [
   'METER',
   'METER_READING',
   'CHARGE',
+  'LOSSES_RUN',
 ] as const;
 
 /** Where a record of an entity type is shown; absent for types without a page of their own. */
@@ -37,6 +38,7 @@ const entityHref: Readonly<Partial<Record<AuditEntityType, (entityId: string) =>
   METER_READING: (id) => `/meters/${id}`,
   // the entity id of a charge's record is its plot
   CHARGE: (id) => `/plots/${id}`,
+  LOSSES_RUN: (id) => `/charges/losses?run=${id}`,
 };
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -205,8 +207,11 @@ function AuditTime({ entry, locale }: { entry: AuditEntry; locale: string }) {
 
 function AuditRecord({ entry }: { entry: AuditEntry }) {
   const t = useT();
+  const { locale } = useLocale();
   const a = t.audit;
-  const label = entry.entityLabel ? auditRecordLabel(entry.entityType, entry.entityLabel, t) : a.unlabelled;
+  const label = entry.entityLabel
+    ? auditRecordLabel(entry.entityType, entry.entityLabel, t, locale)
+    : a.unlabelled;
   const href = entityHref[entry.entityType]?.(entry.entityId);
   return (
     <>

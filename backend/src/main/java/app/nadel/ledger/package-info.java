@@ -1,9 +1,11 @@
 /**
  * The ledger of the cooperative (feature 011): charges of plots, which are never changed or deleted (a mistake is
  * cancelled by a reversal), the billing months they are booked in, opening balances and the account of a plot with the
- * debt per charge type, the month run of recurring tariffs, the charges of meter readings and the "not charged" queue. Tables: {@code billing_month},
- * {@code charge}, {@code charge_part} and {@code meter_value_use} (V13) and {@code not_charged_item} (V15), all under RLS
- * {@code tenant_isolation}; {@code charge} and {@code charge_part} are append-only (privileges and a trigger, ADR 0006).
+ * debt per charge type, the month run of recurring tariffs, the charges of meter readings, the proportional losses runs
+ * and the "not charged" queue. Tables: {@code billing_month}, {@code charge}, {@code charge_part} and
+ * {@code meter_value_use} (V13), {@code not_charged_item} (V15) and {@code losses_run} and {@code losses_run_node}
+ * (V17), all under RLS {@code tenant_isolation}; {@code charge} and {@code charge_part} are append-only (privileges and a
+ * trigger, ADR 0006), a losses run changes only by its reversal (trigger {@code run_reversal_guard}).
  * <p>
  * Public API: the event {@link app.nadel.ledger.ChargesBooked}, published after every booking or reversal so that the
  * plot status can follow the debt. Everything else is internal: the entities, the pure rules {@code BillingCalendar}
@@ -11,15 +13,18 @@
  * balance commands, the account query, the billing months (list, check list, closing in order), the month run
  * ({@code MonthRun}, {@code TariffMonthPlanning}), the charges of plot meter intervals ({@code ReadingCharges}, the
  * listener of {@link app.nadel.meters.PlotMeterPointsChanged}; {@code IntervalCharging}; the pure
- * {@code ReadingChargePlanning} and {@code ReadingChargeCalculator}), the queue ({@code NotChargedQueue}), the
+ * {@code ReadingChargePlanning} and {@code ReadingChargeCalculator}), the losses runs ({@code LossesRuns}; the pure
+ * {@code LossesCalculator} and {@code LossesPlanning}), the queue ({@code NotChargedQueue}), the
  * implementations of the ports {@link app.nadel.tariffs.TariffVersionUsage} ({@code LedgerTariffVersionUsage}) and
  * {@link app.nadel.meters.ReadingUsage} ({@code LedgerReadingUsage}), the listener
  * {@code PlotStatusRefresher} (the debt behind the plot status, through {@link app.nadel.plots.PlotDebtCache}), the
  * plot guard {@code LedgerPlotGuard} (an implementation of {@link app.nadel.plots.PlotChangeGuard}: a plot with charges
- * is never deleted) and the endpoints of tags {@code charges}, {@code billing} and {@code not-charged}. It depends on
+ * is never deleted) and the endpoints of tags {@code charges}, {@code billing}, {@code not-charged} and
+ * {@code losses-runs}. It depends on
  * {@code tariffs} (the public {@code ChargeTypeCatalog}, {@code TariffBook}, {@code TariffResolver},
  * {@code ChargeCalculator}, {@code DaySet}), {@code plots} (the public {@code PlotCatalog}, {@code PlotChangeGuard} and
- * {@code PlotDebtCache}), {@code meters} ({@code MeterNetwork}, {@code PlotMeterPointsChanged}, {@code ReadingUsage},
+ * {@code PlotDebtCache}), {@code meters} ({@code MeterNetwork}, {@code ConsumptionCalculator},
+ * {@code PlotMeterPointsChanged}, {@code ReadingUsage},
  * {@code WaterConnections}: water tariffs charge only the days a plot is connected),
  * {@code settings} ({@code CooperativeSettings}), {@code money}, {@code identity}, {@code audit},
  * {@code problem} and {@code tenancy}; no module depends on it.

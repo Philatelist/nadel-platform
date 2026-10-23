@@ -32,6 +32,17 @@ interface ChargeRepository extends JpaRepository<ChargeRecord, UUID> {
             + "group by c.billingMonthId, c.chargeTypeId")
     List<MonthTypeTotal> totalsOfMonth(@Param("monthId") UUID monthId);
 
+    /** The charges of a run of the kind (the charges a run booked: {@code REGULAR}), in no particular order. */
+    List<ChargeRecord> findByRunIdAndKind(UUID runId, ChargeKind kind);
+
+    /** The charges among {@code chargeIds} that a reversal cancels. */
+    @Query("select c.reversesChargeId from ChargeRecord c where c.reversesChargeId in :ids")
+    List<UUID> reversedAmong(@Param("ids") Collection<UUID> chargeIds);
+
+    /** The number of charges of the kind of each run among {@code runIds}, as pairs of run id and count. */
+    @Query("select c.runId, count(c) from ChargeRecord c where c.runId in :runIds and c.kind = :kind group by c.runId")
+    List<Object[]> countByRun(@Param("runIds") Collection<UUID> runIds, @Param("kind") ChargeKind kind);
+
     /** Whether a reversal of the charge exists (a charge is reversed at most once). */
     boolean existsByReversesChargeId(UUID chargeId);
 

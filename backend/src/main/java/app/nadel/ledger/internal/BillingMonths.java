@@ -90,9 +90,17 @@ class BillingMonths {
      * the last closed month. Reads the committed state without a lock (a preview).
      */
     boolean isOpen(YearMonth month) {
+        return bookingMonth(month.atDay(1)).equals(month);
+    }
+
+    /**
+     * The month a charge about {@code date} would be booked in now ({@link BillingCalendar}). Reads the committed state
+     * without a lock (a preview); a booking asks {@link #openForBooking}.
+     */
+    YearMonth bookingMonth(LocalDate date) {
         List<MonthState> states = months.statesInOrder().stream()
                 .map(m -> new MonthState(YearMonth.from(m.month()), m.status() == BillingMonthRecord.Status.CLOSED))
                 .toList();
-        return BillingCalendar.bookingMonth(month.atDay(1), states, LocalDate.now(clock)).equals(month);
+        return BillingCalendar.bookingMonth(date, states, LocalDate.now(clock));
     }
 }

@@ -2,11 +2,11 @@
 
 The ledger of the cooperative (feature 011): the **charges** of plots, the **billing months** they are booked in,
 **reversals**, **opening balances**, the **account** of a plot with the debt per charge type, the **month run** of
-recurring tariffs, the **charges from meter readings** and the **"not charged" queue**. Slices 1 to 5 of spec 011 are
-in code (slice 2: the billing months with their totals and check list, closing in order, and the plot status refresh;
-slice 3: the month run and the queue; slice 4: a charge per interval of a plot meter and fixed-percentage losses;
-slice 5: water tariffs charge only the days a plot is connected to water); losses and common consumer runs follow in
-the next slices.
+recurring tariffs, the **charges from meter readings**, the **proportional losses runs** and the **"not charged"
+queue**. Slices 1 to 6 of spec 011 are in code (slice 2: the billing months with their totals and check list, closing
+in order, and the plot status refresh; slice 3: the month run and the queue; slice 4: a charge per interval of a plot
+meter and fixed-percentage losses; slice 5: water tariffs charge only the days a plot is connected to water; slice 6:
+proportional losses runs); common consumer runs follow in the next slice.
 
 Tables (V13, all under RLS `tenant_isolation`, an index leading with `tenant_id`, composite foreign keys on
 `(tenant_id, id)`):
@@ -17,6 +17,8 @@ Tables (V13, all under RLS `tenant_isolation`, an index leading with `tenant_id`
 | `charge` | The ledger. `kind` `REGULAR`/`REVERSAL`/`OPENING`, `source` `TARIFF`/`CONSUMPTION`/`LOSSES`/`COMMON_CONSUMER`/`OPENING`/`MANUAL_REVERSAL`, `amount numeric(14,2)`, service period `service_from..service_to`, `accrued_on` (the age of the debt), `billing_month_id`, `calculation jsonb` (codes and numbers only), `source_key` (idempotency of later runs), `reverses_charge_id` (only on a reversal), `reason` (required on a reversal, optional on other kinds, for example an opening balance), `created_by`, `created_at` |
 | `charge_part` | The tariff versions behind a charge (days, an exact quantity `units_num/units_den`, the rate); written by the month run (one row per version) |
 | `meter_value_use` | The meter values a charge or run read: one row per point date (an interval charge: its two points). Not a ledger table. Rows stay after a reversal; `LedgerReadingUsage` leaves out the rows of reversed charges |
+| `losses_run` (V17) | A proportional losses run: `from_date`, `to_date`, `status` `BOOKED`/`REVERSED`, `billing_month_id` (its charges' month), `total`, `created_by`, `created_at`, `reversed_at`, `reversed_by`, `reverse_reason`. Its charges are `charge` rows with `run_id` and source `LOSSES` |
+| `losses_run_node` (V17) | A node of a run as booked: `node_meter_id` (the node's chain, its first meter), `node_kind`, `node_name`, the run's range and status repeated (`from_date`, `to_date`, `run_status`), `position`, `outcome` `CHARGED`/`NEGATIVE`/`UNKNOWN`/`SKIPPED_ABOVE`, `consumption`, `children`, `losses` (kWh, three decimals for display), `pct`, `calculated`, `amount`, `warning jsonb`, `plots jsonb` (codes, ids and numbers only). The exclusion constraint `losses_run_node_no_overlap_ex` keeps two booked runs from charging a node for the same day (only `BOOKED` and `CHARGED` rows) |
 | `not_charged_item` (V15) | The "not charged" queue: `item_key`, `kind` `TARIFF_MONTH`/`INTERVAL`/`LOSSES_NODE`/`COMMON_CONSUMER`, `plot_id`, `charge_type_id`, `meter_id`, `month`, `from_date`, `to_date`, `reason`, `params jsonb` (codes and ids only, `tariffIds`), `status` `OPEN`/`RESOLVED`/`OBSOLETE`, `resolved_at`. Not a ledger table: the application updates the status and, while open, the reason and params; `DELETE`/`TRUNCATE` revoked. One open item per key (`not_charged_item_open_key_uq`); an item goes with its plot or meter (`ON DELETE CASCADE`) |
 
 **Append-only (ADR 0006).** `nadel_app` has no `UPDATE`, `DELETE` or `TRUNCATE` on `charge` and `charge_part`, and a
@@ -180,6 +182,72 @@ Lock order of the slice: plot `FOR SHARE` -> charge type `FOR SHARE` -> billing 
   cannot either. A correction or deletion of a version or a change of scope holds its tariff `FOR UPDATE`, so it waits
   for a run and then sees its charges. The snapshot is read after the locks.
 
+## Proportional losses runs (tag `losses-runs`, slice 6)
+
+| Endpoint | Operation | Who |
+|---|---|---|
+| `POST /losses-runs?preview=true\|false` | `runLosses` | `CHARGES_RUN` (the preview too) |
+| `GET /losses-runs` | `listLossesRuns` | `CHARGES_VIEW` |
+| `GET /losses-runs/{id}` | `getLossesRun` | `CHARGES_VIEW` |
+| `POST /losses-runs/{id}/reverse` | `reverseLossesRun` | `CHARGES_REVERSE` |
+
+- **The network** (`meters.MeterNetwork.network(from, to)`; a booking `lockSharedNetwork`, every electricity meter
+  `FOR SHARE` in id order): every chain of electricity meters that worked in the range (a replacement never splits a
+  node), the histories of its meters and its places in the tree by days, through the day of the final removal.
+- **The losses** (`LossesCalculator`, pure): the days `from` to `to` are counted with end-of-day values, so the
+  consumption of a meter over days `a..b` is `valueAt(b) - valueAt(a - 1)` and back-to-back runs neither overlap nor
+  leave a gap. A node is a substation or quarter chain with a meter under it on a day of the range. Per node: losses =
+  its consumption - its children's consumption over the days they were under it (plot meters, common consumers, quarter
+  meters); `UNKNOWN` when its own or a child's value is unknown (no reading after the date); `SKIPPED_ABOVE` when a node
+  below it is unknown; `NEGATIVE` when the losses are below zero (nothing is charged); otherwise `CHARGED`: the losses
+  are shared among the plots under it (directly or through child nodes, within the days those were under it) in
+  proportion to each plot's consumption under it, exactly; a plot with zero consumption gets nothing. An interpolated
+  value marks the node `calculated`. The values a charged node read are listed (the points at, or on both sides of,
+  the end of the day before each slice and the end of each slice).
+- **The price** (`LossesPlanning`, pure): a plot's kWh from every charged node are added and priced once with its
+  electricity tariff over the range (`TariffResolver`; `ReadingChargeCalculator` spreads the kWh evenly over the days,
+  split by days when the rate changes, one rounding); one `LOSSES` charge per plot. A plot that cannot be priced is
+  listed with `reason` (`NO_TARIFF_FOR_ALL_DAYS`, `CONFLICTING_TARIFFS`, `OUTSIDE_SCOPE`, `EXCLUDED`) and not charged;
+  an inactive type or `0.00` charges nothing. Each node's share is also priced on its own for the node's `amount`.
+- **The answer** `{runId?, from, to, preview, billingMonth, nodes[{meterId, kind, name, consumption, children, losses,
+  pct, calculated, outcome, warning{code, meterId, meterKind, meterName, plotNumber, lastReadingOn, runId, from, to},
+  plots[{plotId, plotNumber, kwh, amount?, reason?}], amount}], charges[{plotId, plotNumber, kwh, amount, chargeId?,
+  reversed?}], plots, total, created, digest}`. Nodes: substations first, then quarter meters, each by name. Warning
+  codes: `NEGATIVE_LOSSES`, `UNKNOWN_VALUE`, `SKIPPED_ABOVE` (the node below), `ALREADY_CHARGED` (the booked run that
+  charged the node for a day of the range; outcome `ALREADY_CHARGED`, charges nothing), `NO_PLOT_CONSUMPTION` (losses
+  above zero, nobody under the node used anything).
+- **Rules:** `to` before `from` 400 `INVALID`, after today 400 `DATE_IN_FUTURE` (field `to`); `nodeIds[i]` not a node
+  of the range 400 `NOT_FOUND` (absent or empty: every node; any meter of a node's chain names it); the losses mode is
+  not `PROPORTIONAL` 409 `LOSSES_MODE_NOT_PROPORTIONAL` (preview too). A booking with a selected node that is
+  `ALREADY_CHARGED` is 409 `LOSSES_RANGE_OVERLAP` (book the others with `nodeIds`; the exclusion constraint is the
+  backstop); with a `digest` that differs 409 `PREVIEW_OUTDATED`. The digest covers the nodes that are not
+  `ALREADY_CHARGED` (outcome and numbers) and the charges (plot, exact kWh, amount), so a preview of every node matches
+  a booking of the others.
+- **Booking:** the run (`losses_run`) in the month of `to` or the earliest open month after it
+  (`BillingMonths.openForBooking`), its nodes (`losses_run_node`), one charge per plot (kind `REGULAR`, source
+  `LOSSES`, charge type `ELECTRICITY`, `tariff_id`, `run_id`, key `LOSSES_RUN:{run}:{plot}`, service period the range,
+  `accrued_on` = `to`, `calculation` `{amount, parts[{tariffVersionId, basis, frequency, quantity, unit KWH, rate, days,
+  from, to, nodeMeterId, calculated}], readings: [], runId, nodeMeterId (one node only)}`, one `charge_part` per node and
+  version with `node_meter_id` and the exact kWh), one `meter_value_use` row (with `run_id`) per value the charged nodes
+  read, an open item `LOSSES_NODE:{node}:{from}:{to}` (reason `UNKNOWN_NODE_VALUE`, `meter_id` the node, charge type
+  `ELECTRICITY`) per `UNKNOWN` or `SKIPPED_ABOVE` node, closes the open items of a charged node whose range meets the
+  run's (`RESOLVED`) and the item of a negative node for the same range (`OBSOLETE`), audit `LOSSES_RUN_BOOKED`
+  (entity type `LOSSES_RUN`, label `from/to`, values `from`, `to`, `billingMonth`, `nodes`, `count`, `total`) and
+  `ChargesBooked`.
+- **Reversal** (`reverse`): reason required (400 `REQUIRED`; `TOO_LONG` over 500); 404 `NOT_FOUND`; 409
+  `RUN_ALREADY_REVERSED`; the run's month `FOR SHARE`, a closed one 409 `RUN_IN_CLOSED_MONTH`. Every charge of the run
+  that is not reversed yet (one may have been reversed by hand) gets a `REVERSAL` row with the run's reason (source
+  `MANUAL_REVERSAL`, the run's `run_id`, in the charge's month); the run becomes `REVERSED` with the time, person and
+  reason, its nodes `run_status = REVERSED` (their days are free again, and its value uses no longer count). Audit
+  `LOSSES_RUN_REVERSED` (`from`, `to`, `count`, `total` of the reversals, `reason`); `ChargesBooked`. The ledger stays
+  append-only; the run rows change only by `BOOKED` -> `REVERSED` (trigger `run_reversal_guard`, V17).
+- **History and details:** newest first, with `billingMonth`, `createdByName`, `total`, `plots` (charges),
+  `chargedNodes`, `skippedNodes`, `reversible` (`CHARGES_REVERSE`, booked, open month) and the reversal; the details add
+  the nodes as booked and the charges with their exact kWh (from their parts) and whether each was reversed.
+- **Locks:** the cooperative's advisory lock of losses runs (`ledger.losses-runs:{tenant}`; bookings, reversals and
+  retries one at a time) -> every electricity meter `FOR SHARE` -> the queue lock -> the charge types and tariffs
+  `FOR SHARE` -> the billing month `FOR SHARE`: the order of the month run.
+
 ## The "not charged" queue (tag `not-charged`, slice 3)
 
 | Endpoint | Operation | Who |
@@ -199,9 +267,15 @@ Lock order of the slice: plot `FOR SHARE` -> charge type `FOR SHARE` -> billing 
   (the charge keeps its service period and `accrued_on`); the item is `RESOLVED` (also when the charge exists already),
   `OBSOLETE` when nothing is left to charge, and stays open (reason and tariffs refreshed) while the conflict remains.
   Answer `{resolved, item?}`; an item that is not open answers `{resolved: true}` and changes nothing; an unknown item
-  or one of another cooperative is 404 `NOT_FOUND`. Other kinds are retried by their own slices. Audit
+  or one of another cooperative is 404 `NOT_FOUND`. Common consumer items are retried by their own slice. Audit
   `NOT_CHARGED_RETRIED` (entity type `CHARGE` about the plot; `kind`, `reason`, `chargeType`, `month`, `outcome`
   `RESOLVED`/`OBSOLETE`/`OPEN`).
+- **Retry** of a `LOSSES_NODE` item (`LossesRuns.retry`, under the locks of a booking, the item `FOR UPDATE` after the
+  queue lock): a run of that node alone over the item's range. Charged now -> the run is booked (audit
+  `LOSSES_RUN_BOOKED`) and the item `RESOLVED`; charged by another run meanwhile -> `RESOLVED`; negative, no longer a
+  node of the range, or the losses mode not proportional -> `OBSOLETE`; still unknown -> open. Audit
+  `NOT_CHARGED_RETRIED` with entity type `METER` about the node meter (label its name; `kind`, `reason`, `from`, `to`,
+  `outcome`, `runId` when a run was booked).
 - **Check list:** `notChargedCount` of a month counts its open items: those of the month itself and those without a
   month whose `to_date` falls in it.
 
@@ -270,7 +344,8 @@ span are used when such a range of a charge that is not reversed meets the span.
 a change on a date reaches, from the day after the previous point to the day before the next one (or the date itself),
 so a correction or deletion of a charged reading and a reading inside a charged interval are 409 `READING_IN_USE`, a
 new reading after a charged interval is accepted, and after the reversal of the charge the reading can change again.
-It replaced the stub `meters/internal/NoChargesYetUsage`.
+A booked losses run reads every meter of its charged nodes on the closed range of its `meter_value_use` rows (with
+`run_id`); the rows of a reversed run no longer count. It replaced the stub `meters/internal/NoChargesYetUsage`.
 
 ## Tariff versions in use
 
@@ -307,10 +382,16 @@ Entity type `BILLING_MONTH` (`LedgerAuditPublisher.publishMonth`), about the mon
 - `BILLING_MONTH_CLOSED`: `status` `OPEN` -> `CLOSED`.
 - `BILLING_MONTH_RUN`: `count` (charges written) and `total` (their sum).
 
+Entity type `LOSSES_RUN` (`LedgerAuditPublisher.publishLossesRun`), about the run, label its range `from/to`:
+
+- `LOSSES_RUN_BOOKED`: `from`, `to`, `billingMonth`, `nodes` (charged), `count` (charges), `total`.
+- `LOSSES_RUN_REVERSED`: `from`, `to`, `count` (reversals), `total` (their sum, negative), `reason`.
+
 Entity type `CHARGE` about the plot, as above:
 
 - `NOT_CHARGED_RETRIED`: `kind`, `reason`, `chargeType`, `month` (a month item) or `from` and `to` (a reading
-  interval), `outcome`.
+  interval), `outcome`. A losses node item is an entry of entity type `METER` about the node meter (label its name)
+  with `kind`, `reason`, `from`, `to`, `outcome` and `runId` when a run was booked.
 
 The charges themselves are the ledger and are not repeated in the log. Reasons are user content: never logged.
 
@@ -324,18 +405,18 @@ Every action is a constant of `LedgerAuditPublisher.Action` and must also be a v
 `tariffIds`, `lockShared`; the pure `TariffResolver`, `ChargeCalculator.breakdown` and `DaySet`; the port
 `TariffVersionUsage`, implemented here), `plots` (`PlotCatalog`: `find`, `findAll`, `findAndLockShared`,
 `inNaturalOrder`, `findChargeable`; the SPI `PlotChangeGuard`; the debt cache writer `PlotDebtCache`),
-`meters` (`MeterNetwork.staleMeters` and `lockSharedPoints`, the event `PlotMeterPointsChanged`, `Quantity`,
-`MeterValue`, `WaterConnections.connectedDays`; the port `ReadingUsage`, implemented here), `settings` (`CooperativeSettings.lossesMode`,
+`meters` (`MeterNetwork.staleMeters`, `lockSharedPoints`, `network` and `lockSharedNetwork`, the event
+`PlotMeterPointsChanged`, `ConsumptionCalculator`, `Quantity`, `MeterValue`, `WaterConnections.connectedDays`; the port
+`ReadingUsage`, implemented here), `settings` (`CooperativeSettings.lossesMode`,
 `lossesPercent`), `money` (`Money`), `identity` (`CurrentUser`, `AccessProfile`, `Permission`,
 `OwnedPlotsSource`), `audit` (events, `ActorNames`), `problem`, `tenancy` (`TenantContext`). Nothing depends on
 `ledger`.
 
 ## Permissions
 
-`CHARGES_VIEW` (Chairman, Treasurer): every plot's account, the months and the queue, and later the runs.
-`CHARGES_RUN` (Chairman): opening balances, the month run (and its preview) and retries, and later losses and common
-consumer runs. `CHARGES_REVERSE`
-(Chairman): reversing a charge, and later a run. `PERIODS_CLOSE` (Chairman): closing a month. Defined in
+`CHARGES_VIEW` (Chairman, Treasurer): every plot's account, the months, the queue and the losses runs.
+`CHARGES_RUN` (Chairman): opening balances, the month run (and its preview), retries and losses runs (and their
+previews), and later common consumer runs. `CHARGES_REVERSE` (Chairman): reversing a charge or a losses run. `PERIODS_CLOSE` (Chairman): closing a month. Defined in
 `identity.Permission`, seeded by `seed_base_roles` (V13; existing cooperatives by targeted inserts).
 
 ## Tests
@@ -351,7 +432,13 @@ or keeping it open with the run's tariffs, 404, permissions, audit), `ReadingCha
 `ReadingChargesTests` (entry, member approval, replacement, removal, a closed month, no tariff -> queue -> retry and
 month run, a deletion, conflicts, water inactive, fixed losses, a redelivered event), `ReadingUsageTests` (409 while
 charged, a reading inside a charged interval, a new reading after one, accepted after the reversal),
-`TariffVersionUsageTests` (409 after the run, accepted after the reversal), the water rows of `MonthRunTests` (25.00 for
+`TariffVersionUsageTests` (409 after the run, accepted after the reversal), `LossesCalculatorTests` (pure: the losses
+rows of §3 - quarter, substation, negative -50, unknown skipping above - shares, a plot moved between quarters,
+calculated values, the values read, the price once per plot, a rate change, overlaps, plots without a tariff, the
+digest), `LossesRunsTests` (preview, booking with charges, parts, value uses and audit, a stale digest, the overlap
+refusal, the reversal of every charge with the run's reason, a closed month, a skipped node charged later by retries,
+calculated marks, the readings a run uses, the mode, validation, node selection, permissions),
+`LossesRunTenantIsolationTests` (V17), the water rows of `MonthRunTests` (25.00 for
 a connected plot, nothing and nothing queued for one that is not, 12.90 from the 16th, a conflict only for a connected
 plot) and of `ReadingChargesTests` (a plot not connected for the whole interval: nothing and nothing queued; the
 connected days only),

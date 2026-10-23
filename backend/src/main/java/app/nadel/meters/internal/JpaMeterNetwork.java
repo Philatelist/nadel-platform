@@ -25,7 +25,8 @@ import org.springframework.transaction.annotation.Transactional;
  * point of a meter is its latest approved reading, else its installation, and the meter is stale when that point is
  * dated before the given day. The points of a meter are those of {@code ConsumptionCalculator}: the initial value, the
  * approved readings and the final value, a reading taking the place of a boundary point on its date. A water meter of
- * a plot that is not connected to water on the check date is never stale (feature 011 §2.8).
+ * a plot that is not connected to water on the check date is never stale (feature 011 §2.8). The network of the losses
+ * runs is the one of the tree screen ({@link TreeQueries#network}), with the placements counted by days.
  */
 @Component
 class JpaMeterNetwork implements MeterNetwork {
@@ -36,12 +37,34 @@ class JpaMeterNetwork implements MeterNetwork {
     private final MeterRepository meters;
     private final MeterReadingRepository readings;
     private final WaterConnectionRepository waterConnections;
+    private final TreeQueries tree;
 
     JpaMeterNetwork(MeterRepository meters, MeterReadingRepository readings,
-            WaterConnectionRepository waterConnections) {
+            WaterConnectionRepository waterConnections, TreeQueries tree) {
         this.meters = meters;
         this.readings = readings;
         this.waterConnections = waterConnections;
+        this.tree = tree;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Network network(LocalDate from, LocalDate to) {
+        requireRange(from, to);
+        return tree.network(meters.findByResource(MeterResource.ELECTRICITY), from, to);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY) // a row lock needs a read-write transaction
+    public Network lockSharedNetwork(LocalDate from, LocalDate to) {
+        requireRange(from, to);
+        return tree.network(meters.findByResourceForShare(MeterResource.ELECTRICITY), from, to);
+    }
+
+    private static void requireRange(LocalDate from, LocalDate to) {
+        if (to.isBefore(from)) {
+            throw new IllegalArgumentException("A range does not end before it starts");
+        }
     }
 
     @Override

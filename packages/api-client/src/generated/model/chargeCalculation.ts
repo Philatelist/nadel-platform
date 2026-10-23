@@ -20,8 +20,10 @@ export interface ChargeCalculation {
   amount: Money;
   parts: ChargeCalculationPart[];
   readings: ChargeCalculationReading[];
-  /** The node of the meter tree whose losses the charge carries */
+  /** The node of the meter tree whose losses the charge carries, when it carries the losses of one node only (the parts name the node of each part) */
   nodeMeterId?: string;
+  /** The losses run that booked the charge */
+  runId?: string;
   /** The common consumer the charge is for */
   consumerMeterId?: string;
   /**

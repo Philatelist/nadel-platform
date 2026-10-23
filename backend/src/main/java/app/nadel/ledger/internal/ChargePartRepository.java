@@ -1,5 +1,7 @@
 package app.nadel.ledger.internal;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -7,6 +9,9 @@ import org.springframework.data.repository.query.Param;
 
 // no tenant_id filter needed: RLS hides other cooperatives' rows
 interface ChargePartRepository extends JpaRepository<ChargePartRecord, UUID> {
+
+    /** The parts of the charges, in no particular order. */
+    List<ChargePartRecord> findByChargeIdIn(Collection<UUID> chargeIds);
 
     /** Whether a charge that is not reversed has a part priced by the tariff version. */
     @Query("""

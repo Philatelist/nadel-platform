@@ -73,4 +73,37 @@ describe('ChargeDetailDialog', () => {
     expect(screen.getByText('Losses percentage').nextSibling).toHaveTextContent('5.00%');
     expect(screen.getByRole('region', { name: 'Calculation' })).toHaveTextContent('4.665 kWh');
   });
+
+  it('names the node of each part and links the run of a proportional losses charge', () => {
+    const part = consumption.calculation.parts[0]!;
+    open({
+      ...losses,
+      calculation: {
+        amount: '30.00',
+        runId: 'r1',
+        parts: [
+          { ...part, nodeMeterId: 'qa', calculated: true },
+          { ...part, nodeMeterId: 'sub' },
+        ],
+        readings: [],
+      },
+    });
+    expect(screen.getByRole('link', { name: 'Open the run' })).toHaveAttribute(
+      'href',
+      '/charges/losses?run=r1',
+    );
+    const calculation = screen.getByRole('region', { name: 'Calculation' });
+    const nodes = within(calculation).getAllByRole('link', { name: 'Node' });
+    expect(nodes.map((n) => n.getAttribute('href'))).toEqual(['/meters/qa', '/meters/sub']);
+    expect(calculation).toHaveTextContent('(calculated)');
+  });
+
+  it('links the single node of a losses charge once', () => {
+    const part = consumption.calculation.parts[0]!;
+    open({
+      ...losses,
+      calculation: { ...losses.calculation, nodeMeterId: 'qa', parts: [{ ...part, nodeMeterId: 'qa' }] },
+    });
+    expect(screen.getAllByRole('link', { name: 'Node' })).toHaveLength(1);
+  });
 });

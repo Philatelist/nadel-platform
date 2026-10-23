@@ -172,13 +172,17 @@ export const getRetryNotChargedUrl = (id: string,) => {
 
 /**
  * Tries again to charge what the item is about (for `TARIFF_MONTH`: the tariffs of its charge type for its plot
- * and month, as the month run does). When the charge is created, or exists already, or nothing is left to
- * charge (the plot left the scope of the tariffs, the amount is `0.00`), the item is closed and `resolved` is
- * true; otherwise it stays open with its (possibly updated) reason and tariffs and is returned as `item`. A
- * charge for a month that was closed in the meantime is booked in the earliest open month after it. An item that
- * is no longer open answers `resolved: true` and changes nothing. An unknown item, or one of another
- * cooperative, is 404 `NOT_FOUND`. Requires `CHARGES_RUN`; written to the audit log (`NOT_CHARGED_RETRIED`,
- * entity type `CHARGE` about the plot).
+ * and month, as the month run does; for `INTERVAL`: the meter interval, as an approved reading does; for
+ * `LOSSES_NODE`: a losses run of that node alone over the item's range, as `runLosses` books it). When the charge
+ * is created, or exists already, or nothing is left to charge (the plot left the scope of the tariffs, the amount
+ * is `0.00`; for `LOSSES_NODE`: the node's losses are now known but negative, the node is no longer in the tree
+ * for the range, or the losses mode is no longer `PROPORTIONAL`), the item is closed and `resolved` is true;
+ * otherwise it stays open with its (possibly updated) reason and tariffs and is returned as `item`. A charge for a
+ * month that was closed in the meantime is booked in the earliest open month after it. An item that is no longer
+ * open answers `resolved: true` and changes nothing. An unknown item, or one of another cooperative, is 404
+ * `NOT_FOUND`. Requires `CHARGES_RUN`; written to the audit log (`NOT_CHARGED_RETRIED`, entity type `CHARGE` about
+ * the plot; for `LOSSES_NODE` entity type `METER` about the node meter, and a booked run also writes
+ * `LOSSES_RUN_BOOKED`).
  * @summary Retry one "not charged" item
  */
 export const retryNotCharged = async (id: string, options?: Parameters<typeof nadelFetch>[1]): Promise<NotChargedRetryResult> => {

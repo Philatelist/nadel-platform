@@ -5,7 +5,7 @@ import { useMe } from '../../me';
 
 interface Tab {
   to: string;
-  label: 'months' | 'notCharged';
+  label: 'months' | 'notCharged' | 'losses';
   /** Omitted: every holder of CHARGES_VIEW sees the tab. */
   permission?: Permission;
   end?: boolean;
@@ -15,6 +15,7 @@ interface Tab {
 const TABS: readonly Tab[] = [
   { to: '/charges', label: 'months' },
   { to: '/charges/not-charged', label: 'notCharged' },
+  { to: '/charges/losses', label: 'losses' },
 ];
 
 const tabClass = ({ isActive }: { isActive: boolean }) =>

@@ -2,6 +2,7 @@ import {
   getGetPlotAccountQueryKey,
   getGetPlotMapQueryKey,
   getGetPlotQueryKey,
+  getListLossesRunsQueryKey,
   getListNotChargedQueryKey,
   getListPlotsQueryKey,
 } from '@nadel/api-client';
@@ -23,6 +24,16 @@ export async function invalidateAfterRun(queryClient: QueryClient, month: string
   await Promise.all([
     invalidateAfterClose(queryClient, month),
     queryClient.invalidateQueries({ queryKey: getListNotChargedQueryKey() }),
+  ]);
+}
+
+/** After a range run is booked or reversed: the month, the queue, every plot account and the lists of runs. */
+export async function invalidateAfterRangeRun(queryClient: QueryClient, month?: string): Promise<void> {
+  const plots = (key: readonly unknown[]) => typeof key[0] === 'string' && key[0].startsWith('/api/v1/plots');
+  await Promise.all([
+    month === undefined ? invalidateAfterClose(queryClient, '') : invalidateAfterRun(queryClient, month),
+    queryClient.invalidateQueries({ queryKey: getListLossesRunsQueryKey() }),
+    queryClient.invalidateQueries({ predicate: (query) => plots(query.queryKey) }),
   ]);
 }
 

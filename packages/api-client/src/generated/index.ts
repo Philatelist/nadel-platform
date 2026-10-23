@@ -3,6 +3,7 @@ export * from './billing/billing';
 export * from './charge-types/charge-types';
 export * from './charges/charges';
 export * from './imports/imports';
+export * from './losses-runs/losses-runs';
 export * from './me/me';
 export * from './members/members';
 export * from './meter-tree/meter-tree';

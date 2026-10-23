@@ -97,11 +97,14 @@ abstract class FreshCooperativeSupport extends LedgerTestSupport {
             sql.update("delete from charge_part where tenant_id = ?", id);
             sql.update("delete from charge where tenant_id = ? and reverses_charge_id is not null", id);
             sql.update("delete from charge where tenant_id = ?", id);
+            sql.update("delete from losses_run_node where tenant_id = ?", id);
+            sql.update("delete from losses_run where tenant_id = ?", id);
             sql.update("delete from not_charged_item where tenant_id = ?", id);
             sql.update("delete from billing_month where tenant_id = ?", id);
         });
         // a replacement points at the meter it replaced
         owner().update("delete from meter_reading where tenant_id = ?", id);
+        owner().update("delete from meter_parent where tenant_id = ?", id);
         owner().update("delete from meter where tenant_id = ? and replaces_meter_id is not null", id);
         for (String table : List.of("audit_entry", "plot_status", "tariff_scope_plot", "tariff_version", "tariff",
                 "ownership", "plot_water_connection", "meter_reading", "meter", "plot", "member_role", "role_permission", "role", "member",

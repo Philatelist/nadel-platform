@@ -7,12 +7,15 @@ import app.nadel.identity.AccessProfile;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 
 /**
  * Publishes the audit event of a change to the ledger: a reversal, an opening balance or a retried "not charged" item
- * (entity type {@code CHARGE}), or the closing or the run of a billing month (entity type {@code BILLING_MONTH}). A
+ * (entity type {@code CHARGE}), the closing or the run of a billing month (entity type {@code BILLING_MONTH}), a losses
+ * run booked or reversed (entity type {@code LOSSES_RUN}, label {@code from/to}) or the retry of a losses node item
+ * (entity type {@code METER} about the node meter, label its name). A
  * {@code CHARGE} entry is about the plot whose account changed: the entity id is the plot's id, so the log links to the
  * plot card, and the label its number (user content). Values are codes and parameters: the charge type as
  * {@code base:<CODE>} or its stored name, amounts with two decimals, ISO dates, the billing month as {@code YYYY-MM},
@@ -24,6 +27,8 @@ class LedgerAuditPublisher {
 
     static final String CHARGE = "CHARGE";
     static final String BILLING_MONTH = "BILLING_MONTH";
+    static final String LOSSES_RUN = "LOSSES_RUN";
+    static final String METER = "METER";
 
     /**
      * Every action the ledger writes to the audit log. Each must also be a value of the contract's {@code AuditAction},
@@ -34,7 +39,9 @@ class LedgerAuditPublisher {
         OPENING_BALANCE_ENTERED,
         NOT_CHARGED_RETRIED,
         BILLING_MONTH_CLOSED,
-        BILLING_MONTH_RUN
+        BILLING_MONTH_RUN,
+        LOSSES_RUN_BOOKED,
+        LOSSES_RUN_REVERSED
     }
 
     private final ApplicationEventPublisher events;
@@ -54,8 +61,27 @@ class LedgerAuditPublisher {
      * the month as {@code YYYY-MM} (a code).
      */
     void publishMonth(AccessProfile actor, Action action, UUID monthId, String month, List<FieldChange> changes) {
+        publishAbout(actor, action, BILLING_MONTH, monthId, month, changes);
+    }
+
+    /** An entry about a losses run (entity type {@code LOSSES_RUN}): the label is its range {@code from/to}. */
+    void publishLossesRun(AccessProfile actor, Action action, UUID runId, String range, List<FieldChange> changes) {
+        publishAbout(actor, action, LOSSES_RUN, runId, range, changes);
+    }
+
+    /**
+     * An entry about a meter (entity type {@code METER}): the retry of a losses node item, about the node meter; the
+     * label is the meter's name (user content), null when unknown.
+     */
+    void publishMeter(AccessProfile actor, Action action, UUID meterId, @Nullable String name,
+            List<FieldChange> changes) {
+        publishAbout(actor, action, METER, meterId, name, changes);
+    }
+
+    private void publishAbout(AccessProfile actor, Action action, String entityType, UUID entityId,
+            @Nullable String label, List<FieldChange> changes) {
         events.publishEvent(AuditEvent.now(Objects.requireNonNull(actor.tenantId()),
-                new Actor(actor.memberId(), actor.subject(), actor.displayName()), action.name(), BILLING_MONTH,
-                monthId, month, changes));
+                new Actor(actor.memberId(), actor.subject(), actor.displayName()), action.name(), entityType,
+                entityId, label, changes));
     }
 }

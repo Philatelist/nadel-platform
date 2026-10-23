@@ -31,4 +31,6 @@ export interface ChargeCalculationPart {
   to: string;
   /** True when the quantity rests on a value calculated between readings ("розрахунковий") */
   calculated?: boolean;
+  /** The node of the meter tree whose losses this part carries (a proportional losses charge has one part per node and tariff version) */
+  nodeMeterId?: string;
 }

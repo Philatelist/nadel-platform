@@ -106,6 +106,14 @@ public final class ProblemCodes {
 
     /** 409: a run is booked with the digest of a preview that no longer matches what it would create. */
     public static final String PREVIEW_OUTDATED = "PREVIEW_OUTDATED";
+    /** 409: a losses run is asked while the cooperative charges losses as a fixed percentage. */
+    public static final String LOSSES_MODE_NOT_PROPORTIONAL = "LOSSES_MODE_NOT_PROPORTIONAL";
+    /** 409: a booked losses run charged a node of the new run for a day of its range. */
+    public static final String LOSSES_RANGE_OVERLAP = "LOSSES_RANGE_OVERLAP";
+    /** 409: the run was reversed before; a run is reversed once. */
+    public static final String RUN_ALREADY_REVERSED = "RUN_ALREADY_REVERSED";
+    /** 409: the charges of the run are booked in a closed billing month; their correction is an adjustment. */
+    public static final String RUN_IN_CLOSED_MONTH = "RUN_IN_CLOSED_MONTH";
 
     /** 409: the plot is connected to water on one of the days of the new connection (or has a lasting one). */
     public static final String WATER_ALREADY_CONNECTED = "WATER_ALREADY_CONNECTED";

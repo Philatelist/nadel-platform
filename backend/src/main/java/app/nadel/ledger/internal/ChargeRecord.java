@@ -78,6 +78,9 @@ class ChargeRecord {
     @Column(name = "meter_id", updatable = false)
     private UUID meterId;
 
+    @Column(name = "run_id", updatable = false)
+    private UUID runId;
+
     @Column(name = "reverses_charge_id", updatable = false)
     private UUID reversesChargeId;
 
@@ -180,8 +183,37 @@ class ChargeRecord {
     }
 
     /**
-     * The reversal of {@code original}: the opposite amount, the same plot, charge type, service period and debt age,
-     * source {@code MANUAL_REVERSAL}, the reason, pointing at the original.
+     * A losses charge of a proportional losses run (kind {@code REGULAR}, source {@code LOSSES}): the plot's kWh from
+     * every node of the run priced with its electricity tariff, for the days of the run's range, the debt counting from
+     * its end; identified by {@code sourceKey} ({@code LOSSES_RUN:{run}:{plot}}) and pointing at the run.
+     */
+    static ChargeRecord lossesRun(UUID tenantId, UUID plotId, UUID chargeTypeId, UUID billingMonthId, UUID tariffId,
+            UUID runId, Money amount, LocalDate serviceFrom, LocalDate serviceTo, String sourceKey,
+            Map<String, Object> calculation, @Nullable UUID createdBy, Instant now) {
+        ChargeRecord charge = new ChargeRecord();
+        charge.id = UUID.randomUUID();
+        charge.tenantId = tenantId;
+        charge.plotId = plotId;
+        charge.chargeTypeId = chargeTypeId;
+        charge.billingMonthId = billingMonthId;
+        charge.kind = ChargeKind.REGULAR;
+        charge.source = ChargeSource.LOSSES;
+        charge.amount = amount.value();
+        charge.serviceFrom = serviceFrom;
+        charge.serviceTo = serviceTo;
+        charge.accruedOn = serviceTo;
+        charge.calculation = calculation;
+        charge.sourceKey = sourceKey;
+        charge.tariffId = tariffId;
+        charge.runId = runId;
+        charge.createdBy = createdBy;
+        charge.createdAt = now;
+        return charge;
+    }
+
+    /**
+     * The reversal of {@code original}: the opposite amount, the same plot, charge type, service period, debt age, meter
+     * and run, source {@code MANUAL_REVERSAL}, the reason, pointing at the original.
      */
     static ChargeRecord reversalOf(ChargeRecord original, UUID billingMonthId, String reason,
             Map<String, Object> calculation, @Nullable UUID createdBy, Instant now) {
@@ -199,6 +231,7 @@ class ChargeRecord {
         charge.accruedOn = original.accruedOn;
         charge.calculation = calculation;
         charge.meterId = original.meterId;
+        charge.runId = original.runId;
         charge.reversesChargeId = original.id;
         charge.reason = reason;
         charge.createdBy = createdBy;
@@ -260,6 +293,11 @@ class ChargeRecord {
 
     @Nullable UUID getMeterId() {
         return meterId;
+    }
+
+    /** The run (a losses run) that booked the charge, or whose charge a reversal cancels; null for other charges. */
+    @Nullable UUID getRunId() {
+        return runId;
     }
 
     @Nullable UUID getReversesChargeId() {

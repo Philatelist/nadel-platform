@@ -10,6 +10,7 @@ import {
   formatPercent,
 } from '@nadel/shared';
 import type { ReactNode } from 'react';
+import { Link } from 'react-router';
 import { useLocale, useT } from '../../i18n';
 import { useCan } from '../../me';
 import { ChargeTypeName } from '../ChargeTypeName';
@@ -43,6 +44,23 @@ export function ChargeDetailDialog({ charge, onClose }: { charge: Charge; onClos
     const text = formatMeterValue(consumption, locale);
     rows.push([d.consumption, unit && unit !== 'PLOT' ? `${text} ${t.charges.line.unit[unit]}` : text]);
   }
+  const { nodeMeterId, runId } = charge.calculation;
+  if (nodeMeterId !== undefined) {
+    rows.push([
+      d.node,
+      <Link key="node" to={`/meters/${nodeMeterId}`} className="text-accent underline">
+        {d.node}
+      </Link>,
+    ]);
+  }
+  if (runId !== undefined) {
+    rows.push([
+      d.run,
+      <Link key="run" to={`/charges/losses?run=${runId}`} className="text-accent underline">
+        {d.openRun}
+      </Link>,
+    ]);
+  }
   if (lossesPercent !== undefined) rows.push([d.lossesPercent, formatPercent(lossesPercent, locale)]);
   if (charge.reason) rows.push([d.reason, <UserContent key="reason">{charge.reason}</UserContent>]);
   rows.push([
@@ -73,6 +91,14 @@ export function ChargeDetailDialog({ charge, onClose }: { charge: Charge; onClos
               {parts.map((part, index) => (
                 <li key={`${part.from}-${part.to}-${index}`}>
                   {calculationLine(part, singlePart ? charge.calculation.amount : undefined, t, locale)}
+                  {part.nodeMeterId !== undefined && part.nodeMeterId !== nodeMeterId && (
+                    <>
+                      {' '}
+                      <Link to={`/meters/${part.nodeMeterId}`} className="text-accent underline">
+                        {d.node}
+                      </Link>
+                    </>
+                  )}
                   {part.calculated && <span className="ml-2 text-ink-muted">({d.calculated})</span>}
                 </li>
               ))}

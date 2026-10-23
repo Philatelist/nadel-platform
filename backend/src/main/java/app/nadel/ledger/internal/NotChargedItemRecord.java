@@ -157,6 +157,37 @@ class NotChargedItemRecord {
     }
 
     /**
+     * The key of the item of a node of the meter tree whose losses a run could not calculate for its range:
+     * {@code LOSSES_NODE:{node}:{from}:{to}}.
+     */
+    static String lossesNodeKey(UUID nodeMeterId, LocalDate from, LocalDate to) {
+        return "LOSSES_NODE:" + nodeMeterId + ":" + from + ":" + to;
+    }
+
+    /**
+     * An open item: a losses run skipped the node (the node of the tree, by the first meter of its chain) for the days
+     * {@code from} to {@code to}, because a value it needs is unknown (its own, a child's, or a node's below it).
+     */
+    static NotChargedItemRecord lossesNode(UUID tenantId, UUID nodeMeterId, UUID chargeTypeId, LocalDate from,
+            LocalDate to, Instant now) {
+        NotChargedItemRecord item = new NotChargedItemRecord();
+        item.id = UUID.randomUUID();
+        item.tenantId = tenantId;
+        item.itemKey = lossesNodeKey(nodeMeterId, from, to);
+        item.kind = Kind.LOSSES_NODE;
+        item.chargeTypeId = chargeTypeId;
+        item.meterId = nodeMeterId;
+        item.fromDate = from;
+        item.toDate = to;
+        item.reason = Reason.UNKNOWN_NODE_VALUE;
+        item.params = params(List.of());
+        item.status = Status.OPEN;
+        item.createdAt = now;
+        item.updatedAt = now;
+        return item;
+    }
+
+    /**
      * A new attempt at the interval ending at the same point failed again: the reason, the tariffs and the start of
      * the interval of that attempt (a reading inserted or deleted before the point changes it). Only an open item
      * changes.

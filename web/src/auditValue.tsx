@@ -1,5 +1,6 @@
 import type { AuditEntityType } from '@nadel/api-client';
 import {
+  format,
   formatDay,
   formatMonth,
   formatMoney,
@@ -11,6 +12,7 @@ import {
   type Messages,
 } from '@nadel/shared';
 import type { ReactNode } from 'react';
+import { Link } from 'react-router';
 import { UserContent } from './components/UserContent';
 import { billingMonthLabel } from './components/charges/billingMonth';
 
@@ -104,6 +106,7 @@ function ownersList(raw: string, t: Messages, locale: string): ReactNode {
 const PLAIN_NUMBER = /^-?\d+(\.\d+)?$/;
 const NUMBER_FIELDS = new Set([
   'count',
+  'nodes',
   'areaM2',
   'position',
   'plotsCreated',
@@ -213,6 +216,12 @@ export function auditValue(
       return user(raw);
     case 'outcome':
       return catalog(a.outcome);
+    case 'runId':
+      return (
+        <Link to={`/charges/losses?run=${raw}`} className="text-accent underline">
+          {t.charges.detail.openRun}
+        </Link>
+      );
     case 'source':
       // a water source is a meter name (user content) or `base:COOPERATIVE_SUPPLY`
       return entityType === 'PLOT'
@@ -233,7 +242,20 @@ export function auditValue(
 }
 
 /** The label of the changed record in the "Record" column. */
-export function auditRecordLabel(entityType: AuditEntityType, label: string, t: Messages): ReactNode {
+export function auditRecordLabel(
+  entityType: AuditEntityType,
+  label: string,
+  t: Messages,
+  locale: string,
+): ReactNode {
+  // a losses run is labelled by its range, `from/to` in ISO days
+  if (entityType === 'LOSSES_RUN') {
+    const [from, to] = label.split('/');
+    if (from && to && ISO_DAY.test(from) && ISO_DAY.test(to)) {
+      return format(t.billing.runHistory.range, { from: formatDay(from, locale), to: formatDay(to, locale) });
+    }
+    return label;
+  }
   if (entityType === 'SETTINGS') return t.settings.title;
   if (entityType === 'BILLING_MONTH') return billingMonthLabel(label, t);
   if (entityType === 'ROLE') return baseToken(label, t.roles);

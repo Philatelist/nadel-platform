@@ -51,7 +51,7 @@ export function NotChargedPlot({ item }: { item: NotChargedItem }) {
       )}
       {item.meterId && (
         <Link to={`/meters/${item.meterId}`} className="text-sm text-accent underline">
-          {t.billing.notCharged.meter}
+          {item.kind === 'LOSSES_NODE' ? t.billing.notCharged.node : t.billing.notCharged.meter}
         </Link>
       )}
     </div>

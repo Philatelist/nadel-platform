@@ -41,3 +41,11 @@
 - Minor: `IntervalCharging.java:283` persist instead of INSERT … ON CONFLICT DO NOTHING (safe under the meter lock + unique key). → noted.
 - Minor: `web/src/auditValue.tsx:188-189` `from`/`to` formatted as dates for every action. → noted.
 - Minor: `settings.losses.text` wording fits PROPORTIONAL only. → carry into the Slice 5 web task.
+
+## Slice 5 — round 1 (5e21bfb): PASS
+- Minor: `WaterConnectionPanel.tsx:51-56` buttons follow `current`; a future `until` or a future-start lasting connection gives a wrong button and 409. → carry into the Slice 6 web task.
+- Minor: uk texts differ from spec wording ("Водопровід кооперативу", "Ділянка вже підключена до води"). → carry into the Slice 6 web task.
+- Minor: `WATER_SOURCE_IN_USE` text says "disconnect them first" though a meter with any past connection can't be deleted. → carry into the Slice 6 web task.
+- Minor: a removed well meter's lasting connections can't be reached from Settings; archiving a plot / making it common land is not blocked by a lasting connection. → Slice 9 (README note or guard).
+- Minor: `WaterConnectionCommands.disconnectAll:1030` stops at the first INVALID. → noted.
+- Minor: `MeterQueries.connectedToday:850-855` IN list not chunked. → noted.
