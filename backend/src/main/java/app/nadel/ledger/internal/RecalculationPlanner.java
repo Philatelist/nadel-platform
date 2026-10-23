@@ -65,9 +65,12 @@ final class RecalculationPlanner {
      * @param openQueueKeys    the open "not charged" items of the scope
      * @param cause            what caused the recalculation (names a line's reason when the comparison cannot)
      * @param waterChargeTypes the water charge types (their day changes are water connection changes)
+     * @param runMonths        the billing month of each run of the scope, by run id (a run follows its month, not the
+     *                         month of a charge of it: a plot new to a closed run is charged in an open one)
      */
     record Input(List<BookedCharge> booked, List<Expected> expected, List<MonthState> months, LocalDate today,
-            Set<String> openQueueKeys, RecalculationRecord.Cause cause, Set<UUID> waterChargeTypes) {
+            Set<String> openQueueKeys, RecalculationRecord.Cause cause, Set<UUID> waterChargeTypes,
+            Map<UUID, YearMonth> runMonths) {
 
         Input {
             booked = List.copyOf(booked);
@@ -77,6 +80,7 @@ final class RecalculationPlanner {
             openQueueKeys = Set.copyOf(openQueueKeys);
             Objects.requireNonNull(cause, "cause");
             waterChargeTypes = Set.copyOf(waterChargeTypes);
+            runMonths = Map.copyOf(runMonths);
         }
     }
 
@@ -183,9 +187,10 @@ final class RecalculationPlanner {
             if (perLine.isEmpty()) {
                 return;
             }
-            Optional<YearMonth> month = runIdentities.stream().map(chains::get).filter(Objects::nonNull)
-                    .map(BookedChain::live).filter(Objects::nonNull).map(BookedCharge::billingMonth).findFirst();
-            if (month.isEmpty() || closed(month.get(), input.months())) {
+            boolean anyLive = runIdentities.stream().map(chains::get).filter(Objects::nonNull).map(BookedChain::live)
+                    .anyMatch(Objects::nonNull);
+            if (!anyLive || closed(Objects.requireNonNull(input.runMonths().get(runId), "the month of a run"),
+                    input.months())) {
                 lines.addAll(perLine);
                 runOutcomes.add(new RunOutcome(runId, RunAction.PER_LINE));
                 return;

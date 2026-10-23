@@ -34,6 +34,7 @@ import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -183,7 +184,18 @@ final class RecalculationFixtures {
     static Plan plan(List<BookedCharge> booked, List<Expected> expected, List<MonthState> months, LocalDate today,
             RecalculationRecord.Cause cause, Set<String> openQueueKeys) {
         return RecalculationPlanner.plan(new Input(booked, expected, months, today, openQueueKeys, cause,
-                Set.of(WATER)));
+                Set.of(WATER), runMonths(booked)));
+    }
+
+    /** The month of each run: the month its run booking wrote its charges in (the earliest of its regular rows). */
+    static Map<UUID, YearMonth> runMonths(List<BookedCharge> booked) {
+        Map<UUID, YearMonth> months = new HashMap<>();
+        for (BookedCharge charge : booked) {
+            if (charge.runId() != null && charge.kind() == ChargeKind.REGULAR) {
+                months.merge(charge.runId(), charge.billingMonth(), (a, b) -> a.isBefore(b) ? a : b);
+            }
+        }
+        return months;
     }
 
     /** A line as text: action, first service day, effective -> expected, difference, the month it goes to. */

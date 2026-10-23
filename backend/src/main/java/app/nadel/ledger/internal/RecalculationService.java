@@ -243,11 +243,13 @@ class RecalculationService {
      * @param plotById            the plots of the scope and of the run lines (their numbers are shown)
      * @param lossesPlans         the losses runs of the scope planned again, by run id
      * @param commonConsumerPlans the common consumer runs of the scope planned again, by run id
+     * @param runMonths           the billing month of each run of the scope, by run id
      */
     private record Planned(Plan plan, String digest, Snapshot snapshot, Map<UUID, ChargeRecord> originals,
             Map<ChargeIdentity, Expected> expected, Map<String, NotChargedItemRecord> openItems,
             Map<String, ScopedInterval> intervals, Map<UUID, PlotFacts> plotById,
-            Map<UUID, LossesRuns.Planned> lossesPlans, Map<UUID, CommonConsumerPlanning.Plan> commonConsumerPlans) {
+            Map<UUID, LossesRuns.Planned> lossesPlans, Map<UUID, CommonConsumerPlanning.Plan> commonConsumerPlans,
+            Map<UUID, YearMonth> runMonths) {
     }
 
     /**
@@ -401,6 +403,12 @@ class RecalculationService {
         // the runs of the scope's charge types: planned again over their range, the run itself ignored
         Map<UUID, LossesRuns.Planned> lossesPlans = new LinkedHashMap<>();
         Map<UUID, CommonConsumerPlanning.Plan> commonConsumerPlans = new LinkedHashMap<>();
+        // a run follows its own billing month, whatever month a charge of it is booked in
+        Map<UUID, YearMonth> runMonths = new HashMap<>();
+        runScope.losses().forEach(run -> runMonths.put(run.getId(),
+                Objects.requireNonNull(monthOf.get(run.getBillingMonthId()))));
+        runScope.commonConsumers().forEach(run -> runMonths.put(run.getId(),
+                Objects.requireNonNull(monthOf.get(run.getBillingMonthId()))));
         UUID electricity = typeOf(snapshot, ELECTRICITY);
         if (electricity != null && typeIds.contains(electricity)) {
             for (LossesRunRecord run : runScope.losses()) {
@@ -444,7 +452,7 @@ class RecalculationService {
                 .map(ChargeTypeEntry::id).collect(Collectors.toSet());
 
         Plan plan = RecalculationPlanner.plan(new RecalculationPlanner.Input(booked, expected, states,
-                LocalDate.now(clock), openItems.keySet(), RecalculationRecord.Cause.MANUAL, water));
+                LocalDate.now(clock), openItems.keySet(), RecalculationRecord.Cause.MANUAL, water, runMonths));
         String digest = RecalculationDigest.of(RecalculationDigest.Cause.manual(),
                 new RecalculationDigest.Scope(scope.months(), manual.chargeTypeIds(), manual.plotIds()), plan);
         Map<ChargeIdentity, Expected> expectedById = new HashMap<>();
@@ -457,7 +465,7 @@ class RecalculationService {
             shown.putAll(plots.findAll(missing));
         }
         return new Planned(plan, digest, snapshot, originals, expectedById, openItems, scopedIntervals, shown,
-                lossesPlans, commonConsumerPlans);
+                lossesPlans, commonConsumerPlans, runMonths);
     }
 
     private static @Nullable UUID typeOf(Snapshot snapshot, String code) {
@@ -805,9 +813,7 @@ class RecalculationService {
             @Nullable UUID createdBy, Instant now, Map<Line, UUID> reversals, Map<Line, UUID> created) {
         UUID runId = run.runId();
         List<Line> runLines = lines.stream().filter(line -> runId.equals(line.runId())).toList();
-        YearMonth runMonth = runLines.stream().map(Line::original).filter(Objects::nonNull)
-                .map(BookedCharge::billingMonth).findFirst().orElseThrow();
-        UUID monthId = monthFor.apply(runMonth.atDay(1)).getId();
+        UUID monthId = monthFor.apply(Objects.requireNonNull(planned.runMonths().get(runId)).atDay(1)).getId();
         boolean losses = planned.lossesPlans().containsKey(runId);
         LossesRuns.Reversed reversed = losses
                 ? lossesRuns.reverseLocked(lossesRunRecords.findByIdForUpdate(runId).orElseThrow(), monthId, reason,

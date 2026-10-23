@@ -275,6 +275,39 @@ class RunRecalculationTests extends FreshCooperativeSupport {
         assertThat(preview(scope("COMMON_CONSUMERS")).get("lines")).isEmpty();
     }
 
+    @Test
+    void aRunOfAClosedMonthStaysClosedWhenThePlotNewToItSortsFirstAndTheNumbersChangeAgain() throws Exception {
+        UUID lighting = lighting();
+        UUID run = bookConsumerRun();
+        closeMonth(september.toString());
+        // the new plot's id sorts before the others: its charge, booked in October, is the run's first identity
+        UUID p4 = plotSortingFirst("4");
+        book(scope("COMMON_CONSUMERS", preview(scope("COMMON_CONSUMERS")).get("digest").asString()));
+        correct(lighting, to, "1080");
+
+        JsonNode preview = preview(scope("COMMON_CONSUMERS"));
+
+        // 80 kWh among four plots: 86.40 each; the run follows September (closed): per-plot identity rules, the
+        // charge of the new plot (in open October) reversed and charged again there
+        assertThat(lines(preview.get("lines"), "plotNumber", "action", "effective", "expected", "difference",
+                "bookedIn", "runId")).containsExactlyInAnyOrder(
+                        "1|ADJUST|54.00|86.40|32.40|" + october + "|" + run,
+                        "2|ADJUST|54.00|86.40|32.40|" + october + "|" + run,
+                        "3|ADJUST|54.00|86.40|32.40|" + october + "|" + run,
+                        "4|REVERSE_AND_RECHARGE|54.00|86.40|32.40|" + october + "|" + run);
+
+        book(scope("COMMON_CONSUMERS", preview.get("digest").asString()));
+
+        // the run stays booked, no run is booked again, September keeps its charges
+        assertThat(owner().queryForObject("select status from common_consumer_run where id = ?", String.class, run))
+                .isEqualTo("BOOKED");
+        assertThat(owner().queryForObject("select count(*) from common_consumer_run where tenant_id = ?",
+                Integer.class, tenant)).isEqualTo(1);
+        assertThat(owner().queryForList("select plot_id from charge where kind = 'REVERSAL' and run_id = ?",
+                UUID.class, run)).containsExactly(p4);
+        assertThat(preview(scope("COMMON_CONSUMERS")).get("lines")).isEmpty();
+    }
+
     // ---- fixtures
 
     /** Quarter A 1 100 kWh with P1 600 and P2 400 and street lighting 0, read before and at the end of the range. */
@@ -284,6 +317,15 @@ class RunRecalculationTests extends FreshCooperativeSupport {
         meter("PLOT", null, p2, quarter, 2000, 2400);
         meter("COMMON_CONSUMER", "Освітлення", null, quarter, 300, 300);
         return quarter;
+    }
+
+    /** A plot of 600 m2 whose id sorts before every random one (so its run identity comes first). */
+    private UUID plotSortingFirst(String number) {
+        UUID id = UUID.fromString("00000000-0000-4000-8000-" + UUID.randomUUID().toString().substring(24));
+        owner().update("insert into plot (id, tenant_id, number, kind, area_m2) values (?, ?, ?, 'PLOT', 600)", id,
+                tenant, number);
+        owner().update("insert into plot_status (plot_id, tenant_id, status) values (?, ?, 'GREY')", id, tenant);
+        return id;
     }
 
     /** Street lighting 50 kWh, shared equally per plot. */

@@ -540,6 +540,30 @@ class RecalculationPlannerTests {
     }
 
     @Test
+    void aClosedRunStaysClosedWhenThePlotNewToItIsChargedInAnOpenMonthAndSortsFirst() {
+        Snapshot electricity = snapshot(electricityTariff());
+        LocalDate from = LocalDate.parse("2026-09-01");
+        LocalDate to = LocalDate.parse("2026-09-30");
+        UUID run = UUID.randomUUID();
+        ledger.lossesRun(lossesPlan(from, to, electricity, Map.of(PLOT_2, facts(PLOT_2, "600")),
+                Map.of(PLOT_2, "4")), run, SEP);
+        // plot 1 (its identity sorts before plot 2's) was new to the closed run: charged in October
+        ledger.lossesRun(lossesPlan(from, to, electricity, Map.of(PLOT, PLOT_600), Map.of(PLOT, "6")), run, OCT);
+
+        List<Expected> expected = ExpectedCharges.ofLossesRun(lossesPlan(from, to, electricity,
+                Map.of(PLOT, PLOT_600, PLOT_2, facts(PLOT_2, "600")), Map.of(PLOT, "7.5", PLOT_2, "5")), run,
+                ELECTRICITY);
+        Plan plan = plan(ledger.rows(), expected, SEPTEMBER_CLOSED, TODAY, Cause.MANUAL);
+
+        // the run follows its month (September, closed): the identity rules, no whole-run rebooking
+        assertThat(describe(plan)).containsExactly(
+                "REVERSE_AND_RECHARGE 2026-09-01 25.92->32.40 6.48 in 2026-10",
+                "ADJUST 2026-09-01 17.28->21.60 4.32 in 2026-10");
+        assertThat(plan.lines()).extracting(Line::plotId).containsExactly(PLOT, PLOT_2);
+        assertThat(plan.runs()).containsExactly(new RunOutcome(run, RunAction.PER_LINE));
+    }
+
+    @Test
     void aMeterMovedToAnotherPlotIsReversedThereAndChargedHere() {
         Snapshot electricity = snapshot(electricityTariff());
         MeterInterval interval = interval(point("2026-09-05", "8140", "R1"), point("2026-10-05", "8205", "R2"));
