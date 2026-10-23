@@ -42,18 +42,23 @@ class TariffAssembler {
     private final TariffScopePlotRepository scopePlots;
     private final PlotCatalog plots;
     private final MeterCatalog meters;
+    private final TariffConflicts conflicts;
     private final Clock clock;
 
     TariffAssembler(TariffVersionRepository versions, TariffScopePlotRepository scopePlots, PlotCatalog plots,
-            MeterCatalog meters, Clock clock) {
+            MeterCatalog meters, TariffConflicts conflicts, Clock clock) {
         this.versions = versions;
         this.scopePlots = scopePlots;
         this.plots = plots;
         this.meters = meters;
+        this.conflicts = conflicts;
         this.clock = clock;
     }
 
-    /** The tariff with every version newest first, its scope in natural order of the plot numbers, and the count. */
+    /**
+     * The tariff with every version newest first, its scope in natural order of the plot numbers, the count and its
+     * conflicts with other tariffs of the charge type.
+     */
     Tariff assemble(TariffRecord tariff, ChargeTypeRecord chargeType) {
         LocalDate today = LocalDate.now(clock);
         List<TariffVersionRecord> oldestFirst = versions.findByTariffIdOrderByValidFromAsc(tariff.getId());
@@ -80,7 +85,8 @@ class TariffAssembler {
                     oldestFirst.get(TariffDtoMapper.shownIndex(oldestFirst, today)).getBasis());
             count = new Counter().count(tariff, resource, rows, facts);
         }
-        return TariffDtoMapper.toDto(tariff, chargeType, oldestFirst, today, selected, excluded, count);
+        return TariffDtoMapper.toDto(tariff, chargeType, oldestFirst, today, selected, excluded, count,
+                conflicts.of(List.of(tariff.getId())).get(tariff.getId()));
     }
 
     /**

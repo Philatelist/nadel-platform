@@ -15,7 +15,9 @@ import { Link, useNavigate, useParams } from 'react-router';
 import { QueryBoundary } from '../components/QueryBoundary';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { UserContent, formatUser } from '../components/UserContent';
+import { PlotAccountPanel } from '../components/charges/PlotAccountPanel';
 import { PlotTariffsPanel } from '../components/tariffs/PlotTariffsPanel';
+import { WaterConnectionPanel } from '../components/water/WaterConnectionPanel';
 import { PlotMeterPanel } from '../components/meters/PlotMeterPanel';
 import { OwnersPanel } from '../components/ownership/OwnersPanel';
 import { Badge, Button, Notice, PageHeader, Panel, StatusDot } from '../components/ui';
@@ -61,6 +63,7 @@ function PlotView({ plot }: { plot: PlotDetails }) {
   const t = useT();
   const { locale } = useLocale();
   const canView = useCan('PLOTS_VIEW');
+  const canViewCharges = useCan('CHARGES_VIEW');
   const canEdit = useCanEditPlots();
   const isOwner = useMe().ownedPlots.some((p) => p.plotId === plot.id);
   const navigate = useNavigate();
@@ -172,8 +175,12 @@ function PlotView({ plot }: { plot: PlotDetails }) {
         ) : (
           <OwnersPanel plotId={plot.id} kind={plot.kind} archived={plot.archived} />
         ))}
+      {plot.kind !== 'COMMON' && (canViewCharges || isOwner) && <PlotAccountPanel plotId={plot.id} />}
       {plot.kind !== 'COMMON' && <PlotTariffsPanel plotId={plot.id} />}
       {plot.kind !== 'COMMON' && <PlotMeterPanel plotId={plot.id} />}
+      {plot.kind !== 'COMMON' && (canView || isOwner) && (
+        <WaterConnectionPanel plotId={plot.id} archived={plot.archived} />
+      )}
       {confirmingDelete && (
         <ConfirmDialog
           title={t.plot.deleteTitle}

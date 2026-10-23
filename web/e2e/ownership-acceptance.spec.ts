@@ -164,7 +164,10 @@ test.describe('ownership: acceptance', () => {
     // the default of every cooperative is "own plots only"
     await expect(main(page).getByRole('radio', { name: /^Лише свої ділянки/ })).toBeChecked();
     await expect(main(page).getByRole('radio', { name: /^Усі ділянки/ })).not.toBeChecked();
-    await expect(main(page).getByRole('radio')).toHaveCount(2);
+    // the visibility group has exactly the two choices (the page has other radio groups: losses, thresholds)
+    await expect(
+      main(page).getByRole('group', { name: 'Хто бачить кольори ділянок' }).getByRole('radio'),
+    ).toHaveCount(2);
   });
 
   test('§2.7 #7: the roles page offers "Manage cooperative settings" as a permission that can be ticked', async ({
@@ -252,15 +255,17 @@ test.describe('ownership: acceptance', () => {
     expect(JSON.parse(refused.body)).toMatchObject({ code: 'PLOT_COMMON_LAND' });
   });
 
-  test('§2.8 #1: the treasurer sees most plots green with owners, a few grey, two names on co-owned plots and the sale in the history of plot 9', async ({
+  test('§2.8 #1: the treasurer sees the owned plots coloured by debt with owners, a few grey, two names on co-owned plots and the sale in the history of plot 9', async ({
     page,
   }) => {
     await loginAs(page, 'treasurer@demo.local');
     await expect(page).toHaveURL(/\/plots$/);
 
-    // the first page: twenty owned plots, each with an owner name and the label "No debt"
+    // the first page: twenty owned plots, each with an owner name and a debt colour label (the demo ledger gives
+    // every owned plot a debt, so none is "No debt")
     await expect(rows(page)).toHaveCount(20);
-    await expect(rows(page).filter({ hasText: 'No debt' })).toHaveCount(20);
+    await expect(rows(page).filter({ hasText: /Debt above threshold|Has debt/ })).toHaveCount(20);
+    await expect(rows(page).filter({ hasText: 'No debt' })).toHaveCount(0);
     await expect(rows(page).filter({ hasText: 'No owner' })).toHaveCount(0);
     const coOwned = rows(page).filter({ has: page.locator('td:first-child', { hasText: /^3$/ }) });
     await expect(coOwned).toHaveCount(1);
@@ -269,7 +274,7 @@ test.describe('ownership: acceptance', () => {
     // the second page: the last owned plots, then the few grey ones and the road
     await page.goto('/plots?page=1');
     await expect(rows(page)).toHaveCount(11);
-    await expect(rows(page).filter({ hasText: 'No debt' })).toHaveCount(5);
+    await expect(rows(page).filter({ hasText: /Debt above threshold|Has debt/ })).toHaveCount(5);
     await expect(rows(page).filter({ hasText: 'No owner' })).toHaveCount(5);
     await expect(rows(page).filter({ hasText: 'Common land' })).toHaveCount(1);
 

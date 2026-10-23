@@ -19,4 +19,5 @@ export const ImportProblemSheet = {
   MEMBERS: 'MEMBERS',
   OWNERSHIP: 'OWNERSHIP',
   METERS: 'METERS',
+  OPENING_BALANCES: 'OPENING_BALANCES',
 } as const;

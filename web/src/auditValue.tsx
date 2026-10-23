@@ -1,6 +1,10 @@
 import type { AuditEntityType } from '@nadel/api-client';
 import {
+  format,
   formatDay,
+  formatMonth,
+  formatMoney,
+  isMoney,
   formatMeterValue,
   formatRateWithCurrency,
   formatShare,
@@ -8,7 +12,9 @@ import {
   type Messages,
 } from '@nadel/shared';
 import type { ReactNode } from 'react';
+import { Link } from 'react-router';
 import { UserContent } from './components/UserContent';
+import { billingMonthLabel } from './components/charges/billingMonth';
 
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
 const BASE_PREFIX = 'base:';
@@ -99,6 +105,8 @@ function ownersList(raw: string, t: Messages, locale: string): ReactNode {
 
 const PLAIN_NUMBER = /^-?\d+(\.\d+)?$/;
 const NUMBER_FIELDS = new Set([
+  'count',
+  'nodes',
   'areaM2',
   'position',
   'plotsCreated',
@@ -111,6 +119,10 @@ const NUMBER_FIELDS = new Set([
   'ownershipsUnchanged',
   'metersCreated',
   'metersUnchanged',
+  'waterConnectionsCreated',
+  'waterConnectionsUnchanged',
+  'openingBalancesCreated',
+  'openingBalancesUnchanged',
 ]);
 
 function localeNumber(raw: string, locale: string): string {
@@ -134,6 +146,8 @@ export function auditValue(
   locale: string,
 ): ReactNode {
   const a = t.audit;
+  // an absent split is the cooperative default
+  if ((raw === undefined || raw === '') && field === 'split') return a.splitDefault;
   if (raw === undefined || raw === '') return a.noValue;
   const catalog = (map: Dictionary): ReactNode => map[raw] ?? raw;
   switch (field) {
@@ -142,6 +156,7 @@ export function auditValue(
     case 'active':
       return raw === 'true' ? a.yes : a.no;
     case 'kind':
+      if (Object.hasOwn(t.billing.notCharged.kind, raw)) return catalog(t.billing.notCharged.kind);
       return catalog(entityType === 'METER' ? t.meters.kind : t.plot.kind);
     case 'resource':
       return catalog(t.meters.resource);
@@ -163,13 +178,35 @@ export function auditValue(
       return catalog(t.channel);
     case 'memberPlotStatusVisibility':
       return t.settings.visibility[raw as keyof Messages['settings']['visibility']]?.label ?? raw;
+    case 'status':
+      return entityType === 'BILLING_MONTH' ? catalog(t.billing.status) : user(raw);
+    case 'lossesMode':
+      return catalog(a.lossesMode);
+    case 'split':
+    case 'commonConsumerDefaultSplit':
+      return catalog(a.split);
+    case 'lossesPercent':
+      return PLAIN_NUMBER.test(raw) ? `${localeNumber(raw, locale)} %` : raw;
     case 'effectiveFrom':
     case 'validFrom':
     case 'dueDate':
     case 'installedOn':
     case 'removedOn':
     case 'takenOn':
+    case 'serviceFrom':
+    case 'serviceTo':
+    case 'from':
+    case 'to':
+    case 'until':
+    case 'date':
       return ISO_DAY.test(raw) ? formatDay(raw, locale) : raw;
+    case 'amount':
+    case 'redAmount':
+    case 'total':
+      return isMoney(raw) ? formatMoney(raw, locale) : raw;
+    case 'billingMonth':
+    case 'month':
+      return /^\d{4}-\d{2}$/.test(raw) ? formatMonth(raw, locale) : raw;
     case 'permissions':
       return raw
         .split(', ')
@@ -181,9 +218,24 @@ export function auditValue(
       return roleNames(raw, t.roles);
     case 'chargeType':
       return auditChargeTypeName(raw, t);
+    case 'reason':
+      if (Object.hasOwn(t.billing.notCharged.reason, raw)) return catalog(t.billing.notCharged.reason);
+      return user(raw);
+    case 'outcome':
+      return catalog(a.outcome);
+    case 'runId':
+      return (
+        <Link to={`/charges/losses?run=${raw}`} className="text-accent underline">
+          {t.charges.detail.openRun}
+        </Link>
+      );
+    case 'source':
+      // a water source is a meter name (user content) or `base:COOPERATIVE_SUPPLY`
+      return entityType === 'PLOT'
+        ? baseToken(raw, { COOPERATIVE_SUPPLY: t.water.cooperativeSupply })
+        : user(raw);
     case 'replacementMeter':
     case 'parent':
-    case 'reason':
       return user(raw);
     case 'name':
       if (entityType === 'ROLE') return baseToken(raw, t.roles);
@@ -197,8 +249,22 @@ export function auditValue(
 }
 
 /** The label of the changed record in the "Record" column. */
-export function auditRecordLabel(entityType: AuditEntityType, label: string, t: Messages): ReactNode {
+export function auditRecordLabel(
+  entityType: AuditEntityType,
+  label: string,
+  t: Messages,
+  locale: string,
+): ReactNode {
+  // a losses run and a common consumers run are labelled by their range, `from/to` in ISO days
+  if (entityType === 'LOSSES_RUN' || entityType === 'COMMON_CONSUMER_RUN') {
+    const [from, to] = label.split('/');
+    if (from && to && ISO_DAY.test(from) && ISO_DAY.test(to)) {
+      return format(t.billing.runHistory.range, { from: formatDay(from, locale), to: formatDay(to, locale) });
+    }
+    return label;
+  }
   if (entityType === 'SETTINGS') return t.settings.title;
+  if (entityType === 'BILLING_MONTH') return billingMonthLabel(label, t);
   if (entityType === 'ROLE') return baseToken(label, t.roles);
   if (entityType === 'CHARGE_TYPE') return auditChargeTypeName(label, t);
   return user(label);

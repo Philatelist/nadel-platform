@@ -1,7 +1,7 @@
 import { ApiError } from '@nadel/api-client';
 import { messages } from '@nadel/shared';
 import { describe, expect, it } from 'vitest';
-import { fieldKey, problemFieldErrors } from './problem';
+import { fieldKey, problemFieldErrors, problemMessage } from './problem';
 
 describe('fieldKey for ownership changes', () => {
   it('keeps owner rows, their property, owners and effectiveFrom', () => {
@@ -62,5 +62,41 @@ describe('meter problems', () => {
     );
     expect(result.plotId).toBe('The plot is archived');
     expect(result.kind).toBe('Remove the plot’s meter first');
+  });
+});
+
+describe('water and losses run problems', () => {
+  const code = (c: string) => new ApiError(409, { code: c });
+
+  it('says a meter plots are or were connected to cannot be deleted and suggests removing it', () => {
+    expect(problemMessage(messages('en'), code('WATER_SOURCE_IN_USE'))).toBe(
+      'Plots are or were connected to this meter, so it cannot be deleted. Remove the meter (take it out of service) instead.',
+    );
+    expect(problemMessage(messages('uk'), code('WATER_SOURCE_IN_USE'))).toContain('не можна видалити');
+    expect(problemMessage(messages('uk'), code('WATER_SOURCE_IN_USE'))).toContain('Зніміть лічильник');
+  });
+
+  it('uses the spec wording for an already connected plot', () => {
+    expect(problemMessage(messages('uk'), code('WATER_ALREADY_CONNECTED'))).toBe(
+      'Ділянка вже підключена до води',
+    );
+    expect(problemMessage(messages('en'), code('WATER_ALREADY_CONNECTED'))).toBe(
+      'The plot is already connected to water',
+    );
+  });
+
+  it('has a text for every losses run problem in both languages', () => {
+    for (const locale of ['uk', 'en'] as const) {
+      for (const c of [
+        'LOSSES_MODE_NOT_PROPORTIONAL',
+        'LOSSES_RANGE_OVERLAP',
+        'RUN_ALREADY_REVERSED',
+        'RUN_IN_CLOSED_MONTH',
+      ]) {
+        expect(problemMessage(messages(locale), code(c)), `${locale} ${c}`).not.toBe(
+          messages(locale).problem.UNKNOWN,
+        );
+      }
+    }
   });
 });

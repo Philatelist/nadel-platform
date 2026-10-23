@@ -7,6 +7,7 @@ import app.nadel.meters.ConsumptionCalculator.RangeConsumption;
 import app.nadel.meters.ConsumptionCalculator.Slice;
 import app.nadel.meters.ConsumptionCalculator.ValueAt;
 import app.nadel.meters.MeterKind;
+import app.nadel.meters.MeterNetwork;
 import app.nadel.meters.MeterResource;
 import app.nadel.meters.Quantity;
 import app.nadel.plots.PlotCatalog;
@@ -85,27 +86,9 @@ class TreeQueries {
                     "The request is not valid.", List.of(new FieldProblem("to", ProblemCodes.INVALID)));
         }
         List<MeterRecord> electricity = meters.findByResource(MeterResource.ELECTRICITY);
-        Map<UUID, MeterHistory> histories = chains.historiesById(electricity);
-        Map<UUID, UUID> chainKeyOf = new HashMap<>();
-        List<List<MeterRecord>> found = MeterChains.chainsAmong(electricity);
-        for (List<MeterRecord> chain : found) {
-            chain.forEach(meter -> chainKeyOf.put(meter.getId(), chain.getFirst().getId()));
-        }
-        Map<UUID, List<MeterParentRecord>> rowsByChain = new HashMap<>();
-        for (MeterParentRecord row : parentRows.findAll()) {
-            UUID key = chainKeyOf.get(row.getMeterId());
-            if (key != null && chainKeyOf.containsKey(row.getParentMeterId())) {
-                rowsByChain.computeIfAbsent(key, k -> new ArrayList<>()).add(row);
-            }
-        }
-
         Map<UUID, List<Chain>> under = new HashMap<>();
-        for (List<MeterRecord> members : found) {
-            List<ParentPeriod> placements = placements(members,
-                    rowsByChain.getOrDefault(members.getFirst().getId(), List.of()), chainKeyOf);
-            Chain chain = new Chain(members, members.stream().map(meter -> histories.get(meter.getId())).toList(),
-                    placements);
-            placements.stream().map(ParentPeriod::parentMeterId).distinct()
+        for (Chain chain : chainsOf(electricity, false)) {
+            chain.placements().stream().map(ParentPeriod::parentMeterId).distinct()
                     .forEach(parent -> under.computeIfAbsent(parent, k -> new ArrayList<>()).add(chain));
         }
 
@@ -122,16 +105,77 @@ class TreeQueries {
     }
 
     /**
+     * The electricity network for the runs of feature 011 ({@code MeterNetwork.network}): the chains of
+     * {@code electricity} (every electricity meter of the cooperative, so chains are whole) that worked on a day from
+     * {@code from} to {@code to}, with their histories and their places in the tree by days, through the day of the
+     * final removal (a run counts end-of-day values, so the removal day is the last day the chain measured). Runs in
+     * the caller's transaction; two queries besides the meters: the parent periods and the approved readings.
+     */
+    MeterNetwork.Network network(List<MeterRecord> electricity, LocalDate from, LocalDate to) {
+        List<MeterNetwork.NetworkChain> result = new ArrayList<>();
+        for (Chain chain : chainsOf(electricity, true)) {
+            MeterRecord first = chain.meters().getFirst();
+            LocalDate finalRemoval = chain.meters().getLast().getRemovedOn();
+            if (first.getInstalledOn().isAfter(to) || (finalRemoval != null && finalRemoval.isBefore(from))) {
+                continue;
+            }
+            MeterRecord shown = first;
+            for (MeterRecord meter : chain.meters()) {
+                if (!meter.getInstalledOn().isAfter(to)) {
+                    shown = meter;
+                }
+            }
+            result.add(new MeterNetwork.NetworkChain(chain.key(), first.getKind(), first.getPlotId(),
+                    shown.getId(), shown.getName(), chain.meters().stream().map(MeterRecord::getId).toList(),
+                    chain.histories(),
+                    chain.placements().stream().map(period -> new MeterNetwork.Placement(
+                            ROOT.equals(period.parentMeterId()) ? null : period.parentMeterId(), period.validFrom(),
+                            period.validTo())).toList()));
+        }
+        return new MeterNetwork.Network(from, to, result);
+    }
+
+    /**
+     * The chains among the meters with their histories and placements ({@link #placements}); the parent periods are
+     * read once and grouped by chain, a parent read as its chain too.
+     */
+    private List<Chain> chainsOf(List<MeterRecord> electricity, boolean throughRemovalDay) {
+        Map<UUID, MeterHistory> histories = chains.historiesById(electricity);
+        Map<UUID, UUID> chainKeyOf = new HashMap<>();
+        List<List<MeterRecord>> found = MeterChains.chainsAmong(electricity);
+        for (List<MeterRecord> chain : found) {
+            chain.forEach(meter -> chainKeyOf.put(meter.getId(), chain.getFirst().getId()));
+        }
+        Map<UUID, List<MeterParentRecord>> rowsByChain = new HashMap<>();
+        for (MeterParentRecord row : parentRows.findAll()) {
+            UUID key = chainKeyOf.get(row.getMeterId());
+            if (key != null && chainKeyOf.containsKey(row.getParentMeterId())) {
+                rowsByChain.computeIfAbsent(key, k -> new ArrayList<>()).add(row);
+            }
+        }
+        List<Chain> result = new ArrayList<>(found.size());
+        for (List<MeterRecord> members : found) {
+            List<ParentPeriod> placements = placements(members,
+                    rowsByChain.getOrDefault(members.getFirst().getId(), List.of()), chainKeyOf, throughRemovalDay);
+            result.add(new Chain(members, members.stream().map(meter -> histories.get(meter.getId())).toList(),
+                    placements));
+        }
+        return result;
+    }
+
+    /**
      * The places of a chain in the tree, in date order and without overlaps: the parent periods of its meters, clipped
-     * to the days the chain worked up to the day before its final removal, a period cut on the day before the next one
-     * starts (the replaced meter's period ends on the replacement day, its successor's starts on it), neighbouring
-     * periods under the same parent joined, and the days without a parent under {@link #ROOT}.
+     * to the days the chain worked up to the day before its final removal (the tree screen, whose slices end on the
+     * day after a period) or through the day of the final removal ({@code throughRemovalDay}, the runs, which count
+     * days), a period cut on the day before the next one starts (the replaced meter's period ends on the replacement
+     * day, its successor's starts on it), neighbouring periods under the same parent joined, and the days without a
+     * parent under {@link #ROOT}.
      */
     private static List<ParentPeriod> placements(List<MeterRecord> chain, List<MeterParentRecord> rows,
-            Map<UUID, UUID> chainKeyOf) {
+            Map<UUID, UUID> chainKeyOf, boolean throughRemovalDay) {
         LocalDate start = chain.getFirst().getInstalledOn();
         LocalDate removedOn = chain.getLast().getRemovedOn();
-        LocalDate lastDay = removedOn == null ? null : removedOn.minusDays(1);
+        LocalDate lastDay = removedOn == null ? null : throughRemovalDay ? removedOn : removedOn.minusDays(1);
         if (lastDay != null && lastDay.isBefore(start)) {
             return List.of();
         }

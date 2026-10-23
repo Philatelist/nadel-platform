@@ -8,14 +8,16 @@ import java.util.UUID;
  * only while no charge uses it; after that a correction goes through recalculation (money-rules section 5).
  * <p>
  * This is a port: the meters module defines it and never depends on the module that knows the answer. The ledger
- * (feature 011) depends on meters, so it provides a Spring bean implementing this interface and the meters module finds
- * it by type. Every implementation is asked and the readings count as used when any says so; the bundled default
- * ({@code NoChargesYetUsage}) always answers {@code false} and stays harmless when a real implementation arrives.
+ * (feature 011, {@code LedgerReadingUsage}) depends on meters, so it provides a Spring bean implementing this
+ * interface and the meters module finds it by type. Every implementation is asked and the readings count as used when
+ * any says so.
  * <p>
- * The question is about a date range and not a single reading because a charge for a period reads the value at its end
- * points, which may be interpolated between two readings: changing or inserting a reading anywhere between the readings
- * that the charge was calculated from changes that value. The meters module therefore asks about the span between the
- * neighbouring counted readings of the one that changes.
+ * The question is about a date range and not a single reading because a charge reads the meter on a closed range of
+ * days, from one point to another (an interval charge from its previous point to its reading; a run around the values
+ * at its ends, which may be interpolated between two readings): changing, inserting or deleting a point anywhere in
+ * that range changes what the charge was calculated from. The meters module therefore asks about the days a change on
+ * a date reaches: from the day after the previous point to the day before the next point (or the date itself where
+ * there is none), so a new reading after a charged interval is still accepted.
  * <p>
  * The method runs inside the caller's tenant-aware transaction, with the meter row locked {@code FOR UPDATE}, so an
  * implementation may query its own tables (under row level security) without opening a transaction of its own. To make

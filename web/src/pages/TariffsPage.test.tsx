@@ -161,6 +161,7 @@ function summary(
     chargeTypeId,
     scopeKind: 'ALL_PLOTS',
     plotCount,
+    conflicts: [],
     version: {
       id: `v-${id}`,
       validFrom: '2026-11-01',

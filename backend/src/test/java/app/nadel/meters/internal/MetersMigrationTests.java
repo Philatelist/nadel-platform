@@ -15,7 +15,8 @@ import org.testcontainers.utility.DockerImageName;
  * V12 on a database that already has cooperatives: the four meter permissions are added by targeted inserts only (never
  * by re-running {@code seed_base_roles}, which would restore a permission a chairman removed), and a cooperative created
  * afterwards gets the full matrix from the re-created function. Runs the migrations itself on a separate container: stop
- * at V11, create the cooperatives as the previous release did, then migrate to the latest version.
+ * at V11, create the cooperatives as the previous release did, then migrate to V12 (the ledger permissions of V13 are
+ * covered by {@code LedgerMigrationTests}).
  */
 class MetersMigrationTests {
 
@@ -49,7 +50,7 @@ class MetersMigrationTests {
             assertThat(sql.queryForObject("select count(*) from information_schema.tables where table_name = 'meter'",
                     Integer.class)).isZero();
 
-            flyway(postgres, null).migrate();
+            flyway(postgres, "12").migrate();
 
             for (UUID tenant : List.of(first, second)) {
                 assertThat(permissions(sql, tenant, "CHAIRMAN")).hasSize(15).containsAll(CHAIRMAN_BEFORE)

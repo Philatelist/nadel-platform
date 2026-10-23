@@ -15,6 +15,7 @@
 // extensions such as ".xlsx" (FILE_EXTENSION), and the digit mask letter "N" in input hints (MASK).
 import { expect, test, type Browser, type Page } from '@playwright/test';
 import { messages } from '@nadel/shared';
+import { kyivDay, pastRange } from './support/api';
 import { loginAs } from './support/login';
 
 type Locale = 'uk' | 'en';
@@ -188,6 +189,12 @@ async function auditScreen(page: Page, path: string, locale: Locale): Promise<Fi
   return check(locale, items).map((f) => ({ ...f, where: `${path}: ${f.where}` }));
 }
 
+/** Checks what is on the screen now (an open dialog, a preview), labelled with `where`. */
+async function auditNow(page: Page, where: string, locale: Locale): Promise<Finding[]> {
+  await page.waitForLoadState('networkidle');
+  return check(locale, await collect(page)).map((f) => ({ ...f, where: `${where}: ${f.where}` }));
+}
+
 function report(findings: Finding[]): string {
   return findings.map((f) => `"${f.word}" in ${f.where} (text: "${f.context}")`).join('\n');
 }
@@ -209,6 +216,12 @@ const CHAIRMAN_SCREENS = [
   '/readings',
   '/readings/approvals',
   '/settings/meter-tree',
+  // feature 011: the months, the current month (the demo ledger anchors on today), the queue and the two range runs
+  '/charges',
+  `/charges/months/${kyivDay(0).slice(0, 7)}`,
+  '/charges/not-charged',
+  '/charges/losses',
+  '/charges/common',
   '/no-such-screen',
 ];
 
@@ -253,6 +266,59 @@ for (const locale of ['uk', 'en'] as const) {
       }
     });
 
+    test(`chairman: charges dialogs, previews and the plot account (${locale})`, async ({ browser }) => {
+      test.setTimeout(120_000);
+      const t = messages(locale);
+      const page = await openSession(browser, 'chairman@demo.local', locale);
+      try {
+        const findings: Finding[] = [];
+        // the month page with the run preview and the close confirmation (nothing is booked or closed)
+        await page.goto(`/charges/months/${kyivDay(0).slice(0, 7)}`);
+        await settle(page);
+        await page.getByRole('button', { name: t.billing.run.action, exact: true }).click();
+        await expect(page.getByRole('dialog').getByText(/\d/).first()).toBeVisible();
+        await expect(page.getByText(t.billing.run.loading)).toHaveCount(0);
+        findings.push(...(await auditNow(page, 'month run preview', locale)));
+        await page.getByRole('button', { name: t.billing.run.cancel, exact: true }).click();
+        await page.getByRole('button', { name: t.billing.close.action, exact: true }).click();
+        findings.push(...(await auditNow(page, 'close month dialog', locale)));
+        await page.getByRole('button', { name: t.billing.close.cancel, exact: true }).click();
+
+        // a losses and a common consumers preview over a past range (previews write nothing)
+        const range = await pastRange(page);
+        for (const path of ['/charges/losses', '/charges/common']) {
+          await page.goto(path);
+          await settle(page);
+          await page.getByLabel(t.billing.rangeRun.from, { exact: true }).fill(range.from);
+          await page.getByLabel(t.billing.rangeRun.to, { exact: true }).fill(range.to);
+          await page.getByRole('button', { name: t.billing.rangeRun.preview, exact: true }).click();
+          await expect(page.getByRole('table').first()).toBeVisible();
+          findings.push(...(await auditNow(page, `${path} preview`, locale)));
+          await page.getByRole('button', { name: t.billing.runHistory.details, exact: true }).first().click();
+          findings.push(...(await auditNow(page, `${path} run details`, locale)));
+        }
+
+        // the account of a plot: a charge with its calculation, the reverse dialog, the opening balance form
+        await page.goto('/plots');
+        await settle(page);
+        const plotHref = (await hrefs(page, /^\/plots\/[0-9a-f-]{36}$/))[0];
+        await page.goto(plotHref ?? '');
+        await settle(page);
+        await page.getByRole('button', { name: t.charges.details, exact: true }).first().click();
+        findings.push(...(await auditNow(page, 'charge details', locale)));
+        await page.getByRole('button', { name: t.charges.detail.close, exact: true }).first().click();
+        await page.getByRole('button', { name: t.charges.reverse.action, exact: true }).first().click();
+        findings.push(...(await auditNow(page, 'reverse dialog', locale)));
+        await page.getByRole('button', { name: t.charges.reverse.cancel, exact: true }).click();
+        await page.getByRole('button', { name: t.charges.opening.action, exact: true }).click();
+        findings.push(...(await auditNow(page, 'opening balance form', locale)));
+
+        expect(report(findings), 'language mixes').toBe('');
+      } finally {
+        await page.context().close();
+      }
+    });
+
     test(`member: own account and plots (${locale})`, async ({ browser }) => {
       const page = await openSession(browser, 'member@demo.local', locale);
       try {
@@ -265,6 +331,15 @@ for (const locale of ['uk', 'en'] as const) {
         const ownHref = (await hrefs(page, /^\/plots\/[0-9a-f-]{36}$/))[0];
         expect(ownHref, 'an own plot link on the member plots list').toBeTruthy();
         findings.push(...(await auditScreen(page, ownHref ?? '', locale)));
+
+        // "My charges" with a charge's calculation
+        await page.goto('/account');
+        await settle(page);
+        await page
+          .getByRole('button', { name: messages(locale).charges.details, exact: true })
+          .first()
+          .click();
+        findings.push(...(await auditNow(page, 'my charge details', locale)));
         expect(report(findings), 'language mixes').toBe('');
       } finally {
         await page.context().close();

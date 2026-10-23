@@ -95,15 +95,15 @@ has a current ownership). A guard must only read and must take no lock that is o
     built from `MemberSnapshot.diff(before, after)`; see the `audit` README.
 
 - Roles, all `@PreAuthorize("hasAuthority('PERM_ROLES_MANAGE')")` on the controllers, one transaction each:
-  `GET /permissions` (`PermissionCatalog`: the fifteen permissions in enum order with English text), `GET /roles`
-  (base roles first, then custom by name; `memberCount` counts active members only; Chairman always lists all fifteen),
+  `GET /permissions` (`PermissionCatalog`: the nineteen permissions in enum order with English text), `GET /roles`
+  (base roles first, then custom by name; `memberCount` counts active members only; Chairman always lists all nineteen),
   `POST /roles`, `PUT /roles/{id}` (full replacement), `DELETE /roles/{id}`, and `PUT /members/{id}/roles` (replaces the
   member's whole role set). Permission changes apply on the next request: `AccessProfile` is resolved from the database on
   every request, nothing is cached.
   - Name: trimmed; empty is 400 `REQUIRED`, over 60 is 400 `TOO_LONG` (field `name`). Unique per cooperative ignoring case
     (`lower(name)` on both sides in the database, so Cyrillic works): a pre-check plus a mapping of the unique index
     `role_tenant_name_uq` give 409 `ROLE_NAME_TAKEN`.
-  - Base roles: delete is 409 `BASE_ROLE_IMMUTABLE`; Chairman's permission set must stay all fifteen (a PUT with the full
+  - Base roles: delete is 409 `BASE_ROLE_IMMUTABLE`; Chairman's permission set must stay all nineteen (a PUT with the full
     set is accepted and changes nothing, and its name can be changed); Treasurer and Member permissions and every
     description are editable. A PUT omits `description` = clears it.
   - Renaming (feature 004): every role, base roles included, can be renamed; names stay unique per cooperative ignoring

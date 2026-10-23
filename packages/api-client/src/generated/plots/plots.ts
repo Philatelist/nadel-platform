@@ -591,7 +591,8 @@ export const useUpdatePlot = <TError = BadRequestResponse | UnauthorizedResponse
  * Removes a plot that was created by mistake, together with its status. Requires `PLOTS_VIEW` and `PLOTS_EDIT`. Only an active
  * plot can be deleted; an archived plot is refused with 409 `PLOT_ARCHIVED` and must be restored first, and a plot
  * that has ever had an owner is refused with 409 `PLOT_HAS_OWNERSHIP_HISTORY`, a plot that has a meter (active or
- * removed) with 409 `PLOT_HAS_METER`. The deletion is audited.
+ * removed) with 409 `PLOT_HAS_METER`, a plot that has charges (any kind) with 409 `PLOT_HAS_CHARGES`. The deletion
+ * is audited.
  * @summary Delete a plot or common land
  */
 export const deletePlot = async (id: string, options?: Parameters<typeof nadelFetch>[1]): Promise<void> => {

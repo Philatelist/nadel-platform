@@ -22,10 +22,12 @@ public final class DemoTariffData {
     }
 
     /**
-     * Leaves the two cooperatives with exactly the four seeded charge types and no tariffs: removes every scope row,
+     * Leaves the two cooperatives with exactly the five seeded charge types and no tariffs: removes every scope row,
      * version, tariff and charge type (the owner role may, the application role may not) and seeds the types again.
+     * The ledger rows that refer to tariffs and charge types go first ({@link DemoLedgerData#clear}).
      */
     public static void clear(JdbcTemplate owner) {
+        DemoLedgerData.clear(owner);
         owner.update("delete from tariff_scope_plot where tenant_id in (?, ?)", DEMO_TENANT, OTHER_TENANT);
         owner.update("delete from tariff_version where tenant_id in (?, ?)", DEMO_TENANT, OTHER_TENANT);
         owner.update("delete from tariff where tenant_id in (?, ?)", DEMO_TENANT, OTHER_TENANT);

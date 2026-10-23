@@ -14,6 +14,7 @@ import { resourceUnit } from '../../meters';
 import { problemMessage } from '../../problem';
 import { readingErrorMessage } from '../../readings';
 import { ResourceIcon } from '../meters/ResourceIcon';
+import { invalidateAfterReading } from '../charges/chargeInvalidation';
 import { UserContent } from '../UserContent';
 import { Badge, Button, Notice, TextField } from '../ui';
 import { ReadingDateField } from './ReadingDateField';
@@ -59,6 +60,7 @@ export function RoundRow({
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: getListMeterReadingsQueryKey(meter.id) }),
           queryClient.invalidateQueries({ queryKey: getListMetersQueryKey() }),
+          invalidateAfterReading(queryClient),
         ]);
         onSaved(valueField.current);
       },

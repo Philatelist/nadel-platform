@@ -1,14 +1,37 @@
 package app.nadel.meters;
 
 import java.time.LocalDate;
+import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
- * What another module may know about the plot meters of the cooperative: which plots a meter-based tariff reaches. The
- * cooperative is the one of the caller's transaction (row-level security); every method runs inside it.
+ * What another module may know about the meters of the cooperative: which plots a meter-based tariff reaches, the
+ * kind and name of one meter, and its chain of replacements. The cooperative is the one of the caller's transaction (row-level security); every
+ * method runs inside it.
  */
 public interface MeterCatalog {
+
+    /**
+     * What another module may know about one meter.
+     *
+     * @param name   the name of a named meter (substation, quarter, common consumer; user content); null for a plot meter
+     * @param active whether it is not removed
+     */
+    record MeterFacts(UUID id, MeterKind kind, MeterResource resource, @Nullable String name, boolean active) {
+    }
+
+    /** The meter, removed or not; empty when it does not exist in the cooperative. */
+    Optional<MeterFacts> find(UUID meterId);
+
+    /**
+     * The ids of the meter's chain of replacements: the meters it replaced and the meters that replaced it, with the
+     * meter itself, oldest first (the order of {@code MeterNetwork.NetworkChain#meterIds}); the meter alone when it was
+     * never replaced and replaced nothing; empty when it does not exist in the cooperative.
+     */
+    List<UUID> chainOf(UUID meterId);
 
     /**
      * Every plot of the cooperative that has an active (not removed) plot meter of the resource now. Archived plots and

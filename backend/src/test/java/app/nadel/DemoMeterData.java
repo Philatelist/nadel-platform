@@ -21,8 +21,13 @@ public final class DemoMeterData {
     private DemoMeterData() {
     }
 
-    /** Removes every reading, tree period and meter of the two cooperatives (the owner role may, the application role may not). */
+    /**
+     * Removes every reading, tree period and meter of the two cooperatives (the owner role may, the application role
+     * may not), after the ledger rows that refer to meters ({@link DemoLedgerData#clear}: charges, runs, value uses,
+     * water connections).
+     */
     public static void clear(JdbcTemplate owner) {
+        DemoLedgerData.clear(owner);
         owner.update("delete from meter_reading where tenant_id in (?, ?)", DEMO_TENANT, OTHER_TENANT);
         owner.update("delete from meter_parent where tenant_id in (?, ?)", DEMO_TENANT, OTHER_TENANT);
         owner.update("delete from meter where tenant_id in (?, ?) and replaces_meter_id is not null", DEMO_TENANT,

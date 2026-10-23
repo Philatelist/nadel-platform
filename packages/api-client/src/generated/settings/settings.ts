@@ -31,6 +31,7 @@ import type {
 import type {
   BadRequestResponse,
   CooperativeSettings,
+  CooperativeSettingsUpdate,
   ForbiddenResponse,
   UnauthorizedResponse
 } from '../model';
@@ -68,7 +69,8 @@ export const getGetSettingsUrl = () => {
 /**
  * Returns the settings of the current cooperative. Every member of the cooperative may call it; the platform
  * operator has no cooperative data: 403. A cooperative that never saved its settings has the defaults
- * (`memberPlotStatusVisibility` is `OWN_ONLY`).
+ * (`memberPlotStatusVisibility` `OWN_ONLY`, `lossesMode` `FIXED_PERCENT`, `lossesPercent` `0.00`,
+ * `commonConsumerDefaultSplit` `CONNECTED_PLOTS`, `redAmount` `1000.00`, `redDays` 90).
  * @summary Cooperative settings
  */
 export const getSettings = async ( options?: Parameters<typeof nadelFetch>[1]): Promise<CooperativeSettings> => {
@@ -169,12 +171,16 @@ export const getUpdateSettingsUrl = () => {
 }
 
 /**
- * Replaces the settings of the current cooperative. Requires the `SETTINGS_MANAGE` permission. A change is
- * written to the audit log with the old and the new value; saving the current value changes nothing and writes
- * no audit entry.
+ * Changes the settings of the current cooperative. Requires the `SETTINGS_MANAGE` permission. Every field is
+ * optional: a field left out keeps its value, so each section of the settings page saves only its own fields.
+ * A change is written to the audit log (`SETTINGS_UPDATED`) with the old and the new value of every changed
+ * field; saving the current values changes nothing and writes no audit entry. 400 `VALIDATION_FAILED`:
+ * `redAmount` negative or with more than 12 integer digits (`INVALID`), `lossesPercent` above `100.00`
+ * (`INVALID`), `redDays` outside 0..36500, an unknown enum value or a malformed number. A change of the red
+ * threshold applies to every plot status shown from then on (the status is derived when it is read).
  * @summary Change cooperative settings
  */
-export const updateSettings = async (cooperativeSettings: CooperativeSettings, options?: Parameters<typeof nadelFetch>[1]): Promise<CooperativeSettings> => {
+export const updateSettings = async (cooperativeSettingsUpdate: CooperativeSettingsUpdate, options?: Parameters<typeof nadelFetch>[1]): Promise<CooperativeSettings> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -195,7 +201,7 @@ return nadelFetch<CooperativeSettings>(getUpdateSettingsUrl(),
     ...options,
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(cooperativeSettings)
+    body: JSON.stringify(cooperativeSettingsUpdate)
   }
 );}
 
@@ -233,9 +239,9 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type UpdateSettingsMutationResult = NonNullable<Awaited<ReturnType<typeof updateSettings>>>
-    export type UpdateSettingsMutationBody = CooperativeSettings
+    export type UpdateSettingsMutationBody = CooperativeSettingsUpdate
     export type UpdateSettingsMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse
-    export type UpdateSettingsMutationVariables = {data: CooperativeSettings}
+    export type UpdateSettingsMutationVariables = {data: CooperativeSettingsUpdate}
 
     /**
  * @summary Change cooperative settings

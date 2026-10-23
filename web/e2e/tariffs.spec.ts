@@ -112,7 +112,7 @@ test.describe('tariffs', () => {
         await member.goto('/tariffs');
         await expect(member.getByText("You don't have access to this page")).toBeVisible();
         await member.goto('/account');
-        const mine = member.getByRole('region', { name: 'What I will be charged' });
+        const mine = member.getByRole('region', { name: 'Expected charges' });
         await expect(mine).toBeVisible();
         await expect(mine.getByRole('heading', { level: 2, name: /^Plot (7|15)$/ })).toHaveCount(2);
         await expect(mine).not.toContainText(plot.number);

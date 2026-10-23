@@ -1,11 +1,14 @@
 # imports
 
-Excel import of a whole cooperative in one go: plots, members, ownership and plot meters from one `.xlsx` file with four
-sheets (`Plots`, `Members`, `Ownership`, `Meters`; in the Ukrainian template `Ділянки`, `Члени`, `Власність`,
-`Лічильники`). Requirements: `docs/features/008-excel-import.md` and, for the Meters sheet, section 7 of
-`docs/features/010-meters-and-readings.md`; specs: `context/spec/008-excel-import/`, `context/spec/010-meters-and-readings/`.
+Excel import of a whole cooperative in one go: plots (with their water connection), members, ownership, plot meters and
+opening balances from one `.xlsx` file with five sheets (`Plots`, `Members`, `Ownership`, `Meters`, `Opening balances`;
+in the Ukrainian template `Ділянки`, `Члени`, `Власність`, `Лічильники`, `Вхідне сальдо`). Requirements:
+`docs/features/008-excel-import.md`, for the Meters sheet section 7 of `docs/features/010-meters-and-readings.md`, for
+the water column and the Opening balances sheet sections 2.8 and 2.9 of feature 011; specs:
+`context/spec/008-excel-import/`, `context/spec/010-meters-and-readings/`,
+`context/spec/011-ledger-charges-period-closing/`.
 
-The module offers the template download, the upload with a preview of all four sheets, the commit and the history of
+The module offers the template download, the upload with a preview of all five sheets, the commit and the history of
 the uploads.
 
 ## Endpoints
@@ -35,10 +38,11 @@ the first cell and the row is imported. Deleting only the `#` leaves the label i
 
 | Sheet (English) | Columns |
 |---|---|
-| `Plots` | number, street, kind, area_m2, area_sotky, cadastral_number, has_building, notes |
+| `Plots` | number, street, kind, area_m2, area_sotky, cadastral_number, has_building, notes, water |
 | `Members` | external_id, last_name, first_name, middle_name, phones, email, postal_address, delivery_channel, telegram_username, viber_phone |
 | `Ownership` | plot_number, member_external_id, share, valid_from |
 | `Meters` | plot_number, resource, serial, installed_on, initial_reading |
+| `Opening balances` | plot_number, charge_type, amount, date, reason |
 
 **English template:** the sheet names above, the canonical column keys as headers, English hints and examples
 (`imports/template_en.properties`).
@@ -52,12 +56,15 @@ example is a consistent set: plot `31а` (not `12а`: the demo cooperative alrea
 kind `ДІЛЯНКА`, 600 m2, building `так`; member key `Ч-001`, `Шевченко Тарас Григорович`, `+380 67 123 45 67`; ownership of
 plot `31а` by `Ч-001`, share `1` (a single owner must hold the whole plot, rules in `plots/README.md`), since 01.03.2020;
 an electricity meter (`ЕЛЕКТРОЕНЕРГІЯ`) of plot `31а`, serial `0456789`, installed 01.03.2020 at `1250,5` (the English
-example: plot `12a`, `ELECTRICITY`, the same serial, date and `1250.5`).
+example: plot `12a`, `ELECTRICITY`, the same serial, date and `1250.5`); water `так` (`yes`) on the plot; an opening
+balance of plot `31а` (`12a`) for `Членський внесок` (`Membership fee`, the default name of the seeded type, so the
+example is a name the upload accepts) of `1500,00` (`1500.00`) as of 01.09.2026 with the reason `Борг за 2025 рік`
+(`Debt for 2025`).
 Missing texts or placeholders fail the build's tests, not a download.
 
 Columns that hold identifiers or phone numbers (`number`, `phones`, `viber_phone`, `external_id`, `plot_number`,
-`member_external_id`, `cadastral_number`, the meter `serial`) and the `share` have the text format, so Excel keeps leading
-zeros, long digit strings and `1/2`.
+`member_external_id`, `cadastral_number`, the meter `serial`, the opening balance `plot_number`) and the `share` have the
+text format, so Excel keeps leading zeros, long digit strings and `1/2`.
 
 ## The vocabulary
 
@@ -66,8 +73,8 @@ word is the Ukrainian label the template shows:
 
 | Line | Meaning |
 |---|---|
-| `<sheet>.<column key> = label \| alias ...` | column headers of `plots`, `members`, `ownership`, `meters` |
-| `sheet.<plots\|members\|ownership\|meters> = label \| alias ...` | sheet names |
+| `<sheet>.<column key> = label \| alias ...` | column headers of `plots`, `members`, `ownership`, `meters`, `opening` (the Opening balances sheet) |
+| `sheet.<plots\|members\|ownership\|meters\|opening> = label \| alias ...` | sheet names |
 | `value.kind.<PLOT\|COMMON>`, `value.channel.<EMAIL\|TELEGRAM\|VIBER\|PAPER>`, `value.yesno.<true\|false>`, `value.resource.<ELECTRICITY\|WATER>` | value words |
 
 The upload accepts **both languages, also mixed in one file**, for all three: a sheet is found by its English name or any
@@ -92,15 +99,16 @@ the owning module (`INVALID`). Yes and no (`так`/`ні`, `yes`/`no`, `true`/`
 3. `WorkbookReader` (the only user of the spreadsheet library) streams the rows; `PlotsSheet`, `MembersSheet` and
    `OwnershipSheet` find the columns with `HeaderMatcher`, read every cell with `Cells` and stop with 400
    `IMPORT_LIMIT_EXCEEDED` at the 2,001st plot row, the 3,001st member row or the 6,001st ownership row. The workbook's
-   date system (1900 or 1904) comes from `WorkbookReader.date1904()` and is used for the Excel dates of `valid_from` and
-   `installed_on`. `MetersSheet` stops at the 2,001st meter row. A workbook without a `Members` sheet is fine (plots only); a `Members` sheet needs
+   date system (1900 or 1904) comes from `WorkbookReader.date1904()` and is used for the Excel dates of `valid_from`,
+   `installed_on` and the opening balance `date`. `MetersSheet` stops at the 2,001st meter row, `OpeningBalancesSheet`
+   at the 6,001st opening balance row. A workbook without a `Members` sheet is fine (plots only); a `Members` sheet needs
    its header (`external_id`, `last_name` and `first_name` are required columns). `phones` is split at commas and
    semicolons; a phone cell that Excel stored as a number has lost its leading zero, so nine digits get the `0` back.
    Anything the library throws on a damaged file, a DOCTYPE included (DTDs are off), becomes `FILE_NOT_XLSX`. File
    names, sheet names and cell values are never logged.
 4. In one transaction: the expired previews of the cooperative lose their plan (there is no scheduled job yet), the plots,
-   members and meters modules plan the rows (`plots.PlotImport`, `members.MemberImport`, `meters.MeterImport`), and an
-   `import_run` row is inserted. Nothing else is saved: a preview
+   members, meters and ledger modules plan the rows (`plots.PlotImport`, `members.MemberImport`, `meters.MeterImport`,
+   `meters.WaterConnectionImport`, `ledger.OpeningBalanceImport`), and an `import_run` row is inserted. Nothing else is saved: a preview
    creates no plot and no audit entry.
 
 The preview lists the problems found (at most 1,000; `problemCount` is the total) with sheet, Excel row (0 for the file or
@@ -156,15 +164,51 @@ and plan (the effective one, as for ownership):
 A new meter's id is derived from the import id, the plot number (lower case) and the resource, so the commit's second
 planning gives the same ids.
 
+### Water column (feature 011)
+
+The optional `water` column of the Plots sheet (`Вода`) connects plots to water. `PlotsSheet` keeps the cell as typed;
+the planner reads it: a yes word (`так`, `yes`, `true`, a boolean cell) asks for the cooperative's water supply, a no
+word (`ні`, `no`, `false`) and an empty cell ask for nothing, and any other text is the name of a water source (an active
+common consumer meter, a well). The import never disconnects: "ні" on a connected plot leaves it connected, and so does
+an empty cell; a disconnection is made on the plot card or the water source. The cells that ask for a connection go to
+`meters.WaterConnectionImport.plan` with the Plots sheet's rows and effective plan; its problems are reported on the
+Plots row, column `water`: `WATER_SOURCE_INVALID` (no active common consumer meter has the name),
+`WATER_SOURCE_AMBIGUOUS` (two or more do), `WATER_ALREADY_CONNECTED` (a lasting connection to another source, or a
+connection that ends today or later), `PLOT_COMMON_LAND`. A row whose plot row has another problem is not checked. A
+plot with a lasting connection is unchanged for a yes and for the name of its current source
+(`waterConnections.unchanged`); a new connection is `waterConnections.created` and starts on the day of the commit
+(Europe/Kyiv). Rules and locks: `meters/README.md` (Water connections).
+
+### Opening balances (feature 011)
+
+The Opening balances sheet (`Вхідне сальдо`) may be missing; a sheet that is there needs `plot_number`, `charge_type`,
+`amount` and `date` (`HEADER_MISSING` otherwise); `reason` is optional. `OpeningBalancesSheet` reads the cells (an
+unreadable `amount` is `NUMBER_INVALID`, an unreadable `date` `DATE_INVALID`, neither then also `REQUIRED`);
+`ledger.OpeningBalanceImport.plan` decides per row with the rules of an opening balance entered on the plot account
+(`ledger/README.md`, Opening balances from the import): `REQUIRED`, `AMOUNT_NOT_POSITIVE`, `INVALID` (more than two
+decimals or 12 integer digits; on `charge_type` a name of two types), `DATE_IN_FUTURE`, `TOO_LONG` (`reason` over 500),
+`UNKNOWN_PLOT`, `PLOT_COMMON_LAND`, `UNKNOWN_CHARGE_TYPE`, `CHARGE_TYPE_ARCHIVED`, `DUPLICATE_IN_FILE` (on
+`charge_type`: the same plot, charge type and date as an earlier row) and `OPENING_BALANCE_EXISTS` (on `amount`,
+`params.amount`: the plot has a standing opening balance of the charge type and date with another amount). The charge
+type is named as the cooperative calls it, or by the English or Ukrainian default name of a seeded type that was never
+renamed. A row whose plot already has a standing opening balance with the same charge type, date and amount is
+unchanged (`openingBalances.unchanged`), so the same file uploaded again books nothing twice; any other row is
+`openingBalances.created`. A balance is booked in the month of its date or the earliest open month after it, with the
+key `OPENING:{importId}:{row}`; without a reason that key is the reference to the import.
+
 ### Stored plan and digest
 
-The stored `plan` (version 1, now with a fourth array) holds the normalised rows: `plots`, `members`, `ownership` (row,
-plot number, member key as typed, share, `valid_from` as an ISO date) and `meters` (row, plot number, resource, serial,
-`installedOn` as an ISO date, `initialReading` as plain decimal text). A plan stored before the Meters sheet existed has
-no `meters` and reads as an empty sheet. Member ids are never stored: they are derived
+The stored `plan` (version 1, now with a fifth array) holds the normalised rows: `plots` (with the `water` cell as typed),
+`members`, `ownership` (row, plot number, member key as typed, share, `valid_from` as an ISO date), `meters` (row, plot
+number, resource, serial, `installedOn` as an ISO date, `initialReading` as plain decimal text) and `openingBalances`
+(row, plot number, charge type as typed, `amount` as plain decimal text, `date` as an ISO date, reason). A plan stored
+before the Meters sheet existed has no `meters` and reads as an empty sheet; one stored before feature 011 has no
+`water` cells and no `openingBalances`. Member ids are never stored: they are derived
 again when the plan is recomputed. `PlanDigest` computes the SHA-256 of a canonical text of the whole plan and the
 preview stores it in `import_run.plan_digest` (null for a run with problems). One line per plot row, member row,
-ownership row and meter row with the sheet, the natural key (lower case), the action or outcome, the id of the matched record or `new`,
+ownership row, meter row, water cell that asks for a connection (the plot, the action and the source the plan found)
+and opening balance row (the plot, the action, the charge type id, the amount, the date and the reason) with the sheet,
+the natural key (lower case), the action or outcome, the id of the matched record or `new`,
 the changed field names and the values of the file; the lines are sorted, so the digest does not depend on the order of
 the rows; ids of records the import creates are left out because they depend on the import's own id. The commit slice
 recomputes the plan from the stored rows and refuses the preview as stale when the digest differs.
@@ -191,22 +235,28 @@ or saves nothing. In this order:
 3. The stored rows are read back (`StoredPlan`) and planned once to learn which existing plots, meters and members they
    touch; the persistence context is cleared; `PlotImport.lock` takes those plots `FOR UPDATE`, then `MeterImport.lock`
    the stored plots that get a new meter `FOR SHARE` (the lock of a registration by hand) and the unchanged meters
-   `FOR UPDATE`, then `MemberImport.lock` those members, each in id order. The order is that of a change of owner (plot first, then its owners) and of archiving
+   `FOR UPDATE`, then `WaterConnectionImport.lock` the stored plots that get a connection `FOR SHARE` and the
+   connections of the planned plots `FOR UPDATE`, then `OpeningBalanceImport.lock` the stored plots that get an opening
+   balance and their charge types `FOR SHARE`, then `MemberImport.lock` those members, each in id order. The order is that of a change of owner (plot first, then its owners) and of archiving
    (member row), so no lock cycle exists; the advisory lock serialises two imports. The clear matters: without it the
    second planning would read the first one's managed entities instead of the locked rows.
 4. The rows are planned again under the locks and the digest is compared with the stored one: a different digest, or any
    problem, is `IMPORT_STALE` (a plot with one of the file's numbers created meanwhile, an owner changed, a member
-   archived, a meter registered, removed or replaced, ...).
+   archived, a meter registered, removed or replaced, a plot connected to water, an opening balance entered or
+   reversed, a charge type renamed or archived, ...).
 5. `MemberImport.apply` (members), then `PlotImport.apply` (plots with their GREY status rows, plot updates, then first
    owners with the status refresh), then `MeterImport.apply` (the new plot meters, after the plots they may belong to),
-   each record audited as when entered by hand (`MEMBER_CREATED`/`MEMBER_UPDATED`, `PLOT_CREATED`/`PLOT_UPDATED`,
-   `OWNERSHIP_CHANGED`, `METER_REGISTERED`). The facades **return** their audit events instead of publishing
+   then `WaterConnectionImport.apply` (connections from the day of the commit), then `OpeningBalanceImport.apply` (the
+   balances, one `ledger.ChargesBooked` for their plots), each record audited as when entered by hand
+   (`MEMBER_CREATED`/`MEMBER_UPDATED`, `PLOT_CREATED`/`PLOT_UPDATED`, `OWNERSHIP_CHANGED`, `METER_REGISTERED`,
+   `WATER_CONNECTED`, `OPENING_BALANCE_ENTERED`). The facades **return** their audit events instead of publishing
    them; `ImportCommitter` publishes them as `audit.AuditBatch` events of at most 500 entries (members first, then plots
    and owners), in the commit transaction, so the outbox stores them atomically with the data. 7,000 records are 14
    batches, not 7,000 events: the audit listener writes a batch with one JDBC batch insert in one transaction (see the
    `audit` README). Then one `IMPORT_COMMITTED` event (a normal single `AuditEvent`, exactly one per import) (entity type `IMPORT`, entity
    id = import id, label = file name, fields `plotsCreated`, `plotsUpdated`, `plotsUnchanged`, `membersCreated`, ...,
-   `ownershipsCreated`, `ownershipsUnchanged`, `metersCreated`, `metersUnchanged` as text). New rows are persisted (no SELECT per row) with Hibernate
+   `ownershipsCreated`, `ownershipsUnchanged`, `metersCreated`, `metersUnchanged`, `waterConnectionsCreated`,
+   `waterConnectionsUnchanged`, `openingBalancesCreated`, `openingBalancesUnchanged` as text). New rows are persisted (no SELECT per row) with Hibernate
    batching (`jdbc.batch_size: 50`, `order_inserts`, `order_updates`). Finally the run becomes `COMMITTED` with
    `committed_at` and its plan dropped.
 
@@ -225,7 +275,10 @@ Facade locking and apply contracts live in `members/README.md` and `plots/README
 Hibernate would log a failed batch with the values of the row, so `application.yml` turns the `org.hibernate.orm.jdbc.error`
 logger off and sets the driver property `logServerErrorDetail=false` (the constraint name is still in the message).
 
-Tests: `ImportCommitTests` and `ImportConstraintViolationTests` (a rule broken between the plan and the flush is 409
+Tests: `ImportPlotsWaterTests` (the water column in both languages, no and empty leave a plot as it is, a re-import,
+every problem code, a stale preview), `ImportOpeningBalancesTests` (the sheet in both languages, booking, a re-import,
+a reversed balance imported again, a renamed seeded type, every problem code, missing headers, a stale preview),
+`ImportCommitTests` and `ImportConstraintViolationTests` (a rule broken between the plan and the flush is 409
 `IMPORT_STALE`, for each of the four constraints, through the batched flush). `ImportLargeCommitTests` (a file at the
 limits) is tagged `large`; it runs in `make test` by default and can be skipped with `-DexcludedGroups=large`.
 
@@ -258,5 +311,5 @@ Table: `import_run` (V9, RLS `tenant_isolation`; the application role cannot del
 author as a snapshot (member id, Keycloak subject, display name), the counts, the problem count and, for a preview that
 can still be committed, the normalised rows (`plan`, personal data, cleared when no longer needed).
 
-Depends on `identity`, `problem`, `tenancy`, `plots`, `members`, `meters` (`MeterImport`) and `audit` (it publishes
-`IMPORT_COMMITTED`).
+Depends on `identity`, `problem`, `tenancy`, `plots`, `members`, `meters` (`MeterImport`, `WaterConnectionImport`),
+`ledger` (`OpeningBalanceImport`) and `audit` (it publishes `IMPORT_COMMITTED`).

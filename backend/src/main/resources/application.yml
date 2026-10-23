@@ -81,3 +81,6 @@ spring:
       on-profile: dev
   flyway:
     locations: classpath:db/migration,classpath:db/demo
+    placeholders:
+      # The demo ledger block of R__demo_data.sql runs only when this is "on" (integration tests turn it off)
+      demoledger: "on"

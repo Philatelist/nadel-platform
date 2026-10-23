@@ -1,6 +1,8 @@
 package app.nadel.plots.internal;
 
 import jakarta.persistence.LockModeType;
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -65,7 +67,9 @@ interface PlotRepository extends JpaRepository<Plot, UUID> {
 
     // no tenant_id filter needed: RLS hides other cooperatives' rows
     @Query("""
-            select new app.nadel.plots.internal.PlotRow(p, s.status, s.debt)
+            select new app.nadel.plots.internal.PlotRow(p, s.debt, s.oldestDebtDate,
+                case when exists (select 1 from Ownership o where o.plotId = p.id and o.validTo is null)
+                     then true else false end)
             from Plot p left join PlotStatusEntry s on s.plotId = p.id
             where p.archivedAt is null
             order by p.number, p.id
@@ -73,18 +77,27 @@ interface PlotRepository extends JpaRepository<Plot, UUID> {
     List<PlotRow> findActiveWithStatus();
 
     @Query("""
-            select new app.nadel.plots.internal.PlotRow(p, s.status, s.debt)
+            select new app.nadel.plots.internal.PlotRow(p, s.debt, s.oldestDebtDate,
+                case when exists (select 1 from Ownership o where o.plotId = p.id and o.validTo is null)
+                     then true else false end)
             from Plot p left join PlotStatusEntry s on s.plotId = p.id
             where p.id = :id
             """)
     Optional<PlotRow> findRowById(@Param("id") UUID id);
 
     @Query("""
-            select new app.nadel.plots.internal.PlotRow(p, s.status, s.debt)
+            select new app.nadel.plots.internal.PlotRow(p, s.debt, s.oldestDebtDate,
+                case when exists (select 1 from Ownership o where o.plotId = p.id and o.validTo is null)
+                     then true else false end)
             from Plot p left join PlotStatusEntry s on s.plotId = p.id
             where p.id in :ids
             """)
     List<PlotRow> findRowsByIds(@Param("ids") Collection<UUID> ids);
+
+    /** The active plots that are not common land, in natural order of the number. */
+    @Query(value = "select * from plot p where p.archived_at is null and p.kind <> 'COMMON' "
+            + "order by p.number_sort_key, p.number, p.id", nativeQuery = true)
+    List<Plot> findChargeableInNaturalOrder();
 
     /** The given plots' ids in natural order of the number (the order of the plots list). */
     @Query(value = "select p.id from plot p where p.id in (:ids) order by p.number_sort_key, p.number, p.id",
@@ -119,9 +132,11 @@ interface PlotRepository extends JpaRepository<Plot, UUID> {
      * the plot also matches when one of its current owners is among {@code ownerIds}, which must not be empty (pass a
      * placeholder id while the branch is off). When {@code ownedOnly} is true only plots among {@code ownedPlotIds}
      * are listed, and that list must not be empty either (placeholder while off). {@code kind} and {@code status} are
-     * optional filters; the status is the displayed one (common land is always GREY, a plot without a status row is
-     * GREY). The order is fixed here, so the {@code Pageable} must be unsorted. Rows of other cooperatives are hidden
-     * by RLS.
+     * optional filters; the status is the displayed one, derived as {@link PlotStatusPolicy#statusOf} does it (the
+     * same rule in SQL: GREY for common land and a plot without a current owner, GREEN without a debt, RED when the
+     * debt is above {@code redAmount} or its oldest unpaid charge is dated before {@code redSince} = today minus the
+     * red days, YELLOW otherwise; a plot without a status row has no debt). The order is fixed here, so the
+     * {@code Pageable} must be unsorted. Rows of other cooperatives are hidden by RLS.
      */
     @Query(value = """
             select p.* from plot p
@@ -129,8 +144,11 @@ interface PlotRepository extends JpaRepository<Plot, UUID> {
             where (:includeArchived = true or p.archived_at is null)
               and (cast(:kind as text) is null or p.kind = cast(:kind as text))
               and (cast(:status as text) is null
-                   or coalesce(case when p.kind = 'COMMON' then 'GREY' else s.status end, 'GREY')
-                      = cast(:status as text))
+                   or (case when p.kind = 'COMMON' or not exists (
+                                 select 1 from ownership c where c.plot_id = p.id and c.valid_to is null) then 'GREY'
+                            when coalesce(s.debt, 0) <= 0 then 'GREEN'
+                            when s.debt > :redAmount or s.oldest_debt_date < :redSince then 'RED'
+                            else 'YELLOW' end) = cast(:status as text))
               and (:ownedOnly = false or p.id in (:ownedPlotIds))
               and (lower(p.number) like :textPattern escape '!'
                    or lower(p.street) like :textPattern escape '!'
@@ -146,8 +164,11 @@ interface PlotRepository extends JpaRepository<Plot, UUID> {
             where (:includeArchived = true or p.archived_at is null)
               and (cast(:kind as text) is null or p.kind = cast(:kind as text))
               and (cast(:status as text) is null
-                   or coalesce(case when p.kind = 'COMMON' then 'GREY' else s.status end, 'GREY')
-                      = cast(:status as text))
+                   or (case when p.kind = 'COMMON' or not exists (
+                                 select 1 from ownership c where c.plot_id = p.id and c.valid_to is null) then 'GREY'
+                            when coalesce(s.debt, 0) <= 0 then 'GREEN'
+                            when s.debt > :redAmount or s.oldest_debt_date < :redSince then 'RED'
+                            else 'YELLOW' end) = cast(:status as text))
               and (:ownedOnly = false or p.id in (:ownedPlotIds))
               and (lower(p.number) like :textPattern escape '!'
                    or lower(p.street) like :textPattern escape '!'
@@ -161,5 +182,6 @@ interface PlotRepository extends JpaRepository<Plot, UUID> {
             @Param("status") String status, @Param("textPattern") String textPattern,
             @Param("searchCadastral") boolean searchCadastral, @Param("searchOwners") boolean searchOwners,
             @Param("ownerIds") Collection<UUID> ownerIds, @Param("ownedOnly") boolean ownedOnly,
-            @Param("ownedPlotIds") Collection<UUID> ownedPlotIds, Pageable pageable);
+            @Param("ownedPlotIds") Collection<UUID> ownedPlotIds, @Param("redAmount") BigDecimal redAmount,
+            @Param("redSince") LocalDate redSince, Pageable pageable);
 }

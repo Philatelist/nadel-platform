@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import app.nadel.DemoMeterData;
+import app.nadel.DemoReadingCharges;
 import app.nadel.DemoTariffData;
 import app.nadel.IntegrationTest;
 import app.nadel.TestTokens;
@@ -84,6 +85,9 @@ class MetersAcceptanceTests extends IntegrationTest {
     @AfterEach
     void removeEverythingTheTestCreated() {
         JdbcTemplate owner = ownerJdbc();
+        // the readings of 2025 are before the demo electricity tariff: the ledger queues them (the items go with the
+        // meters) and charges nothing; wait for its listener before the meters go
+        DemoReadingCharges.awaitListeners(owner);
         owner.update("delete from meter_reading where meter_id in (select id from meter where serial like 'MA-%')");
         owner.update("delete from meter_parent where meter_id in (select id from meter where serial like 'MA-%') "
                 + "or parent_meter_id in (select id from meter where serial like 'MA-%')");

@@ -131,7 +131,7 @@ test.describe('plots registry: acceptance', () => {
     }
   });
 
-  test('§2.1 marks in Ukrainian: "Без боргу" on an owned plot, grey "Без власника" on an unowned one and "Спільні землі" on the road, filter by kind', async ({
+  test('§2.1 marks in Ukrainian: a debt label ("Борг понад поріг" or "Є борг", by the age of the debt) on an owned plot, grey "Без власника" on an unowned one and "Спільні землі" on the road, filter by kind', async ({
     page,
   }) => {
     await signInInUkrainian(page, 'treasurer@demo.local');
@@ -141,8 +141,9 @@ test.describe('plots registry: acceptance', () => {
     await expect(rows(page).first().locator('td').nth(4)).toHaveText('Спільні землі'); // kind
     await expect(rows(page).first().locator('td').nth(5)).toContainText('Спільні землі'); // grey status label
     await search(page, 'Пошук за номером, вулицею або кадастровим номером').fill('');
-    // plot 1 is owned (green), plot 27 has no owner (grey)
-    await expect(rows(page).first().locator('td').nth(5)).toContainText('Без боргу');
+    // plot 1 is owned and has a debt in the demo ledger (red or yellow, by where the anchor day falls); plot 27 has
+    // no owner (grey)
+    await expect(rows(page).first().locator('td').nth(5)).toContainText(/Борг понад поріг|Є борг/);
     await search(page, 'Пошук за номером, вулицею або кадастровим номером').fill('27');
     const unowned = rows(page).filter({ has: page.getByRole('link', { name: '27', exact: true }) });
     await expect(unowned).toHaveCount(1);
@@ -184,14 +185,18 @@ test.describe('plots registry: acceptance', () => {
     expect(plotRows.every((r) => r.includes('вул. Садова') || r.includes('вул. Вишнева'))).toBe(true);
     expect(plotRows.filter((r) => r.includes('вул. Садова')).length).toBeGreaterThan(10);
     expect(plotRows.filter((r) => r.includes('вул. Вишнева')).length).toBeGreaterThan(10);
-    // owned plots are green ("No debt"), plots 25-29 have "No owner" and the road is "Common land"; no debt yet
-    expect(everyRow.filter((r) => r.includes('No debt')).length).toBe(25);
+    // the demo ledger gives every one of the 25 owned plots a debt, so each is red or yellow and none green (how many
+    // are red depends on the day the demo was loaded); plots 25-29 have "No owner" and the road is "Common land"
+    const red = everyRow.filter((r) => r.includes('Debt above threshold')).length;
+    const yellow = everyRow.filter((r) => r.includes('Has debt')).length;
+    expect(red + yellow).toBe(25);
+    expect(everyRow.filter((r) => r.includes('No debt')).length).toBe(0);
     expect(everyRow.filter((r) => r.includes('No owner')).length).toBe(5);
     const road = everyRow.filter((r) => r.startsWith('R-1'));
     expect(road).toHaveLength(1);
     expect(road[0]).not.toContain('No owner');
     expect(road[0]).not.toContain('No debt');
-    expect(everyRow.some((r) => /Debt/.test(r))).toBe(false);
+    expect(road[0]).not.toMatch(/debt/i);
 
     // §2.2 #3: the filter by kind "Common land" lists the road only (and resets paging)
     await page.getByRole('main').getByLabel('Kind', { exact: true }).selectOption({ label: 'Common land' });

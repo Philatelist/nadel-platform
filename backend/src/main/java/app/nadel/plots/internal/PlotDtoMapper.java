@@ -2,6 +2,7 @@ package app.nadel.plots.internal;
 
 import app.nadel.identity.AccessProfile;
 import app.nadel.identity.Permission;
+import app.nadel.money.Money;
 import java.time.ZoneOffset;
 import java.util.List;
 import nadel.contract.model.PlotDetails;
@@ -27,8 +28,11 @@ final class PlotDtoMapper {
         return viewer.can(Permission.PLOTS_VIEW);
     }
 
-    static PlotStatus statusOf(PlotRow row) {
-        return PlotStatus.fromValue(PlotStatusPolicy.statusOf(row.plot().getKind(), row.status()).name());
+    /** The status derived from the row's debt, its owners and the request's threshold and today. */
+    static PlotStatus statusOf(PlotRow row, PlotStatusPolicy.Basis basis) {
+        Money debt = row.debt() == null ? Money.ZERO : Money.of(row.debt());
+        return PlotStatus.fromValue(PlotStatusPolicy.statusOf(row.plot().getKind(), row.hasOwner(), debt,
+                row.oldestDebtDate(), basis).name());
     }
 
     /**
@@ -43,7 +47,7 @@ final class PlotDtoMapper {
         dto.setStreet(plot.getStreet());
         dto.setKind(nadel.contract.model.PlotKind.fromValue(plot.getKind().name()));
         if (scope.canSeeStatus(plot.getId())) {
-            dto.setStatus(statusOf(row));
+            dto.setStatus(statusOf(row, scope.statusBasis()));
         }
         dto.setArchived(plot.getArchivedAt() != null);
         if (scope.canSeeDetails(plot.getId())) {
@@ -58,8 +62,8 @@ final class PlotDtoMapper {
     }
 
     /** The card for the caller of a write endpoint, which all require {@code PLOTS_VIEW}. */
-    static PlotDetails toDetails(AccessProfile actor, PlotRow row) {
-        return toDetails(canSeeAllDetails(actor) ? ViewerScope.FULL : ViewerScope.NONE, row);
+    static PlotDetails toDetails(AccessProfile actor, PlotRow row, PlotStatusPolicy.Basis basis) {
+        return toDetails(canSeeAllDetails(actor) ? ViewerScope.full(basis) : ViewerScope.none(basis), row);
     }
 
     static PlotDetails toDetails(ViewerScope scope, PlotRow row) {
@@ -70,7 +74,7 @@ final class PlotDtoMapper {
         dto.setStreet(plot.getStreet());
         dto.setKind(nadel.contract.model.PlotKind.fromValue(plot.getKind().name()));
         if (scope.canSeeStatus(plot.getId())) {
-            dto.setStatus(statusOf(row));
+            dto.setStatus(statusOf(row, scope.statusBasis()));
         }
         dto.setArchived(plot.getArchivedAt() != null);
         if (plot.getArchivedAt() != null) {

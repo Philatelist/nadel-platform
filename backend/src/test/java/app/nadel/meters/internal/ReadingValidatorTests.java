@@ -111,8 +111,9 @@ class ReadingValidatorTests {
 
         Neighbours between = ReadingValidator.neighbours(ACTIVE, counted, date("2026-09-20"));
         assertThat(between).isEqualTo(new Neighbours(reading("2026-09-03", "8140"), reading("2026-10-05", "8205")));
-        assertThat(between.spanFrom(date("2026-09-20"))).isEqualTo("2026-09-03");
-        assertThat(between.spanTo(date("2026-09-20"))).isEqualTo("2026-10-05");
+        // the days a change on 20.09 reaches: from the day after the previous point to the day before the next one
+        assertThat(between.spanFrom(date("2026-09-20"))).isEqualTo("2026-09-04");
+        assertThat(between.spanTo(date("2026-09-20"))).isEqualTo("2026-10-04");
 
         Neighbours last = ReadingValidator.neighbours(ACTIVE, counted, date("2026-10-20"));
         assertThat(last.next()).isNull();

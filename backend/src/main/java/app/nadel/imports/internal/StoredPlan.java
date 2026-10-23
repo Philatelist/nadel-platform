@@ -1,5 +1,6 @@
 package app.nadel.imports.internal;
 
+import app.nadel.ledger.OpeningBalanceImport;
 import app.nadel.members.MemberImportRow;
 import app.nadel.meters.MeterImportRow;
 import app.nadel.plots.PlotImportRow;
@@ -25,9 +26,12 @@ final class StoredPlan {
     private StoredPlan() {
     }
 
-    /** The four sheets of a stored plan; a plan stored before the Meters sheet existed has no meters. */
+    /**
+     * The five sheets of a stored plan; a plan stored before the Meters sheet existed has no meters, one stored before
+     * feature 011 no water cells and no opening balances.
+     */
     record Sheets(PlotsSheet.Parsed plots, MembersSheet.Parsed members, OwnershipSheet.Parsed ownership,
-            MetersSheet.Parsed meters) {
+            MetersSheet.Parsed meters, OpeningBalancesSheet.Parsed openings) {
     }
 
     /**
@@ -43,7 +47,8 @@ final class StoredPlan {
         return new Sheets(plots((List<Map<String, Object>>) plan.get("plots")),
                 members((List<Map<String, Object>>) plan.get("members")),
                 ownership((List<Map<String, Object>>) plan.get("ownership")),
-                meters((List<Map<String, Object>>) plan.get("meters")));
+                meters((List<Map<String, Object>>) plan.get("meters")),
+                openings((List<Map<String, Object>>) plan.get("openingBalances")));
     }
 
     private static PlotsSheet.Parsed plots(@Nullable List<Map<String, Object>> stored) {
@@ -53,7 +58,7 @@ final class StoredPlan {
             // the column only names the cell of a problem, and a stored row has none
             rows.add(new PlotsSheet.ParsedRow(new PlotImportRow(number(map, "row"), text(map, "number"),
                     text(map, "street"), text(map, "kind"), area, text(map, "cadastralNumber"),
-                    (Boolean) map.get("hasBuilding"), text(map, "notes")), PlotColumn.AREA_M2));
+                    (Boolean) map.get("hasBuilding"), text(map, "notes")), PlotColumn.AREA_M2, text(map, "water")));
         }
         return new PlotsSheet.Parsed(rows, List.of());
     }
@@ -91,6 +96,18 @@ final class StoredPlan {
                     reading == null ? null : new BigDecimal(reading)));
         }
         return new MetersSheet.Parsed(rows, List.of());
+    }
+
+    private static OpeningBalancesSheet.Parsed openings(@Nullable List<Map<String, Object>> stored) {
+        List<OpeningBalanceImport.Row> rows = new ArrayList<>();
+        for (Map<String, Object> map : orEmpty(stored)) {
+            String amount = text(map, "amount");
+            String date = text(map, "date");
+            rows.add(new OpeningBalanceImport.Row(number(map, "row"), text(map, "plotNumber"),
+                    text(map, "chargeType"), amount == null ? null : new BigDecimal(amount),
+                    date == null ? null : LocalDate.parse(date), text(map, "reason")));
+        }
+        return new OpeningBalancesSheet.Parsed(rows, List.of());
     }
 
     private static List<Map<String, Object>> orEmpty(@Nullable List<Map<String, Object>> stored) {

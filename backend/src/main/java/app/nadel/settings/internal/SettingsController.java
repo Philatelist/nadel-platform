@@ -4,9 +4,12 @@ import app.nadel.identity.AccessProfile;
 import app.nadel.identity.CurrentUser;
 import app.nadel.problem.ApiProblemException;
 import app.nadel.problem.ProblemCodes;
+import app.nadel.settings.CommonConsumerSplit;
+import app.nadel.settings.LossesMode;
 import app.nadel.settings.PlotStatusVisibility;
 import nadel.contract.api.SettingsApi;
 import nadel.contract.model.CooperativeSettings;
+import nadel.contract.model.CooperativeSettingsUpdate;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -33,18 +36,32 @@ class SettingsController implements SettingsApi {
             throw new ApiProblemException(HttpStatus.FORBIDDEN, ProblemCodes.PERMISSION_DENIED,
                     "The platform operator has no access to cooperative data.");
         }
-        return ResponseEntity.ok(toDto(service.visibility(viewer)));
+        return ResponseEntity.ok(toDto(service.values(viewer)));
     }
 
+    /** Only the fields present in the body change; see {@link SettingsService#update}. */
     @Override
     @PreAuthorize("hasAuthority('PERM_SETTINGS_MANAGE')")
-    public ResponseEntity<CooperativeSettings> updateSettings(CooperativeSettings cooperativeSettings) {
-        PlotStatusVisibility requested = PlotStatusVisibility.valueOf(
-                cooperativeSettings.getMemberPlotStatusVisibility().getValue());
-        return ResponseEntity.ok(toDto(service.update(requested, currentUser.profile())));
+    public ResponseEntity<CooperativeSettings> updateSettings(CooperativeSettingsUpdate update) {
+        var change = new SettingsService.Change(
+                update.getMemberPlotStatusVisibility() == null ? null
+                        : PlotStatusVisibility.valueOf(update.getMemberPlotStatusVisibility().getValue()),
+                update.getLossesMode() == null ? null : LossesMode.valueOf(update.getLossesMode().getValue()),
+                update.getLossesPercent(),
+                update.getCommonConsumerDefaultSplit() == null ? null
+                        : CommonConsumerSplit.valueOf(update.getCommonConsumerDefaultSplit().getValue()),
+                update.getRedAmount(),
+                update.getRedDays());
+        return ResponseEntity.ok(toDto(service.update(change, currentUser.profile())));
     }
 
-    private static CooperativeSettings toDto(PlotStatusVisibility visibility) {
-        return new CooperativeSettings(nadel.contract.model.PlotStatusVisibility.fromValue(visibility.name()));
+    private static CooperativeSettings toDto(SettingsValues values) {
+        return new CooperativeSettings(
+                nadel.contract.model.PlotStatusVisibility.fromValue(values.memberPlotStatusVisibility().name()),
+                nadel.contract.model.LossesMode.fromValue(values.lossesMode().name()),
+                values.lossesPercent().toPlainString(),
+                nadel.contract.model.CommonConsumerSplit.fromValue(values.commonConsumerDefaultSplit().name()),
+                values.redAmount().toPlainString(),
+                values.redDays());
     }
 }

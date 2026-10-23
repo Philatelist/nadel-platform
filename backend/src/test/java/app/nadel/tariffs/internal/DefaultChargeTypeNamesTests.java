@@ -13,6 +13,8 @@ class DefaultChargeTypeNamesTests {
         assertThat(DefaultChargeTypeNames.of("ELECTRICITY")).containsExactly("Electricity", "Електроенергія");
         assertThat(DefaultChargeTypeNames.of("LAND_TAX")).containsExactly("Land tax", "Земельний податок");
         assertThat(DefaultChargeTypeNames.of("WATER")).containsExactly("Water", "Вода");
+        assertThat(DefaultChargeTypeNames.of("COMMON_CONSUMERS")).containsExactly("Common consumers",
+                "Спільні споживачі");
     }
 
     @Test
@@ -26,6 +28,7 @@ class DefaultChargeTypeNamesTests {
         assertThat(DefaultChargeTypeNames.isDefaultOf("WATER", "water")).isTrue();
         assertThat(DefaultChargeTypeNames.isDefaultOf("WATER", "ВОДА")).isTrue();
         assertThat(DefaultChargeTypeNames.isDefaultOf("LAND_TAX", "земельний ПОДАТОК")).isTrue();
+        assertThat(DefaultChargeTypeNames.isDefaultOf("COMMON_CONSUMERS", "СПІЛЬНІ споживачі")).isTrue();
     }
 
     @Test

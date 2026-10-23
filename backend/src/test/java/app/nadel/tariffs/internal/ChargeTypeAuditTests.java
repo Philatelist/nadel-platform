@@ -133,9 +133,10 @@ class ChargeTypeAuditTests extends IntegrationTest {
 
         int[] base = ids.stream().mapToInt(id -> entries(id, "CHARGE_TYPE_REORDERED").size()).toArray();
 
-        // land tax and electricity swap places; membership fee and water stay where they are
+        // land tax and electricity swap places; membership fee, water and common consumers stay where they are
         send(chairman, put(API + "/order"), Map.of("ids", List.of(ids.get(0).toString(), ids.get(2).toString(),
-                ids.get(1).toString(), ids.get(3).toString()))).andExpect(status().isNoContent());
+                ids.get(1).toString(), ids.get(3).toString(), ids.get(4).toString())))
+                .andExpect(status().isNoContent());
 
         Map<String, Object> electricity = newEntry(ids.get(1), "CHARGE_TYPE_REORDERED", base[1]);
         assertThat(changes(electricity)).containsExactly(new Change("position", "2", "3"));

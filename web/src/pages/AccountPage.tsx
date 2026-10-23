@@ -3,7 +3,8 @@ import { useLocale, useT } from '../i18n';
 import { QueryBoundary } from '../components/QueryBoundary';
 import { MyPlotsPanel } from '../components/ownership/MyPlotsPanel';
 import { MyMetersPanel } from '../components/readings/MyMetersPanel';
-import { MyChargesPanel } from '../components/tariffs/MyChargesPanel';
+import { MyChargesPanel } from '../components/charges/MyChargesPanel';
+import { MyExpectedChargesPanel } from '../components/tariffs/MyExpectedChargesPanel';
 import { MemberDetails } from '../components/MemberDetails';
 import { Badge, PageHeader, Panel } from '../components/ui';
 import { useMe } from '../me';
@@ -62,6 +63,7 @@ export function AccountPage() {
       <MyPlotsPanel />
       <MyMetersPanel />
       <MyChargesPanel />
+      <MyExpectedChargesPanel />
     </div>
   );
 }

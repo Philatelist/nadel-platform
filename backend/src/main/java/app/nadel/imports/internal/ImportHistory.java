@@ -79,11 +79,13 @@ class ImportHistory {
 
     /**
      * The stored {@code {"plots": {"created", "updated", "unchanged"}, ...}}; a missing part counts as zero (an upload
-     * from before the Meters sheet has no {@code meters}).
+     * from before the Meters sheet has no {@code meters}, one from before feature 011 no {@code waterConnections} and
+     * no {@code openingBalances}).
      */
     private static ImportCounts countsOf(Map<String, Object> stored) {
         return new ImportCounts(entityCounts(stored.get("plots")), entityCounts(stored.get("members")),
-                entityCounts(stored.get("ownerships")), entityCounts(stored.get("meters")));
+                entityCounts(stored.get("ownerships")), entityCounts(stored.get("meters")),
+                entityCounts(stored.get("waterConnections")), entityCounts(stored.get("openingBalances")));
     }
 
     private static ImportEntityCounts entityCounts(Object stored) {

@@ -123,6 +123,32 @@ const router = createBrowserRouter([
         ],
       },
       {
+        element: <RequirePermission permission="CHARGES_VIEW" />,
+        children: [
+          {
+            path: 'charges',
+            lazy: () => import('./pages/ChargesPage').then((m) => ({ Component: m.ChargesPage })),
+          },
+          {
+            path: 'charges/not-charged',
+            lazy: () => import('./pages/NotChargedPage').then((m) => ({ Component: m.NotChargedPage })),
+          },
+          {
+            path: 'charges/losses',
+            lazy: () => import('./pages/LossesPage').then((m) => ({ Component: m.LossesPage })),
+          },
+          {
+            path: 'charges/common',
+            lazy: () =>
+              import('./pages/CommonConsumersPage').then((m) => ({ Component: m.CommonConsumersPage })),
+          },
+          {
+            path: 'charges/months/:ym',
+            lazy: () => import('./pages/ChargesMonthPage').then((m) => ({ Component: m.ChargesMonthPage })),
+          },
+        ],
+      },
+      {
         element: <RequirePermission permission="AUDIT_VIEW" />,
         children: [
           {

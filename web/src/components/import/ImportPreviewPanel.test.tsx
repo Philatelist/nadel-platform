@@ -16,6 +16,8 @@ function preview(over: Partial<ImportPreview> = {}): ImportPreview {
       members: { created: 0, updated: 0, unchanged: 0 },
       ownerships: { created: 0, updated: 0, unchanged: 0 },
       meters: { created: 0, updated: 0, unchanged: 0 },
+      waterConnections: { created: 2, updated: 0, unchanged: 1 },
+      openingBalances: { created: 4, updated: 0, unchanged: 0 },
     },
     problems: [],
     problemCount: 0,
@@ -41,6 +43,54 @@ describe('ImportPreviewPanel', () => {
     const row = within(screen.getByRole('row', { name: /Plots/ })).getAllByRole('cell');
     expect(row.map((c) => c.textContent)).toEqual(['Plots', '5', '3', '7']);
     expect(screen.getByRole('status')).toHaveTextContent('no problems');
+  });
+
+  it('shows the water connection and opening balance counts', () => {
+    renderPanel(preview());
+    const water = within(screen.getByRole('row', { name: /Water connections/ })).getAllByRole('cell');
+    expect(water.map((c) => c.textContent)).toEqual(['Water connections', '2', '0', '1']);
+    const balances = within(screen.getByRole('row', { name: /Opening balances/ })).getAllByRole('cell');
+    expect(balances.map((c) => c.textContent)).toEqual(['Opening balances', '4', '0', '0']);
+  });
+
+  it('shows the stored amount when an opening balance already exists', () => {
+    renderPanel(
+      preview({
+        committable: false,
+        problemCount: 1,
+        problems: [
+          problem(3, {
+            sheet: 'OPENING_BALANCES',
+            column: 'amount',
+            code: 'OPENING_BALANCE_EXISTS',
+            params: { amount: '300.00' },
+          }),
+        ],
+      }),
+    );
+    const row = screen.getAllByRole('row').slice(-1)[0];
+    expect(row).toHaveTextContent('Opening balances3Amount');
+    expect(row).toHaveTextContent('opening balance of ₴300.00 for this charge type — reverse it first.');
+  });
+
+  it('uses sheet-specific texts for the opening balances sheet and the water column', () => {
+    renderPanel(
+      preview({
+        committable: false,
+        problemCount: 3,
+        problems: [
+          problem(2, { sheet: 'OPENING_BALANCES', column: 'plot_number', code: 'UNKNOWN_PLOT' }),
+          problem(3, { sheet: 'OPENING_BALANCES', column: 'charge_type', code: 'UNKNOWN_CHARGE_TYPE' }),
+          problem(4, { column: 'water', code: 'PLOT_COMMON_LAND' }),
+        ],
+      }),
+    );
+    const rows = screen.getAllByRole('row').slice(-3);
+    expect(rows[0]).toHaveTextContent('There is no such active plot in the cooperative.');
+    expect(rows[1]).toHaveTextContent('Opening balances3Charge type');
+    expect(rows[1]).toHaveTextContent('There is no such charge type in the cooperative.');
+    expect(rows[2]).toHaveTextContent('Plots4Water');
+    expect(rows[2]).toHaveTextContent('Common land is never connected to water.');
   });
 
   it('labels a member problem with the member column and message', () => {

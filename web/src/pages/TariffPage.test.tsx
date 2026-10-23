@@ -63,6 +63,7 @@ describe('TariffPage', () => {
       scopeKind: 'ALL_PLOTS',
       selectedPlots: [],
       exclusions: [],
+      conflicts: [],
       chargeType: {
         id: 'c1',
         code: 'MEMBERSHIP',

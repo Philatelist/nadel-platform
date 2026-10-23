@@ -160,3 +160,15 @@
 | web/e2e/meters-acceptance.spec.ts | §2.8 #1-#3 import of the "Лічильники" sheet | e2e | positive+negative | yes | OK | Ukrainian |
 | web/e2e/meters-acceptance.spec.ts | §2.9 #1 audit log of a replacement and an approval | e2e | positive | yes | OK | Ukrainian, one language |
 | web/e2e/meters-acceptance.spec.ts | §2.10 #1 demo network and pending readings | e2e | positive | yes | OK | exactly one pending demo reading (plot 7) |
+| backend/src/test/java/app/nadel/ledger/LedgerAcceptanceTests.java | theChairmanRunsAMonthChargesAReadingReversesAndClosesInOrderAndEveryRefusalHolds | integration | positive+negative | yes | OK | spec 011-ledger-charges-period-closing: whole-feature journey §2.1-§2.4, §2.9, §2.10, §2.12 |
+| backend/src/test/java/app/nadel/ledger/LedgerAcceptanceTests.java | whatCouldNotBeChargedIsListedBlocksNoClosingAndIsChargedByARetryOnceTheTariffIsFixed | integration | positive+negative | yes | OK | §2.2 #6, §2.4 #7, §2.7 |
+| backend/src/test/java/app/nadel/ledger/internal/UnchargedDaysTests.java | UnchargedDaysTests (9 tests) | unit | positive+negative | yes | OK | §2.5/§2.6 narrowing of a queued run item; boundaries and full coverage |
+| backend/src/test/java/app/nadel/ledger/LossesRunsTests.java | aQuarterShowingLessThanItsChildrenChargesNothingAndWarnsWithTheNumbers | integration | negative | yes | OK | §2.5 #3 at API level |
+| backend/src/test/java/app/nadel/ledger/LossesRunsTests.java | aRetryOfAnItemOtherRunsChargedSomeDaysOfNarrowsItToTheDaysLeft | integration | positive | no | OK | extended: original item RESOLVED, retry audited |
+| backend/src/test/java/app/nadel/meters/internal/MeterCatalogTests.java | theChainOfAReplacedMeterIsTheSameOldestFirstFromAnyMeterOfItAndEmptyForAnUnknownOne | integration | positive+negative | no | OK | MeterCatalog.chainOf |
+| backend/src/test/java/app/nadel/imports/internal/ImportOpeningBalancesTests.java | aRowDatedInAClosedMonthIsBookedInTheEarliestOpenMonthKeepingItsOwnDate | integration | positive+negative | no | OK | §2.9 + §2.2 |
+| backend/src/test/java/app/nadel/ledger/internal/OpeningBalanceImportServiceTests.java | aRowDatedInAClosedMonthIsBookedInTheMonthTheCalendarGivesAndEachMonthIsAskedOnce | unit | positive | no | OK | per-month cache in apply |
+| backend/src/test/java/app/nadel/ledger/internal/OpeningBalanceImportServiceTests.java | aTieOnTheTimeOfBookingFallsBackToTheSmallerIdWhateverTheOrder | unit | positive | no | OK | id tie-breaker |
+| backend/src/test/java/app/nadel/ledger/internal/DemoLedgerDataTests.java | thePlotDebtsAreWhatTheStatusRefresherRecords | integration | positive | no | OK | now date-independent (statuses compared with the rule for today) |
+| web/e2e/ledger-acceptance.spec.ts | §2.8 connect a plot to water, cannot connect twice, disconnect keeps the history | e2e | positive+negative | yes | OK | English |
+| web/e2e/ledger-acceptance.spec.ts | §2.10 red amount form saves, keeps the value and refuses a non-amount | e2e | positive+negative | yes | OK | restores the amount |

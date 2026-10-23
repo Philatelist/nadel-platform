@@ -227,20 +227,27 @@ test.describe('ownership', () => {
     }
     await expect(main(page)).not.toContainText('sotka');
     await expect(main(page)).not.toContainText('Литвиненко');
-    await expect(main(page)).not.toContainText('No debt');
+    await expect(main(page)).not.toContainText(/No debt|Has debt|Debt above threshold/);
 
-    // the list: own plots 7 and 15 show "No debt", every other plot a neutral mark without a label
+    // the list: own plots 7 and 15 show a debt label (the demo ledger; red or yellow by where the anchor day falls),
+    // every other plot a neutral mark without a label
     await page.goto('/plots');
     await expect(rows(page).first()).toBeVisible();
-    const labelled = rows(page).filter({ hasText: 'No debt' });
+    const labelled = rows(page).filter({ hasText: /Has debt|Debt above threshold/ });
     await expect(labelled).toHaveCount(2);
     await expect(labelled.nth(0)).toContainText('7');
     await expect(labelled.nth(1)).toContainText('15');
     await expect(rows(page).filter({ hasText: /No owner|Common land/ })).toHaveCount(0);
     await expect(main(page).getByTestId('status-neutral')).toHaveCount(18);
     // the status filter only matches the member's own plots
-    await main(page).getByLabel('Status', { exact: true }).selectOption({ label: 'No debt' });
-    await expect(numbers(page)).toHaveText(['7', '15']);
+    const label = (await labelled.nth(0).textContent())?.includes('Debt above threshold')
+      ? 'Debt above threshold'
+      : 'Has debt';
+    const withLabel = await labelled.filter({ hasText: label }).count();
+    await main(page).getByLabel('Status', { exact: true }).selectOption({ label });
+    await expect(rows(page)).toHaveCount(withLabel);
+    await expect(numbers(page).first()).toHaveText('7');
+    expect((await numbers(page).allTextContents()).every((n) => n === '7' || n === '15')).toBe(true);
   });
 
   test('chairman switches to "All plots": the member sees labels on other plots but still no area or owners', async ({
@@ -254,20 +261,24 @@ test.describe('ownership', () => {
       await expect(page.getByRole('heading', { level: 1, name: 'Cooperative settings' })).toBeVisible();
       await expect(page.getByRole('radio', { name: /^Own plots only/ })).toBeChecked();
       await page.getByRole('radio', { name: /^All plots/ }).check();
-      await main(page).getByRole('button', { name: 'Save', exact: true }).click();
+      await main(page)
+        .getByRole('group', { name: 'Who sees plot colours' })
+        .locator('xpath=ancestor::form')
+        .getByRole('button', { name: 'Save', exact: true })
+        .click();
       await expect(main(page).getByText('Settings saved.')).toBeVisible();
 
       await member.goto('/plots');
       await expect(rows(member).first()).toBeVisible();
       await expect(main(member).getByTestId('status-neutral')).toHaveCount(0);
-      await expect(rows(member).filter({ hasText: 'No debt' })).toHaveCount(20);
+      await expect(rows(member).filter({ hasText: /Debt above threshold|Has debt/ })).toHaveCount(20);
       await expect(
         main(member)
           .locator('thead th')
           .filter({ hasText: /Area|Owners/ }),
       ).toHaveCount(0);
       await openDemoPlot(member, '9', 'Search by number or street');
-      await expect(main(member)).toContainText('No debt');
+      await expect(main(member)).toContainText(/Debt above threshold|Has debt/); // plot 9 has a debt in the demo ledger
       await expect(main(member)).not.toContainText('sotka');
       await expect(main(member)).not.toContainText('Литвиненко');
       await expect(main(member).getByText('Owners', { exact: true })).toHaveCount(0);

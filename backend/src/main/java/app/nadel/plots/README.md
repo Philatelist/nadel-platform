@@ -48,7 +48,7 @@ status refresh, `OWNERSHIP_CHANGED` event and its texts) is `OwnershipRecorder`,
 import. A violation of the plot number, cadastral number or ownership overlap constraint at a flush, or a plan that no
 longer holds, is 409 `IMPORT_STALE`.
 
-`plots` also implements the SPIs `members.MemberArchiveGuard` (see Guards) and `identity.OwnedPlotsSource` (`GET /me` ownedPlots), serves the public read facade `PlotCatalog` (`JpaPlotCatalog`: `find`, `findAll`, `findAndLockShared` (the plot `FOR SHARE`, `MANDATORY` transaction: taken by `meters` before it registers a plot meter, so it waits for a delete, archive or edit of the plot in progress and they wait for it), `findAllAndLockShared` (the same lock for many plots in id order, 500 per `IN` list: the Excel import's meters), `findActiveByNumbers` (active plots by number ignoring case, 500 values per `IN` list), `inNaturalOrder` (ids sorted by the natural order of the number, as in the plots list), `inStreetOrder` (ids by street in the Ukrainian alphabet with the ICU collation `uk-x-icu`, plots without a street last, then the natural order of the number: the meter register and round), `countChargeable`; plain `PlotFacts` records with number, street, common land, archived and area, used by `tariffs` and `meters`; runs in the caller's transaction under RLS), defines the veto SPI `PlotChangeGuard` (see Guards), and uses `members.MemberDirectory` and `settings.CooperativeSettings`.
+`plots` also implements the SPIs `members.MemberArchiveGuard` (see Guards) and `identity.OwnedPlotsSource` (`GET /me` ownedPlots), serves the debt cache writer `PlotDebtCache` (see Status) and the public read facade `PlotCatalog` (`JpaPlotCatalog`: `find`, `findAll`, `findAndLockShared` (the plot `FOR SHARE`, `MANDATORY` transaction: taken by `meters` before it registers a plot meter, so it waits for a delete, archive or edit of the plot in progress and they wait for it), `findAllAndLockShared` (the same lock for many plots in id order, 500 per `IN` list: the Excel import's meters), `findActiveByNumbers` (active plots by number ignoring case, 500 values per `IN` list), `inNaturalOrder` (ids sorted by the natural order of the number, as in the plots list), `inStreetOrder` (ids by street in the Ukrainian alphabet with the ICU collation `uk-x-icu`, plots without a street last, then the natural order of the number: the meter register and round), `countChargeable`, `findChargeable` (the active plots that are not common land in natural order of the number: the ledger's month run and the tariffs' conflict warning); plain `PlotFacts` records with number, street, common land, archived and area, used by `tariffs`, `meters` and `ledger`; runs in the caller's transaction under RLS), defines the veto SPI `PlotChangeGuard` (see Guards), and uses `members.MemberDirectory` and `settings.CooperativeSettings`.
 
 ## Endpoints
 
@@ -168,9 +168,31 @@ member, share, dates and basis; `coOwnerShares` replaces the shares of other rec
 
 ## Status
 
-`PlotStatusPolicy`: common land is always `GREY`; every other plot shows its cached `plot_status` (a missing row is `GREY`).
-Until debts exist, the demo data and the ownership changes keep the cache as `GREEN` for a plot with a current owner and
-`GREY` for a plot without one, with no debt. Creating a plot inserts the initial `GREY` row; the ledger rebuilds it later.
+The colour of a plot is **derived when it is read** (map, plots list and its status filter, plot card), never taken
+from a stored colour: `PlotStatusPolicy.statusOf(kind, hasOwner, debt, oldestDebtDate, thresholds, today)` (pure,
+`PlotStatusPolicyTests`; money-rules section 9):
+
+- GREY for common land and for a plot without a current owner (an `ownership` row with `valid_to` null);
+- RED when the debt is above the red amount, or there is a debt and today minus the oldest unpaid charge's date is more
+  than the red days;
+- YELLOW for any other debt; GREEN without a debt (zero or less).
+
+`PlotStatusBasis` reads the thresholds (`settings.CooperativeSettings.redAmount()`/`redDays()`) and today (the
+Europe/Kyiv `Clock`) once per request; `ViewerScope` carries them. The repository reads `plot_status.debt`,
+`oldest_debt_date` and whether a current owner exists with each row (`PlotRow`); a plot without a `plot_status` row has
+no debt. The list's status filter repeats the same rule in SQL (`PlotRepository.search`, with `redAmount` and
+`redSince` = today minus the red days). A change of the threshold or the passing of days therefore applies at once.
+
+`PlotDebtCache` (public, `JpaPlotDebtCache`) is how the ledger keeps the cache: `lockAll(plotIds)` creates missing rows
+(GREY, no debt) and locks the rows `FOR UPDATE` in the database's uuid order (500 per `IN` list), then
+`record(plotId, debt, oldestDebtDate)` stores the debt rebuilt from the committed ledger. Both run in the caller's
+transaction (`MANDATORY`).
+
+Decision on the stored `plot_status.status` column: **this release no longer reads it** (contract later, never dropped
+in this feature). It is kept written as a snapshot for the previous release during a rolling update: `record` writes
+the status the plot shows on that day, an ownership change keeps writing `PlotStatusPolicy.afterOwnershipChange` (GREY
+without owners, GREY -> GREEN with owners, any other status kept), and a new plot starts GREY. Creating a plot inserts
+its row; the ledger rebuilds the debt later.
 
 ## Writes
 
@@ -204,17 +226,20 @@ lock a change of owner takes), so a guard and an ownership change of one plot ru
   `ownership` (`ON DELETE RESTRICT`) stays as the database backstop.
 - Update: a plot that has any ownership row cannot become common land: 409 `PLOT_HAS_OWNERSHIP_HISTORY` with
   `errors[{field: kind}]`. Common land with no history can become a plot, and other edits are unaffected.
-- `PlotChangeGuard` (SPI of this module, ADR 0011; implemented by `meters.internal.MeterPlotGuard`): after the ownership
+- `PlotChangeGuard` (SPI of this module, ADR 0011; implemented by `meters.internal.MeterPlotGuard` and
+  `ledger.internal.LedgerPlotGuard`): after the ownership
   checks, `PlotCommands.delete`, `archive` and `update` (a `PLOT` becoming `COMMON`) ask every guard bean through
   `PlotChangeGuards` with the plot already locked `FOR UPDATE`; the first refusal is a 409 with the guard's code
   (`PLOT_HAS_METER`; `errors[{field: kind}]` for the update). The import's plan asks the guards in bulk about the matched
   plots a row turns into common land and reports a refusal as a problem on `kind`; the commit plans again under the plot
   locks. Guards return the refused plots instead of throwing, only read and take no locks. `meters` refuses delete and
-  common land while the plot has any meter (active or removed) and archive while it has an active one.
+  common land while the plot has any meter (active or removed) and archive while it has an active one; `ledger` refuses
+  delete while the plot has any charge (`PLOT_HAS_CHARGES`).
 - `OwnershipArchiveGuard` implements `members.MemberArchiveGuard`: 409 `MEMBER_OWNS_PLOT` when the member has a current
   ownership. Lock order: a change of owner takes the plot lock, then the members `FOR SHARE`; the member archive takes
   only the member row lock (after the chairman lock) and the guard takes no locks, so no cycle is possible. If the
   change commits first the archive sees the owner; if the archive commits first the change finds the member archived.
 
-Depends on `identity`, `problem`, `audit` and `members` (public `MemberDirectory` only). The `Clock` bean (Europe/Kyiv) is
+Depends on `identity`, `problem`, `audit`, `members` (public `MemberDirectory` only), `settings` (public
+`CooperativeSettings`: the visibility and the red threshold) and `money` (`Money` of the debt cache). The `Clock` bean (Europe/Kyiv) is
 declared in `app.nadel.ClockConfiguration`.

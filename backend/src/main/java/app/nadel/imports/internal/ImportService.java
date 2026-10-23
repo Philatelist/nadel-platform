@@ -75,18 +75,20 @@ class ImportService {
         MembersSheet.Parsed members;
         OwnershipSheet.Parsed ownership;
         MetersSheet.Parsed meters;
+        OpeningBalancesSheet.Parsed openings;
         try (WorkbookReader reader = WorkbookReader.open(content)) {
             plots = PlotsSheet.parse(reader);
             members = MembersSheet.parse(reader);
             ownership = OwnershipSheet.parse(reader);
             meters = MetersSheet.parse(reader);
+            openings = OpeningBalancesSheet.parse(reader);
         }
 
         UUID importId = UUID.randomUUID();
         return transaction.execute(status -> {
             Instant now = clock.instant();
             runs.clearExpiredPlans(actor.tenantId(), now);
-            ImportPlan plan = planner.plan(actor.tenantId(), importId, plots, members, ownership, meters);
+            ImportPlan plan = planner.plan(actor.tenantId(), importId, plots, members, ownership, meters, openings);
             ImportRun run = runs.save(ImportRun.create(importId, actor.tenantId(), fileName, actor.memberId(),
                     actor.subject(), actor.displayName(), now, now.plus(PREVIEW_VALID_FOR),
                     plan.hasProblems() ? ImportStatus.HAS_ERRORS : ImportStatus.PREVIEW, plan.counts().toMap(),
@@ -146,7 +148,9 @@ class ImportService {
                 .plots(toApi(counts.plots()))
                 .members(toApi(counts.members()))
                 .ownerships(toApi(counts.ownerships()))
-                .meters(toApi(counts.meters()));
+                .meters(toApi(counts.meters()))
+                .waterConnections(toApi(counts.waterConnections()))
+                .openingBalances(toApi(counts.openingBalances()));
     }
 
     private static ImportEntityCounts toApi(PlanCounts.EntityCounts counts) {

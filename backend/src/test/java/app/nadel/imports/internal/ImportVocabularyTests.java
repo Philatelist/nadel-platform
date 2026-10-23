@@ -21,6 +21,7 @@ class ImportVocabularyTests {
         assertLabelsAreAccepted(ImportVocabulary.COLUMNS_MEMBERS, MemberColumn.values());
         assertLabelsAreAccepted(ImportVocabulary.COLUMNS_OWNERSHIP, OwnershipColumn.values());
         assertLabelsAreAccepted(ImportVocabulary.COLUMNS_METERS, MeterColumn.values());
+        assertLabelsAreAccepted(ImportVocabulary.COLUMNS_OPENING, OpeningBalanceColumn.values());
     }
 
     private void assertLabelsAreAccepted(String sheet, SheetColumn[] columns) {
@@ -39,10 +40,11 @@ class ImportVocabularyTests {
         Arrays.stream(MemberColumn.values()).forEach(c -> known.add("members." + c.key()));
         Arrays.stream(OwnershipColumn.values()).forEach(c -> known.add("ownership." + c.key()));
         Arrays.stream(MeterColumn.values()).forEach(c -> known.add("meters." + c.key()));
+        Arrays.stream(OpeningBalanceColumn.values()).forEach(c -> known.add("opening." + c.key()));
         Properties file = ImportVocabulary.load("imports/header-aliases.properties");
         for (String name : file.stringPropertyNames()) {
             if (name.startsWith("plots.") || name.startsWith("members.") || name.startsWith("ownership.")
-                    || name.startsWith("meters.")) {
+                    || name.startsWith("meters.") || name.startsWith("opening.")) {
                 assertThat(known).as(name).contains(name);
             }
         }
@@ -55,8 +57,10 @@ class ImportVocabularyTests {
         assertThat(MembersSheet.NAMES).contains("Members", "Члени");
         assertThat(OwnershipSheet.NAMES).contains("Ownership", "Власність");
         assertThat(MetersSheet.NAMES).containsExactly("Meters", "Лічильники");
+        assertThat(OpeningBalancesSheet.NAMES).startsWith("Opening balances", "Вхідне сальдо");
         assertThat(vocabulary.sheetLabel("plots")).isEqualTo("Ділянки");
         assertThat(vocabulary.sheetLabel("meters")).isEqualTo("Лічильники");
+        assertThat(vocabulary.sheetLabel("opening")).isEqualTo("Вхідне сальдо");
     }
 
     @Test

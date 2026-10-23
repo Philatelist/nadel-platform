@@ -44,14 +44,11 @@
         <li><a href="#r-tariffs">Tariffs and the expected amount</a><span class="tag done">works</span></li>
         <li><a href="#r-meters">Meters and the tree</a><span class="tag done">works</span></li>
         <li><a href="#r-readings">Readings and consumption</a><span class="tag done">works</span></li>
+        <li><a href="#r-charges">Charges and closing months</a><span class="tag done">works</span></li>
         <li>
-          <a href="#r-charges">Charges and closing months</a><span class="tag planned">planned · 011</span>
+          <a href="#r-losses">Network losses and common consumers</a><span class="tag done">works</span>
         </li>
-        <li>
-          <a href="#r-losses">Network losses and common consumers</a
-          ><span class="tag planned">planned · 011</span>
-        </li>
-        <li><a href="#r-water">Water and connections</a><span class="tag planned">planned · 011</span></li>
+        <li><a href="#r-water">Water and connections</a><span class="tag done">works</span></li>
         <li>
           <a href="#r-recalc">Corrections and recalculation</a><span class="tag planned">planned · 012</span>
         </li>
@@ -388,6 +385,11 @@
       </div>
       <h3>Meter tree</h3>
       <p>The meter tree is opened from here too — see chapter 9.</p>
+      <h3>Charging settings</h3>
+      <p>
+        Below the colour choice: the red status threshold, how losses are charged, the split of common
+        consumers and the water supply of plots. They are described in chapters 17–19.
+      </p>
     </section>
 
     <section class="chapter" id="import">
@@ -427,6 +429,12 @@
         </li>
         <li>Sheet and column names are accepted in Ukrainian and English, even mixed.</li>
       </ul>
+      <p>
+        Two additions: the <strong>Opening balances</strong> sheet (plot, charge type, amount, date, basis;
+        one row per plot and charge type; amounts with at most two decimals) and the <strong>Water</strong>
+        column of the Plots sheet ("yes" connects to the cooperative supply, any other text names a well; "no"
+        or empty changes nothing). Importing the same file again books nothing twice.
+      </p>
     </section>
 
     <section class="chapter" id="tariffs">
@@ -698,6 +706,15 @@
         A member never sees other plots' amounts, owners or personal data. Other plots' colours only when the
         chairman chose "All plots" (chapter 6).
       </p>
+      <h3>My charges</h3>
+      <p>
+        For each of their plots the member sees the debt per charge type and every charge with its
+        calculation, read-only. See chapter 17.
+      </p>
+      <figure>
+        <img src="../img/en/member-charges.png" alt="My charges" />
+        <figcaption>"My charges" in the member account</figcaption>
+      </figure>
     </section>
 
     <section class="part" id="part-2">
@@ -1036,9 +1053,7 @@ one-time fee    the whole rate in the month of its due date, 0.00 in other month
     </section>
 
     <section class="chapter" id="r-charges">
-      <h2>
-        <span class="num">17</span> Charges and closing months <span class="tag planned">planned · 011</span>
-      </h2>
+      <h2><span class="num">17</span> Charges and closing months <span class="tag done">works</span></h2>
       <p>
         A charge is an entry in the plot's account: charge type, amount, month, the days it pays for (service
         period) and how the amount was obtained (rates, units, kWh, the readings and tariff versions used).
@@ -1132,12 +1147,149 @@ one-time fee    the whole rate in the month of its due date, 0.00 in other month
 debt per charge type = Σ charges of that type (reversals negative) − Σ allocated payments
 prepayment           = Σ payments − Σ allocated payments</pre>
       <p>Payments arrive in the next phase. Until then a plot with charges shows a debt — that is correct.</p>
+
+      <h3>On the screen: "Charges"</h3>
+      <p>
+        The "Charges" menu item (permission "View charges") has four tabs: Months, Not charged, Losses and
+        Common consumers.
+      </p>
+      <figure>
+        <img src="../img/en/charges.png" alt="Charges" />
+        <figcaption>"Charges": the months, newest first, with the total per charge type</figcaption>
+      </figure>
+
+      <ol class="steps">
+        <li>
+          Open a month. The page shows what was charged per charge type and the check list ("Before closing"):
+          is the month run done, how many items wait in "Not charged", which meters have no reading for more
+          than 60 days.
+        </li>
+        <li>
+          "Charge the month" (permission "Run charges") first shows a <strong>preview</strong>: the number of
+          plots, the new charges per charge type and the items that cannot be charged. "Book" books exactly
+          what was shown. If anything changed meanwhile the system asks to preview again.
+        </li>
+        <li>
+          A rerun creates only what is missing: a plot or a tariff added later gets its charge, nothing is
+          duplicated. A month after the current one cannot be charged.
+        </li>
+      </ol>
+      <figure>
+        <img src="../img/en/charges-run.png" alt="Month run preview" />
+        <figcaption>
+          The preview of the month run: nothing new, because the current month was already run
+        </figcaption>
+      </figure>
+
+      <h3>"Not charged"</h3>
+      <p>
+        One list of everything the system could not charge, with the reason and a link to fix it: no tariff
+        for every day, two tariffs on the same day, a plot outside every tariff, an unknown node or consumer
+        value. "Retry" tries one item again; the next month run retries the tariff and reading items. An item
+        disappears when the retry succeeds. Items never block closing a month.
+      </p>
+      <figure>
+        <img src="../img/en/charges-not-charged.png" alt="Not charged" />
+        <figcaption>"Not charged": the reason and "Retry" for each item</figcaption>
+      </figure>
+
+      <h3>Closing a month</h3>
+      <p>
+        "Close the month" (permission "Close periods") shows the check list once more and asks to confirm.
+        Only the earliest open month can be closed ("Close the earlier months first" otherwise). A closed
+        month never changes; late entries go to the earliest open month.
+      </p>
+      <figure>
+        <img src="../img/en/charges-close.png" alt="Close the month" />
+        <figcaption>Closing: the check list stays in view, nothing blocks it</figcaption>
+      </figure>
+
+      <h3>The plot account, reversals and opening balances</h3>
+      <p>
+        On the plot card the "Account" panel shows the debt per charge type and the charges, newest first,
+        with a date filter. "Details" opens the calculation of a charge: kWh, rate, readings, days, the losses
+        percentage. A charge booked later than the days it pays for reads "for 13.09–28.09, charged in October
+        2026".
+      </p>
+      <figure>
+        <img src="../img/en/plot-account.png" alt="Plot account" />
+        <figcaption>The plot account</figcaption>
+      </figure>
+
+      <figure>
+        <img src="../img/en/plot-account-charge.png" alt="Charge details" />
+        <figcaption>The calculation of a charge</figcaption>
+      </figure>
+
+      <ul>
+        <li>
+          <strong>Reverse</strong> (permission "Reverse charges") asks for a reason and creates an entry for
+          the same amount with a minus. A charge is reversed once; a reversal cannot be reversed; a charge in
+          a closed month is corrected by an adjustment (a later phase), the button is not offered.
+        </li>
+        <li>
+          <strong>Enter an opening balance</strong> (permission "Run charges"): charge type, amount, "debt
+          counts from" (not later than today) and an optional reason. Many plots at once: the "Opening
+          balances" sheet of the Excel import (chapter 7). One opening balance per plot and charge type; to
+          change it, reverse it first.
+        </li>
+        <li>Reversing a whole losses or common consumers run is done on its page (below).</li>
+      </ul>
+      <h3>Plot colours on the map and in the list</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Colour</th>
+            <th>When</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Red</td>
+            <td>
+              The debt is above the "red from amount" or the oldest debt is more than "red from days" old
+              (strictly greater)
+            </td>
+          </tr>
+          <tr>
+            <td>Yellow</td>
+            <td>Any other debt</td>
+          </tr>
+          <tr>
+            <td>Green</td>
+            <td>No debt</td>
+          </tr>
+          <tr>
+            <td>Grey</td>
+            <td>No owner, or common land</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>
+        The thresholds are set in "Cooperative settings" (defaults 1,000.00 ₴ and 90 days; the demo
+        cooperative uses 2,000.00 ₴ and 90 days).
+      </p>
+      <figure>
+        <img src="../img/en/settings-thresholds.png" alt="Thresholds" />
+        <figcaption>The red status threshold in the settings</figcaption>
+      </figure>
+
+      <h3>The treasurer and the member</h3>
+      <p>
+        The treasurer sees months, accounts and the lists but has no buttons. A member sees only the account
+        of their own plots under "My charges" (chapter 12), read-only, with the calculation of every charge;
+        other plots' amounts are never shown.
+      </p>
+      <figure>
+        <img src="../img/en/treasurer-charges.png" alt="Treasurer view" />
+        <figcaption>What the treasurer sees: no actions</figcaption>
+      </figure>
     </section>
 
     <section class="chapter" id="r-losses">
       <h2>
         <span class="num">18</span> Network losses and common consumers
-        <span class="tag planned">planned · 011</span>
+        <span class="tag done">works</span>
       </h2>
       <h3>Losses: two modes, the chairman chooses</h3>
       <ul>
@@ -1211,12 +1363,55 @@ prepayment           = Σ payments − Σ allocated payments</pre>
           </tr>
         </tbody>
       </table>
+
+      <h3>On the screen: "Losses" and "Common consumers"</h3>
+      <p>
+        Both tabs of "Charges" work the same way: pick the range "From" and "To" (not later than today), press
+        "Preview", read the table and warnings, then "Book" (permission "Run charges"). The booking is written
+        in the month of the "To" day, or in the earliest open month after it. The history of past runs is
+        below, with "Details" and "Reverse the run" (permission "Reverse charges", a reason is required).
+      </p>
+      <figure>
+        <img src="../img/en/charges-losses.png" alt="Losses run" />
+        <figcaption>A losses preview: a node with an unknown value is skipped with a warning</figcaption>
+      </figure>
+
+      <ul>
+        <li>
+          The losses mode is chosen in the settings ("Losses"): with a fixed percentage there is nothing to
+          run here and the page says so.
+        </li>
+        <li>
+          If some nodes were already charged for these days the whole run cannot be booked; "Preview without
+          the charged nodes" books the rest.
+        </li>
+        <li>
+          A node with an unknown value goes to "Not charged"; when readings arrive, "Retry" charges it alone.
+        </li>
+        <li>
+          Common consumers need a tariff of the "Common consumers" charge type; without it the preview says
+          "No tariff" and nothing can be booked. The split of each consumer, its service users and the default
+          are in the settings.
+        </li>
+      </ul>
+      <figure>
+        <img src="../img/en/charges-common.png" alt="Common consumers run" />
+        <figcaption>A common consumers preview</figcaption>
+      </figure>
+
+      <figure>
+        <img src="../img/en/settings-losses.png" alt="Losses settings" />
+        <figcaption>The losses mode in the settings</figcaption>
+      </figure>
+
+      <figure>
+        <img src="../img/en/settings-common.png" alt="Common consumers settings" />
+        <figcaption>The split of each common consumer</figcaption>
+      </figure>
     </section>
 
     <section class="chapter" id="r-water">
-      <h2>
-        <span class="num">19</span> Water and connections <span class="tag planned">planned · 011</span>
-      </h2>
+      <h2><span class="num">19</span> Water and connections <span class="tag done">works</span></h2>
       <p>
         Water works like electricity:
         <strong>a plot not connected to the well pays nothing for water</strong>.
@@ -1247,6 +1442,37 @@ prepayment           = Σ payments − Σ allocated payments</pre>
           the import.
         </li>
       </ul>
+
+      <h3>On the screen</h3>
+      <p>
+        A plot's connection is on its card, panel "Water": "Connect" (source and the first connected day) and
+        "Disconnect" (the last connected day); the history is listed below. Many plots at once are connected
+        or disconnected on the "Water supply" section of "Cooperative settings", per source. Without a
+        connection a plot is never queued in "Not charged" for water and pays nothing for it.
+      </p>
+      <figure>
+        <img src="../img/en/plot-water.png" alt="Water connection" />
+        <figcaption>The "Water" panel of a plot</figcaption>
+      </figure>
+
+      <figure>
+        <img src="../img/en/settings-water.png" alt="Water supply" />
+        <figcaption>The water sources and their plots in the settings</figcaption>
+      </figure>
+
+      <div class="warn">
+        <span class="callout-title">Two things to know</span>
+        <ul>
+          <li>
+            If a well meter has been removed, its lasting connections are no longer offered in the settings:
+            end them on each plot's card.
+          </li>
+          <li>
+            Archiving a plot or making it common land does <strong>not</strong> end its lasting water
+            connection. End the connection on the plot card first.
+          </li>
+        </ul>
+      </div>
     </section>
 
     <section class="chapter" id="r-recalc">

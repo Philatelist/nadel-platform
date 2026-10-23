@@ -41,13 +41,15 @@ class PlotQueries {
     private final OwnershipQueries ownerships;
     private final MemberDirectory members;
     private final CooperativeSettings settings;
+    private final PlotStatusBasis statusBasis;
 
     PlotQueries(PlotRepository plots, OwnershipQueries ownerships, MemberDirectory members,
-            CooperativeSettings settings) {
+            CooperativeSettings settings, PlotStatusBasis statusBasis) {
         this.plots = plots;
         this.ownerships = ownerships;
         this.members = members;
         this.settings = settings;
+        this.statusBasis = statusBasis;
     }
 
     /**
@@ -56,13 +58,14 @@ class PlotQueries {
      * Call inside a transaction.
      */
     private ViewerScope scopeOf(AccessProfile viewer) {
+        PlotStatusPolicy.Basis basis = statusBasis.current();
         if (PlotDtoMapper.canSeeAllDetails(viewer)) {
-            return ViewerScope.FULL;
+            return ViewerScope.full(basis);
         }
         Set<UUID> owned = viewer.memberId() == null
                 ? Set.of()
                 : ownerships.currentPlotIdsOf(viewer.memberId());
-        return new ViewerScope(false, owned, settings.memberPlotStatusVisibility());
+        return new ViewerScope(false, owned, settings.memberPlotStatusVisibility(), basis);
     }
 
     /**
@@ -100,10 +103,13 @@ class PlotQueries {
         }
         String text = query == null ? "" : query.strip();
         List<UUID> ownerIds = full && !text.isEmpty() ? members.idsMatchingName(text) : List.of();
+        PlotStatusPolicy.Basis basis = scope.statusBasis();
         Page<Plot> result = plots.search(full && includeArchived, kind == null ? null : kind.getValue(),
                 status == null ? null : status.getValue(), likeContains(text), full, !ownerIds.isEmpty(),
                 ownerIds.isEmpty() ? NO_OWNER_IDS : ownerIds, ownedOnly,
-                ownedOnly ? List.copyOf(scope.ownedPlotIds()) : NO_OWNER_IDS, PageRequest.of(page, size));
+                ownedOnly ? List.copyOf(scope.ownedPlotIds()) : NO_OWNER_IDS,
+                basis.thresholds().redAmount().value(),
+                basis.today().minusDays(basis.thresholds().redDays()), PageRequest.of(page, size));
         List<UUID> plotIds = result.getContent().stream().map(Plot::getId).toList();
         Map<UUID, PlotRow> rows = plots.findRowsByIds(plotIds).stream()
                 .collect(Collectors.toMap(row -> row.plot().getId(), Function.identity()));
@@ -145,7 +151,7 @@ class PlotQueries {
         props.setStreet(plot.getStreet());
         props.setKind(nadel.contract.model.PlotKind.fromValue(plot.getKind().name()));
         if (scope.canSeeStatus(plot.getId())) {
-            props.setStatus(PlotDtoMapper.statusOf(row));
+            props.setStatus(PlotDtoMapper.statusOf(row, scope.statusBasis()));
         }
         if (details) {
             props.setAreaM2(plot.getAreaM2().doubleValue()); // area, not money

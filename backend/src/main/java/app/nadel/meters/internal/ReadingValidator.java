@@ -60,16 +60,18 @@ final class ReadingValidator {
     record Neighbours(@Nullable Reading previous, @Nullable Reading next) {
 
         /**
-         * The days whose readings decide the values around {@code date}: from the previous point (or the date itself)
-         * to the next point (or the date itself). A charge that used any reading in this span is affected by a change
-         * on {@code date}.
+         * The days a change on {@code date} reaches: from the day after the previous point (or the date itself) to the
+         * day before the next point (or the date itself). A charge read the meter on a closed range of days from one
+         * point to another ({@code ReadingUsage}); a change on {@code date} alters it exactly when that range meets
+         * this span. The neighbouring points themselves stay out: a new reading after a charged interval (which ends
+         * on the previous point) does not touch it (feature 011, the span fix).
          */
         LocalDate spanFrom(LocalDate date) {
-            return previous == null ? date : previous.takenOn();
+            return previous == null ? date : previous.takenOn().plusDays(1);
         }
 
         LocalDate spanTo(LocalDate date) {
-            return next == null ? date : next.takenOn();
+            return next == null ? date : next.takenOn().minusDays(1);
         }
     }
 

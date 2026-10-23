@@ -7,6 +7,7 @@ import java.util.List;
 import nadel.contract.model.Basis;
 import nadel.contract.model.Frequency;
 import nadel.contract.model.Tariff;
+import nadel.contract.model.TariffConflict;
 import nadel.contract.model.TariffExclusion;
 import nadel.contract.model.TariffScopeKind;
 import nadel.contract.model.TariffScopePlot;
@@ -21,13 +22,14 @@ final class TariffDtoMapper {
 
     /**
      * The tariff with all versions, newest first; {@code versionsOldestFirst} is every version of the tariff. The
-     * scope lists and the plot count come ready from the caller.
+     * scope lists, the plot count and the conflicts come ready from the caller.
      */
     static Tariff toDto(TariffRecord tariff, ChargeTypeRecord chargeType, List<TariffVersionRecord> versionsOldestFirst,
             LocalDate today, List<TariffScopePlot> selectedPlots, List<TariffExclusion> exclusions,
-            @Nullable Long plotCount) {
+            @Nullable Long plotCount, List<TariffConflict> conflicts) {
         var dto = new Tariff(tariff.getId(), tariff.getName(), ChargeTypeDtoMapper.toDto(chargeType),
-                scopeKind(tariff), versionsNewestFirst(versionsOldestFirst, today), selectedPlots, exclusions);
+                scopeKind(tariff), versionsNewestFirst(versionsOldestFirst, today), selectedPlots, exclusions,
+                conflicts);
         dto.setPlotCount(plotCount);
         return dto;
     }

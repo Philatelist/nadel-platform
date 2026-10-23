@@ -40,6 +40,20 @@ tags:
     description: Meter readings, the reading round and the consumption between readings
   - name: meter-tree
     description: The electricity meter tree, its dated history and the consumption per node over a date range
+  - name: charges
+    description: The ledger of a plot (its account), reversals of charges and opening balances
+  - name: billing
+    description: Billing months, their totals, the closing check list, the month run and closing
+  - name: not-charged
+    description: The "not charged" queue (what the app could not charge, with the reason) and its retry
+  - name: losses-runs
+    description: Proportional losses runs over a date range per node of the meter tree, their history and reversal
+  - name: common-consumer-runs
+    description: >-
+      Common consumer runs over a date range per common consumer meter, their history and reversal, and how each
+      common consumer is shared among plots
+  - name: water
+    description: Water connections of plots (with their history) and the water sources they are connected to
 
 paths:
   /me:
@@ -809,7 +823,8 @@ paths:
         Removes a plot that was created by mistake, together with its status. Requires `PLOTS_VIEW` and `PLOTS_EDIT`. Only an active
         plot can be deleted; an archived plot is refused with 409 `PLOT_ARCHIVED` and must be restored first, and a plot
         that has ever had an owner is refused with 409 `PLOT_HAS_OWNERSHIP_HISTORY`, a plot that has a meter (active or
-        removed) with 409 `PLOT_HAS_METER`. The deletion is audited.
+        removed) with 409 `PLOT_HAS_METER`, a plot that has charges (any kind) with 409 `PLOT_HAS_CHARGES`. The deletion
+        is audited.
       parameters:
         - name: id
           in: path
@@ -1060,7 +1075,8 @@ paths:
       description: |
         Returns the settings of the current cooperative. Every member of the cooperative may call it; the platform
         operator has no cooperative data: 403. A cooperative that never saved its settings has the defaults
-        (`memberPlotStatusVisibility` is `OWN_ONLY`).
+        (`memberPlotStatusVisibility` `OWN_ONLY`, `lossesMode` `FIXED_PERCENT`, `lossesPercent` `0.00`,
+        `commonConsumerDefaultSplit` `CONNECTED_PLOTS`, `redAmount` `1000.00`, `redDays` 90).
       responses:
         '200':
           description: OK
@@ -1077,15 +1093,19 @@ paths:
       operationId: updateSettings
       summary: Change cooperative settings
       description: |
-        Replaces the settings of the current cooperative. Requires the `SETTINGS_MANAGE` permission. A change is
-        written to the audit log with the old and the new value; saving the current value changes nothing and writes
-        no audit entry.
+        Changes the settings of the current cooperative. Requires the `SETTINGS_MANAGE` permission. Every field is
+        optional: a field left out keeps its value, so each section of the settings page saves only its own fields.
+        A change is written to the audit log (`SETTINGS_UPDATED`) with the old and the new value of every changed
+        field; saving the current values changes nothing and writes no audit entry. 400 `VALIDATION_FAILED`:
+        `redAmount` negative or with more than 12 integer digits (`INVALID`), `lossesPercent` above `100.00`
+        (`INVALID`), `redDays` outside 0..36500, an unknown enum value or a malformed number. A change of the red
+        threshold applies to every plot status shown from then on (the status is derived when it is read).
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CooperativeSettings'
+              $ref: '#/components/schemas/CooperativeSettingsUpdate'
       responses:
         '200':
           description: The saved settings
@@ -1197,21 +1217,23 @@ paths:
       summary: Upload an import file and get its preview
       description: |
         Parses and checks an Excel workbook (`.xlsx`, at most 10 MB, at most 2,000 plots, 3,000 members, 6,000 ownership
-        rows and 2,000 meter rows) and
+        rows, 2,000 meter rows and 6,000 opening balance rows) and
         returns a preview. Nothing is saved except the record of the upload itself. The preview can be committed for
         30 minutes (`expiresAt`) when `committable` is true, that is when there are no problems and something would be
         created or updated. Requires the `IMPORT_RUN` permission; the platform operator has no cooperative data: 403.
 
-        All four sheets are checked. The `Members`, `Ownership` and `Meters` sheets may be missing (a file may hold
-        plots only, or plots and members); the `Plots` sheet is required.
+        All five sheets are checked. The `Members`, `Ownership`, `Meters` and `Opening balances` sheets may be missing
+        (a file may hold plots only, or plots and members); the `Plots` sheet is required.
         Rows whose first cell starts with `#` and empty rows are skipped. `problems` lists at most 1,000 problems
         (`problemCount` is the total) in sheet and row order. `row` is the Excel row number (1 is the header row);
         0 means the problem is about the file or the whole sheet. `column` is the canonical column key
-        (Plots: `number`, `street`, `kind`, `area_m2`, `area_sotky`, `cadastral_number`, `has_building`, `notes`;
+        (Plots: `number`, `street`, `kind`, `area_m2`, `area_sotky`, `cadastral_number`, `has_building`, `notes`,
+        `water`;
         Members: `external_id`, `last_name`, `first_name`, `middle_name`, `phones`, `email`, `postal_address`,
         `delivery_channel`, `telegram_username`, `viber_phone`;
         Ownership: `plot_number`, `member_external_id`, `share`, `valid_from`;
-        Meters: `plot_number`, `resource`, `serial`, `installed_on`, `initial_reading`).
+        Meters: `plot_number`, `resource`, `serial`, `installed_on`, `initial_reading`;
+        Opening balances (sheet `OPENING_BALANCES`): `plot_number`, `charge_type`, `amount`, `date`, `reason`).
         `code` is one of:
 
         - file and sheet level: `SHEET_MISSING` (no sheet of that name), `HEADER_MISSING` (a required column is not in
@@ -1280,6 +1302,44 @@ paths:
         - `METER_ACTIVE_EXISTS` (`serial`, `params.plot`: the plot already has another active meter of that resource;
           the import never replaces a meter, replace it in the register).
 
+        The optional `water` column of the `Plots` sheet (Ukrainian header `Вода`) connects plots to water from the
+        day of the commit (Europe/Kyiv): `yes` (`так`, `true`) connects the plot to the cooperative's water supply; the
+        name of an active common consumer meter (a well, ignoring case and extra spaces) connects it to that source;
+        `no` (`ні`, `false`) and an empty cell leave the plot as it is: the import never disconnects a plot (that is
+        done on the plot card or the water source). A plot that already has a lasting connection is unchanged for
+        `yes` and for the name of its current source (`waterConnections.unchanged`); a new connection counts as
+        `waterConnections.created`; connections are never updated. Water codes (`water`):
+
+        - `WATER_SOURCE_INVALID`: no active common consumer meter has this name;
+        - `WATER_SOURCE_AMBIGUOUS`: two or more active common consumer meters have this name;
+        - `WATER_ALREADY_CONNECTED`: the plot has a lasting connection to another source, or a connection that ends
+          today or later;
+        - `PLOT_COMMON_LAND`: common land is not connected to water.
+        A plot whose own row has another problem is not checked for water.
+
+        The `Opening balances` sheet (Ukrainian name `Вхідне сальдо`) books opening debts, one row per plot and charge
+        type, as when an opening balance is entered on the plot account: `plot_number` (a plot of the `Plots` sheet or
+        an active plot of the cooperative), `charge_type` (the name of a charge type as the cooperative calls it, or
+        the default name of a seeded type that was not renamed, in English or Ukrainian; ignoring case and extra
+        spaces), `amount` (greater than zero, at most two decimals), `date` (an Excel date or `DD.MM.YYYY`, not after
+        today in Europe/Kyiv; the balance is booked in the month of the date or the earliest open month after it) and
+        the optional `reason` (at most 500 characters; without one the import is the reference). The first four
+        columns are required. A row whose plot already has an opening balance of the same charge type, date and amount
+        that is not reversed is unchanged (`openingBalances.unchanged`), so uploading the same file again books
+        nothing twice; any other row books a new opening balance (`openingBalances.created`). Opening balances are
+        never updated. Codes:
+
+        - `REQUIRED` (`plot_number`, `charge_type`, `amount`, `date`), `NUMBER_INVALID` (`amount`: not a number),
+          `DATE_INVALID` (`date`), `TOO_LONG` (`reason`);
+        - `AMOUNT_NOT_POSITIVE` (`amount`: zero or negative), `INVALID` (`amount`: more than two decimals or more than
+          12 integer digits; `charge_type`: the name stands for two charge types), `DATE_IN_FUTURE` (`date`);
+        - `UNKNOWN_PLOT`, `PLOT_COMMON_LAND` (`plot_number`), as on the `Meters` sheet;
+        - `UNKNOWN_CHARGE_TYPE` (`charge_type`: no charge type has this name), `CHARGE_TYPE_ARCHIVED` (`charge_type`:
+          the only charge type with this name is archived);
+        - `DUPLICATE_IN_FILE` (`charge_type`: an earlier row names the same plot, charge type and date);
+        - `OPENING_BALANCE_EXISTS` (`amount`, `params.amount`: the plot already has an opening balance of this charge
+          type and date with another amount that is not reversed; reverse it on the plot account first).
+
         A file that cannot be read at all is refused with 400 `FILE_NOT_XLSX` (not an `.xlsx` workbook, corrupt,
         encrypted, or unpacking to an unreasonable size) or 400 `IMPORT_LIMIT_EXCEEDED` (too many rows); a file over
         the size limit with 413 `FILE_TOO_LARGE`.
@@ -1321,14 +1381,18 @@ paths:
         `IMPORT_RUN` permission; the platform operator has no cooperative data: 403. An unknown id, and the id of
         another cooperative's import, is 404.
 
-        Before saving, the plan is computed again from the stored rows under locks on the plots, meters and members
-        it touches and compared with the preview. Any difference (a plot with one of the file's numbers created
-        meanwhile, an owner changed, a member archived, a meter registered or removed) refuses the commit with
-        `IMPORT_STALE`, and so does a unique
+        Before saving, the plan is computed again from the stored rows under locks on the plots, meters, water
+        connections, charge types and members it touches and compared with the preview. Any difference (a plot with
+        one of the file's numbers created meanwhile, an owner changed, a member archived, a meter registered or
+        removed, a plot connected to water, a charge type renamed or archived, an opening balance entered or
+        reversed) refuses the commit with `IMPORT_STALE`, and so does a unique
         or overlap rule broken while saving by a record created meanwhile; nothing is saved and the file has to be
-        uploaded again. Per-record audit entries are written as when the records are entered by hand, plus one
+        uploaded again. Per-record audit entries are written as when the records are entered by hand
+        (`WATER_CONNECTED`, `OPENING_BALANCE_ENTERED` among them), plus one
         `IMPORT_COMMITTED` entry (entity type `IMPORT`, entity id = import id, label = file name, one field per
-        count, for example `plotsCreated`).
+        count, for example `plotsCreated`, `waterConnectionsCreated`, `openingBalancesCreated`). New water
+        connections start on the day of the commit; opening balances are booked with the key
+        `OPENING:{importId}:{row}`.
 
         Refusals (nothing is saved):
 
@@ -2036,8 +2100,9 @@ paths:
         Deletes an active meter that has no readings (its initial reading does not count; see `deletable`). A meter
         with readings of any status is refused with 409 `METER_HAS_READINGS` (remove it instead), a removed meter with
         409 `METER_REMOVED`, a meter that is or was the parent of another meter in the electricity tree with 409
-        `METER_HAS_CHILDREN` (its children's history refers to it). Requires `METERS_VIEW` and `METERS_MANAGE`;
-        written to the audit log (`METER_DELETED`, the old values).
+        `METER_HAS_CHILDREN` (its children's history refers to it), a meter that plots are or were connected to as
+        their water source with 409 `WATER_SOURCE_IN_USE` (their connection history refers to it). Requires
+        `METERS_VIEW` and `METERS_MANAGE`; written to the audit log (`METER_DELETED`, the old values).
       parameters:
         - name: id
           in: path
@@ -2707,6 +2772,1006 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
 
+  /plots/{id}/account:
+    get:
+      tags: [charges]
+      operationId: getPlotAccount
+      summary: The account of a plot with its charges and the debt per charge type
+      description: |
+        The ledger of one plot. `debts` lists every charge type the plot has a charge of, in the order of the charge
+        types, with the sum of its charges (a reversal counts negative); `total` is their sum. Until payments exist
+        the debt is the sum of the charges. `charges` lists the charges newest first (by `accruedOn`, then by the
+        time they were booked); `from` and `to` (both optional, inclusive) limit the list by `accruedOn`, never the
+        debts. `from` after `to` is 400 `VALIDATION_FAILED` (`errors[{field: from, code: INVALID}]`). Every amount is
+        calculated by the server. No permission annotation: a caller with `CHARGES_VIEW` may ask for any plot of the
+        cooperative, anyone else only for a plot they currently own. Any other plot, an unknown id and a plot of
+        another cooperative are the same 404 `PLOT_NOT_FOUND`; the platform operator has no cooperative data: 403.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: from
+          in: query
+          required: false
+          description: The first day of the list (by `accruedOn`), inclusive
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: false
+          description: The last day of the list (by `accruedOn`), inclusive
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlotAccount'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /plots/{id}/opening-balances:
+    post:
+      tags: [charges]
+      operationId: enterOpeningBalance
+      summary: Enter an opening balance of a plot
+      description: |
+        Books the debt a plot had before the cooperative started with the platform: a charge of kind `OPENING` and
+        source `OPENING` of the charge type, with `accruedOn` and the service period equal to `date`. It is booked in
+        the billing month of `date` when that month is open, otherwise in the earliest open month after it (a month
+        that does not exist yet is opened). 400 `VALIDATION_FAILED`: `amount` not greater than zero
+        (`AMOUNT_NOT_POSITIVE`) or with more than 12 integer digits (`INVALID`), `date` after today in Europe/Kyiv
+        (`DATE_IN_FUTURE`), a missing field (`REQUIRED`), `reason` over 500 characters (`TOO_LONG`). An unknown charge
+        type is 404 `NOT_FOUND` (`errors[{field: chargeTypeId, code: NOT_FOUND}]`); an archived one is 409
+        `CHARGE_TYPE_ARCHIVED` (`errors[{field: chargeTypeId}]`). An unknown plot, or one of another cooperative, is
+        404 `PLOT_NOT_FOUND`; an archived plot is 409 `PLOT_ARCHIVED` and common land 409 `PLOT_COMMON_LAND`.
+        The optional reason is stored on the charge (`reason`). Requires `CHARGES_RUN`; written to the audit log
+        (`OPENING_BALANCE_ENTERED`, entity type `CHARGE` about the plot, with the reason).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpeningBalanceInput'
+      responses:
+        '201':
+          description: The booked opening balance
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Charge'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /charges/{id}/reverse:
+    post:
+      tags: [charges]
+      operationId: reverseCharge
+      summary: Reverse a charge
+      description: |
+        Cancels a charge by a new charge of kind `REVERSAL` and source `MANUAL_REVERSAL`: the same amount with the
+        opposite sign, the same plot, charge type, service period and `accruedOn`, the reason, and `reverses` naming
+        the original. It is booked in the billing month of the original, which must be open. Nothing is changed or
+        deleted (the ledger is append-only). Conflicts (409): the charge is a reversal (`REVERSAL_NOT_REVERSIBLE`), it
+        was reversed before (`CHARGE_ALREADY_REVERSED`), its billing month is closed (`CHARGE_IN_CLOSED_MONTH`; its
+        correction is an adjustment). 400 `VALIDATION_FAILED` with `reason` `REQUIRED` (absent or blank) or
+        `TOO_LONG`. An unknown charge, or one of another cooperative, is 404 `NOT_FOUND`. Requires `CHARGES_REVERSE`;
+        written to the audit log (`CHARGE_REVERSED`, entity type `CHARGE` about the plot, with the reason).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChargeReversal'
+      responses:
+        '201':
+          description: The reversal
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Charge'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /billing-months:
+    get:
+      tags: [billing]
+      operationId: listBillingMonths
+      summary: The billing months with their totals
+      description: |
+        Every billing month of the cooperative, newest first: from the month of its first billing month row (the
+        first charge) to the current month in Europe/Kyiv, including months that have no row or no charge yet (they
+        are listed `OPEN` with empty totals; a row is created when the month is closed or a charge is booked in it).
+        `totals` holds the sum of the charges booked in the month per charge type (a reversal counts negative), in the
+        order of the charge types; `total` is their sum. A cooperative without any month gets an empty list.
+        Requires `CHARGES_VIEW`.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BillingMonthSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /billing-months/{month}:
+    get:
+      tags: [billing]
+      operationId: getBillingMonth
+      summary: One billing month with its totals and the closing check list
+      description: |
+        The month as in the list plus the check list shown before closing: whether the month run is done, the number
+        of "not charged" items of the month and the plot meters without a reading for more than 60 days (active plot
+        meters whose last approved reading, or installation, is more than 60 days before the month's last day or
+        today, whichever is earlier). Nothing on the list blocks closing. A month that is not listed (before the
+        first month, after the current one) is 404 `NOT_FOUND`. Requires `CHARGES_VIEW`.
+      parameters:
+        - name: month
+          in: path
+          required: true
+          description: The billing month, `YYYY-MM`
+          schema:
+            type: string
+            pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillingMonthDetails'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /billing-months/{month}/close:
+    post:
+      tags: [billing]
+      operationId: closeBillingMonth
+      summary: Close a billing month
+      description: |
+        Closes the month: nothing is booked in it any more, and a charge about its days is booked in the earliest open
+        month after it. A closed month is never reopened. Conflicts (409): a month after the current one in
+        Europe/Kyiv (`PERIOD_IN_FUTURE`), a closed month (`PERIOD_CLOSED`), an earlier month that is still open
+        (`PERIOD_CLOSE_ORDER`; months close in order). A month before the first month of the cooperative (or any
+        month while it has none) is 404 `NOT_FOUND`. A listed month without a row is created and closed. The check
+        list does not block closing. Requires `PERIODS_CLOSE`; written to the audit log (`BILLING_MONTH_CLOSED`,
+        entity type `BILLING_MONTH`, label `YYYY-MM`).
+      parameters:
+        - name: month
+          in: path
+          required: true
+          description: The billing month, `YYYY-MM`
+          schema:
+            type: string
+            pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+      responses:
+        '200':
+          description: The closed month
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillingMonthDetails'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /billing-months/{month}/run:
+    post:
+      tags: [billing]
+      operationId: runBillingMonth
+      summary: Preview or book the month run of recurring tariffs
+      description: |
+        Charges every active plot that is not common land every recurring or one-off tariff (`PER_PLOT`,
+        `PER_AREA_SOTKA`, `FIXED_ONE_TIME`) of every active, non-archived charge type that applies to it in the month
+        (scope, exclusions), with the amount of the tariff calculation (money rules section 4.1). Tariffs charged by
+        meter readings (`PER_KWH`, `PER_M3`) are not part of the run. One charge per plot, tariff and month: a rerun
+        creates only what is missing, never a duplicate, and never re-creates a reversed charge. An amount of `0.00`
+        creates nothing. When two tariffs of the same charge type would charge a plot more than `0.00` in the month
+        neither is charged and a "not charged" item (`TARIFF_MONTH`, `CONFLICTING_TARIFFS`) names them; a tariff that
+        charges `0.00` that month (a one-time fee due in another month) takes no part, and a plot that already has the
+        month's charge of one of them is not queued. The run also resolves the open `TARIFF_MONTH` items of the month
+        that it can now charge, and retries the open `TARIFF_MONTH` items of every other month: a charge it can now book
+        goes into that month, or the earliest open month after it when it is closed, with that month's service period;
+        these charges count in `plots`, `totals`, `total`, `created` and the `digest`. With `preview=true` nothing is
+        written: the answer shows what the run would create (`created` is 0) and a `digest` of it. With `preview=false` the run is booked:
+        the charges are written in the month, the month is marked as run and the answer shows what was created;
+        a `digest` from an earlier preview that no longer matches is refused with 409 `PREVIEW_OUTDATED` and nothing
+        is written. Conflicts (409): a month after the current one in Europe/Kyiv (`PERIOD_IN_FUTURE`), a closed
+        month (`PERIOD_CLOSED`). Requires `CHARGES_RUN`; a booking is written to the audit log
+        (`BILLING_MONTH_RUN`, entity type `BILLING_MONTH`, label `YYYY-MM`, values `count` and `total`).
+      parameters:
+        - name: month
+          in: path
+          required: true
+          description: The billing month, `YYYY-MM`
+          schema:
+            type: string
+            pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+        - name: preview
+          in: query
+          required: true
+          description: '`true` shows what the run would create without writing anything; `false` books it'
+          schema:
+            type: boolean
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MonthRunRequest'
+      responses:
+        '200':
+          description: What the run would create (preview) or created (booking)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MonthRunResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /not-charged:
+    get:
+      tags: [not-charged]
+      operationId: listNotCharged
+      summary: The open "not charged" items
+      description: |
+        Everything the app could not charge and that is still open, each with its reason and what to fix: the plot,
+        the charge type, the month (or the date range) and the tariffs involved (for `CONFLICTING_TARIFFS` both
+        tariffs). Newest month first, then in the natural order of the plot numbers. An item disappears when a retry
+        or a later run charges it or finds nothing left to charge. Requires `CHARGES_VIEW`.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/NotChargedItem'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /not-charged/{id}/retry:
+    post:
+      tags: [not-charged]
+      operationId: retryNotCharged
+      summary: Retry one "not charged" item
+      description: |
+        Tries again to charge what the item is about (for `TARIFF_MONTH`: the tariffs of its charge type for its plot
+        and month, as the month run does; for `INTERVAL`: the meter interval, as an approved reading does; for
+        `LOSSES_NODE`: a losses run of that node alone over the item's range, as `runLosses` books it; for
+        `COMMON_CONSUMER`: a common consumer run of that consumer alone over the item's range, as `runCommonConsumers`
+        books it). When the charge is created, or exists already, or nothing is left to charge (the plot left the scope
+        of the tariffs, the amount is `0.00`; for `LOSSES_NODE`: the node's losses are now known but negative, the node
+        is no longer in the tree for the range, or the losses mode is no longer `PROPORTIONAL`; for `COMMON_CONSUMER`:
+        the consumer is now `NOT_CHARGED` or `NO_PLOTS`, or no longer a consumer of the range; it stays open while there
+        is no tariff), the item is closed and `resolved` is true;
+        otherwise it stays open with its (possibly updated) reason and tariffs and is returned as `item`. A charge for a
+        month that was closed in the meantime is booked in the earliest open month after it. An item that is no longer
+        open answers `resolved: true` and changes nothing. An unknown item, or one of another cooperative, is 404
+        `NOT_FOUND`. Requires `CHARGES_RUN`; written to the audit log (`NOT_CHARGED_RETRIED`, entity type `CHARGE` about
+        the plot; for `LOSSES_NODE` and `COMMON_CONSUMER` entity type `METER` about the node or consumer meter, and a
+        booked run also writes `LOSSES_RUN_BOOKED` or `COMMON_CONSUMER_RUN_BOOKED`).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The outcome of the retry
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotChargedRetryResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /losses-runs:
+    get:
+      tags: [losses-runs]
+      operationId: listLossesRuns
+      summary: The losses runs of the cooperative
+      description: |
+        Every proportional losses run, booked or reversed, newest first, with its range, author, totals and status.
+        Requires `CHARGES_VIEW`.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LossesRunSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [losses-runs]
+      operationId: runLosses
+      summary: Preview or book a proportional losses run
+      description: |
+        Charges the losses of the electricity network over the days `from` to `to` (both included) per node of the
+        meter tree (substation and quarter meters that had a meter under them on a day of the range), money rules
+        section 6. The range consumption of a meter is its end-of-day value on `to` minus its end-of-day value on the
+        day before `from` (`valueAt(to) - valueAt(from - 1)`), with the tree as it was on each day. For every node:
+        losses = the node's consumption - the consumption of its children (plot meters, common consumers, quarter
+        meters) over the days they were under it; the losses are shared among the plots under the node (directly or
+        through child nodes) in proportion to each plot's consumption under it, a plot with zero consumption gets
+        nothing. Each plot's kWh from every node are added and priced once with the plot's electricity tariff (`PER_KWH`,
+        split by days when the rate changes) and rounded once: one `LOSSES` charge per plot per run, booked in the month
+        of `to` (or the earliest open month after it when that month is closed), with the debt counting from `to`.
+        Outcomes per node: `CHARGED`; `NEGATIVE` (the children used more than the node shows: nothing is charged);
+        `UNKNOWN` (a value of the node or of a child is unknown, no reading after the range end: the node is skipped);
+        `SKIPPED_ABOVE` (a node below is unknown: skipped too); `ALREADY_CHARGED` (a booked run charged the node for a
+        day of the range). Values calculated between readings are allowed and marked `calculated`. `nodeIds` limits
+        the run to those nodes (absent or empty: every node); the other nodes are still calculated where a selected node
+        needs them but are not listed. With `preview=true` nothing is written and the answer has a `digest`. With
+        `preview=false` the run is booked: the run and its nodes are stored, the charges written, each `UNKNOWN` or
+        `SKIPPED_ABOVE` node gets a "not charged" item (`LOSSES_NODE`, `UNKNOWN_NODE_VALUE`), the open items of a node
+        that is now charged are closed, and the meter values the charged nodes read can no longer be corrected while the
+        run is booked. Field codes of 400 `VALIDATION_FAILED`: `to` `INVALID` (before `from`) or `DATE_IN_FUTURE` (after
+        today in Europe/Kyiv); `nodeIds[i]` `NOT_FOUND` (not a node of the tree in the range). Conflicts (409): the
+        losses mode of the cooperative is not `PROPORTIONAL` (`LOSSES_MODE_NOT_PROPORTIONAL`, preview too); a booking
+        with a selected node that is `ALREADY_CHARGED` (`LOSSES_RANGE_OVERLAP`; book the other nodes with `nodeIds`);
+        a booking with the `digest` of a preview that no longer matches (`PREVIEW_OUTDATED`; the digest covers the
+        listed nodes that are not `ALREADY_CHARGED` and the charges, so a preview of every node matches a booking of
+        those nodes). Requires `CHARGES_RUN`; a booking is written to the audit log (`LOSSES_RUN_BOOKED`, entity type
+        `LOSSES_RUN`, label `from/to`, values `from`, `to`, `billingMonth`, `nodes`, `count`, `total`).
+      parameters:
+        - name: preview
+          in: query
+          required: true
+          description: '`true` shows what the run would charge without writing anything; `false` books it'
+          schema:
+            type: boolean
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LossesRunRequest'
+      responses:
+        '200':
+          description: What the run would charge (preview) or charged (booking)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LossesRunResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /losses-runs/{id}:
+    get:
+      tags: [losses-runs]
+      operationId: getLossesRun
+      summary: One losses run with its nodes and charges
+      description: |
+        The run as stored when it was booked: its nodes with their numbers, outcomes, warnings and plot shares, and its
+        charges (with whether each was reversed). An unknown run, or one of another cooperative, is 404 `NOT_FOUND`.
+        Requires `CHARGES_VIEW`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LossesRunDetails'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /losses-runs/{id}/reverse:
+    post:
+      tags: [losses-runs]
+      operationId: reverseLossesRun
+      summary: Reverse a whole losses run
+      description: |
+        Reverses every charge of the run that is not reversed yet with the run's reason (a `REVERSAL` row each, source
+        `MANUAL_REVERSAL`, in the charge's billing month) and marks the run `REVERSED`: its nodes no longer block a later
+        run over the same days and the meter values it read can be corrected again. Nothing is changed or deleted in the
+        ledger. Conflicts (409): the run was reversed before (`RUN_ALREADY_REVERSED`), its charges are booked in a closed
+        month (`RUN_IN_CLOSED_MONTH`; a correction is an adjustment). 400 `VALIDATION_FAILED` with `reason` `REQUIRED`
+        (absent or blank) or `TOO_LONG`. An unknown run, or one of another cooperative, is 404 `NOT_FOUND`. Requires
+        `CHARGES_REVERSE`; written to the audit log (`LOSSES_RUN_REVERSED`, entity type `LOSSES_RUN`, label
+        `from/to`, values `from`, `to`, `count`, `total`, `reason`).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RunReversal'
+      responses:
+        '200':
+          description: The reversed run
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LossesRunDetails'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /common-consumer-runs:
+    get:
+      tags: [common-consumer-runs]
+      operationId: listCommonConsumerRuns
+      summary: The common consumer runs of the cooperative
+      description: |
+        Every common consumer run, booked or reversed, newest first, with its range, author, totals and status.
+        Requires `CHARGES_VIEW`.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CommonConsumerRunSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [common-consumer-runs]
+      operationId: runCommonConsumers
+      summary: Preview or book a common consumer run
+      description: |
+        Charges the electricity of the common consumers (well pumps, street lighting) over the days `from` to `to`
+        (both included) to plots, as the separate charge type `COMMON_CONSUMERS` (money rules section 6.3). Every
+        common consumer meter that worked on a day of the range is a consumer of the run (a replacement keeps the
+        consumer: `meterId` is the first meter of its chain). Its consumption is its end-of-day value on `to` minus its
+        end-of-day value on the day before `from` (`valueAt(to) - valueAt(from - 1)`), shared as the consumer's split
+        says (`common_consumer_billing`, else the cooperative's `commonConsumerDefaultSplit`): `CONNECTED_PLOTS`
+        equally per plot-day among the plots connected to that well on each day of the range; `EQUAL_PER_PLOT` equally
+        among the active plots (not common land), with or without meters; `SERVICE_USERS` equally among the active
+        plots marked as its users; `NOT_CHARGED` nothing (listed with its consumption). Each plot's kWh are priced with
+        the plot's `COMMON_CONSUMERS` tariff (`PER_KWH`, spread evenly over the plot's days of the split, split by days
+        when the rate changes) and rounded once: one `COMMON_CONSUMER` charge per plot per consumer per run, booked in
+        the month of `to` (or the earliest open month after it when that month is closed), with the debt counting from
+        `to`. Outcomes per consumer: `CHARGED`; `NOT_CHARGED` (its split is `NOT_CHARGED`); `NO_PLOTS` (consumption
+        above zero but no plot to share it among: nothing is charged and the days stay free); `UNKNOWN` (its value is
+        unknown, no reading after the range end: skipped); `ALREADY_CHARGED` (a booked run charged the consumer for a
+        day of the range). Values calculated between readings are allowed and marked `calculated`. `noTariff` is true
+        when the `COMMON_CONSUMERS` charge type is inactive or archived or has no tariff with a `PER_KWH` version valid
+        on a day of the range: the plots are listed without amounts and nothing can be booked. `consumerIds` limits the
+        run to those consumers (absent or empty: every consumer). With `preview=true` nothing is written and the answer
+        has a `digest`. With `preview=false` the run is booked: the run and one line per consumer are stored, the
+        charges written, each `UNKNOWN` consumer gets a "not charged" item (`COMMON_CONSUMER`,
+        `UNKNOWN_CONSUMER_VALUE`), the open items of a consumer that is now charged are closed, and the meter values a
+        charged consumer read can no longer be corrected while the run is booked. Field codes of 400
+        `VALIDATION_FAILED`: `to` `INVALID` (before `from`) or `DATE_IN_FUTURE` (after today in Europe/Kyiv);
+        `consumerIds[i]` `NOT_FOUND` (not a common consumer of the range). Conflicts (409) of a booking:
+        `NO_COMMON_CONSUMERS_TARIFF` (`noTariff`); `COMMON_CONSUMER_RANGE_OVERLAP` (a selected consumer is
+        `ALREADY_CHARGED`; book the others with `consumerIds`); `PREVIEW_OUTDATED` (the `digest` of a preview that no
+        longer matches; it covers the listed consumers that are not `ALREADY_CHARGED` and the charges). Requires
+        `CHARGES_RUN`; a booking is written to the audit log (`COMMON_CONSUMER_RUN_BOOKED`, entity type
+        `COMMON_CONSUMER_RUN`, label `from/to`, values `from`, `to`, `billingMonth`, `consumers`, `count`, `total`).
+      parameters:
+        - name: preview
+          in: query
+          required: true
+          description: '`true` shows what the run would charge without writing anything; `false` books it'
+          schema:
+            type: boolean
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommonConsumerRunRequest'
+      responses:
+        '200':
+          description: What the run would charge (preview) or charged (booking)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonConsumerRunResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /common-consumer-runs/{id}:
+    get:
+      tags: [common-consumer-runs]
+      operationId: getCommonConsumerRun
+      summary: One common consumer run with its consumers and charges
+      description: |
+        The run as stored when it was booked: its consumers with their numbers, splits, outcomes, warnings and plot
+        shares, each plot share with its charge (and whether it was reversed). An unknown run, or one of another
+        cooperative, is 404 `NOT_FOUND`. Requires `CHARGES_VIEW`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonConsumerRunDetails'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /common-consumer-runs/{id}/reverse:
+    post:
+      tags: [common-consumer-runs]
+      operationId: reverseCommonConsumerRun
+      summary: Reverse a whole common consumer run
+      description: |
+        Reverses every charge of the run that is not reversed yet with the run's reason (a `REVERSAL` row each, source
+        `MANUAL_REVERSAL`, in the charge's billing month) and marks the run `REVERSED`: its consumers no longer block a
+        later run over the same days and the meter values it read can be corrected again. Nothing is changed or deleted
+        in the ledger. Conflicts (409): the run was reversed before (`RUN_ALREADY_REVERSED`), its charges are booked in
+        a closed month (`RUN_IN_CLOSED_MONTH`; a correction is an adjustment). 400 `VALIDATION_FAILED` with `reason`
+        `REQUIRED` (absent or blank) or `TOO_LONG`. An unknown run, or one of another cooperative, is 404 `NOT_FOUND`.
+        Requires `CHARGES_REVERSE`; written to the audit log (`COMMON_CONSUMER_RUN_REVERSED`, entity type
+        `COMMON_CONSUMER_RUN`, label `from/to`, values `from`, `to`, `count`, `total`, `reason`).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RunReversal'
+      responses:
+        '200':
+          description: The reversed run
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonConsumerRunDetails'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /common-consumers/{meterId}/billing:
+    get:
+      tags: [common-consumer-runs]
+      operationId: getCommonConsumerBilling
+      summary: How a common consumer is shared among plots
+      description: |
+        The split of the common consumer of the meter `meterId` (`split` absent: the cooperative's
+        `commonConsumerDefaultSplit` applies, shown as `effectiveSplit`) and its service users (the plots marked as
+        using it, in the natural order of the plot numbers; they count with `SERVICE_USERS`). The settings belong to
+        the consumer, the whole chain of its meters through replacements: any meter of the chain shows what a run
+        uses for the consumer (the split of the latest meter of the chain that has its own split, and the service
+        users of the latest meter that has service users). A meter that is not a common consumer meter of the
+        cooperative is 404 `NOT_FOUND`. Requires `SETTINGS_MANAGE`.
+      parameters:
+        - name: meterId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonConsumerBilling'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [common-consumer-runs]
+      operationId: updateCommonConsumerBilling
+      summary: Change how a common consumer is shared among plots
+      description: |
+        Sets the split of the common consumer of the meter `meterId` (absent `split`: back to the cooperative's
+        default) and replaces its service users with `servicePlotIds`. Through any meter of the consumer's chain of
+        replacements: the settings are saved for the whole consumer (on its latest meter, replacing what its other
+        meters had), so a read through any of its meters shows them. Runs booked before keep what they charged; the
+        next run uses the new settings. Field codes of 400 `VALIDATION_FAILED`: `servicePlotIds[i]` `UNKNOWN_PLOT` (no such plot in the
+        cooperative), `DUPLICATE` (listed twice), `PLOT_ARCHIVED`, `PLOT_COMMON_LAND`; `servicePlotIds` `TOO_LONG`
+        (over 5000). A meter that is not a common consumer meter of the cooperative is 404 `NOT_FOUND`. Requires
+        `SETTINGS_MANAGE`; a change is written to the audit log (`COMMON_CONSUMER_BILLING_CHANGED`, entity type
+        `METER` about the consumer meter, label its name, values `split` (the consumer's own split, absent for the
+        cooperative's default) and `servicePlots` (the plot numbers in natural order, joined by ", "), each only when
+        it changed); saving the current values writes nothing.
+      parameters:
+        - name: meterId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommonConsumerBillingUpdate'
+      responses:
+        '200':
+          description: The saved settings of the consumer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonConsumerBilling'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /plots/{id}/water-connections:
+    get:
+      tags: [water]
+      operationId: getPlotWaterConnections
+      summary: The water connection of a plot and its history
+      description: |
+        Every connection the plot has had, newest first, and whether it is connected today (Europe/Kyiv). No
+        permission annotation: a caller with `PLOTS_VIEW` may ask for any plot of the cooperative, anyone else only for
+        a plot they currently own. Any other plot, an unknown id and a plot of another cooperative are the same 404
+        `PLOT_NOT_FOUND`; the platform operator has no cooperative data: 403.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlotWaterConnections'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      tags: [water]
+      operationId: connectPlotWater
+      summary: Connect a plot to water
+      description: |
+        Connects the plot to a water source from `from` (a day of the connection): the common consumer meter
+        `sourceMeterId` (a well pump), or without it the cooperative's water supply. Water tariffs of any basis charge
+        the plot only for its connected days. A plot has at most one connection that lasts and its connections never
+        share a day: 409 `WATER_ALREADY_CONNECTED` (`errors[{field: from}]`) when it is connected now or on a day from
+        `from` on. A `sourceMeterId` that is not an active common consumer meter of the cooperative is 409
+        `WATER_SOURCE_INVALID` (`errors[{field: sourceMeterId}]`). An archived plot is 409 `PLOT_ARCHIVED`, common land
+        409 `PLOT_COMMON_LAND`; an unknown plot, or one of another cooperative, 404 `PLOT_NOT_FOUND`. 400
+        `VALIDATION_FAILED` with `from` `REQUIRED`. The answer is the plot's connections as `GET` shows them. Requires
+        `METERS_MANAGE`; written to the audit log (`WATER_CONNECTED`, entity type `PLOT` about the plot).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WaterConnectionCreate'
+      responses:
+        '201':
+          description: The plot's connections with the new one
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlotWaterConnections'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /plots/{id}/water-connections/{connectionId}/end:
+    post:
+      tags: [water]
+      operationId: endPlotWaterConnection
+      summary: Disconnect a plot from water
+      description: |
+        Ends the connection on `until`, the last day the plot is connected (on or after the connection's `from`;
+        otherwise 400 `VALIDATION_FAILED` with `until` `INVALID`). The connection stays in the history. A connection
+        that has ended already is 409 `WATER_NOT_CONNECTED`. An unknown plot, or one of another cooperative, is 404
+        `PLOT_NOT_FOUND`; a connection that is not one of the plot's is 404 `NOT_FOUND`. The answer is the plot's
+        connections as `GET` shows them. Requires `METERS_MANAGE`; written to the audit log (`WATER_DISCONNECTED`,
+        entity type `PLOT` about the plot).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: connectionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WaterConnectionEnd'
+      responses:
+        '200':
+          description: The plot's connections with the ended one
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlotWaterConnections'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /water-sources:
+    get:
+      tags: [water]
+      operationId: listWaterSources
+      summary: The water sources and their connected plots
+      description: |
+        The cooperative's water supply (`id` `cooperative`) first, then every active common consumer meter (a well
+        pump) by name, each with the plots whose connection to it has not ended before today (Europe/Kyiv), in the
+        natural order of the plot numbers. Requires `PLOTS_VIEW`.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WaterSource'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /water-sources/{sourceId}/connections:
+    post:
+      tags: [water]
+      operationId: connectWaterSourcePlots
+      summary: Connect several plots to a water source
+      description: |
+        Connects every plot of `plotIds` to the source from `from`, in one transaction (all or nothing), as
+        `connectPlotWater` would. `sourceId` is `cooperative` (the cooperative's water supply) or the id of an active
+        common consumer meter; another meter is 409 `WATER_SOURCE_INVALID`, an unknown id 404 `NOT_FOUND`. Field codes
+        of 400 `VALIDATION_FAILED`: `plotIds[i]` `UNKNOWN_PLOT` (no such plot in the cooperative), `DUPLICATE` (listed
+        twice), `PLOT_ARCHIVED`, `PLOT_COMMON_LAND`; `plotIds` `REQUIRED` (empty) or `TOO_LONG` (over 5000); `from`
+        `REQUIRED`. A plot that is connected now or on a day from `from` on is 409 `WATER_ALREADY_CONNECTED` with
+        `errors[{field: plotIds[i]}]`. The answer is the source as `listWaterSources` shows it. Requires
+        `METERS_MANAGE`; one audit entry per plot (`WATER_CONNECTED`, entity type `PLOT`).
+      parameters:
+        - name: sourceId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WaterSourceConnection'
+      responses:
+        '200':
+          description: The source with its plots
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WaterSource'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /water-sources/{sourceId}/disconnections:
+    post:
+      tags: [water]
+      operationId: disconnectWaterSourcePlots
+      summary: Disconnect several plots from a water source
+      description: |
+        Ends the lasting connection of every plot of `plotIds` to the source on `until` (the last connected day), in one
+        transaction (all or nothing), as `endPlotWaterConnection` would. `sourceId` as in `connectWaterSourcePlots`
+        (here a removed meter is accepted, so its plots can be disconnected). Field codes of 400 `VALIDATION_FAILED`:
+        `plotIds[i]` `UNKNOWN_PLOT` or `DUPLICATE`; `plotIds` `REQUIRED` or `TOO_LONG`; `until` `REQUIRED`, or
+        `INVALID` when it is before the start of a plot's connection (`errors[{field: plotIds[i], code: INVALID}]`). A
+        plot without a lasting connection to this source is 409 `WATER_NOT_CONNECTED` with
+        `errors[{field: plotIds[i]}]`. The answer is the source as `listWaterSources` shows it. Requires
+        `METERS_MANAGE`; one audit entry per plot (`WATER_DISCONNECTED`, entity type `PLOT`).
+      parameters:
+        - name: sourceId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WaterSourceDisconnection'
+      responses:
+        '200':
+          description: The source with its plots
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WaterSource'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -2747,8 +3812,9 @@ components:
     NotFound:
       description: >-
         The resource does not exist or is not visible to the caller (code `NOT_FOUND`; `PLOT_NOT_FOUND` from the
-        plot-scoped meter operations `listPlotMeters` and `submitPlotReading` when the plot is unknown, of another
-        cooperative or not the caller's)
+        plot-scoped meter operations `listPlotMeters` and `submitPlotReading` and the ledger operations
+        `getPlotAccount` and `enterOpeningBalance` when the plot is unknown, of another cooperative or not the
+        caller's)
       content:
         application/problem+json:
           schema:
@@ -2807,7 +3873,25 @@ components:
         `METER_HAS_PENDING_READINGS`), or a reading that is not pending is approved or rejected (code
         `READING_STATUS_INVALID`), or a change of the electricity tree breaks its rules (code `METER_TREE_INVALID`,
         with `errors[{field, code}]` naming the rule, see `setMeterParent`), or a meter that has meters under it in the
-        tree is deleted, or removed while they still work under it (code `METER_HAS_CHILDREN`)
+        tree is deleted, or removed while they still work under it (code `METER_HAS_CHILDREN`), or a plot that has
+        charges is deleted (code `PLOT_HAS_CHARGES`), or a charge that was reversed before is reversed again (code
+        `CHARGE_ALREADY_REVERSED`), a reversal is reversed (code `REVERSAL_NOT_REVERSIBLE`), or a charge booked in a
+        closed billing month is reversed (code `CHARGE_IN_CLOSED_MONTH`), or a billing month is closed while an
+        earlier month is open (code `PERIOD_CLOSE_ORDER`), a closed month is closed again (code `PERIOD_CLOSED`) or a
+        month after the current one is closed (code `PERIOD_IN_FUTURE`), or the month run is asked for a closed month
+        (code `PERIOD_CLOSED`) or a month after the current one (code `PERIOD_IN_FUTURE`), or a booking is sent with
+        the digest of a preview that no longer matches what the run would create (code `PREVIEW_OUTDATED`), or a losses
+        run is asked while the losses mode is not proportional (code `LOSSES_MODE_NOT_PROPORTIONAL`), a losses run is
+        booked for a node that a booked run charged for a day of the range (code `LOSSES_RANGE_OVERLAP`), a run that was
+        reversed is reversed again (code `RUN_ALREADY_REVERSED`) or a run whose charges are booked in a closed month is
+        reversed (code `RUN_IN_CLOSED_MONTH`), or a common consumer run is booked without a per-kWh tariff of the
+        common consumers charge type for the range (code `NO_COMMON_CONSUMERS_TARIFF`) or for a common consumer that a
+        booked run charged for a day of the range (code `COMMON_CONSUMER_RANGE_OVERLAP`), or a plot
+        is connected to water while it is connected on one of those days (code `WATER_ALREADY_CONNECTED`), a
+        connection that has ended is ended again or a plot without a lasting connection to the source is disconnected
+        from it (code `WATER_NOT_CONNECTED`), the water source is not an active common consumer meter (code
+        `WATER_SOURCE_INVALID`), or a meter that plots are or were connected to as their water source is deleted (code
+        `WATER_SOURCE_IN_USE`)
       content:
         application/problem+json:
           schema:
@@ -2842,6 +3926,10 @@ components:
         - METERS_MANAGE
         - READINGS_ENTER
         - READINGS_APPROVE
+        - CHARGES_VIEW
+        - CHARGES_RUN
+        - CHARGES_REVERSE
+        - PERIODS_CLOSE
 
     PlotStatusVisibility:
       type: string
@@ -2851,12 +3939,84 @@ components:
         plots. People allowed to view plots always see every status.
       enum: [OWN_ONLY, ALL_PLOTS]
 
+    LossesMode:
+      type: string
+      description: >-
+        How losses in the electricity network are charged. `FIXED_PERCENT`: every electricity interval of a plot also
+        charges `lossesPercent` of its kWh at the same rate parts. `PROPORTIONAL`: losses are charged by runs over a
+        date range, shared among the plots under each node of the meter tree.
+      enum: [FIXED_PERCENT, PROPORTIONAL]
+
+    CommonConsumerSplit:
+      type: string
+      description: >-
+        How the consumption of a common consumer is shared among plots. `CONNECTED_PLOTS`: equally among the plots
+        connected to that water source, day by day. `EQUAL_PER_PLOT`: equally among all active plots.
+        `SERVICE_USERS`: equally among the plots marked as using the consumer. `NOT_CHARGED`: covered by the
+        membership fee, nothing is charged.
+      enum: [CONNECTED_PLOTS, EQUAL_PER_PLOT, SERVICE_USERS, NOT_CHARGED]
+
+    LossesPercent:
+      type: string
+      pattern: '^\d{1,3}(\.\d{1,2})?$'
+      description: >-
+        A percentage from 0 to 100 with at most two decimal places, as a string (not money). The server answers
+        with exactly two decimals (`"5.00"`).
+      examples: ['5.00']
+
     CooperativeSettings:
       type: object
-      required: [memberPlotStatusVisibility]
+      description: >-
+        The settings of the cooperative. `redAmount` and `redDays` are the red threshold of the plot status: a plot
+        is red when its debt is above `redAmount` or the oldest unpaid charge is older than `redDays` days, yellow with
+        any other debt, green without a debt (docs/domain/money-rules.md, section 9).
+      required:
+        [
+          memberPlotStatusVisibility,
+          lossesMode,
+          lossesPercent,
+          commonConsumerDefaultSplit,
+          redAmount,
+          redDays,
+        ]
       properties:
         memberPlotStatusVisibility:
           $ref: '#/components/schemas/PlotStatusVisibility'
+        lossesMode:
+          $ref: '#/components/schemas/LossesMode'
+        lossesPercent:
+          $ref: '#/components/schemas/LossesPercent'
+        commonConsumerDefaultSplit:
+          $ref: '#/components/schemas/CommonConsumerSplit'
+        redAmount:
+          $ref: '#/components/schemas/Money'
+        redDays:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 36500
+
+    CooperativeSettingsUpdate:
+      type: object
+      description: >-
+        A change of the settings: only the fields present are changed, the others keep their value. An empty object
+        changes nothing.
+      properties:
+        memberPlotStatusVisibility:
+          $ref: '#/components/schemas/PlotStatusVisibility'
+        lossesMode:
+          $ref: '#/components/schemas/LossesMode'
+        lossesPercent:
+          $ref: '#/components/schemas/LossesPercent'
+        commonConsumerDefaultSplit:
+          $ref: '#/components/schemas/CommonConsumerSplit'
+        redAmount:
+          $ref: '#/components/schemas/Money'
+        redDays:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 36500
 
     BaseRole:
       type: string
@@ -3176,11 +4336,46 @@ components:
         - READING_SUBMITTED
         - READING_APPROVED
         - READING_REJECTED
+        - CHARGE_REVERSED
+        - OPENING_BALANCE_ENTERED
+        - BILLING_MONTH_CLOSED
+        - BILLING_MONTH_RUN
+        - NOT_CHARGED_RETRIED
+        - WATER_CONNECTED
+        - WATER_DISCONNECTED
+        - LOSSES_RUN_BOOKED
+        - LOSSES_RUN_REVERSED
+        - COMMON_CONSUMER_RUN_BOOKED
+        - COMMON_CONSUMER_RUN_REVERSED
+        - COMMON_CONSUMER_BILLING_CHANGED
 
     AuditEntityType:
       type: string
-      description: Kind of the entity an audit entry is about
-      enum: [MEMBER, ROLE, PLOT, SETTINGS, OWNERSHIP, IMPORT, CHARGE_TYPE, TARIFF, METER, METER_READING]
+      description: >-
+        Kind of the entity an audit entry is about. A `CHARGE` entry (a reversal, an opening balance, a retried
+        "not charged" item) is about the plot whose account changed: its `entityId` is the plot id and its label the
+        plot number. A `BILLING_MONTH` entry (a closing, a month run) is about a billing month: its label is the month
+        as `YYYY-MM`. A `LOSSES_RUN` entry (a losses run booked or reversed) is about the run: its label is the range
+        as `from/to` (ISO dates); so is a `COMMON_CONSUMER_RUN` entry (a common consumer run booked or reversed). A
+        `NOT_CHARGED_RETRIED` entry of a losses node or common consumer item is a `METER` entry about the node or
+        consumer meter, and so is `COMMON_CONSUMER_BILLING_CHANGED` (about the consumer meter, label its name).
+      enum:
+        [
+          MEMBER,
+          ROLE,
+          PLOT,
+          SETTINGS,
+          OWNERSHIP,
+          IMPORT,
+          CHARGE_TYPE,
+          TARIFF,
+          METER,
+          METER_READING,
+          CHARGE,
+          BILLING_MONTH,
+          LOSSES_RUN,
+          COMMON_CONSUMER_RUN,
+        ]
 
     AuditFieldChange:
       type: object
@@ -3190,8 +4385,8 @@ components:
         numbers, `true`/`false`, `base:<CODE>` tokens for a standard role or charge type name (also in the `roles`
         list joined by ", "), and for `owners` a JSON array of `{"member": "Last First", "share": "1/2"}` (a
         correction adds `from` and `to`, ISO dates, `to` absent while the record is open). Meter readings are plain
-        decimals with three decimals (`8205.000`). Values written before this format are plain text and are shown as
-        stored.
+        decimals with three decimals (`8205.000`). Money amounts are plain decimals with two decimals (`-25.00`), a
+        billing month is `YYYY-MM`. Values written before this format are plain text and are shown as stored.
       required: [field]
       properties:
         field:
@@ -3835,8 +5030,10 @@ components:
 
     ImportCounts:
       type: object
-      description: Records per sheet. Rows with a problem are not counted.
-      required: [plots, members, ownerships, meters]
+      description: >-
+        Records per sheet. Rows with a problem are not counted. `waterConnections` counts the plots of the `water`
+        column of the `Plots` sheet. An upload from before a sheet existed counts zero for it.
+      required: [plots, members, ownerships, meters, waterConnections, openingBalances]
       properties:
         plots:
           $ref: '#/components/schemas/ImportEntityCounts'
@@ -3845,6 +5042,10 @@ components:
         ownerships:
           $ref: '#/components/schemas/ImportEntityCounts'
         meters:
+          $ref: '#/components/schemas/ImportEntityCounts'
+        waterConnections:
+          $ref: '#/components/schemas/ImportEntityCounts'
+        openingBalances:
           $ref: '#/components/schemas/ImportEntityCounts'
 
     ImportEntityCounts:
@@ -3867,7 +5068,7 @@ components:
       properties:
         sheet:
           type: string
-          enum: [FILE, PLOTS, MEMBERS, OWNERSHIP, METERS]
+          enum: [FILE, PLOTS, MEMBERS, OWNERSHIP, METERS, OPENING_BALANCES]
         row:
           type: integer
           minimum: 0
@@ -3934,14 +5135,18 @@ components:
             `TREE_WATER` (a water meter has no tree), `TREE_QUARTER_UNDER_QUARTER` (a quarter meter under another
             quarter meter), `TREE_PARENT_KIND` (the kinds do not allow this parent), `TREE_PARENT_INACTIVE` (the parent
             is removed or not yet installed on the date), `TREE_DATE_BEFORE_LATEST` (a date before the meter's latest
-            change in the tree), `READING_DATE_OUTSIDE_METER` (a date before the meter's installation)
+            change in the tree), `READING_DATE_OUTSIDE_METER` (a date before the meter's installation),
+            `AMOUNT_NOT_POSITIVE` (an amount that is zero or negative), `DATE_IN_FUTURE` (a date after today in
+            Europe/Kyiv), `NOT_FOUND` (no such charge type in the cooperative, or not a node of the meter tree in the
+            range of a losses run), `PLOT_COMMON_LAND` (common land is
+            never connected to water)
         message:
           type: string
 
     ChargeTypeCode:
       type: string
-      description: Code of one of the four charge types every cooperative starts with; custom types have no code
-      enum: [MEMBERSHIP, ELECTRICITY, LAND_TAX, WATER]
+      description: Code of one of the five charge types every cooperative starts with; custom types have no code
+      enum: [MEMBERSHIP, ELECTRICITY, LAND_TAX, WATER, COMMON_CONSUMERS]
 
     ChargeType:
       type: object
@@ -4175,10 +5380,47 @@ components:
         firstVersion:
           $ref: '#/components/schemas/TariffVersionCreate'
 
+    TariffConflictPlot:
+      type: object
+      description: A plot on which two tariffs conflict
+      required: [plotId, number]
+      properties:
+        plotId:
+          type: string
+          format: uuid
+        number:
+          type: string
+          description: User content, as the cooperative writes it
+
+    TariffConflict:
+      type: object
+      description: >-
+        Another tariff of the same charge type that applies to some of the same plots from today on: on those plots
+        neither tariff is charged (the case goes to the "not charged" queue) until a scope is changed. A warning only;
+        both tariffs stay valid.
+      required: [otherTariffId, otherTariffName, plotCount, plots]
+      properties:
+        otherTariffId:
+          type: string
+          format: uuid
+        otherTariffName:
+          type: string
+          description: User content
+        plotCount:
+          type: integer
+          format: int64
+          description: The number of plots both tariffs apply to
+        plots:
+          type: array
+          maxItems: 10
+          description: The first of those plots in the natural order of the numbers (at most 10)
+          items:
+            $ref: '#/components/schemas/TariffConflictPlot'
+
     TariffSummary:
       type: object
       description: A tariff in the list, with the version that is shown
-      required: [id, name, chargeTypeId, scopeKind, version]
+      required: [id, name, chargeTypeId, scopeKind, version, conflicts]
       properties:
         id:
           type: string
@@ -4198,11 +5440,18 @@ components:
           description: >-
             Number of plots the tariff applies to; for a meter-based version (`PER_KWH`, `PER_M3`) only the plots
             with an active meter of the resource
+        conflicts:
+          type: array
+          description: >-
+            The other tariffs of the same charge type that apply to some of the same active plots, ordered by name;
+            empty when there is no conflict or the charge type is inactive
+          items:
+            $ref: '#/components/schemas/TariffConflict'
 
     Tariff:
       type: object
       description: A tariff with its charge type, all versions and its scope
-      required: [id, name, chargeType, scopeKind, versions, selectedPlots, exclusions]
+      required: [id, name, chargeType, scopeKind, versions, selectedPlots, exclusions, conflicts]
       properties:
         id:
           type: string
@@ -4235,6 +5484,11 @@ components:
             Number of plots the tariff applies to, as in the list (exclusions subtracted, archived plots and common
             land never counted); when the shown version (the one valid today, else the earliest future one) is
             meter-based, only the plots with an active meter of its resource
+        conflicts:
+          type: array
+          description: As in the list
+          items:
+            $ref: '#/components/schemas/TariffConflict'
 
     ExpectedChargeStatus:
       type: string
@@ -4990,3 +6244,1456 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/MeterTreeNode'
+
+    ChargeKind:
+      type: string
+      description: >-
+        `REGULAR` an accrual; `REVERSAL` cancels one charge with the opposite amount (see `reverses`, `reason`);
+        `OPENING` an opening balance
+      enum: [REGULAR, REVERSAL, OPENING]
+
+    ChargeSource:
+      type: string
+      description: >-
+        What produced the charge: `TARIFF` the month run of a tariff, `CONSUMPTION` a meter reading, `LOSSES` losses
+        in the network, `COMMON_CONSUMER` a common consumer run, `OPENING` an opening balance, `MANUAL_REVERSAL` a
+        reversal made by hand
+      enum: [TARIFF, CONSUMPTION, LOSSES, COMMON_CONSUMER, OPENING, MANUAL_REVERSAL]
+
+    ChargeTypeRef:
+      type: object
+      description: The charge type of a charge
+      required: [id, name, nameCustomized]
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          $ref: '#/components/schemas/ChargeTypeCode'
+        name:
+          type: string
+          description: The stored name; clients show their own default name while `nameCustomized` is false
+        nameCustomized:
+          type: boolean
+
+    CalculationUnit:
+      type: string
+      description: >-
+        What the quantity of a calculation part counts: `PLOT` one plot, `SOTKA` sotkas (100 m2) of area, `KWH`
+        kilowatt-hours, `M3` cubic metres
+      enum: [PLOT, SOTKA, KWH, M3]
+
+    ChargeCalculationPart:
+      type: object
+      description: >-
+        One part of a calculation: a quantity priced at the rate of one tariff version for the days that version
+        applied. Parts are added exactly and the sum is rounded once.
+      required: [days, from, to]
+      properties:
+        tariffVersionId:
+          type: string
+          format: uuid
+        basis:
+          $ref: '#/components/schemas/Basis'
+        frequency:
+          $ref: '#/components/schemas/Frequency'
+        quantity:
+          type: string
+          description: The quantity as a plain decimal string (for example kWh `93.300`, sotkas `6.00`); not money
+        unit:
+          $ref: '#/components/schemas/CalculationUnit'
+        rate:
+          $ref: '#/components/schemas/Rate'
+        days:
+          type: integer
+          format: int32
+          minimum: 0
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+        calculated:
+          type: boolean
+          description: True when the quantity rests on a value calculated between readings ("розрахунковий")
+        nodeMeterId:
+          type: string
+          format: uuid
+          description: >-
+            The node of the meter tree whose losses this part carries (a proportional losses charge has one part per
+            node and tariff version)
+
+    ChargeCalculationReading:
+      type: object
+      description: A meter value a charge was calculated from
+      required: [meterId, takenOn, value]
+      properties:
+        meterId:
+          type: string
+          format: uuid
+        takenOn:
+          type: string
+          format: date
+        value:
+          $ref: '#/components/schemas/MeterValue'
+        calculated:
+          type: boolean
+          description: True for a value calculated between readings ("розрахунковий")
+
+    ChargeCalculation:
+      type: object
+      description: >-
+        How a charge was calculated, as codes and numbers only (the client builds the text). An opening balance and a
+        reversal have no parts and no readings.
+      required: [amount, parts, readings]
+      properties:
+        amount:
+          $ref: '#/components/schemas/Money'
+        parts:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChargeCalculationPart'
+        readings:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChargeCalculationReading'
+        nodeMeterId:
+          type: string
+          format: uuid
+          description: >-
+            The node of the meter tree whose losses the charge carries, when it carries the losses of one node only
+            (the parts name the node of each part)
+        runId:
+          type: string
+          format: uuid
+          description: The losses run or common consumer run that booked the charge
+        consumerMeterId:
+          type: string
+          format: uuid
+          description: The common consumer the charge is for (the first meter of its chain)
+        consumerName:
+          type: string
+          description: The name of the common consumer when the run was booked (user content)
+        split:
+          $ref: '#/components/schemas/CommonConsumerSplit'
+        lossesPercent:
+          type: string
+          pattern: '^\d{1,3}(\.\d{1,2})?$'
+          description: >-
+            The percentage (two decimals, `"5.00"`) of a fixed-percentage losses charge (source `LOSSES` of a meter
+            interval); its parts carry the losses quantities
+        consumption:
+          type: string
+          pattern: '^\d{1,11}(\.\d{1,3})?$'
+          description: >-
+            The consumption of the meter interval a fixed-percentage losses charge is taken of, rounded to three
+            decimals for display (the amount was calculated from the exact quantity)
+
+    Charge:
+      type: object
+      description: One row of the ledger of a plot. Never changed or deleted.
+      required:
+        [
+          id,
+          plotId,
+          kind,
+          source,
+          chargeType,
+          amount,
+          billingMonth,
+          billingMonthClosed,
+          serviceFrom,
+          serviceTo,
+          accruedOn,
+          reversible,
+          calculation,
+          createdAt,
+        ]
+      properties:
+        id:
+          type: string
+          format: uuid
+        plotId:
+          type: string
+          format: uuid
+        kind:
+          $ref: '#/components/schemas/ChargeKind'
+        source:
+          $ref: '#/components/schemas/ChargeSource'
+        chargeType:
+          $ref: '#/components/schemas/ChargeTypeRef'
+        amount:
+          $ref: '#/components/schemas/Money'
+        billingMonth:
+          type: string
+          pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+          description: The billing month the charge is booked in, `YYYY-MM`
+        billingMonthClosed:
+          type: boolean
+          description: True when the billing month is closed (a correction is then an adjustment, not a reversal)
+        serviceFrom:
+          type: string
+          format: date
+          description: The first day the charge pays for
+        serviceTo:
+          type: string
+          format: date
+          description: The last day the charge pays for
+        accruedOn:
+          type: string
+          format: date
+          description: The day the debt counts from (its age)
+        reason:
+          type: string
+          description: >-
+            The reason of a reversal (always present), or the optional reason or document reference of an opening
+            balance (user content)
+        reverses:
+          type: string
+          format: uuid
+          description: The charge a reversal cancels
+        reversedBy:
+          type: string
+          format: uuid
+          description: The reversal that cancelled this charge
+        reversible:
+          type: boolean
+          description: >-
+            True when the caller may reverse the charge now: the caller has `CHARGES_REVERSE`, the charge is not a
+            reversal, was not reversed and its billing month is open
+        calculation:
+          $ref: '#/components/schemas/ChargeCalculation'
+        createdAt:
+          type: string
+          format: date-time
+        createdByName:
+          type: string
+          description: >-
+            The current name of the member who booked the charge; only for callers with `CHARGES_VIEW`, absent for
+            charges booked by the system or by a member who no longer exists
+
+    ChargeTypeDebt:
+      type: object
+      description: The debt of a plot for one charge type
+      required: [chargeTypeId, name, nameCustomized, debt]
+      properties:
+        chargeTypeId:
+          type: string
+          format: uuid
+        chargeTypeCode:
+          $ref: '#/components/schemas/ChargeTypeCode'
+        name:
+          type: string
+          description: The stored name; clients show their own default name while `nameCustomized` is false
+        nameCustomized:
+          type: boolean
+        debt:
+          $ref: '#/components/schemas/Money'
+
+    PlotAccount:
+      type: object
+      description: The account of a plot
+      required: [plotId, debts, total, charges]
+      properties:
+        plotId:
+          type: string
+          format: uuid
+        debts:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChargeTypeDebt'
+        total:
+          $ref: '#/components/schemas/Money'
+        charges:
+          type: array
+          description: Newest first, limited by `from` and `to`
+          items:
+            $ref: '#/components/schemas/Charge'
+
+    ChargeReversal:
+      type: object
+      description: Why a charge is reversed
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+          description: User content, stored as typed; surrounding whitespace is trimmed
+
+    OpeningBalanceInput:
+      type: object
+      description: An opening debt of a plot for one charge type as of a date
+      required: [chargeTypeId, amount, date]
+      properties:
+        chargeTypeId:
+          type: string
+          format: uuid
+        amount:
+          $ref: '#/components/schemas/Money'
+        date:
+          type: string
+          format: date
+          description: The day the debt counts from; not after today
+        reason:
+          type: string
+          maxLength: 500
+          description: >-
+            A reason or a document reference (user content), stored on the charge and written to the audit log;
+            surrounding whitespace is trimmed, a blank reason means none
+
+    BillingMonthStatus:
+      type: string
+      description: '`OPEN` accepts new charges; `CLOSED` never changes again'
+      enum: [OPEN, CLOSED]
+
+    ChargeTypeTotal:
+      type: object
+      description: The sum of the charges of one charge type booked in a billing month (reversals count negative)
+      required: [chargeTypeId, name, nameCustomized, amount]
+      properties:
+        chargeTypeId:
+          type: string
+          format: uuid
+        chargeTypeCode:
+          $ref: '#/components/schemas/ChargeTypeCode'
+        name:
+          type: string
+          description: The stored name; clients show their own default name while `nameCustomized` is false
+        nameCustomized:
+          type: boolean
+        amount:
+          $ref: '#/components/schemas/Money'
+
+    BillingMonthSummary:
+      type: object
+      description: A billing month with the totals of the charges booked in it
+      required: [month, status, runDone, totals, total]
+      properties:
+        month:
+          type: string
+          pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+          description: The month, `YYYY-MM`
+        status:
+          $ref: '#/components/schemas/BillingMonthStatus'
+        runDone:
+          type: boolean
+          description: True when the month run of recurring tariffs was booked for the month
+        closedAt:
+          type: string
+          format: date-time
+          description: When the month was closed; absent while it is open
+        totals:
+          type: array
+          description: Per charge type that has a charge in the month, in the order of the charge types
+          items:
+            $ref: '#/components/schemas/ChargeTypeTotal'
+        total:
+          $ref: '#/components/schemas/Money'
+
+    StaleMeter:
+      type: object
+      description: >-
+        An active plot meter without an approved reading (or its installation) for more than 60 days before the
+        check date
+      required: [meterId, plotId, plotNumber, resource, lastReadingOn]
+      properties:
+        meterId:
+          type: string
+          format: uuid
+        plotId:
+          type: string
+          format: uuid
+        plotNumber:
+          type: string
+          description: User content, as the cooperative writes it
+        resource:
+          $ref: '#/components/schemas/MeterResource'
+        lastReadingOn:
+          type: string
+          format: date
+          description: The date of the last approved reading on or before the check date, or the installation date
+
+    BillingMonthChecklist:
+      type: object
+      description: What the person closing the month sees first; nothing here blocks closing
+      required: [runDone, notChargedCount, staleMeters]
+      properties:
+        runDone:
+          type: boolean
+        notChargedCount:
+          type: integer
+          format: int32
+          minimum: 0
+          description: The open "not charged" items of the month
+        staleMeters:
+          type: array
+          description: In the natural order of the plot numbers, electricity before water
+          items:
+            $ref: '#/components/schemas/StaleMeter'
+
+    BillingMonthDetails:
+      type: object
+      description: A billing month with its totals and the closing check list
+      required: [month, status, runDone, totals, total, checklist]
+      properties:
+        month:
+          type: string
+          pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+          description: The month, `YYYY-MM`
+        status:
+          $ref: '#/components/schemas/BillingMonthStatus'
+        runDone:
+          type: boolean
+        closedAt:
+          type: string
+          format: date-time
+        closedByName:
+          type: string
+          description: The current name of the member who closed the month; absent while open or when unknown
+        totals:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChargeTypeTotal'
+        total:
+          $ref: '#/components/schemas/Money'
+        checklist:
+          $ref: '#/components/schemas/BillingMonthChecklist'
+
+    MonthRunRequest:
+      type: object
+      description: The booking of a month run; `digest` is the one of the preview the user confirmed
+      properties:
+        digest:
+          type: string
+          maxLength: 128
+          description: >-
+            The `digest` of the preview; when present and the run would now create something else, the booking is
+            refused with 409 `PREVIEW_OUTDATED`
+
+    NotChargedKind:
+      type: string
+      description: >-
+        What could not be charged: `TARIFF_MONTH` the tariffs of a charge type for a plot and a billing month,
+        `INTERVAL` a meter reading interval, `LOSSES_NODE` the losses of a node of the meter tree, `COMMON_CONSUMER` a
+        common consumer
+      enum: [TARIFF_MONTH, INTERVAL, LOSSES_NODE, COMMON_CONSUMER]
+
+    NotChargedReason:
+      type: string
+      description: >-
+        Why: `NO_TARIFF_FOR_ALL_DAYS` no tariff covers every day, `CONFLICTING_TARIFFS` two tariffs of the charge type
+        apply on the same day, `OUTSIDE_SCOPE` the plot is outside the scope of every tariff, `EXCLUDED` the plot is
+        excluded, `UNKNOWN_NODE_VALUE` / `UNKNOWN_CONSUMER_VALUE` a meter value of the range is unknown
+      enum:
+        - NO_TARIFF_FOR_ALL_DAYS
+        - CONFLICTING_TARIFFS
+        - OUTSIDE_SCOPE
+        - EXCLUDED
+        - UNKNOWN_NODE_VALUE
+        - UNKNOWN_CONSUMER_VALUE
+
+    NotChargedTariff:
+      type: object
+      description: A tariff an item is about (the link to fix it)
+      required: [id, name]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          description: User content
+
+    NotChargedItem:
+      type: object
+      description: >-
+        Something the app could not charge, with the reason and what to fix. Codes and ids only; the client builds the
+        text.
+      required: [kind, reason, tariffs]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Absent in a preview for an item that does not exist yet
+        kind:
+          $ref: '#/components/schemas/NotChargedKind'
+        reason:
+          $ref: '#/components/schemas/NotChargedReason'
+        plotId:
+          type: string
+          format: uuid
+        plotNumber:
+          type: string
+          description: User content, as the cooperative writes it
+        chargeType:
+          $ref: '#/components/schemas/ChargeTypeRef'
+        meterId:
+          type: string
+          format: uuid
+          description: The meter to fix (an interval, a node, a common consumer)
+        month:
+          type: string
+          pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+          description: The billing month of a `TARIFF_MONTH` item, `YYYY-MM`
+        from:
+          type: string
+          format: date
+          description: The first day of the days the item is about
+        to:
+          type: string
+          format: date
+          description: The last day of the days the item is about
+        tariffs:
+          type: array
+          description: The tariffs involved, ordered by name (both tariffs for `CONFLICTING_TARIFFS`); may be empty
+          items:
+            $ref: '#/components/schemas/NotChargedTariff'
+        createdAt:
+          type: string
+          format: date-time
+          description: When the item was first opened; absent in a preview for a new item
+
+    NotChargedRetryResult:
+      type: object
+      description: The outcome of a retry
+      required: [resolved]
+      properties:
+        resolved:
+          type: boolean
+          description: True when the item is closed (charged now or before, or nothing left to charge)
+        item:
+          $ref: '#/components/schemas/NotChargedItem'
+
+    MonthRunResult:
+      type: object
+      description: >-
+        What a month run would create (preview) or created (booking): the new charges only, never those of an earlier
+        run; the charges of the retried "not charged" items of other months included
+      required: [month, preview, plots, totals, total, notCharged, created, digest]
+      properties:
+        month:
+          type: string
+          pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+          description: The month, `YYYY-MM`
+        preview:
+          type: boolean
+        plots:
+          type: integer
+          format: int32
+          minimum: 0
+          description: The number of plots that get at least one new charge
+        totals:
+          type: array
+          description: The new charges per charge type, in the order of the charge types
+          items:
+            $ref: '#/components/schemas/ChargeTypeTotal'
+        total:
+          $ref: '#/components/schemas/Money'
+        notCharged:
+          type: array
+          description: >-
+            The items of the month the run cannot charge (opened by a booking, or kept open when they exist), in the
+            natural order of the plot numbers, then by charge type
+          items:
+            $ref: '#/components/schemas/NotChargedItem'
+        created:
+          type: integer
+          format: int32
+          minimum: 0
+          description: The number of charges written; 0 in a preview
+        digest:
+          type: string
+          description: Identifies what the run would create; send it with the booking to make sure nothing changed
+
+    WaterSourceKind:
+      type: string
+      description: >-
+        `COOPERATIVE_SUPPLY`: the cooperative's water supply (no meter; clients show their own name for it).
+        `METER`: a common consumer meter, for example a well pump, named by the cooperative.
+      enum: [COOPERATIVE_SUPPLY, METER]
+
+    WaterSourceRef:
+      type: object
+      description: The water source of a connection
+      required: [id, kind]
+      properties:
+        id:
+          type: string
+          description: "`cooperative` for the cooperative's water supply, otherwise the id of the meter"
+        kind:
+          $ref: '#/components/schemas/WaterSourceKind'
+        name:
+          type: string
+          description: The meter's name (user content); absent for the cooperative's water supply
+
+    WaterConnection:
+      type: object
+      description: One connection of a plot to water
+      required: [id, source, from]
+      properties:
+        id:
+          type: string
+          format: uuid
+        source:
+          $ref: '#/components/schemas/WaterSourceRef'
+        from:
+          type: string
+          format: date
+          description: The first connected day
+        until:
+          type: string
+          format: date
+          description: The last connected day; absent while the connection lasts
+
+    PlotWaterConnections:
+      type: object
+      description: The water connections of a plot
+      required: [plotId, connected, connections]
+      properties:
+        plotId:
+          type: string
+          format: uuid
+        connected:
+          type: boolean
+          description: Whether the plot is connected today (Europe/Kyiv)
+        current:
+          $ref: '#/components/schemas/WaterConnection'
+        connections:
+          type: array
+          description: Every connection the plot has had, newest first; `current` is one of them
+          items:
+            $ref: '#/components/schemas/WaterConnection'
+
+    WaterConnectionCreate:
+      type: object
+      required: [from]
+      properties:
+        sourceMeterId:
+          type: string
+          format: uuid
+          description: An active common consumer meter; absent for the cooperative's water supply
+        from:
+          type: string
+          format: date
+          description: The first connected day
+
+    WaterConnectionEnd:
+      type: object
+      required: [until]
+      properties:
+        until:
+          type: string
+          format: date
+          description: The last connected day, on or after the first one
+
+    WaterSourcePlot:
+      type: object
+      description: A plot connected to a water source
+      required: [plotId, plotNumber, connectionId, from]
+      properties:
+        plotId:
+          type: string
+          format: uuid
+        plotNumber:
+          type: string
+          description: User content, as the cooperative writes it
+        connectionId:
+          type: string
+          format: uuid
+        from:
+          type: string
+          format: date
+        until:
+          type: string
+          format: date
+          description: The last connected day when the connection ends today or later; absent while it lasts
+
+    WaterSource:
+      type: object
+      description: A water source with the plots whose connection to it has not ended before today
+      required: [id, kind, plots]
+      properties:
+        id:
+          type: string
+          description: "`cooperative` for the cooperative's water supply, otherwise the id of the meter"
+        kind:
+          $ref: '#/components/schemas/WaterSourceKind'
+        name:
+          type: string
+          description: The meter's name (user content); absent for the cooperative's water supply
+        plots:
+          type: array
+          description: In the natural order of the plot numbers
+          items:
+            $ref: '#/components/schemas/WaterSourcePlot'
+
+    WaterSourceConnection:
+      type: object
+      required: [plotIds, from]
+      properties:
+        plotIds:
+          type: array
+          maxItems: 5000
+          items:
+            type: string
+            format: uuid
+        from:
+          type: string
+          format: date
+          description: The first connected day of every plot
+
+    WaterSourceDisconnection:
+      type: object
+      required: [plotIds, until]
+      properties:
+        plotIds:
+          type: array
+          maxItems: 5000
+          items:
+            type: string
+            format: uuid
+        until:
+          type: string
+          format: date
+          description: The last connected day of every plot
+
+    LossesRunRequest:
+      type: object
+      description: >-
+        The range of a losses run (days, both included), the nodes to run (absent or empty: every node) and, for a
+        booking, the `digest` of the preview the user confirmed
+      required: [from, to]
+      properties:
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+        nodeIds:
+          type: array
+          maxItems: 500
+          description: Meter ids of the nodes to run (any meter of a node's chain)
+          items:
+            type: string
+            format: uuid
+        digest:
+          type: string
+          maxLength: 128
+          description: >-
+            The `digest` of the preview; when present and the run would now book something else, the booking is
+            refused with 409 `PREVIEW_OUTDATED`
+
+    LossesNodeOutcome:
+      type: string
+      description: >-
+        What a run does with a node: `CHARGED` its losses are shared among the plots under it (also when they are
+        zero); `NEGATIVE` the children used more than the node shows, nothing is charged; `UNKNOWN` a value of the node
+        or of a child is unknown, the node is skipped; `SKIPPED_ABOVE` a node below is unknown, the node is skipped too;
+        `ALREADY_CHARGED` a booked run charged the node for a day of the range (preview only; a booking is refused)
+      enum: [CHARGED, NEGATIVE, UNKNOWN, SKIPPED_ABOVE, ALREADY_CHARGED]
+
+    LossesWarningCode:
+      type: string
+      description: >-
+        The warning of a node: `NEGATIVE_LOSSES` (the numbers are the node's `consumption`, `children` and `losses`);
+        `UNKNOWN_VALUE` (the value of `meterId` at the range end, or the day before the range start, is unknown;
+        `lastReadingOn` is its last point before it); `SKIPPED_ABOVE` (`meterId` is the unknown node below);
+        `ALREADY_CHARGED` (`runId`, `from`, `to`: the booked run that charged the node); `NO_PLOT_CONSUMPTION` (the
+        losses are above zero but no plot under the node used anything, so nobody is charged)
+      enum: [NEGATIVE_LOSSES, UNKNOWN_VALUE, SKIPPED_ABOVE, ALREADY_CHARGED, NO_PLOT_CONSUMPTION]
+
+    LossesWarning:
+      type: object
+      description: Why a node is not charged, or charges nobody; codes, ids and dates only
+      required: [code]
+      properties:
+        code:
+          $ref: '#/components/schemas/LossesWarningCode'
+        meterId:
+          type: string
+          format: uuid
+        meterKind:
+          $ref: '#/components/schemas/MeterKind'
+        meterName:
+          type: string
+          description: The name of a named meter (user content)
+        plotNumber:
+          type: string
+          description: The plot of a plot meter (user content)
+        lastReadingOn:
+          type: string
+          format: date
+        runId:
+          type: string
+          format: uuid
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+
+    LossesRunPlot:
+      type: object
+      description: >-
+        The share of one plot in the losses of one node: the kWh (rounded to three decimals for display; the amount is
+        calculated from the exact quantity) and their price at the plot's tariff, rounded once. A plot whose share cannot
+        be priced has no `amount` and, when the board can fix it, a `reason`
+      required: [plotId, kwh]
+      properties:
+        plotId:
+          type: string
+          format: uuid
+        plotNumber:
+          type: string
+          description: User content
+        kwh:
+          $ref: '#/components/schemas/MeterValue'
+        amount:
+          $ref: '#/components/schemas/Money'
+        reason:
+          $ref: '#/components/schemas/NotChargedReason'
+
+    LossesRunNode:
+      type: object
+      description: >-
+        One node of a run. Quantities are kWh rounded to three decimals for display; `losses` may be negative;
+        `pct` is the losses in percent of the node's consumption, two decimals (absent when the consumption is zero or
+        unknown). `amount` is the sum of the plots' amounts.
+      required: [meterId, kind, calculated, outcome, plots, amount]
+      properties:
+        meterId:
+          type: string
+          format: uuid
+          description: The node (the first meter of its chain; a replacement keeps the node)
+        kind:
+          $ref: '#/components/schemas/MeterKind'
+        name:
+          type: string
+          description: User content
+        consumption:
+          $ref: '#/components/schemas/MeterValue'
+        children:
+          $ref: '#/components/schemas/MeterValue'
+        losses:
+          type: string
+          pattern: '^-?\d{1,11}\.\d{3}$'
+        pct:
+          type: string
+          pattern: '^-?\d+\.\d{2}$'
+        calculated:
+          type: boolean
+          description: True when a value the node's numbers rest on was calculated between readings ("розрахунковий")
+        outcome:
+          $ref: '#/components/schemas/LossesNodeOutcome'
+        warning:
+          $ref: '#/components/schemas/LossesWarning'
+        plots:
+          type: array
+          description: The plots under the node with a share, in the natural order of the plot numbers
+          items:
+            $ref: '#/components/schemas/LossesRunPlot'
+        amount:
+          $ref: '#/components/schemas/Money'
+
+    LossesRunCharge:
+      type: object
+      description: >-
+        The losses charge of one plot: its kWh from every charged node, priced once and rounded once (`chargeId` and
+        `reversed` once booked)
+      required: [plotId, kwh, amount]
+      properties:
+        plotId:
+          type: string
+          format: uuid
+        plotNumber:
+          type: string
+          description: User content
+        kwh:
+          $ref: '#/components/schemas/MeterValue'
+        amount:
+          $ref: '#/components/schemas/Money'
+        chargeId:
+          type: string
+          format: uuid
+        reversed:
+          type: boolean
+
+    LossesRunResult:
+      type: object
+      description: What a losses run would charge (preview) or charged (booking)
+      required: [from, to, preview, nodes, charges, plots, total, created, digest]
+      properties:
+        runId:
+          type: string
+          format: uuid
+          description: The booked run; absent in a preview
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+        preview:
+          type: boolean
+        billingMonth:
+          type: string
+          pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+          description: The billing month the charges are (or would be) booked in, `YYYY-MM`
+        nodes:
+          type: array
+          description: The nodes, substations first, then by name
+          items:
+            $ref: '#/components/schemas/LossesRunNode'
+        charges:
+          type: array
+          description: One charge per plot, in the natural order of the plot numbers
+          items:
+            $ref: '#/components/schemas/LossesRunCharge'
+        plots:
+          type: integer
+          format: int32
+          minimum: 0
+          description: The number of plots charged
+        total:
+          $ref: '#/components/schemas/Money'
+        created:
+          type: integer
+          format: int32
+          minimum: 0
+          description: The number of charges written; 0 in a preview
+        digest:
+          type: string
+          description: Identifies what the run would book; send it with the booking to make sure nothing changed
+
+    LossesRunStatus:
+      type: string
+      description: '`BOOKED` its charges stand; `REVERSED` every charge was reversed'
+      enum: [BOOKED, REVERSED]
+
+    LossesRunSummary:
+      type: object
+      description: One losses run in the history
+      required:
+        [id, from, to, status, billingMonth, createdAt, total, plots, chargedNodes, skippedNodes, reversible]
+      properties:
+        id:
+          type: string
+          format: uuid
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+        status:
+          $ref: '#/components/schemas/LossesRunStatus'
+        billingMonth:
+          type: string
+          pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+          description: The billing month its charges are booked in, `YYYY-MM`
+        createdAt:
+          type: string
+          format: date-time
+        createdByName:
+          type: string
+          description: The current name of the member who booked it; absent when unknown
+        total:
+          $ref: '#/components/schemas/Money'
+        plots:
+          type: integer
+          format: int32
+          minimum: 0
+          description: The number of plots charged
+        chargedNodes:
+          type: integer
+          format: int32
+          minimum: 0
+        skippedNodes:
+          type: integer
+          format: int32
+          minimum: 0
+          description: The nodes not charged (negative, unknown or skipped above)
+        reversible:
+          type: boolean
+          description: >-
+            True when the caller may reverse the run now: the caller has `CHARGES_REVERSE`, the run is booked and its
+            billing month is open
+        reversedAt:
+          type: string
+          format: date-time
+        reversedByName:
+          type: string
+        reverseReason:
+          type: string
+          description: User content
+
+    LossesRunDetails:
+      type: object
+      description: One losses run with its nodes and charges as booked
+      required:
+        [
+          id,
+          from,
+          to,
+          status,
+          billingMonth,
+          createdAt,
+          total,
+          plots,
+          chargedNodes,
+          skippedNodes,
+          reversible,
+          nodes,
+          charges,
+        ]
+      properties:
+        id:
+          type: string
+          format: uuid
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+        status:
+          $ref: '#/components/schemas/LossesRunStatus'
+        billingMonth:
+          type: string
+          pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+        createdAt:
+          type: string
+          format: date-time
+        createdByName:
+          type: string
+        total:
+          $ref: '#/components/schemas/Money'
+        plots:
+          type: integer
+          format: int32
+          minimum: 0
+        chargedNodes:
+          type: integer
+          format: int32
+          minimum: 0
+        skippedNodes:
+          type: integer
+          format: int32
+          minimum: 0
+        reversible:
+          type: boolean
+        reversedAt:
+          type: string
+          format: date-time
+        reversedByName:
+          type: string
+        reverseReason:
+          type: string
+          description: User content
+        nodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/LossesRunNode'
+        charges:
+          type: array
+          items:
+            $ref: '#/components/schemas/LossesRunCharge'
+
+    RunReversal:
+      type: object
+      description: Why a run is reversed
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+          description: User content, stored as typed; surrounding whitespace is trimmed
+
+    CommonConsumerRunRequest:
+      type: object
+      description: >-
+        The range of a common consumer run (days, both included), the consumers to run (absent or empty: every
+        consumer) and, for a booking, the `digest` of the preview the user confirmed
+      required: [from, to]
+      properties:
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+        consumerIds:
+          type: array
+          maxItems: 500
+          description: Meter ids of the consumers to run (any meter of a consumer's chain)
+          items:
+            type: string
+            format: uuid
+        digest:
+          type: string
+          maxLength: 128
+          description: >-
+            The `digest` of the preview; when present and the run would now book something else, the booking is
+            refused with 409 `PREVIEW_OUTDATED`
+
+    CommonConsumerOutcome:
+      type: string
+      description: >-
+        What a run does with a common consumer: `CHARGED` its consumption is shared among its plots (also when it is
+        zero); `NOT_CHARGED` its split is `NOT_CHARGED` (covered by the membership fee), nothing is charged;
+        `NO_PLOTS` it used something but no plot shares it (nobody connected, no service users), nothing is charged;
+        `UNKNOWN` its value at the range end (or the day before the start) is unknown, it is skipped;
+        `ALREADY_CHARGED` a booked run charged it for a day of the range (preview only; a booking is refused)
+      enum: [CHARGED, NOT_CHARGED, NO_PLOTS, UNKNOWN, ALREADY_CHARGED]
+
+    CommonConsumerWarningCode:
+      type: string
+      description: >-
+        The warning of a consumer: `UNKNOWN_VALUE` (the value of `meterId` at the range end, or the day before the
+        range start, is unknown; `lastReadingOn` is its last point before it); `ALREADY_CHARGED` (`runId`, `from`,
+        `to`: the booked run that charged it); `NO_PLOTS` (it used something but no plot shares it)
+      enum: [UNKNOWN_VALUE, ALREADY_CHARGED, NO_PLOTS]
+
+    CommonConsumerWarning:
+      type: object
+      description: Why a consumer is not charged; codes, ids and dates only
+      required: [code]
+      properties:
+        code:
+          $ref: '#/components/schemas/CommonConsumerWarningCode'
+        meterId:
+          type: string
+          format: uuid
+        lastReadingOn:
+          type: string
+          format: date
+        runId:
+          type: string
+          format: uuid
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+
+    CommonConsumerRunPlot:
+      type: object
+      description: >-
+        The share of one plot in one consumer: its days in the split (connected days for `CONNECTED_PLOTS`, else the
+        days of the range), the kWh (rounded to three decimals for display; the amount is calculated from the exact
+        quantity) and their price at the plot's `COMMON_CONSUMERS` tariff, rounded once. A plot whose share cannot be
+        priced has no `amount` and, when the board can fix it, a `reason`. `chargeId` and `reversed` once booked
+      required: [plotId, days, kwh]
+      properties:
+        plotId:
+          type: string
+          format: uuid
+        plotNumber:
+          type: string
+          description: User content
+        days:
+          type: integer
+          format: int32
+          minimum: 0
+        kwh:
+          $ref: '#/components/schemas/MeterValue'
+        amount:
+          $ref: '#/components/schemas/Money'
+        reason:
+          $ref: '#/components/schemas/NotChargedReason'
+        chargeId:
+          type: string
+          format: uuid
+        reversed:
+          type: boolean
+
+    CommonConsumerRunLine:
+      type: object
+      description: >-
+        One common consumer of a run. `consumption` is kWh rounded to three decimals for display (absent when
+        unknown); `plotDays` is the sum of the plots' days; `amount` the sum of the plots' amounts
+      required: [meterId, split, calculated, outcome, plotDays, plots, amount]
+      properties:
+        meterId:
+          type: string
+          format: uuid
+          description: The consumer (the first meter of its chain; a replacement keeps the consumer)
+        name:
+          type: string
+          description: User content
+        split:
+          $ref: '#/components/schemas/CommonConsumerSplit'
+        consumption:
+          $ref: '#/components/schemas/MeterValue'
+        calculated:
+          type: boolean
+          description: True when a value the consumption rests on was calculated between readings ("розрахунковий")
+        outcome:
+          $ref: '#/components/schemas/CommonConsumerOutcome'
+        warning:
+          $ref: '#/components/schemas/CommonConsumerWarning'
+        plotDays:
+          type: integer
+          format: int64
+          minimum: 0
+        plots:
+          type: array
+          description: The plots that share the consumer, in the natural order of the plot numbers
+          items:
+            $ref: '#/components/schemas/CommonConsumerRunPlot'
+        amount:
+          $ref: '#/components/schemas/Money'
+
+    CommonConsumerRunResult:
+      type: object
+      description: What a common consumer run would charge (preview) or charged (booking)
+      required: [from, to, preview, noTariff, consumers, plots, charges, total, created, digest]
+      properties:
+        runId:
+          type: string
+          format: uuid
+          description: The booked run; absent in a preview
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+        preview:
+          type: boolean
+        billingMonth:
+          type: string
+          pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+          description: The billing month the charges are (or would be) booked in, `YYYY-MM`
+        noTariff:
+          type: boolean
+          description: >-
+            True when there is no `COMMON_CONSUMERS` tariff to price the run with ("Немає тарифу"): nothing is priced
+            and a booking is refused with 409 `NO_COMMON_CONSUMERS_TARIFF`
+        consumers:
+          type: array
+          description: The common consumers by name
+          items:
+            $ref: '#/components/schemas/CommonConsumerRunLine'
+        plots:
+          type: integer
+          format: int32
+          minimum: 0
+          description: The number of plots charged
+        charges:
+          type: integer
+          format: int32
+          minimum: 0
+          description: The number of charges (one per plot per consumer)
+        total:
+          $ref: '#/components/schemas/Money'
+        created:
+          type: integer
+          format: int32
+          minimum: 0
+          description: The number of charges written; 0 in a preview
+        digest:
+          type: string
+          description: Identifies what the run would book; send it with the booking to make sure nothing changed
+
+    CommonConsumerRunStatus:
+      type: string
+      description: '`BOOKED` its charges stand; `REVERSED` every charge was reversed'
+      enum: [BOOKED, REVERSED]
+
+    CommonConsumerRunSummary:
+      type: object
+      description: One common consumer run in the history
+      required:
+        [
+          id,
+          from,
+          to,
+          status,
+          billingMonth,
+          createdAt,
+          total,
+          plots,
+          charges,
+          chargedConsumers,
+          skippedConsumers,
+          reversible,
+        ]
+      properties:
+        id:
+          type: string
+          format: uuid
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+        status:
+          $ref: '#/components/schemas/CommonConsumerRunStatus'
+        billingMonth:
+          type: string
+          pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+          description: The billing month its charges are booked in, `YYYY-MM`
+        createdAt:
+          type: string
+          format: date-time
+        createdByName:
+          type: string
+          description: The current name of the member who booked it; absent when unknown
+        total:
+          $ref: '#/components/schemas/Money'
+        plots:
+          type: integer
+          format: int32
+          minimum: 0
+          description: The number of plots charged
+        charges:
+          type: integer
+          format: int32
+          minimum: 0
+          description: The number of charges
+        chargedConsumers:
+          type: integer
+          format: int32
+          minimum: 0
+        skippedConsumers:
+          type: integer
+          format: int32
+          minimum: 0
+          description: The consumers not charged (not charged by their split, without plots, or unknown)
+        reversible:
+          type: boolean
+          description: >-
+            True when the caller may reverse the run now: the caller has `CHARGES_REVERSE`, the run is booked and its
+            billing month is open
+        reversedAt:
+          type: string
+          format: date-time
+        reversedByName:
+          type: string
+        reverseReason:
+          type: string
+          description: User content
+
+    CommonConsumerRunDetails:
+      type: object
+      description: One common consumer run with its consumers as booked; each plot share carries its charge
+      required:
+        [
+          id,
+          from,
+          to,
+          status,
+          billingMonth,
+          createdAt,
+          total,
+          plots,
+          charges,
+          chargedConsumers,
+          skippedConsumers,
+          reversible,
+          consumers,
+        ]
+      properties:
+        id:
+          type: string
+          format: uuid
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+        status:
+          $ref: '#/components/schemas/CommonConsumerRunStatus'
+        billingMonth:
+          type: string
+          pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+        createdAt:
+          type: string
+          format: date-time
+        createdByName:
+          type: string
+        total:
+          $ref: '#/components/schemas/Money'
+        plots:
+          type: integer
+          format: int32
+          minimum: 0
+        charges:
+          type: integer
+          format: int32
+          minimum: 0
+        chargedConsumers:
+          type: integer
+          format: int32
+          minimum: 0
+        skippedConsumers:
+          type: integer
+          format: int32
+          minimum: 0
+        reversible:
+          type: boolean
+        reversedAt:
+          type: string
+          format: date-time
+        reversedByName:
+          type: string
+        reverseReason:
+          type: string
+          description: User content
+        consumers:
+          type: array
+          items:
+            $ref: '#/components/schemas/CommonConsumerRunLine'
+
+    CommonConsumerBilling:
+      type: object
+      description: >-
+        How one common consumer (the whole chain of its meters through replacements) is shared among plots. `split`
+        is the consumer's own split, absent while the cooperative's `commonConsumerDefaultSplit` applies;
+        `effectiveSplit` is the split a run uses now
+      required: [meterId, active, effectiveSplit, servicePlotIds]
+      properties:
+        meterId:
+          type: string
+          format: uuid
+        name:
+          type: string
+          description: User content
+        active:
+          type: boolean
+          description: False for a removed meter
+        split:
+          $ref: '#/components/schemas/CommonConsumerSplit'
+        effectiveSplit:
+          $ref: '#/components/schemas/CommonConsumerSplit'
+        servicePlotIds:
+          type: array
+          description: The plots marked as using the consumer, in the natural order of the plot numbers
+          items:
+            type: string
+            format: uuid
+
+    CommonConsumerBillingUpdate:
+      type: object
+      description: >-
+        The split of a common consumer (absent: the cooperative's default) and its service users (replaced as a whole;
+        an empty list removes them all)
+      required: [servicePlotIds]
+      properties:
+        split:
+          $ref: '#/components/schemas/CommonConsumerSplit'
+        servicePlotIds:
+          type: array
+          maxItems: 5000
+          items:
+            type: string
+            format: uuid

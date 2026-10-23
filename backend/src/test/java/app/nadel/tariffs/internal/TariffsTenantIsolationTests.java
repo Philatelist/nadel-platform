@@ -65,7 +65,7 @@ class TariffsTenantIsolationTests extends IntegrationTest {
         DemoTariffData.restore(ownerJdbc());
     }
 
-    /** No tariffs and exactly the four seeded types in both cooperatives: the demo tariffs are restored afterwards. */
+    /** No tariffs and exactly the five seeded types in both cooperatives: the demo tariffs are restored afterwards. */
     private void clearTariffs() {
         JdbcTemplate owner = ownerJdbc();
         for (UUID plot : tempPlots) {
@@ -81,7 +81,7 @@ class TariffsTenantIsolationTests extends IntegrationTest {
     void eachCooperativeSeesOnlyItsOwnRowsInEveryTable() {
         for (UUID tenant : List.of(DEMO_TENANT, OTHER_TENANT)) {
             UUID tariff = tenant.equals(DEMO_TENANT) ? DEMO_TARIFF : OTHER_TARIFF;
-            assertThat(count(tenant, "charge_type", "")).as("charge types of %s", tenant).isEqualTo(4);
+            assertThat(count(tenant, "charge_type", "")).as("charge types of %s", tenant).isEqualTo(5);
             assertThat(count(tenant, "tariff", "")).isEqualTo(1);
             assertThat(count(tenant, "tariff_version", "")).isEqualTo(1);
             assertThat(count(tenant, "tariff_scope_plot", "")).isEqualTo(1);
@@ -159,7 +159,7 @@ class TariffsTenantIsolationTests extends IntegrationTest {
 
         assertRowSecurity(sql -> sql.queryForList("select seed_charge_types(?)", OTHER_TENANT));
         assertThat(ownerJdbc().queryForObject("select count(*) from charge_type where tenant_id = ?", Integer.class,
-                OTHER_TENANT)).isEqualTo(3);
+                OTHER_TENANT)).isEqualTo(4);
     }
 
     // ---- composite foreign keys
@@ -257,7 +257,7 @@ class TariffsTenantIsolationTests extends IntegrationTest {
         Integer tariffs = inTenant(DEMO_TENANT, sql -> sql.update("update tariff set scope_kind = 'SELECTED_PLOTS' "
                 + "where id = ?", DEMO_TARIFF));
 
-        assertThat(types).isEqualTo(4);
+        assertThat(types).isEqualTo(5);
         assertThat(tariffs).isEqualTo(1);
         assertThat(ownerJdbc().queryForObject("select count(*) from charge_type", Integer.class)).isGreaterThan(7);
     }
@@ -442,8 +442,8 @@ class TariffsTenantIsolationTests extends IntegrationTest {
 
         assertThat(ownerJdbc().queryForObject("select count(*) from charge_type where tenant_id = ? and "
                 + "id = md5(tenant_id::text || ':CHARGE_TYPE:' || code)::uuid", Integer.class, DEMO_TENANT))
-                .isEqualTo(4);
-        assertThat(count(DEMO_TENANT, "charge_type", "")).isEqualTo(4);
+                .isEqualTo(5);
+        assertThat(count(DEMO_TENANT, "charge_type", "")).isEqualTo(5);
     }
 
     // ---- helpers

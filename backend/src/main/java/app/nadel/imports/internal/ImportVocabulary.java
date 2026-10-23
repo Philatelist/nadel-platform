@@ -24,7 +24,8 @@ import org.springframework.core.io.ClassPathResource;
  * accepted without being listed.
  * <p>
  * Lines are {@code <group>.<key> = label | alias | ...}. Groups: {@code plots}, {@code members}, {@code ownership},
- * {@code meters} (columns), {@code sheet} (sheet names) and {@code value} (the key is {@code <kind>.<CANONICAL>}).
+ * {@code meters}, {@code opening} (columns), {@code sheet} (sheet names) and {@code value} (the key is
+ * {@code <kind>.<CANONICAL>}).
  */
 final class ImportVocabulary {
 
@@ -32,6 +33,7 @@ final class ImportVocabulary {
     static final String COLUMNS_MEMBERS = "members";
     static final String COLUMNS_OWNERSHIP = "ownership";
     static final String COLUMNS_METERS = "meters";
+    static final String COLUMNS_OPENING = "opening";
     static final String KIND = "kind";
     static final String CHANNEL = "channel";
     static final String YES_NO = "yesno";

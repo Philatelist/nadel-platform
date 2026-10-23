@@ -34,9 +34,10 @@ final class PlotsSheet {
 
     /**
      * A plot row ready for the plots module, with the column its area came from, so a problem with the area is
-     * shown on the column the person filled.
+     * shown on the column the person filled, and the water cell (feature 011) as typed, null when empty: a yes or no
+     * word, or the name of a water source. The planner decides what it means.
      */
-    record ParsedRow(PlotImportRow row, PlotColumn areaColumn) {
+    record ParsedRow(PlotImportRow row, PlotColumn areaColumn, @Nullable String water) {
     }
 
     /** The rows of the sheet and the problems found while reading them. */
@@ -111,7 +112,7 @@ final class PlotsSheet {
                 text(raw, header, PlotColumn.CADASTRAL_NUMBER),
                 building.value(),
                 text(raw, header, PlotColumn.NOTES));
-        return new ParsedRow(row, areaColumn);
+        return new ParsedRow(row, areaColumn, text(raw, header, PlotColumn.WATER));
     }
 
     private static @Nullable String text(RawRow raw, HeaderMatcher.Match<PlotColumn> header, PlotColumn column) {

@@ -27,14 +27,14 @@ import tools.jackson.databind.JsonNode;
 /**
  * Readings through the API (spec 010, sections 2.4 and 2.5): the default date, a date changed for one row, the future,
  * the working period, a lower reading, a reading between two others, the same date twice, the unusual-consumption
- * warning, correction, deletion, readings a charge uses (a test {@link ReadingUsage} next to the default one), a batch
+ * warning, correction, deletion, readings a charge uses (a test {@link ReadingUsage} next to the ledger's), a batch
  * with a result per row, and who may call which endpoint.
  */
 class ReadingsTests extends MeterTestSupport {
 
     private static final String STREET = "MT вул. Вишнева";
 
-    /** A usage that a test switches on for chosen meters, in addition to the default that says "never used". */
+    /** A usage that a test switches on for chosen meters, in addition to the ledger's. */
     @TestConfiguration(proxyBeanMethods = false)
     static class UsedMeters {
 
@@ -161,8 +161,8 @@ class ReadingsTests extends MeterTestSupport {
         assertThat(reading.get("interval").get("consumption").asString()).isEqualTo("30.000");
         assertThat(intervals(history(meter))).containsExactly("2026-09-20..2026-10-05=35.000",
                 "2026-09-03..2026-09-20=30.000", "2026-06-01..2026-09-03=140.000");
-        // the charge question covers the readings around the new one
-        assertThat(usage.asked).contains(meter + " 2026-09-03 2026-10-05");
+        // the charge question covers the days between the readings around the new one
+        assertThat(usage.asked).contains(meter + " 2026-09-04 2026-10-04");
         // too high for the place between them
         assertThat(enter(meter, "2026-09-25", "8206").get("error").get("params").get("nextTakenOn").asString())
                 .isEqualTo("2026-10-05");
@@ -290,7 +290,7 @@ class ReadingsTests extends MeterTestSupport {
         assertThat(intervals(history(meter))).containsExactly("2026-09-03..2026-10-05=65.000",
                 "2026-06-01..2026-09-03=140.000");
         assertThat(readingCount(meter)).isEqualTo(2);
-        assertThat(usage.asked).contains(meter + " 2026-09-03 2026-10-05");
+        assertThat(usage.asked).contains(meter + " 2026-09-04 2026-10-04");
         send(chairman(), delete(READINGS + "/" + middle), null).andExpect(status().isNotFound());
     }
 
@@ -348,7 +348,8 @@ class ReadingsTests extends MeterTestSupport {
                 .andExpect(jsonPath("$.code").value("READING_IN_USE"));
         assertThat(readingStatus(pending)).isEqualTo("PENDING");
         synchronized (usage.asked) {
-            assertThat(usage.asked).contains(meter + " 2026-09-01 2026-09-15");
+            // no point after the pending reading: from the day after the previous point to its own date
+            assertThat(usage.asked).contains(meter + " 2026-09-02 2026-09-15");
         }
 
         usage.used.clear();

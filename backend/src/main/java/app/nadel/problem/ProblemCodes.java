@@ -89,6 +89,47 @@ public final class ProblemCodes {
      * is not pending, so it can be neither approved nor rejected.
      */
     public static final String READING_STATUS_INVALID = "READING_STATUS_INVALID";
+    /** 409: a plot that has charges (any kind, reversed or not) is never deleted; the ledger keeps them. */
+    public static final String PLOT_HAS_CHARGES = "PLOT_HAS_CHARGES";
+    /** 409: the charge was reversed before; a charge is reversed at most once. */
+    public static final String CHARGE_ALREADY_REVERSED = "CHARGE_ALREADY_REVERSED";
+    /** 409: the charge is a reversal, which cannot itself be reversed. */
+    public static final String REVERSAL_NOT_REVERSIBLE = "REVERSAL_NOT_REVERSIBLE";
+    /** 409: the charge is booked in a closed billing month; its correction is an adjustment (feature 012). */
+    public static final String CHARGE_IN_CLOSED_MONTH = "CHARGE_IN_CLOSED_MONTH";
+    /** 409: a billing month is closed while an earlier month is still open; months close in order. */
+    public static final String PERIOD_CLOSE_ORDER = "PERIOD_CLOSE_ORDER";
+    /** 409: the billing month is closed; a closed month never changes and is never closed again. */
+    public static final String PERIOD_CLOSED = "PERIOD_CLOSED";
+    /** 409: a month after the current one (Europe/Kyiv) cannot be closed or charged. */
+    public static final String PERIOD_IN_FUTURE = "PERIOD_IN_FUTURE";
+
+    /** 409: a run is booked with the digest of a preview that no longer matches what it would create. */
+    public static final String PREVIEW_OUTDATED = "PREVIEW_OUTDATED";
+    /** 409: a losses run is asked while the cooperative charges losses as a fixed percentage. */
+    public static final String LOSSES_MODE_NOT_PROPORTIONAL = "LOSSES_MODE_NOT_PROPORTIONAL";
+    /** 409: a booked losses run charged a node of the new run for a day of its range. */
+    public static final String LOSSES_RANGE_OVERLAP = "LOSSES_RANGE_OVERLAP";
+    /**
+     * 409: a common consumer run is booked while the {@code COMMON_CONSUMERS} charge type has no per-kWh tariff for the
+     * range (or is inactive or archived): nothing can be priced.
+     */
+    public static final String NO_COMMON_CONSUMERS_TARIFF = "NO_COMMON_CONSUMERS_TARIFF";
+    /** 409: a booked common consumer run charged a consumer of the new run for a day of its range. */
+    public static final String COMMON_CONSUMER_RANGE_OVERLAP = "COMMON_CONSUMER_RANGE_OVERLAP";
+    /** 409: the run was reversed before; a run is reversed once. */
+    public static final String RUN_ALREADY_REVERSED = "RUN_ALREADY_REVERSED";
+    /** 409: the charges of the run are booked in a closed billing month; their correction is an adjustment. */
+    public static final String RUN_IN_CLOSED_MONTH = "RUN_IN_CLOSED_MONTH";
+
+    /** 409: the plot is connected to water on one of the days of the new connection (or has a lasting one). */
+    public static final String WATER_ALREADY_CONNECTED = "WATER_ALREADY_CONNECTED";
+    /** 409: the connection has ended already, or the plot has no lasting connection to that water source. */
+    public static final String WATER_NOT_CONNECTED = "WATER_NOT_CONNECTED";
+    /** 409: the water source is not an active common consumer meter of the cooperative. */
+    public static final String WATER_SOURCE_INVALID = "WATER_SOURCE_INVALID";
+    /** 409: plots are or were connected to the meter as their water source, so it is not deleted. */
+    public static final String WATER_SOURCE_IN_USE = "WATER_SOURCE_IN_USE";
 
     /** Codes of single fields in {@code errors[]}. */
     public static final String REQUIRED = "REQUIRED";
@@ -105,6 +146,10 @@ public final class ProblemCodes {
     public static final String FREQUENCY_BASIS_MISMATCH = "FREQUENCY_BASIS_MISMATCH";
     /** Common land named in the scope of a tariff (selected plots or exclusions); it has no tariffs. */
     public static final String TARIFF_COMMON_LAND = "TARIFF_COMMON_LAND";
+    /** An amount that must be greater than zero (an opening balance) is zero or negative. */
+    public static final String AMOUNT_NOT_POSITIVE = "AMOUNT_NOT_POSITIVE";
+    /** A date that must not be after today in the cooperative's time zone (an opening balance) is in the future. */
+    public static final String DATE_IN_FUTURE = "DATE_IN_FUTURE";
     /** The same plot listed twice in one list of a request. */
     public static final String DUPLICATE = "DUPLICATE";
     public static final String MEMBER_NOT_FOUND = "MEMBER_NOT_FOUND";
@@ -143,6 +188,15 @@ public final class ProblemCodes {
     public static final String OWNERSHIP_CONFLICT = "OWNERSHIP_CONFLICT";
     /** The rows of one plot do not all have the same owner-since date. */
     public static final String OWNERSHIP_DATE_MISMATCH = "OWNERSHIP_DATE_MISMATCH";
+    /** An Opening balances row names a charge type that no charge type of the cooperative is called. */
+    public static final String UNKNOWN_CHARGE_TYPE = "UNKNOWN_CHARGE_TYPE";
+    /**
+     * An Opening balances row: the plot already has an opening balance of the charge type and date with another
+     * amount that is not reversed.
+     */
+    public static final String OPENING_BALANCE_EXISTS = "OPENING_BALANCE_EXISTS";
+    /** The water column of a Plots row names a water source that two or more active common consumer meters share. */
+    public static final String WATER_SOURCE_AMBIGUOUS = "WATER_SOURCE_AMBIGUOUS";
 
     private ProblemCodes() {
     }

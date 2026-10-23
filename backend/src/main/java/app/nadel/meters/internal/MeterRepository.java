@@ -55,6 +55,15 @@ interface MeterRepository extends JpaRepository<MeterRecord, UUID> {
     /** Every meter of the resource, active and removed. */
     List<MeterRecord> findByResource(MeterResource resource);
 
+    /**
+     * Every meter of the resource, active and removed, each with a shared row lock ({@code FOR SHARE}) until the end of
+     * the transaction, taken in id order: a run that charges from the values of the whole network holds them, so a
+     * write of a meter or of its readings ({@code FOR UPDATE}) waits for it.
+     */
+    @Lock(LockModeType.PESSIMISTIC_READ)
+    @Query("select m from MeterRecord m where m.resource = :resource order by m.id")
+    List<MeterRecord> findByResourceForShare(@Param("resource") MeterResource resource);
+
     /** The meters that are not removed. */
     List<MeterRecord> findByRemovedOnIsNull();
 

@@ -1,5 +1,7 @@
 package app.nadel.settings.internal;
 
+import app.nadel.settings.CommonConsumerSplit;
+import app.nadel.settings.LossesMode;
 import app.nadel.settings.PlotStatusVisibility;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -7,6 +9,7 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -23,13 +26,32 @@ class SettingsRow {
     @Column(name = "member_plot_status_visibility", nullable = false)
     private PlotStatusVisibility memberPlotStatusVisibility;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "losses_mode", nullable = false)
+    private LossesMode lossesMode;
+
+    @Column(name = "losses_percent", nullable = false)
+    private BigDecimal lossesPercent;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "common_consumer_default_split", nullable = false)
+    private CommonConsumerSplit commonConsumerDefaultSplit;
+
+    @Column(name = "red_amount", nullable = false)
+    private BigDecimal redAmount;
+
+    @Column(name = "red_days", nullable = false)
+    private int redDays;
+
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
     protected SettingsRow() {
     }
 
-    PlotStatusVisibility getMemberPlotStatusVisibility() {
-        return memberPlotStatusVisibility;
+    /** The stored values. */
+    SettingsValues values() {
+        return new SettingsValues(memberPlotStatusVisibility, lossesMode, lossesPercent, commonConsumerDefaultSplit,
+                redAmount, redDays);
     }
 }

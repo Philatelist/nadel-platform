@@ -13,6 +13,7 @@ import { useLocale, useT } from '../../i18n';
 import { kyivToday } from '../../kyivToday';
 import { resourceUnit } from '../../meters';
 import { problemFieldErrors, problemMessage, type FieldErrors } from '../../problem';
+import { invalidateAfterReading } from '../charges/chargeInvalidation';
 import { Modal } from '../Modal';
 import { Button, Notice, TextField } from '../ui';
 import { ReadingDateField } from './ReadingDateField';
@@ -49,6 +50,7 @@ export function CorrectReadingDialog({
           queryClient.invalidateQueries({ queryKey: getListMeterReadingsQueryKey(meter.id) }),
           queryClient.invalidateQueries({ queryKey: getGetMeterQueryKey(meter.id) }),
           queryClient.invalidateQueries({ queryKey: getListMetersQueryKey() }),
+          invalidateAfterReading(queryClient),
         ]);
         onSaved();
       },

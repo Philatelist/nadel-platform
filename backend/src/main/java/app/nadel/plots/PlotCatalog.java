@@ -72,4 +72,10 @@ public interface PlotCatalog {
 
     /** The number of plots a tariff for all plots applies to: active (not archived) and not common land. */
     long countChargeable();
+
+    /**
+     * The plots a tariff for all plots applies to: active (not archived) and not common land, in natural order of the
+     * number (the ledger's month run, the conflict warning of the tariffs page).
+     */
+    List<PlotFacts> findChargeable();
 }

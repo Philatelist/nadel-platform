@@ -10,6 +10,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ChargeType } from './chargeType';
+import type { TariffConflict } from './tariffConflict';
 import type { TariffExclusion } from './tariffExclusion';
 import type { TariffScopeKind } from './tariffScopeKind';
 import type { TariffScopePlot } from './tariffScopePlot';
@@ -31,4 +32,6 @@ export interface Tariff {
   exclusions: TariffExclusion[];
   /** Number of plots the tariff applies to, as in the list (exclusions subtracted, archived plots and common land never counted); when the shown version (the one valid today, else the earliest future one) is meter-based, only the plots with an active meter of its resource */
   plotCount?: number;
+  /** As in the list */
+  conflicts: TariffConflict[];
 }

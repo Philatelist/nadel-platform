@@ -391,7 +391,7 @@ test.describe('tariffs: acceptance', () => {
     }
   });
 
-  test('§2.5 #1-#5 in Ukrainian: the treasurer reads only, a member has no menu item and no page, "Що мені нараховуватимуть" shows own plots', async ({
+  test('§2.5 #1-#5 in Ukrainian: the treasurer reads only, a member has no menu item and no page, "Очікувані нарахування" shows own plots', async ({
     page,
     browser,
   }) => {
@@ -435,7 +435,7 @@ test.describe('tariffs: acceptance', () => {
         await member.goto('/tariffs');
         await expect(member.getByText(/немає доступу до цієї сторінки/i)).toBeVisible();
         await member.goto('/account');
-        const mine = member.getByRole('region', { name: 'Що мені нараховуватимуть' });
+        const mine = member.getByRole('region', { name: 'Очікувані нарахування' });
         await expect(mine).toBeVisible();
         await expect(mine.getByRole('heading', { level: 2, name: /^Ділянка \S+$/ }).first()).toBeVisible();
         await expect(mine).not.toContainText(foreign.number);

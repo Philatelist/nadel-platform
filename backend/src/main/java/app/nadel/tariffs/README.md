@@ -1,14 +1,14 @@
 # tariffs
 
 What the cooperative charges for and how much (feature 009): **charge types**, **tariffs with versions**, **scopes** and
-the **expected amount** of a plot for a month. Nothing is charged here; charges arrive with feature 011, which reuses
-`ChargeCalculator`.
+the **expected amount** of a plot for a month. Nothing is charged here; the ledger (feature 011) charges with the same
+`ChargeCalculator` (`breakdown`), reads the tariffs through `TariffBook` and picks the tariff with `TariffResolver`.
 
 Tables (all under RLS `tenant_isolation`, an index on `tenant_id`, composite foreign keys on `(tenant_id, id)`; V10):
 
 | Table | What it holds |
 |---|---|
-| `charge_type` | What is charged for: the four seeded types (`code` MEMBERSHIP, ELECTRICITY, LAND_TAX, WATER) and custom ones |
+| `charge_type` | What is charged for: the five seeded types (`code` MEMBERSHIP, ELECTRICITY, LAND_TAX, WATER, COMMON_CONSUMERS since V13) and custom ones |
 | `tariff` | A tariff of one charge type, with its `scope_kind` (`ALL_PLOTS` or `SELECTED_PLOTS`; new tariffs are `ALL_PLOTS`) |
 | `tariff_version` | Rates by date (`valid_from`, basis, frequency, `rate numeric(14,4)`, due date, note); a new rate is a new version, a mistake is corrected or deleted until a charge uses the version |
 | `tariff_scope_plot` | Selected plots (`SELECTED`), or exclusions with a reason (`EXCLUDED`); written by `PUT /tariffs/{id}/scope`; cascades when a plot is deleted |
@@ -21,8 +21,11 @@ cooperative.
 ## Public API and permissions
 
 The module root exports `ChargeCalculator` (pure, no Spring, no database), `VersionTerms` (with `InvalidVersionTermsException`),
-`Basis`, `Frequency`, `ExpectedCharge` (`Amount` or `ByReadings` with the meter basis) and the port `TariffVersionUsage`; everything else is in `internal`. Feature 011 (the
-ledger) calls the same `ChargeCalculator`, so the preview and the real charge never diverge.
+`Basis`, `Frequency`, `ExpectedCharge` (`Amount` or `ByReadings` with the meter basis), `DaySet` (pure: sorted disjoint
+closed date ranges, `ALL`, `NONE`, `of`, `count`, `intersect`, `contains`, `first`, `last`), `TariffResolver` (pure),
+the port `TariffVersionUsage`, the read API `ChargeTypeCatalog` (`find`, `findAndLockShared`, `all`: `ChargeTypeFacts` with code, stored name, `nameCustomized`, active, archived, position and the audit token `auditName()`; `findByNames`: the types a typed name stands for, by the stored name and, while a seeded type is not renamed, its default names of `DefaultChargeTypeNames` in both languages, ignoring case and extra spaces, for the ledger's opening balances import; implemented by `JpaChargeTypeCatalog`) and the read API `TariffBook`
+(implemented by `JpaTariffBook`); everything else is in `internal`. Feature 011 (the ledger) calls the same
+`ChargeCalculator`, so the preview and the real charge never diverge.
 
 Permissions (ADR 0009, defined in `identity.Permission`, seeded for the Chairman by `seed_base_roles`; the Treasurer gets
 only `TARIFFS_VIEW`): `TARIFFS_VIEW` reads charge types, tariffs and the expected amount of any plot. `TARIFFS_MANAGE`
@@ -31,8 +34,9 @@ currently own. Every change is written to the audit log (see Audit).
 
 ## Charge types
 
-- `seed_charge_types(tenant)` writes the four types with deterministic ids `md5(tenant || ':CHARGE_TYPE:' || code)::uuid`,
-  positions 1 to 4, English names, Water inactive, `name_customized = false`, `ON CONFLICT DO NOTHING` (never
+- `seed_charge_types(tenant)` writes the five types with deterministic ids `md5(tenant || ':CHARGE_TYPE:' || code)::uuid`,
+  positions 1 to 5, English names, Water inactive (`COMMON_CONSUMERS`, "Common consumers", added by V13 for new and
+  existing cooperatives), `name_customized = false`, `ON CONFLICT DO NOTHING` (never
   overwrites what a chairman changed). `seed_base_roles(tenant)` calls it, so a new cooperative gets the types and the
   roles from one call; V10 seeds every existing cooperative.
 - The stored name of a seeded type is the English default. While `nameCustomized` is false clients show their own
@@ -149,17 +153,36 @@ be corrected or deleted until a charge uses it; after that a correction goes thr
 
 `TariffVersionUsage.isUsed(UUID tenantId, UUID versionId)` is a public interface in the module root. The tariffs module
 asks **every** bean of that type (`List<TariffVersionUsage>`) and counts a version as used when any answers `true`.
-`NoChargesYetUsage` is the bundled default and always answers `false`, because no charge exists in feature 009.
 
-How feature 011 plugs in without a module cycle: the ledger module depends on `tariffs` (it already must, for
-`ChargeCalculator`), so it implements `TariffVersionUsage` in its own `internal` package as a Spring bean, answering from
-its `charge` table (for example `exists(select 1 from charge where tariff_version_id = ?)`). The tariffs module never
-imports the ledger; Spring finds the bean by type, so nothing in `tariffs` changes and the default may stay (it answers
-`false`) or be deleted. The method runs inside the caller's tenant-aware transaction with the tariff row locked
-`FOR UPDATE`, so the implementation queries its own tables under RLS without a transaction of its own. To make the check
-race-free, the code that creates a charge from a version must lock the same tariff row `FOR SHARE` (or otherwise wait for
-a correction) in the transaction that writes the charge. The ledger's feature also adds the `TARIFF_VERSION_IN_USE`
-tests against its own implementation; here a test bean next to the default stands in (`TariffVersionCorrectionTests`).
+The ledger (feature 011) implements it without a module cycle: it depends on `tariffs`, and its
+`ledger.internal.LedgerTariffVersionUsage` answers from its own tables (a charge that is not reversed has a
+`charge_part` of the version). The 009 stub `NoChargesYetUsage` is gone. The method runs inside the caller's
+tenant-aware transaction with the tariff row locked `FOR UPDATE`; the ledger writes charges with the tariffs locked
+`FOR SHARE` (`TariffBook.lockShared`), so a correction waits for a run and then sees its charges. The
+`TARIFF_VERSION_IN_USE` tests against the real implementation are `ledger.TariffVersionUsageTests`; here a test bean
+stands in (`TariffVersionCorrectionTests`).
+
+## Charging (feature 011): `TariffBook` and `TariffResolver`
+
+- **`TariffBook`** (`JpaTariffBook`): `snapshot()` reads every charge type (`ChargeTypeEntry`: code, active, archived)
+  and every tariff (`TariffEntry`: charge type, name, `Scope` `ALL_PLOTS`/`SELECTED_PLOTS`, selected plots, excluded
+  plots, `VersionRef(id, VersionTerms)` oldest first) in four queries; `tariffIds()`; `lockShared(ids)` locks the
+  tariffs `FOR SHARE` in id order until the end of the caller's transaction.
+- **`TariffResolver.resolve(snapshot, chargeTypeId, PlotFacts(plotId, commonLand, archived, areaM2), from, to)`**
+  (pure): `None(TYPE_INACTIVE)` for an inactive, archived or unknown type; `None(NO_TARIFF)` when no tariff of the type
+  has a version valid in the range (versions never end, so: its first version starts on or before `to`);
+  `None(OUTSIDE_SCOPE)` for an archived plot or common land; then the tariffs whose scope covers the plot (selected,
+  or all plots minus exclusions): exactly one is `Single`, two or more are `Conflict` (ordered by name, then id), none
+  is `None(EXCLUDED)` when the plot is excluded from one, else `None(OUTSIDE_SCOPE)`. Tests: `TariffResolverTests`.
+- **The conflict warning** (`TariffConflicts`): `GET /tariffs` and `GET /tariffs/{id}` (and the answers of create and
+  scope changes) carry `conflicts[{otherTariffId, otherTariffName, plotCount, plots[{plotId, number}] (the first 10
+  in natural order)}]`, worked out with the same resolver for every active plot that is not common land from today
+  on (`PlotCatalog.findChargeable`), ordered by the other tariff's name; empty when there is none or the type is
+  inactive. A warning only: both tariffs stay valid; the ledger charges neither on those plots and queues the case.
+  The warning shows every overlap of scopes, whatever the amounts; the ledger's month run counts a tariff in a conflict
+  only when it would charge the plot more than `0.00` in the month (money rules §4.1, `ledger` README), so two
+  one-time fees of one type due in different months are warned about here but never queued.
+  Tests: `ledger.TariffConflictWarningTests`.
 
 ## Scopes
 
@@ -185,6 +208,15 @@ tests against its own implementation; here a test bean next to the default stand
 *would* be charged in the month. The arithmetic lives once in the public, pure `ChargeCalculator` (rule in
 `docs/domain/money-rules.md` section 4.1); the query only picks the tariffs and the scope.
 
+- **Breakdown (feature 011).** `ChargeCalculator.breakdown(versions, areaM2, YearMonth, DaySet applicable)` returns
+  `Optional<Breakdown(Money amount, List<Part(terms, days, units, from, to)>)>`: each recurring version counts for
+  the days of the month on which it is valid **and** that are applicable (the water connection days; `DaySet.ALL`
+  otherwise), over the days in the month; a one-time fee counts only when its version is valid on the due date and the
+  due date is applicable (its part: 1 day, the due date, 1 unit). One exact sum, rounded once. Empty when no version is
+  valid on an applicable day of the month, or when a per-kWh or per-m3 version is (charged by readings). A one-time fee
+  due in another month breaks down to `0.00` without parts. `calculate` is `breakdown(..., DaySet.ALL)` mapped to
+  `ExpectedCharge.Amount`, so the 009 results are unchanged. Tests: `ChargeCalculatorTests` (also 25.00 and 12.90 for
+  water 300 per plot per year with the plot connected all month or from the 16th), `DaySetTests`.
 - **Calculator.** `ChargeCalculator.calculate(List<VersionTerms>, areaM2, YearMonth)` returns an
   `Optional<ExpectedCharge>`: empty when no version overlaps the month, `ExpectedCharge.ByReadings(basis)` when a
   `PER_KWH` or `PER_M3` version overlaps it (the basis of the latest such version names the meter's resource), else
@@ -212,7 +244,10 @@ tests against its own implementation; here a test bean next to the default stand
   `OwnedPlotsSource`, meter presence through `MeterCatalog`.
 - **Demo data.** `R__demo_data.sql` adds membership (50.0000 per sotka yearly, plot 28 excluded), land tax (35.0000
   per sotka yearly), electricity (4.3200 per kWh monthly) and a custom "Road repair" type with a fixed one-time fee of
-  1200.0000 due 2026-12-01, all from 2026-01-01 for the demo cooperative.
+  1200.0000 due 2026-12-01, all from 2026-01-01 for the demo cooperative (block `demo tariffs`). The block `demo ledger`
+  (feature 011, dev profile only) adds the "Спільні споживачі за лічильником" tariff of the common consumers type (4.3200
+  per kWh from 2026-01-01) and books the month runs, so in the dev demo the membership, land tax and electricity
+  versions are in use (`TARIFF_VERSION_IN_USE` on a correction).
 
 ## Audit
 
@@ -235,7 +270,7 @@ removed exclusion. The reasons are in the audit entries only, never in the appli
 
 Charge type names in the audit log are tokens, never English display text (the pattern of the role names): a seeded type
 that was never renamed (`nameCustomized` false) is written as `base:<CODE>`, with `<CODE>` one of `MEMBERSHIP`,
-`ELECTRICITY`, `LAND_TAX`, `WATER`; a renamed seeded type and every custom type is written under its stored name
+`ELECTRICITY`, `LAND_TAX`, `WATER`, `COMMON_CONSUMERS`; a renamed seeded type and every custom type is written under its stored name
 (`ChargeTypeSnapshot.auditName`). This applies to the `CHARGE_TYPE` label and `name` old/new values and to the
 `chargeType` value of `TARIFF_CREATED`. The client shows the catalog name for `base:<CODE>` and the value as is otherwise.
 
@@ -246,8 +281,8 @@ old and new number), `CHARGE_TYPE_ARCHIVED` (`archived` false to true). Publishe
 
 ## Default names: an exception to the English-only rule
 
-The Ukrainian default names of the four seeded types ("Членський внесок", "Електроенергія", "Земельний податок",
-"Вода") are needed on the server for the name check above. They live in one UTF-8 resource file,
+The Ukrainian default names of the five seeded types ("Членський внесок", "Електроенергія", "Земельний податок",
+"Вода", "Спільні споживачі") are needed on the server for the name check above. They live in one UTF-8 resource file,
 `src/main/resources/tariffs/charge-type-default-names.properties` (the English and Ukrainian default names side by
 side, keys like `MEMBERSHIP.en` and `MEMBERSHIP.uk`), read by `DefaultChargeTypeNames`. The file mirrors `chargeTypes.defaultNames` in the web catalog
 (`packages/shared/src/i18n/uk.ts`), which is the source of the texts users see; keep the two in step. This is a
@@ -256,7 +291,8 @@ narrow exception to "everything in the repository is English", of the same kind 
 ## Dependencies
 
 `identity` (`CurrentUser`, `AccessProfile`, `OwnedPlotsSource`), `audit` (events), `problem`, `money` (`Rate`, `Money`) and
-`plots` (the public `PlotCatalog` only: `find`, `findAll`, `inNaturalOrder`, `countChargeable`) and `meters` (the public
+`plots` (the public `PlotCatalog` only: `find`, `findAll`, `inNaturalOrder`, `countChargeable`, `findChargeable`) and `meters` (the public
 `MeterCatalog` only: `plotIdsWithActiveMeter`, `hasMeterBetween`; `meters` never depends on `tariffs`). The module root exports
-`Basis`, `Frequency`, `VersionTerms`, `ExpectedCharge`, `ChargeCalculator` and `TariffVersionUsage`. Nothing depends on this
-module yet; the ledger (feature 011) will, and implements `TariffVersionUsage`.
+`Basis`, `Frequency`, `VersionTerms`, `ExpectedCharge`, `ChargeCalculator`, `DaySet`, `TariffBook`, `TariffResolver`,
+`TariffVersionUsage` and `ChargeTypeCatalog`. The ledger (feature 011) depends on this module and implements
+`TariffVersionUsage`.

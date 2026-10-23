@@ -1,5 +1,6 @@
 package app.nadel.imports.internal;
 
+import app.nadel.ledger.OpeningBalanceImport;
 import app.nadel.members.MemberImportAction;
 import app.nadel.members.MemberImportItem;
 import app.nadel.members.MemberImportPlan;
@@ -8,6 +9,7 @@ import app.nadel.meters.MeterImportAction;
 import app.nadel.meters.MeterImportItem;
 import app.nadel.meters.MeterImportPlan;
 import app.nadel.meters.MeterImportRow;
+import app.nadel.meters.WaterConnectionImport;
 import app.nadel.plots.OwnershipImportItem;
 import app.nadel.plots.OwnershipImportPlan;
 import app.nadel.plots.PlotImportAction;
@@ -19,10 +21,12 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -32,9 +36,10 @@ import org.jspecify.annotations.Nullable;
  * plan is computed again from the stored rows and its digest must equal the one stored with the preview; any
  * difference (a plot added meanwhile, an owner changed) means the preview is stale.
  * <p>
- * The text has one line per plot row, member row, ownership row and meter row: sheet, natural key (lower case), action,
- * the matched record's id or {@code new}, the names of the changed fields and the values the file gives. A plan without
- * meter rows has no meter line, so a preview stored before the Meters sheet existed keeps its digest. Ids of records the
+ * The text has one line per plot row, member row, ownership row, meter row, water cell that asks for a connection and
+ * opening balance row: sheet, natural key (lower case), action, the matched record's id or {@code new}, the names of the
+ * changed fields and the values the file gives. A plan without meter rows has no meter line, and one without water
+ * cells or opening balances no such line, so a preview stored before those existed keeps its digest. Ids of records the
  * import creates are left out (they depend on the import's own id, so two previews of one file would differ); an
  * existing record is identified by its id. Every value is written with its length ({@code 3:abc;}), so no value can
  * be mistaken for a separator. The lines are sorted, so the digest does not depend on the order of the rows: the plan
@@ -50,7 +55,9 @@ final class PlanDigest {
 
     static String of(List<PlotImportRow> plotRows, PlotImportPlan plots, List<MemberImportRow> memberRows,
             MemberImportPlan members, List<OwnershipSheet.ParsedRow> ownershipRows, OwnershipImportPlan ownership,
-            List<MeterImportRow> meterRows, MeterImportPlan meters) {
+            List<MeterImportRow> meterRows, MeterImportPlan meters, List<WaterConnectionImport.Row> waterRows,
+            WaterConnectionImport.Plan water, List<OpeningBalanceImport.Row> openingRows,
+            OpeningBalanceImport.Plan openings) {
         Set<UUID> newPlots = new HashSet<>();
         List<String> lines = new ArrayList<>();
         for (int index = 0; index < plotRows.size(); index++) {
@@ -92,6 +99,21 @@ final class PlanDigest {
                     row.resource() == null ? null : row.resource().strip().toUpperCase(Locale.ROOT), item.action(),
                     ref(item.meterId(), newMeters), ref(item.plotId(), newPlots), row.serial(),
                     row.installedOn(), plain(row.initialReading())));
+        }
+        Map<Integer, String> plotNumbers = new HashMap<>();
+        plotRows.forEach(row -> plotNumbers.putIfAbsent(row.row(), lower(row.number())));
+        for (int index = 0; index < waterRows.size(); index++) {
+            WaterConnectionImport.Row row = waterRows.get(index);
+            WaterConnectionImport.Item item = water.items().get(index);
+            // the source is the meter the plan found (or the supply), so a renamed or new well changes the digest
+            lines.add(line("water", plotNumbers.get(row.row()), item.action(), ref(item.plotId(), newPlots),
+                    item.sourceMeterId()));
+        }
+        for (int index = 0; index < openingRows.size(); index++) {
+            OpeningBalanceImport.Row row = openingRows.get(index);
+            OpeningBalanceImport.Item item = openings.items().get(index);
+            lines.add(line("opening", lower(row.plotNumber()), item.action(), ref(item.plotId(), newPlots),
+                    item.chargeTypeId(), plain(row.amount()), row.date(), row.reason()));
         }
         lines.sort(null);
         return sha256(String.join("\n", lines));

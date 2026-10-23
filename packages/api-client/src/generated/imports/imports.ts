@@ -311,21 +311,23 @@ export const getUploadImportUrl = () => {
 
 /**
  * Parses and checks an Excel workbook (`.xlsx`, at most 10 MB, at most 2,000 plots, 3,000 members, 6,000 ownership
- * rows and 2,000 meter rows) and
+ * rows, 2,000 meter rows and 6,000 opening balance rows) and
  * returns a preview. Nothing is saved except the record of the upload itself. The preview can be committed for
  * 30 minutes (`expiresAt`) when `committable` is true, that is when there are no problems and something would be
  * created or updated. Requires the `IMPORT_RUN` permission; the platform operator has no cooperative data: 403.
  *
- * All four sheets are checked. The `Members`, `Ownership` and `Meters` sheets may be missing (a file may hold
- * plots only, or plots and members); the `Plots` sheet is required.
+ * All five sheets are checked. The `Members`, `Ownership`, `Meters` and `Opening balances` sheets may be missing
+ * (a file may hold plots only, or plots and members); the `Plots` sheet is required.
  * Rows whose first cell starts with `#` and empty rows are skipped. `problems` lists at most 1,000 problems
  * (`problemCount` is the total) in sheet and row order. `row` is the Excel row number (1 is the header row);
  * 0 means the problem is about the file or the whole sheet. `column` is the canonical column key
- * (Plots: `number`, `street`, `kind`, `area_m2`, `area_sotky`, `cadastral_number`, `has_building`, `notes`;
+ * (Plots: `number`, `street`, `kind`, `area_m2`, `area_sotky`, `cadastral_number`, `has_building`, `notes`,
+ * `water`;
  * Members: `external_id`, `last_name`, `first_name`, `middle_name`, `phones`, `email`, `postal_address`,
  * `delivery_channel`, `telegram_username`, `viber_phone`;
  * Ownership: `plot_number`, `member_external_id`, `share`, `valid_from`;
- * Meters: `plot_number`, `resource`, `serial`, `installed_on`, `initial_reading`).
+ * Meters: `plot_number`, `resource`, `serial`, `installed_on`, `initial_reading`;
+ * Opening balances (sheet `OPENING_BALANCES`): `plot_number`, `charge_type`, `amount`, `date`, `reason`).
  * `code` is one of:
  *
  * - file and sheet level: `SHEET_MISSING` (no sheet of that name), `HEADER_MISSING` (a required column is not in
@@ -393,6 +395,44 @@ export const getUploadImportUrl = () => {
  * - `DUPLICATE_IN_FILE` (`resource`: an earlier row names the same plot and resource);
  * - `METER_ACTIVE_EXISTS` (`serial`, `params.plot`: the plot already has another active meter of that resource;
  *   the import never replaces a meter, replace it in the register).
+ *
+ * The optional `water` column of the `Plots` sheet (Ukrainian header `Вода`) connects plots to water from the
+ * day of the commit (Europe/Kyiv): `yes` (`так`, `true`) connects the plot to the cooperative's water supply; the
+ * name of an active common consumer meter (a well, ignoring case and extra spaces) connects it to that source;
+ * `no` (`ні`, `false`) and an empty cell leave the plot as it is: the import never disconnects a plot (that is
+ * done on the plot card or the water source). A plot that already has a lasting connection is unchanged for
+ * `yes` and for the name of its current source (`waterConnections.unchanged`); a new connection counts as
+ * `waterConnections.created`; connections are never updated. Water codes (`water`):
+ *
+ * - `WATER_SOURCE_INVALID`: no active common consumer meter has this name;
+ * - `WATER_SOURCE_AMBIGUOUS`: two or more active common consumer meters have this name;
+ * - `WATER_ALREADY_CONNECTED`: the plot has a lasting connection to another source, or a connection that ends
+ *   today or later;
+ * - `PLOT_COMMON_LAND`: common land is not connected to water.
+ * A plot whose own row has another problem is not checked for water.
+ *
+ * The `Opening balances` sheet (Ukrainian name `Вхідне сальдо`) books opening debts, one row per plot and charge
+ * type, as when an opening balance is entered on the plot account: `plot_number` (a plot of the `Plots` sheet or
+ * an active plot of the cooperative), `charge_type` (the name of a charge type as the cooperative calls it, or
+ * the default name of a seeded type that was not renamed, in English or Ukrainian; ignoring case and extra
+ * spaces), `amount` (greater than zero, at most two decimals), `date` (an Excel date or `DD.MM.YYYY`, not after
+ * today in Europe/Kyiv; the balance is booked in the month of the date or the earliest open month after it) and
+ * the optional `reason` (at most 500 characters; without one the import is the reference). The first four
+ * columns are required. A row whose plot already has an opening balance of the same charge type, date and amount
+ * that is not reversed is unchanged (`openingBalances.unchanged`), so uploading the same file again books
+ * nothing twice; any other row books a new opening balance (`openingBalances.created`). Opening balances are
+ * never updated. Codes:
+ *
+ * - `REQUIRED` (`plot_number`, `charge_type`, `amount`, `date`), `NUMBER_INVALID` (`amount`: not a number),
+ *   `DATE_INVALID` (`date`), `TOO_LONG` (`reason`);
+ * - `AMOUNT_NOT_POSITIVE` (`amount`: zero or negative), `INVALID` (`amount`: more than two decimals or more than
+ *   12 integer digits; `charge_type`: the name stands for two charge types), `DATE_IN_FUTURE` (`date`);
+ * - `UNKNOWN_PLOT`, `PLOT_COMMON_LAND` (`plot_number`), as on the `Meters` sheet;
+ * - `UNKNOWN_CHARGE_TYPE` (`charge_type`: no charge type has this name), `CHARGE_TYPE_ARCHIVED` (`charge_type`:
+ *   the only charge type with this name is archived);
+ * - `DUPLICATE_IN_FILE` (`charge_type`: an earlier row names the same plot, charge type and date);
+ * - `OPENING_BALANCE_EXISTS` (`amount`, `params.amount`: the plot already has an opening balance of this charge
+ *   type and date with another amount that is not reversed; reverse it on the plot account first).
  *
  * A file that cannot be read at all is refused with 400 `FILE_NOT_XLSX` (not an `.xlsx` workbook, corrupt,
  * encrypted, or unpacking to an unreasonable size) or 400 `IMPORT_LIMIT_EXCEEDED` (too many rows); a file over
@@ -476,14 +516,18 @@ export const useUploadImport = <TError = BadRequestResponse | UnauthorizedRespon
  * `IMPORT_RUN` permission; the platform operator has no cooperative data: 403. An unknown id, and the id of
  * another cooperative's import, is 404.
  *
- * Before saving, the plan is computed again from the stored rows under locks on the plots, meters and members
- * it touches and compared with the preview. Any difference (a plot with one of the file's numbers created
- * meanwhile, an owner changed, a member archived, a meter registered or removed) refuses the commit with
- * `IMPORT_STALE`, and so does a unique
+ * Before saving, the plan is computed again from the stored rows under locks on the plots, meters, water
+ * connections, charge types and members it touches and compared with the preview. Any difference (a plot with
+ * one of the file's numbers created meanwhile, an owner changed, a member archived, a meter registered or
+ * removed, a plot connected to water, a charge type renamed or archived, an opening balance entered or
+ * reversed) refuses the commit with `IMPORT_STALE`, and so does a unique
  * or overlap rule broken while saving by a record created meanwhile; nothing is saved and the file has to be
- * uploaded again. Per-record audit entries are written as when the records are entered by hand, plus one
+ * uploaded again. Per-record audit entries are written as when the records are entered by hand
+ * (`WATER_CONNECTED`, `OPENING_BALANCE_ENTERED` among them), plus one
  * `IMPORT_COMMITTED` entry (entity type `IMPORT`, entity id = import id, label = file name, one field per
- * count, for example `plotsCreated`).
+ * count, for example `plotsCreated`, `waterConnectionsCreated`, `openingBalancesCreated`). New water
+ * connections start on the day of the commit; opening balances are booked with the key
+ * `OPENING:{importId}:{row}`.
  *
  * Refusals (nothing is saved):
  *

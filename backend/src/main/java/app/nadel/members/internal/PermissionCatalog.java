@@ -41,6 +41,12 @@ final class PermissionCatalog {
                     "Enter, correct and delete meter readings, for example on a round"};
             case READINGS_APPROVE -> new String[] {"Approve readings",
                     "Approve or reject the readings that members submit"};
+            case CHARGES_VIEW -> new String[] {"View charges",
+                    "See the account of every plot, the billing months, the runs and what could not be charged"};
+            case CHARGES_RUN -> new String[] {"Run charges",
+                    "Run a month, losses and common consumers; retry what could not be charged; enter opening balances"};
+            case CHARGES_REVERSE -> new String[] {"Reverse charges", "Reverse a charge or a whole run with a reason"};
+            case PERIODS_CLOSE -> new String[] {"Close months", "Close a billing month so that it never changes again"};
         };
         return new PermissionInfo(nadel.contract.model.Permission.fromValue(permission.name()), text[0], text[1]);
     }

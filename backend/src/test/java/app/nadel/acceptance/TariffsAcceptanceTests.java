@@ -92,13 +92,18 @@ class TariffsAcceptanceTests extends IntegrationTest {
 
     // ---- §2.1 Charge types
 
-    /** §2.1 #1: the four starting types, Water inactive; their Ukrainian names are taken (shown by the client). */
+    /**
+     * §2.1 #1: the starting types (four in 009, "Common consumers" added by 011), Water inactive; their Ukrainian names
+     * are taken (shown by the client).
+     */
     @Test
-    void section21_theFourStartingTypesAreThereWaterInactive() throws Exception {
+    void section21_theStartingTypesAreThereWaterInactive() throws Exception {
         JsonNode list = body(send(chairman, get(TYPES), null).andExpect(status().isOk()));
-        assertThat(codes(list)).containsExactly("MEMBERSHIP", "ELECTRICITY", "LAND_TAX", "WATER");
-        assertThat(texts(list, "name")).containsExactly("Membership fee", "Electricity", "Land tax", "Water");
+        assertThat(codes(list)).containsExactly("MEMBERSHIP", "ELECTRICITY", "LAND_TAX", "WATER", "COMMON_CONSUMERS");
+        assertThat(texts(list, "name")).containsExactly("Membership fee", "Electricity", "Land tax", "Water",
+                "Common consumers");
         assertThat(list.get(3).get("active").asBoolean()).isFalse();
+        assertThat(list.get(4).get("active").asBoolean()).isTrue();
         assertThat(list.get(0).get("active").asBoolean()).isTrue();
         assertThat(list).allSatisfy(t -> assertThat(t.get("nameCustomized").asBoolean()).isFalse());
         // negative: the Ukrainian default is as taken as the English one
@@ -111,10 +116,10 @@ class TariffsAcceptanceTests extends IntegrationTest {
     void section21_aCustomTypeIsAddedAtTheEndActive() throws Exception {
         UUID road = newType("Ремонт дороги");
         JsonNode list = body(send(chairman, get(TYPES), null).andExpect(status().isOk()));
-        assertThat(list).hasSize(5);
-        assertThat(list.get(4).get("id").asString()).isEqualTo(road.toString());
-        assertThat(list.get(4).get("name").asString()).isEqualTo("Ремонт дороги");
-        assertThat(list.get(4).get("active").asBoolean()).isTrue();
+        assertThat(list).hasSize(6);
+        assertThat(list.get(5).get("id").asString()).isEqualTo(road.toString());
+        assertThat(list.get(5).get("name").asString()).isEqualTo("Ремонт дороги");
+        assertThat(list.get(5).get("active").asBoolean()).isTrue();
     }
 
     /** §2.1 #3: a renamed type shows the new name everywhere (types, tariff card, tariffs list, plot amounts). */
@@ -144,22 +149,23 @@ class TariffsAcceptanceTests extends IntegrationTest {
                 .andExpect(jsonPath("$.errors[0].field").value("name"));
         send(chairman, put(TYPES + "/" + road), Map.of("name", "Electricity", "active", true))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("CHARGE_TYPE_NAME_TAKEN"));
-        assertThat(texts(body(send(chairman, get(TYPES), null)), "name")).hasSize(5).contains("Ремонт дороги");
+        assertThat(texts(body(send(chairman, get(TYPES), null)), "name")).hasSize(6).contains("Ремонт дороги");
     }
 
     /** §2.1 #5: moving "Land tax" up swaps it with the type above it and the order is kept after reloading. */
     @Test
     void section21_movingATypeUpChangesPlacesAndTheOrderIsKept() throws Exception {
         List<String> ids = ids(body(send(chairman, get(TYPES), null)));
-        send(chairman, put(TYPES + "/order"), Map.of("ids", List.of(ids.get(0), ids.get(2), ids.get(1), ids.get(3))))
+        send(chairman, put(TYPES + "/order"),
+                Map.of("ids", List.of(ids.get(0), ids.get(2), ids.get(1), ids.get(3), ids.get(4))))
                 .andExpect(status().isNoContent());
         assertThat(codes(body(send(chairman, get(TYPES), null))))
-                .containsExactly("MEMBERSHIP", "LAND_TAX", "ELECTRICITY", "WATER");
+                .containsExactly("MEMBERSHIP", "LAND_TAX", "ELECTRICITY", "WATER", "COMMON_CONSUMERS");
         // negative: a stale list is refused and changes nothing
         send(chairman, put(TYPES + "/order"), Map.of("ids", List.of(ids.get(0), ids.get(1))))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("CHARGE_TYPE_ORDER_STALE"));
         assertThat(codes(body(send(chairman, get(TYPES), null))))
-                .containsExactly("MEMBERSHIP", "LAND_TAX", "ELECTRICITY", "WATER");
+                .containsExactly("MEMBERSHIP", "LAND_TAX", "ELECTRICITY", "WATER", "COMMON_CONSUMERS");
     }
 
     /** §2.1 #6: an archived type leaves the list, gets no tariffs and its tariffs leave the expected amounts. */
@@ -173,7 +179,7 @@ class TariffsAcceptanceTests extends IntegrationTest {
 
         send(chairman, post(TYPES + "/" + road + "/archive"), null).andExpect(status().isNoContent());
 
-        assertThat(ids(body(send(chairman, get(TYPES), null)))).doesNotContain(road.toString()).hasSize(4);
+        assertThat(ids(body(send(chairman, get(TYPES), null)))).doesNotContain(road.toString()).hasSize(5);
         send(chairman, post(TARIFFS), tariffBody(road, "Again", version("2026-01-01", "PER_PLOT", "MONTHLY", "1")))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("CHARGE_TYPE_ARCHIVED"));
         preview(chairman, plot, "2026-11").andExpect(jsonPath("$.items", hasSize(1)))
@@ -430,7 +436,7 @@ class TariffsAcceptanceTests extends IntegrationTest {
     @Test
     void section25_theTreasurerReadsButCannotChange() throws Exception {
         UUID tariff = newTariff(typeId("MEMBERSHIP"), "Members", version("2026-01-01", "PER_PLOT", "MONTHLY", "10"));
-        send(treasurer, get(TYPES), null).andExpect(jsonPath("$", hasSize(4)));
+        send(treasurer, get(TYPES), null).andExpect(jsonPath("$", hasSize(5)));
         send(treasurer, get(TARIFFS), null).andExpect(jsonPath("$", hasSize(1)));
         send(treasurer, get(TARIFFS + "/" + tariff), null).andExpect(status().isOk());
         send(treasurer, get("/api/v1/me"), null).andExpect(jsonPath("$.permissions[?(@ == 'TARIFFS_VIEW')]").exists())
@@ -447,7 +453,7 @@ class TariffsAcceptanceTests extends IntegrationTest {
         send(chairman, get(TARIFFS), null).andExpect(jsonPath("$", hasSize(1)));
         send(chairman, get(TARIFFS + "/" + tariff), null).andExpect(jsonPath("$.versions", hasSize(1)))
                 .andExpect(jsonPath("$.scopeKind").value("ALL_PLOTS"));
-        send(chairman, get(TYPES), null).andExpect(jsonPath("$", hasSize(4)));
+        send(chairman, get(TYPES), null).andExpect(jsonPath("$", hasSize(5)));
     }
 
     /** §2.5 #3: a member has no view permission (no menu item) and the tariffs API is closed to them. */

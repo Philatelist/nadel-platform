@@ -3,6 +3,8 @@ package app.nadel.meters.internal;
 import app.nadel.meters.MeterCatalog;
 import app.nadel.meters.MeterResource;
 import java.time.LocalDate;
+import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
@@ -13,15 +15,31 @@ import org.springframework.transaction.annotation.Transactional;
 class JpaMeterCatalog implements MeterCatalog {
 
     private final MeterRepository meters;
+    private final MeterChains chains;
 
-    JpaMeterCatalog(MeterRepository meters) {
+    JpaMeterCatalog(MeterRepository meters, MeterChains chains) {
         this.meters = meters;
+        this.chains = chains;
     }
 
     @Override
     @Transactional(readOnly = true)
     public Set<UUID> plotIdsWithActiveMeter(MeterResource resource) {
         return Set.copyOf(meters.plotIdsWithActiveMeterOf(resource));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<MeterFacts> find(UUID meterId) {
+        return meters.findById(meterId).map(meter -> new MeterFacts(meter.getId(), meter.getKind(),
+                meter.getResource(), meter.getName(), meter.isActive()));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<UUID> chainOf(UUID meterId) {
+        return meters.findById(meterId).map(meter -> chains.chainOf(meter).stream().map(MeterRecord::getId).toList())
+                .orElse(List.of());
     }
 
     @Override

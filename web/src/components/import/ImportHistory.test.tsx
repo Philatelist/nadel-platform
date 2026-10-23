@@ -25,6 +25,8 @@ function row(over: Partial<ImportSummary> = {}): ImportSummary {
       members: zero,
       ownerships: zero,
       meters: { created: 3, updated: 0, unchanged: 1 },
+      waterConnections: { created: 6, updated: 0, unchanged: 0 },
+      openingBalances: { created: 2, updated: 0, unchanged: 0 },
     },
     problemCount: 0,
     ...over,
@@ -58,6 +60,8 @@ describe('ImportHistory', () => {
     expect(cells.getByText('Olena Koval')).toBeInTheDocument();
     expect(cells.getByText('Imported')).toBeInTheDocument();
     expect(cells.getByText('Plots: 5 new, 2 updated')).toBeInTheDocument();
+    expect(cells.getByText('Water connections: 6 new, 0 updated')).toBeInTheDocument();
+    expect(cells.getByText('Opening balances: 2 new, 0 updated')).toBeInTheDocument();
     expect(cells.getByText(/12:30/)).toBeInTheDocument();
   });
 

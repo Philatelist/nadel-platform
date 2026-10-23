@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import app.nadel.IntegrationTest;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -103,6 +104,25 @@ class SettingsTenantIsolationTests extends IntegrationTest {
         assertThatThrownBy(() -> as(DEMO_TENANT, () -> tx.execute(s -> jdbc.update(
                 "update cooperative_settings set member_plot_status_visibility = 'EVERYONE'"))))
                 .isInstanceOf(DataAccessException.class);
+    }
+
+    @Test
+    void theLedgerSettingsHaveDefaultsAndTheirChecks() {
+        assertThat(ownerJdbc().queryForMap("select losses_mode, losses_percent, common_consumer_default_split, "
+                + "red_amount, red_days from cooperative_settings where tenant_id = ?", DEMO_TENANT))
+                .containsEntry("losses_mode", "FIXED_PERCENT")
+                .containsEntry("losses_percent", new BigDecimal("0.00"))
+                .containsEntry("common_consumer_default_split", "CONNECTED_PLOTS")
+                .containsEntry("red_amount", new BigDecimal("1000.00"))
+                .containsEntry("red_days", 90);
+        for (String invalid : List.of("losses_mode = 'SOMETIMES'", "losses_percent = 100.01",
+                "losses_percent = -1", "common_consumer_default_split = 'BY_AREA'", "red_amount = -0.01",
+                "red_days = -1")) {
+            assertThatThrownBy(() -> as(DEMO_TENANT, () -> tx.execute(s -> jdbc.update(
+                    "update cooperative_settings set " + invalid))))
+                    .as(invalid)
+                    .isInstanceOf(DataAccessException.class);
+        }
     }
 
     private String otherValue() {

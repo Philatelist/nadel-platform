@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import nadel.contract.model.Tariff;
+import nadel.contract.model.TariffConflict;
 import nadel.contract.model.TariffSummary;
 import nadel.contract.model.TariffVersion;
 import org.jspecify.annotations.Nullable;
@@ -26,21 +27,23 @@ class TariffQueries {
     private final TariffVersionRepository versions;
     private final ChargeTypeRepository chargeTypes;
     private final TariffAssembler assembler;
+    private final TariffConflicts conflicts;
     private final Clock clock;
 
     TariffQueries(TariffRepository tariffs, TariffVersionRepository versions, ChargeTypeRepository chargeTypes,
-            TariffAssembler assembler, Clock clock) {
+            TariffAssembler assembler, TariffConflicts conflicts, Clock clock) {
         this.tariffs = tariffs;
         this.versions = versions;
         this.chargeTypes = chargeTypes;
         this.assembler = assembler;
+        this.conflicts = conflicts;
         this.clock = clock;
     }
 
     /**
      * The tariffs of the non-archived charge types in list order, each with the version valid today (Kyiv) or else the
      * earliest future one, and the number of plots it applies to (for a version charged by meter, the plots with an
-     * active meter of its resource).
+     * active meter of its resource), and its conflicts with other tariffs of the charge type ({@link TariffConflicts}).
      */
     @Transactional(readOnly = true)
     List<TariffSummary> list() {
@@ -63,6 +66,7 @@ class TariffQueries {
             }
         }
         Map<UUID, Long> counts = assembler.plotCounts(meterOf);
+        Map<UUID, List<TariffConflict>> conflictsOf = conflicts.of(ids);
 
         List<TariffSummary> result = new ArrayList<>(all.size());
         for (TariffRecord tariff : meterOf.keySet()) {
@@ -73,7 +77,7 @@ class TariffQueries {
                     : null;
             TariffVersion dto = TariffDtoMapper.version(version, validTo, today);
             var summary = new TariffSummary(tariff.getId(), tariff.getName(), tariff.getChargeTypeId(),
-                    TariffDtoMapper.scopeKind(tariff), dto);
+                    TariffDtoMapper.scopeKind(tariff), dto, conflictsOf.get(tariff.getId()));
             summary.setPlotCount(counts.get(tariff.getId()));
             result.add(summary);
         }

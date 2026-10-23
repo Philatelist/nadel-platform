@@ -43,6 +43,7 @@ const base: Tariff = {
   ],
   chargeType: { id: 'c1', code: 'MEMBERSHIP', name: 'Fee', nameCustomized: false, active: true, position: 1 },
   versions: [],
+  conflicts: [],
 };
 
 function renderEditor() {
