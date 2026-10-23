@@ -15,3 +15,4 @@ export * from './readings/readings';
 export * from './roles/roles';
 export * from './settings/settings';
 export * from './tariffs/tariffs';
+export * from './water/water';

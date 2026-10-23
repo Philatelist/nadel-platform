@@ -14,6 +14,7 @@ import { useState } from 'react';
 import { useLocale, useT } from '../../i18n';
 import { resourceUnit } from '../../meters';
 import { problemMessage } from '../../problem';
+import { invalidateAfterReading } from '../charges/chargeInvalidation';
 import { ConfirmDialog } from '../ConfirmDialog';
 import { QueryBoundary } from '../QueryBoundary';
 import { formatUser } from '../UserContent';
@@ -46,6 +47,7 @@ export function ReadingHistory({ meter }: { meter: Meter }) {
           queryClient.invalidateQueries({ queryKey: getListMeterReadingsQueryKey(meter.id) }),
           queryClient.invalidateQueries({ queryKey: getGetMeterQueryKey(meter.id) }),
           queryClient.invalidateQueries({ queryKey: getListMetersQueryKey() }),
+          invalidateAfterReading(queryClient),
         ]);
       },
       onError: (error: unknown) => {

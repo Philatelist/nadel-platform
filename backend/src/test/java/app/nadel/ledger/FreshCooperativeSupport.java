@@ -104,7 +104,7 @@ abstract class FreshCooperativeSupport extends LedgerTestSupport {
         owner().update("delete from meter_reading where tenant_id = ?", id);
         owner().update("delete from meter where tenant_id = ? and replaces_meter_id is not null", id);
         for (String table : List.of("audit_entry", "plot_status", "tariff_scope_plot", "tariff_version", "tariff",
-                "ownership", "meter_reading", "meter", "plot", "member_role", "role_permission", "role", "member",
+                "ownership", "plot_water_connection", "meter_reading", "meter", "plot", "member_role", "role_permission", "role", "member",
                 "charge_type", "cooperative_settings")) {
             owner().update("delete from " + table + " where tenant_id = ?", id);
         }
@@ -193,6 +193,17 @@ abstract class FreshCooperativeSupport extends LedgerTestSupport {
     void exclude(Tariff tariff, UUID plot) {
         owner().update("insert into tariff_scope_plot (tenant_id, tariff_id, plot_id, kind, reason) "
                 + "values (?, ?, ?, 'EXCLUDED', 'Звільнено')", tenant, tariff.id(), plot);
+    }
+
+    /** Connects the plot to the cooperative's water supply from {@code from} until {@code until} (null: lasting). */
+    void connectToWater(UUID plot, String from, String until) {
+        owner().update("insert into plot_water_connection (tenant_id, plot_id, valid_from, valid_to) "
+                + "values (?, ?, ?::date, ?::date)", tenant, plot, from, until);
+    }
+
+    /** Switches the seeded water charge type on (it starts inactive). */
+    void activateWater() {
+        owner().update("update charge_type set active = true where id = ?", typeId("WATER"));
     }
 
     void unselect(Tariff tariff, UUID plot) {

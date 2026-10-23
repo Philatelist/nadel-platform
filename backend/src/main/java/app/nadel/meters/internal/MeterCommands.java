@@ -57,10 +57,12 @@ class MeterCommands {
     private final MeterParents parents;
     private final MeterAuditPublisher audit;
     private final MeterPointEvents pointEvents;
+    private final WaterConnectionRepository waterConnections;
     private final Clock clock;
 
     MeterCommands(MeterRepository meters, PlotCatalog plots, ReadingFacts readings, MeterQueries queries,
-            MeterParents parents, MeterAuditPublisher audit, MeterPointEvents pointEvents, Clock clock) {
+            MeterParents parents, MeterAuditPublisher audit, MeterPointEvents pointEvents,
+            WaterConnectionRepository waterConnections, Clock clock) {
         this.meters = meters;
         this.plots = plots;
         this.readings = readings;
@@ -68,6 +70,7 @@ class MeterCommands {
         this.parents = parents;
         this.audit = audit;
         this.pointEvents = pointEvents;
+        this.waterConnections = waterConnections;
         this.clock = clock;
     }
 
@@ -260,6 +263,11 @@ class MeterCommands {
         // the foreign key meter_parent_parent_fk (ON DELETE RESTRICT) stays as the backstop of this check
         if (parents.wasEverParent(meter.getId())) {
             throw hasChildren("A meter that has or had meters under it in the tree is not deleted.");
+        }
+        // the foreign key plot_water_connection_source_fk (ON DELETE RESTRICT) stays as the backstop of this check
+        if (waterConnections.existsBySourceMeterId(meter.getId())) {
+            throw new ApiProblemException(HttpStatus.CONFLICT, ProblemCodes.WATER_SOURCE_IN_USE,
+                    "A meter that plots are or were connected to as their water source is not deleted.");
         }
         MeterSnapshot before = MeterSnapshot.of(meter, plotNumber(meter));
         meters.delete(meter);

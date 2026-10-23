@@ -11,6 +11,7 @@ import app.nadel.ledger.internal.TariffMonthPlanning.NewCharge;
 import app.nadel.ledger.internal.TariffMonthPlanning.Nothing;
 import app.nadel.ledger.internal.TariffMonthPlanning.Outcome;
 import app.nadel.ledger.internal.TariffMonthPlanning.PlannedCharge;
+import app.nadel.ledger.internal.WaterDays.ApplicableDays;
 import app.nadel.money.Money;
 import app.nadel.plots.PlotCatalog;
 import app.nadel.plots.PlotCatalog.PlotFacts;
@@ -18,7 +19,6 @@ import app.nadel.problem.ApiProblemException;
 import app.nadel.problem.ProblemCodes;
 import app.nadel.tariffs.ChargeTypeCatalog;
 import app.nadel.tariffs.ChargeTypeCatalog.ChargeTypeFacts;
-import app.nadel.tariffs.DaySet;
 import app.nadel.tariffs.TariffBook;
 import app.nadel.tariffs.TariffBook.ChargeTypeEntry;
 import app.nadel.tariffs.TariffBook.Snapshot;
@@ -78,7 +78,8 @@ import org.springframework.transaction.annotation.Transactional;
  * those charges are booked like the listener's, in the month of their reading or the earliest open month after it,
  * and are not part of the preview or its digest.
  * <p>
- * Seam for a later slice: {@link #applicableDays} is where the water connection days apply (slice 5).
+ * A tariff of the {@code WATER} charge type, of any basis, charges a plot only for the days it is connected to water
+ * ({@link WaterDays}): a plot that is not connected in the month gets nothing and is never queued.
  */
 @Service
 class MonthRun {
@@ -94,12 +95,13 @@ class MonthRun {
     private final NotChargedRetries retries;
     private final LedgerAuditPublisher audit;
     private final IntervalCharging intervals;
+    private final WaterDays waterDays;
     private final Clock clock;
 
     MonthRun(TariffBook book, ChargeTypeCatalog chargeTypes, PlotCatalog plots, BillingMonths billingMonths,
             ChargeRepository charges, NotChargedItemRepository items, NotChargedViews itemViews,
             TariffChargeWriter writer, NotChargedRetries retries, LedgerAuditPublisher audit,
-            IntervalCharging intervals, Clock clock) {
+            IntervalCharging intervals, WaterDays waterDays, Clock clock) {
         this.book = book;
         this.chargeTypes = chargeTypes;
         this.plots = plots;
@@ -111,6 +113,7 @@ class MonthRun {
         this.retries = retries;
         this.audit = audit;
         this.intervals = intervals;
+        this.waterDays = waterDays;
         this.clock = clock;
     }
 
@@ -217,13 +220,16 @@ class MonthRun {
         }
         keys.addAll(NotChargedRetries.sourceKeys(snapshot, otherMonths, chargeableById));
         Set<String> existing = existingKeys(keys);
+        Set<YearMonth> months = new HashSet<>(List.of(month));
+        otherMonths.forEach(item -> months.add(Objects.requireNonNull(item.getMonth())));
+        ApplicableDays applicable = waterDays.forMonths(snapshot, chargeableById.keySet(), months);
         List<PlannedCharge> planned = new ArrayList<>();
         List<ConflictCase> conflicts = new ArrayList<>();
         Map<String, Outcome> outcomes = new HashMap<>();
         for (PlotFacts plot : chargeable) {
             for (ChargeTypeEntry type : types) {
                 Outcome outcome = TariffMonthPlanning.plan(snapshot, type.id(), facts(plot), month,
-                        applicableDays(type.id(), plot.id(), month), existing::contains);
+                        applicable.of(type.id(), plot.id(), month), existing::contains);
                 outcomes.put(NotChargedItemRecord.tariffMonthKey(plot.id(), type.id(), month), outcome);
                 if (outcome instanceof NewCharge newCharge) {
                     planned.add(newCharge.charge());
@@ -233,15 +239,7 @@ class MonthRun {
             }
         }
         return new Plan(planned, conflicts, outcomes,
-                NotChargedRetries.plan(snapshot, otherMonths, chargeableById, existing::contains));
-    }
-
-    /**
-     * The days the tariffs of the type may charge the plot in the month: every day. Slice 5 (water connections)
-     * returns the connected days for the {@code WATER} type here.
-     */
-    static DaySet applicableDays(UUID chargeTypeId, UUID plotId, YearMonth month) {
-        return DaySet.ALL;
+                NotChargedRetries.plan(snapshot, otherMonths, chargeableById, applicable, existing::contains));
     }
 
     /** The charge types the run charges: active, not archived, with at least one tariff; in list order. */

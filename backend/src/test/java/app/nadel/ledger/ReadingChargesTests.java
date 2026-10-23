@@ -288,6 +288,44 @@ class ReadingChargesTests extends ReadingChargeSupport {
     }
 
     @Test
+    void aWaterReadingOfAPlotNotConnectedForTheWholeIntervalChargesAndQueuesNothing() throws Exception {
+        activateWater();
+        UUID connected = plot("1", "600");
+        Tariff water = tariff("WATER", "Вода", "PER_M3", "MONTHLY", "20.0000", "2026-01-01");
+        select(water, connected);
+        // disconnected before the interval: the tariff would charge it
+        UUID disconnected = plot("7", "600");
+        select(water, disconnected);
+        connectToWater(disconnected, "2020-05-01", "2026-08-22");
+        // never connected and outside the tariff's scope: it would be queued as OUTSIDE_SCOPE if it were connected
+        UUID dry = plot("9", "600");
+        entered(meter(disconnected, "WATER", "2026-08-22", "0"), "2026-09-03", "5");
+        entered(meter(dry, "WATER", "2026-08-22", "0"), "2026-09-03", "5");
+        awaitListeners();
+
+        assertThat(chargeCount()).isZero();
+        assertThat(openItems()).isEmpty();
+    }
+
+    @Test
+    void aWaterReadingIsChargedForTheConnectedDaysOfItsInterval() throws Exception {
+        activateWater();
+        UUID plot = plot("7", "600");
+        tariff("WATER", "Вода", "PER_M3", "MONTHLY", "20.0000", "2026-01-01");
+        // 01.09-30.09 (30 days) 30 m3, connected from 16.09: 15 days = 15 m3 x 20 = 300.00
+        connectToWater(plot, "2026-09-16", null);
+        UUID meter = meter(plot, "WATER", "2026-08-31", "0");
+        entered(meter, "2026-09-30", "30");
+        awaitCharges(1);
+
+        assertThat(readingCharges(plot)).singleElement().satisfies(charge -> {
+            assertThat(charge.get("amount")).isEqualTo("300.00");
+            assertThat(charge.get("service_from")).isEqualTo("2026-09-16");
+            assertThat(charge.get("service_to")).isEqualTo("2026-09-30");
+        });
+    }
+
+    @Test
     void fixedPercentageLossesAddALossesChargeOverTheSameParts() throws Exception {
         UUID plot = plot("7", "600");
         electricity();

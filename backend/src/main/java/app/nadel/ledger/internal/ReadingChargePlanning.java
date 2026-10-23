@@ -52,6 +52,9 @@ import org.jspecify.annotations.Nullable;
  * switched on); no tariff valid in the interval is {@code NO_TARIFF_FOR_ALL_DAYS}; the plot outside every scope is
  * {@code OUTSIDE_SCOPE}, excluded {@code EXCLUDED}, naming the tariffs of the type.</li>
  * </ul>
+ * An interval without an applicable day (a water meter of a plot not connected to water on any of its days) is
+ * {@link Nothing} before any tariff is looked at, so it is never queued.
+ * <p>
  * With fixed-percentage losses (electricity only, a percentage above zero) the same interval also gets a {@code LOSSES}
  * charge, key {@code LOSSES:{fromKey}:{toKey}}, over the same parts, when its amount is above {@code 0.00}.
  */
@@ -218,6 +221,10 @@ final class ReadingChargePlanning {
             MeterInterval interval, DaySet applicable, @Nullable BigDecimal lossesPercent, Predicate<String> charged) {
         if (charged.test(interval.consumptionKey())) {
             return new AlreadyCharged();
+        }
+        if (applicable.count(interval.firstDay(), interval.to().on()) == 0) {
+            // no day the tariffs may charge (a water meter of a plot not connected): nothing, and nothing is queued
+            return new Nothing();
         }
         Resolution resolution = TariffResolver.resolve(snapshot, chargeTypeId, plot, interval.firstDay(),
                 interval.to().on());

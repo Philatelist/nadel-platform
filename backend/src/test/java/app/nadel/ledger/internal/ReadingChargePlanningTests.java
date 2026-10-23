@@ -158,6 +158,34 @@ class ReadingChargePlanningTests {
                 .satisfies(part -> assertThat(((Map<?, ?>) part).get("unit")).isEqualTo("M3"));
     }
 
+    @Test
+    void aWaterIntervalWithoutAConnectedDayIsNothingAndNeverQueuedWhateverTheTariffs() {
+        TariffEntry water = tariff(WATER, "Вода", Basis.PER_M3, "20.0000");
+        // connected only before and after the interval 23.09-04.10
+        DaySet connected = DaySet.of(List.of(new DaySet.Range(LocalDate.parse("2026-01-01"),
+                LocalDate.parse("2026-09-22")), new DaySet.Range(LocalDate.parse("2026-10-05"), LocalDate.MAX)));
+
+        // no water tariff at all would otherwise be NO_TARIFF_FOR_ALL_DAYS
+        assertThat(ReadingChargePlanning.plan(snapshot(true), WATER, PLOT, MeterResource.WATER, INTERVAL, connected,
+                null, key -> false)).isInstanceOf(Nothing.class);
+        assertThat(ReadingChargePlanning.plan(snapshot(true, water), WATER, PLOT, MeterResource.WATER, INTERVAL,
+                DaySet.NONE, null, key -> false)).isInstanceOf(Nothing.class);
+    }
+
+    @Test
+    void aWaterIntervalIsChargedForItsConnectedDaysOnly() {
+        TariffEntry water = tariff(WATER, "Вода", Basis.PER_M3, "20.0000");
+        // 93.3 m3 over 12 days, connected 29.09-04.10 (6 days): 46.65 m3 x 20 = 933.00
+        DaySet connected = DaySet.of(LocalDate.parse("2026-09-29"), LocalDate.MAX);
+
+        NewCharges charges = (NewCharges) ReadingChargePlanning.plan(snapshot(true, water), WATER, PLOT,
+                MeterResource.WATER, INTERVAL, connected, null, key -> false);
+
+        assertThat(charges.consumption().amount()).hasToString("933.00");
+        assertThat(charges.consumption().serviceFrom()).isEqualTo(LocalDate.parse("2026-09-29"));
+        assertThat(charges.consumption().serviceTo()).isEqualTo(LocalDate.parse("2026-10-04"));
+    }
+
     private static Outcome plan(Snapshot snapshot, UUID type, MeterResource resource, BigDecimal percent,
             Predicate<String> charged) {
         return ReadingChargePlanning.plan(snapshot, type, PLOT, resource, INTERVAL, DaySet.ALL, percent, charged);

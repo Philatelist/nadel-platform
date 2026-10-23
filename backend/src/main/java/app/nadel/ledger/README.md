@@ -2,10 +2,11 @@
 
 The ledger of the cooperative (feature 011): the **charges** of plots, the **billing months** they are booked in,
 **reversals**, **opening balances**, the **account** of a plot with the debt per charge type, the **month run** of
-recurring tariffs, the **charges from meter readings** and the **"not charged" queue**. Slices 1 to 4 of spec 011 are
+recurring tariffs, the **charges from meter readings** and the **"not charged" queue**. Slices 1 to 5 of spec 011 are
 in code (slice 2: the billing months with their totals and check list, closing in order, and the plot status refresh;
-slice 3: the month run and the queue; slice 4: a charge per interval of a plot meter and fixed-percentage losses);
-losses and common consumer runs and water connections follow in the next slices.
+slice 3: the month run and the queue; slice 4: a charge per interval of a plot meter and fixed-percentage losses;
+slice 5: water tariffs charge only the days a plot is connected to water); losses and common consumer runs follow in
+the next slices.
 
 Tables (V13, all under RLS `tenant_isolation`, an index leading with `tenant_id`, composite foreign keys on
 `(tenant_id, id)`):
@@ -126,8 +127,11 @@ Lock order of the slice: plot `FOR SHARE` -> charge type `FOR SHARE` -> billing 
   that would charge more than `0.00` take part** (money rules §4.1): one -> its charge, two or more -> a conflict, none
   -> nothing (`0.00`, a tariff charged by meter readings (`PER_KWH`, `PER_M3`, any such version in the month), no
   applicable day). So a one-time fee is charged in its due month although a fee of the same type due in another month
-  applies too. The applicable days are `DaySet.ALL` now; `MonthRun.applicableDays`
-  is the seam where slice 5 puts the water connection days.
+  applies too. The applicable days (`WaterDays`) are every day, except for the `WATER` charge type: its tariffs, of
+  any basis, count only the days the plot is connected to water (`meters.WaterConnections.connectedDays`, read once
+  per run for every chargeable plot and every month the run plans), so a plot that is not connected in the month gets
+  no water charge and is never queued, and a connection that starts or ends inside the month splits the fee by days
+  (300.0000 a year from the 16th of October: 12.90). A retry of a month item uses the same days.
 - **The charge:** kind `REGULAR`, source `TARIFF`, `tariff_id`, `source_key` `TARIFF:{tariff}:{plot}:{YYYY-MM}`, booked
   in the run month, service period = the first to the last day the versions count for, `accrued_on` = the first day of
   the month (a one-time fee: its due date), `created_by` the person who ran it, `calculation` `{amount, parts[{tariffVersionId,
@@ -228,8 +232,11 @@ no interval, so it publishes nothing). `ReadingCharges` listens with the ADR 000
 - **The amount** (`ReadingChargeCalculator`, pure): the days of an interval run from the day after the previous point
   to the reading date, both included (`N` days); each `PER_KWH` (`PER_M3` for water) version gets
   `consumption x d / N` for its `d` applicable days, priced at its rate; one exact sum rounded once by
-  `Money.ofQuotient`. Applicable days are every day now; `IntervalCharging.applicableDays` is the seam for the water
-  connection days (slice 5). `0.00` charges nothing.
+  `Money.ofQuotient`. The applicable days (`WaterDays.forInterval`) are every day for electricity and the days the
+  plot is connected to water for a water meter: the m3 of the days not connected are dropped with their share, and an
+  interval without a connected day is nothing before any tariff is looked at, so it is never queued (whatever the
+  scopes and versions). `0.00` charges nothing. A connection entered after a reading was approved does not charge that
+  reading again (its correction belongs to feature 012).
 - **Fixed-percentage losses**: with `lossesMode = FIXED_PERCENT` and `lossesPercent > 0` an electricity interval also
   gets a `LOSSES` charge (charge type `ELECTRICITY`, key `LOSSES:{fromKey}:{toKey}`) of `percent / 100` of each part at
   the same rate, rounded once on its own; booked only together with the consumption charge.
@@ -318,7 +325,7 @@ Every action is a constant of `LedgerAuditPublisher.Action` and must also be a v
 `TariffVersionUsage`, implemented here), `plots` (`PlotCatalog`: `find`, `findAll`, `findAndLockShared`,
 `inNaturalOrder`, `findChargeable`; the SPI `PlotChangeGuard`; the debt cache writer `PlotDebtCache`),
 `meters` (`MeterNetwork.staleMeters` and `lockSharedPoints`, the event `PlotMeterPointsChanged`, `Quantity`,
-`MeterValue`; the port `ReadingUsage`, implemented here), `settings` (`CooperativeSettings.lossesMode`,
+`MeterValue`, `WaterConnections.connectedDays`; the port `ReadingUsage`, implemented here), `settings` (`CooperativeSettings.lossesMode`,
 `lossesPercent`), `money` (`Money`), `identity` (`CurrentUser`, `AccessProfile`, `Permission`,
 `OwnedPlotsSource`), `audit` (events, `ActorNames`), `problem`, `tenancy` (`TenantContext`). Nothing depends on
 `ledger`.
@@ -344,7 +351,10 @@ or keeping it open with the run's tariffs, 404, permissions, audit), `ReadingCha
 `ReadingChargesTests` (entry, member approval, replacement, removal, a closed month, no tariff -> queue -> retry and
 month run, a deletion, conflicts, water inactive, fixed losses, a redelivered event), `ReadingUsageTests` (409 while
 charged, a reading inside a charged interval, a new reading after one, accepted after the reversal),
-`TariffVersionUsageTests` (409 after the run, accepted after the reversal),
+`TariffVersionUsageTests` (409 after the run, accepted after the reversal), the water rows of `MonthRunTests` (25.00 for
+a connected plot, nothing and nothing queued for one that is not, 12.90 from the 16th, a conflict only for a connected
+plot) and of `ReadingChargesTests` (a plot not connected for the whole interval: nothing and nothing queued; the
+connected days only),
 `TariffConflictWarningTests` (the tariffs page), `NotChargedTenantIsolationTests` (V15) - these run in a cooperative of
 their own (`FreshCooperativeSupport`); `BillingMonthsTests` (the list and totals, the month page and its
 check list, closing in order, a closed month that gets nothing more, late bookings, future months, permissions, audit,

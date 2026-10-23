@@ -483,8 +483,9 @@ export const useUpdateMeter = <TError = BadRequestResponse | UnauthorizedRespons
  * Deletes an active meter that has no readings (its initial reading does not count; see `deletable`). A meter
  * with readings of any status is refused with 409 `METER_HAS_READINGS` (remove it instead), a removed meter with
  * 409 `METER_REMOVED`, a meter that is or was the parent of another meter in the electricity tree with 409
- * `METER_HAS_CHILDREN` (its children's history refers to it). Requires `METERS_VIEW` and `METERS_MANAGE`;
- * written to the audit log (`METER_DELETED`, the old values).
+ * `METER_HAS_CHILDREN` (its children's history refers to it), a meter that plots are or were connected to as
+ * their water source with 409 `WATER_SOURCE_IN_USE` (their connection history refers to it). Requires
+ * `METERS_VIEW` and `METERS_MANAGE`; written to the audit log (`METER_DELETED`, the old values).
  * @summary Delete a meter entered by mistake
  */
 export const deleteMeter = async (id: string, options?: Parameters<typeof nadelFetch>[1]): Promise<void> => {

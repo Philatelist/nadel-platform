@@ -53,7 +53,9 @@ class MeterNetworkTests extends MeterTestSupport {
     void aPlotMeterWithoutAReadingForMoreThanTheDaysIsStale() {
         UUID plot = newPlot("Стара");
         UUID never = meter(plot, "PLOT", "ELECTRICITY", "2026-01-10", null);
-        UUID water = meter(newPlot("Стара"), "PLOT", "WATER", "2026-01-10", null);
+        UUID waterPlot = newPlot("Стара");
+        UUID water = meter(waterPlot, "PLOT", "WATER", "2026-01-10", null);
+        connectToWater(waterPlot, "2026-01-01", null);
         UUID readLongAgo = meter(newPlot("Стара"), "PLOT", "ELECTRICITY", "2026-01-10", null);
         reading(readLongAgo, "2026-07-31", "50", "APPROVED");
 
@@ -64,6 +66,30 @@ class MeterNetworkTests extends MeterTestSupport {
         assertThat(stale.get(water).resource()).isEqualTo(MeterResource.WATER);
         // 31.07 is 61 days before 30.09
         assertThat(stale.get(readLongAgo).lastReadingOn()).isEqualTo(LocalDate.of(2026, 7, 31));
+    }
+
+    @Test
+    void aWaterMeterOfAPlotNotConnectedToWaterOnTheCheckDateIsNeverStale() {
+        UUID neverConnected = meter(newPlot("Суха"), "PLOT", "WATER", "2026-01-10", null);
+        UUID disconnectedPlot = newPlot("Суха");
+        UUID disconnected = meter(disconnectedPlot, "PLOT", "WATER", "2026-01-10", null);
+        connectToWater(disconnectedPlot, "2026-01-01", "2026-09-29");
+        UUID laterPlot = newPlot("Суха");
+        UUID connectedLater = meter(laterPlot, "PLOT", "WATER", "2026-01-10", null);
+        connectToWater(laterPlot, "2026-10-01", null);
+        UUID connectedPlot = newPlot("Суха");
+        UUID connected = meter(connectedPlot, "PLOT", "WATER", "2026-01-10", null);
+        connectToWater(connectedPlot, "2026-09-30", null);
+
+        Map<UUID, StaleMeter> stale = stale(DEMO_TENANT, AS_OF);
+
+        assertThat(stale).doesNotContainKeys(neverConnected, disconnected, connectedLater).containsKey(connected);
+    }
+
+    /** A connection of the plot to the cooperative's water supply, written as the database owner. */
+    private void connectToWater(UUID plot, String from, String until) {
+        ownerJdbc().update("insert into plot_water_connection (tenant_id, plot_id, valid_from, valid_to) "
+                + "values (?, ?, ?::date, ?::date)", DEMO_TENANT, plot, from, until);
     }
 
     @Test

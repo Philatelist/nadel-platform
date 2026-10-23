@@ -18,7 +18,6 @@ import app.nadel.meters.MeterResource;
 import app.nadel.plots.PlotCatalog;
 import app.nadel.settings.CooperativeSettings;
 import app.nadel.settings.LossesMode;
-import app.nadel.tariffs.DaySet;
 import app.nadel.tariffs.TariffBook.ChargeTypeEntry;
 import app.nadel.tariffs.TariffBook.Snapshot;
 import app.nadel.tariffs.TariffResolver;
@@ -61,7 +60,8 @@ import org.springframework.transaction.annotation.Transactional;
  * quantity as a fraction, rate) and one {@code meter_value_use} row per point it read (the two points of the interval),
  * which {@code LedgerReadingUsage} answers from. Business failures never throw: they open or refresh the item
  * {@code INTERVAL:{meter}:{toKey}}; an item whose interval no longer exists (the readings around it changed) becomes
- * {@code OBSOLETE}.
+ * {@code OBSOLETE}. A water meter's interval is charged only for the days its plot is connected to water
+ * ({@link WaterDays}); an interval without a connected day charges and queues nothing.
  */
 @Component
 class IntervalCharging {
@@ -73,11 +73,12 @@ class IntervalCharging {
     private final BillingMonths billingMonths;
     private final ChargeRepository charges;
     private final NotChargedItemRepository items;
+    private final WaterDays waterDays;
     private final EntityManager entityManager;
 
     IntervalCharging(MeterNetwork network, TariffChargeWriter writer, PlotCatalog plots,
             CooperativeSettings settings, BillingMonths billingMonths, ChargeRepository charges,
-            NotChargedItemRepository items, EntityManager entityManager) {
+            NotChargedItemRepository items, WaterDays waterDays, EntityManager entityManager) {
         this.network = network;
         this.writer = writer;
         this.plots = plots;
@@ -85,6 +86,7 @@ class IntervalCharging {
         this.billingMonths = billingMonths;
         this.charges = charges;
         this.items = items;
+        this.waterDays = waterDays;
         this.entityManager = entityManager;
     }
 
@@ -223,7 +225,8 @@ class IntervalCharging {
             Instant now) {
         MeterResource resource = context.meter().resource();
         Outcome outcome = ReadingChargePlanning.plan(context.snapshot(), context.type().id(), context.plot(), resource,
-                interval, applicableDays(resource, context.plotId()), context.lossesPercent(),
+                interval, waterDays.forInterval(resource, context.plotId(), interval.firstDay(), interval.to().on()),
+                context.lossesPercent(),
                 key -> !charges.existingSourceKeys(List.of(key)).isEmpty());
         String itemKey = NotChargedItemRecord.intervalKey(interval.meterId(), interval.to().key());
         Optional<NotChargedItemRecord> open = items.findOpen(itemKey);
@@ -256,14 +259,6 @@ class IntervalCharging {
         }
         items.flush();
         return processed;
-    }
-
-    /**
-     * The days the tariffs of the resource may charge the plot: every day. Slice 5 (water connections) returns the
-     * connected days for water here.
-     */
-    static DaySet applicableDays(MeterResource resource, UUID plotId) {
-        return DaySet.ALL;
     }
 
     /** Writes the charges of an interval, their parts and the points they read, in the booking month. */

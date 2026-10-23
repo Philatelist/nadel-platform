@@ -433,6 +433,74 @@ class MonthRunTests extends FreshCooperativeSupport {
         send(member, get(NOT_CHARGED), null).andExpect(status().isForbidden());
     }
 
+    // ---- water connections (§2.8)
+
+    /** The latest month of 31 days up to the current one (October in the examples). */
+    private static YearMonth longMonth() {
+        YearMonth candidate = current();
+        while (candidate.lengthOfMonth() != 31) {
+            candidate = candidate.minusMonths(1);
+        }
+        return candidate;
+    }
+
+    private Map<String, Object> waterCharge(UUID plot, Tariff water) {
+        return charges(plot).stream().filter(c -> water.id().equals(c.get("tariff_id"))).findFirst().orElse(null);
+    }
+
+    @Test
+    void aWaterFeeChargesOnlyTheConnectedDaysAndNeverAPlotThatIsNotConnected() throws Exception {
+        YearMonth october = longMonth();
+        activateWater();
+        // 300.0000 per plot per year, billed monthly
+        Tariff water = tariff("WATER", "Вода", "PER_PLOT", "YEARLY", "300.0000", "2026-01-01");
+        UUID p1 = plot("P1", "600.00");
+        UUID p3 = plot("P3", "600.00");
+        UUID p4 = plot("P4", "600.00");
+        UUID p5 = plot("P5", "600.00");
+        connectToWater(p1, "2020-05-01", null);
+        connectToWater(p3, october.atDay(16).toString(), null);
+        connectToWater(p5, "2020-05-01", october.atDay(15).toString());
+
+        JsonNode booked = run(chairman, october.toString(), false, null);
+
+        // P1 the whole month 25.00; P3 from the 16th 300 x 16 / (31 x 12) = 12.90; P5 until the 15th 12.10
+        assertThat(waterCharge(p1, water).get("amount")).isEqualTo("25.00");
+        Map<String, Object> p3Charge = waterCharge(p3, water);
+        assertThat(p3Charge.get("amount")).isEqualTo("12.90");
+        assertThat(date(p3Charge.get("service_from"))).isEqualTo(october.atDay(16));
+        assertThat(date(p3Charge.get("service_to"))).isEqualTo(october.atEndOfMonth());
+        assertThat(owner().queryForObject("select days from charge_part where charge_id = ?", Integer.class,
+                p3Charge.get("id"))).isEqualTo(16);
+        assertThat(waterCharge(p5, water).get("amount")).isEqualTo("12.10");
+        // P4, plot 7 and plot 9 are not connected: no water charge and nothing in "not charged"
+        assertThat(waterCharge(p4, water)).isNull();
+        assertThat(waterCharge(plot7, water)).isNull();
+        assertThat(total(booked, "WATER")).isEqualTo("50.00");
+        assertThat(booked.get("notCharged")).isEmpty();
+        assertThat(owner().queryForObject("select count(*) from not_charged_item where tenant_id = ?",
+                Integer.class, tenant)).isZero();
+    }
+
+    @Test
+    void twoWaterTariffsAreAConflictOnlyForAConnectedPlot() throws Exception {
+        activateWater();
+        tariff("WATER", "Вода 1", "PER_PLOT", "YEARLY", "300.0000", "2026-01-01");
+        tariff("WATER", "Вода 2", "PER_PLOT", "YEARLY", "120.0000", "2026-01-01");
+        UUID p1 = plot("P1", "600.00");
+        connectToWater(p1, "2020-05-01", null);
+
+        JsonNode booked = book();
+
+        assertThat(total(booked, "WATER")).isNull();
+        assertThat(booked.get("notCharged")).singleElement().satisfies(item -> {
+            assertThat(item.get("plotId").asString()).isEqualTo(p1.toString());
+            assertThat(item.get("reason").asString()).isEqualTo("CONFLICTING_TARIFFS");
+        });
+        assertThat(owner().queryForObject("select count(*) from not_charged_item where tenant_id = ?",
+                Integer.class, tenant)).isEqualTo(1);
+    }
+
     // ---- audit and the plot status
 
     @Test

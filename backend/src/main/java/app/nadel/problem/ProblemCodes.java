@@ -107,6 +107,15 @@ public final class ProblemCodes {
     /** 409: a run is booked with the digest of a preview that no longer matches what it would create. */
     public static final String PREVIEW_OUTDATED = "PREVIEW_OUTDATED";
 
+    /** 409: the plot is connected to water on one of the days of the new connection (or has a lasting one). */
+    public static final String WATER_ALREADY_CONNECTED = "WATER_ALREADY_CONNECTED";
+    /** 409: the connection has ended already, or the plot has no lasting connection to that water source. */
+    public static final String WATER_NOT_CONNECTED = "WATER_NOT_CONNECTED";
+    /** 409: the water source is not an active common consumer meter of the cooperative. */
+    public static final String WATER_SOURCE_INVALID = "WATER_SOURCE_INVALID";
+    /** 409: plots are or were connected to the meter as their water source, so it is not deleted. */
+    public static final String WATER_SOURCE_IN_USE = "WATER_SOURCE_IN_USE";
+
     /** Codes of single fields in {@code errors[]}. */
     public static final String REQUIRED = "REQUIRED";
     public static final String TOO_LONG = "TOO_LONG";

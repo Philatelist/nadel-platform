@@ -19,7 +19,8 @@
  * is never deleted) and the endpoints of tags {@code charges}, {@code billing} and {@code not-charged}. It depends on
  * {@code tariffs} (the public {@code ChargeTypeCatalog}, {@code TariffBook}, {@code TariffResolver},
  * {@code ChargeCalculator}, {@code DaySet}), {@code plots} (the public {@code PlotCatalog}, {@code PlotChangeGuard} and
- * {@code PlotDebtCache}), {@code meters} ({@code MeterNetwork}, {@code PlotMeterPointsChanged}, {@code ReadingUsage}),
+ * {@code PlotDebtCache}), {@code meters} ({@code MeterNetwork}, {@code PlotMeterPointsChanged}, {@code ReadingUsage},
+ * {@code WaterConnections}: water tariffs charge only the days a plot is connected),
  * {@code settings} ({@code CooperativeSettings}), {@code money}, {@code identity}, {@code audit},
  * {@code problem} and {@code tenancy}; no module depends on it.
  */

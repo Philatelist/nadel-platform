@@ -46,6 +46,8 @@ tags:
     description: Billing months, their totals, the closing check list, the month run and closing
   - name: not-charged
     description: The "not charged" queue (what the app could not charge, with the reason) and its retry
+  - name: water
+    description: Water connections of plots (with their history) and the water sources they are connected to
 
 paths:
   /me:
@@ -2048,8 +2050,9 @@ paths:
         Deletes an active meter that has no readings (its initial reading does not count; see `deletable`). A meter
         with readings of any status is refused with 409 `METER_HAS_READINGS` (remove it instead), a removed meter with
         409 `METER_REMOVED`, a meter that is or was the parent of another meter in the electricity tree with 409
-        `METER_HAS_CHILDREN` (its children's history refers to it). Requires `METERS_VIEW` and `METERS_MANAGE`;
-        written to the audit log (`METER_DELETED`, the old values).
+        `METER_HAS_CHILDREN` (its children's history refers to it), a meter that plots are or were connected to as
+        their water source with 409 `WATER_SOURCE_IN_USE` (their connection history refers to it). Requires
+        `METERS_VIEW` and `METERS_MANAGE`; written to the audit log (`METER_DELETED`, the old values).
       parameters:
         - name: id
           in: path
@@ -3082,6 +3085,241 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /plots/{id}/water-connections:
+    get:
+      tags: [water]
+      operationId: getPlotWaterConnections
+      summary: The water connection of a plot and its history
+      description: |
+        Every connection the plot has had, newest first, and whether it is connected today (Europe/Kyiv). No
+        permission annotation: a caller with `PLOTS_VIEW` may ask for any plot of the cooperative, anyone else only for
+        a plot they currently own. Any other plot, an unknown id and a plot of another cooperative are the same 404
+        `PLOT_NOT_FOUND`; the platform operator has no cooperative data: 403.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlotWaterConnections'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      tags: [water]
+      operationId: connectPlotWater
+      summary: Connect a plot to water
+      description: |
+        Connects the plot to a water source from `from` (a day of the connection): the common consumer meter
+        `sourceMeterId` (a well pump), or without it the cooperative's water supply. Water tariffs of any basis charge
+        the plot only for its connected days. A plot has at most one connection that lasts and its connections never
+        share a day: 409 `WATER_ALREADY_CONNECTED` (`errors[{field: from}]`) when it is connected now or on a day from
+        `from` on. A `sourceMeterId` that is not an active common consumer meter of the cooperative is 409
+        `WATER_SOURCE_INVALID` (`errors[{field: sourceMeterId}]`). An archived plot is 409 `PLOT_ARCHIVED`, common land
+        409 `PLOT_COMMON_LAND`; an unknown plot, or one of another cooperative, 404 `PLOT_NOT_FOUND`. 400
+        `VALIDATION_FAILED` with `from` `REQUIRED`. The answer is the plot's connections as `GET` shows them. Requires
+        `METERS_MANAGE`; written to the audit log (`WATER_CONNECTED`, entity type `PLOT` about the plot).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WaterConnectionCreate'
+      responses:
+        '201':
+          description: The plot's connections with the new one
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlotWaterConnections'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /plots/{id}/water-connections/{connectionId}/end:
+    post:
+      tags: [water]
+      operationId: endPlotWaterConnection
+      summary: Disconnect a plot from water
+      description: |
+        Ends the connection on `until`, the last day the plot is connected (on or after the connection's `from`;
+        otherwise 400 `VALIDATION_FAILED` with `until` `INVALID`). The connection stays in the history. A connection
+        that has ended already is 409 `WATER_NOT_CONNECTED`. An unknown plot, or one of another cooperative, is 404
+        `PLOT_NOT_FOUND`; a connection that is not one of the plot's is 404 `NOT_FOUND`. The answer is the plot's
+        connections as `GET` shows them. Requires `METERS_MANAGE`; written to the audit log (`WATER_DISCONNECTED`,
+        entity type `PLOT` about the plot).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: connectionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WaterConnectionEnd'
+      responses:
+        '200':
+          description: The plot's connections with the ended one
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlotWaterConnections'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /water-sources:
+    get:
+      tags: [water]
+      operationId: listWaterSources
+      summary: The water sources and their connected plots
+      description: |
+        The cooperative's water supply (`id` `cooperative`) first, then every active common consumer meter (a well
+        pump) by name, each with the plots whose connection to it has not ended before today (Europe/Kyiv), in the
+        natural order of the plot numbers. Requires `PLOTS_VIEW`.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WaterSource'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /water-sources/{sourceId}/connections:
+    post:
+      tags: [water]
+      operationId: connectWaterSourcePlots
+      summary: Connect several plots to a water source
+      description: |
+        Connects every plot of `plotIds` to the source from `from`, in one transaction (all or nothing), as
+        `connectPlotWater` would. `sourceId` is `cooperative` (the cooperative's water supply) or the id of an active
+        common consumer meter; another meter is 409 `WATER_SOURCE_INVALID`, an unknown id 404 `NOT_FOUND`. Field codes
+        of 400 `VALIDATION_FAILED`: `plotIds[i]` `UNKNOWN_PLOT` (no such plot in the cooperative), `DUPLICATE` (listed
+        twice), `PLOT_ARCHIVED`, `PLOT_COMMON_LAND`; `plotIds` `REQUIRED` (empty) or `TOO_LONG` (over 5000); `from`
+        `REQUIRED`. A plot that is connected now or on a day from `from` on is 409 `WATER_ALREADY_CONNECTED` with
+        `errors[{field: plotIds[i]}]`. The answer is the source as `listWaterSources` shows it. Requires
+        `METERS_MANAGE`; one audit entry per plot (`WATER_CONNECTED`, entity type `PLOT`).
+      parameters:
+        - name: sourceId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WaterSourceConnection'
+      responses:
+        '200':
+          description: The source with its plots
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WaterSource'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /water-sources/{sourceId}/disconnections:
+    post:
+      tags: [water]
+      operationId: disconnectWaterSourcePlots
+      summary: Disconnect several plots from a water source
+      description: |
+        Ends the lasting connection of every plot of `plotIds` to the source on `until` (the last connected day), in one
+        transaction (all or nothing), as `endPlotWaterConnection` would. `sourceId` as in `connectWaterSourcePlots`
+        (here a removed meter is accepted, so its plots can be disconnected). Field codes of 400 `VALIDATION_FAILED`:
+        `plotIds[i]` `UNKNOWN_PLOT` or `DUPLICATE`; `plotIds` `REQUIRED` or `TOO_LONG`; `until` `REQUIRED`, or
+        `INVALID` when it is before the start of a plot's connection (`errors[{field: plotIds[i], code: INVALID}]`). A
+        plot without a lasting connection to this source is 409 `WATER_NOT_CONNECTED` with
+        `errors[{field: plotIds[i]}]`. The answer is the source as `listWaterSources` shows it. Requires
+        `METERS_MANAGE`; one audit entry per plot (`WATER_DISCONNECTED`, entity type `PLOT`).
+      parameters:
+        - name: sourceId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WaterSourceDisconnection'
+      responses:
+        '200':
+          description: The source with its plots
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WaterSource'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -3190,7 +3428,12 @@ components:
         earlier month is open (code `PERIOD_CLOSE_ORDER`), a closed month is closed again (code `PERIOD_CLOSED`) or a
         month after the current one is closed (code `PERIOD_IN_FUTURE`), or the month run is asked for a closed month
         (code `PERIOD_CLOSED`) or a month after the current one (code `PERIOD_IN_FUTURE`), or a booking is sent with
-        the digest of a preview that no longer matches what the run would create (code `PREVIEW_OUTDATED`)
+        the digest of a preview that no longer matches what the run would create (code `PREVIEW_OUTDATED`), or a plot
+        is connected to water while it is connected on one of those days (code `WATER_ALREADY_CONNECTED`), a
+        connection that has ended is ended again or a plot without a lasting connection to the source is disconnected
+        from it (code `WATER_NOT_CONNECTED`), the water source is not an active common consumer meter (code
+        `WATER_SOURCE_INVALID`), or a meter that plots are or were connected to as their water source is deleted (code
+        `WATER_SOURCE_IN_USE`)
       content:
         application/problem+json:
           schema:
@@ -3640,6 +3883,8 @@ components:
         - BILLING_MONTH_CLOSED
         - BILLING_MONTH_RUN
         - NOT_CHARGED_RETRIED
+        - WATER_CONNECTED
+        - WATER_DISCONNECTED
 
     AuditEntityType:
       type: string
@@ -4418,7 +4663,8 @@ components:
             is removed or not yet installed on the date), `TREE_DATE_BEFORE_LATEST` (a date before the meter's latest
             change in the tree), `READING_DATE_OUTSIDE_METER` (a date before the meter's installation),
             `AMOUNT_NOT_POSITIVE` (an amount that is zero or negative), `DATE_IN_FUTURE` (a date after today in
-            Europe/Kyiv), `NOT_FOUND` (no such charge type in the cooperative)
+            Europe/Kyiv), `NOT_FOUND` (no such charge type in the cooperative), `PLOT_COMMON_LAND` (common land is
+            never connected to water)
         message:
           type: string
 
@@ -6068,3 +6314,155 @@ components:
         digest:
           type: string
           description: Identifies what the run would create; send it with the booking to make sure nothing changed
+
+    WaterSourceKind:
+      type: string
+      description: >-
+        `COOPERATIVE_SUPPLY`: the cooperative's water supply (no meter; clients show their own name for it).
+        `METER`: a common consumer meter, for example a well pump, named by the cooperative.
+      enum: [COOPERATIVE_SUPPLY, METER]
+
+    WaterSourceRef:
+      type: object
+      description: The water source of a connection
+      required: [id, kind]
+      properties:
+        id:
+          type: string
+          description: "`cooperative` for the cooperative's water supply, otherwise the id of the meter"
+        kind:
+          $ref: '#/components/schemas/WaterSourceKind'
+        name:
+          type: string
+          description: The meter's name (user content); absent for the cooperative's water supply
+
+    WaterConnection:
+      type: object
+      description: One connection of a plot to water
+      required: [id, source, from]
+      properties:
+        id:
+          type: string
+          format: uuid
+        source:
+          $ref: '#/components/schemas/WaterSourceRef'
+        from:
+          type: string
+          format: date
+          description: The first connected day
+        until:
+          type: string
+          format: date
+          description: The last connected day; absent while the connection lasts
+
+    PlotWaterConnections:
+      type: object
+      description: The water connections of a plot
+      required: [plotId, connected, connections]
+      properties:
+        plotId:
+          type: string
+          format: uuid
+        connected:
+          type: boolean
+          description: Whether the plot is connected today (Europe/Kyiv)
+        current:
+          $ref: '#/components/schemas/WaterConnection'
+        connections:
+          type: array
+          description: Every connection the plot has had, newest first; `current` is one of them
+          items:
+            $ref: '#/components/schemas/WaterConnection'
+
+    WaterConnectionCreate:
+      type: object
+      required: [from]
+      properties:
+        sourceMeterId:
+          type: string
+          format: uuid
+          description: An active common consumer meter; absent for the cooperative's water supply
+        from:
+          type: string
+          format: date
+          description: The first connected day
+
+    WaterConnectionEnd:
+      type: object
+      required: [until]
+      properties:
+        until:
+          type: string
+          format: date
+          description: The last connected day, on or after the first one
+
+    WaterSourcePlot:
+      type: object
+      description: A plot connected to a water source
+      required: [plotId, plotNumber, connectionId, from]
+      properties:
+        plotId:
+          type: string
+          format: uuid
+        plotNumber:
+          type: string
+          description: User content, as the cooperative writes it
+        connectionId:
+          type: string
+          format: uuid
+        from:
+          type: string
+          format: date
+        until:
+          type: string
+          format: date
+          description: The last connected day when the connection ends today or later; absent while it lasts
+
+    WaterSource:
+      type: object
+      description: A water source with the plots whose connection to it has not ended before today
+      required: [id, kind, plots]
+      properties:
+        id:
+          type: string
+          description: "`cooperative` for the cooperative's water supply, otherwise the id of the meter"
+        kind:
+          $ref: '#/components/schemas/WaterSourceKind'
+        name:
+          type: string
+          description: The meter's name (user content); absent for the cooperative's water supply
+        plots:
+          type: array
+          description: In the natural order of the plot numbers
+          items:
+            $ref: '#/components/schemas/WaterSourcePlot'
+
+    WaterSourceConnection:
+      type: object
+      required: [plotIds, from]
+      properties:
+        plotIds:
+          type: array
+          maxItems: 5000
+          items:
+            type: string
+            format: uuid
+        from:
+          type: string
+          format: date
+          description: The first connected day of every plot
+
+    WaterSourceDisconnection:
+      type: object
+      required: [plotIds, until]
+      properties:
+        plotIds:
+          type: array
+          maxItems: 5000
+          items:
+            type: string
+            format: uuid
+        until:
+          type: string
+          format: date
+          description: The last connected day of every plot

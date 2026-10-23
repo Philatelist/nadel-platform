@@ -187,6 +187,7 @@ export function auditValue(
     case 'serviceTo':
     case 'from':
     case 'to':
+    case 'until':
     case 'date':
       return ISO_DAY.test(raw) ? formatDay(raw, locale) : raw;
     case 'amount':
@@ -212,6 +213,11 @@ export function auditValue(
       return user(raw);
     case 'outcome':
       return catalog(a.outcome);
+    case 'source':
+      // a water source is a meter name (user content) or `base:COOPERATIVE_SUPPLY`
+      return entityType === 'PLOT'
+        ? baseToken(raw, { COOPERATIVE_SUPPLY: t.water.cooperativeSupply })
+        : user(raw);
     case 'replacementMeter':
     case 'parent':
       return user(raw);

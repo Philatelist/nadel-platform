@@ -227,6 +227,9 @@ class MetersTests extends MeterTestSupport {
         UUID elsewhere = register(plotMeter(other, "ELECTRICITY", "MT-3", "2026-01-01", "0"));
         UUID pump = register(namedMeter("COMMON_CONSUMER", "MT Свердловина", "MT-4", "2026-01-01", "0"));
         reading(elsewhere, "2026-06-01", "50", "APPROVED");
+        // only a plot connected to water owes a water reading (feature 011 §2.8)
+        ownerJdbc().update("insert into plot_water_connection (tenant_id, plot_id, valid_from) "
+                + "values (?, ?, date '2026-01-01')", DEMO_TENANT, plot);
 
         assertThat(ids(send(chairman(), get(METERS).param("resource", "WATER"), null)))
                 .contains(water.toString()).doesNotContain(electricity.toString(), pump.toString());

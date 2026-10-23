@@ -188,6 +188,27 @@ describe('SettingsPage', () => {
       expect(await screen.findByText('Settings saved.')).toBeInTheDocument();
     });
 
+    it('keeps Save disabled when the same percentage is retyped in another form', async () => {
+      const user = userEvent.setup();
+      renderPage();
+      const save = screen.getByRole('button', { name: 'Save the losses' });
+      await user.clear(percent());
+      await user.type(percent(), '5');
+      expect(save).toBeDisabled();
+      await user.clear(percent());
+      await user.type(percent(), '5,0');
+      expect(save).toBeDisabled();
+      await user.clear(percent());
+      await user.type(percent(), '5.01');
+      expect(save).toBeEnabled();
+    });
+
+    it('describes the losses for both modes', () => {
+      renderPage();
+      expect(screen.getByText(/added to the consumption charge of each plot/)).toBeInTheDocument();
+      expect(screen.getByText(/losses run splits the losses of the node/)).toBeInTheDocument();
+    });
+
     it('explains the proportional mode and sends it', async () => {
       const user = userEvent.setup();
       renderPage();

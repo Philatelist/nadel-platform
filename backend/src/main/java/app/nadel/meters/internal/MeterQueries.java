@@ -9,6 +9,7 @@ import app.nadel.plots.PlotCatalog;
 import app.nadel.plots.PlotCatalog.PlotFacts;
 import app.nadel.problem.ApiProblemException;
 import java.text.Collator;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -43,14 +44,18 @@ class MeterQueries {
     private final MeterAccess access;
     private final ReadingFacts readings;
     private final MeterChains chains;
+    private final WaterConnectionRepository waterConnections;
+    private final Clock clock;
 
     MeterQueries(MeterRepository meters, PlotCatalog plots, MeterAccess access, ReadingFacts readings,
-            MeterChains chains) {
+            MeterChains chains, WaterConnectionRepository waterConnections, Clock clock) {
         this.meters = meters;
         this.plots = plots;
         this.access = access;
         this.readings = readings;
         this.chains = chains;
+        this.waterConnections = waterConnections;
+        this.clock = clock;
     }
 
     /**
@@ -90,9 +95,13 @@ class MeterQueries {
         List<UUID> ids = candidates.stream().map(MeterRecord::getId).toList();
         Map<UUID, Reading> latest = readings.latestApproved(ids);
         if (noReadingSince != null) {
+            Set<UUID> connected = connectedToday(candidates);
             candidates = candidates.stream()
                     .filter(meter -> MeterDtoMapper.lastReading(meter, latest.get(meter.getId())).takenOn()
                             .isBefore(noReadingSince))
+                    // a plot that is not connected to water owes no water reading (feature 011 §2.8)
+                    .filter(meter -> meter.getResource() != MeterResource.WATER
+                            || connected.contains(meter.getPlotId()))
                     .toList();
         }
         Set<UUID> withReadings = readings.withReadings(candidates.stream().map(MeterRecord::getId).toList());
@@ -103,6 +112,14 @@ class MeterQueries {
                         withReadings.contains(meter.getId()), withNote,
                         neighbours.getOrDefault(meter.getId(), Neighbours.NONE)))
                 .toList();
+    }
+
+    /** The plots of the water meters among the candidates that are connected to water today (Europe/Kyiv). */
+    private Set<UUID> connectedToday(List<MeterRecord> candidates) {
+        List<UUID> plotIds = candidates.stream().filter(meter -> meter.getResource() == MeterResource.WATER)
+                .map(MeterRecord::getPlotId).filter(Objects::nonNull).distinct().toList();
+        return plotIds.isEmpty() ? Set.of()
+                : Set.copyOf(waterConnections.plotsConnectedOn(plotIds, LocalDate.now(clock)));
     }
 
     /** The meter card; 404 when unknown or of another cooperative (RLS). */

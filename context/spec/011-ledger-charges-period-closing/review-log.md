@@ -33,3 +33,11 @@
 - Minor: `MonthRun.java:181` items closed by the run get no per-item NOT_CHARGED_RETRIED audit entry. → noted.
 - Minor: `MonthRun.java:200` the run retries items of every other month, later ones too (spec says earlier). Harmless under the queue lock. → noted.
 - Minor: digest still covers charges only (round 1 minor 3). → noted.
+
+## Slice 4 — round 1 (a75bbd1 + merge parts of ff5780c): PASS
+- Minor: `web/src/components/readings/ReadingHistory.tsx` delete flow does not call `invalidateAfterReading`. → carry into the Slice 5 web task.
+- Minor: `web/src/pages/SettingsPage.tsx:214` "changed" compares "5" with "5.00". → carry into the Slice 5 web task.
+- Minor: `MonthRun.java:170,186-195` interval charges booked by `retryAll` are not in the BILLING_MONTH_RUN audit count/total nor the run result (documented). → noted.
+- Minor: `IntervalCharging.java:283` persist instead of INSERT … ON CONFLICT DO NOTHING (safe under the meter lock + unique key). → noted.
+- Minor: `web/src/auditValue.tsx:188-189` `from`/`to` formatted as dates for every action. → noted.
+- Minor: `settings.losses.text` wording fits PROPORTIONAL only. → carry into the Slice 5 web task.

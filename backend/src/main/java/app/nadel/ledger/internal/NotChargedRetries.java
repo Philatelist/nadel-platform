@@ -9,6 +9,7 @@ import app.nadel.ledger.internal.TariffMonthPlanning.NewCharge;
 import app.nadel.ledger.internal.TariffMonthPlanning.Nothing;
 import app.nadel.ledger.internal.TariffMonthPlanning.Outcome;
 import app.nadel.ledger.internal.TariffMonthPlanning.PlannedCharge;
+import app.nadel.ledger.internal.WaterDays.ApplicableDays;
 import app.nadel.plots.PlotCatalog.PlotFacts;
 import app.nadel.tariffs.TariffBook.Snapshot;
 import app.nadel.tariffs.TariffBook.TariffEntry;
@@ -103,12 +104,13 @@ class NotChargedRetries {
     /**
      * What a retry of each item would do now. Pure: no writes. Items of a kind not retried here are left out.
      *
-     * @param plots   the plots by id ({@link MonthRun}: the chargeable plots; a plot missing here, or archived or
-     *                common land, has nothing left to charge)
-     * @param charged whether a charge with the source key exists
+     * @param plots      the plots by id ({@link MonthRun}: the chargeable plots; a plot missing here, or archived or
+     *                   common land, has nothing left to charge)
+     * @param applicable the days the tariffs of a charge type may charge a plot in a month ({@link WaterDays})
+     * @param charged    whether a charge with the source key exists
      */
     static List<Attempt> plan(Snapshot snapshot, Collection<NotChargedItemRecord> open, Map<UUID, PlotFacts> plots,
-            Predicate<String> charged) {
+            ApplicableDays applicable, Predicate<String> charged) {
         List<Attempt> attempts = new ArrayList<>();
         for (NotChargedItemRecord item : open) {
             if (!retried(item)) {
@@ -119,7 +121,7 @@ class NotChargedRetries {
             YearMonth month = month(item);
             Outcome outcome = plot == null ? new Nothing()
                     : TariffMonthPlanning.plan(snapshot, chargeTypeId, MonthRun.facts(plot), month,
-                            MonthRun.applicableDays(chargeTypeId, plot.id(), month), charged);
+                            applicable.of(chargeTypeId, plot.id(), month), charged);
             attempts.add(new Attempt(item, outcome));
         }
         return attempts;

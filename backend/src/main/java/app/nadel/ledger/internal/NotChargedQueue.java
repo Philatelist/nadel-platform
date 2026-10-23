@@ -61,12 +61,14 @@ class NotChargedQueue {
     private final ChargeTypeCatalog chargeTypes;
     private final LedgerAuditPublisher audit;
     private final IntervalCharging intervals;
+    private final WaterDays waterDays;
     private final EntityManager entityManager;
     private final Clock clock;
 
     NotChargedQueue(NotChargedItemRepository items, NotChargedViews views, TariffBook book, TariffChargeWriter writer,
             NotChargedRetries retries, ChargeRepository charges, PlotCatalog plots, ChargeTypeCatalog chargeTypes,
-            LedgerAuditPublisher audit, IntervalCharging intervals, EntityManager entityManager, Clock clock) {
+            LedgerAuditPublisher audit, IntervalCharging intervals, WaterDays waterDays, EntityManager entityManager,
+            Clock clock) {
         this.items = items;
         this.views = views;
         this.book = book;
@@ -77,6 +79,7 @@ class NotChargedQueue {
         this.chargeTypes = chargeTypes;
         this.audit = audit;
         this.intervals = intervals;
+        this.waterDays = waterDays;
         this.entityManager = entityManager;
         this.clock = clock;
     }
@@ -129,6 +132,7 @@ class NotChargedQueue {
         Optional<PlotFacts> plot = plots.find(plotId);
         Attempt attempt = NotChargedRetries.plan(snapshot, List.of(item),
                 plot.map(p -> Map.of(p.id(), p)).orElse(Map.of()),
+                waterDays.forMonths(snapshot, List.of(plotId), List.of(month)),
                 key -> !charges.existingSourceKeys(List.of(key)).isEmpty()).getFirst();
         Instant now = clock.instant();
         if (!retries.apply(tenantId, List.of(attempt), actor.memberId(), now).isEmpty()) {

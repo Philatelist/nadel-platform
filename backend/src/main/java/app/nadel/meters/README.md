@@ -9,7 +9,8 @@ meter register (entity, commands, queries, endpoints, the plot guard, audit), re
 superseding, correction, deletion, the unusual-consumption warning, the history with intervals), replacement, range
 consumption over a chain of meters, the member flow (submission, approval, rejection), the electricity tree (moves
 with an effective date, the tree over a date range with the consumption per node), meter presence for the tariffs
-(`MeterCatalog`) and the Meters sheet of the Excel import (`MeterImport`).
+(`MeterCatalog`) and the Meters sheet of the Excel import (`MeterImport`). Feature 011 (slice 5) adds the water
+connections of plots (see Water connections).
 
 Depends on `plots` (`PlotCatalog`, the import records `PlotImportRow` and `PlotImportPlan`, and it implements
 `plots.PlotChangeGuard`), `identity` (`CurrentUser`, `AccessProfile`, `OwnedPlotsSource`, `Permission`), `audit` (events)
@@ -48,6 +49,7 @@ within the working period; that a `REJECTED` or `APPROVED` row carries `decided_
 | `PlotMeterPointsChanged` | Event (feature 011): the points of a plot meter changed on a date (`cause` `READING_ENTERED`, `READING_APPROVED`, `READING_CORRECTED`, `READING_DELETED`, `METER_REMOVED`, `METER_REPLACED`), published by `internal.MeterPointEvents` in the transaction of the change, for `PLOT` meters only; a correction that moves a reading publishes one per date. Ids, codes and a date only. The ledger charges the intervals around the date |
 | `MeterCatalog` | Read API for other modules (`internal.JpaMeterCatalog`): `plotIdsWithActiveMeter(resource)` (plots with an active plot meter of the resource now) and `hasMeterBetween(plot, resource, from, to)` (a plot meter of the resource worked on a day of the range, both ends included). The tariffs module uses it for `NO_METER` and the plot counts of meter-based tariffs |
 | `MeterNetwork` | Read API for the ledger (`internal.JpaMeterNetwork`, feature 011): `lockSharedPoints(meterId)` locks the meter `FOR SHARE` (a reading write holds it `FOR UPDATE`) and returns its points with stable keys (`INSTALL:{meter}`, the reading id, `REMOVAL:{meter}`; a reading on a boundary date takes its place), in the caller's transaction; `staleMeters(asOf, days)` lists the plot meters that worked on `asOf` (installed on or before it, not removed on or before it) whose last point on or before `asOf` (the latest approved reading, else the installation) is dated before `asOf - days`, as `StaleMeter(meterId, plotId, resource, lastReadingOn)`; the rule of the round's `noReadingSince` filter, as of a date. The closing check list of a billing month asks it with 60 days. Tests: `MeterNetworkTests` |
+| `WaterConnections` | Read API for the ledger (`internal.JpaWaterConnections`, feature 011): `connectedDays(plotIds, from, to)` gives, per plot, the days it was connected to any water source in the range (clipped, oldest first; a plot without such a day is absent), `connectedToSource(sourceMeterId, from, to)` the same for one source (null = the cooperative's water supply), for the common consumer split of a well pump. In the caller's transaction |
 | `MeterImport` | Facade of the Excel import's Meters sheet (`internal.MeterImportService`): `plan`, `lock`, `apply`, with `MeterImportRow`, `MeterImportPlan`, `MeterImportItem`, `MeterImportAction` (`NEW`, `UNCHANGED`) and `MeterImportProblem`. See The Excel sheet |
 
 ### The calculation
@@ -329,6 +331,58 @@ persists the new meters with the ids of the plan (derived from the import id, pl
 the inserts), maps `meter_active_plot_uq` at the flush to 409 `IMPORT_STALE` and returns one `METER_REGISTERED` event per
 meter (`MeterAuditPublisher.event`, the same fields as a registration by hand) for the import to publish in its batches.
 Tests: `ImportPreviewMetersTests`, `ImportCommitTests` (in the imports module), `MeterCatalogTests`.
+
+## Water connections (feature 011, slice 5)
+
+Table `plot_water_connection` (V16): `plot_id`, `source_meter_id` (a common consumer meter, a well pump; null = the
+cooperative's water supply), `valid_from`, `valid_to` (both connected days; null while the connection lasts). RLS
+`tenant_isolation`, `plot_water_connection_tenant_idx`, composite foreign keys (the plot `ON DELETE CASCADE`, the source
+`ON DELETE RESTRICT`), the period CHECK, the exclusion constraint `plot_water_connection_no_overlap_ex` (a plot is
+connected once on any day, 23P01) and the partial unique index `plot_water_connection_active_uq` (one lasting
+connection, 23505); `DELETE` and `TRUNCATE` revoked from `nadel_app` (the history is kept, a disconnection ends the
+row). Tests: `WaterConnectionTenantIsolationTests`.
+
+Internal: `WaterConnectionRecord`, `WaterConnectionRepository`, `WaterConnectionCommands`, `WaterConnectionQueries`,
+`JpaWaterConnections`, `WaterController` (tag `water`).
+
+| Endpoint | Operation | Who |
+|---|---|---|
+| `GET /plots/{id}/water-connections` | `getPlotWaterConnections` | `PLOTS_VIEW` for any plot, otherwise a current owner of the plot; anyone else, an unknown plot and one of another cooperative the same 404 `PLOT_NOT_FOUND`, the platform operator 403 |
+| `POST /plots/{id}/water-connections` | `connectPlotWater` | `METERS_MANAGE` |
+| `POST /plots/{id}/water-connections/{connectionId}/end` | `endPlotWaterConnection` | `METERS_MANAGE` |
+| `GET /water-sources` | `listWaterSources` | `PLOTS_VIEW` |
+| `POST /water-sources/{sourceId}/connections` | `connectWaterSourcePlots` | `METERS_MANAGE` |
+| `POST /water-sources/{sourceId}/disconnections` | `disconnectWaterSourcePlots` | `METERS_MANAGE` |
+
+- **A plot's connections**: newest first, `connected` (today in Europe/Kyiv) and `current` (the connection of today).
+  Each connection names its source (`id` `cooperative` or the meter id, `kind` `COOPERATIVE_SUPPLY` or `METER`, the
+  meter's `name`), `from` and `until`.
+- **Connect** (`sourceMeterId?`, `from`): the plot locked `FOR SHARE` (404 `PLOT_NOT_FOUND`, 409 `PLOT_ARCHIVED`, 409
+  `PLOT_COMMON_LAND`); a source that is not an active common consumer meter (unknown, another kind, removed) 409
+  `WATER_SOURCE_INVALID` on `sourceMeterId`; the plot's connections `FOR UPDATE`: a lasting one or one that reaches
+  `from` is 409 `WATER_ALREADY_CONNECTED` on `from` (and the constraints, mapped at the flush, for two at once). 201
+  with the plot's connections.
+- **End** (`until`, the last connected day): 404 `NOT_FOUND` for a connection that is not the plot's, 409
+  `WATER_NOT_CONNECTED` when it has ended already, 400 `INVALID` on `until` before its `from`.
+- **Water sources**: `cooperative` first, then the active common consumer meters by name (Ukrainian collation), each
+  with the plots whose connection to it has not ended before today, in the natural order of the numbers. **Bulk**
+  connect and disconnect are all or nothing: `plotIds[i]` `DUPLICATE`, `UNKNOWN_PLOT`, and for a connection
+  `PLOT_ARCHIVED`, `PLOT_COMMON_LAND` (400); `plotIds` `REQUIRED` when empty; 409 `WATER_ALREADY_CONNECTED` or
+  `WATER_NOT_CONNECTED` (no lasting connection to this source) with `plotIds[i]`; `until` before a plot's `from` is 400
+  `INVALID` on `plotIds[i]`. The path's `sourceId` is `cooperative` or a meter id: unknown or malformed 404, not a
+  common consumer meter 409 `WATER_SOURCE_INVALID` (a removed one too, for a connection only). Answer: the source.
+- **Missing readings**: a water meter of a plot that is not connected to water is never missing readings: the
+  `noReadingSince` filter of the register and the round leaves it out unless the plot is connected today, and
+  `MeterNetwork.staleMeters` unless it is connected on the check date. Without the filter the meter stays in the
+  register and the round.
+- **Delete guard**: a meter that plots are or were connected to as their water source is not deleted, 409
+  `WATER_SOURCE_IN_USE` (the foreign key is the backstop).
+- **Audit** (entity type `PLOT`, entity id the plot, label its number): `WATER_CONNECTED` (`source`, `from`),
+  `WATER_DISCONNECTED` (`source`, `from`, `until`); `source` is the meter's name (user content) or
+  `base:COOPERATIVE_SUPPLY`. One entry per plot of a bulk change. Guarded by `WaterAuditActionsTests` (the actions
+  are values of the contract's `AuditAction`).
+- Tests: `WaterConnectionsTests` (history, one lasting connection, overlap 409, bulk, sources, permissions, audit,
+  missing readings, the facade, the delete guard), `MeterNetworkTests` (stale water meters).
 
 ## Permissions
 

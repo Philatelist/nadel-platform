@@ -67,6 +67,10 @@ abstract class MeterTestSupport extends IntegrationTest {
         // audit entries are written after the commit; one that arrives after this cleanup stays, harmlessly
         owner.update("delete from audit_entry where entity_type in ('METER', 'METER_READING') "
                 + "and entity_label like 'MT%'");
+        // a water connection refers to its plot and its well (feature 011)
+        owner.update("delete from plot_water_connection where source_meter_id in "
+                + "(select id from meter where serial like 'MT-%') or plot_id = any(?::uuid[])",
+                "{" + String.join(",", plots.stream().map(UUID::toString).toList()) + "}");
         owner.update("delete from meter where serial like 'MT-%' and replaces_meter_id is not null");
         owner.update("delete from meter where serial like 'MT-%'");
         for (UUID ownership : ownerships) {

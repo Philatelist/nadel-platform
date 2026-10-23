@@ -10,6 +10,7 @@ import { normalizeMoneyInput, normalizePercentInput } from '@nadel/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
+import { WaterSourcesSection } from '../components/water/WaterSourcesSection';
 import { QueryBoundary } from '../components/QueryBoundary';
 import { Button, Notice, PageHeader, Panel, RadioGroup, TextField } from '../components/ui';
 import { useCanManageMeters } from '../hooks/useCanManageMeters';
@@ -26,10 +27,12 @@ export function SettingsPage() {
   useDocumentTitle(t.settings.title);
   const canSettings = useCan('SETTINGS_MANAGE');
   const canTree = useCanManageMeters();
+  const canViewPlots = useCan('PLOTS_VIEW');
   return (
     <div className="flex flex-col gap-4 text-[15px]">
       <PageHeader title={t.settings.title} />
       {canSettings && <CooperativeSettings />}
+      {canViewPlots && <WaterSourcesSection />}
       {canTree && (
         <Panel>
           <Link to="/settings/meter-tree" className="text-[17px] font-semibold text-accent underline">
@@ -187,6 +190,14 @@ function StatusThresholdSection({ saved }: { saved: Settings }) {
   );
 }
 
+/** A percentage as text without insignificant zeros ("5.00" and "5" both give "5"); no float arithmetic. */
+function canonicalPercent(text: string): string {
+  const [integer = '0', fraction = ''] = text.split('.');
+  const digits = fraction.replace(/0+$/, '');
+  const whole = integer.replace(/^0+(?=\d)/, '');
+  return digits ? `${whole}.${digits}` : whole;
+}
+
 /** How the losses of a meter tree node are charged; the percentage applies to FIXED_PERCENT. The server checks the range. */
 function LossesSettingsSection({ saved }: { saved: Settings }) {
   const t = useT();
@@ -211,7 +222,11 @@ function LossesSettingsSection({ saved }: { saved: Settings }) {
   });
 
   const normalized = normalizePercentInput(percent);
-  const changed = mode !== saved.lossesMode || normalized !== saved.lossesPercent;
+  // "5" and the saved "5.00" are the same percentage: compare them as normalised numeric text
+  const changed =
+    mode !== saved.lossesMode ||
+    normalized === undefined ||
+    canonicalPercent(normalized) !== canonicalPercent(saved.lossesPercent);
 
   return (
     <Panel title={s.losses.title}>
