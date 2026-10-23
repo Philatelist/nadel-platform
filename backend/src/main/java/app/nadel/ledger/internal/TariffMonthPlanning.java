@@ -30,9 +30,10 @@ import java.util.function.Predicate;
  * database, no clock; the month run and the retry of a queue item both call it, so they never disagree.
  * <p>
  * {@link TariffResolver} finds the tariffs of the type that apply to the plot over the month. A tariff's charge is
- * identified by the source key {@code TARIFF:{tariff}:{plot}:{YYYY-MM}}; when a charge with the key of any of them
- * exists (reversed or not) there is nothing new ({@link AlreadyCharged}: a rerun never books twice, never re-creates a
- * reversed charge, and a tariff that joins later does not turn a charged month into a conflict). Otherwise
+ * identified by the source key {@code TARIFF:{tariff}:{plot}:{YYYY-MM}}; when the key of any of them counts as charged
+ * ({@link ChargeKeys}: a charge with it stands or was reversed by hand) there is nothing new ({@link AlreadyCharged}: a
+ * rerun never books twice, never re-creates a charge reversed by hand, and a tariff that joins later does not turn a
+ * charged month into a conflict; a charge only a recalculation reversed is planned again). Otherwise
  * {@link ChargeCalculator#breakdown} over the applicable days gives each tariff's amount, and <b>only the tariffs that
  * would charge more than {@code 0.00} take part</b> (money rules §4.1): exactly one is charged ({@link NewCharge}), two
  * or more are a conflict that is queued with those tariffs ({@link Conflicting}), none is {@link Nothing} ({@code 0.00},
@@ -54,7 +55,7 @@ final class TariffMonthPlanning {
     record NewCharge(PlannedCharge charge) implements Outcome {
     }
 
-    /** The month's charge of one of the tariffs that apply exists already (reversed or not). */
+    /** The month's charge of one of the tariffs that apply counts as charged (it stands or was reversed by hand). */
     record AlreadyCharged(String sourceKey) implements Outcome {
     }
 
@@ -153,7 +154,7 @@ final class TariffMonthPlanning {
      * @param month        the billing month
      * @param applicable   the days the tariffs of the type may charge the plot ({@link DaySet#ALL}; the water
      *                     connection days for water from slice 5)
-     * @param charged      whether a charge with the source key exists
+     * @param charged      whether the source key counts as charged ({@link ChargeKeys})
      */
     static Outcome plan(Snapshot snapshot, UUID chargeTypeId, PlotFacts plot, YearMonth month, DaySet applicable,
             Predicate<String> charged) {

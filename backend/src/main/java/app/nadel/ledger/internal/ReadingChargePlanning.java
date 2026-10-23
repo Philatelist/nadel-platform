@@ -37,9 +37,10 @@ import org.jspecify.annotations.Nullable;
  * month run all call it, so they never disagree.
  * <p>
  * The charge of an interval is identified by {@code CONSUMPTION:{fromKey}:{toKey}} (the keys of its two points, see
- * {@code MeterNetwork.Point}); when a charge with that key exists (reversed or not) there is nothing new
- * ({@link AlreadyCharged}): a redelivered event never books twice and a reversed interval is not re-created (its
- * correction is a new reading, which has new keys). Otherwise {@link TariffResolver} picks the tariff of the meter's
+ * {@code MeterNetwork.Point}); when the key counts as charged ({@link ChargeKeys}: a charge with it stands or was
+ * reversed by hand) there is nothing new ({@link AlreadyCharged}): a redelivered event never books twice and an
+ * interval reversed by hand is not re-created (its correction is a new reading, which has new keys). An interval whose
+ * charge only a recalculation reversed is planned again. Otherwise {@link TariffResolver} picks the tariff of the meter's
  * charge type ({@code ELECTRICITY} or {@code WATER}) over the days of the interval:
  * <ul>
  * <li>one tariff: {@link ReadingChargeCalculator} prices it. A positive amount is a {@link NewCharges}; {@code 0.00}
@@ -71,7 +72,7 @@ final class ReadingChargePlanning {
     record NewCharges(PlannedReadingCharge consumption, @Nullable PlannedReadingCharge losses) implements Outcome {
     }
 
-    /** The interval's charge exists already (reversed or not). */
+    /** The interval's charge counts as charged (it stands or was reversed by hand). */
     record AlreadyCharged() implements Outcome {
     }
 
@@ -215,7 +216,7 @@ final class ReadingChargePlanning {
      * @param applicable    the days the tariffs may charge the plot ({@link DaySet#ALL}; the water connection days
      *                      for water from slice 5)
      * @param lossesPercent the fixed losses percentage (electricity, {@code FIXED_PERCENT} mode), or null
-     * @param charged       whether a charge with the source key exists
+     * @param charged       whether the source key counts as charged ({@link ChargeKeys})
      */
     static Outcome plan(Snapshot snapshot, UUID chargeTypeId, PlotFacts plot, MeterResource resource,
             MeterInterval interval, DaySet applicable, @Nullable BigDecimal lossesPercent, Predicate<String> charged) {

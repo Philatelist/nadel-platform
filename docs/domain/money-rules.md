@@ -46,8 +46,9 @@ reversal of the 25.00 the membership debt is 0.00 and the total 17.50.
   date), the reading date for a charge of a reading, the last day of the range for a run, the given date for an opening
   balance.
 - One charge per source and case (a source key: a tariff, plot and month; the two points of an interval; a run and a
-  plot), so a rerun, a redelivered event or a retry never charges twice, and a reversed charge is not re-created by a
-  rerun or a retry (its correction belongs to feature 012).
+  plot), so a rerun, a redelivered event or a retry never charges twice, and a charge reversed by hand is not
+  re-created by a rerun or a retry (its correction belongs to feature 012). A charge a recalculation reversed because
+  the case can no longer be charged (it is queued) is charged again by a rerun or a retry once it can be, once.
 
 ### 3.1 Billing months and closing
 
@@ -118,7 +119,8 @@ PER_KWH/PER_M3 not calculated here: needs readings (features 010–011); the plo
   the days the tariff may charge the plot (every day, or for water the days the plot is connected): each recurring
   version counts for its valid **and** applicable days over `D`, a one-time fee only when its due date is applicable;
   one rounding as above. It stores the parts (version, days, sotkas or one plot, rate). An amount of `0.00` creates no
-  charge. One charge per plot, tariff and month: a rerun never charges twice and never re-creates a reversed charge.
+  charge. One charge per plot, tariff and month: a rerun never charges twice and never re-creates a charge reversed by
+  hand.
 - **Conflicting tariffs.** When two tariffs of the same charge type apply to one plot (its scope, not excluded) on the
   same day, neither is charged for that plot; the month run puts the case in the "not charged" queue naming both
   tariffs, and the tariffs page warns. Versions never end, so two such tariffs conflict from the later first version on.

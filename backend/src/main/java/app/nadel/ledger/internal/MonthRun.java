@@ -91,7 +91,7 @@ class MonthRun {
     private final ChargeTypeCatalog chargeTypes;
     private final PlotCatalog plots;
     private final BillingMonths billingMonths;
-    private final ChargeRepository charges;
+    private final ChargeKeys chargeKeys;
     private final NotChargedItemRepository items;
     private final NotChargedViews itemViews;
     private final TariffChargeWriter writer;
@@ -103,14 +103,14 @@ class MonthRun {
     private final Clock clock;
 
     MonthRun(TariffBook book, ChargeTypeCatalog chargeTypes, PlotCatalog plots, BillingMonths billingMonths,
-            ChargeRepository charges, NotChargedItemRepository items, NotChargedViews itemViews,
+            ChargeKeys chargeKeys, NotChargedItemRepository items, NotChargedViews itemViews,
             TariffChargeWriter writer, NotChargedRetries retries, LedgerAuditPublisher audit,
             IntervalCharging intervals, WaterDays waterDays, ChargingLock chargingLock, Clock clock) {
         this.book = book;
         this.chargeTypes = chargeTypes;
         this.plots = plots;
         this.billingMonths = billingMonths;
-        this.charges = charges;
+        this.chargeKeys = chargeKeys;
         this.items = items;
         this.itemViews = itemViews;
         this.writer = writer;
@@ -217,7 +217,7 @@ class MonthRun {
         List<NotChargedItemRecord> otherMonths = items.findByKindAndStatus(Kind.TARIFF_MONTH, Status.OPEN).stream()
                 .filter(item -> !first.equals(Objects.requireNonNull(item.getMonth()).atDay(1)))
                 .sorted(Comparator.comparing(NotChargedItemRecord::getItemKey)).toList();
-        // first: the source keys the run may use, to ask the ledger once which exist (reversed ones included)
+        // first: the source keys the run may use, to ask the ledger once which count as charged (ChargeKeys)
         Set<String> keys = new HashSet<>();
         for (PlotFacts plot : chargeable) {
             for (ChargeTypeEntry type : types) {
@@ -299,13 +299,9 @@ class MonthRun {
         return new TariffResolver.PlotFacts(plot.id(), plot.commonLand(), plot.archived(), plot.areaM2());
     }
 
+    /** The keys that count as charged ({@link ChargeKeys}: a charge stands or was reversed by hand). */
     private Set<String> existingKeys(Set<String> keys) {
-        List<String> all = new ArrayList<>(keys);
-        Set<String> existing = new HashSet<>();
-        for (int from = 0; from < all.size(); from += 500) {
-            existing.addAll(charges.existingSourceKeys(all.subList(from, Math.min(all.size(), from + 500))));
-        }
-        return existing;
+        return chargeKeys.charged(keys);
     }
 
     /** Opens an item per conflict, or brings the open one up to date with the tariffs of this run. */

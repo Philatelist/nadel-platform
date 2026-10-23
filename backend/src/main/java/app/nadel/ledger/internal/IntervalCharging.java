@@ -77,20 +77,20 @@ class IntervalCharging {
     private final PlotCatalog plots;
     private final CooperativeSettings settings;
     private final BillingMonths billingMonths;
-    private final ChargeRepository charges;
+    private final ChargeKeys chargeKeys;
     private final NotChargedItemRepository items;
     private final WaterDays waterDays;
     private final EntityManager entityManager;
 
     IntervalCharging(MeterNetwork network, TariffChargeWriter writer, PlotCatalog plots,
-            CooperativeSettings settings, BillingMonths billingMonths, ChargeRepository charges,
+            CooperativeSettings settings, BillingMonths billingMonths, ChargeKeys chargeKeys,
             NotChargedItemRepository items, WaterDays waterDays, EntityManager entityManager) {
         this.network = network;
         this.writer = writer;
         this.plots = plots;
         this.settings = settings;
         this.billingMonths = billingMonths;
-        this.charges = charges;
+        this.chargeKeys = chargeKeys;
         this.items = items;
         this.waterDays = waterDays;
         this.entityManager = entityManager;
@@ -229,7 +229,9 @@ class IntervalCharging {
      */
     private Processed process(UUID tenantId, Context context, MeterInterval interval, @Nullable UUID actor,
             Instant now) {
-        Outcome outcome = plan(context, interval, key -> !charges.existingSourceKeys(List.of(key)).isEmpty());
+        // charged: a charge of the interval stands or was reversed by hand (not one a recalculation reversed)
+        Set<String> charged = chargeKeys.charged(List.of(interval.consumptionKey(), interval.lossesKey()));
+        Outcome outcome = plan(context, interval, charged::contains);
         String itemKey = NotChargedItemRecord.intervalKey(interval.meterId(), interval.to().key());
         Optional<NotChargedItemRecord> open = items.findOpen(itemKey);
         Processed processed;
@@ -267,7 +269,8 @@ class IntervalCharging {
      * What {@link ReadingChargePlanning} decides for one interval of the meter: the tariffs of the snapshot, the days the
      * plot may be charged ({@link WaterDays}) and the losses percentage of the context.
      *
-     * @param charged whether a charge with the source key exists ({@code key -> false} for a recalculation)
+     * @param charged whether the source key counts as charged ({@link ChargeKeys}; {@code key -> false} for a
+     *                recalculation)
      */
     private Outcome plan(Context context, MeterInterval interval, Predicate<String> charged) {
         MeterResource resource = context.meter().resource();
@@ -276,7 +279,11 @@ class IntervalCharging {
                 context.lossesPercent(), charged);
     }
 
-    /** Writes the charges of an interval, their parts and the points they read, in the booking month. */
+    /**
+     * Writes the charges of an interval, their parts and the points they read, in the booking month; each under its
+     * base key, or {@code base#r{recalculation}} when a recalculation reversed the charge of the base key
+     * ({@link ChargeKeys#bookingKeys}).
+     */
     private void book(UUID tenantId, NewCharges planned, @Nullable UUID actor, Instant now) {
         List<PlannedReadingCharge> toBook = new ArrayList<>();
         toBook.add(planned.consumption());
@@ -284,8 +291,10 @@ class IntervalCharging {
             toBook.add(planned.losses());
         }
         BillingMonthRecord month = billingMonths.openForBooking(tenantId, planned.consumption().accruedOn());
+        Map<String, String> keys = chargeKeys.bookingKeys(toBook.stream().map(PlannedReadingCharge::sourceKey)
+                .toList());
         for (PlannedReadingCharge charge : toBook) {
-            write(tenantId, charge, month.getId(), charge.sourceKey(), null, actor, now);
+            write(tenantId, charge, month.getId(), keys.get(charge.sourceKey()), null, actor, now);
         }
     }
 

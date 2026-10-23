@@ -12,6 +12,7 @@ import java.time.Instant;
 import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.UUID;
@@ -44,13 +45,15 @@ class TariffChargeWriter {
     private final ChargeTypeCatalog chargeTypes;
     private final ApplicationEventPublisher events;
     private final EntityManager entityManager;
+    private final ChargeKeys chargeKeys;
 
     TariffChargeWriter(TariffBook book, ChargeTypeCatalog chargeTypes, ApplicationEventPublisher events,
-            EntityManager entityManager) {
+            EntityManager entityManager, ChargeKeys chargeKeys) {
         this.book = book;
         this.chargeTypes = chargeTypes;
         this.events = events;
         this.entityManager = entityManager;
+        this.chargeKeys = chargeKeys;
     }
 
     /**
@@ -93,16 +96,20 @@ class TariffChargeWriter {
 
     /**
      * Writes the charges (each with its parts, one per version) in the billing month; the charges first, then the
-     * parts, so the foreign keys hold whatever order the batch takes.
+     * parts, so the foreign keys hold whatever order the batch takes. Each charge goes under its base key, or
+     * {@code base#r{recalculation}} when a recalculation reversed the charge of the base key
+     * ({@link ChargeKeys#bookingKeys}).
      */
     @Transactional(propagation = Propagation.MANDATORY)
     List<ChargeRecord> book(UUID tenantId, List<PlannedCharge> planned, UUID billingMonthId,
             @Nullable UUID createdBy, Instant now) {
         List<ChargeRecord> written = new ArrayList<>(planned.size());
+        Map<String, String> keys = planned.isEmpty() ? Map.of()
+                : chargeKeys.bookingKeys(planned.stream().map(PlannedCharge::sourceKey).toList());
         for (PlannedCharge charge : planned) {
             ChargeRecord record = ChargeRecord.tariff(tenantId, charge.plotId(), charge.chargeTypeId(),
                     billingMonthId, charge.tariff().id(), charge.amount(), charge.serviceFrom(), charge.serviceTo(),
-                    charge.accruedOn(), charge.sourceKey(), charge.calculation(), createdBy, now);
+                    charge.accruedOn(), keys.get(charge.sourceKey()), charge.calculation(), createdBy, now);
             entityManager.persist(record);
             written.add(record);
         }

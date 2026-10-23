@@ -31,3 +31,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `c6926e6..bd66a08` | MAJOR_ISSUES | M1 an INTERVAL item opened after a recalculation REVERSE is marked RESOLVED by the next retry/month run without charging (the reversed original keeps its key, `charged` predicate says AlreadyCharged); same pattern for TARIFF_MONTH items from Slice 3 | minor: NEW interval line after a back-dated version shows reason METER_TREE (ChangeReasons fallback); current losses mode applied to past fixed-losses charges (document); all-history load then in-memory filter; deviations 1–3 accepted |
+
+## Slice 5 — Losses and common consumers runs
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `bd66a08..e161d9a` | MAJOR_ISSUES | M1 a run's open/closed state is taken from the first live charge (a NEW plot of a closed run is booked in the open month), so a closed run can be reversed and rebooked; `rebookRun` takes the month from the first line | minor: losses mode not re-checked — after a switch PROPORTIONAL→FIXED a recalculation can add fixed losses and rebook the proportional run (double losses; decision/doc needed); a chosen plot pulls the whole run in (document); no test for RunAction.REVERSE or the plot-scope filter; known gaps (hand-reversed plot left out of a rebooked run; unknown node in a closed month gets no queue item) |

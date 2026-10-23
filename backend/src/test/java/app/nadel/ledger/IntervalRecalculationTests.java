@@ -27,11 +27,12 @@ import tools.jackson.databind.JsonNode;
  * consumption and fixed-percentage losses, compared per interval (the meter, the source and the dates of its two
  * readings). A new rate reverses and charges again an interval of an open month and adjusts one of a closed month in
  * the earliest open month with the original's service period and debt date; fixed losses follow the consumption; a
- * queued interval is charged and its item resolved, an interval that can no longer be charged is reversed and queued;
- * water is charged for the connected days only while the water type is active; a second run finds nothing; new charges
- * and adjustments read the points of their interval ({@code meter_value_use}). Months are relative to the current month
- * in Europe/Kyiv: the readings are dated in the previous month ("September"), the current one ("October") is open.
- * Electricity 4.32 per kWh: 65 kWh = 280.80.
+ * queued interval is charged and its item resolved, an interval that can no longer be charged is reversed and queued
+ * (a retry or the month run keeps it queued until it can be charged, then charges it once under the recalculation's
+ * suffix); water is charged for the connected days only while the water type is active; a second run finds nothing;
+ * new charges and adjustments read the points of their interval ({@code meter_value_use}). Months are relative to the
+ * current month in Europe/Kyiv: the readings are dated in the previous month ("September"), the current one
+ * ("October") is open. Electricity 4.32 per kWh: 65 kWh = 280.80.
  */
 class IntervalRecalculationTests extends ReadingChargeSupport {
 
@@ -334,6 +335,99 @@ class IntervalRecalculationTests extends ReadingChargeSupport {
         });
         assertThat(owner().queryForObject("select sum(amount)::text from charge where plot_id = ?", String.class,
                 plot)).isEqualTo("0.00");
+    }
+
+    /** An interval charged, reversed by a recalculation that can no longer charge it, and queued. */
+    private record ReversedInterval(Tariff electricity, UUID meter, UUID reading, UUID item, UUID recalculation) {
+
+        String baseKey() {
+            return "CONSUMPTION:INSTALL:" + meter + ":" + reading;
+        }
+    }
+
+    private ReversedInterval reversedAndQueued() throws Exception {
+        Tariff electricity = tariff("ELECTRICITY", "Електроенергія", "PER_KWH", "MONTHLY", "4.3200", "2020-01-01");
+        UUID meter = electricityMeter(plot, day(september, 3), "8140");
+        UUID reading = entered(meter, day(september, 20), "8205");
+        awaitCharges(1);
+        owner().update("update tariff_version set valid_from = ?::date where id = ?", day(september, 15),
+                electricity.version());
+        JsonNode preview = preview(electricityScope(null, null));
+        JsonNode booked = book(electricityScope(REASON, preview.get("digest").asString()));
+        assertThat(booked.get("lines").get(0).get("action").asString()).isEqualTo("REVERSE");
+        UUID item = (UUID) openItems().getFirst().get("id");
+        return new ReversedInterval(electricity, meter, reading, item,
+                UUID.fromString(booked.get("id").asString()));
+    }
+
+    /** The version starts on 1 January 2020 again: the interval can be charged. */
+    private void fixTheVersion(ReversedInterval reversed) {
+        owner().update("update tariff_version set valid_from = '2020-01-01' where id = ?",
+                reversed.electricity().version());
+    }
+
+    private List<Map<String, Object>> regularCharges() {
+        return readingCharges(plot).stream().filter(c -> "REGULAR".equals(c.get("kind"))).toList();
+    }
+
+    private String plotTotal() {
+        return owner().queryForObject("select sum(amount)::text from charge where plot_id = ?", String.class, plot);
+    }
+
+    @Test
+    void aRetryKeepsAnIntervalAReversalQueuedOpenUntilItCanBeChargedAndThenChargesItOnce() throws Exception {
+        ReversedInterval reversed = reversedAndQueued();
+
+        // still no tariff for every day: the item stays open and nothing is booked
+        JsonNode unresolved = body(send(chairman, post(RETRY.formatted(reversed.item())), null)
+                .andExpect(status().isOk()));
+        assertThat(unresolved.get("resolved").asBoolean()).isFalse();
+        assertThat(openItems()).singleElement().satisfies(item -> assertThat(item.get("id"))
+                .isEqualTo(reversed.item()));
+        assertThat(plotTotal()).isEqualTo("0.00");
+
+        fixTheVersion(reversed);
+        JsonNode resolved = body(send(chairman, post(RETRY.formatted(reversed.item())), null)
+                .andExpect(status().isOk()));
+
+        assertThat(resolved.get("resolved").asBoolean()).isTrue();
+        assertThat(openItems()).isEmpty();
+        // the base key is the reversed charge's: the new one goes under the recalculation's suffix
+        assertThat(regularCharges()).extracting(c -> c.get("source_key"), c -> c.get("amount"))
+                .containsExactly(tuple(reversed.baseKey(), "280.80"),
+                        tuple(reversed.baseKey() + "#r" + reversed.recalculation(), "280.80"));
+        assertThat(plotTotal()).isEqualTo("280.80");
+        // charged now: a redelivered event books nothing
+        int before = chargeCount();
+        new TransactionTemplate(transactions).executeWithoutResult(status -> events.publishEvent(
+                new PlotMeterPointsChanged(tenant, reversed.meter(), plot, MeterResource.ELECTRICITY,
+                        september.atDay(20), PlotMeterPointsChanged.Cause.READING_ENTERED)));
+        awaitListeners();
+        assertThat(chargeCount()).isEqualTo(before);
+    }
+
+    @Test
+    void theMonthRunKeepsAnIntervalAReversalQueuedOpenUntilItCanBeChargedAndThenChargesItOnce() throws Exception {
+        ReversedInterval reversed = reversedAndQueued();
+
+        send(chairman, post(RUN.formatted(october, false)), null).andExpect(status().isOk());
+        assertThat(openItems()).singleElement().satisfies(item -> assertThat(item.get("id"))
+                .isEqualTo(reversed.item()));
+        assertThat(plotTotal()).isEqualTo("0.00");
+
+        fixTheVersion(reversed);
+        send(chairman, post(RUN.formatted(october, false)), null).andExpect(status().isOk());
+
+        assertThat(openItems()).isEmpty();
+        assertThat(owner().queryForObject("select status from not_charged_item where id = ?", String.class,
+                reversed.item())).isEqualTo("RESOLVED");
+        assertThat(regularCharges()).extracting(c -> c.get("source_key"), c -> c.get("amount"))
+                .containsExactly(tuple(reversed.baseKey(), "280.80"),
+                        tuple(reversed.baseKey() + "#r" + reversed.recalculation(), "280.80"));
+        int before = chargeCount();
+        send(chairman, post(RUN.formatted(october, false)), null).andExpect(status().isOk());
+        assertThat(chargeCount()).isEqualTo(before);
+        assertThat(plotTotal()).isEqualTo("280.80");
     }
 
     // ---- water

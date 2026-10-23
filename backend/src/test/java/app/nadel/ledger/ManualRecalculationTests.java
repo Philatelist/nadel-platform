@@ -23,9 +23,11 @@ import tools.jackson.databind.JsonNode;
  * the preview writes nothing, the booking reverses and charges again in the open month and adjusts the closed month in
  * the earliest open month, with the original's service period and debt date; a second run finds nothing; a stale
  * preview, a missing or too long reason, a future month and a range over 24 months are refused; a closed month keeps
- * its charges and totals; a charge reversed by hand stays; the record, its lines and its audit entry; who may preview
- * and book. Months are relative to the current month in Europe/Kyiv: the previous month ("September") is closed, the
- * current one ("October") open. Membership 50.00 per sotka per year: 600 m2 pays 25.00 a month, 700 m2 29.17.
+ * its charges and totals; a charge reversed by hand stays; a month the recalculation reversed and queued stays queued
+ * on a retry or a month run until it can be charged, then is charged once under the recalculation's suffix; the record,
+ * its lines and its audit entry; who may preview and book. Months are relative to the current month in Europe/Kyiv: the
+ * previous month ("September") is closed, the current one ("October") open. Membership 50.00 per sotka per year:
+ * 600 m2 pays 25.00 a month, 700 m2 29.17.
  */
 class ManualRecalculationTests extends FreshCooperativeSupport {
 
@@ -348,6 +350,89 @@ class ManualRecalculationTests extends FreshCooperativeSupport {
 
         assertThat(preview.get("lines")).singleElement()
                 .satisfies(line -> assertThat(line.get("action").asString()).isEqualTo("ADJUST"));
+    }
+
+    // ---- a month a recalculation reversed and queued
+
+    /** A month item opened by a recalculation that reversed the charge, and the recalculation. */
+    private record ReversedMonth(Tariff extra, UUID item, UUID recalculation) {
+    }
+
+    /**
+     * October of plot 7 booked, then a second membership tariff for plot 7: the recalculation of October reverses the
+     * charge and queues the conflict.
+     */
+    private ReversedMonth octoberReversedAndQueued() throws Exception {
+        bookSeptemberAndOctoberThenCloseSeptember();
+        Tariff extra = tariff("MEMBERSHIP", "Додатковий внесок", "PER_PLOT", "MONTHLY", "100.0000", "2020-01-01");
+        select(extra, plot7);
+        Map<String, Object> scope = manual(october, october, List.of(typeId("MEMBERSHIP")), List.of(plot7), null,
+                null);
+        JsonNode preview = preview(scope);
+        assertThat(preview.get("lines")).singleElement()
+                .satisfies(line -> assertThat(line.get("action").asString()).isEqualTo("REVERSE"));
+        JsonNode booked = book(manual(october, october, List.of(typeId("MEMBERSHIP")), List.of(plot7), REASON,
+                preview.get("digest").asString()));
+        UUID item = owner().queryForObject("select id from not_charged_item where tenant_id = ? and status = 'OPEN' "
+                + "and kind = 'TARIFF_MONTH'", UUID.class, tenant);
+        return new ReversedMonth(extra, item, UUID.fromString(booked.get("id").asString()));
+    }
+
+    private String itemStatus(UUID item) {
+        return owner().queryForObject("select status from not_charged_item where id = ?", String.class, item);
+    }
+
+    private List<String> octoberMembershipKeys() {
+        return charges(plot7).stream().filter(c -> "REGULAR".equals(c.get("kind")))
+                .filter(c -> date(c.get("service_from")).equals(YearMonth.parse(october).atDay(1)))
+                .filter(c -> membership.id().equals(c.get("tariff_id")))
+                .map(c -> (String) c.get("source_key")).toList();
+    }
+
+    private String membershipDebt() throws Exception {
+        return debt(body(send(chairman, get(ACCOUNT.formatted(plot7)), null).andExpect(status().isOk())),
+                "MEMBERSHIP");
+    }
+
+    @Test
+    void aRetryKeepsAMonthAReversalQueuedOpenUntilItCanBeChargedAndThenChargesItOnce() throws Exception {
+        ReversedMonth reversed = octoberReversedAndQueued();
+        String base = "TARIFF:" + membership.id() + ":" + plot7 + ":" + october;
+
+        JsonNode unresolved = body(send(chairman, post(RETRY.formatted(reversed.item())), null)
+                .andExpect(status().isOk()));
+        assertThat(unresolved.get("resolved").asBoolean()).isFalse();
+        assertThat(itemStatus(reversed.item())).isEqualTo("OPEN");
+        assertThat(membershipDebt()).isEqualTo("25.00");
+
+        unselect(reversed.extra(), plot7);
+        JsonNode resolved = body(send(chairman, post(RETRY.formatted(reversed.item())), null)
+                .andExpect(status().isOk()));
+
+        assertThat(resolved.get("resolved").asBoolean()).isTrue();
+        assertThat(itemStatus(reversed.item())).isEqualTo("RESOLVED");
+        assertThat(octoberMembershipKeys()).containsExactly(base, base + "#r" + reversed.recalculation());
+        assertThat(membershipDebt()).isEqualTo("50.00");
+    }
+
+    @Test
+    void theMonthRunKeepsAMonthAReversalQueuedOpenUntilItCanBeChargedAndThenChargesItOnce() throws Exception {
+        ReversedMonth reversed = octoberReversedAndQueued();
+        String base = "TARIFF:" + membership.id() + ":" + plot7 + ":" + october;
+
+        send(chairman, post(RUN.formatted(october, false)), null).andExpect(status().isOk());
+        assertThat(itemStatus(reversed.item())).isEqualTo("OPEN");
+        assertThat(membershipDebt()).isEqualTo("25.00");
+
+        unselect(reversed.extra(), plot7);
+        send(chairman, post(RUN.formatted(october, false)), null).andExpect(status().isOk());
+
+        assertThat(itemStatus(reversed.item())).isEqualTo("RESOLVED");
+        assertThat(octoberMembershipKeys()).containsExactly(base, base + "#r" + reversed.recalculation());
+        assertThat(membershipDebt()).isEqualTo("50.00");
+        int before = chargeCount();
+        send(chairman, post(RUN.formatted(october, false)), null).andExpect(status().isOk());
+        assertThat(chargeCount()).isEqualTo(before);
     }
 
     // ---- refusals

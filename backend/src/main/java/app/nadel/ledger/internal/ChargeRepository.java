@@ -53,6 +53,22 @@ interface ChargeRepository extends JpaRepository<ChargeRecord, UUID> {
     @Query("select c.sourceKey from ChargeRecord c where c.sourceKey in :keys")
     List<String> existingSourceKeys(@Param("keys") Collection<String> keys);
 
+    /** The source keys among {@code keys} whose charge a reversal of the source cancels ({@link ChargeKeys}). */
+    @Query("select c.sourceKey from ChargeRecord c where c.sourceKey in :keys and exists "
+            + "(select r.id from ChargeRecord r where r.reversesChargeId = c.id and r.source = :source)")
+    List<String> reversedBy(@Param("keys") Collection<String> keys, @Param("source") ChargeSource source);
+
+    /**
+     * The charges with the source key {@code base} or a key that starts with {@code prefix} ({@code base#r}: booked
+     * again by a recalculation or after one), each as its key and the source, recalculation and time of the reversal
+     * that cancels it (nulls while it stands); {@link ChargeKeys}.
+     */
+    @Query("select c.sourceKey, r.source, r.recalculationId, r.createdAt from ChargeRecord c "
+            + "left join ChargeRecord r on r.reversesChargeId = c.id "
+            + "where c.sourceKey = :base or substring(c.sourceKey, 1, :prefixLength) = :prefix")
+    List<Object[]> revisionsOf(@Param("base") String base, @Param("prefix") String prefix,
+            @Param("prefixLength") int prefixLength);
+
     /** The opening balances of the plots that no reversal cancels, in no particular order (the Excel import). */
     @Query("select c from ChargeRecord c where c.plotId in :plotIds and c.kind = :kind and not exists "
             + "(select r.id from ChargeRecord r where r.reversesChargeId = c.id)")

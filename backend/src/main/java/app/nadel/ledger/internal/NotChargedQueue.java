@@ -59,7 +59,7 @@ class NotChargedQueue {
     private final TariffBook book;
     private final TariffChargeWriter writer;
     private final NotChargedRetries retries;
-    private final ChargeRepository charges;
+    private final ChargeKeys chargeKeys;
     private final PlotCatalog plots;
     private final ChargeTypeCatalog chargeTypes;
     private final LedgerAuditPublisher audit;
@@ -72,7 +72,7 @@ class NotChargedQueue {
     private final Clock clock;
 
     NotChargedQueue(NotChargedItemRepository items, NotChargedViews views, TariffBook book, TariffChargeWriter writer,
-            NotChargedRetries retries, ChargeRepository charges, PlotCatalog plots, ChargeTypeCatalog chargeTypes,
+            NotChargedRetries retries, ChargeKeys chargeKeys, PlotCatalog plots, ChargeTypeCatalog chargeTypes,
             LedgerAuditPublisher audit, IntervalCharging intervals, LossesRuns lossesRuns,
             CommonConsumerRuns commonConsumerRuns, WaterDays waterDays, ChargingLock chargingLock,
             EntityManager entityManager, Clock clock) {
@@ -81,7 +81,7 @@ class NotChargedQueue {
         this.book = book;
         this.writer = writer;
         this.retries = retries;
-        this.charges = charges;
+        this.chargeKeys = chargeKeys;
         this.plots = plots;
         this.chargeTypes = chargeTypes;
         this.audit = audit;
@@ -147,7 +147,7 @@ class NotChargedQueue {
         Attempt attempt = NotChargedRetries.plan(snapshot, List.of(item),
                 plot.map(p -> Map.of(p.id(), p)).orElse(Map.of()),
                 waterDays.forMonths(snapshot, List.of(plotId), List.of(month)),
-                key -> !charges.existingSourceKeys(List.of(key)).isEmpty()).getFirst();
+                key -> !chargeKeys.charged(List.of(key)).isEmpty()).getFirst();
         Instant now = clock.instant();
         if (!retries.apply(tenantId, List.of(attempt), actor.memberId(), now).isEmpty()) {
             writer.publishBooked(tenantId, Set.of(plotId));
