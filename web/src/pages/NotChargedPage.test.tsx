@@ -26,6 +26,17 @@ const item: NotChargedItem = {
   ],
 };
 
+const consumerItem: NotChargedItem = {
+  id: 'n4',
+  kind: 'COMMON_CONSUMER',
+  reason: 'UNKNOWN_CONSUMER_VALUE',
+  meterId: 'w1',
+  chargeType: { id: 't9', code: 'COMMON_CONSUMERS', name: 'Common consumers', nameCustomized: false },
+  from: '2026-10-01',
+  to: '2026-10-23',
+  tariffs: [],
+};
+
 vi.mock('../me', () => ({
   useCan: (p: Permission) => permissions.includes(p),
   useMe: () => ({ permissions }),
@@ -93,6 +104,16 @@ describe('NotChargedPage', () => {
     expect(screen.getByText('A meter value of the period is unknown')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Retry' }));
     expect(mutate).toHaveBeenCalledWith({ id: 'n3' });
+  });
+
+  it('shows a common consumer with its consumer link, the period and a retry', async () => {
+    notCharged = [consumerItem];
+    renderWithApp(withQueries(<NotChargedPage />));
+    expect(screen.getByRole('link', { name: 'Common consumer' })).toHaveAttribute('href', '/meters/w1');
+    expect(screen.getByText('1 Oct 2026 – 23 Oct 2026')).toBeInTheDocument();
+    expect(screen.getByText('A meter value of the period is unknown')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(mutate).toHaveBeenCalledWith({ id: 'n4' });
   });
 
   it('retries and reports an item that is still not charged', async () => {

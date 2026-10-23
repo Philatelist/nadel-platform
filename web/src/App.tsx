@@ -138,6 +138,11 @@ const router = createBrowserRouter([
             lazy: () => import('./pages/LossesPage').then((m) => ({ Component: m.LossesPage })),
           },
           {
+            path: 'charges/common',
+            lazy: () =>
+              import('./pages/CommonConsumersPage').then((m) => ({ Component: m.CommonConsumersPage })),
+          },
+          {
             path: 'charges/months/:ym',
             lazy: () => import('./pages/ChargesMonthPage').then((m) => ({ Component: m.ChargesMonthPage })),
           },

@@ -99,6 +99,8 @@ abstract class FreshCooperativeSupport extends LedgerTestSupport {
             sql.update("delete from charge where tenant_id = ?", id);
             sql.update("delete from losses_run_node where tenant_id = ?", id);
             sql.update("delete from losses_run where tenant_id = ?", id);
+            sql.update("delete from common_consumer_run_line where tenant_id = ?", id);
+            sql.update("delete from common_consumer_run where tenant_id = ?", id);
             sql.update("delete from not_charged_item where tenant_id = ?", id);
             sql.update("delete from billing_month where tenant_id = ?", id);
         });
@@ -106,9 +108,10 @@ abstract class FreshCooperativeSupport extends LedgerTestSupport {
         owner().update("delete from meter_reading where tenant_id = ?", id);
         owner().update("delete from meter_parent where tenant_id = ?", id);
         owner().update("delete from meter where tenant_id = ? and replaces_meter_id is not null", id);
-        for (String table : List.of("audit_entry", "plot_status", "tariff_scope_plot", "tariff_version", "tariff",
-                "ownership", "plot_water_connection", "meter_reading", "meter", "plot", "member_role", "role_permission", "role", "member",
-                "charge_type", "cooperative_settings")) {
+        for (String table : List.of("common_consumer_user", "common_consumer_billing", "audit_entry", "plot_status",
+                "tariff_scope_plot", "tariff_version", "tariff", "ownership", "plot_water_connection", "meter_reading",
+                "meter", "plot", "member_role", "role_permission", "role", "member", "charge_type",
+                "cooperative_settings")) {
             owner().update("delete from " + table + " where tenant_id = ?", id);
         }
         owner().update("delete from tenant where id = ?", id);

@@ -44,7 +44,7 @@ export function ChargeDetailDialog({ charge, onClose }: { charge: Charge; onClos
     const text = formatMeterValue(consumption, locale);
     rows.push([d.consumption, unit && unit !== 'PLOT' ? `${text} ${t.charges.line.unit[unit]}` : text]);
   }
-  const { nodeMeterId, runId } = charge.calculation;
+  const { nodeMeterId, runId, consumerMeterId, consumerName, split } = charge.calculation;
   if (nodeMeterId !== undefined) {
     rows.push([
       d.node,
@@ -53,10 +53,24 @@ export function ChargeDetailDialog({ charge, onClose }: { charge: Charge; onClos
       </Link>,
     ]);
   }
-  if (runId !== undefined) {
+  if (consumerMeterId !== undefined) {
     rows.push([
-      d.run,
-      <Link key="run" to={`/charges/losses?run=${runId}`} className="text-accent underline">
+      d.consumer,
+      <Link key="consumer" to={`/meters/${consumerMeterId}`} className="text-accent underline">
+        {consumerName ? <UserContent>{consumerName}</UserContent> : d.consumer}
+      </Link>,
+    ]);
+  }
+  if (split !== undefined) rows.push([d.split, t.billing.common.split[split]]);
+  if (runId !== undefined) {
+    const common = consumerMeterId !== undefined;
+    rows.push([
+      common ? d.commonRun : d.run,
+      <Link
+        key="run"
+        to={`/charges/${common ? 'common' : 'losses'}?run=${runId}`}
+        className="text-accent underline"
+      >
         {d.openRun}
       </Link>,
     ]);

@@ -212,6 +212,21 @@ class ChargeRecord {
     }
 
     /**
+     * A charge of a common consumer run (kind {@code REGULAR}, source {@code COMMON_CONSUMER}, charge type
+     * {@code COMMON_CONSUMERS}): one plot's share of one consumer priced with its tariff, for the days of the run's
+     * range, the debt counting from its end; identified by {@code sourceKey}
+     * ({@code COMMON_CONSUMER_RUN:{run}:{consumer}:{plot}}) and pointing at the run.
+     */
+    static ChargeRecord commonConsumerRun(UUID tenantId, UUID plotId, UUID chargeTypeId, UUID billingMonthId,
+            UUID tariffId, UUID runId, Money amount, LocalDate serviceFrom, LocalDate serviceTo, String sourceKey,
+            Map<String, Object> calculation, @Nullable UUID createdBy, Instant now) {
+        ChargeRecord charge = lossesRun(tenantId, plotId, chargeTypeId, billingMonthId, tariffId, runId, amount,
+                serviceFrom, serviceTo, sourceKey, calculation, createdBy, now);
+        charge.source = ChargeSource.COMMON_CONSUMER;
+        return charge;
+    }
+
+    /**
      * The reversal of {@code original}: the opposite amount, the same plot, charge type, service period, debt age, meter
      * and run, source {@code MANUAL_REVERSAL}, the reason, pointing at the original.
      */
@@ -295,7 +310,10 @@ class ChargeRecord {
         return meterId;
     }
 
-    /** The run (a losses run) that booked the charge, or whose charge a reversal cancels; null for other charges. */
+    /**
+     * The run (a losses run or a common consumer run) that booked the charge, or whose charge a reversal cancels; null
+     * for other charges.
+     */
     @Nullable UUID getRunId() {
         return runId;
     }

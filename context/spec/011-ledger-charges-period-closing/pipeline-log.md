@@ -123,3 +123,15 @@ Same as 004–010 (see `context/spec/010-meters-and-readings/pipeline-log.md`). 
 - AUTO: `to` after today → 400 DATE_IN_FUTURE (spec silent; nothing could be charged anyway).
 - Slice 6 web (react-frontend): LossesPage on reusable RunRangePage/RunHistory/ReverseRunDialog/RunWarnings, audit LOSSES_RUN, LOSSES_NODE queue rows, Slice 5 minors (water buttons, uk texts, WATER_SOURCE_IN_USE text); RED per builder. Orchestrator: clients 56/7/130/542, typecheck/lint/format green, gen stable. AUTO: overlap UX — Book hidden, "preview without the charged nodes" re-previews with nodeIds, then books with that digest.
 - Slice 6 verified by orchestrator: backend 606 (ledger, meters, audit, modularity) green.
+- Slice 6 committed — tests green; review round 1 running.
+- Slice 6 review round 1: MAJOR_ISSUES (M1 overlap re-preview drops UNKNOWN nodes). Fixes in the review worktree: react-frontend M1, spring-backend minors 1-3.
+- Slice 6 review fixes committed `5d03827` in the review worktree (M1 web: re-preview keeps all non-ALREADY_CHARGED nodes, Book without CHARGED nodes; minor 1: LOSSES_NODE item narrowed to the uncharged days; minor 2: losses zero at 3 decimals are zero; minor 3 README deadlock note). RED for each (logs checked); targeted backend 66 + web 543 green. Cherry-pick after the Slice 7 commit if LossesRuns overlaps. Round 2 running.
+- Slice 6 review round 2: PASS. Fix 5d03827 to be cherry-picked after the Slice 7 commit.
+- Slice 7 backend (spring-backend): V18 common_consumer_run/_run_line/_billing/_user, CommonConsumerSplitCalculator, CommonConsumerPlanning, CommonConsumerRuns + controller, billing settings endpoints, COMMON_CONSUMER queue retries, MeterCatalog.find; slice 601 green, RED per class (builder); gen stable. Web task delegated to react-frontend (with the Slice 6 empty-preview minor, generically in RunRangePage).
+- AUTO: one run line per consumer (not per plot) with plot shares in jsonb, mirroring losses_run_node so RunRangePage is reused (tech spec had one line per plot).
+- AUTO: run line keeps the consumer name and has no foreign key to the meter (an UNKNOWN consumer meter can still be deleted; a charged one always has readings and cannot).
+- AUTO: CONNECTED_PLOTS uses the well's water connections; a share is priced over the plot's own days (split by rate changes), rounded once.
+- AUTO: noTariff when COMMON_CONSUMERS is missing/inactive/archived or has no PER_KWH version in the range; preview lists plots without amounts; booking 409 NO_COMMON_CONSUMERS_TARIFF.
+- AUTO: no consumer list endpoint; the web lists consumers from GET /meters?kind=COMMON_CONSUMER.
+- Slice 7 web (react-frontend): CommonConsumersPage on RunRangePage (idsField, hasLines, notice), CommonConsumersSection, audit/queue/charge detail; RED per builder. Orchestrator: clients 56/7/130/568, typecheck/lint/format green, gen stable. TODO at the Slice 6 fix cherry-pick: give LossesPage `hasLines` (nodes > 0) so an empty losses preview does not offer Book.
+- Slice 7 verified by orchestrator: backend 652 (ledger, meters, audit, modularity) green.

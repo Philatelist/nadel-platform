@@ -14,8 +14,10 @@ import org.springframework.stereotype.Component;
 /**
  * Publishes the audit event of a change to the ledger: a reversal, an opening balance or a retried "not charged" item
  * (entity type {@code CHARGE}), the closing or the run of a billing month (entity type {@code BILLING_MONTH}), a losses
- * run booked or reversed (entity type {@code LOSSES_RUN}, label {@code from/to}) or the retry of a losses node item
- * (entity type {@code METER} about the node meter, label its name). A
+ * run booked or reversed (entity type {@code LOSSES_RUN}, label {@code from/to}), a common consumer run booked or
+ * reversed (entity type {@code COMMON_CONSUMER_RUN}, label {@code from/to}), or the retry of a losses node or common
+ * consumer item and a change of how a common consumer is shared (entity type {@code METER} about the meter, label its
+ * name). A
  * {@code CHARGE} entry is about the plot whose account changed: the entity id is the plot's id, so the log links to the
  * plot card, and the label its number (user content). Values are codes and parameters: the charge type as
  * {@code base:<CODE>} or its stored name, amounts with two decimals, ISO dates, the billing month as {@code YYYY-MM},
@@ -28,6 +30,7 @@ class LedgerAuditPublisher {
     static final String CHARGE = "CHARGE";
     static final String BILLING_MONTH = "BILLING_MONTH";
     static final String LOSSES_RUN = "LOSSES_RUN";
+    static final String COMMON_CONSUMER_RUN = "COMMON_CONSUMER_RUN";
     static final String METER = "METER";
 
     /**
@@ -41,7 +44,10 @@ class LedgerAuditPublisher {
         BILLING_MONTH_CLOSED,
         BILLING_MONTH_RUN,
         LOSSES_RUN_BOOKED,
-        LOSSES_RUN_REVERSED
+        LOSSES_RUN_REVERSED,
+        COMMON_CONSUMER_RUN_BOOKED,
+        COMMON_CONSUMER_RUN_REVERSED,
+        COMMON_CONSUMER_BILLING_CHANGED
     }
 
     private final ApplicationEventPublisher events;
@@ -69,9 +75,16 @@ class LedgerAuditPublisher {
         publishAbout(actor, action, LOSSES_RUN, runId, range, changes);
     }
 
+    /** An entry about a common consumer run (entity type {@code COMMON_CONSUMER_RUN}): the label is its range. */
+    void publishCommonConsumerRun(AccessProfile actor, Action action, UUID runId, String range,
+            List<FieldChange> changes) {
+        publishAbout(actor, action, COMMON_CONSUMER_RUN, runId, range, changes);
+    }
+
     /**
-     * An entry about a meter (entity type {@code METER}): the retry of a losses node item, about the node meter; the
-     * label is the meter's name (user content), null when unknown.
+     * An entry about a meter (entity type {@code METER}): the retry of a losses node or common consumer item, about the
+     * node or consumer meter, or a change of how a common consumer is shared; the label is the meter's name (user
+     * content), null when unknown.
      */
     void publishMeter(AccessProfile actor, Action action, UUID meterId, @Nullable String name,
             List<FieldChange> changes) {

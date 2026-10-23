@@ -106,4 +106,27 @@ describe('ChargeDetailDialog', () => {
     });
     expect(screen.getAllByRole('link', { name: 'Node' })).toHaveLength(1);
   });
+
+  it('names the consumer and the split of a common consumer charge and links its run', () => {
+    open({
+      ...consumption,
+      source: 'COMMON_CONSUMER',
+      calculation: {
+        ...consumption.calculation,
+        runId: 'r7',
+        consumerMeterId: 'w1',
+        consumerName: 'Well pump',
+        split: 'SERVICE_USERS',
+      },
+    });
+    expect(screen.getByRole('link', { name: 'Well pump' })).toHaveAttribute('href', '/meters/w1');
+    expect(screen.getByText('Split').nextSibling).toHaveTextContent('Among service users');
+    expect(screen.getByText('Common consumers run').nextSibling).toContainElement(
+      screen.getByRole('link', { name: 'Open the run' }),
+    );
+    expect(screen.getByRole('link', { name: 'Open the run' })).toHaveAttribute(
+      'href',
+      '/charges/common?run=r7',
+    );
+  });
 });

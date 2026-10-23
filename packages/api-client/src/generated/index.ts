@@ -2,6 +2,7 @@ export * from './audit/audit';
 export * from './billing/billing';
 export * from './charge-types/charge-types';
 export * from './charges/charges';
+export * from './common-consumer-runs/common-consumer-runs';
 export * from './imports/imports';
 export * from './losses-runs/losses-runs';
 export * from './me/me';

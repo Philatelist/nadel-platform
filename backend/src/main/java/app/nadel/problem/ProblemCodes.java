@@ -110,6 +110,13 @@ public final class ProblemCodes {
     public static final String LOSSES_MODE_NOT_PROPORTIONAL = "LOSSES_MODE_NOT_PROPORTIONAL";
     /** 409: a booked losses run charged a node of the new run for a day of its range. */
     public static final String LOSSES_RANGE_OVERLAP = "LOSSES_RANGE_OVERLAP";
+    /**
+     * 409: a common consumer run is booked while the {@code COMMON_CONSUMERS} charge type has no per-kWh tariff for the
+     * range (or is inactive or archived): nothing can be priced.
+     */
+    public static final String NO_COMMON_CONSUMERS_TARIFF = "NO_COMMON_CONSUMERS_TARIFF";
+    /** 409: a booked common consumer run charged a consumer of the new run for a day of its range. */
+    public static final String COMMON_CONSUMER_RANGE_OVERLAP = "COMMON_CONSUMER_RANGE_OVERLAP";
     /** 409: the run was reversed before; a run is reversed once. */
     public static final String RUN_ALREADY_REVERSED = "RUN_ALREADY_REVERSED";
     /** 409: the charges of the run are booked in a closed billing month; their correction is an adjustment. */

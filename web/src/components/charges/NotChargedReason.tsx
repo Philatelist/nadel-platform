@@ -51,9 +51,17 @@ export function NotChargedPlot({ item }: { item: NotChargedItem }) {
       )}
       {item.meterId && (
         <Link to={`/meters/${item.meterId}`} className="text-sm text-accent underline">
-          {item.kind === 'LOSSES_NODE' ? t.billing.notCharged.node : t.billing.notCharged.meter}
+          {meterLinkLabel(item.kind, t.billing.notCharged)}
         </Link>
       )}
     </div>
   );
+}
+
+function meterLinkLabel(
+  kind: NotChargedItem['kind'],
+  n: { node: string; meter: string; consumer: string },
+): string {
+  if (kind === 'LOSSES_NODE') return n.node;
+  return kind === 'COMMON_CONSUMER' ? n.consumer : n.meter;
 }

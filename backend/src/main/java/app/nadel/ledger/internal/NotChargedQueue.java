@@ -46,9 +46,9 @@ import org.springframework.transaction.annotation.Transactional;
  * or the type is no longer charged) makes it {@code OBSOLETE}. A conflict that remains keeps it open with the tariffs
  * of the retry. An item that is not open answers resolved and changes nothing. A reading interval
  * ({@code INTERVAL}) is retried by {@link IntervalCharging#retry}, the losses of a node ({@code LOSSES_NODE}) by
- * {@link LossesRuns#retry}. Audit {@code NOT_CHARGED_RETRIED} (entity type {@code CHARGE}, about the plot; for a
- * losses node {@code METER}, about the node meter) with the kind, the reason, the charge type, the month and the
- * outcome.
+ * {@link LossesRuns#retry}, a common consumer ({@code COMMON_CONSUMER}) by {@link CommonConsumerRuns#retry}. Audit
+ * {@code NOT_CHARGED_RETRIED} (entity type {@code CHARGE}, about the plot; for a losses node or a common consumer
+ * {@code METER}, about the meter) with the kind, the reason, the charge type, the month and the outcome.
  */
 @Service
 class NotChargedQueue {
@@ -64,14 +64,15 @@ class NotChargedQueue {
     private final LedgerAuditPublisher audit;
     private final IntervalCharging intervals;
     private final LossesRuns lossesRuns;
+    private final CommonConsumerRuns commonConsumerRuns;
     private final WaterDays waterDays;
     private final EntityManager entityManager;
     private final Clock clock;
 
     NotChargedQueue(NotChargedItemRepository items, NotChargedViews views, TariffBook book, TariffChargeWriter writer,
             NotChargedRetries retries, ChargeRepository charges, PlotCatalog plots, ChargeTypeCatalog chargeTypes,
-            LedgerAuditPublisher audit, IntervalCharging intervals, LossesRuns lossesRuns, WaterDays waterDays,
-            EntityManager entityManager, Clock clock) {
+            LedgerAuditPublisher audit, IntervalCharging intervals, LossesRuns lossesRuns,
+            CommonConsumerRuns commonConsumerRuns, WaterDays waterDays, EntityManager entityManager, Clock clock) {
         this.items = items;
         this.views = views;
         this.book = book;
@@ -83,6 +84,7 @@ class NotChargedQueue {
         this.audit = audit;
         this.intervals = intervals;
         this.lossesRuns = lossesRuns;
+        this.commonConsumerRuns = commonConsumerRuns;
         this.waterDays = waterDays;
         this.entityManager = entityManager;
         this.clock = clock;
@@ -121,9 +123,8 @@ class NotChargedQueue {
         if (item.getKind() == Kind.LOSSES_NODE) {
             return retryLossesNode(item, actor);
         }
-        if (item.getKind() != Kind.TARIFF_MONTH) {
-            // common consumers are retried by their own slice (011 slice 7)
-            return unresolved(item);
+        if (item.getKind() == Kind.COMMON_CONSUMER) {
+            return retryCommonConsumer(item, actor);
         }
         UUID tenantId = Objects.requireNonNull(actor.tenantId());
         YearMonth month = Objects.requireNonNull(item.getMonth());
@@ -209,6 +210,28 @@ class NotChargedQueue {
         }
         audit.publishMeter(actor, LedgerAuditPublisher.Action.NOT_CHARGED_RETRIED,
                 Objects.requireNonNull(item.getMeterId()), retried.nodeName(), changes);
+        return retried.status() == Status.OPEN ? unresolved(item) : new NotChargedRetryResult(true);
+    }
+
+    /**
+     * Retries a common consumer ({@link CommonConsumerRuns#retry}: a run of that consumer alone over the item's range,
+     * booked when the consumer is charged now). Audit {@code NOT_CHARGED_RETRIED} about the consumer meter (entity type
+     * {@code METER}) with the kind, the reason, the range, the outcome and the run booked; the booking itself writes
+     * {@code COMMON_CONSUMER_RUN_BOOKED}.
+     */
+    private NotChargedRetryResult retryCommonConsumer(NotChargedItemRecord item, AccessProfile actor) {
+        CommonConsumerRuns.Retried retried = commonConsumerRuns.retry(item, actor);
+        List<FieldChange> changes = new ArrayList<>(List.of(
+                new FieldChange("kind", null, item.getKind().name()),
+                new FieldChange("reason", null, item.getReason().name()),
+                new FieldChange("from", null, String.valueOf(item.getFromDate())),
+                new FieldChange("to", null, String.valueOf(item.getToDate())),
+                new FieldChange("outcome", null, retried.status().name())));
+        if (retried.runId() != null) {
+            changes.add(new FieldChange("runId", null, retried.runId().toString()));
+        }
+        audit.publishMeter(actor, LedgerAuditPublisher.Action.NOT_CHARGED_RETRIED,
+                Objects.requireNonNull(item.getMeterId()), retried.consumerName(), changes);
         return retried.status() == Status.OPEN ? unresolved(item) : new NotChargedRetryResult(true);
     }
 

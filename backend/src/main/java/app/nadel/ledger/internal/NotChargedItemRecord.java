@@ -188,6 +188,38 @@ class NotChargedItemRecord {
     }
 
     /**
+     * The key of the item of a common consumer whose consumption a run could not calculate for its range:
+     * {@code COMMON_CONSUMER:{consumer}:{from}:{to}}.
+     */
+    static String commonConsumerKey(UUID consumerMeterId, LocalDate from, LocalDate to) {
+        return "COMMON_CONSUMER:" + consumerMeterId + ":" + from + ":" + to;
+    }
+
+    /**
+     * An open item: a common consumer run skipped the consumer (by the first meter of its chain) for the days
+     * {@code from} to {@code to}, because its value at the end of the range (or of the day before it) is unknown.
+     * {@code chargeTypeId} is the {@code COMMON_CONSUMERS} charge type, null when the cooperative has none.
+     */
+    static NotChargedItemRecord commonConsumer(UUID tenantId, UUID consumerMeterId, @Nullable UUID chargeTypeId,
+            LocalDate from, LocalDate to, Instant now) {
+        NotChargedItemRecord item = new NotChargedItemRecord();
+        item.id = UUID.randomUUID();
+        item.tenantId = tenantId;
+        item.itemKey = commonConsumerKey(consumerMeterId, from, to);
+        item.kind = Kind.COMMON_CONSUMER;
+        item.chargeTypeId = chargeTypeId;
+        item.meterId = consumerMeterId;
+        item.fromDate = from;
+        item.toDate = to;
+        item.reason = Reason.UNKNOWN_CONSUMER_VALUE;
+        item.params = params(List.of());
+        item.status = Status.OPEN;
+        item.createdAt = now;
+        item.updatedAt = now;
+        return item;
+    }
+
+    /**
      * A new attempt at the interval ending at the same point failed again: the reason, the tariffs and the start of
      * the interval of that attempt (a reading inserted or deleted before the point changes it). Only an open item
      * changes.

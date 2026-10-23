@@ -22,8 +22,8 @@ import org.springframework.transaction.annotation.Transactional;
  * path that charges from the points holds the meter {@code FOR SHARE} ({@code MeterNetwork.lockSharedPoints}) until it
  * commits. Runs in the caller's transaction, under RLS. A losses run reads every meter of its charged nodes on the
  * closed range between the first and the last point its values rest on (rows with {@code run_id}: the points at, or
- * around, the end of the day before its range and the end of its range); the rows of a reversed run are ignored.
- * Common consumer runs (a later slice) add theirs the same way.
+ * around, the end of the day before its range and the end of its range); the rows of a reversed run are ignored. A
+ * booked common consumer run reads the meters of every consumer it charged the same way.
  */
 @Component
 class LedgerReadingUsage implements ReadingUsage {
@@ -47,6 +47,12 @@ class LedgerReadingUsage implements ReadingUsage {
                 or exists (
                     select 1 from meter_value_use u
                     join losses_run l on l.id = u.run_id and l.status = 'BOOKED'
+                    where u.meter_id = :meter
+                    group by u.run_id
+                    having min(u.used_on) <= :to and max(u.used_on) >= :from)
+                or exists (
+                    select 1 from meter_value_use u
+                    join common_consumer_run c on c.id = u.run_id and c.status = 'BOOKED'
                     where u.meter_id = :meter
                     group by u.run_id
                     having min(u.used_on) <= :to and max(u.used_on) >= :from)

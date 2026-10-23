@@ -69,6 +69,16 @@ describe('SettingsPage', () => {
     expect(screen.queryByRole('radio')).toBeNull();
   });
 
+  it('shows the common consumers section only with SETTINGS_MANAGE', () => {
+    renderPage();
+    expect(
+      screen.getByText('How the consumption of each common meter', { exact: false }),
+    ).toBeInTheDocument();
+    permissions = ['METERS_VIEW'];
+    renderPage();
+    expect(screen.getAllByText('Common consumers')).toHaveLength(1);
+  });
+
   it('hides the meter tree link without METERS_MANAGE', () => {
     renderPage();
     expect(screen.queryByRole('link', { name: 'Meter tree' })).toBeNull();

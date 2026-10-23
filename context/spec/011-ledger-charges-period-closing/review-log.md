@@ -49,3 +49,17 @@
 - Minor: a removed well meter's lasting connections can't be reached from Settings; archiving a plot / making it common land is not blocked by a lasting connection. → Slice 9 (README note or guard).
 - Minor: `WaterConnectionCommands.disconnectAll:1030` stops at the first INVALID. → noted.
 - Minor: `MeterQueries.connectedToday:850-855` IN list not chunked. → noted.
+
+## Slice 6 — round 1 (f2844d6): MAJOR_ISSUES
+- M1 `web/src/pages/LossesPage.tsx:46-50`: the overlap re-preview keeps only CHARGED nodes, so UNKNOWN/SKIPPED_ABOVE nodes are never queued; Book hidden when no node is CHARGED. → fixing (react-frontend, review worktree).
+- Minor 1 `LossesRuns.java:365-372`, `:539-540`: a LOSSES_NODE item is resolved by a run that covers only part of its range. → fixing.
+- Minor 2 `LossesRuns.java:315-327` / V17:92: a tiny negative loss rounds to -0.000 and breaks the CHECK (500). → fixing.
+- Minor 3 lock order `lockSharedNetwork` vs `MeterParents` parent replacement can deadlock (Postgres aborts one). → README note / small fix.
+- Minor 4 `LossesCalculator.java:186-191` SKIPPED_ABOVE checks the whole range, not the days below. → noted.
+- Minor 5 digest leaves out not-charged plot reasons. → noted.
+- Minor 6 money-rules §6.4 still `valueAt(to) − valueAt(from)`. → Slice 9.
+
+## Slice 6 — round 2 (5d03827): PASS
+- M1 and minors 1-3 resolved.
+- Minor: `LossesPage.tsx:46-49` a preview with no nodes shows Book and books an empty run (history row + audit, no ledger data). → carry into the Slice 7 web task.
+- Minor: `LossesRunsTests.aRetryOfAnItemOtherRunsChargedSomeDaysOfNarrowsItToTheDaysLeft` does not assert the original item RESOLVED / the audit outcome. → noted for Slice 10.

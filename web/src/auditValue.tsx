@@ -142,6 +142,8 @@ export function auditValue(
   locale: string,
 ): ReactNode {
   const a = t.audit;
+  // an absent split is the cooperative default
+  if ((raw === undefined || raw === '') && field === 'split') return a.splitDefault;
   if (raw === undefined || raw === '') return a.noValue;
   const catalog = (map: Dictionary): ReactNode => map[raw] ?? raw;
   switch (field) {
@@ -176,6 +178,7 @@ export function auditValue(
       return entityType === 'BILLING_MONTH' ? catalog(t.billing.status) : user(raw);
     case 'lossesMode':
       return catalog(a.lossesMode);
+    case 'split':
     case 'commonConsumerDefaultSplit':
       return catalog(a.split);
     case 'lossesPercent':
@@ -248,8 +251,8 @@ export function auditRecordLabel(
   t: Messages,
   locale: string,
 ): ReactNode {
-  // a losses run is labelled by its range, `from/to` in ISO days
-  if (entityType === 'LOSSES_RUN') {
+  // a losses run and a common consumers run are labelled by their range, `from/to` in ISO days
+  if (entityType === 'LOSSES_RUN' || entityType === 'COMMON_CONSUMER_RUN') {
     const [from, to] = label.split('/');
     if (from && to && ISO_DAY.test(from) && ISO_DAY.test(to)) {
       return format(t.billing.runHistory.range, { from: formatDay(from, locale), to: formatDay(to, locale) });

@@ -2,11 +2,11 @@
 
 The ledger of the cooperative (feature 011): the **charges** of plots, the **billing months** they are booked in,
 **reversals**, **opening balances**, the **account** of a plot with the debt per charge type, the **month run** of
-recurring tariffs, the **charges from meter readings**, the **proportional losses runs** and the **"not charged"
-queue**. Slices 1 to 6 of spec 011 are in code (slice 2: the billing months with their totals and check list, closing
-in order, and the plot status refresh; slice 3: the month run and the queue; slice 4: a charge per interval of a plot
-meter and fixed-percentage losses; slice 5: water tariffs charge only the days a plot is connected to water; slice 6:
-proportional losses runs); common consumer runs follow in the next slice.
+recurring tariffs, the **charges from meter readings**, the **proportional losses runs**, the **common consumer runs**
+and the **"not charged" queue**. Slices 1 to 7 of spec 011 are in code (slice 2: the billing months with their totals
+and check list, closing in order, and the plot status refresh; slice 3: the month run and the queue; slice 4: a charge
+per interval of a plot meter and fixed-percentage losses; slice 5: water tariffs charge only the days a plot is
+connected to water; slice 6: proportional losses runs; slice 7: common consumer runs and the split of each consumer).
 
 Tables (V13, all under RLS `tenant_isolation`, an index leading with `tenant_id`, composite foreign keys on
 `(tenant_id, id)`):
@@ -19,6 +19,10 @@ Tables (V13, all under RLS `tenant_isolation`, an index leading with `tenant_id`
 | `meter_value_use` | The meter values a charge or run read: one row per point date (an interval charge: its two points). Not a ledger table. Rows stay after a reversal; `LedgerReadingUsage` leaves out the rows of reversed charges |
 | `losses_run` (V17) | A proportional losses run: `from_date`, `to_date`, `status` `BOOKED`/`REVERSED`, `billing_month_id` (its charges' month), `total`, `created_by`, `created_at`, `reversed_at`, `reversed_by`, `reverse_reason`. Its charges are `charge` rows with `run_id` and source `LOSSES` |
 | `losses_run_node` (V17) | A node of a run as booked: `node_meter_id` (the node's chain, its first meter), `node_kind`, `node_name`, the run's range and status repeated (`from_date`, `to_date`, `run_status`), `position`, `outcome` `CHARGED`/`NEGATIVE`/`UNKNOWN`/`SKIPPED_ABOVE`, `consumption`, `children`, `losses` (kWh, three decimals for display), `pct`, `calculated`, `amount`, `warning jsonb`, `plots jsonb` (codes, ids and numbers only). The exclusion constraint `losses_run_node_no_overlap_ex` keeps two booked runs from charging a node for the same day (only `BOOKED` and `CHARGED` rows) |
+| `common_consumer_run` (V18) | A common consumer run: the columns of `losses_run`. Its charges are `charge` rows with `run_id` and source `COMMON_CONSUMER` |
+| `common_consumer_run_line` (V18) | A common consumer of a run as booked: `consumer_meter_id` (the consumer's chain, its first meter; no foreign key, so a meter entered by mistake can still be deleted after a run listed it as unknown), `consumer_name`, the run's range and status repeated, `position`, `split`, `outcome` `CHARGED`/`NOT_CHARGED`/`NO_PLOTS`/`UNKNOWN`, `consumption` (kWh, three decimals for display), `calculated`, `plot_days`, `amount`, `warning jsonb`, `plots jsonb` (`plotId`, `days`, `kwh`, `amount?`, `reason?`). The exclusion constraint `common_consumer_run_line_no_overlap_ex` keeps two booked runs from charging a consumer for the same day (only `BOOKED` and `CHARGED` rows). Both run tables change only by the reversal (`run_reversal_guard`, V17) |
+| `common_consumer_billing` (V18) | Settings: the split of one common consumer meter (`CONNECTED_PLOTS`/`EQUAL_PER_PLOT`/`SERVICE_USERS`/`NOT_CHARGED`); no row = the cooperative's `common_consumer_default_split`. Changed and deleted by the application; goes with its meter (`ON DELETE CASCADE`) |
+| `common_consumer_user` (V18) | Settings: the plots marked as using a common consumer (`SERVICE_USERS`); PK `(tenant_id, consumer_meter_id, plot_id)`; goes with its meter and its plot |
 | `not_charged_item` (V15) | The "not charged" queue: `item_key`, `kind` `TARIFF_MONTH`/`INTERVAL`/`LOSSES_NODE`/`COMMON_CONSUMER`, `plot_id`, `charge_type_id`, `meter_id`, `month`, `from_date`, `to_date`, `reason`, `params jsonb` (codes and ids only, `tariffIds`), `status` `OPEN`/`RESOLVED`/`OBSOLETE`, `resolved_at`. Not a ledger table: the application updates the status and, while open, the reason and params; `DELETE`/`TRUNCATE` revoked. One open item per key (`not_charged_item_open_key_uq`); an item goes with its plot or meter (`ON DELETE CASCADE`) |
 
 **Append-only (ADR 0006).** `nadel_app` has no `UPDATE`, `DELETE` or `TRUNCATE` on `charge` and `charge_part`, and a
@@ -248,6 +252,70 @@ Lock order of the slice: plot `FOR SHARE` -> charge type `FOR SHARE` -> billing 
   retries one at a time) -> every electricity meter `FOR SHARE` -> the queue lock -> the charge types and tariffs
   `FOR SHARE` -> the billing month `FOR SHARE`: the order of the month run.
 
+## Common consumer runs (tag `common-consumer-runs`, slice 7)
+
+| Endpoint | Operation | Who |
+|---|---|---|
+| `POST /common-consumer-runs?preview=true\|false` | `runCommonConsumers` | `CHARGES_RUN` (the preview too) |
+| `GET /common-consumer-runs` | `listCommonConsumerRuns` | `CHARGES_VIEW` |
+| `GET /common-consumer-runs/{id}` | `getCommonConsumerRun` | `CHARGES_VIEW` |
+| `POST /common-consumer-runs/{id}/reverse` | `reverseCommonConsumerRun` | `CHARGES_REVERSE` |
+| `GET\|PUT /common-consumers/{meterId}/billing` | `getCommonConsumerBilling`, `updateCommonConsumerBilling` | `SETTINGS_MANAGE` |
+
+- **The consumers:** every `COMMON_CONSUMER` chain of `MeterNetwork.network(from, to)` (a booking
+  `lockSharedNetwork`), keyed by its first meter (a replacement keeps the consumer), ordered by name. Each is measured as
+  a losses node is (`LossesCalculator.measure`: `valueAt(to) - valueAt(from - 1)`, interpolated values marked
+  `calculated`, the points read listed).
+- **The split** (`CommonConsumerSettings`): the split and service users of the latest meter of the chain that has
+  settings, else the cooperative's `commonConsumerDefaultSplit` and no users. The plots that may share it are the
+  chargeable plots (active, not common land, `PlotCatalog.findChargeable`): `EQUAL_PER_PLOT` all of them, `SERVICE_USERS`
+  the marked ones, each with the days of the range; `CONNECTED_PLOTS` those connected to any meter of the chain
+  (`WaterConnections.connectedToSource`) on their connected days; `NOT_CHARGED` none.
+- **The kWh** (`CommonConsumerSplitCalculator`, pure): `CONNECTED_PLOTS` per plot-day (`consumption x plot's days /
+  sum of the days`), `EQUAL_PER_PLOT` and `SERVICE_USERS` equally; exact quantities.
+- **The price** (`CommonConsumerPlanning`, pure): each plot's kWh of a consumer priced with its `COMMON_CONSUMERS`
+  tariff (`TariffResolver`; `ReadingChargeCalculator` spreads the kWh evenly over the plot's own days of the split,
+  split by days when the rate changes, one rounding); one charge per plot per consumer. A share that cannot be priced is
+  listed with `reason` and not charged; `0.00` charges nothing. `noTariff` when the type is inactive or archived or has
+  no tariff with a `PER_KWH` version valid on a day of the range: the plots are listed without amounts.
+- **Outcomes:** `NOT_CHARGED` (its split), `UNKNOWN` (warning `UNKNOWN_VALUE` with `meterId`, `lastReadingOn`),
+  `NO_PLOTS` (used something, nobody shares it; warning `NO_PLOTS`; the days stay free), `CHARGED` (also with zero
+  consumption), `ALREADY_CHARGED` in a preview (warning with the booked run, `from`, `to`).
+- **Rules:** `to` before `from` 400 `INVALID`, after today 400 `DATE_IN_FUTURE` (field `to`); `consumerIds[i]` not a
+  consumer of the range 400 `NOT_FOUND`. A booking without a tariff is 409 `NO_COMMON_CONSUMERS_TARIFF`, with a
+  `digest` that differs 409 `PREVIEW_OUTDATED`, with a selected consumer that is `ALREADY_CHARGED` 409
+  `COMMON_CONSUMER_RANGE_OVERLAP` (the exclusion constraint is the backstop). The digest covers whether there is a
+  tariff, the consumers that are not `ALREADY_CHARGED` (outcome, split, consumption) and the charges.
+- **Booking:** the run (`common_consumer_run`) in the month of `to` or the earliest open month after it, its lines,
+  one charge per plot per consumer (kind `REGULAR`, source `COMMON_CONSUMER`, charge type `COMMON_CONSUMERS`,
+  `tariff_id`, `run_id`, key `COMMON_CONSUMER_RUN:{run}:{consumer}:{plot}`, service period the range, `accrued_on` =
+  `to`, `calculation` `{amount, parts[{tariffVersionId, basis, frequency, quantity, unit KWH, rate, days, from, to,
+  calculated}], readings: [], runId, consumerMeterId, consumerName, split}`, one `charge_part` per version), one
+  `meter_value_use` row (with `run_id`) per value a charged consumer read, an open item
+  `COMMON_CONSUMER:{consumer}:{from}:{to}` (kind `COMMON_CONSUMER`, reason `UNKNOWN_CONSUMER_VALUE`, `meter_id` the
+  consumer, charge type `COMMON_CONSUMERS`) per unknown consumer; closes the open items of a charged consumer whose
+  range meets the run's (`RESOLVED`) and the item of a `NOT_CHARGED` or `NO_PLOTS` consumer for the same range
+  (`OBSOLETE`); audit `COMMON_CONSUMER_RUN_BOOKED` (entity type `COMMON_CONSUMER_RUN`, label `from/to`, values `from`,
+  `to`, `billingMonth`, `consumers`, `count`, `total`) and `ChargesBooked`.
+- **Reversal, history and details:** as for losses runs (`RUN_ALREADY_REVERSED`, `RUN_IN_CLOSED_MONTH`, reason
+  required; audit `COMMON_CONSUMER_RUN_REVERSED` with `from`, `to`, `count`, `total`, `reason`). The summary counts
+  `plots`, `charges`, `chargedConsumers` and `skippedConsumers`; the details give each plot share its `chargeId` and
+  `reversed`.
+- **Retry** of a `COMMON_CONSUMER` item (`CommonConsumerRuns.retry`, under the locks of a booking, the item
+  `FOR UPDATE` after the queue lock): a run of that consumer alone over the item's range. Charged now -> booked and
+  `RESOLVED`; charged by another run meanwhile -> `RESOLVED`; `NOT_CHARGED`, `NO_PLOTS` or no longer a consumer of the
+  range -> `OBSOLETE`; still unknown, or no tariff -> open. Audit `NOT_CHARGED_RETRIED` (entity type `METER` about the
+  consumer meter).
+- **Settings of a consumer** (`CommonConsumerBillings`): `GET` gives `meterId`, `name`, `active`, `split` (absent: the
+  cooperative's default), `effectiveSplit` and `servicePlotIds` (natural order); `PUT {split?, servicePlotIds}` sets
+  them (absent `split` deletes the row). A meter that is not a common consumer meter (removed ones are accepted) is 404
+  `NOT_FOUND`; `servicePlotIds[i]` `UNKNOWN_PLOT`, `DUPLICATE`, `PLOT_ARCHIVED`, `PLOT_COMMON_LAND` (400). One change of
+  a consumer at a time (advisory lock); audit `COMMON_CONSUMER_BILLING_CHANGED` (entity type `METER`, label the meter
+  name, `split` and `servicePlots` as plot numbers, only what changed). A change applies to the next run only.
+- **Locks:** the cooperative's advisory lock of common consumer runs (`ledger.common-consumer-runs:{tenant}`) -> every
+  electricity meter `FOR SHARE` -> the queue lock -> the charge types and tariffs `FOR SHARE` -> the billing month
+  `FOR SHARE`: the order of the month run and the losses runs (no transaction takes both run locks).
+
 ## The "not charged" queue (tag `not-charged`, slice 3)
 
 | Endpoint | Operation | Who |
@@ -267,7 +335,7 @@ Lock order of the slice: plot `FOR SHARE` -> charge type `FOR SHARE` -> billing 
   (the charge keeps its service period and `accrued_on`); the item is `RESOLVED` (also when the charge exists already),
   `OBSOLETE` when nothing is left to charge, and stays open (reason and tariffs refreshed) while the conflict remains.
   Answer `{resolved, item?}`; an item that is not open answers `{resolved: true}` and changes nothing; an unknown item
-  or one of another cooperative is 404 `NOT_FOUND`. Common consumer items are retried by their own slice. Audit
+  or one of another cooperative is 404 `NOT_FOUND`. Common consumer items: see Common consumer runs. Audit
   `NOT_CHARGED_RETRIED` (entity type `CHARGE` about the plot; `kind`, `reason`, `chargeType`, `month`, `outcome`
   `RESOLVED`/`OBSOLETE`/`OPEN`).
 - **Retry** of a `LOSSES_NODE` item (`LossesRuns.retry`, under the locks of a booking, the item `FOR UPDATE` after the
@@ -345,7 +413,8 @@ a change on a date reaches, from the day after the previous point to the day bef
 so a correction or deletion of a charged reading and a reading inside a charged interval are 409 `READING_IN_USE`, a
 new reading after a charged interval is accepted, and after the reversal of the charge the reading can change again.
 A booked losses run reads every meter of its charged nodes on the closed range of its `meter_value_use` rows (with
-`run_id`); the rows of a reversed run no longer count. It replaced the stub `meters/internal/NoChargesYetUsage`.
+`run_id`), and a booked common consumer run the meters of the consumers it charged; the rows of a reversed run no
+longer count. It replaced the stub `meters/internal/NoChargesYetUsage`.
 
 ## Tariff versions in use
 
@@ -387,11 +456,22 @@ Entity type `LOSSES_RUN` (`LedgerAuditPublisher.publishLossesRun`), about the ru
 - `LOSSES_RUN_BOOKED`: `from`, `to`, `billingMonth`, `nodes` (charged), `count` (charges), `total`.
 - `LOSSES_RUN_REVERSED`: `from`, `to`, `count` (reversals), `total` (their sum, negative), `reason`.
 
+Entity type `COMMON_CONSUMER_RUN` (`LedgerAuditPublisher.publishCommonConsumerRun`), about the run, label `from/to`:
+
+- `COMMON_CONSUMER_RUN_BOOKED`: `from`, `to`, `billingMonth`, `consumers` (charged), `count` (charges), `total`.
+- `COMMON_CONSUMER_RUN_REVERSED`: `from`, `to`, `count` (reversals), `total` (negative), `reason`.
+
+Entity type `METER` about a common consumer meter (label its name):
+
+- `COMMON_CONSUMER_BILLING_CHANGED`: `split` (the own split; absent value = the cooperative's default) and
+  `servicePlots` (plot numbers in natural order, joined by ", "), each only when it changed.
+
 Entity type `CHARGE` about the plot, as above:
 
 - `NOT_CHARGED_RETRIED`: `kind`, `reason`, `chargeType`, `month` (a month item) or `from` and `to` (a reading
   interval), `outcome`. A losses node item is an entry of entity type `METER` about the node meter (label its name)
-  with `kind`, `reason`, `from`, `to`, `outcome` and `runId` when a run was booked.
+  with `kind`, `reason`, `from`, `to`, `outcome` and `runId` when a run was booked; a common consumer item likewise,
+  about the consumer meter.
 
 The charges themselves are the ledger and are not repeated in the log. Reasons are user content: never logged.
 
@@ -406,17 +486,18 @@ Every action is a constant of `LedgerAuditPublisher.Action` and must also be a v
 `TariffVersionUsage`, implemented here), `plots` (`PlotCatalog`: `find`, `findAll`, `findAndLockShared`,
 `inNaturalOrder`, `findChargeable`; the SPI `PlotChangeGuard`; the debt cache writer `PlotDebtCache`),
 `meters` (`MeterNetwork.staleMeters`, `lockSharedPoints`, `network` and `lockSharedNetwork`, the event
-`PlotMeterPointsChanged`, `ConsumptionCalculator`, `Quantity`, `MeterValue`, `WaterConnections.connectedDays`; the port
-`ReadingUsage`, implemented here), `settings` (`CooperativeSettings.lossesMode`,
-`lossesPercent`), `money` (`Money`), `identity` (`CurrentUser`, `AccessProfile`, `Permission`,
+`PlotMeterPointsChanged`, `ConsumptionCalculator`, `Quantity`, `MeterValue`, `WaterConnections.connectedDays` and
+`connectedToSource`, `MeterCatalog.find`; the port `ReadingUsage`, implemented here), `settings`
+(`CooperativeSettings.lossesMode`, `lossesPercent`, `commonConsumerDefaultSplit`; `CommonConsumerSplit`), `money` (`Money`), `identity` (`CurrentUser`, `AccessProfile`, `Permission`,
 `OwnedPlotsSource`), `audit` (events, `ActorNames`), `problem`, `tenancy` (`TenantContext`). Nothing depends on
 `ledger`.
 
 ## Permissions
 
-`CHARGES_VIEW` (Chairman, Treasurer): every plot's account, the months, the queue and the losses runs.
-`CHARGES_RUN` (Chairman): opening balances, the month run (and its preview), retries and losses runs (and their
-previews), and later common consumer runs. `CHARGES_REVERSE` (Chairman): reversing a charge or a losses run. `PERIODS_CLOSE` (Chairman): closing a month. Defined in
+`CHARGES_VIEW` (Chairman, Treasurer): every plot's account, the months, the queue, the losses runs and the common
+consumer runs. `CHARGES_RUN` (Chairman): opening balances, the month run (and its preview), retries, losses runs and
+common consumer runs (and their previews). `CHARGES_REVERSE` (Chairman): reversing a charge, a losses run or a common
+consumer run. `SETTINGS_MANAGE`: reading and changing the split and service users of a common consumer. `PERIODS_CLOSE` (Chairman): closing a month. Defined in
 `identity.Permission`, seeded by `seed_base_roles` (V13; existing cooperatives by targeted inserts).
 
 ## Tests
@@ -438,7 +519,13 @@ calculated values, the values read, the price once per plot, a rate change, over
 digest), `LossesRunsTests` (preview, booking with charges, parts, value uses and audit, a stale digest, the overlap
 refusal, the reversal of every charge with the run's reason, a closed month, a skipped node charged later by retries,
 calculated marks, the readings a run uses, the mode, validation, node selection, permissions),
-`LossesRunTenantIsolationTests` (V17), the water rows of `MonthRunTests` (25.00 for
+`LossesRunTenantIsolationTests` (V17), `CommonConsumerSplitCalculatorTests` and `CommonConsumerPlanningTests` (pure:
+the common consumer rows of §3 - equal 54.00, connected plots 86.40, plot-days 24/24/12 kWh, users 43.20, not charged -
+the price over a plot's own days with a rate change, rounding once, plots that cannot be priced, outcomes, no tariff,
+overlaps, the values read, the digest, the calculation), `CommonConsumerRunsTests` (the modes, booking with charges,
+parts, value uses, account and audit, no tariff, overlap, stale digest, reversal, a closed month, an unknown consumer
+queued and retried, the readings a run uses, validation, consumer selection, the settings of a consumer with
+validation and audit, permissions), `CommonConsumerTenantIsolationTests` (V18), the water rows of `MonthRunTests` (25.00 for
 a connected plot, nothing and nothing queued for one that is not, 12.90 from the 16th, a conflict only for a connected
 plot) and of `ReadingChargesTests` (a plot not connected for the whole interval: nothing and nothing queued; the
 connected days only),

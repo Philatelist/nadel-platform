@@ -22,7 +22,7 @@ export interface RangeRunResult {
 }
 
 export interface RangeRunRequest {
-  data: { from: string; to: string; nodeIds?: string[]; digest?: string };
+  data: { from: string; to: string; nodeIds?: string[]; consumerIds?: string[]; digest?: string };
   params: { preview: boolean };
 }
 
@@ -39,6 +39,8 @@ export interface RangeRunner<TResult> {
 export interface PartialBooking {
   blocked: boolean;
   ids: string[];
+  /** Replaces the usual blocked text, e.g. when nothing can be booked for a reason of its own. */
+  notice?: string;
 }
 
 interface Props<TResult extends RangeRunResult> {
@@ -51,6 +53,10 @@ interface Props<TResult extends RangeRunResult> {
   previewTitle: (range: { from: string; to: string }) => string;
   /** Present when parts of a preview can be refused; the page offers to book the rest. */
   partial?: (result: TResult) => PartialBooking;
+  /** The request field that carries the ids of the lines to run: `nodeIds` (losses) or `consumerIds`. */
+  idsField?: 'nodeIds' | 'consumerIds';
+  /** False when the preview has no lines at all; then nothing can be booked. Defaults to true. */
+  hasLines?: (result: TResult) => boolean;
   /** Texts of the blocked case. */
   blockedTexts?: { note: string; action: string; nothing: string };
   /** An extra hint for a problem code (a link to the settings, say). */
@@ -72,6 +78,8 @@ export function RunRangePage<TResult extends RangeRunResult>({
   renderPreview,
   previewTitle,
   partial,
+  idsField = 'nodeIds',
+  hasLines,
   blockedTexts,
   problemHint,
   onBooked,
@@ -109,7 +117,11 @@ export function RunRangePage<TResult extends RangeRunResult>({
   function handleError(e: unknown) {
     setError(e);
     const problem = problemCode(e);
-    setOutdated(problem === 'PREVIEW_OUTDATED' || problem === 'LOSSES_RANGE_OVERLAP');
+    setOutdated(
+      problem === 'PREVIEW_OUTDATED' ||
+        problem === 'LOSSES_RANGE_OVERLAP' ||
+        problem === 'COMMON_CONSUMER_RANGE_OVERLAP',
+    );
   }
 
   function runPreview(ids?: string[]) {
@@ -118,7 +130,7 @@ export function RunRangePage<TResult extends RangeRunResult>({
     setDone(undefined);
     setPreview(undefined);
     runner.mutate(
-      { data: { from, to, ...(ids ? { nodeIds: ids } : {}) }, params: { preview: true } },
+      { data: { from, to, ...(ids ? { [idsField]: ids } : {}) }, params: { preview: true } },
       {
         onSuccess: (result) => {
           setNodeIds(ids);
@@ -133,7 +145,7 @@ export function RunRangePage<TResult extends RangeRunResult>({
     setError(undefined);
     runner.mutate(
       {
-        data: { from, to, ...(nodeIds ? { nodeIds } : {}), digest: result.digest },
+        data: { from, to, ...(nodeIds ? { [idsField]: nodeIds } : {}), digest: result.digest },
         params: { preview: false },
       },
       {
@@ -150,7 +162,12 @@ export function RunRangePage<TResult extends RangeRunResult>({
     );
   }
 
-  const parts = preview && partial ? partial(preview) : undefined;
+  const empty = preview !== undefined && hasLines !== undefined && !hasLines(preview);
+  const parts: PartialBooking | undefined = empty
+    ? { blocked: true, ids: [] }
+    : preview && partial
+      ? partial(preview)
+      : undefined;
   const bookable = preview !== undefined && !(parts?.blocked ?? false);
   const previewing = runner.isPending && preview === undefined;
   const booking = runner.isPending && preview !== undefined;
@@ -222,7 +239,7 @@ export function RunRangePage<TResult extends RangeRunResult>({
             {renderPreview(preview)}
             {parts?.blocked && blockedTexts && (
               <Notice tone="warning">
-                {parts.ids.length > 0 ? blockedTexts.note : blockedTexts.nothing}
+                {parts.notice ?? (parts.ids.length > 0 ? blockedTexts.note : blockedTexts.nothing)}
               </Notice>
             )}
             <div className="flex flex-wrap justify-end gap-2">

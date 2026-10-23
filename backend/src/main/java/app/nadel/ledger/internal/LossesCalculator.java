@@ -333,15 +333,16 @@ final class LossesCalculator {
      * @param unknown    the value that is not known, when {@code known} is null
      * @param uses       the points read
      */
-    private record Measured(@Nullable Quantity known, boolean calculated, @Nullable UnknownValue unknown,
+    record Measured(@Nullable Quantity known, boolean calculated, @Nullable UnknownValue unknown,
             Set<ValueUse> uses) {
     }
 
     /**
      * The consumption of the chain on the days {@code first} to {@code last}: its value at the end of {@code last} minus
-     * its value at the end of the day before {@code first}, and the points those values rest on.
+     * its value at the end of the day before {@code first}, and the points those values rest on. The common consumer
+     * runs measure each consumer this way too.
      */
-    private static Measured measure(NetworkChain chain, LocalDate first, LocalDate last) {
+    static Measured measure(NetworkChain chain, LocalDate first, LocalDate last) {
         LocalDate before = first.minusDays(1);
         RangeConsumption consumption = ConsumptionCalculator.rangeConsumption(chain.histories(), before, last);
         Set<ValueUse> uses = new LinkedHashSet<>();
