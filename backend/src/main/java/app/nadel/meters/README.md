@@ -188,7 +188,7 @@ rules and the warning), `ReadingProblem`, `ReadingCommands`, `ReadingQueries`, `
 
 Entity type `METER_READING`, entity id = the meter (the log links to the meter card, as `OWNERSHIP` entries carry the
 plot), label = the meter's label. `READING_ENTERED` (`takenOn`, `value` new), `READING_REPLACED` (`takenOn` old and new
-the same date, `value` old and new), `READING_CORRECTED` (`takenOn` and `value` old and new), `READING_DELETED`
+the same date, `value` old and new), `READING_CORRECTED` (old and new `takenOn` and `value`, only those that changed), `READING_DELETED`
 (`takenOn`, `value` old). Values are ISO dates and readings with three decimals.
 
 ## Replacement and range consumption (slice 4)

@@ -7,7 +7,7 @@ import { QueryBoundary } from '../components/QueryBoundary';
 import { DataTable, PageHeader, Panel, Select, TextField, type Column } from '../components/ui';
 import { useLocale, useT } from '../i18n';
 import { UserContent } from '../components/UserContent';
-import { auditRecordLabel, auditValue } from '../auditValue';
+import { auditPermissionChanges, auditRecordLabel, auditValue } from '../auditValue';
 import { problemCode, problemFieldErrors } from '../problem';
 import { useDocumentTitle } from '../useDocumentTitle';
 
@@ -244,8 +244,14 @@ function AuditChanges({ entry }: { entry: AuditEntry }) {
               : fieldNames[change.field]) ?? change.field}
             :{' '}
           </span>
-          {auditValue(entry.entityType, change.field, change.oldValue, t, locale)} →{' '}
-          {auditValue(entry.entityType, change.field, change.newValue, t, locale)}
+          {change.field === 'permissions' ? (
+            auditPermissionChanges(change.oldValue, change.newValue, t).join(', ')
+          ) : (
+            <>
+              {auditValue(entry.entityType, change.field, change.oldValue, t, locale)} →{' '}
+              {auditValue(entry.entityType, change.field, change.newValue, t, locale)}
+            </>
+          )}
         </li>
       ))}
     </ul>

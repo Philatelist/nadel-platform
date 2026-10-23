@@ -97,10 +97,12 @@ the root `CLAUDE.md`). A server never writes an English phrase into `entity_labe
 | `owners` of `OWNERSHIP_CHANGED` / `OWNERSHIP_CORRECTED` | JSON array of `{"member": "Last First", "share": "1/2"}`; a correction adds `"from"` and, unless the record is open, `"to"` (ISO dates) | parse, format dates and names |
 | `effectiveFrom`, `validFrom`, `dueDate`, `installedOn`, `removedOn`, `takenOn`, `serviceFrom`, `serviceTo`, `date` | ISO date `2026-01-01` | format date |
 | Enums (`kind`, `basis`/`frequency` of a tariff version, `scope`, `deliveryChannel`, `memberPlotStatusVisibility`, `lossesMode`, `commonConsumerDefaultSplit`, `status` of a billing month, `kind`/`resource` of a meter, `kind`/`reason`/`outcome` of a not-charged retry) | the enum code | catalog |
-| `permissions` | permission codes sorted and joined by ", " | catalog |
+| `permissions` | permission codes sorted and joined by ", " | the difference: `+ name` per added, `− name` per removed permission |
 | Flags (`active`, `archived`, `hasBuilding`) | `true` / `false` | yes/no |
 | Numbers (`areaM2` `600.00`, `rate`, `position`, import counts) | plain decimal text | format number |
 | Member and plot labels, names, notes, reasons (also `reason` of `READING_REJECTED`, `CHARGE_REVERSED` and `OPENING_BALANCE_ENTERED`), import file name | user content | as is |
+
+A publisher lists only the fields whose value changed; a field with the same old and new value is not written. The one exception is `takenOn` of `READING_REPLACED`, which names the date of the replaced reading.
 
 Entries written before this format keep their old text (the log is append-only and is not migrated): a value that
 does not match a format above is shown as stored.
