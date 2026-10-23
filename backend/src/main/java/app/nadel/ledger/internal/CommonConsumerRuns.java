@@ -95,7 +95,8 @@ import org.springframework.transaction.annotation.Transactional;
  * {@code COMMON_CONSUMER} charge per plot per consumer in the month of {@code to} or the earliest open month after it
  * (key {@code COMMON_CONSUMER_RUN:{run}:{consumer}:{plot}}, debt from {@code to}) with one part per tariff version, a
  * {@code meter_value_use} row per value a charged consumer read, an open "not charged" item per unknown consumer, closes
- * the open items of the consumers it charged (and of a consumer that is no longer charged for the same range), writes
+ * the open items of the consumers it charged once every day of an item is charged, else narrows the item to the days
+ * left (and closes the item of a consumer that is no longer charged for the same range), writes
  * the audit entry {@code COMMON_CONSUMER_RUN_BOOKED} and publishes {@code ChargesBooked}.
  */
 @Service
@@ -372,9 +373,9 @@ class CommonConsumerRuns {
     }
 
     /**
-     * Opens an item per unknown consumer (or keeps the open one), closes the open items of a charged consumer whose
-     * range meets the run's ({@code RESOLVED}: those days are charged now) and the open item of a consumer that is not
-     * charged by its split or has no plots, for the same range ({@code OBSOLETE}: nothing is left to charge).
+     * Opens an item per unknown consumer (or keeps the open one), settles the open items of a charged consumer whose
+     * range meets the run's ({@link #settle}: those days are charged now) and closes the open item of a consumer that is
+     * not charged by its split or has no plots, for the same range ({@code OBSOLETE}: nothing is left to charge).
      */
     private void updateQueue(UUID tenantId, Plan plan, @Nullable UUID type, Instant now) {
         for (PlannedLine line : plan.lines()) {
@@ -392,7 +393,7 @@ class CommonConsumerRuns {
                             Status.OPEN, key)) {
                         if (item.getFromDate() != null && item.getToDate() != null
                                 && !item.getFromDate().isAfter(plan.to()) && !item.getToDate().isBefore(plan.from())) {
-                            item.close(Status.RESOLVED, now);
+                            settle(tenantId, item, now);
                         }
                     }
                 }
@@ -401,6 +402,34 @@ class CommonConsumerRuns {
             }
         }
         items.flush();
+    }
+
+    /**
+     * Settles an open item of a consumer some of whose days booked runs charged (the caller's run among them, flushed):
+     * the item is {@code RESOLVED} when the booked runs that charged the consumer cover every day of its range. When some
+     * days are left, the item is narrowed to them: it is {@code RESOLVED} (its charged days are charged) and an open item
+     * {@code COMMON_CONSUMER:{consumer}:{from}:{to}} takes each run of days left (unless one is open already), so a retry
+     * works them out on their own. An item none of whose days is charged stays as it is. As
+     * {@code LossesRuns.settle} does for a node.
+     */
+    private void settle(UUID tenantId, NotChargedItemRecord item, Instant now) {
+        LocalDate from = Objects.requireNonNull(item.getFromDate());
+        LocalDate to = Objects.requireNonNull(item.getToDate());
+        UUID consumer = Objects.requireNonNull(item.getMeterId());
+        // oldest range first; two booked charged ranges of a consumer never overlap
+        // (common_consumer_run_line_no_overlap_ex)
+        List<DaySet.Range> left = UnchargedDays.left(from, to, lines.chargedOverlapping(List.of(consumer), from, to)
+                .stream().map(charged -> new DaySet.Range(charged.getFromDate(), charged.getToDate())).toList());
+        if (left.equals(List.of(new DaySet.Range(from, to)))) {
+            return;
+        }
+        item.close(Status.RESOLVED, now);
+        for (DaySet.Range days : left) {
+            if (items.findOpen(NotChargedItemRecord.commonConsumerKey(consumer, days.from(), days.to())).isEmpty()) {
+                items.save(NotChargedItemRecord.commonConsumer(tenantId, consumer, item.getChargeTypeId(),
+                        days.from(), days.to(), now));
+            }
+        }
     }
 
     // ---- the history
@@ -522,8 +551,8 @@ class CommonConsumerRuns {
     /**
      * Retries an open {@code COMMON_CONSUMER} item: a run of its consumer alone over its range, booked as {@link #run}
      * books one when the consumer is charged now. Under the locks of a booking (the item {@code FOR UPDATE} after the
-     * queue lock). The item is {@code RESOLVED} when the consumer is charged now or was charged by another run
-     * meanwhile, {@code OBSOLETE} when nothing is left to charge (its split is {@code NOT_CHARGED}, no plot shares it,
+     * queue lock). The item is {@code RESOLVED} when the consumer is charged now or was charged by other runs
+     * meanwhile (for some of its days only: narrowed to the days left, see {@link #settle}), {@code OBSOLETE} when nothing is left to charge (its split is {@code NOT_CHARGED}, no plot shares it,
      * or it is not a consumer of the range any more), and stays open while its value is still unknown or there is no
      * tariff to price it with.
      */
@@ -552,7 +581,10 @@ class CommonConsumerRuns {
         }
         PlannedLine only = plan.lines().getFirst();
         if (only.overlap() != null) {
-            return closed(item, Status.RESOLVED, now, name);
+            // charged by another run meanwhile: resolved, or narrowed to the days left
+            settle(tenantId, item, now);
+            items.flush();
+            return new Retried(item.getStatus(), null, name);
         }
         if (only.outcome() == Outcome.NOT_CHARGED || only.outcome() == Outcome.NO_PLOTS) {
             return closed(item, Status.OBSOLETE, now, name);

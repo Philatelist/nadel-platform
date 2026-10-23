@@ -125,6 +125,14 @@ class CommonConsumerRunLineRecord {
         return consumerName;
     }
 
+    LocalDate getFromDate() {
+        return fromDate;
+    }
+
+    LocalDate getToDate() {
+        return toDate;
+    }
+
     int getPosition() {
         return position;
     }

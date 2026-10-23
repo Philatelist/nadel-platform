@@ -12,7 +12,7 @@
 import type { CommonConsumerSplit } from './commonConsumerSplit';
 
 /**
- * How one common consumer is shared among plots. `split` is the consumer's own split, absent while the cooperative's `commonConsumerDefaultSplit` applies; `effectiveSplit` is the split a run uses now
+ * How one common consumer (the whole chain of its meters through replacements) is shared among plots. `split` is the consumer's own split, absent while the cooperative's `commonConsumerDefaultSplit` applies; `effectiveSplit` is the split a run uses now
  */
 export interface CommonConsumerBilling {
   meterId: string;

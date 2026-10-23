@@ -350,6 +350,54 @@ class CommonConsumerRunsTests extends FreshCooperativeSupport {
     }
 
     @Test
+    void aRunOverSomeDaysOfAQueuedConsumerNarrowsItsItemAndARunOverTheRestResolvesIt() throws Exception {
+        // the well is read on 31.08 only: the run of September queues it
+        UUID well = consumer("Свердловина №1", 300, null);
+        billing(well, "EQUAL_PER_PLOT", List.of()).andExpect(status().isOk());
+        send(chairman, post(BOOK), range()).andExpect(status().isOk());
+        assertThat(lines(body(send(chairman, get(NOT_CHARGED), null)), "meterId", "from", "to"))
+                .containsExactly(well + "|" + FROM + "|" + TO);
+
+        // read on 15.09: a run of 01.09-15.09 charges the well, the item keeps 16.09-30.09
+        reading(well, "2026-09-15", "320");
+        JsonNode first = body(send(chairman, post(BOOK), range(FROM, "2026-09-15")).andExpect(status().isOk()));
+        assertThat(lines(first.get("consumers"), "name", "consumption", "outcome"))
+                .containsExactly("Свердловина №1|20.000|CHARGED");
+        assertThat(lines(body(send(chairman, get(NOT_CHARGED), null)), "kind", "reason", "meterId", "from", "to"))
+                .containsExactly("COMMON_CONSUMER|UNKNOWN_CONSUMER_VALUE|" + well + "|2026-09-16|" + TO);
+        assertThat(only(body(send(chairman, get(NOT_CHARGED), null))).get("chargeType").get("code").asString())
+                .isEqualTo("COMMON_CONSUMERS");
+        assertThat(owner().queryForList("select status from not_charged_item where tenant_id = ? and meter_id = ? "
+                + "and from_date = ?::date and to_date = ?::date", String.class, tenant, well, FROM, TO))
+                .containsExactly("RESOLVED");
+
+        // read on 30.09: a run of the days left charges them and resolves the item
+        reading(well, TO, "340");
+        send(chairman, post(BOOK), range("2026-09-16", TO)).andExpect(status().isOk());
+        assertThat(body(send(chairman, get(NOT_CHARGED), null))).isEmpty();
+    }
+
+    @Test
+    void aRetryOfAnItemOtherRunsChargedSomeDaysOfNarrowsItToTheDaysLeft() throws Exception {
+        UUID lighting = consumer("Освітлення", 1000, 1050);
+        billing(lighting, "EQUAL_PER_PLOT", List.of()).andExpect(status().isOk());
+        send(chairman, post(BOOK), range()).andExpect(status().isOk());
+        // an open item of the lighting over 16.09-10.10, of which the run above charged 16.09-30.09
+        UUID item = UUID.randomUUID();
+        owner().update("insert into not_charged_item (id, tenant_id, item_key, kind, charge_type_id, meter_id, "
+                + "from_date, to_date, reason) values (?, ?, ?, 'COMMON_CONSUMER', ?, ?, '2026-09-16', '2026-10-10', "
+                + "'UNKNOWN_CONSUMER_VALUE')", item, tenant, "COMMON_CONSUMER:" + lighting + ":2026-09-16:2026-10-10",
+                typeId("COMMON_CONSUMERS"), lighting);
+
+        assertThat(body(send(chairman, post(RETRY.formatted(item)), null).andExpect(status().isOk()))
+                .get("resolved").asBoolean()).isTrue();
+
+        assertThat(lines(body(send(chairman, get(NOT_CHARGED), null)), "kind", "meterId", "from", "to"))
+                .containsExactly("COMMON_CONSUMER|" + lighting + "|2026-10-01|2026-10-10");
+        assertThat(runCount()).isEqualTo(1);
+    }
+
+    @Test
     void theReadingsABookedRunUsesCannotBeCorrectedUntilItIsReversed() throws Exception {
         UUID lighting = consumer("Освітлення", 1000, 1050);
         billing(lighting, "EQUAL_PER_PLOT", List.of()).andExpect(status().isOk());
@@ -468,6 +516,69 @@ class CommonConsumerRunsTests extends FreshCooperativeSupport {
         send(chairman, get(BILLING.formatted(UUID.randomUUID())), null).andExpect(status().isNotFound());
     }
 
+    @Test
+    void aReplacedConsumerShowsAndIsChargedWithTheSettingsOfItsChain() throws Exception {
+        UUID old = consumer("Освітлення", 1000, null);
+        billing(old, "SERVICE_USERS", List.of(p1, p2)).andExpect(status().isOk());
+        // replaced on 15.09 at 1 020; the new meter starts at 0 and reads 30 on 30.09: 20 + 30 = 50 kWh
+        UUID next = replace(old, "2026-09-15", "1020", "0");
+        reading(next, TO, "30");
+
+        // the new meter shows the settings the old one was given, and a run charges with them
+        JsonNode inherited = body(send(chairman, get(BILLING.formatted(next)), null).andExpect(status().isOk()));
+        assertThat(inherited.get("meterId").asString()).isEqualTo(next.toString());
+        assertThat(inherited.get("split").asString()).isEqualTo("SERVICE_USERS");
+        assertThat(inherited.get("effectiveSplit").asString()).isEqualTo("SERVICE_USERS");
+        assertThat(lines(inherited.get("servicePlotIds"))).containsExactly(p1.toString(), p2.toString());
+        JsonNode consumers = body(send(chairman, post(PREVIEW), range()).andExpect(status().isOk()))
+                .get("consumers");
+        assertThat(lines(consumers, "split", "consumption", "outcome")).containsExactly("SERVICE_USERS|50.000|CHARGED");
+        assertThat(lines(only(consumers).get("plots"), "plotNumber", "kwh", "amount"))
+                .containsExactly("1|25.000|108.00", "2|25.000|108.00");
+
+        // users stored on the new meter alone do not hide the split of the old one: each is the latest that has one
+        owner().update("insert into common_consumer_user (tenant_id, consumer_meter_id, plot_id) values (?, ?, ?)",
+                tenant, next, p3);
+        JsonNode mixed = body(send(chairman, get(BILLING.formatted(old)), null).andExpect(status().isOk()));
+        assertThat(mixed.get("split").asString()).isEqualTo("SERVICE_USERS");
+        assertThat(lines(mixed.get("servicePlotIds"))).containsExactly(p3.toString());
+        JsonNode mixedLine = only(body(send(chairman, post(PREVIEW), range()).andExpect(status().isOk()))
+                .get("consumers"));
+        assertThat(mixedLine.get("split").asString()).isEqualTo("SERVICE_USERS");
+        assertThat(lines(mixedLine.get("plots"), "plotNumber", "kwh", "amount")).containsExactly("3|50.000|216.00");
+    }
+
+    @Test
+    void aChangeThroughAnyMeterOfAReplacedConsumerIsSavedForTheConsumerAndCharged() throws Exception {
+        UUID old = consumer("Освітлення", 1000, null);
+        billing(old, "SERVICE_USERS", List.of(p1, p2)).andExpect(status().isOk());
+        UUID next = replace(old, "2026-09-15", "1020", "0");
+        reading(next, TO, "30");
+
+        // changed through the old meter: saved on the new one, the old rows removed
+        JsonNode saved = body(billing(old, "EQUAL_PER_PLOT", List.of()).andExpect(status().isOk()));
+        assertThat(saved.get("split").asString()).isEqualTo("EQUAL_PER_PLOT");
+        assertThat(owner().queryForList("select consumer_meter_id from common_consumer_billing where tenant_id = ?",
+                UUID.class, tenant)).containsExactly(next);
+        assertThat(owner().queryForObject("select count(*) from common_consumer_user where tenant_id = ?",
+                Integer.class, tenant)).isZero();
+        for (UUID meter : List.of(old, next)) {
+            JsonNode shown = body(send(chairman, get(BILLING.formatted(meter)), null).andExpect(status().isOk()));
+            assertThat(shown.get("effectiveSplit").asString()).isEqualTo("EQUAL_PER_PLOT");
+            assertThat(shown.get("servicePlotIds")).isEmpty();
+        }
+        JsonNode booked = body(send(chairman, post(BOOK), range()).andExpect(status().isOk()));
+        assertThat(lines(booked.get("consumers"), "split", "amount")).containsExactly("EQUAL_PER_PLOT|216.00");
+
+        // back to the cooperative's default through the new meter: nothing of the old settings comes back
+        JsonNode reset = body(billing(next, null, List.of()).andExpect(status().isOk()));
+        assertThat(reset.has("split")).isFalse();
+        assertThat(body(send(chairman, get(BILLING.formatted(old)), null)).get("effectiveSplit").asString())
+                .isEqualTo("CONNECTED_PLOTS");
+        assertThat(owner().queryForObject("select count(*) from common_consumer_billing where tenant_id = ?",
+                Integer.class, tenant)).isZero();
+    }
+
     // ---- permissions
 
     @Test
@@ -517,6 +628,17 @@ class CommonConsumerRunsTests extends FreshCooperativeSupport {
     private void reading(UUID meter, String on, String value) {
         owner().update("insert into meter_reading (tenant_id, meter_id, taken_on, value, source, status) "
                 + "values (?, ?, ?::date, ?, 'ENTERED', 'APPROVED')", tenant, meter, on, new BigDecimal(value));
+    }
+
+    /** Replaces the meter as the chairman (the API's replacement); returns the new meter. */
+    private UUID replace(UUID meter, String on, String finalReading, String initialReading) throws Exception {
+        Map<String, Object> replacement = new LinkedHashMap<>();
+        replacement.put("replacedOn", on);
+        replacement.put("finalReading", finalReading);
+        replacement.put("serial", "CC-NEW-" + UUID.randomUUID().toString().substring(0, 6));
+        replacement.put("initialReading", initialReading);
+        return UUID.fromString(body(send(chairman, post("/api/v1/meters/" + meter + "/replace"), replacement)
+                .andExpect(status().isCreated())).get("id").asString());
     }
 
     /** Connects the plot to the well from {@code from} until {@code until} (null: lasting). */

@@ -17,9 +17,12 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * How each common consumer is shared among plots (tables {@code common_consumer_billing} and
  * {@code common_consumer_user}, V18): the consumer's own split (no row: the cooperative's default) and the plots marked
- * as its users. Both are settings, keyed by a meter; a run reads them for every meter of a consumer's chain and takes
- * those of the latest meter that has any ({@link #of}), so a replaced meter keeps the settings until the new one gets
- * its own. Parameterised native SQL inside the caller's transaction, under RLS.
+ * as its users. Both are settings of the consumer, the whole chain of its meters (replacements included), stored by a
+ * meter: the split is the one of the latest meter of the chain that has a split, the users those of the latest meter
+ * that has users, each found on its own ({@link #ofChain}), so a replaced meter keeps the settings until the new one
+ * gets its own. A run and {@code GET /common-consumers/{meterId}/billing} read them so ({@link #ofConsumer}); a change
+ * through any meter of the chain is saved on its latest meter and clears the other meters' rows ({@link #saveConsumer}),
+ * so what is read after it is what was saved. Parameterised native SQL inside the caller's transaction, under RLS.
  */
 @Component
 class CommonConsumerSettings {
@@ -72,29 +75,54 @@ class CommonConsumerSettings {
         return billing;
     }
 
-    /** The settings of one meter; empty settings when it has none. */
+    /** The settings of a consumer whose chain is {@code meterIds} (oldest first): {@link #ofChain} of the stored ones. */
     @Transactional(propagation = Propagation.MANDATORY)
-    Billing ofMeter(UUID meterId) {
-        return of(List.of(meterId)).getOrDefault(meterId, new Billing(null, Set.of()));
+    Billing ofConsumer(List<UUID> meterIds) {
+        return ofChain(meterIds, of(meterIds));
     }
 
     /**
-     * The settings of a consumer's chain: those of the latest meter of {@code meterIds} (oldest first) that has any;
-     * empty settings when none has.
+     * The settings of a consumer's chain {@code meterIds} (oldest first): the split of the latest meter that has a split
+     * (none: null, the cooperative's default) and the users of the latest meter that has users (none: no users), each
+     * found on its own, so a newer meter with only users does not hide an older meter's split, nor the other way round.
      */
     static Billing ofChain(List<UUID> meterIds, Map<UUID, Billing> billing) {
-        for (int i = meterIds.size() - 1; i >= 0; i--) {
+        CommonConsumerSplit split = null;
+        Set<UUID> users = null;
+        for (int i = meterIds.size() - 1; i >= 0 && (split == null || users == null); i--) {
             Billing one = billing.get(meterIds.get(i));
-            if (one != null) {
-                return one;
+            if (one == null) {
+                continue;
+            }
+            if (split == null) {
+                split = one.split();
+            }
+            if (users == null && !one.users().isEmpty()) {
+                users = one.users();
             }
         }
-        return new Billing(null, Set.of());
+        return new Billing(split, users == null ? Set.of() : users);
+    }
+
+    /**
+     * Saves the settings of a consumer whose chain is {@code meterIds} (oldest first): on its latest meter
+     * ({@link #save}), the rows of its other meters removed, so {@link #ofConsumer} reads back what was saved.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    void saveConsumer(UUID tenantId, List<UUID> meterIds, @Nullable CommonConsumerSplit split,
+            Collection<UUID> users) {
+        List<UUID> older = meterIds.subList(0, meterIds.size() - 1);
+        if (!older.isEmpty()) {
+            entityManager.createNativeQuery("delete from common_consumer_billing where consumer_meter_id in (:meters)")
+                    .setParameter("meters", older).executeUpdate();
+            entityManager.createNativeQuery("delete from common_consumer_user where consumer_meter_id in (:meters)")
+                    .setParameter("meters", older).executeUpdate();
+        }
+        save(tenantId, meterIds.getLast(), split, users);
     }
 
     /** Saves the settings of one meter: its split (null removes the row) and its users (replaced as a whole). */
-    @Transactional(propagation = Propagation.MANDATORY)
-    void save(UUID tenantId, UUID meterId, @Nullable CommonConsumerSplit split, Collection<UUID> users) {
+    private void save(UUID tenantId, UUID meterId, @Nullable CommonConsumerSplit split, Collection<UUID> users) {
         if (split == null) {
             entityManager.createNativeQuery("delete from common_consumer_billing where consumer_meter_id = :meter")
                     .setParameter("meter", meterId).executeUpdate();
@@ -116,14 +144,15 @@ class CommonConsumerSettings {
     }
 
     /**
-     * The transaction-scoped advisory lock of the settings of one consumer meter: two changes of the same consumer run
-     * one after the other, so each audits the change from what the other saved.
+     * The transaction-scoped advisory lock of the settings of one consumer, by the first meter of its chain: two changes
+     * of the same consumer (through any of its meters) run one after the other, so each audits the change from what the
+     * other saved.
      */
     @Transactional(propagation = Propagation.MANDATORY)
-    void lock(UUID tenantId, UUID meterId) {
+    void lock(UUID tenantId, UUID consumerKey) {
         entityManager.createNativeQuery(
                 "select count(*) from (select pg_advisory_xact_lock(hashtextextended(:key, 0))) as l")
-                .setParameter("key", "ledger.common-consumer-billing:" + tenantId + ":" + meterId)
+                .setParameter("key", "ledger.common-consumer-billing:" + tenantId + ":" + consumerKey)
                 .getSingleResult();
     }
 }

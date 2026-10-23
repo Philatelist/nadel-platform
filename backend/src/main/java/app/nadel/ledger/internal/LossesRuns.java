@@ -31,6 +31,7 @@ import app.nadel.problem.FieldProblem;
 import app.nadel.problem.ProblemCodes;
 import app.nadel.settings.CooperativeSettings;
 import app.nadel.settings.LossesMode;
+import app.nadel.tariffs.DaySet;
 import app.nadel.tariffs.TariffBook;
 import app.nadel.tariffs.TariffBook.ChargeTypeEntry;
 import app.nadel.tariffs.TariffBook.Snapshot;
@@ -389,28 +390,17 @@ class LossesRuns {
         LocalDate from = Objects.requireNonNull(item.getFromDate());
         LocalDate to = Objects.requireNonNull(item.getToDate());
         UUID node = Objects.requireNonNull(item.getMeterId());
-        List<LocalDate[]> left = new ArrayList<>();
-        LocalDate next = from;
         // oldest range first; two booked charged ranges of a node never overlap (losses_run_node_no_overlap_ex)
-        for (LossesRunNodeRecord charged : nodes.chargedOverlapping(List.of(node), from, to)) {
-            if (charged.getFromDate().isAfter(next)) {
-                left.add(new LocalDate[] {next, charged.getFromDate().minusDays(1)});
-            }
-            if (!charged.getToDate().isBefore(next)) {
-                next = charged.getToDate().plusDays(1);
-            }
-        }
-        if (!next.isAfter(to)) {
-            left.add(new LocalDate[] {next, to});
-        }
-        if (left.size() == 1 && left.getFirst()[0].equals(from) && left.getFirst()[1].equals(to)) {
+        List<DaySet.Range> left = UnchargedDays.left(from, to, nodes.chargedOverlapping(List.of(node), from, to)
+                .stream().map(charged -> new DaySet.Range(charged.getFromDate(), charged.getToDate())).toList());
+        if (left.equals(List.of(new DaySet.Range(from, to)))) {
             return;
         }
         item.close(Status.RESOLVED, now);
-        for (LocalDate[] days : left) {
-            if (items.findOpen(NotChargedItemRecord.lossesNodeKey(node, days[0], days[1])).isEmpty()) {
+        for (DaySet.Range days : left) {
+            if (items.findOpen(NotChargedItemRecord.lossesNodeKey(node, days.from(), days.to())).isEmpty()) {
                 items.save(NotChargedItemRecord.lossesNode(tenantId, node, Objects.requireNonNull(
-                        item.getChargeTypeId()), days[0], days[1], now));
+                        item.getChargeTypeId()), days.from(), days.to(), now));
             }
         }
     }

@@ -501,10 +501,13 @@ export const useReverseCommonConsumerRun = <TError = BadRequestResponse | Unauth
 }
 
 /**
- * The split of the common consumer meter `meterId` (`split` absent: the cooperative's
+ * The split of the common consumer of the meter `meterId` (`split` absent: the cooperative's
  * `commonConsumerDefaultSplit` applies, shown as `effectiveSplit`) and its service users (the plots marked as
- * using it, in the natural order of the plot numbers; they count with `SERVICE_USERS`). A meter that is not a
- * common consumer meter of the cooperative is 404 `NOT_FOUND`. Requires `SETTINGS_MANAGE`.
+ * using it, in the natural order of the plot numbers; they count with `SERVICE_USERS`). The settings belong to
+ * the consumer, the whole chain of its meters through replacements: any meter of the chain shows what a run
+ * uses for the consumer (the split of the latest meter of the chain that has its own split, and the service
+ * users of the latest meter that has service users). A meter that is not a common consumer meter of the
+ * cooperative is 404 `NOT_FOUND`. Requires `SETTINGS_MANAGE`.
  * @summary How a common consumer is shared among plots
  */
 export const getCommonConsumerBilling = async (meterId: string, options?: Parameters<typeof nadelFetch>[1]): Promise<CommonConsumerBilling> => {
@@ -605,9 +608,11 @@ export const getUpdateCommonConsumerBillingUrl = (meterId: string,) => {
 }
 
 /**
- * Sets the split of the common consumer (absent `split`: back to the cooperative's default) and replaces its
- * service users with `servicePlotIds`. Runs booked before keep what they charged; the next run uses the new
- * settings. Field codes of 400 `VALIDATION_FAILED`: `servicePlotIds[i]` `UNKNOWN_PLOT` (no such plot in the
+ * Sets the split of the common consumer of the meter `meterId` (absent `split`: back to the cooperative's
+ * default) and replaces its service users with `servicePlotIds`. Through any meter of the consumer's chain of
+ * replacements: the settings are saved for the whole consumer (on its latest meter, replacing what its other
+ * meters had), so a read through any of its meters shows them. Runs booked before keep what they charged; the
+ * next run uses the new settings. Field codes of 400 `VALIDATION_FAILED`: `servicePlotIds[i]` `UNKNOWN_PLOT` (no such plot in the
  * cooperative), `DUPLICATE` (listed twice), `PLOT_ARCHIVED`, `PLOT_COMMON_LAND`; `servicePlotIds` `TOO_LONG`
  * (over 5000). A meter that is not a common consumer meter of the cooperative is 404 `NOT_FOUND`. Requires
  * `SETTINGS_MANAGE`; a change is written to the audit log (`COMMON_CONSUMER_BILLING_CHANGED`, entity type

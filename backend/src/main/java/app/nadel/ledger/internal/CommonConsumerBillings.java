@@ -34,12 +34,20 @@ import org.springframework.transaction.annotation.Transactional;
  * marked as using it (they count with {@code SERVICE_USERS}). Settings, not history: a change applies to the next run
  * and never to runs booked before.
  * <p>
+ * The settings belong to the consumer, the whole chain of its meters ({@link MeterCatalog#chainOf}: a replacement
+ * keeps the consumer): {@code GET} on any meter of the chain shows what a run uses for it
+ * ({@link CommonConsumerSettings#ofChain}: the split and the users each of the latest meter that has them), and
+ * {@code PUT} on any meter of the chain saves them on the chain's latest meter, clearing the rows of its other meters
+ * ({@link CommonConsumerSettings#saveConsumer}), so a read after a change shows what was saved and a run charges with
+ * it.
+ * <p>
  * The meter must be a common consumer meter of the cooperative (removed ones too), else 404 {@code NOT_FOUND}. A
  * service user must be an active plot that is not common land, listed once: field codes {@code UNKNOWN_PLOT},
  * {@code DUPLICATE}, {@code PLOT_ARCHIVED}, {@code PLOT_COMMON_LAND} on {@code servicePlotIds[i]}. Two changes of one
- * consumer run one after the other (an advisory lock); a change is audited as {@code COMMON_CONSUMER_BILLING_CHANGED}
- * (entity type {@code METER} about the meter, label its name) with {@code split} (the own split, absent for the
- * default) and {@code servicePlots} (plot numbers in natural order, joined by ", "), each only when it changed.
+ * consumer run one after the other (an advisory lock by the first meter of its chain); a change is audited as
+ * {@code COMMON_CONSUMER_BILLING_CHANGED} (entity type {@code METER} about the meter of the request, label its name)
+ * with {@code split} (the consumer's own split, absent for the default) and {@code servicePlots} (plot numbers in
+ * natural order, joined by ", "), each only when it changed.
  */
 @Service
 class CommonConsumerBillings {
@@ -62,7 +70,7 @@ class CommonConsumerBillings {
     @Transactional(readOnly = true)
     CommonConsumerBilling get(UUID meterId) {
         MeterFacts meter = consumer(meterId);
-        return view(meter, billing.ofMeter(meterId));
+        return view(meter, billing.ofConsumer(meters.chainOf(meterId)));
     }
 
     @Transactional
@@ -73,11 +81,12 @@ class CommonConsumerBillings {
         CommonConsumerSplit split = update.getSplit() == null ? null
                 : CommonConsumerSplit.valueOf(update.getSplit().getValue());
         UUID tenantId = Objects.requireNonNull(actor.tenantId());
-        billing.lock(tenantId, meterId);
-        Billing before = billing.ofMeter(meterId);
+        List<UUID> chain = meters.chainOf(meterId);
+        billing.lock(tenantId, chain.getFirst());
+        Billing before = billing.ofConsumer(chain);
         Billing after = new Billing(split, new HashSet<>(users));
         if (!before.equals(after)) {
-            billing.save(tenantId, meterId, split, users);
+            billing.saveConsumer(tenantId, chain, split, users);
             List<FieldChange> changes = new ArrayList<>();
             if (before.split() != after.split()) {
                 changes.add(new FieldChange("split", name(before.split()), name(after.split())));
