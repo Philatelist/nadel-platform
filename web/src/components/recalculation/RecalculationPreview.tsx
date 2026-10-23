@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { Recalculation, RecalculationLine } from '@nadel/api-client';
 import { format, formatDay, formatMonth } from '@nadel/shared';
 import { useLocale, useT } from '../../i18n';
@@ -70,7 +71,16 @@ export function RecalculationPreview({
   const empty = groups.length === 0;
   const trimmed = reason.trim();
   const localReasonError = trimmed.length > REASON_MAX_LENGTH ? p.reasonTooLong : undefined;
-  const canBook = !empty && trimmed.length > 0 && localReasonError === undefined && !booking;
+  const [triedEmpty, setTriedEmpty] = useState(false);
+  const missingReason = triedEmpty && trimmed.length === 0 ? p.reasonRequired : undefined;
+  const canBook = !empty && localReasonError === undefined && !booking;
+  const handleBook = () => {
+    if (trimmed.length === 0) {
+      setTriedEmpty(true);
+      return;
+    }
+    onBook();
+  };
   return (
     <div className="flex flex-col gap-4">
       <Panel title={p.scope}>
@@ -109,7 +119,7 @@ export function RecalculationPreview({
               hint={p.reasonHint}
               rows={3}
               value={reason}
-              error={localReasonError ?? reasonError}
+              error={localReasonError ?? missingReason ?? reasonError}
               onChange={(e) => onReasonChange(e.target.value)}
             />
             <p className="mt-1 text-right text-sm text-ink-muted" data-testid="reason-counter">
@@ -123,7 +133,7 @@ export function RecalculationPreview({
           {t.recalculation.step.back}
         </Button>
         {!empty && (
-          <Button onClick={onBook} disabled={!canBook}>
+          <Button onClick={handleBook} disabled={!canBook}>
             {booking ? t.recalculation.step.booking : t.recalculation.step.book}
           </Button>
         )}

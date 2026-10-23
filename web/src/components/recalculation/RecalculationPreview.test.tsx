@@ -71,7 +71,6 @@ describe('RecalculationPreview', () => {
         onBack={vi.fn()}
       />,
     );
-    expect(screen.getByRole('button', { name: 'Book the recalculation' })).toBeDisabled();
     expect(screen.getByTestId('reason-counter')).toHaveTextContent('0 / 500');
     rerender(
       <RecalculationPreview
@@ -85,6 +84,14 @@ describe('RecalculationPreview', () => {
     );
     expect(screen.getByText('The reason is too long (at most 500 characters)')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Book the recalculation' })).toBeDisabled();
+  });
+
+  it('shows "Enter a reason" instead of booking when the reason is empty', async () => {
+    const props = renderPreview({ reason: '  ' });
+    expect(screen.queryByText('Enter a reason')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Book the recalculation' }));
+    expect(screen.getByText('Enter a reason')).toBeInTheDocument();
+    expect(props.onBook).not.toHaveBeenCalled();
   });
 
   it('books and reports typing through the callbacks', async () => {
