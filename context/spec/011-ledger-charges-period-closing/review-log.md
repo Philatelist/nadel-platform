@@ -116,3 +116,6 @@
 - Line coverage 11,337 / 11,625 = 0.9752 (baseline 0.9794). Floor raised 0.97 → 0.975; `jacoco:check` passes at 0.975 and fails at 0.98 on the same data.
 - Compared with the baseline: no failures before or after; nothing new failing.
 - After the run: Slice 10 review fixes cherry-picked; their 5 classes re-run (39 green); typecheck and format green.
+
+## Phase 5 — CI fix 1
+- CI Backend failed: all 2,143 tests passed, but line coverage measured 11,333 / 11,625 = 0.9749 (local 0.9752) — below the 0.975 floor. Coverage of timing-dependent listener/retry lines varies by a few lines between runs. Floor set to 0.974 (still raised from main's 0.97); both measurements clear it.
