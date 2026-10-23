@@ -1,8 +1,8 @@
 // @layer: e2e
 // @spec: 011-ledger-charges-period-closing
 // @regression
-// Charges and period closing in a browser, on the demo ledger (September closed, October open and already run):
-// the chairman runs October for a plot added after the run, approves an owner's reading and sees the electricity
+// Charges and period closing in a browser, on the demo ledger (the previous month closed, the current one open and already run):
+// the chairman runs the open month for a plot added after the run, approves an owner's reading and sees the electricity
 // charge, runs and reverses a losses run with a warning node, retries a "not charged" item, reverses a charge and
 // the treasurer sees no actions; the member sees only the own plot. Every test CREATES its own plots (unique
 // number) and archives them; the losses run and the charges it books are reversed in `finally`. Closing a month
@@ -13,7 +13,10 @@ import {
   archiveLeftovers,
   createPlot,
   expectCreated,
+  demoMonths,
   kyivDay,
+  monthLabel,
+  pastRange,
   retireMeter,
   shortDay,
   type CreatedPlot,
@@ -94,22 +97,24 @@ test.describe('charges and period closing', () => {
     }
   });
 
-  test('the chairman sees the months, runs October for a plot added after the run and a rerun adds nothing @smoke', async ({
+  test('the chairman sees the months, runs the open month for a plot added after the run and a rerun adds nothing @smoke', async ({
     page,
   }) => {
     const plot = { id: '', number: `E2E-C-R${Date.now().toString(36)}` };
     await loginAs(page, 'chairman@demo.local');
+    const { open, closed } = await demoMonths(page);
+    const openLabel = monthLabel(open);
     try {
       await menuLink(page, 'Charges').click();
       await expect(page.getByRole('heading', { level: 1, name: 'Charges' })).toBeVisible();
       const months = main(page).getByRole('list', { name: 'Billing months' }).getByRole('listitem');
-      await expect(months.filter({ hasText: 'October 2026' })).toContainText('Open');
-      await expect(months.filter({ hasText: 'September 2026' })).toContainText('Closed');
-      await expect(months.filter({ hasText: 'October 2026' })).toContainText('Membership fee');
+      await expect(months.filter({ hasText: openLabel })).toContainText('Open');
+      await expect(months.filter({ hasText: monthLabel(closed) })).toContainText('Closed');
+      await expect(months.filter({ hasText: openLabel })).toContainText('Membership fee');
 
-      // October is already run: the preview has nothing new and the check list says so
-      await months.filter({ hasText: 'October 2026' }).getByRole('link', { name: 'October 2026' }).click();
-      await expect(page.getByRole('heading', { level: 1, name: 'October 2026' })).toBeVisible();
+      // the open month is already run: the preview has nothing new and the check list says so
+      await months.filter({ hasText: openLabel }).getByRole('link', { name: openLabel }).click();
+      await expect(page.getByRole('heading', { level: 1, name: openLabel })).toBeVisible();
       await expect(main(page).getByText('The month run is done')).toBeVisible();
       await main(page).getByRole('button', { name: 'Charge the month', exact: true }).click();
       const dialog = page.getByRole('dialog');
@@ -232,15 +237,22 @@ test.describe('charges and period closing', () => {
     }
   });
 
-  test('the chairman runs losses for August: a quarter with an unknown value is a warning, the rest is booked and the run is reversed', async ({
+  test('the chairman runs losses for a past range: a quarter with an unknown value is a warning, the rest is booked and the run is reversed', async ({
     page,
   }) => {
     await loginAs(page, 'chairman@demo.local');
+    const range = pastRange();
+    const rangeText = `${shortDay(range.from)} – ${shortDay(range.to)}`;
+    const demoRun = expectCreated<{ from: string; to: string; status: string }[]>(
+      await api(page, 'GET', '/losses-runs'),
+      200,
+    ).find((r) => r.status === 'BOOKED' && r.from !== range.from);
+    if (!demoRun) throw new Error('the demo ledger has no booked losses run');
     const reverseBooked = async () => {
       const runs = await api(page, 'GET', '/losses-runs');
       if (runs.status !== 200) return;
       for (const run of JSON.parse(runs.body) as { id: string; from: string; to: string; status: string }[])
-        if (run.status === 'BOOKED' && run.from === '2026-08-01' && run.to === '2026-08-31')
+        if (run.status === 'BOOKED' && run.from === range.from && run.to === range.to)
           await api(page, 'POST', `/losses-runs/${run.id}/reverse`, { reason: 'E2E clean-up' }).catch(
             () => undefined,
           );
@@ -251,17 +263,19 @@ test.describe('charges and period closing', () => {
       await main(page).getByRole('link', { name: 'Losses', exact: true }).click();
       await expect(page.getByRole('heading', { level: 1, name: 'Losses' })).toBeVisible();
 
-      // the past run of the demo is in the history, booked in October
+      // the past run of the demo is in the history, booked
       const history = main(page).getByRole('list', { name: 'Past runs' });
       await expect(
-        history.getByRole('listitem').filter({ hasText: '4 Oct 2026 – 18 Oct 2026' }),
+        history
+          .getByRole('listitem')
+          .filter({ hasText: `${shortDay(demoRun.from)} – ${shortDay(demoRun.to)}` }),
       ).toContainText('Booked');
 
-      await main(page).getByLabel('From', { exact: true }).fill('2026-08-01');
-      await main(page).getByLabel('To', { exact: true }).fill('2026-08-31');
+      await main(page).getByLabel('From', { exact: true }).fill(range.from);
+      await main(page).getByLabel('To', { exact: true }).fill(range.to);
       await main(page).getByRole('button', { name: 'Preview', exact: true }).click();
       const preview = main(page).locator('section', { hasText: 'Preview for' });
-      await expect(preview).toContainText('1 Aug 2026 – 31 Aug 2026');
+      await expect(preview).toContainText(rangeText);
       const nodes = preview.getByRole('table', { name: 'Losses per node' });
       await expect(nodes.getByRole('row').filter({ hasText: 'Квартал А' })).toContainText('Charged');
       await expect(nodes.getByRole('row').filter({ hasText: 'Квартал Б' })).toContainText('Unknown value');
@@ -272,15 +286,13 @@ test.describe('charges and period closing', () => {
       await preview.getByRole('button', { name: 'Book', exact: true }).click();
       await expect(main(page).getByText(/^Charges created: [1-9]/)).toBeVisible();
       // (earlier runs of these days that were reversed stay in the history)
-      const run = history
-        .getByRole('listitem')
-        .filter({ hasText: '1 Aug 2026 – 31 Aug 2026', hasNotText: 'Reversed' });
+      const run = history.getByRole('listitem').filter({ hasText: rangeText, hasNotText: 'Reversed' });
       await expect(run).toContainText('Booked');
       await run.getByRole('button', { name: 'Details', exact: true }).click();
       await expect(run.getByText('Charges of the run')).toBeVisible();
 
       // the same days again: the quarter is already charged, so the whole run cannot be booked
-      await main(page).getByLabel('From', { exact: true }).fill('2026-08-01');
+      await main(page).getByLabel('From', { exact: true }).fill(range.from);
       await main(page).getByRole('button', { name: 'Preview', exact: true }).click();
       await expect(preview.getByText(/already been charged|charged for these days/i).first()).toBeVisible();
 
@@ -292,9 +304,9 @@ test.describe('charges and period closing', () => {
       await dialog.getByLabel('Reason', { exact: true }).fill('E2E reversal');
       await dialog.getByRole('button', { name: 'Reverse the run', exact: true }).click();
       await expect(run).toHaveCount(0);
-      await expect(
-        history.getByRole('listitem').filter({ hasText: '1 Aug 2026 – 31 Aug 2026' }).first(),
-      ).toContainText('Reversed');
+      await expect(history.getByRole('listitem').filter({ hasText: rangeText }).first()).toContainText(
+        'Reversed',
+      );
     } finally {
       await reverseBooked();
     }
@@ -326,7 +338,7 @@ test.describe('charges and period closing', () => {
     await loginAs(page, 'chairman@demo.local');
     try {
       plot.id = (await createPlot(page, plot.number)).id;
-      await bookMonth(page, '2026-10');
+      await bookMonth(page, (await demoMonths(page)).open);
       await page.goto(`/plots/${plot.id}`);
       const panel = main(page).locator('section', {
         has: page.getByRole('heading', { name: 'Account', exact: true }),
@@ -394,7 +406,8 @@ test.describe('charges and period closing', () => {
     await loginAs(page, 'chairman@demo.local');
     const plotId = await plotIdOf(page, '14');
     const account = await accountOf(page, plotId);
-    const index = account.charges.findIndex((c) => c.billingMonth === '2026-09');
+    const { closed } = await demoMonths(page);
+    const index = account.charges.findIndex((c) => c.billingMonth === closed);
     expect(index).toBeGreaterThanOrEqual(0);
     expect(account.charges[index]?.reversible).toBe(false);
     await page.goto(`/plots/${plotId}`);
@@ -414,8 +427,11 @@ test.describe('charges and period closing', () => {
     await loginAs(page, 'treasurer@demo.local');
     await expect(menuLink(page, 'Charges')).toBeVisible();
     await menuLink(page, 'Charges').click();
-    await main(page).getByRole('link', { name: 'October 2026' }).click();
-    await expect(page.getByRole('heading', { level: 1, name: 'October 2026' })).toBeVisible();
+    const { open } = await demoMonths(page);
+    await main(page)
+      .getByRole('link', { name: monthLabel(open) })
+      .click();
+    await expect(page.getByRole('heading', { level: 1, name: monthLabel(open) })).toBeVisible();
     await expect(main(page).getByText('Before closing')).toBeVisible();
     await expect(main(page).getByRole('button')).toHaveCount(0);
 
@@ -440,9 +456,9 @@ test.describe('charges and period closing', () => {
     await expect(panel.getByRole('button', { name: 'Enter an opening balance', exact: true })).toHaveCount(0);
 
     // the server refuses what the screen does not offer
-    const run = await api(page, 'POST', '/billing-months/2026-10/run?preview=true');
+    const run = await api(page, 'POST', `/billing-months/${open}/run?preview=true`);
     expect(run.status).toBe(403);
-    const close = await api(page, 'POST', '/billing-months/2026-10/close');
+    const close = await api(page, 'POST', `/billing-months/${open}/close`);
     expect(close.status).toBe(403);
   });
 

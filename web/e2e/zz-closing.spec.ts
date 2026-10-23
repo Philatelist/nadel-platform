@@ -2,7 +2,7 @@
 // @spec: 011-ledger-charges-period-closing
 // @regression
 // Closing a billing month. It lives in its own file whose name sorts last because Playwright runs files in
-// alphabetical order: once the demo's only open month (October) is closed, nothing can be charged any more, and
+// alphabetical order: once the demo's only open month (the current month) is closed, nothing can be charged any more, and
 // the other specs that run the month or book ranges would find no open month. The test skips itself when no month
 // is open (a re-run on the same database).
 import { expect, test, type Page } from '@playwright/test';
@@ -12,7 +12,7 @@ import { loginAs } from './support/login';
 const main = (page: Page) => page.getByRole('main');
 
 test.describe('closing a month', () => {
-  test('the chairman closes October after viewing the check list; nothing can be added to it afterwards @smoke', async ({
+  test('the chairman closes the open month after viewing the check list; nothing can be added to it afterwards @smoke', async ({
     page,
   }) => {
     await loginAs(page, 'chairman@demo.local');

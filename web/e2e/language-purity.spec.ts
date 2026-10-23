@@ -15,7 +15,7 @@
 // extensions such as ".xlsx" (FILE_EXTENSION), and the digit mask letter "N" in input hints (MASK).
 import { expect, test, type Browser, type Page } from '@playwright/test';
 import { messages } from '@nadel/shared';
-import { kyivDay } from './support/api';
+import { kyivDay, pastRange } from './support/api';
 import { loginAs } from './support/login';
 
 type Locale = 'uk' | 'en';
@@ -288,8 +288,8 @@ for (const locale of ['uk', 'en'] as const) {
         for (const path of ['/charges/losses', '/charges/common']) {
           await page.goto(path);
           await settle(page);
-          await page.getByLabel(t.billing.rangeRun.from, { exact: true }).fill('2026-08-01');
-          await page.getByLabel(t.billing.rangeRun.to, { exact: true }).fill('2026-08-31');
+          await page.getByLabel(t.billing.rangeRun.from, { exact: true }).fill(pastRange().from);
+          await page.getByLabel(t.billing.rangeRun.to, { exact: true }).fill(pastRange().to);
           await page.getByRole('button', { name: t.billing.rangeRun.preview, exact: true }).click();
           await expect(page.getByRole('table').first()).toBeVisible();
           findings.push(...(await auditNow(page, `${path} preview`, locale)));

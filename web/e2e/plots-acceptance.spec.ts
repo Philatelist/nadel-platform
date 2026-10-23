@@ -141,8 +141,9 @@ test.describe('plots registry: acceptance', () => {
     await expect(rows(page).first().locator('td').nth(4)).toHaveText('Спільні землі'); // kind
     await expect(rows(page).first().locator('td').nth(5)).toContainText('Спільні землі'); // grey status label
     await search(page, 'Пошук за номером, вулицею або кадастровим номером').fill('');
-    // plot 1 is owned and, in the demo ledger, over the threshold (red); plot 27 has no owner (grey)
-    await expect(rows(page).first().locator('td').nth(5)).toContainText('Борг понад поріг');
+    // plot 1 is owned and has a debt in the demo ledger (red or yellow, by where the anchor day falls); plot 27 has
+    // no owner (grey)
+    await expect(rows(page).first().locator('td').nth(5)).toContainText(/Борг понад поріг|Є борг/);
     await search(page, 'Пошук за номером, вулицею або кадастровим номером').fill('27');
     const unowned = rows(page).filter({ has: page.getByRole('link', { name: '27', exact: true }) });
     await expect(unowned).toHaveCount(1);
@@ -184,10 +185,11 @@ test.describe('plots registry: acceptance', () => {
     expect(plotRows.every((r) => r.includes('вул. Садова') || r.includes('вул. Вишнева'))).toBe(true);
     expect(plotRows.filter((r) => r.includes('вул. Садова')).length).toBeGreaterThan(10);
     expect(plotRows.filter((r) => r.includes('вул. Вишнева')).length).toBeGreaterThan(10);
-    // the demo ledger colours the 25 owned plots by debt: 14 red, 11 yellow, none green; plots 25-29 have
-    // "No owner" and the road is "Common land"
-    expect(everyRow.filter((r) => r.includes('Debt above threshold')).length).toBe(14);
-    expect(everyRow.filter((r) => r.includes('Has debt')).length).toBe(11);
+    // the demo ledger gives every one of the 25 owned plots a debt, so each is red or yellow and none green (how many
+    // are red depends on the day the demo was loaded); plots 25-29 have "No owner" and the road is "Common land"
+    const red = everyRow.filter((r) => r.includes('Debt above threshold')).length;
+    const yellow = everyRow.filter((r) => r.includes('Has debt')).length;
+    expect(red + yellow).toBe(25);
     expect(everyRow.filter((r) => r.includes('No debt')).length).toBe(0);
     expect(everyRow.filter((r) => r.includes('No owner')).length).toBe(5);
     const road = everyRow.filter((r) => r.startsWith('R-1'));
