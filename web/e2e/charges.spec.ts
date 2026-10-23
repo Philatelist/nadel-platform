@@ -241,7 +241,7 @@ test.describe('charges and period closing', () => {
     page,
   }) => {
     await loginAs(page, 'chairman@demo.local');
-    const range = pastRange();
+    const range = await pastRange(page);
     const rangeText = `${shortDay(range.from)} – ${shortDay(range.to)}`;
     const demoRun = expectCreated<{ from: string; to: string; status: string }[]>(
       await api(page, 'GET', '/losses-runs'),

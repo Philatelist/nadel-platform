@@ -131,7 +131,7 @@ test.describe('plots registry: acceptance', () => {
     }
   });
 
-  test('§2.1 marks in Ukrainian: "Борг понад поріг" on an owned plot, grey "Без власника" on an unowned one and "Спільні землі" on the road, filter by kind', async ({
+  test('§2.1 marks in Ukrainian: a debt label ("Борг понад поріг" or "Є борг", by the age of the debt) on an owned plot, grey "Без власника" on an unowned one and "Спільні землі" on the road, filter by kind', async ({
     page,
   }) => {
     await signInInUkrainian(page, 'treasurer@demo.local');

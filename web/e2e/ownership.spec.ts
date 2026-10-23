@@ -243,7 +243,9 @@ test.describe('ownership', () => {
     const label = (await labelled.nth(0).textContent())?.includes('Debt above threshold')
       ? 'Debt above threshold'
       : 'Has debt';
+    const withLabel = await labelled.filter({ hasText: label }).count();
     await main(page).getByLabel('Status', { exact: true }).selectOption({ label });
+    await expect(rows(page)).toHaveCount(withLabel);
     await expect(numbers(page).first()).toHaveText('7');
     expect((await numbers(page).allTextContents()).every((n) => n === '7' || n === '15')).toBe(true);
   });

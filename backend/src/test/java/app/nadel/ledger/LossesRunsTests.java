@@ -378,6 +378,35 @@ class LossesRunsTests extends FreshCooperativeSupport {
         assertThat(lines(body(send(chairman, get(NOT_CHARGED), null)), "meterId", "from", "to"))
                 .containsExactly(quarterA + "|2026-10-01|2026-10-10");
         assertThat(runCount()).isEqualTo(1);
+        // the item that was retried is closed (the narrowed one is a new item) and the retry is audited
+        assertThat(owner().queryForObject("select status from not_charged_item where id = ?", String.class, item))
+                .isEqualTo("RESOLVED");
+        await().atMost(Duration.ofSeconds(10)).until(() -> owner().queryForObject(
+                "select count(*) from audit_entry where tenant_id = ? and action = 'NOT_CHARGED_RETRIED' "
+                        + "and entity_type = 'METER' and entity_id = ?", Integer.class, tenant, quarterA) == 1);
+    }
+
+    // @spec: 011-ledger-charges-period-closing (§2.5 "a quarter shows 950 kWh and its children 1 000 kWh")
+    // @regression
+    @Test
+    void aQuarterShowingLessThanItsChildrenChargesNothingAndWarnsWithTheNumbers() throws Exception {
+        quarterA = namedMeter("QUARTER", "Квартал А", null, 5000, 5950);
+        meterP1 = plotMeter(p1, quarterA, 1000, 1600);
+        meterP2 = plotMeter(p2, quarterA, 2000, 2400);
+
+        for (String path : List.of(PREVIEW, BOOK)) {
+            JsonNode run = body(send(chairman, post(path), range()).andExpect(status().isOk()));
+
+            JsonNode node = run.get("nodes").get(0);
+            assertThat(node.get("outcome").asString()).isEqualTo("NEGATIVE");
+            assertThat(node.get("consumption").asString()).isEqualTo("950.000");
+            assertThat(node.get("children").asString()).isEqualTo("1000.000");
+            assertThat(node.get("losses").asString()).isEqualTo("-50.000");
+            assertThat(node.get("warning").get("code").asString()).isEqualTo("NEGATIVE_LOSSES");
+            assertThat(run.get("charges")).isEmpty();
+        }
+        assertThat(owner().queryForObject("select count(*) from charge where tenant_id = ?", Integer.class, tenant))
+                .isZero();
     }
 
     @Test

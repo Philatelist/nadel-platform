@@ -57,24 +57,46 @@ export interface BillingMonthRow {
 
 /**
  * The demo ledger hangs on the day the database was first loaded: its open month is the current month and its closed
- * month the one before. Read them from the API instead of naming calendar months, so the specs do not age.
+ * month the one before. Read them from the API instead of naming calendar months, so the specs do not age. When
+ * more than one month has a status (a reused local database), the latest of each is taken.
  */
 export async function demoMonths(page: Page): Promise<{ open: string; closed: string }> {
   const months = expectCreated<BillingMonthRow[]>(await api(page, 'GET', '/billing-months'), 200);
-  const open = months.find((m) => m.status === 'OPEN')?.month;
-  const closed = months.find((m) => m.status === 'CLOSED')?.month;
+  const latest = (status: BillingMonthRow['status']) =>
+    months
+      .filter((m) => m.status === status)
+      .map((m) => m.month)
+      .sort()
+      .at(-1);
+  const open = latest('OPEN');
+  const closed = latest('CLOSED');
   if (!open || !closed)
     throw new Error(`the demo ledger has no open and closed month: ${JSON.stringify(months)}`);
   return { open, closed };
 }
 
+/** An ISO day shifted by `offsetDays` days (calendar arithmetic in UTC, so no time zone shifts it). */
+export function shiftDay(isoDay: string, offsetDays: number): string {
+  const day = new Date(`${isoDay.slice(0, 10)}T00:00:00Z`);
+  day.setUTCDate(day.getUTCDate() + offsetDays);
+  return day.toISOString().slice(0, 10);
+}
+
 /**
- * A past range for the losses and common consumers previews, in days before today: 83 to 53 days back. It ends after
- * the last reading of plot 20 (75 days back in the demo), so quarter Б has no reading after the range and is a
- * warning, while quarter А has readings inside it. It lies wholly before the demo runs (19 to 5 days back).
+ * A past range for the losses and common consumers previews, counted back from the demo anchor and not from today (a
+ * reused local database keeps the day it was first loaded): the demo losses run ends 5 days before the anchor, and
+ * the range is 78 to 48 days before that end. It ends after the last reading of plot 20 (70 days before the anchor
+ * in the demo), so quarter Б has no reading after the range and is a warning, while quarter А has readings inside
+ * it. It lies wholly before the demo runs (14 to 0 days before their end).
  */
-export function pastRange(): { from: string; to: string } {
-  return { from: kyivDay(-83), to: kyivDay(-53) };
+export async function pastRange(page: Page): Promise<{ from: string; to: string }> {
+  const runs = expectCreated<{ to: string }[]>(await api(page, 'GET', '/losses-runs'), 200);
+  const demoEnd = runs
+    .map((r) => r.to)
+    .sort()
+    .at(-1);
+  if (!demoEnd) throw new Error('the demo ledger has no losses run to anchor the past range on');
+  return { from: shiftDay(demoEnd, -78), to: shiftDay(demoEnd, -48) };
 }
 
 /** Parses a JSON response that must have the given status, or throws with the body for a readable failure. */

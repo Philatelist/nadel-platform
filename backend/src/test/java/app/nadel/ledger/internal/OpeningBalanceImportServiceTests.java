@@ -56,9 +56,10 @@ class OpeningBalanceImportServiceTests {
     private final ChargeTypeCatalog chargeTypes = mock(ChargeTypeCatalog.class);
     private final ChargeRepository charges = mock(ChargeRepository.class);
     private final OpeningBalances openingBalances = mock(OpeningBalances.class);
+    private final BillingMonths billingMonths = mock(BillingMonths.class);
     private final ApplicationEventPublisher events = mock(ApplicationEventPublisher.class);
     private final OpeningBalanceImportService service = new OpeningBalanceImportService(plots, chargeTypes, charges,
-            openingBalances, mock(BillingMonths.class), mock(LedgerAuditPublisher.class), events,
+            openingBalances, billingMonths, mock(LedgerAuditPublisher.class), events,
             mock(EntityManager.class), Clock.fixed(NOW, ZoneId.of("Europe/Kyiv")));
 
     @Test
@@ -112,6 +113,63 @@ class OpeningBalanceImportServiceTests {
                 assertThat(item.problems()).containsExactly(
                         new Problem("amount", "OPENING_BALANCE_EXISTS", Map.of("amount", "100.00")));
             });
+        }
+    }
+
+    @Test
+    void aRowDatedInAClosedMonthIsBookedInTheMonthTheCalendarGivesAndEachMonthIsAskedOnce() {
+        // the calendar maps January to March (the earliest open month) and February to April
+        BillingMonthRecord march = mock(BillingMonthRecord.class);
+        BillingMonthRecord april = mock(BillingMonthRecord.class);
+        when(billingMonths.openForBooking(eq(TENANT), any()))
+                .thenAnswer(call -> ((LocalDate) call.getArgument(1)).getMonthValue() == 1 ? march : april);
+        when(chargeTypes.all()).thenReturn(List.of(TYPE));
+        when(plots.findAll(anyCollection())).thenReturn(Map.of());
+        when(openingBalances.book(any(), any(), any(), any(), any(), any(), any(), any(), any()))
+                .thenAnswer(call -> new OpeningBalances.Booked(ChargeRecord.opening(TENANT, call.getArgument(1),
+                        TYPE.id(), UUID.randomUUID(), call.getArgument(3), call.getArgument(4), null,
+                        call.getArgument(6), Map.of(), null, NOW), List.of()));
+        LocalDate[] dates = {LocalDate.of(2026, 1, 5), LocalDate.of(2026, 2, 3), LocalDate.of(2026, 1, 20)};
+        List<Row> rows = new ArrayList<>();
+        List<Item> items = new ArrayList<>();
+        for (int i = 0; i < dates.length; i++) {
+            rows.add(new Row(i + 2, "P-" + i, TYPE.name(), new BigDecimal("100.00"), dates[i], null));
+            items.add(new Item(i + 2, Action.NEW, UUID.randomUUID(), TYPE.id(), List.of()));
+        }
+
+        service.apply(TENANT, UUID.randomUUID(), rows, new Plan(items), new Actor(null, "subject", "Actor"));
+
+        ArgumentCaptor<LocalDate> bookedDates = ArgumentCaptor.forClass(LocalDate.class);
+        ArgumentCaptor<BillingMonthRecord> bookedMonths = ArgumentCaptor.forClass(BillingMonthRecord.class);
+        verify(openingBalances, times(3)).book(any(), any(), any(), any(), bookedDates.capture(), any(), any(), any(),
+                bookedMonths.capture());
+        // each charge keeps its own date and goes to the month the calendar chose for the month of that date
+        assertThat(bookedDates.getAllValues()).containsExactly(dates);
+        assertThat(bookedMonths.getAllValues()).containsExactly(march, april, march);
+        // the month of a date is asked once however many rows it has
+        verify(billingMonths, times(2)).openForBooking(eq(TENANT), any());
+    }
+
+    @Test
+    void aTieOnTheTimeOfBookingFallsBackToTheSmallerIdWhateverTheOrder() {
+        UUID plotId = UUID.randomUUID();
+        ChargeRecord a = standing(plotId, "100.00", NOW.minusSeconds(60));
+        ChargeRecord b = standing(plotId, "200.00", NOW.minusSeconds(60));
+        assertThat(a.getId()).isNotEqualTo(b.getId());
+        ChargeRecord smaller = a.getId().compareTo(b.getId()) < 0 ? a : b;
+        when(plots.findActiveByNumbers(anyCollection()))
+                .thenReturn(List.of(new PlotFacts(plotId, "A-1", null, false, false, BigDecimal.TEN)));
+        when(chargeTypes.findByNames(anyCollection())).thenReturn(Map.of(TYPE.name(), List.of(TYPE)));
+        List<Row> rows = List.of(new Row(2, "A-1", TYPE.name(), new BigDecimal("300.00"), DATE, null));
+
+        for (List<ChargeRecord> order : List.of(List.of(a, b), List.of(b, a))) {
+            when(charges.findStandingOfKind(anyCollection(), eq(ChargeKind.OPENING))).thenReturn(order);
+
+            Plan plan = service.plan(TENANT, List.of(), new PlotImportPlan(List.of()), rows);
+
+            assertThat(plan.items()).singleElement().satisfies(item -> assertThat(item.problems()).containsExactly(
+                    new Problem("amount", "OPENING_BALANCE_EXISTS",
+                            Map.of("amount", smaller.getAmount().value().toPlainString()))));
         }
     }
 

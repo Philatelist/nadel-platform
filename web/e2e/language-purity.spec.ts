@@ -285,11 +285,12 @@ for (const locale of ['uk', 'en'] as const) {
         await page.getByRole('button', { name: t.billing.close.cancel, exact: true }).click();
 
         // a losses and a common consumers preview over a past range (previews write nothing)
+        const range = await pastRange(page);
         for (const path of ['/charges/losses', '/charges/common']) {
           await page.goto(path);
           await settle(page);
-          await page.getByLabel(t.billing.rangeRun.from, { exact: true }).fill(pastRange().from);
-          await page.getByLabel(t.billing.rangeRun.to, { exact: true }).fill(pastRange().to);
+          await page.getByLabel(t.billing.rangeRun.from, { exact: true }).fill(range.from);
+          await page.getByLabel(t.billing.rangeRun.to, { exact: true }).fill(range.to);
           await page.getByRole('button', { name: t.billing.rangeRun.preview, exact: true }).click();
           await expect(page.getByRole('table').first()).toBeVisible();
           findings.push(...(await auditNow(page, `${path} preview`, locale)));

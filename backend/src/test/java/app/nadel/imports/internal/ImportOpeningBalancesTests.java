@@ -306,6 +306,44 @@ class ImportOpeningBalancesTests extends ImportCommitSupport {
     }
 
     @Test
+    void aRowDatedInAClosedMonthIsBookedInTheEarliestOpenMonthKeepingItsOwnDate() throws Exception {
+        UUID p = storedPlot("p");
+        UUID q = storedPlot("q");
+        // 10.03.2024 and 20.03.2024 are in a closed month (and before the last closed one of the cooperative)
+        ownerJdbc().update("insert into billing_month (tenant_id, month, status, closed_at) "
+                + "values (?, date '2024-03-01', 'CLOSED', now()) on conflict (tenant_id, month) do nothing",
+                DEMO_TENANT);
+        LocalDate first = LocalDate.of(2024, 3, 10);
+        LocalDate second = LocalDate.of(2024, 3, 20);
+        byte[] workbook = english(List.of(), List.of(
+                balance(plotNo("p"), "Membership fee", 100, first, null),
+                balance(plotNo("p"), "Land tax", 200, second, null),
+                balance(plotNo("q"), "Membership fee", 300, first, null)));
+
+        JsonNode preview = preview(workbook);
+        assertThat(problems(preview)).isEmpty();
+        commit(preview.get("id").asString()).andExpect(status().isOk());
+
+        String earliestOpen = ownerJdbc().queryForObject("select to_char(min(month), 'YYYY-MM') from billing_month "
+                + "where tenant_id = ? and status = 'OPEN' and month > (select max(month) from billing_month "
+                + "where tenant_id = ? and status = 'CLOSED')", String.class, DEMO_TENANT, DEMO_TENANT);
+        assertThat(earliestOpen).isNotNull().isNotEqualTo("2024-03");
+        for (Map<String, Object> opening : openings(p)) {
+            assertThat(opening.get("month")).isEqualTo(earliestOpen);
+        }
+        assertThat(openings(p)).extracting(o -> o.get("accrued_on").toString())
+                .containsExactlyInAnyOrder(first.toString(), second.toString());
+        assertThat(openings(q)).singleElement().satisfies(o -> {
+            assertThat(o.get("month")).isEqualTo(earliestOpen);
+            assertThat(o.get("accrued_on").toString()).isEqualTo(first.toString());
+        });
+        // no charge went into the closed month
+        assertThat(ownerJdbc().queryForObject("select count(*) from charge c join billing_month m "
+                + "on m.id = c.billing_month_id where m.tenant_id = ? and m.month = date '2024-03-01'",
+                Integer.class, DEMO_TENANT)).isZero();
+    }
+
+    @Test
     void aRenamedSeededTypeIsFoundByItsNewNameOnlyAndADefaultNameOfATypeThatKeepsItIsFoundInBothLanguages()
             throws Exception {
         storedPlot("p");

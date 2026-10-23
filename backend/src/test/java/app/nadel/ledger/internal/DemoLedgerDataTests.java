@@ -419,8 +419,39 @@ class DemoLedgerDataTests extends IntegrationTest {
         awaitListeners();
 
         assertThat(owner.queryForList(snapshot, String.class, DEMO_TENANT)).isEqualTo(demo);
-        assertThat(demo).anyMatch(line -> line.endsWith("|RED")).anyMatch(line -> line.endsWith("|YELLOW"))
-                .anyMatch(line -> line.startsWith("12|") && line.endsWith("|RED"));
+        // the colours follow the rule for today whatever today is (a debt older than the red days is red, so the
+        // mix of red and yellow moves with the date); plot 12's opening balance is above the red amount on any date
+        Map<String, String> expected = expectedStatuses();
+        assertThat(owner.queryForList("select p.number || '|' || s.status from plot_status s join plot p "
+                + "on p.id = s.plot_id where p.tenant_id = ? order by p.number", String.class, DEMO_TENANT))
+                .isEqualTo(expected.entrySet().stream().sorted(Map.Entry.comparingByKey())
+                        .map(e -> e.getKey() + "|" + e.getValue()).toList());
+        assertThat(expected.values()).contains("RED", "GREY").doesNotContainNull();
+        assertThat(expected).containsEntry("12", "RED");
+    }
+
+    /**
+     * The status of every demo plot by the rule of the plot map for today (Kyiv), computed in SQL from the cached debt:
+     * grey for common land and a plot without a current owner, green without a debt, red when the debt is above the red
+     * amount or its oldest charge is older than the red days, yellow otherwise.
+     */
+    private Map<String, String> expectedStatuses() {
+        Map<String, String> statuses = new HashMap<>();
+        owner.queryForList("""
+                select p.number,
+                       case when p.kind = 'COMMON' or not exists (select 1 from ownership o
+                                where o.plot_id = p.id and o.valid_to is null) then 'GREY'
+                            when s.debt <= 0 then 'GREEN'
+                            when s.debt > coalesce(cs.red_amount, 1000.00)
+                                 or ((now() at time zone 'Europe/Kyiv')::date - s.oldest_debt_date)
+                                    > coalesce(cs.red_days, 90) then 'RED'
+                            else 'YELLOW' end as status
+                from plot p
+                join plot_status s on s.plot_id = p.id
+                left join cooperative_settings cs on cs.tenant_id = p.tenant_id
+                where p.tenant_id = ?""", DEMO_TENANT).forEach(row -> statuses.put((String) row.get("number"),
+                (String) row.get("status")));
+        return statuses;
     }
 
     @Test
@@ -457,7 +488,9 @@ class DemoLedgerDataTests extends IntegrationTest {
         Map<String, String> statuses = new HashMap<>();
         map.get("features").forEach(f -> statuses.put(f.get("properties").get("number").asString(),
                 f.get("properties").get("status").asString()));
-        assertThat(statuses.values()).contains("RED", "YELLOW", "GREY");
+        // red, yellow and green by debt and age (which of them show depends on today); grey for common land
+        assertThat(statuses).isEqualTo(expectedStatuses());
+        assertThat(statuses.values()).contains("RED", "GREY");
         assertThat(statuses.get("12")).isEqualTo("RED");
 
         // plot 12: the opening balance; plot 14: the reversal; the account's total is the cached debt

@@ -89,3 +89,18 @@
 - M1 and minors 1-4 resolved.
 - Minor: `OpeningBalanceImportServiceTests.java:97` the id tie-breaker for equal created_at is untested. → Slice 10.
 - Minor: `WaterConnectionImportService.java:199` rows/items index alignment assumed. → noted.
+
+## Slice 9 — round 1 (0ece62b + 7f66eff): MAJOR_ISSUES
+- M1 e2e specs hard-code calendar dates (charges.spec.ts @smoke 'October 2026', run ranges, '2026-10'/'2026-09') and colour counts, while the demo ledger follows today → CI smoke fails from 1 Nov, full suite from tomorrow. → fixing in the review worktree (react-frontend).
+- Minor: guides say red when debt "reaches"/"at least" (code: strictly greater). → fixing.
+- Minor: "October" in spec titles/comments and a guide caption. → fixing.
+- Minor: `DemoLedgerDataTests.thePlotDebtsAreWhatTheStatusRefresherRecords` requires ≥1 RED and ≥1 YELLOW (date-dependent). → fix in Slice 10 / Phase 4 if it flips; noted.
+- Minor: demo has no green owned plot (no payments yet; spec §2.13 allows it). → AUTO noted.
+- Minor: owner manual "a member sees only their own accounts, whatever the permissions". → fixing.
+
+## Slice 9 — round 2 (35c69d2): PASS
+- M1 and the round-1 minors resolved.
+- Minor: `plots-acceptance.spec.ts:134` title still says "Борг понад поріг". → Slice 10.
+- Minor: `support/api.ts:76` `pastRange` counts back from today, not the demo anchor (reused local DB). → Slice 10.
+- Minor: `ownership.spec.ts:247-248` filter check could count labelled rows. → Slice 10.
+- Minor: `support/api.ts:63-64` `demoMonths` should pick the latest month of each status. → Slice 10.
