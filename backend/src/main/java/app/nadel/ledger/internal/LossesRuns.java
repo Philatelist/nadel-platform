@@ -117,6 +117,7 @@ class LossesRuns {
     private final NotChargedItemRepository items;
     private final ActorNames actorNames;
     private final LedgerAuditPublisher audit;
+    private final ChargingLock chargingLock;
     private final EntityManager entityManager;
     private final Clock clock;
 
@@ -124,7 +125,8 @@ class LossesRuns {
             CooperativeSettings settings, BillingMonths billingMonths, BillingMonthRepository months,
             LossesRunRepository runs, LossesRunNodeRepository nodes, ChargeRepository charges,
             ChargePartRepository parts, NotChargedItemRepository items, ActorNames actorNames,
-            LedgerAuditPublisher audit, EntityManager entityManager, Clock clock) {
+            LedgerAuditPublisher audit, ChargingLock chargingLock, EntityManager entityManager,
+            Clock clock) {
         this.network = network;
         this.book = book;
         this.writer = writer;
@@ -139,6 +141,7 @@ class LossesRuns {
         this.items = items;
         this.actorNames = actorNames;
         this.audit = audit;
+        this.chargingLock = chargingLock;
         this.entityManager = entityManager;
         this.clock = clock;
     }
@@ -601,8 +604,10 @@ class LossesRuns {
         }
     }
 
-    /** The transaction-scoped advisory lock of the cooperative's losses runs. */
+    /** The cooperative's charging lock ({@link ChargingLock}), then the advisory lock of its losses runs. */
     private void lockRuns(UUID tenantId) {
+        // every booking, reversal and retry books or reverses charges: the cooperative's charging lock comes first
+        chargingLock.lock(tenantId);
         entityManager.createNativeQuery(
                 "select count(*) from (select pg_advisory_xact_lock(hashtextextended(:key, 0))) as l")
                 .setParameter("key", RUN_LOCK + tenantId)

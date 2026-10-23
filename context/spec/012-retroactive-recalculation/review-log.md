@@ -12,3 +12,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `676ebbb..167f42e` | PASS | — | minor: `?adjustments=1` is shared by every plot panel in "Мої нарахування"; recalculation link reuses `openCharge` key; long javadoc line in `Reversals`; `digest`/`reason` without `maxLength` in the contract (Slice 3 decides); `012:` commit subjects follow the pipeline convention, not Conventional Commits |
+
+## Slice 2 — The recalculation planner (pure)
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `167f42e..0ef7ec0` | PASS | — | minor: `Plan.isEmpty()` ignores queue-only outcomes (Slice 3 decides); digest line text has no plot/charge type id; `closed(...)` repeats the month-order rule of `BillingCalendar`; `ExpectedCharges` map put could overwrite (assertion); requirement §3 closed-September reading dates cannot put the first interval in September — tests shift them one month (amounts unchanged), align the doc in Slice 8 |

@@ -13,6 +13,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
 import { useT } from '../i18n';
 import { problemFieldErrors, problemMessage, type FieldErrors } from '../problem';
+import { RecalcHint } from './recalculation/RecalcHint';
 import { Button, Notice, Panel, Select, TextArea, TextField } from './ui';
 
 const KINDS = Object.values(PlotKind);
@@ -181,6 +182,11 @@ export function PlotForm({
               <option value="M2">{t.plotForm.unitM2}</option>
             </Select>
           </div>
+          {plot && (
+            <div className="md:col-span-2">
+              <RecalcHint />
+            </div>
+          )}
           <TextField
             label={f.cadastralNumber}
             error={errors.cadastralNumber}

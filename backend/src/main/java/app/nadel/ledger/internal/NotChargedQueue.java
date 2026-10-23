@@ -35,7 +35,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * The "not charged" queue (feature 011 §2.7): {@code GET /not-charged} lists the open items, {@code POST
- * /not-charged/{id}/retry} tries one again.
+ * /not-charged/{id}/retry} tries one again. A retry of any kind takes the cooperative's charging lock
+ * ({@link ChargingLock}) first.
  * <p>
  * A retry of a {@code TARIFF_MONTH} item does for its plot, charge type and month what the month run does, on the
  * same path as the run's retries ({@link NotChargedRetries}, under the same locks: the month's advisory lock, the
@@ -66,13 +67,15 @@ class NotChargedQueue {
     private final LossesRuns lossesRuns;
     private final CommonConsumerRuns commonConsumerRuns;
     private final WaterDays waterDays;
+    private final ChargingLock chargingLock;
     private final EntityManager entityManager;
     private final Clock clock;
 
     NotChargedQueue(NotChargedItemRepository items, NotChargedViews views, TariffBook book, TariffChargeWriter writer,
             NotChargedRetries retries, ChargeRepository charges, PlotCatalog plots, ChargeTypeCatalog chargeTypes,
             LedgerAuditPublisher audit, IntervalCharging intervals, LossesRuns lossesRuns,
-            CommonConsumerRuns commonConsumerRuns, WaterDays waterDays, EntityManager entityManager, Clock clock) {
+            CommonConsumerRuns commonConsumerRuns, WaterDays waterDays, ChargingLock chargingLock,
+            EntityManager entityManager, Clock clock) {
         this.items = items;
         this.views = views;
         this.book = book;
@@ -86,6 +89,7 @@ class NotChargedQueue {
         this.lossesRuns = lossesRuns;
         this.commonConsumerRuns = commonConsumerRuns;
         this.waterDays = waterDays;
+        this.chargingLock = chargingLock;
         this.entityManager = entityManager;
         this.clock = clock;
     }
@@ -117,6 +121,8 @@ class NotChargedQueue {
         if (item.getStatus() != Status.OPEN) {
             return new NotChargedRetryResult(true);
         }
+        // every kind of retry books charges: the cooperative's charging lock first, before any other ledger lock
+        chargingLock.lock(Objects.requireNonNull(actor.tenantId()));
         if (item.getKind() == Kind.INTERVAL) {
             return retryInterval(item, actor);
         }

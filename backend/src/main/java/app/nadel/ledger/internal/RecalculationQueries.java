@@ -148,6 +148,11 @@ class RecalculationQueries {
             Map<UUID, ChargeTypeFacts> typeById) {
         Map<UUID, Money> byType = new LinkedHashMap<>();
         stored.forEach(line -> byType.merge(line.getChargeTypeId(), line.getDifference(), Money::plus));
+        return totals(byType, typeById);
+    }
+
+    /** The differences per charge type given, in the order of the charge types (position, then id). */
+    static List<ChargeTypeTotal> totals(Map<UUID, Money> byType, Map<UUID, ChargeTypeFacts> typeById) {
         List<ChargeTypeFacts> ordered = new ArrayList<>(byType.keySet().stream().map(typeById::get).toList());
         ordered.sort(Comparator.comparingInt(ChargeTypeFacts::position).thenComparing(ChargeTypeFacts::id));
         return ordered.stream().map(type -> {

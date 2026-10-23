@@ -16,7 +16,11 @@ import type { RecalculationCause } from './recalculationCause';
  */
 export interface RecalculationRequest {
   cause: RecalculationCause;
-  /** User content */
+  /**
+     * User content
+     * @maxLength 500
+     */
   reason?: string;
+  /** @maxLength 128 */
   digest?: string;
 }

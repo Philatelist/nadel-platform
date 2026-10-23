@@ -148,6 +148,19 @@ const router = createBrowserRouter([
               import('./pages/RecalculationsPage').then((m) => ({ Component: m.RecalculationsPage })),
           },
           {
+            path: 'charges/recalculations/new',
+            element: <RequirePermission permission="RECALCULATION_RUN" />,
+            children: [
+              {
+                index: true,
+                lazy: () =>
+                  import('./pages/RecalculationNewPage').then((m) => ({
+                    Component: m.RecalculationNewPage,
+                  })),
+              },
+            ],
+          },
+          {
             path: 'charges/recalculations/:id',
             lazy: () =>
               import('./pages/RecalculationDetailPage').then((m) => ({

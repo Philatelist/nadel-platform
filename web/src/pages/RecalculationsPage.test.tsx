@@ -7,8 +7,9 @@ import { RecalculationsPage } from './RecalculationsPage';
 
 const useListRecalculations = vi.fn();
 
+let canRun = true;
 vi.mock('../me', () => ({
-  useCan: () => true,
+  useCan: () => canRun,
   useMe: () => ({ permissions: ['CHARGES_VIEW'] }),
   useOptionalMe: () => null,
 }));
@@ -41,6 +42,7 @@ describe('RecalculationsPage', () => {
   beforeEach(() => {
     window.localStorage.setItem('nadel.locale', 'en');
     useListRecalculations.mockReset();
+    canRun = true;
   });
 
   it('lists recalculations with cause, author, reason, total and a link to the detail', () => {
@@ -62,5 +64,18 @@ describe('RecalculationsPage', () => {
     useListRecalculations.mockReturnValue(queryResult(page([])));
     renderWithApp(<RecalculationsPage />);
     expect(screen.getByText('There have been no recalculations yet')).toBeInTheDocument();
+  });
+
+  it('offers a new recalculation only to holders of RECALCULATION_RUN', () => {
+    useListRecalculations.mockReturnValue(queryResult(page([summary])));
+    const { unmount } = renderWithApp(<RecalculationsPage />);
+    expect(screen.getByRole('link', { name: 'New recalculation' })).toHaveAttribute(
+      'href',
+      '/charges/recalculations/new',
+    );
+    unmount();
+    canRun = false;
+    renderWithApp(<RecalculationsPage />);
+    expect(screen.queryByRole('link', { name: 'New recalculation' })).not.toBeInTheDocument();
   });
 });

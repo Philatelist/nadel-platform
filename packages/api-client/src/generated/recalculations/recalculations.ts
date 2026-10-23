@@ -199,15 +199,19 @@ export const getRunRecalculationUrl = (params: RunRecalculationParams,) => {
  * a tariff added, corrected or deleted together with the recalculation (`cause.tariffVersion`); `READING_*` a
  * reading entered, corrected or deleted together with the recalculation (`cause.reading`). With `preview=true`
  * nothing is written (a cause-driven change is applied and rolled back) and the answer has a `digest`; with
- * `preview=false` the change and the recalculation are booked together, or nothing is. 400 `VALIDATION_FAILED`:
- * `reason` `REQUIRED` or `TOO_LONG` (over 500 characters) for a booking, `cause.manual.to` `INVALID` (before
- * `from`) or `DATE_IN_FUTURE` (after the current month). Conflicts (409): the manual range spans more than 24
- * months (`RECALCULATION_RANGE_TOO_LONG`), a manual recalculation finds nothing to change
- * (`NOTHING_TO_RECALCULATE`), a booking is sent with the digest of a preview that no longer matches
- * (`PREVIEW_OUTDATED`). Requires `RECALCULATION_RUN`, and also `TARIFFS_MANAGE` for a tariff version cause and
- * `READINGS_ENTER` for a reading cause; a booking is written to the audit log (`RECALCULATION_BOOKED`). Until the
- * booking service arrives (feature 012, slice 3) every request of a caller with `RECALCULATION_RUN` is answered
- * 409 `NOTHING_TO_RECALCULATE`.
+ * `preview=false` the change and the recalculation are booked together, or nothing is. A preview that finds
+ * nothing to change answers with no lines ("No changes"). 400 `VALIDATION_FAILED`: `reason` `REQUIRED` or
+ * `TOO_LONG` (over 500 characters) for a booking, `cause.manual` `REQUIRED` for `MANUAL`, `cause.manual.to`
+ * `INVALID` (before `from`) or `DATE_IN_FUTURE` (after the current month), `cause.manual.chargeTypeIds[i]`
+ * `NOT_FOUND` (unknown) or `INVALID` (inactive or archived), `cause.manual.plotIds[i]` `UNKNOWN_PLOT`,
+ * `PLOT_ARCHIVED` or `PLOT_COMMON_LAND`. Until the cause-driven recalculations arrive (feature 012, slices 6 and
+ * 7) a `cause.type` other than `MANUAL` is 400 `VALIDATION_FAILED` with `cause.type` `UNSUPPORTED`, and a manual
+ * recalculation covers the charges of recurring tariffs only (slices 4 and 5 add the charges of readings and
+ * runs). Conflicts (409): the manual range spans more than 24 months (`RECALCULATION_RANGE_TOO_LONG`), a manual
+ * recalculation finds nothing to change when booked (`NOTHING_TO_RECALCULATE`), a booking is sent with the
+ * digest of a preview that no longer matches (`PREVIEW_OUTDATED`). Requires `RECALCULATION_RUN`, and also
+ * `TARIFFS_MANAGE` for a tariff version cause and `READINGS_ENTER` for a reading cause; a booking is written to
+ * the audit log (`RECALCULATION_BOOKED`, entity type `RECALCULATION`).
  * @summary Preview or book a recalculation
  */
 export const runRecalculation = async (recalculationRequest: RecalculationRequest,

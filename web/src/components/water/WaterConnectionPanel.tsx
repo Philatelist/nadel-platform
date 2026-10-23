@@ -15,6 +15,7 @@ import { useCan } from '../../me';
 import { problemFieldErrors } from '../../problem';
 import { Modal } from '../Modal';
 import { QueryBoundary } from '../QueryBoundary';
+import { RecalcHint } from '../recalculation/RecalcHint';
 import { Button, Notice, Panel, Select, TextField } from '../ui';
 import { WaterSourceName, invalidateAfterWaterChange, waterProblemMessage } from './waterShared';
 
@@ -59,6 +60,7 @@ export function WaterConnectionPanel({ plotId, archived = false }: { plotId: str
                   )}
                 </div>
               )}
+              {canManage && !archived && <RecalcHint />}
               <h3 className="text-sm font-medium text-ink-muted">{w.historyTitle}</h3>
               {data.connections.length === 0 ? (
                 <p className="text-ink-muted">{w.noHistory}</p>

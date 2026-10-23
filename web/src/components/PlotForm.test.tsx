@@ -6,6 +6,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderWithApp } from '../test/render';
 import { convertAreaText, PlotForm } from './PlotForm';
 
+let canRecalculate = false;
+vi.mock('../me', () => ({
+  useCan: () => canRecalculate,
+  useMe: () => ({ permissions: [] }),
+  useOptionalMe: () => null,
+}));
+
 const createMutate = vi.fn();
 const updateMutate = vi.fn();
 let updateOptions: { mutation: { onError: (e: unknown) => void } };
@@ -54,6 +61,7 @@ describe('convertAreaText', () => {
 
 describe('PlotForm', () => {
   beforeEach(() => {
+    canRecalculate = false;
     createMutate.mockClear();
     updateMutate.mockClear();
   });
@@ -115,5 +123,23 @@ describe('PlotForm', () => {
     expect(
       await screen.findByText('This plot has had owners and cannot become common land'),
     ).toBeInTheDocument();
+  });
+
+  it('reminds holders of RECALCULATION_RUN that past charges stay as they are, when a plot is edited', () => {
+    canRecalculate = true;
+    renderForm(existing);
+    expect(screen.getByRole('link', { name: 'Recalculation' })).toHaveAttribute(
+      'href',
+      '/charges/recalculations/new',
+    );
+  });
+
+  it('shows no recalculation hint to others or on a new plot', () => {
+    canRecalculate = true;
+    renderForm();
+    expect(screen.queryByRole('link', { name: 'Recalculation' })).not.toBeInTheDocument();
+    canRecalculate = false;
+    renderForm(existing);
+    expect(screen.queryAllByRole('link', { name: 'Recalculation' })).toHaveLength(0);
   });
 });

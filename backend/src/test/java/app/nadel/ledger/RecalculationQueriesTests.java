@@ -16,8 +16,8 @@ import tools.jackson.databind.JsonNode;
  * The booked recalculations through the API (feature 012 §2.7 and §2.8): the list newest first, a record with its scope,
  * lines and totals, 404 for an unknown record and for one of another cooperative, and who may read them (chairman,
  * treasurer and a custom role with {@code CHARGES_VIEW}; not a member nor the platform operator). Records are written
- * through the test support until the booking arrives (slice 3); until then {@code POST /recalculations} answers 409
- * {@code NOTHING_TO_RECALCULATE} to a caller with {@code RECALCULATION_RUN} and 403 to everyone else.
+ * through the test support so their shape is exact; {@code POST /recalculations} answers a caller with
+ * {@code RECALCULATION_RUN} and 403 to everyone else (the booking itself: {@code ManualRecalculationTests}).
  */
 class RecalculationQueriesTests extends LedgerApiSupport {
 
@@ -253,13 +253,18 @@ class RecalculationQueriesTests extends LedgerApiSupport {
     }
 
     @Test
-    void untilTheBookingArrivesThereIsNothingToRecalculate() throws Exception {
+    void aCallerWithRecalculationRunPreviewsAndIsToldWhenThereIsNothingToBook() throws Exception {
+        // a range without any charge or tariff of the demo cooperative: no lines
+        Map<String, Object> empty = Map.of("cause", Map.of("type", "MANUAL", "manual",
+                Map.of("from", "2001-01", "to", "2001-02")), "reason", REASON);
         for (String bearer : new String[] {chairman(), customRoleToken("RECALCULATION_RUN")}) {
-            for (String preview : new String[] {"true", "false"}) {
-                send(bearer, post(LIST).param("preview", preview), MANUAL)
-                        .andExpect(status().isConflict())
-                        .andExpect(jsonPath("$.code").value("NOTHING_TO_RECALCULATE"));
-            }
+            send(bearer, post(LIST).param("preview", "true"), empty)
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.preview").value(true))
+                    .andExpect(jsonPath("$.lines.length()").value(0));
+            send(bearer, post(LIST).param("preview", "false"), empty)
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.code").value("NOTHING_TO_RECALCULATE"));
         }
         // the contract is still validated at the boundary
         send(chairman(), post(LIST).param("preview", "true"), Map.of("reason", REASON))

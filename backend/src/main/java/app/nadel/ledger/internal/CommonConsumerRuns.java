@@ -121,6 +121,7 @@ class CommonConsumerRuns {
     private final NotChargedItemRepository items;
     private final ActorNames actorNames;
     private final LedgerAuditPublisher audit;
+    private final ChargingLock chargingLock;
     private final EntityManager entityManager;
     private final Clock clock;
 
@@ -128,7 +129,8 @@ class CommonConsumerRuns {
             PlotCatalog plots, CooperativeSettings settings, CommonConsumerSettings billing,
             BillingMonths billingMonths, BillingMonthRepository months, CommonConsumerRunRepository runs,
             CommonConsumerRunLineRepository lines, ChargeRepository charges, NotChargedItemRepository items,
-            ActorNames actorNames, LedgerAuditPublisher audit, EntityManager entityManager, Clock clock) {
+            ActorNames actorNames, LedgerAuditPublisher audit, ChargingLock chargingLock, EntityManager entityManager,
+            Clock clock) {
         this.network = network;
         this.water = water;
         this.book = book;
@@ -144,6 +146,7 @@ class CommonConsumerRuns {
         this.items = items;
         this.actorNames = actorNames;
         this.audit = audit;
+        this.chargingLock = chargingLock;
         this.entityManager = entityManager;
         this.clock = clock;
     }
@@ -608,8 +611,10 @@ class CommonConsumerRuns {
 
     // ---- helpers
 
-    /** The transaction-scoped advisory lock of the cooperative's common consumer runs. */
+    /** The cooperative's charging lock ({@link ChargingLock}), then the advisory lock of its common consumer runs. */
     private void lockRuns(UUID tenantId) {
+        // every booking, reversal and retry books or reverses charges: the cooperative's charging lock comes first
+        chargingLock.lock(tenantId);
         entityManager.createNativeQuery(
                 "select count(*) from (select pg_advisory_xact_lock(hashtextextended(:key, 0))) as l")
                 .setParameter("key", RUN_LOCK + tenantId)

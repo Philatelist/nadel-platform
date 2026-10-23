@@ -217,9 +217,13 @@ export function auditValue(
       return roleNames(raw, t.roles);
     case 'chargeType':
       return auditChargeTypeName(raw, t);
+    case 'chargeTypes':
+      return roleNames(raw, t.chargeTypes.defaultNames);
     case 'reason':
       if (Object.hasOwn(t.billing.notCharged.reason, raw)) return catalog(t.billing.notCharged.reason);
       return user(raw);
+    case 'cause':
+      return catalog(t.recalculation.causeType);
     case 'outcome':
       return catalog(a.outcome);
     case 'runId':
@@ -288,6 +292,16 @@ export function auditRecordLabel(
     const [from, to] = label.split('/');
     if (from && to && ISO_DAY.test(from) && ISO_DAY.test(to)) {
       return format(t.billing.runHistory.range, { from: formatDay(from, locale), to: formatDay(to, locale) });
+    }
+    return label;
+  }
+  // a recalculation is labelled by its months, `from/to` in `YYYY-MM`
+  if (entityType === 'RECALCULATION') {
+    const [from, to] = label.split('/');
+    if (from && to && /^\d{4}-\d{2}$/.test(from) && /^\d{4}-\d{2}$/.test(to)) {
+      return from === to
+        ? formatMonth(from, locale)
+        : `${formatMonth(from, locale)} – ${formatMonth(to, locale)}`;
     }
     return label;
   }

@@ -28,12 +28,14 @@ import org.springframework.transaction.annotation.Transactional;
  * opposite amount, the same plot, charge type, service period and debt age, the reason and a pointer to the original,
  * booked in the original's billing month. Nothing is changed or deleted.
  * <p>
- * The rules, in order: a reason (trimmed, not empty); the charge exists in the cooperative (404); it is not a reversal
- * itself ({@code REVERSAL_NOT_REVERSIBLE}) nor an adjustment ({@code ADJUSTMENT_NOT_REVERSIBLE}; a later recalculation
- * adjusts the original again, and the database refuses such a reversal too, {@code charge_target_guard}); its month is open ({@code CHARGE_IN_CLOSED_MONTH}; the month is locked
- * {@code FOR SHARE}, so a closing waits); it was not reversed before ({@code CHARGE_ALREADY_REVERSED}). Two reversals of
- * the same charge at the same time meet at the unique index {@code charge_reversed_once_uq}, whose violation is the same
- * 409. The reason is user content: it goes to the ledger and the audit entry, never to a log.
+ * The rules, in order: a reason (trimmed, not empty); then the cooperative's charging lock ({@link ChargingLock}),
+ * before any other lock; the charge exists in the cooperative (404); it is not a reversal itself
+ * ({@code REVERSAL_NOT_REVERSIBLE}) nor an adjustment ({@code ADJUSTMENT_NOT_REVERSIBLE}; a later recalculation
+ * adjusts the original again, and the database refuses such a reversal too, {@code charge_target_guard}); its month is
+ * open ({@code CHARGE_IN_CLOSED_MONTH}; the month is locked {@code FOR SHARE}, so a closing waits); it was not reversed
+ * before ({@code CHARGE_ALREADY_REVERSED}). Two reversals of the same charge at the same time meet at the unique index
+ * {@code charge_reversed_once_uq}, whose violation is the same 409. The reason is user content: it goes to the ledger
+ * and the audit entry, never to a log.
  */
 @Service
 class Reversals {
@@ -48,12 +50,13 @@ class Reversals {
     private final ChargeViews views;
     private final LedgerAuditPublisher audit;
     private final ApplicationEventPublisher events;
+    private final ChargingLock chargingLock;
     private final EntityManager entityManager;
     private final Clock clock;
 
     Reversals(ChargeRepository charges, BillingMonthRepository months, BillingMonths billingMonths,
             ChargeTypeCatalog chargeTypes, PlotCatalog plots, ChargeViews views, LedgerAuditPublisher audit,
-            ApplicationEventPublisher events, EntityManager entityManager, Clock clock) {
+            ApplicationEventPublisher events, ChargingLock chargingLock, EntityManager entityManager, Clock clock) {
         this.charges = charges;
         this.months = months;
         this.billingMonths = billingMonths;
@@ -62,6 +65,7 @@ class Reversals {
         this.views = views;
         this.audit = audit;
         this.events = events;
+        this.chargingLock = chargingLock;
         this.entityManager = entityManager;
         this.clock = clock;
     }
@@ -73,6 +77,8 @@ class Reversals {
             throw new ApiProblemException(HttpStatus.BAD_REQUEST, ProblemCodes.VALIDATION_FAILED,
                     "The request is not valid.", List.of(new FieldProblem("reason", ProblemCodes.REQUIRED)));
         }
+        // a recalculation reads the chains and books under this lock, so a reversal never slips in between
+        chargingLock.lock(Objects.requireNonNull(actor.tenantId()));
         ChargeRecord original = charges.findById(chargeId).orElseThrow(ApiProblemException::notFound);
         if (original.getKind() == ChargeKind.REVERSAL) {
             throw conflict(ProblemCodes.REVERSAL_NOT_REVERSIBLE, "A reversal cannot be reversed.");

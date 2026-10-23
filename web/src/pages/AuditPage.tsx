@@ -25,6 +25,7 @@ const ENTITY_TYPES = [
   'CHARGE',
   'LOSSES_RUN',
   'COMMON_CONSUMER_RUN',
+  'RECALCULATION',
 ] as const;
 
 /** Where a record of an entity type is shown; absent for types without a page of their own. */
@@ -41,6 +42,7 @@ const entityHref: Readonly<Partial<Record<AuditEntityType, (entityId: string) =>
   CHARGE: (id) => `/plots/${id}`,
   LOSSES_RUN: (id) => `/charges/losses?run=${id}`,
   COMMON_CONSUMER_RUN: (id) => `/charges/common?run=${id}`,
+  RECALCULATION: (id) => `/charges/recalculations/${id}`,
 };
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -241,7 +243,9 @@ function AuditChanges({ entry }: { entry: AuditEntry }) {
           <span className="text-ink-muted">
             {(entry.entityType === 'METER' && change.field === 'effectiveFrom'
               ? a.fields.meterEffectiveFrom
-              : fieldNames[change.field]) ?? change.field}
+              : entry.entityType === 'RECALCULATION' && change.field === 'count'
+                ? a.fields.recalcLines
+                : fieldNames[change.field]) ?? change.field}
             :{' '}
           </span>
           {change.field === 'permissions' ? (

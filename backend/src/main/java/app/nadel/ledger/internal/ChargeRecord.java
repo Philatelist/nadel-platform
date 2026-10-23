@@ -139,12 +139,25 @@ class ChargeRecord {
     static ChargeRecord tariff(UUID tenantId, UUID plotId, UUID chargeTypeId, UUID billingMonthId, UUID tariffId,
             Money amount, LocalDate serviceFrom, LocalDate serviceTo, LocalDate accruedOn, String sourceKey,
             Map<String, Object> calculation, @Nullable UUID createdBy, Instant now) {
+        return tariff(tenantId, plotId, chargeTypeId, billingMonthId, tariffId, amount, serviceFrom, serviceTo,
+                accruedOn, sourceKey, calculation, null, createdBy, now);
+    }
+
+    /**
+     * A tariff charge as {@link #tariff} makes it, booked by the recalculation {@code recalculationId} (feature 012:
+     * the charge that replaces a reversed one, or a charge that was missing), or by the month run when null. The
+     * recalculation books it with the base key, or with {@code base#r{recalculationId}} when a charge has the base key.
+     */
+    static ChargeRecord tariff(UUID tenantId, UUID plotId, UUID chargeTypeId, UUID billingMonthId, UUID tariffId,
+            Money amount, LocalDate serviceFrom, LocalDate serviceTo, LocalDate accruedOn, String sourceKey,
+            Map<String, Object> calculation, @Nullable UUID recalculationId, @Nullable UUID createdBy, Instant now) {
         ChargeRecord charge = new ChargeRecord();
         charge.id = UUID.randomUUID();
         charge.tenantId = tenantId;
         charge.plotId = plotId;
         charge.chargeTypeId = chargeTypeId;
         charge.billingMonthId = billingMonthId;
+        charge.recalculationId = recalculationId;
         charge.kind = ChargeKind.REGULAR;
         charge.source = ChargeSource.TARIFF;
         charge.amount = amount.value();
@@ -403,7 +416,10 @@ class ChargeRecord {
         return adjustsChargeId;
     }
 
-    /** The recalculation that booked the charge (an adjustment, or a reversal of a recalculation); null otherwise. */
+    /**
+     * The recalculation that booked the charge (an adjustment, a reversal of a recalculation, or a regular charge it
+     * booked); null otherwise.
+     */
     @Nullable UUID getRecalculationId() {
         return recalculationId;
     }

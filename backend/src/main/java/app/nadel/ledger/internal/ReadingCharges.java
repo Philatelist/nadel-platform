@@ -24,7 +24,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  * Idempotent: {@link IntervalCharging#chargeAround} books an interval only when no charge has its source key, so a
  * redelivered event writes nothing new. Business failures (no tariff for every day, conflicting tariffs, outside the
  * scope) never throw: they become "not charged" items. Charges from readings need no permission of their own; they
- * follow the reading change, and are booked without an author. Logs ids and counts only.
+ * follow the reading change, and are booked without an author. Logs ids and counts only. The transaction takes the
+ * cooperative's charging lock ({@link ChargingLock}) first.
  */
 @Component
 class ReadingCharges {
@@ -32,11 +33,14 @@ class ReadingCharges {
     private static final Logger log = LoggerFactory.getLogger(ReadingCharges.class);
 
     private final IntervalCharging charging;
+    private final ChargingLock chargingLock;
     private final TransactionTemplate transaction;
     private final Clock clock;
 
-    ReadingCharges(IntervalCharging charging, PlatformTransactionManager transactionManager, Clock clock) {
+    ReadingCharges(IntervalCharging charging, ChargingLock chargingLock, PlatformTransactionManager transactionManager,
+            Clock clock) {
         this.charging = charging;
+        this.chargingLock = chargingLock;
         this.transaction = new TransactionTemplate(transactionManager);
         this.clock = clock;
     }
@@ -44,8 +48,10 @@ class ReadingCharges {
     @Async
     @TransactionalEventListener
     void on(PlotMeterPointsChanged event) {
-        Set<UUID> booked = TenantContext.runAs(event.tenantId(), () -> transaction.execute(
-                status -> charging.chargeAround(event.tenantId(), event.meterId(), event.on(), clock.instant())));
+        Set<UUID> booked = TenantContext.runAs(event.tenantId(), () -> transaction.execute(status -> {
+            chargingLock.lock(event.tenantId());
+            return charging.chargeAround(event.tenantId(), event.meterId(), event.on(), clock.instant());
+        }));
         log.debug("Meter {} points changed ({}): {} plots charged", event.meterId(), event.cause(),
                 booked == null ? 0 : booked.size());
     }

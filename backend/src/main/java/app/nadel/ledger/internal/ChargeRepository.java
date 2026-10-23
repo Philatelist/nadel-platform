@@ -59,6 +59,17 @@ interface ChargeRepository extends JpaRepository<ChargeRecord, UUID> {
     List<ChargeRecord> findStandingOfKind(@Param("plotIds") Collection<UUID> plotIds,
             @Param("kind") ChargeKind kind);
 
+    /** The charges of the kind and source of the plots and charge types, in no particular order (a recalculation). */
+    @Query("select c from ChargeRecord c where c.plotId in :plotIds and c.chargeTypeId in :typeIds "
+            + "and c.kind = :kind and c.source = :source")
+    List<ChargeRecord> findOfPlotsAndTypes(@Param("plotIds") Collection<UUID> plotIds,
+            @Param("typeIds") Collection<UUID> chargeTypeIds, @Param("kind") ChargeKind kind,
+            @Param("source") ChargeSource source);
+
+    /** The reversals and adjustments of the charges, in no particular order (a recalculation's booked chains). */
+    @Query("select c from ChargeRecord c where c.reversesChargeId in :ids or c.adjustsChargeId in :ids")
+    List<ChargeRecord> findReversalsAndAdjustmentsOf(@Param("ids") Collection<UUID> chargeIds);
+
     /** The plots among {@code plotIds} that have at least one charge of any kind. */
     @Query("select distinct c.plotId from ChargeRecord c where c.plotId in :plotIds")
     List<UUID> plotIdsWithCharges(@Param("plotIds") Collection<UUID> plotIds);

@@ -25,7 +25,8 @@ import org.springframework.transaction.annotation.Transactional;
  * What the month run and the retry of a month item share: the locks they take and the writing of tariff charges.
  * Everything runs inside the caller's transaction.
  * <p>
- * Lock order: the month advisory lock (one run or retry of a month at a time per cooperative), the queue advisory lock
+ * Lock order: the cooperative's charging lock ({@link ChargingLock}, taken by the caller first), the month advisory
+ * lock (one run or retry of a month at a time per cooperative), the queue advisory lock
  * (one booking run or retry of the cooperative at a time, since a run also retries the open items of every other
  * month), the charge types {@code FOR SHARE} (an archive waits), the tariffs {@code FOR SHARE} (a correction of a
  * version or a change of scope waits, then sees the charges: {@link LedgerTariffVersionUsage}), then the billing months
@@ -107,17 +108,43 @@ class TariffChargeWriter {
         }
         entityManager.flush();
         for (int i = 0; i < planned.size(); i++) {
-            PlannedCharge charge = planned.get(i);
-            List<UUID> versionIds = charge.versionIds();
-            List<Part> parts = charge.breakdown().parts();
-            for (int p = 0; p < parts.size(); p++) {
-                Part part = parts.get(p);
-                entityManager.persist(ChargePartRecord.of(tenantId, written.get(i).getId(), versionIds.get(p),
-                        part.days(), part.units(), part.terms().rate().value()));
-            }
+            writeParts(tenantId, written.get(i).getId(), planned.get(i));
         }
         entityManager.flush();
         return written;
+    }
+
+    /**
+     * Writes a charge the recalculation {@code recalculationId} books (feature 012): the planned charge with
+     * {@code sourceKey} (its base key, or {@code base#r{recalculation}} when a charge has the base key) and its parts,
+     * in the billing month. Flushes.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    ChargeRecord bookRecalculated(UUID tenantId, PlannedCharge charge, UUID billingMonthId, String sourceKey,
+            UUID recalculationId, @Nullable UUID createdBy, Instant now) {
+        ChargeRecord record = ChargeRecord.tariff(tenantId, charge.plotId(), charge.chargeTypeId(), billingMonthId,
+                charge.tariff().id(), charge.amount(), charge.serviceFrom(), charge.serviceTo(), charge.accruedOn(),
+                sourceKey, charge.calculation(), recalculationId, createdBy, now);
+        entityManager.persist(record);
+        entityManager.flush();
+        writeParts(tenantId, record.getId(), charge);
+        entityManager.flush();
+        return record;
+    }
+
+    /**
+     * Writes one {@code charge_part} per version of the planned charge for {@code chargeId}: the charge itself, or an
+     * adjustment of a recalculation, whose parts are the versions of the expected charge (feature 012).
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    void writeParts(UUID tenantId, UUID chargeId, PlannedCharge charge) {
+        List<UUID> versionIds = charge.versionIds();
+        List<Part> parts = charge.breakdown().parts();
+        for (int p = 0; p < parts.size(); p++) {
+            Part part = parts.get(p);
+            entityManager.persist(ChargePartRecord.of(tenantId, chargeId, versionIds.get(p), part.days(),
+                    part.units(), part.terms().rate().value()));
+        }
     }
 
     /** Publishes {@link ChargesBooked} for the plots, at most {@value #PLOTS_PER_EVENT} plots per event. */

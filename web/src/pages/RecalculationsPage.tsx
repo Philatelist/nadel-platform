@@ -7,7 +7,8 @@ import { Pagination } from '../components/Pagination';
 import { causeLabel } from '../components/recalculation/recalcLabels';
 import { QueryBoundary } from '../components/QueryBoundary';
 import { UserContent } from '../components/UserContent';
-import { DataTable, Money, PageHeader, type Column } from '../components/ui';
+import { buttonClass, DataTable, Money, PageHeader, type Column } from '../components/ui';
+import { useCan } from '../me';
 import { useLocale, useT } from '../i18n';
 import { useDocumentTitle } from '../useDocumentTitle';
 
@@ -19,6 +20,7 @@ export function RecalculationsPage() {
   const { locale } = useLocale();
   const r = t.recalculation;
   useDocumentTitle(r.title);
+  const canRun = useCan('RECALCULATION_RUN');
   const [params, setParams] = useSearchParams();
   const page = Math.max(0, Number.parseInt(params.get('page') ?? '0', 10) || 0);
   const query = useListRecalculations(
@@ -59,7 +61,17 @@ export function RecalculationsPage() {
   ];
   return (
     <div className="flex flex-col gap-4 text-[15px]">
-      <PageHeader title={r.heading} description={r.description} />
+      <PageHeader
+        title={r.heading}
+        description={r.description}
+        actions={
+          canRun && (
+            <Link to="/charges/recalculations/new" className={buttonClass()}>
+              {r.newButton}
+            </Link>
+          )
+        }
+      />
       <ChargesTabs />
       <QueryBoundary query={query} isEmpty={(data) => data.items.length === 0} emptyMessage={r.empty}>
         {(data) => (

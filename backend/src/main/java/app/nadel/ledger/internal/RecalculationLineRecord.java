@@ -93,6 +93,43 @@ class RecalculationLineRecord {
     protected RecalculationLineRecord() {
     }
 
+    /** The charges a line booked; each may be null. */
+    record Created(@Nullable UUID reversalChargeId, @Nullable UUID newChargeId, @Nullable UUID adjustmentChargeId) {
+    }
+
+    /**
+     * A line of a booked recalculation (feature 012, slice 3).
+     *
+     * @param reasons  codes of the contract's {@code RecalculationChangeReason}
+     * @param position the line's place in the record (1-based)
+     */
+    static RecalculationLineRecord of(UUID tenantId, UUID recalculationId, UUID plotId, UUID chargeTypeId,
+            LocalDate serviceFrom, LocalDate serviceTo, @Nullable UUID originalChargeId, Money bookedAmount,
+            Money adjustedSoFar, Money expectedAmount, Money difference, Action action, List<String> reasons,
+            @Nullable UUID runId, Created created, int position) {
+        RecalculationLineRecord line = new RecalculationLineRecord();
+        line.id = UUID.randomUUID();
+        line.tenantId = tenantId;
+        line.recalculationId = recalculationId;
+        line.plotId = plotId;
+        line.chargeTypeId = chargeTypeId;
+        line.serviceFrom = serviceFrom;
+        line.serviceTo = serviceTo;
+        line.originalChargeId = originalChargeId;
+        line.bookedAmount = bookedAmount.value();
+        line.adjustedSoFar = adjustedSoFar.value();
+        line.expectedAmount = expectedAmount.value();
+        line.difference = difference.value();
+        line.action = action;
+        line.reasons = List.copyOf(reasons);
+        line.runId = runId;
+        line.reversalChargeId = created.reversalChargeId();
+        line.newChargeId = created.newChargeId();
+        line.adjustmentChargeId = created.adjustmentChargeId();
+        line.position = position;
+        return line;
+    }
+
     UUID getId() {
         return id;
     }

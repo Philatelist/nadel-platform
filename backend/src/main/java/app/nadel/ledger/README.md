@@ -78,7 +78,7 @@ Everything else is in `internal`.
 | `POST /plots/{id}/opening-balances` | `enterOpeningBalance` | `CHARGES_RUN` |
 | `GET /recalculations?page&size` | `listRecalculations` (tag `recalculations`) | `CHARGES_VIEW` |
 | `GET /recalculations/{id}` | `getRecalculation` | `CHARGES_VIEW`; unknown or another cooperative's 404 `NOT_FOUND` |
-| `POST /recalculations?preview` | `runRecalculation` | `RECALCULATION_RUN` (temporary answer, see below) |
+| `POST /recalculations?preview` | `runRecalculation` | `RECALCULATION_RUN` (preview and booking, see Recalculations) |
 
 - **Account** (`AccountQueries`, one read-only transaction): `debts[]` lists every charge type the plot has a charge of,
   in the order of the charge types, with its debt (also `0.00` after a reversal); `total`; `charges[]` newest first by
@@ -116,9 +116,36 @@ Everything else is in `internal`.
   reversal it booked, `reasons`, the created charge ids) and the differences per charge type in the order of the
   types. Entities `RecalculationRecord` and `RecalculationLineRecord` are `@Immutable`. `ChargeRecord.adjustment` and
   `ChargeRecord.recalculationReversalOf` build the rows a booking will write.
-- **Temporary until feature 012 slice 3:** `POST /recalculations` is declared in the contract and needs
-  `RECALCULATION_RUN`, but `RecalculationService` answers every request with 409 `NOTHING_TO_RECALCULATE` and writes
-  nothing; slice 3 replaces it with the booking.
+- **Recalculation** (`RecalculationService`, feature 012 slice 3: cause `MANUAL`, charges of recurring tariffs). Any
+  other `cause.type` is 400 `VALIDATION_FAILED` with `cause.type` `UNSUPPORTED` until slices 6 and 7; the charges of
+  readings and runs join with slices 4 and 5 (their identities are not in this slice's booked chains). Validation:
+  `cause.manual` `REQUIRED`; `cause.manual.to` before `from` `INVALID`, after the current month `DATE_IN_FUTURE`
+  (400); more than 24 months 409 `RECALCULATION_RANGE_TOO_LONG`; a booking needs `reason` (trimmed, 1-500: `REQUIRED`,
+  `TOO_LONG`; the contract's `maxLength` 500 catches it at the boundary too). One `TransactionTemplate` transaction; a
+  preview marks it rollback-only and it is the outermost one. Locks: the charging lock -> the queue lock -> charge types
+  and tariffs `FOR SHARE` -> every billing month `FOR SHARE` (no month closes under the plan). Scope: the months
+  `from`..`to`; the chosen charge types (unknown 400 `NOT_FOUND`, inactive or archived `INVALID`) or every active one;
+  the chosen plots (`UNKNOWN_PLOT`, `PLOT_ARCHIVED`, `PLOT_COMMON_LAND`) or every chargeable one. Expected:
+  `MonthRun.expected` (the month run's plan loop with its water days, `key -> false`); booked chains: the `REGULAR`
+  `TARIFF` charges of the scope's plots and types whose key month is in the scope (a key that is not a month-run key is
+  left alone), with their reversals and adjustments; queue: the open `TARIFF_MONTH` items of the scope. Then
+  `RecalculationPlanner` and `RecalculationDigest` (the line's plot is part of it). A booking with another digest is
+  409 `PREVIEW_OUTDATED`; a plan without lines is 409 `NOTHING_TO_RECALCULATE` on booking and an answer with no lines
+  on preview. A plan without lines books nothing at all, its queue outcomes included (a preview of it lists no
+  `notCharged`); the queue of such a scope is left to the month run and the retry. The booking writes, in order: the
+  `recalculation` row (cause, scope with `causeType`, `months`, the chosen `chargeTypeIds` and `plotIds` - empty means
+  all -, reason, total, counts, digest, author); the reversals (`ChargeRecord.recalculationReversalOf`, source
+  `RECALCULATION`, the reason, in the reversed charge's month); the new `REGULAR` charges with their parts
+  (`TariffChargeWriter.bookRecalculated`: the base key, or `base#r{recalculationId}` when a charge has the base key;
+  `recalculation_id` set; in the month the month run would book them in); the adjustments (`ChargeRecord.adjustment`:
+  the difference, the original's service period, `accrued_on`, tariff, the reason, booked in the earliest open month
+  through `BillingMonths.openForBooking(original.accruedOn)`, calculation `{amount, parts: [], readings: []}` and one
+  `charge_part` per version of the expected charge, so those versions count as used); the queue (an item that cannot be
+  charged opened or refreshed with its tariffs, a charged one `RESOLVED`, one with nothing left `OBSOLETE`); the
+  `recalculation_line` rows (by plot in natural order, service period, charge type; reasons as
+  `RecalculationChangeReason` codes; the charge ids each line booked); one `AuditBatch` with `RECALCULATION_BOOKED`;
+  `ChargesBooked` for the plots of the lines. The answer is the contract's `Recalculation`: a preview without `id`,
+  with the `digest`; a booking with `id`, `reason`, `createdAt`, `createdByName` and each line's created charge ids.
 
 The value rules (amount, date, reason) and the audit values live in `OpeningBalanceRules`, the booking itself in
 `OpeningBalances.book`; the import uses both, so the two ways of entering a balance cannot disagree.
@@ -126,6 +153,17 @@ The value rules (amount, date, reason) and the audit values live in `OpeningBala
 Lock order: plot `FOR SHARE` -> charge type `FOR SHARE` -> billing month `FOR SHARE`. The ledger never locks a `charge`
 row (`FOR SHARE` would need `UPDATE`, which `nadel_app` does not have); concurrency on charges is settled by unique
 indexes.
+
+**The charging lock** (`ChargingLock`, feature 012): a transaction advisory lock `ledger.charging:{tenant}`
+(`pg_advisory_xact_lock(hashtextextended(key, 0))`) that every path booking or reversing charges of a cooperative takes
+**first**, before any other ledger lock: the month run booking (before its month lock), the retry of a "not charged"
+item of any kind (`NotChargedQueue.retry`), the charges of readings (`ReadingCharges`, before `IntervalCharging`), the
+booking, reversal and retry of losses and common consumer runs (in their `lockRuns`, before the run lock), a reversal by
+hand (`Reversals`, before the charge's month) and a recalculation, its preview too. Nobody takes it while holding
+another ledger lock, so it never takes part in a deadlock; it is reentrant within a transaction (a run retried through
+the queue takes it twice). So a recalculation reads the booked chains and books with no other charging path of the
+cooperative in between, and a run or a reversal waits for it. Previews of the month run and of the runs take no lock.
+Opening balances do not take it (they are never recalculated).
 
 ## Opening balances from the import (slice 8)
 
@@ -235,9 +273,9 @@ Lock order of the slice: plot `FOR SHARE` -> charge type `FOR SHARE` -> billing 
 - **Booking:** the month row is opened when missing, `run_at` is set (also when nothing new was charged), audit
   `BILLING_MONTH_RUN` (entity type `BILLING_MONTH`, label `YYYY-MM`, values `count` and `total`, the retried items'
   charges included), `ChargesBooked` for the plots charged.
-- **Locks** (`TariffChargeWriter`): the month's advisory lock (`ledger.month-run:{tenant}:{YYYY-MM}`) -> the queue
-  advisory lock (`ledger.not-charged:{tenant}`) -> every charge type `FOR SHARE` (id order) -> every tariff
-  `FOR SHARE` (`TariffBook.lockShared`, id order) -> the billing month `FOR SHARE` (`BillingMonths.openMonthForRun`)
+- **Locks** (`TariffChargeWriter`): the charging lock (`ChargingLock`) -> the month's advisory lock
+  (`ledger.month-run:{tenant}:{YYYY-MM}`) -> the queue advisory lock (`ledger.not-charged:{tenant}`) -> every charge
+  type `FOR SHARE` (id order) -> every tariff `FOR SHARE` (`TariffBook.lockShared`, id order) -> the billing month `FOR SHARE` (`BillingMonths.openMonthForRun`)
   -> the months of the retried charges `FOR SHARE` (`openForBooking`, in calendar order). A retry takes the same locks
   (its item's month, the queue, the item `FOR UPDATE`, the types and tariffs). The queue lock serialises every booking
   run and retry of the cooperative, so a run that books an item of another month never races that month's run or a
@@ -311,9 +349,10 @@ Lock order of the slice: plot `FOR SHARE` -> charge type `FOR SHARE` -> billing 
 - **History and details:** newest first, with `billingMonth`, `createdByName`, `total`, `plots` (charges),
   `chargedNodes`, `skippedNodes`, `reversible` (`CHARGES_REVERSE`, booked, open month) and the reversal; the details add
   the nodes as booked and the charges with their exact kWh (from their parts) and whether each was reversed.
-- **Locks:** the cooperative's advisory lock of losses runs (`ledger.losses-runs:{tenant}`; bookings, reversals and
-  retries one at a time) -> every electricity meter `FOR SHARE` -> the queue lock -> the charge types and tariffs
-  `FOR SHARE` -> the billing month `FOR SHARE`: the order of the month run.
+- **Locks:** the charging lock (`ChargingLock`) -> the cooperative's advisory lock of losses runs
+  (`ledger.losses-runs:{tenant}`; bookings, reversals and retries one at a time) -> every electricity meter
+  `FOR SHARE` -> the queue lock -> the charge types and tariffs `FOR SHARE` -> the billing month `FOR SHARE`: the order
+  of the month run.
   A known, rare deadlock: a booking or retry locks every electricity meter `FOR SHARE` in id order
   (`MeterNetwork.lockSharedNetwork`), while the replacement of a substation or quarter meter (`meters` `MeterParents`)
   holds the old meter `FOR UPDATE` and then locks the meters under it `FOR UPDATE` in id order. When the run already
@@ -395,9 +434,10 @@ Lock order of the slice: plot `FOR SHARE` -> charge type `FOR SHARE` -> billing 
   `NOT_FOUND`; `servicePlotIds[i]` `UNKNOWN_PLOT`, `DUPLICATE`, `PLOT_ARCHIVED`, `PLOT_COMMON_LAND` (400). One change of
   a consumer at a time (advisory lock by the chain's first meter); audit `COMMON_CONSUMER_BILLING_CHANGED` (entity type
   `METER` about the meter asked, label the meter name, `split` and `servicePlots` as plot numbers, only what changed). A change applies to the next run only.
-- **Locks:** the cooperative's advisory lock of common consumer runs (`ledger.common-consumer-runs:{tenant}`) -> every
-  electricity meter `FOR SHARE` -> the queue lock -> the charge types and tariffs `FOR SHARE` -> the billing month
-  `FOR SHARE`: the order of the month run and the losses runs (no transaction takes both run locks).
+- **Locks:** the charging lock (`ChargingLock`) -> the cooperative's advisory lock of common consumer runs
+  (`ledger.common-consumer-runs:{tenant}`) -> every electricity meter `FOR SHARE` -> the queue lock -> the charge types
+  and tariffs `FOR SHARE` -> the billing month `FOR SHARE`: the order of the month run and the losses runs (no
+  transaction takes both run locks).
 
 ## The "not charged" queue (tag `not-charged`, slice 3)
 
@@ -559,6 +599,13 @@ Entity type `CHARGE` about the plot, as above:
 
 The charges themselves are the ledger and are not repeated in the log. Reasons are user content: never logged.
 
+Entity type `RECALCULATION` (`LedgerAuditPublisher.recalculationEvent`, published in one `AuditBatch` with the change
+that caused it, from slice 6), about the recalculation, label its months `from/to` (`YYYY-MM`):
+
+- `RECALCULATION_BOOKED`: `cause` (the cause type, `MANUAL`), `from`, `to`, `chargeTypes` (`base:<CODE>` or the stored
+  name, joined by ", "; only when chosen), `plots` (plot numbers in natural order; only when chosen), `reason`, `count`
+  (lines) and `total` (the sum of the differences).
+
 Every action is a constant of `LedgerAuditPublisher.Action` and must also be a value of `AuditAction` in
 `api/openapi.yaml`: the audit listing maps stored entries with `AuditAction.fromValue`, so a missing value breaks it
 (guarded by `LedgerAuditActionsTests`).
@@ -633,8 +680,14 @@ consumer run. `SETTINGS_MANAGE`: reading and changing the split and service user
 
 `BillingCalendarTests`, `DebtCalculatorTests` (pure, adjustments included), `ChargeRecordTests` (pure: the adjustment
 and the reversal of a recalculation); `RecalculationQueriesTests` (the list newest first and paged, a record with its
-scope, lines and totals, the effective amount, 404 for another cooperative, who may read and run them, the temporary
-409); `RecalculationTenantIsolationTests` (V19 tables and charge rules); `MonthRunTests` (the month-run rows of §3: preview, booking,
+scope, lines and totals, the effective amount, 404 for another cooperative, who may read and run them, a preview with
+no lines and 409 `NOTHING_TO_RECALCULATE`); `ManualRecalculationTests` (area 600 -> 700 with the previous month closed
+and the current one open end to end: +4.17 adjustment in the open month with the closed month's service period and
+date, reversal -25.00 and new 29.17 under `#r`, the account, the closed month unchanged, the record and its lines, the
+audit entry; a new rate from the open month; a second run with no changes and 409; a stale preview 409 with nothing
+written; a hand reversal stays; reason required and at most 500; future month, `to` before `from`, missing scope,
+another cause type; more than 24 months; unknown, archived and common land plots, unknown and inactive types; who may
+preview and book, and another cooperative); `RecalculationTenantIsolationTests` (V19 tables and charge rules); `MonthRunTests` (the month-run rows of §3: preview, booking,
 rerun, a plot added later, 0.00, a reversed charge, one-time fees, scopes, inactive types, tariffs by readings,
 conflicts to the queue naming both tariffs, only tariffs above 0.00 in a conflict (two one-time fees due in different
 months), no conflict for a plot charged before a second tariff joined, a stale digest, closed and future months,
