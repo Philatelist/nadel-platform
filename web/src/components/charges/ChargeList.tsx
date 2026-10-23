@@ -3,7 +3,8 @@ import { chargePeriodNote, formatDay } from '@nadel/shared';
 import { useLocale, useT } from '../../i18n';
 import { ChargeTypeName } from '../ChargeTypeName';
 import { Badge, Button, Money } from '../ui';
-import { chargeEntryLabel } from './chargeLabels';
+import { AdjustmentLine } from './AdjustmentLine';
+import { chargeEntryLabel, isAdjustment } from './chargeLabels';
 
 /** Charges as the server orders them (newest first). Rows wrap on a phone; a reversal is offered only when allowed. */
 export function ChargeList({
@@ -11,11 +12,14 @@ export function ChargeList({
   canReverse,
   onOpen,
   onReverse,
+  findCharge,
 }: {
   charges: readonly Charge[];
   canReverse: boolean;
   onOpen: (charge: Charge) => void;
   onReverse: (charge: Charge) => void;
+  /** Finds a charge of the loaded list by id (the original of an adjustment). */
+  findCharge?: (id: string) => Charge | undefined;
 }) {
   const t = useT();
   const { locale } = useLocale();
@@ -23,7 +27,8 @@ export function ChargeList({
   return (
     <ul aria-label={c.listCaption} className="divide-y divide-line-subtle">
       {charges.map((charge) => {
-        const note = chargePeriodNote(charge, t, locale);
+        const adjustment = isAdjustment(charge);
+        const note = adjustment ? undefined : chargePeriodNote(charge, t, locale);
         return (
           <li key={charge.id} className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 py-3">
             <div className="flex min-w-0 flex-col gap-0.5">
@@ -36,9 +41,16 @@ export function ChargeList({
                 {charge.reversedBy && <Badge tone="neutral">{c.reversed}</Badge>}
               </div>
               {note && <div className="text-sm text-ink-muted">{note}</div>}
+              {adjustment && (
+                <AdjustmentLine
+                  charge={charge}
+                  original={charge.adjusts ? findCharge?.(charge.adjusts.chargeId) : undefined}
+                  onOpenOriginal={onOpen}
+                />
+              )}
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <Money amount={charge.amount} tone="auto" />
+              <Money amount={charge.amount} tone={adjustment ? 'default' : 'auto'} />
               <Button variant="secondary" onClick={() => onOpen(charge)}>
                 {c.details}
               </Button>

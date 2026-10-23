@@ -50,9 +50,10 @@
     (ADR 0007 pattern) rebuilds the debt cache of the plots through `plots.PlotDebtCache`, and `plots` derives the
     colour at read time from the cached debt, the red threshold of the settings (`redAmount`, `redDays`, V14) and
     today; and `OpeningBalanceImport`. Endpoints (tags `charges`, `billing`, `losses-runs`, `common-consumer-runs`,
-    `not-charged`): the plot account (`CHARGES_VIEW`, or a current owner; any other plot 404 `PLOT_NOT_FOUND`),
+    `not-charged`, `recalculations`): the plot account (`CHARGES_VIEW`, or a current owner; any other plot 404 `PLOT_NOT_FOUND`),
     reversals (`CHARGES_REVERSE`), opening balances, month runs, runs and retries (`CHARGES_RUN`), closing
-    (`PERIODS_CLOSE`), the months, runs and queue (`CHARGES_VIEW`), the split of a common consumer (`SETTINGS_MANAGE`);
+    (`PERIODS_CLOSE`), the months, runs, queue and recalculations (`CHARGES_VIEW`), recalculating
+    (`RECALCULATION_RUN`, feature 012), the split of a common consumer (`SETTINGS_MANAGE`);
     every action audited (entity types `CHARGE`, `BILLING_MONTH`, `LOSSES_RUN`, `COMMON_CONSUMER_RUN`, `METER`).
     Dependencies: `ledger` -> `tariffs` (`ChargeTypeCatalog`, `TariffBook`, `TariffResolver`, `ChargeCalculator`;
     it implements `TariffVersionUsage`), `plots` (`PlotCatalog`, `PlotDebtCache`; it implements `PlotChangeGuard`: a
@@ -167,7 +168,7 @@
   3. No member: 403 `MEMBER_NOT_LINKED`. A failure of the lookup itself is 500, not 401.
   4. The union of the member's role permissions becomes the `PERM_*` authorities. Nothing is cached, so a role change applies on the next request.
 - **Authorization:** always on the server, with `@PreAuthorize("hasAuthority('PERM_...')")` **[in code, since spec 002]**. Clients hide UI by permission only for convenience (web: `useCan`, `RequirePermission`). See ADR 0009:
-  - A fixed list of permissions is defined in code (`identity.Permission`: `MEMBERS_VIEW`, `MEMBERS_EDIT`, `ROLES_MANAGE`, `AUDIT_VIEW`, `PLOTS_VIEW`, `PLOTS_EDIT`, `OWNERSHIP_EDIT`, `IMPORT_RUN`, `SETTINGS_MANAGE`, `TARIFFS_VIEW`, `TARIFFS_MANAGE`, `METERS_VIEW`, `METERS_MANAGE`, `READINGS_ENTER`, `READINGS_APPROVE`, `CHARGES_VIEW`, `CHARGES_RUN`, `CHARGES_REVERSE`, `PERIODS_CLOSE`; later features add theirs, such as `PAYMENTS_ALLOCATE`). The Treasurer base role has `METERS_VIEW` and `CHARGES_VIEW`; the Chairman has all nineteen.
+  - A fixed list of permissions is defined in code (`identity.Permission`: `MEMBERS_VIEW`, `MEMBERS_EDIT`, `ROLES_MANAGE`, `AUDIT_VIEW`, `PLOTS_VIEW`, `PLOTS_EDIT`, `OWNERSHIP_EDIT`, `IMPORT_RUN`, `SETTINGS_MANAGE`, `TARIFFS_VIEW`, `TARIFFS_MANAGE`, `METERS_VIEW`, `METERS_MANAGE`, `READINGS_ENTER`, `READINGS_APPROVE`, `CHARGES_VIEW`, `CHARGES_RUN`, `CHARGES_REVERSE`, `PERIODS_CLOSE`, `RECALCULATION_RUN`; later features add theirs, such as `PAYMENTS_ALLOCATE`). The Treasurer base role has `METERS_VIEW` and `CHARGES_VIEW`; the Chairman has all twenty.
   - Roles are named permission sets stored per cooperative (`role`, `role_permission`, `member_role`, tenant-scoped with RLS). Base roles `CHAIRMAN`, `TREASURER`, `MEMBER` are seeded by `seed_base_roles` and cannot be renamed or deleted; Chairman always has every permission; at least one active chairman must remain. Custom roles (for example "Secretary", or "Electrician" for meters) are created by anyone with `ROLES_MANAGE`.
   - Code checks permissions, never role names. A caller without `MEMBERS_VIEW` gets 404 for any member card but their own, so other members' existence is not revealed.
 - **Data visibility for members:** a member sees debt amounts, owners, status and personal data only for plots they own. The status color of other plots is visible only when the chairman sets the cooperative setting `memberPlotStatusVisibility` to `ALL_PLOTS` (default `OWN_ONLY`, feature 007). The API enforces this (`GET /plots` and `GET /plots/{id}` omit `status` on plots the caller may not see and omit owners, area and personal data on plots the caller does not own; `GET /me` returns `ownedPlots`), not just the UI **[in code, since spec 007]**.

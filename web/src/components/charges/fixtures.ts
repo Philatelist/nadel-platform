@@ -32,3 +32,18 @@ export const charge: Charge = {
   createdAt: '2026-10-05T09:00:00Z',
   createdByName: 'Іваненко Петро',
 };
+
+/** A booked adjustment of `charge` by a recalculation: −5.00 for the billing month of the original. */
+export const adjustment: Charge = {
+  ...charge,
+  id: 'a1',
+  kind: 'ADJUSTMENT',
+  source: 'RECALCULATION',
+  amount: '-5.00',
+  billingMonth: '2026-10',
+  reversible: false,
+  reason: 'Rate corrected',
+  adjusts: { chargeId: 'c1', billingMonth: '2026-09', serviceFrom: '2026-09-01', serviceTo: '2026-09-30' },
+  recalculationId: 'r1',
+  calculation: { amount: '-5.00', parts: [], readings: [] },
+};

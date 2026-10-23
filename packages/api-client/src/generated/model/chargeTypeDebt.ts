@@ -13,7 +13,7 @@ import type { ChargeTypeCode } from './chargeTypeCode';
 import type { Money } from './money';
 
 /**
- * The debt of a plot for one charge type
+ * The debt of a plot for one charge type (its charges, reversals and adjustments)
  */
 export interface ChargeTypeDebt {
   chargeTypeId: string;

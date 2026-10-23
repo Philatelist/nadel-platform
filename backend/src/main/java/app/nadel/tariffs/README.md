@@ -10,7 +10,7 @@ Tables (all under RLS `tenant_isolation`, an index on `tenant_id`, composite for
 |---|---|
 | `charge_type` | What is charged for: the five seeded types (`code` MEMBERSHIP, ELECTRICITY, LAND_TAX, WATER, COMMON_CONSUMERS since V13) and custom ones |
 | `tariff` | A tariff of one charge type, with its `scope_kind` (`ALL_PLOTS` or `SELECTED_PLOTS`; new tariffs are `ALL_PLOTS`) |
-| `tariff_version` | Rates by date (`valid_from`, basis, frequency, `rate numeric(14,4)`, due date, note); a new rate is a new version, a mistake is corrected or deleted until a charge uses the version |
+| `tariff_version` | Rates by date (`valid_from`, basis, frequency, `rate numeric(14,4)`, due date, note); a new rate is a new version, a mistake is corrected or deleted until a charge uses the version; `deleted_at` (V19) marks a used version deleted softly by a recalculation (feature 012), and the unique start date applies only to versions that are not deleted |
 | `tariff_scope_plot` | Selected plots (`SELECTED`), or exclusions with a reason (`EXCLUDED`); written by `PUT /tariffs/{id}/scope`; cascades when a plot is deleted |
 
 All four tables exist in V10 (one migration, one isolation test). `nadel_app` has no `DELETE`/`TRUNCATE` on `charge_type` and `tariff`.
@@ -148,6 +148,12 @@ be corrected or deleted until a charge uses it; after that a correction goes thr
 - **Entity.** `TariffVersionRecord` is no longer `@Immutable`; `correct(terms, note)` replaces the terms and keeps the
   owner, the tariff and the creation time. V11 grants `UPDATE` and `DELETE` to `nadel_app`; the use check, not the grant,
   protects a version a charge was produced from.
+- **Soft-deleted versions** (V19, feature 012). A used version cannot be removed physically (`charge_part` points at it
+  and is append-only), so a recalculation will delete it by setting `deleted_at` (slice 6). `@SQLRestriction("deleted_at
+  is null")` on `TariffVersionRecord` leaves such rows out of every read: the tariff card and its derived end dates, the
+  `TariffBook` snapshot (so the resolver and the ledger never charge from them), the expected amounts of a plot, the
+  version count of `TARIFF_LAST_VERSION`, and `PUT`/`DELETE` of the version (404, also checked by `isDeleted` after a
+  load by id). Its start date is free for a new version. Test: `TariffVersionCorrectionTests`.
 
 ### The port `TariffVersionUsage`
 

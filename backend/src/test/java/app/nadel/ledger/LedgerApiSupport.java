@@ -29,10 +29,11 @@ import tools.jackson.databind.json.JsonMapper;
 
 /**
  * What the ledger API tests share: tokens of the demo users, of custom roles and of the other cooperative, throw-away
- * plots, charges written as the database owner (the month run and reading charges arrive with later slices), billing
- * months, and a cleanup that removes the charges of the test's plots (as {@code nadel_owner} with the maintenance
- * setting), the billing months the test (or the application) created, the audit entries about the plots, the plots,
- * the ownerships, roles and charge types it created.
+ * plots, charges written as the database owner (the month run and reading charges arrive with later slices), booked
+ * recalculations with their lines, adjustments and reversals written the same way (the booking arrives with feature
+ * 012 slice 3), billing months, and a cleanup that removes the recalculations, the charges of the test's plots (as
+ * {@code nadel_owner} with the maintenance setting), the billing months the test (or the application) created, the
+ * audit entries about the plots, the plots, the ownerships, roles and charge types it created.
  */
 abstract class LedgerApiSupport extends LedgerTestSupport {
 
@@ -50,6 +51,7 @@ abstract class LedgerApiSupport extends LedgerTestSupport {
     private final List<UUID> ownerships = new ArrayList<>();
     private final List<UUID> roles = new ArrayList<>();
     private final List<UUID> chargeTypes = new ArrayList<>();
+    private final List<UUID> recalculations = new ArrayList<>();
     private final Set<UUID> monthsBefore = new HashSet<>();
 
     @BeforeEach
@@ -60,13 +62,25 @@ abstract class LedgerApiSupport extends LedgerTestSupport {
 
     @AfterEach
     void removeLedgerApiFixtures() {
+        String booked = "{" + String.join(",", recalculations.stream().map(UUID::toString).toList()) + "}";
+        if (!recalculations.isEmpty()) {
+            // the lines point at the charges and the recalculation, the adjustments at their originals
+            asLedgerOwner(sql -> sql.update("delete from recalculation_line where recalculation_id = any(?::uuid[])",
+                    booked));
+        }
         if (!testPlots.isEmpty()) {
             String plots = "{" + String.join(",", testPlots.stream().map(UUID::toString).toList()) + "}";
             asLedgerOwner(sql -> {
+                sql.update("delete from charge where plot_id = any(?::uuid[]) and adjusts_charge_id is not null",
+                        plots);
                 sql.update("delete from charge where plot_id = any(?::uuid[]) and reverses_charge_id is not null",
                         plots);
                 sql.update("delete from charge where plot_id = any(?::uuid[])", plots);
             });
+        }
+        if (!recalculations.isEmpty()) {
+            asLedgerOwner(sql -> sql.update("delete from recalculation where id = any(?::uuid[])", booked));
+            recalculations.clear();
         }
         JdbcTemplate owner = ownerJdbc();
         List<UUID> created = owner.queryForList("select id from billing_month", UUID.class).stream()
@@ -231,6 +245,65 @@ abstract class LedgerApiSupport extends LedgerTestSupport {
                 month(DEMO_TENANT, month), new BigDecimal(amount), first, first.withDayOfMonth(first.lengthOfMonth()),
                 first, "TEST:" + id);
         return id;
+    }
+
+    /**
+     * A booked recalculation written as the database owner (the booking arrives with feature 012 slice 3); removed
+     * after the test. {@code scope} is the stored JSON (ids and codes, with {@code causeType}).
+     */
+    UUID recalculation(UUID tenant, String cause, String reason, String total, int lines, int plots, UUID createdBy,
+            String createdAt, String scope) {
+        UUID id = UUID.randomUUID();
+        ownerJdbc().update("insert into recalculation (id, tenant_id, cause, reason, total, line_count, plot_count, "
+                + "digest, created_by, created_at, scope) values (?, ?, ?, ?, ?, ?, ?, 'test-digest', ?, "
+                + "?::timestamptz, ?::jsonb)", id, tenant, cause, reason, new BigDecimal(total), lines, plots,
+                createdBy, createdAt, scope);
+        recalculations.add(id);
+        return id;
+    }
+
+    /**
+     * An adjustment of the charge booked by the recalculation in {@code month} (YYYY-MM): the original's plot, charge
+     * type, service period and debt age, source {@code RECALCULATION}, the reason; written as the database owner.
+     */
+    UUID adjustment(UUID original, UUID recalculation, String amount, String month, String reason) {
+        UUID id = UUID.randomUUID();
+        UUID tenant = ownerJdbc().queryForObject("select tenant_id from charge where id = ?", UUID.class, original);
+        ownerJdbc().update("insert into charge (id, tenant_id, plot_id, charge_type_id, billing_month_id, kind, source, "
+                + "amount, service_from, service_to, accrued_on, source_key, adjusts_charge_id, recalculation_id, "
+                + "reason) select ?, tenant_id, plot_id, charge_type_id, ?, 'ADJUSTMENT', 'RECALCULATION', ?, "
+                + "service_from, service_to, accrued_on, ?, id, ?, ? from charge where id = ?", id,
+                month(tenant, month), new BigDecimal(amount), "ADJUSTMENT:" + recalculation + ":" + original,
+                recalculation, reason, original);
+        return id;
+    }
+
+    /** The reversal of the charge booked by the recalculation in the charge's month; written as the database owner. */
+    UUID recalculationReversal(UUID original, UUID recalculation, String reason) {
+        UUID id = UUID.randomUUID();
+        ownerJdbc().update("insert into charge (id, tenant_id, plot_id, charge_type_id, billing_month_id, kind, source, "
+                + "amount, service_from, service_to, accrued_on, reverses_charge_id, recalculation_id, reason) "
+                + "select ?, tenant_id, plot_id, charge_type_id, billing_month_id, 'REVERSAL', 'RECALCULATION', "
+                + "-amount, service_from, service_to, accrued_on, id, ?, ? from charge where id = ?", id,
+                recalculation, reason, original);
+        return id;
+    }
+
+    /** A line of a recalculation about one charge; the charge ids it booked may be null. */
+    record LineRow(UUID plot, UUID chargeType, String serviceFrom, String serviceTo, UUID original, String booked,
+            String adjustedSoFar, String expected, String difference, String action, String reasons, UUID reversal,
+            UUID created, UUID adjustment) {
+    }
+
+    void recalculationLine(UUID tenant, UUID recalculation, int position, LineRow line) {
+        ownerJdbc().update("insert into recalculation_line (tenant_id, recalculation_id, plot_id, charge_type_id, "
+                + "service_from, service_to, original_charge_id, booked_amount, adjusted_so_far, expected_amount, "
+                + "difference, action, reasons, reversal_charge_id, new_charge_id, adjustment_charge_id, position) "
+                + "values (?, ?, ?, ?, ?::date, ?::date, ?, ?, ?, ?, ?, ?, ?::text[], ?, ?, ?, ?)", tenant,
+                recalculation, line.plot(), line.chargeType(), line.serviceFrom(), line.serviceTo(), line.original(),
+                new BigDecimal(line.booked()), new BigDecimal(line.adjustedSoFar()), new BigDecimal(line.expected()),
+                new BigDecimal(line.difference()), line.action(), line.reasons(), line.reversal(), line.created(),
+                line.adjustment(), position);
     }
 
     int chargeCount(UUID plot) {

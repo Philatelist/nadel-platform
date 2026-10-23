@@ -29,7 +29,8 @@ import org.springframework.transaction.annotation.Transactional;
  * booked in the original's billing month. Nothing is changed or deleted.
  * <p>
  * The rules, in order: a reason (trimmed, not empty); the charge exists in the cooperative (404); it is not a reversal
- * itself ({@code REVERSAL_NOT_REVERSIBLE}); its month is open ({@code CHARGE_IN_CLOSED_MONTH}; the month is locked
+ * itself ({@code REVERSAL_NOT_REVERSIBLE}) nor an adjustment ({@code ADJUSTMENT_NOT_REVERSIBLE}; a later recalculation
+ * adjusts the original again, and the database refuses such a reversal too, {@code charge_target_guard}); its month is open ({@code CHARGE_IN_CLOSED_MONTH}; the month is locked
  * {@code FOR SHARE}, so a closing waits); it was not reversed before ({@code CHARGE_ALREADY_REVERSED}). Two reversals of
  * the same charge at the same time meet at the unique index {@code charge_reversed_once_uq}, whose violation is the same
  * 409. The reason is user content: it goes to the ledger and the audit entry, never to a log.
@@ -76,6 +77,10 @@ class Reversals {
         if (original.getKind() == ChargeKind.REVERSAL) {
             throw conflict(ProblemCodes.REVERSAL_NOT_REVERSIBLE, "A reversal cannot be reversed.");
         }
+        if (original.getKind() == ChargeKind.ADJUSTMENT) {
+            throw conflict(ProblemCodes.ADJUSTMENT_NOT_REVERSIBLE,
+                    "An adjustment cannot be reversed; a later recalculation adjusts the original charge again.");
+        }
         BillingMonthRecord month = months.findByIdForShare(original.getBillingMonthId()).orElseThrow();
         if (month.isClosed()) {
             throw conflict(ProblemCodes.CHARGE_IN_CLOSED_MONTH,
@@ -107,7 +112,7 @@ class Reversals {
                 new FieldChange("billingMonth", null, booking.yearMonth().toString()),
                 new FieldChange("reason", null, reason)));
         events.publishEvent(new ChargesBooked(tenantId, Set.of(original.getPlotId())));
-        return views.view(reversal, null, views.context(List.of(reversal), actor));
+        return views.view(reversal, views.context(List.of(reversal), actor));
     }
 
     private static ApiProblemException alreadyReversed() {

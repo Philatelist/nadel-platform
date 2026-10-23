@@ -17,10 +17,21 @@ import { ChargeTypeName } from '../ChargeTypeName';
 import { Modal } from '../Modal';
 import { UserContent } from '../UserContent';
 import { Badge, Button, Money, Notice } from '../ui';
-import { chargeEntryLabel } from './chargeLabels';
+import { adjustmentLead, chargeEntryLabel, isAdjustment } from './chargeLabels';
 
 /** The calculation of a charge as lines built from the server's strings; mount the dialog only while open. */
-export function ChargeDetailDialog({ charge, onClose }: { charge: Charge; onClose: () => void }) {
+export function ChargeDetailDialog({
+  charge,
+  onClose,
+  charges = [],
+  onOpenCharge,
+}: {
+  charge: Charge;
+  onClose: () => void;
+  /** The loaded list, to open the original of an adjustment and the adjustments of a charge. */
+  charges?: readonly Charge[];
+  onOpenCharge?: (charge: Charge) => void;
+}) {
   const t = useT();
   const { locale } = useLocale();
   const canReverse = useCan('CHARGES_REVERSE');
@@ -28,13 +39,20 @@ export function ChargeDetailDialog({ charge, onClose }: { charge: Charge; onClos
   const { parts, readings, consumption, lossesPercent } = charge.calculation;
   const note = chargePeriodNote(charge, t, locale);
   const singlePart = parts.length === 1;
+  const adjustment = isAdjustment(charge);
+  const original = charge.adjusts ? charges.find((c) => c.id === charge.adjusts?.chargeId) : undefined;
+  const adjustments = (charge.adjustedBy ?? []).flatMap((id) => charges.find((c) => c.id === id) ?? []);
   const showClosedNote =
-    canReverse && charge.billingMonthClosed && charge.kind !== 'REVERSAL' && !charge.reversedBy;
+    canReverse &&
+    charge.billingMonthClosed &&
+    charge.kind !== 'REVERSAL' &&
+    !adjustment &&
+    !charge.reversedBy;
 
   const rows: [string, ReactNode][] = [
     [d.type, <ChargeTypeName key="type" type={charge.chargeType} />],
     [d.kind, chargeEntryLabel(t, charge)],
-    [d.amount, <Money key="amount" amount={charge.amount} tone="auto" />],
+    [d.amount, <Money key="amount" amount={charge.amount} tone={adjustment ? 'default' : 'auto'} />],
     [d.billingMonth, formatMonth(charge.billingMonth, locale)],
     [d.servicePeriod, `${formatDay(charge.serviceFrom, locale)}–${formatDay(charge.serviceTo, locale)}`],
     [d.accruedOn, formatDay(charge.accruedOn, locale)],
@@ -77,6 +95,47 @@ export function ChargeDetailDialog({ charge, onClose }: { charge: Charge; onClos
   }
   if (lossesPercent !== undefined) rows.push([d.lossesPercent, formatPercent(lossesPercent, locale)]);
   if (charge.reason) rows.push([d.reason, <UserContent key="reason">{charge.reason}</UserContent>]);
+  if (charge.adjusts) {
+    rows.push([
+      d.adjusts,
+      original && onOpenCharge ? (
+        <button
+          key="adjusts"
+          type="button"
+          className="text-accent underline"
+          onClick={() => onOpenCharge(original)}
+        >
+          {adjustmentLead(t, charge, locale)}
+        </button>
+      ) : (
+        adjustmentLead(t, charge, locale)
+      ),
+    ]);
+  }
+  if (adjustments.length > 0 && onOpenCharge) {
+    rows.push([
+      d.adjustedBy,
+      <span key="adjustedBy" className="flex flex-col items-start gap-1">
+        {adjustments.map((a) => (
+          <button key={a.id} type="button" className="text-accent underline" onClick={() => onOpenCharge(a)}>
+            {adjustmentLead(t, a, locale)}
+          </button>
+        ))}
+      </span>,
+    ]);
+  }
+  if (charge.recalculationId) {
+    rows.push([
+      d.recalculation,
+      <Link
+        key="recalculation"
+        to={`/charges/recalculations/${charge.recalculationId}`}
+        className="text-accent underline"
+      >
+        {d.openCharge}
+      </Link>,
+    ]);
+  }
   rows.push([
     d.createdBy,
     charge.createdByName ? <UserContent key="by">{charge.createdByName}</UserContent> : d.system,

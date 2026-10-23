@@ -9,6 +9,7 @@
  *
  * OpenAPI spec version: 0.1.0
  */
+import type { ChargeKind } from './chargeKind';
 
 export type GetPlotAccountParams = {
 /**
@@ -19,4 +20,8 @@ from?: string;
  * The last day of the list (by `accruedOn`), inclusive
  */
 to?: string;
+/**
+ * Only charges of this kind
+ */
+kind?: ChargeKind;
 };

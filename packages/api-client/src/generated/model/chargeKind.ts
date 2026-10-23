@@ -11,7 +11,7 @@
  */
 
 /**
- * `REGULAR` an accrual; `REVERSAL` cancels one charge with the opposite amount (see `reverses`, `reason`); `OPENING` an opening balance
+ * `REGULAR` an accrual; `REVERSAL` cancels one charge with the opposite amount (see `reverses`, `reason`); `OPENING` an opening balance; `ADJUSTMENT` corrects a charge of a closed month in the earliest open month, positive or negative, with the original's service period and `accruedOn` (see `adjusts`, `reason`)
  */
 export type ChargeKind = typeof ChargeKind[keyof typeof ChargeKind];
 
@@ -20,4 +20,5 @@ export const ChargeKind = {
   REGULAR: 'REGULAR',
   REVERSAL: 'REVERSAL',
   OPENING: 'OPENING',
+  ADJUSTMENT: 'ADJUSTMENT',
 } as const;

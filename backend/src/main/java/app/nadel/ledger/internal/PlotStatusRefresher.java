@@ -2,7 +2,6 @@ package app.nadel.ledger.internal;
 
 import app.nadel.ledger.ChargesBooked;
 import app.nadel.ledger.internal.DebtCalculator.Debts;
-import app.nadel.ledger.internal.DebtCalculator.Line;
 import app.nadel.plots.PlotDebtCache;
 import app.nadel.tenancy.TenantContext;
 import java.util.List;
@@ -58,9 +57,7 @@ class PlotStatusRefresher {
                 .collect(Collectors.groupingBy(ChargeRecord::getPlotId));
         for (UUID plotId : event.plotIds()) {
             Debts debts = DebtCalculator.of(byPlot.getOrDefault(plotId, List.of()).stream()
-                    .map(c -> new Line(c.getId(), c.getChargeTypeId(), c.getAmount(), c.getAccruedOn(),
-                            c.getReversesChargeId()))
-                    .toList());
+                    .map(DebtCalculator::line).toList());
             debtCache.record(plotId, debts.total(), debts.oldestAccrual());
         }
         return null;

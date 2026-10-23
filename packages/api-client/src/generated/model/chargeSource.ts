@@ -11,7 +11,7 @@
  */
 
 /**
- * What produced the charge: `TARIFF` the month run of a tariff, `CONSUMPTION` a meter reading, `LOSSES` losses in the network, `COMMON_CONSUMER` a common consumer run, `OPENING` an opening balance, `MANUAL_REVERSAL` a reversal made by hand
+ * What produced the charge: `TARIFF` the month run of a tariff, `CONSUMPTION` a meter reading, `LOSSES` losses in the network, `COMMON_CONSUMER` a common consumer run, `OPENING` an opening balance, `MANUAL_REVERSAL` a reversal made by hand, `RECALCULATION` an adjustment or a reversal booked by a recalculation
  */
 export type ChargeSource = typeof ChargeSource[keyof typeof ChargeSource];
 
@@ -23,4 +23,5 @@ export const ChargeSource = {
   COMMON_CONSUMER: 'COMMON_CONSUMER',
   OPENING: 'OPENING',
   MANUAL_REVERSAL: 'MANUAL_REVERSAL',
+  RECALCULATION: 'RECALCULATION',
 } as const;

@@ -14,15 +14,22 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
+import org.hibernate.annotations.SQLRestriction;
 import org.jspecify.annotations.Nullable;
 
 /**
  * One rate of a tariff from a date. A change of rate is a new version. A version can be corrected
  * ({@link #correct}) or deleted until a charge uses it (see {@link app.nadel.tariffs.TariffVersionUsage}); the
  * application role holds {@code UPDATE} and {@code DELETE} on the table for that (V11), the use check guards it.
+ * <p>
+ * A version a charge used is deleted softly ({@code deleted_at}, V19, feature 012): its charge parts keep pointing at
+ * it, but it no longer exists for the application. {@link SQLRestriction} leaves soft-deleted rows out of every query
+ * and load of the entity (the tariff card, {@code TariffBook} snapshots, the resolver, the expected amounts, the version
+ * count and the use check), and {@link #isDeleted} lets a caller that loads by id check it too.
  */
 @Entity
 @Table(name = "tariff_version")
+@SQLRestriction("deleted_at is null")
 class TariffVersionRecord {
 
     @Id
@@ -56,6 +63,9 @@ class TariffVersionRecord {
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
+
+    @Column(name = "deleted_at")
+    private Instant deletedAt;
 
     protected TariffVersionRecord() {
     }
@@ -117,5 +127,10 @@ class TariffVersionRecord {
 
     @Nullable String getNote() {
         return note;
+    }
+
+    /** Whether the version was deleted softly (a recalculation removed a used version). */
+    boolean isDeleted() {
+        return deletedAt != null;
     }
 }

@@ -192,10 +192,14 @@ class TariffCommands {
                 .orElseThrow(ApiProblemException::notFound);
     }
 
-    /** The version of that tariff (404 when it is missing or belongs to another tariff), refused when a charge uses it. */
+    /**
+     * The version of that tariff (404 when it is missing, deleted softly or belongs to another tariff), refused when a
+     * charge uses it.
+     */
     private TariffVersionRecord lockedVersion(TariffRecord tariff, UUID versionId, AccessProfile actor) {
         TariffVersionRecord version = versions.findById(versionId)
-                .filter(v -> v.getTariffId().equals(tariff.getId())).orElseThrow(ApiProblemException::notFound);
+                .filter(v -> v.getTariffId().equals(tariff.getId()) && !v.isDeleted())
+                .orElseThrow(ApiProblemException::notFound);
         UUID tenantId = Objects.requireNonNull(actor.tenantId());
         if (usages.stream().anyMatch(usage -> usage.isUsed(tenantId, version.getId()))) {
             throw new ApiProblemException(HttpStatus.CONFLICT, ProblemCodes.TARIFF_VERSION_IN_USE,

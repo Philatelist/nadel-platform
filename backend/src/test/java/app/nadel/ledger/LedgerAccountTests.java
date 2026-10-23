@@ -16,7 +16,9 @@ import tools.jackson.databind.JsonNode;
  * The account of a plot, reversals and opening balances through the API (feature 011 §2.1, §2.9 and the §3 rows "Manual
  * reversal" and "Opening balance"): debts per charge type, the reversal rules, booking in the earliest open month, and
  * who may do what per endpoint (chairman, treasurer, a custom role with one permission, a member for their own plot and
- * another plot, the other cooperative, the platform operator).
+ * another plot, the other cooperative, the platform operator). Adjustments (feature 012 §2.3, written through the test
+ * support until the booking arrives): they count in the debt, link to the charge they adjust and to their
+ * recalculation (only for {@code CHARGES_VIEW}), the kind filter, and they are never reversed.
  */
 class LedgerAccountTests extends LedgerApiSupport {
 
@@ -213,6 +215,121 @@ class LedgerAccountTests extends LedgerApiSupport {
         send(chairman(), post(REVERSE.formatted(UUID.randomUUID())), Map.of("reason", "Помилка"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("NOT_FOUND"));
+    }
+
+    // ---- adjustments (feature 012 §2.3)
+
+    private static final String CLOSED = "2024-03";
+    private static final String OPEN = "2024-04";
+    private static final String RATE_CORRECTED = "Виправлено ставку членського внеску";
+
+    /** The 60 -> 50 example on one plot: March 30.00 (closed) adjusted by -5.00 in April, April 25.00. */
+    private record Adjusted(UUID plot, UUID original, UUID april, UUID recalculation, UUID adjustment) {
+    }
+
+    private Adjusted adjustedPlot() {
+        UUID plot = newPlot();
+        UUID original = tariffCharge(plot, "MEMBERSHIP", "30.00", CLOSED);
+        closedMonth(DEMO_TENANT, CLOSED);
+        UUID april = tariffCharge(plot, "MEMBERSHIP", "25.00", OPEN);
+        UUID recalculation = recalculation(DEMO_TENANT, "MANUAL", RATE_CORRECTED, "-5.00", 1, 1,
+                demoMember("chairman@demo.local"), "2026-10-20T10:00:00Z", "{\"causeType\": \"MANUAL\"}");
+        UUID adjustment = adjustment(original, recalculation, "-5.00", OPEN, RATE_CORRECTED);
+        return new Adjusted(plot, original, april, recalculation, adjustment);
+    }
+
+    @Test
+    void anAdjustmentCountsInTheDebtAndLinksToTheChargeItAdjusts() throws Exception {
+        // functional spec 2.3: "Коригування за вересень: -5,00" in October, the membership debt 50.00
+        Adjusted given = adjustedPlot();
+
+        JsonNode account = account(chairman(), given.plot());
+
+        assertThat(account.get("debts")).hasSize(1);
+        assertThat(account.get("debts").get(0).get("debt").asString()).isEqualTo("50.00");
+        assertThat(account.get("total").asString()).isEqualTo("50.00");
+        assertThat(account.get("charges")).hasSize(3);
+        JsonNode adjustment = charge(account, given.adjustment());
+        assertThat(adjustment.get("kind").asString()).isEqualTo("ADJUSTMENT");
+        assertThat(adjustment.get("source").asString()).isEqualTo("RECALCULATION");
+        assertThat(adjustment.get("amount").asString()).isEqualTo("-5.00");
+        assertThat(adjustment.get("billingMonth").asString()).isEqualTo(OPEN);
+        assertThat(adjustment.get("billingMonthClosed").asBoolean()).isFalse();
+        assertThat(adjustment.get("serviceFrom").asString()).isEqualTo("2024-03-01");
+        assertThat(adjustment.get("serviceTo").asString()).isEqualTo("2024-03-31");
+        assertThat(adjustment.get("accruedOn").asString()).isEqualTo("2024-03-01");
+        assertThat(adjustment.get("reason").asString()).isEqualTo(RATE_CORRECTED);
+        assertThat(adjustment.get("adjusts").get("chargeId").asString()).isEqualTo(given.original().toString());
+        assertThat(adjustment.get("adjusts").get("billingMonth").asString()).isEqualTo(CLOSED);
+        assertThat(adjustment.get("adjusts").get("serviceFrom").asString()).isEqualTo("2024-03-01");
+        assertThat(adjustment.get("adjusts").get("serviceTo").asString()).isEqualTo("2024-03-31");
+        assertThat(adjustment.get("recalculationId").asString()).isEqualTo(given.recalculation().toString());
+        assertThat(adjustment.get("reversible").asBoolean()).isFalse(); // its month is open, but never reversed
+        assertThat(adjustment.has("adjustedBy")).isFalse();
+        assertThat(adjustment.has("reverses")).isFalse();
+
+        JsonNode original = charge(account, given.original());
+        assertThat(original.get("amount").asString()).isEqualTo("30.00"); // the original is never changed
+        assertThat(original.get("adjustedBy").valueStream().map(JsonNode::asString).toList())
+                .containsExactly(given.adjustment().toString());
+        assertThat(original.has("adjusts")).isFalse();
+        assertThat(original.has("recalculationId")).isFalse();
+        JsonNode april = charge(account, given.april());
+        assertThat(april.has("adjustedBy")).isFalse();
+        assertThat(april.get("reversible").asBoolean()).isTrue();
+
+        // the treasurer views charges, so sees the recalculation too
+        assertThat(charge(account(treasurer(), given.plot()), given.adjustment()).get("recalculationId").asString())
+                .isEqualTo(given.recalculation().toString());
+    }
+
+    @Test
+    void theKindFilterLimitsTheListButNotTheDebts() throws Exception {
+        Adjusted given = adjustedPlot();
+
+        JsonNode adjustments = body(send(chairman(), get(ACCOUNT.formatted(given.plot())).param("kind", "ADJUSTMENT"),
+                null).andExpect(status().isOk()));
+        assertThat(adjustments.get("charges").valueStream().map(c -> c.get("id").asString()).toList())
+                .containsExactly(given.adjustment().toString());
+        assertThat(adjustments.get("total").asString()).isEqualTo("50.00");
+        // the adjustment still names its original, which is not listed
+        assertThat(adjustments.get("charges").get(0).get("adjusts").get("billingMonth").asString()).isEqualTo(CLOSED);
+
+        JsonNode regular = body(send(chairman(), get(ACCOUNT.formatted(given.plot())).param("kind", "REGULAR"), null)
+                .andExpect(status().isOk()));
+        assertThat(regular.get("charges").valueStream().map(c -> c.get("id").asString()).toList())
+                .containsExactlyInAnyOrder(given.original().toString(), given.april().toString());
+
+        send(chairman(), get(ACCOUNT.formatted(given.plot())).param("kind", "BONUS"), null)
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void aMemberSeesTheAdjustmentsOfTheirOwnPlotWithoutTheRecalculation() throws Exception {
+        Adjusted given = adjustedPlot();
+        own(demoMember("member@demo.local"), given.plot());
+
+        JsonNode account = account(member(), given.plot());
+
+        assertThat(account.get("total").asString()).isEqualTo("50.00");
+        JsonNode adjustment = charge(account, given.adjustment());
+        assertThat(adjustment.get("amount").asString()).isEqualTo("-5.00");
+        assertThat(adjustment.get("reason").asString()).isEqualTo(RATE_CORRECTED);
+        assertThat(adjustment.get("adjusts").get("chargeId").asString()).isEqualTo(given.original().toString());
+        assertThat(adjustment.has("recalculationId")).isFalse();
+        assertThat(adjustment.has("createdByName")).isFalse();
+        assertThat(charge(account, given.original()).get("adjustedBy")).hasSize(1);
+    }
+
+    @Test
+    void anAdjustmentIsNeverReversedByHand() throws Exception {
+        Adjusted given = adjustedPlot();
+
+        send(chairman(), post(REVERSE.formatted(given.adjustment())), Map.of("reason", "Помилка"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("ADJUSTMENT_NOT_REVERSIBLE"));
+        assertThat(chargeCount(given.plot())).isEqualTo(3);
+        assertThat(account(chairman(), given.plot()).get("total").asString()).isEqualTo("50.00");
     }
 
     // ---- opening balances (§3 "Opening balance")

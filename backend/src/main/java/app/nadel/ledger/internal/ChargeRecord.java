@@ -20,7 +20,8 @@ import org.jspecify.annotations.Nullable;
 /**
  * One row of the ledger (table {@code charge}, V13). Append-only: the application role has no {@code UPDATE} or
  * {@code DELETE} on the table and a trigger refuses both to everyone else, so the entity is {@link Immutable} and only
- * ever inserted ({@code EntityManager.persist}). A mistake is cancelled by a {@link ChargeKind#REVERSAL} row.
+ * ever inserted ({@code EntityManager.persist}). A mistake is cancelled by a {@link ChargeKind#REVERSAL} row; a charge
+ * of a closed month is corrected by an {@link ChargeKind#ADJUSTMENT} row (V19) booked by a recalculation.
  * <p>
  * {@code calculation} holds codes and numbers only (the {@code ChargeCalculation} of the API contract), never display
  * text.
@@ -83,6 +84,12 @@ class ChargeRecord {
 
     @Column(name = "reverses_charge_id", updatable = false)
     private UUID reversesChargeId;
+
+    @Column(name = "adjusts_charge_id", updatable = false)
+    private UUID adjustsChargeId;
+
+    @Column(name = "recalculation_id", updatable = false)
+    private UUID recalculationId;
 
     @Column(updatable = false)
     private String reason;
@@ -235,6 +242,71 @@ class ChargeRecord {
      */
     static ChargeRecord reversalOf(ChargeRecord original, UUID billingMonthId, String reason,
             Map<String, Object> calculation, @Nullable UUID createdBy, Instant now) {
+        return reversal(original, billingMonthId, ChargeSource.MANUAL_REVERSAL, null, reason, calculation, createdBy,
+                now);
+    }
+
+    /**
+     * The reversal of {@code original} booked by a recalculation (feature 012): {@link #reversalOf} with source
+     * {@code RECALCULATION} and the recalculation's id, so a reversal made by hand stays recognisable.
+     */
+    static ChargeRecord recalculationReversalOf(ChargeRecord original, UUID billingMonthId, UUID recalculationId,
+            String reason, Map<String, Object> calculation, @Nullable UUID createdBy, Instant now) {
+        return reversal(original, billingMonthId, ChargeSource.RECALCULATION, recalculationId, reason, calculation,
+                createdBy, now);
+    }
+
+    /**
+     * An adjustment of {@code original} booked by a recalculation (feature 012): kind {@code ADJUSTMENT}, source
+     * {@code RECALCULATION}, {@code amount} (expected minus effective, positive or negative, never zero) booked in
+     * {@code billingMonthId} (the earliest open month), with the original's plot, charge type, service period, debt age
+     * ({@code accrued_on}), tariff, meter and run, the reason, and pointing at the original and the recalculation;
+     * identified by {@code sourceKey} {@code ADJUSTMENT:{recalculationId}:{originalId}}, so a charge is adjusted at
+     * most once per recalculation.
+     *
+     * @throws IllegalArgumentException when {@code amount} is zero or the original is not a {@code REGULAR} charge
+     */
+    static ChargeRecord adjustment(ChargeRecord original, UUID billingMonthId, UUID recalculationId, Money amount,
+            String reason, Map<String, Object> calculation, @Nullable UUID createdBy, Instant now) {
+        if (amount.signum() == 0) {
+            throw new IllegalArgumentException("An adjustment is never zero");
+        }
+        if (original.kind != ChargeKind.REGULAR) {
+            throw new IllegalArgumentException("An adjustment corrects a regular charge");
+        }
+        ChargeRecord charge = new ChargeRecord();
+        charge.id = UUID.randomUUID();
+        charge.tenantId = original.tenantId;
+        charge.plotId = original.plotId;
+        charge.chargeTypeId = original.chargeTypeId;
+        charge.billingMonthId = billingMonthId;
+        charge.kind = ChargeKind.ADJUSTMENT;
+        charge.source = ChargeSource.RECALCULATION;
+        charge.amount = amount.value();
+        charge.serviceFrom = original.serviceFrom;
+        charge.serviceTo = original.serviceTo;
+        charge.accruedOn = original.accruedOn;
+        charge.calculation = calculation;
+        charge.sourceKey = adjustmentKey(recalculationId, original.id);
+        charge.tariffId = original.tariffId;
+        charge.meterId = original.meterId;
+        charge.runId = original.runId;
+        charge.adjustsChargeId = original.id;
+        charge.recalculationId = recalculationId;
+        charge.reason = reason;
+        charge.createdBy = createdBy;
+        charge.createdAt = now;
+        return charge;
+    }
+
+    /** The source key of the adjustment of {@code originalId} by {@code recalculationId}. */
+    static String adjustmentKey(UUID recalculationId, UUID originalId) {
+        return "ADJUSTMENT:" + recalculationId + ":" + originalId;
+    }
+
+    private static ChargeRecord reversal(ChargeRecord original, UUID billingMonthId, ChargeSource source,
+            @Nullable UUID recalculationId, String reason, Map<String, Object> calculation, @Nullable UUID createdBy,
+            Instant now) {
         ChargeRecord charge = new ChargeRecord();
         charge.id = UUID.randomUUID();
         charge.tenantId = original.tenantId;
@@ -242,7 +314,7 @@ class ChargeRecord {
         charge.chargeTypeId = original.chargeTypeId;
         charge.billingMonthId = billingMonthId;
         charge.kind = ChargeKind.REVERSAL;
-        charge.source = ChargeSource.MANUAL_REVERSAL;
+        charge.source = source;
         charge.amount = original.getAmount().negate().value();
         charge.serviceFrom = original.serviceFrom;
         charge.serviceTo = original.serviceTo;
@@ -251,6 +323,7 @@ class ChargeRecord {
         charge.meterId = original.meterId;
         charge.runId = original.runId;
         charge.reversesChargeId = original.id;
+        charge.recalculationId = recalculationId;
         charge.reason = reason;
         charge.createdBy = createdBy;
         charge.createdAt = now;
@@ -323,6 +396,16 @@ class ChargeRecord {
 
     @Nullable UUID getReversesChargeId() {
         return reversesChargeId;
+    }
+
+    /** The charge an {@link ChargeKind#ADJUSTMENT} corrects; null for every other charge. */
+    @Nullable UUID getAdjustsChargeId() {
+        return adjustsChargeId;
+    }
+
+    /** The recalculation that booked the charge (an adjustment, or a reversal of a recalculation); null otherwise. */
+    @Nullable UUID getRecalculationId() {
+        return recalculationId;
     }
 
     @Nullable String getReason() {

@@ -82,10 +82,12 @@ export const getGetPlotAccountUrl = (id: string,
 /**
  * The ledger of one plot. `debts` lists every charge type the plot has a charge of, in the order of the charge
  * types, with the sum of its charges (a reversal counts negative); `total` is their sum. Until payments exist
- * the debt is the sum of the charges. `charges` lists the charges newest first (by `accruedOn`, then by the
- * time they were booked); `from` and `to` (both optional, inclusive) limit the list by `accruedOn`, never the
- * debts. `from` after `to` is 400 `VALIDATION_FAILED` (`errors[{field: from, code: INVALID}]`). Every amount is
- * calculated by the server. No permission annotation: a caller with `CHARGES_VIEW` may ask for any plot of the
+ * the debt is the sum of the charges, adjustments included. `charges` lists the charges newest first (by
+ * `accruedOn`, then by the time they were booked); `from` and `to` (both optional, inclusive) limit the list by
+ * `accruedOn`, and `kind` limits it to one kind (for example `ADJUSTMENT`), never the debts. `from` after `to` is
+ * 400 `VALIDATION_FAILED` (`errors[{field: from, code: INVALID}]`). An adjustment names the charge it adjusts
+ * (`adjusts`), an adjusted charge its adjustments (`adjustedBy`); `recalculationId` is shown only to callers with
+ * `CHARGES_VIEW`. Every amount is calculated by the server. No permission annotation: a caller with `CHARGES_VIEW` may ask for any plot of the
  * cooperative, anyone else only for a plot they currently own. Any other plot, an unknown id and a plot of
  * another cooperative are the same 404 `PLOT_NOT_FOUND`; the platform operator has no cooperative data: 403.
  * @summary The account of a plot with its charges and the debt per charge type
@@ -297,8 +299,9 @@ export const useEnterOpeningBalance = <TError = BadRequestResponse | Unauthorize
  * Cancels a charge by a new charge of kind `REVERSAL` and source `MANUAL_REVERSAL`: the same amount with the
  * opposite sign, the same plot, charge type, service period and `accruedOn`, the reason, and `reverses` naming
  * the original. It is booked in the billing month of the original, which must be open. Nothing is changed or
- * deleted (the ledger is append-only). Conflicts (409): the charge is a reversal (`REVERSAL_NOT_REVERSIBLE`), it
- * was reversed before (`CHARGE_ALREADY_REVERSED`), its billing month is closed (`CHARGE_IN_CLOSED_MONTH`; its
+ * deleted (the ledger is append-only). Conflicts (409): the charge is a reversal (`REVERSAL_NOT_REVERSIBLE`), an
+ * adjustment (`ADJUSTMENT_NOT_REVERSIBLE`; a later recalculation adjusts the original again), it was reversed
+ * before (`CHARGE_ALREADY_REVERSED`), its billing month is closed (`CHARGE_IN_CLOSED_MONTH`; its
  * correction is an adjustment). 400 `VALIDATION_FAILED` with `reason` `REQUIRED` (absent or blank) or
  * `TOO_LONG`. An unknown charge, or one of another cooperative, is 404 `NOT_FOUND`. Requires `CHARGES_REVERSE`;
  * written to the audit log (`CHARGE_REVERSED`, entity type `CHARGE` about the plot, with the reason).

@@ -47,6 +47,8 @@ final class PermissionCatalog {
                     "Run a month, losses and common consumers; retry what could not be charged; enter opening balances"};
             case CHARGES_REVERSE -> new String[] {"Reverse charges", "Reverse a charge or a whole run with a reason"};
             case PERIODS_CLOSE -> new String[] {"Close months", "Close a billing month so that it never changes again"};
+            case RECALCULATION_RUN -> new String[] {"Recalculate charges",
+                    "Preview and book recalculations of past charges; correct used tariff versions and readings"};
         };
         return new PermissionInfo(nadel.contract.model.Permission.fromValue(permission.name()), text[0], text[1]);
     }

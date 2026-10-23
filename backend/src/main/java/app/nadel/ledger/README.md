@@ -16,7 +16,7 @@ Tables (V13, all under RLS `tenant_isolation`, an index leading with `tenant_id`
 | Table | What it holds |
 |---|---|
 | `billing_month` | An accounting period: `month` (its first day), `status` `OPEN` or `CLOSED`, `run_at`, `closed_at`, `closed_by`. Created on demand, `OPEN` by default; never deleted (`DELETE`/`TRUNCATE` revoked). The V14 trigger `billing_month_guard` refuses any change of a closed month (so no reopening), a change of `month`, and every `DELETE`/`TRUNCATE`, to everyone but `nadel_owner` with the maintenance setting |
-| `charge` | The ledger. `kind` `REGULAR`/`REVERSAL`/`OPENING`, `source` `TARIFF`/`CONSUMPTION`/`LOSSES`/`COMMON_CONSUMER`/`OPENING`/`MANUAL_REVERSAL`, `amount numeric(14,2)`, service period `service_from..service_to`, `accrued_on` (the age of the debt), `billing_month_id`, `calculation jsonb` (codes and numbers only), `source_key` (idempotency of later runs), `reverses_charge_id` (only on a reversal), `reason` (required on a reversal, optional on other kinds, for example an opening balance), `created_by`, `created_at` |
+| `charge` | The ledger. `kind` `REGULAR`/`REVERSAL`/`OPENING`/`ADJUSTMENT` (V19), `source` `TARIFF`/`CONSUMPTION`/`LOSSES`/`COMMON_CONSUMER`/`OPENING`/`MANUAL_REVERSAL`/`RECALCULATION` (V19), `amount numeric(14,2)`, service period `service_from..service_to`, `accrued_on` (the age of the debt), `billing_month_id`, `calculation jsonb` (codes and numbers only), `source_key` (idempotency of later runs), `reverses_charge_id` (only on a reversal), `adjusts_charge_id` (only on an adjustment: the `REGULAR` charge it corrects, V19), `recalculation_id` (the recalculation that booked an adjustment or a reversal of source `RECALCULATION`, V19), `reason` (required on a reversal, optional on other kinds, for example an opening balance), `created_by`, `created_at` |
 | `charge_part` | The tariff versions behind a charge (days, an exact quantity `units_num/units_den`, the rate); written by the month run (one row per version) |
 | `meter_value_use` | The meter values a charge or run read: one row per point date (an interval charge: its two points). Not a ledger table. Rows stay after a reversal; `LedgerReadingUsage` leaves out the rows of reversed charges |
 | `losses_run` (V17) | A proportional losses run: `from_date`, `to_date`, `status` `BOOKED`/`REVERSED`, `billing_month_id` (its charges' month), `total`, `created_by`, `created_at`, `reversed_at`, `reversed_by`, `reverse_reason`. Its charges are `charge` rows with `run_id` and source `LOSSES` |
@@ -25,15 +25,20 @@ Tables (V13, all under RLS `tenant_isolation`, an index leading with `tenant_id`
 | `common_consumer_run_line` (V18) | A common consumer of a run as booked: `consumer_meter_id` (the consumer's chain, its first meter; no foreign key, so a meter entered by mistake can still be deleted after a run listed it as unknown), `consumer_name`, the run's range and status repeated, `position`, `split`, `outcome` `CHARGED`/`NOT_CHARGED`/`NO_PLOTS`/`UNKNOWN`, `consumption` (kWh, three decimals for display), `calculated`, `plot_days`, `amount`, `warning jsonb`, `plots jsonb` (`plotId`, `days`, `kwh`, `amount?`, `reason?`). The exclusion constraint `common_consumer_run_line_no_overlap_ex` keeps two booked runs from charging a consumer for the same day (only `BOOKED` and `CHARGED` rows). Both run tables change only by the reversal (`run_reversal_guard`, V17) |
 | `common_consumer_billing` (V18) | Settings: the split of one common consumer meter (`CONNECTED_PLOTS`/`EQUAL_PER_PLOT`/`SERVICE_USERS`/`NOT_CHARGED`); no row = the cooperative's `common_consumer_default_split`. Changed and deleted by the application; goes with its meter (`ON DELETE CASCADE`) |
 | `common_consumer_user` (V18) | Settings: the plots marked as using a common consumer (`SERVICE_USERS`); PK `(tenant_id, consumer_meter_id, plot_id)`; goes with its meter and its plot |
+| `recalculation` (V19) | A booked recalculation (feature 012): `cause` `MANUAL`/`TARIFF_VERSION`/`READING`, `cause_ref_id` (no foreign key), `scope jsonb` (ids and codes under the keys of the contract's `RecalculationScope`, plus `causeType`), `reason` (1-500, user content), `total`, `line_count`, `plot_count`, `digest`, `created_by`, `created_at`. Append-only like `charge` |
+| `recalculation_line` (V19) | A line of a recalculation: `plot_id`, `charge_type_id`, the service period, `original_charge_id`, `booked_amount`, `adjusted_so_far`, `expected_amount`, `difference`, `action` `REVERSE_AND_RECHARGE`/`ADJUST`/`NEW`/`REVERSE`, `reasons text[]` (codes of `RecalculationChangeReason`), `run_id`, the charges it booked (`reversal_charge_id`, `new_charge_id`, `adjustment_charge_id`), `position`. Append-only |
 | `not_charged_item` (V15) | The "not charged" queue: `item_key`, `kind` `TARIFF_MONTH`/`INTERVAL`/`LOSSES_NODE`/`COMMON_CONSUMER`, `plot_id`, `charge_type_id`, `meter_id`, `month`, `from_date`, `to_date`, `reason`, `params jsonb` (codes and ids only, `tariffIds`), `status` `OPEN`/`RESOLVED`/`OBSOLETE`, `resolved_at`. Not a ledger table: the application updates the status and, while open, the reason and params; `DELETE`/`TRUNCATE` revoked. One open item per key (`not_charged_item_open_key_uq`); an item goes with its plot or meter (`ON DELETE CASCADE`) |
 
 **Append-only (ADR 0006).** `nadel_app` has no `UPDATE`, `DELETE` or `TRUNCATE` on `charge` and `charge_part`, and a
 `BEFORE UPDATE OR DELETE` row trigger plus a `BEFORE TRUNCATE` trigger refuse them to everyone else too. The only way
 past the trigger is `nadel_owner` with `SET LOCAL app.ledger_maintenance = 'on'`, for demo data and test helpers;
 `nadel_app` is refused even with the setting. In Java the entity `ChargeRecord` is `@Immutable` and only ever persisted.
-CHECK constraints keep a reversal negative with a reason and a pointer, every other row positive (a reason optional);
-the partial unique
-index `charge_reversed_once_uq` lets a charge be reversed once.
+CHECK constraints keep a reversal negative with a reason and a pointer, an adjustment non-zero (either sign) with source
+`RECALCULATION`, a reason, its target and its recalculation, every other row positive (a reason optional); the partial
+unique index `charge_reversed_once_uq` lets a charge be reversed once and `charge_adjustment_once_uq` adjusted once per
+recalculation. The trigger `charge_target_guard` (V19) lets an adjustment target only a `REGULAR` charge of its
+cooperative that is not reversed, and a reversal never target an adjustment or a reversal. `recalculation` and
+`recalculation_line` are append-only the same way.
 
 ## Public API
 
@@ -52,9 +57,12 @@ Everything else is in `internal`.
   closed one (opened when it has no row; a later month that has a row is never preferred). It is after the current
   month only when the current month itself is closed. The charge keeps its own service period and `accrued_on`. Tests:
   `BillingCalendarTests`.
-- `DebtCalculator.of(lines)`: debt per charge type = the sum of the plot's charges of the type, reversals negative;
-  total = their sum; the oldest unpaid accrual = the oldest `accrued_on` among positive charges that were not reversed
-  (until payments exist). Exact `Money` addition, no rounding. Tests: `DebtCalculatorTests`.
+- `DebtCalculator.of(lines)`: debt per charge type = the sum of the plot's charges of the type, reversals negative,
+  adjustments with their sign; total = their sum; the oldest unpaid accrual = the oldest `accrued_on` among the charges
+  that are neither a reversal nor an adjustment, were not reversed, and whose effective amount (the charge plus its
+  adjustments) is above zero (until payments exist); an adjustment carries the debt age of its charge and never counts
+  on its own. The account and the plot status (`PlotStatusRefresher`) both use it. Exact `Money` addition, no rounding.
+  Tests: `DebtCalculatorTests`.
 - `BillingMonths.openForBooking(tenant, date)` (inside the caller's transaction, `MANDATORY`; every booking path goes
   through it): asks the calendar with the months' current statuses (scalars, never stale managed entities), inserts the
   month `ON CONFLICT DO NOTHING` when missing, locks it `FOR SHARE` and reads its status as a scalar under the lock, so a
@@ -65,9 +73,12 @@ Everything else is in `internal`.
 
 | Endpoint | Operation | Who |
 |---|---|---|
-| `GET /plots/{id}/account?from&to` | `getPlotAccount` | `CHARGES_VIEW` for any plot, otherwise a current owner of the plot; anyone else, an unknown plot and one of another cooperative the same 404 `PLOT_NOT_FOUND`; the platform operator 403 |
+| `GET /plots/{id}/account?from&to&kind` | `getPlotAccount` | `CHARGES_VIEW` for any plot, otherwise a current owner of the plot; anyone else, an unknown plot and one of another cooperative the same 404 `PLOT_NOT_FOUND`; the platform operator 403 |
 | `POST /charges/{id}/reverse` | `reverseCharge` | `CHARGES_REVERSE` |
 | `POST /plots/{id}/opening-balances` | `enterOpeningBalance` | `CHARGES_RUN` |
+| `GET /recalculations?page&size` | `listRecalculations` (tag `recalculations`) | `CHARGES_VIEW` |
+| `GET /recalculations/{id}` | `getRecalculation` | `CHARGES_VIEW`; unknown or another cooperative's 404 `NOT_FOUND` |
+| `POST /recalculations?preview` | `runRecalculation` | `RECALCULATION_RUN` (temporary answer, see below) |
 
 - **Account** (`AccountQueries`, one read-only transaction): `debts[]` lists every charge type the plot has a charge of,
   in the order of the charge types, with its debt (also `0.00` after a reversal); `total`; `charges[]` newest first by
@@ -75,10 +86,17 @@ Everything else is in `internal`.
   after `to` is 400 `INVALID` on `from`. Each charge carries its billing month (`YYYY-MM`) and whether it is closed,
   `reverses`/`reversedBy`, `reason`, the stored `calculation` (a charge stored without one shows its amount with no
   parts), `createdAt`, `createdByName` (the author's current name through `audit.ActorNames`, only for `CHARGES_VIEW`)
-  and `reversible` (the viewer has `CHARGES_REVERSE`, the charge is not a reversal, not reversed and its month is open).
+  and `reversible` (the viewer has `CHARGES_REVERSE`, the charge is neither a reversal nor an adjustment, not reversed
+  and its month is open). `kind` limits the list to one kind (the web's "adjustments only"), never the debts. Links
+  within the plot's ledger: an adjustment has `adjusts {chargeId, billingMonth, serviceFrom, serviceTo}` (the charge it
+  corrects, also when that charge is outside the range), an adjusted charge `adjustedBy[]` (its adjustments, oldest
+  first; absent when none), and a row of a recalculation `recalculationId`, only for a viewer with `CHARGES_VIEW` (a
+  member sees their adjustments without it).
 - **Reversal** (`Reversals`): reason trimmed and required (400 `REQUIRED`, `TOO_LONG` over 500); unknown charge 404
-  `NOT_FOUND`; a reversal 409 `REVERSAL_NOT_REVERSIBLE`; the original's month is locked `FOR SHARE` and a closed one is
-  409 `CHARGE_IN_CLOSED_MONTH` (its correction is an adjustment, feature 012); reversed before 409
+  `NOT_FOUND`; a reversal 409 `REVERSAL_NOT_REVERSIBLE`; an adjustment 409 `ADJUSTMENT_NOT_REVERSIBLE` (a later
+  recalculation adjusts the original again; `charge_target_guard` refuses it in the database too); the original's month
+  is locked `FOR SHARE` and a closed one is 409 `CHARGE_IN_CLOSED_MONTH` (its correction is an adjustment booked by a
+  recalculation); reversed before 409
   `CHARGE_ALREADY_REVERSED` (a pre-check, and the unique index for two reversals at once). The new row: kind `REVERSAL`,
   source `MANUAL_REVERSAL`, the negated amount (`Money.negate`), the same plot, charge type, service period and
   `accrued_on`, booked in the original's month (through `BillingMonths`), calculation `{amount, parts: [], readings: []}`.
@@ -90,6 +108,17 @@ Everything else is in `internal`.
   `accrued_on` = the date, booked by `BillingMonths` (the month of the date, or the earliest open month after it).
   The optional reason (at most 500, trimmed, blank means none) is stored on the charge (`reason` in the account) and
   in the audit entry. Answer 201 with the charge.
+
+- **Recalculations** (`RecalculationQueries`, read-only, feature 012 slice 1): the list is a page of summaries newest
+  first (`cause`, `causeType` from the stored scope, `reason`, `total`, `lineCount`, `plotCount`, `createdAt`,
+  `createdByName`); a record has its scope, its lines in booking order (`booked`, `adjustments`, `effective` = their
+  sum, `expected`, `difference`, `action`, `bookedIn` = the month of the adjustment, else the new charge, else the
+  reversal it booked, `reasons`, the created charge ids) and the differences per charge type in the order of the
+  types. Entities `RecalculationRecord` and `RecalculationLineRecord` are `@Immutable`. `ChargeRecord.adjustment` and
+  `ChargeRecord.recalculationReversalOf` build the rows a booking will write.
+- **Temporary until feature 012 slice 3:** `POST /recalculations` is declared in the contract and needs
+  `RECALCULATION_RUN`, but `RecalculationService` answers every request with 409 `NOTHING_TO_RECALCULATE` and writes
+  nothing; slice 3 replaces it with the booking.
 
 The value rules (amount, date, reason) and the audit values live in `OpeningBalanceRules`, the booking itself in
 `OpeningBalances.book`; the import uses both, so the two ways of entering a balance cannot disagree.
@@ -597,12 +626,15 @@ cache writer `PlotDebtCache`; the import records `PlotImportRow`, `PlotImportPla
 `CHARGES_VIEW` (Chairman, Treasurer): every plot's account, the months, the queue, the losses runs and the common
 consumer runs. `CHARGES_RUN` (Chairman): opening balances, the month run (and its preview), retries, losses runs and
 common consumer runs (and their previews). `CHARGES_REVERSE` (Chairman): reversing a charge, a losses run or a common
-consumer run. `SETTINGS_MANAGE`: reading and changing the split and service users of a common consumer. `PERIODS_CLOSE` (Chairman): closing a month. Defined in
-`identity.Permission`, seeded by `seed_base_roles` (V13; existing cooperatives by targeted inserts).
+consumer run. `SETTINGS_MANAGE`: reading and changing the split and service users of a common consumer. `PERIODS_CLOSE` (Chairman): closing a month. `RECALCULATION_RUN` (Chairman, V19): previewing and booking a recalculation; reading the recalculations needs `CHARGES_VIEW`. Defined in
+`identity.Permission`, seeded by `seed_base_roles` (V13, V19; existing cooperatives by targeted inserts).
 
 ## Tests
 
-`BillingCalendarTests`, `DebtCalculatorTests` (pure); `MonthRunTests` (the month-run rows of §3: preview, booking,
+`BillingCalendarTests`, `DebtCalculatorTests` (pure, adjustments included), `ChargeRecordTests` (pure: the adjustment
+and the reversal of a recalculation); `RecalculationQueriesTests` (the list newest first and paged, a record with its
+scope, lines and totals, the effective amount, 404 for another cooperative, who may read and run them, the temporary
+409); `RecalculationTenantIsolationTests` (V19 tables and charge rules); `MonthRunTests` (the month-run rows of §3: preview, booking,
 rerun, a plot added later, 0.00, a reversed charge, one-time fees, scopes, inactive types, tariffs by readings,
 conflicts to the queue naming both tariffs, only tariffs above 0.00 in a conflict (two one-time fees due in different
 months), no conflict for a plot charged before a second tariff joined, a stale digest, closed and future months,
@@ -639,7 +671,8 @@ check list, closing in order, a closed month that gets nothing more, late bookin
 the `billing_month_guard` trigger); `PlotStatusRefreshTests`; `LedgerAccountTests` (the account, debts per type, the reversal
 rules of §3, opening balances, booking after a closed month, the plot guard, allowed and denied per endpoint for the
 chairman, the treasurer, custom roles, a member for their own and another plot, the other cooperative and the platform
-operator); `LedgerAuditTests` (entries and `ChargesBooked`); `LedgerTenantIsolationTests` and `LedgerAppendOnlyTests`
+operator; adjustments: the debt, `adjusts`/`adjustedBy`, `recalculationId` only with `CHARGES_VIEW`, the `kind` filter,
+409 `ADJUSTMENT_NOT_REVERSIBLE`); `LedgerAuditTests` (entries and `ChargesBooked`); `LedgerTenantIsolationTests` and `LedgerAppendOnlyTests`
 (the tables); `LedgerMigrationTests` (V13 on existing cooperatives); `ChargesBookedTests`. Test helpers clear ledger rows
 and billing months as `nadel_owner` with the maintenance setting (`LedgerTestSupport`). The opening balances sheet is
 tested in `imports` (`ImportOpeningBalancesTests`: both languages, row problems, booking, a re-import of the same file,
