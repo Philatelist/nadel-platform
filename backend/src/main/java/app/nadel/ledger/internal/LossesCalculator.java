@@ -45,7 +45,8 @@ import org.jspecify.annotations.Nullable;
  * <li>{@link Outcome#UNKNOWN} when the node's own value, or a child's, is unknown;</li>
  * <li>{@link Outcome#SKIPPED_ABOVE} when a node below it (within the days it was below) is unknown, so the node is
  * skipped too: its plots' consumption is not known either;</li>
- * <li>{@link Outcome#NEGATIVE} when the children used more than the node shows: nothing is charged;</li>
+ * <li>{@link Outcome#NEGATIVE} when the children used more than the node shows: nothing is charged. Losses that are
+ * 0.000 kWh at three decimals (the scale they are stored and shown at) are zero, not negative ({@link #settled});</li>
  * <li>{@link Outcome#CHARGED} otherwise: the losses are shared among the plots under the node (directly, or through
  * child nodes within the days those were under it) in proportion to each plot's consumption under it; a plot with zero
  * consumption gets nothing. Each share is exact.</li>
@@ -102,9 +103,9 @@ final class LossesCalculator {
             uses = Set.copyOf(uses);
         }
 
-        /** {@code consumption - children}; null when either is unknown. */
+        /** {@code consumption - children} ({@link #settled}); null when either is unknown. */
         @Nullable Quantity losses() {
-            return consumption == null || children == null ? null : consumption.minus(children);
+            return consumption == null || children == null ? null : settled(consumption.minus(children));
         }
 
         /** A charged node with losses above zero that nobody under it shares, since none of them used anything. */
@@ -166,6 +167,16 @@ final class LossesCalculator {
         return totals;
     }
 
+    /**
+     * The losses as the outcome is decided on: the exact difference, or zero when it is 0.000 kWh at the scale the
+     * numbers are stored and shown at (three decimals, {@link Quantity#toMeterValue()}). A difference that small is
+     * zero: not negative (no warning), and nothing to share.
+     */
+    static Quantity settled(Quantity difference) {
+        Quantity magnitude = difference.signum() < 0 ? Quantity.ZERO.minus(difference) : difference;
+        return magnitude.toMeterValue().value().signum() == 0 ? Quantity.ZERO : difference;
+    }
+
     /** {@code value x numerator / denominator}, exact; the denominator is above zero. */
     static Quantity proportion(Quantity value, Quantity numerator, Quantity denominator) {
         return Quantity.ofFraction(
@@ -193,7 +204,7 @@ final class LossesCalculator {
         if (children == null) {
             return unknown(node, consumption, null, calculated, walk.childSum.unknown());
         }
-        Quantity losses = consumption.minus(children);
+        Quantity losses = settled(consumption.minus(children));
         if (losses.signum() < 0) {
             return new NodeResult(node.key(), Outcome.NEGATIVE, consumption, children, calculated, null, null,
                     Map.of(), Set.of());

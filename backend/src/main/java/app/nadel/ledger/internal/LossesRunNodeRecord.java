@@ -132,6 +132,14 @@ class LossesRunNodeRecord {
         return nodeName;
     }
 
+    LocalDate getFromDate() {
+        return fromDate;
+    }
+
+    LocalDate getToDate() {
+        return toDate;
+    }
+
     int getPosition() {
         return position;
     }

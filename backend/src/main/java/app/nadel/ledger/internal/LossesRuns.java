@@ -89,8 +89,9 @@ import org.springframework.transaction.annotation.Transactional;
  * A booking writes the run, its nodes (with their numbers, warnings and plot shares), one {@code LOSSES} charge per plot
  * in the month of {@code to} or the earliest open month after it (key {@code LOSSES_RUN:{run}:{plot}}, debt from
  * {@code to}) with one part per node and tariff version, a {@code meter_value_use} row per value the charged nodes read,
- * an open "not charged" item per unknown or skipped node, closes the open items of the nodes it charged (and of a node
- * now known to be negative, for the same range), writes the audit entry {@code LOSSES_RUN_BOOKED} and publishes
+ * an open "not charged" item per unknown or skipped node, closes the open items of the nodes it charged once every day
+ * of an item is charged, else narrows the item to the days left (and closes the item of a node now known to be
+ * negative, for the same range), writes the audit entry {@code LOSSES_RUN_BOOKED} and publishes
  * {@code ChargesBooked}.
  */
 @Service
@@ -347,9 +348,9 @@ class LossesRuns {
     }
 
     /**
-     * Opens an item per unknown or skipped node (or keeps the open one), closes the open items of a charged node whose
-     * range meets the run's ({@code RESOLVED}: those days are charged now) and the open item of a negative node for the
-     * same range ({@code OBSOLETE}: nothing is left to charge).
+     * Opens an item per unknown or skipped node (or keeps the open one), settles the open items of a charged node whose
+     * range meets the run's ({@link #settle}: those days are charged now) and closes the open item of a negative node
+     * for the same range ({@code OBSOLETE}: nothing is left to charge).
      */
     private void updateQueue(UUID tenantId, Plan plan, @Nullable UUID electricity, Instant now) {
         for (PlannedNode node : plan.nodes()) {
@@ -367,7 +368,7 @@ class LossesRuns {
                             key)) {
                         if (item.getFromDate() != null && item.getToDate() != null
                                 && !item.getFromDate().isAfter(plan.to()) && !item.getToDate().isBefore(plan.from())) {
-                            item.close(Status.RESOLVED, now);
+                            settle(tenantId, item, now);
                         }
                     }
                 }
@@ -375,6 +376,43 @@ class LossesRuns {
             }
         }
         items.flush();
+    }
+
+    /**
+     * Settles an open item of a node some of whose days booked runs charged (the caller's run among them, flushed): the
+     * item is {@code RESOLVED} when the booked runs that charged the node cover every day of its range. When some days
+     * are left, the item is narrowed to them: it is {@code RESOLVED} (its charged days are charged) and an open item
+     * {@code LOSSES_NODE:{node}:{from}:{to}} takes each run of days left (unless one is open already), so a retry works
+     * them out on their own. An item none of whose days is charged stays as it is.
+     */
+    private void settle(UUID tenantId, NotChargedItemRecord item, Instant now) {
+        LocalDate from = Objects.requireNonNull(item.getFromDate());
+        LocalDate to = Objects.requireNonNull(item.getToDate());
+        UUID node = Objects.requireNonNull(item.getMeterId());
+        List<LocalDate[]> left = new ArrayList<>();
+        LocalDate next = from;
+        // oldest range first; two booked charged ranges of a node never overlap (losses_run_node_no_overlap_ex)
+        for (LossesRunNodeRecord charged : nodes.chargedOverlapping(List.of(node), from, to)) {
+            if (charged.getFromDate().isAfter(next)) {
+                left.add(new LocalDate[] {next, charged.getFromDate().minusDays(1)});
+            }
+            if (!charged.getToDate().isBefore(next)) {
+                next = charged.getToDate().plusDays(1);
+            }
+        }
+        if (!next.isAfter(to)) {
+            left.add(new LocalDate[] {next, to});
+        }
+        if (left.size() == 1 && left.getFirst()[0].equals(from) && left.getFirst()[1].equals(to)) {
+            return;
+        }
+        item.close(Status.RESOLVED, now);
+        for (LocalDate[] days : left) {
+            if (items.findOpen(NotChargedItemRecord.lossesNodeKey(node, days[0], days[1])).isEmpty()) {
+                items.save(NotChargedItemRecord.lossesNode(tenantId, node, Objects.requireNonNull(
+                        item.getChargeTypeId()), days[0], days[1], now));
+            }
+        }
     }
 
     // ---- the history
@@ -503,7 +541,8 @@ class LossesRuns {
     /**
      * Retries an open {@code LOSSES_NODE} item: a run of its node alone over its range, booked as {@link #run} books
      * one when the node is charged now. Under the locks of a booking (the item {@code FOR UPDATE} after the queue lock).
-     * The item is {@code RESOLVED} when the node is charged now or was charged by another run meanwhile, {@code OBSOLETE}
+     * The item is {@code RESOLVED} when the node is charged now or was charged by other runs meanwhile (for some of its
+     * days only: narrowed to the days left, see {@link #settle}), {@code OBSOLETE}
      * when nothing is left to charge (the losses are negative, the node is not in the tree for the range any more, or
      * the losses mode is not proportional), and stays open while a value is still unknown.
      */
@@ -537,7 +576,10 @@ class LossesRuns {
         }
         PlannedNode only = planned.plan().nodes().getFirst();
         if (only.overlap() != null) {
-            return closed(item, Status.RESOLVED, now, name);
+            // charged by another run meanwhile: resolved, or narrowed to the days left
+            settle(tenantId, item, now);
+            items.flush();
+            return new Retried(item.getStatus(), null, name);
         }
         Outcome outcome = only.result().outcome();
         if (outcome == Outcome.NEGATIVE) {

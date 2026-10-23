@@ -30,6 +30,7 @@ import app.nadel.tariffs.TariffBook.VersionRef;
 import app.nadel.tariffs.TariffResolver.PlotFacts;
 import app.nadel.tariffs.VersionTerms;
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -163,6 +164,33 @@ class LossesCalculatorTests {
         assertThat(a.shares()).isEmpty();
         assertThat(a.uses()).isEmpty();
         assertThat(plan(network, Map.of(), electricity("4.3200")).charges()).isEmpty();
+    }
+
+    @Test
+    void lossesThatAreZeroAtThreeDecimalsAreZeroNeitherNegativeNorShared() {
+        // P1 reads 1 000 on 30.09 and 1 092.001 on 31.12 (92 days): the end of 31.10 is 1 000 + 92.001 x 31 / 92
+        // = 1 031.000337; quarter 31 -> losses -0.000337 kWh, 0.000 at three decimals
+        List<NetworkChain> under = List.of(node(A, MeterKind.QUARTER, "Квартал А", null, 31),
+                chain(M1, MeterKind.PLOT, P1, null, A, new MeterHistory(INSTALLED, MeterValue.ZERO, null, null,
+                        List.of(reading("2026-09-30", "1000"), reading("2026-12-31", "1092.001")))));
+        // 1 091.999 instead: 1 030.999663 -> losses +0.000337 kWh, 0.000 as well
+        List<NetworkChain> over = List.of(node(A, MeterKind.QUARTER, "Квартал А", null, 31),
+                chain(M1, MeterKind.PLOT, P1, null, A, new MeterHistory(INSTALLED, MeterValue.ZERO, null, null,
+                        List.of(reading("2026-09-30", "1000"), reading("2026-12-31", "1091.999")))));
+
+        for (List<NetworkChain> network : List.of(under, over)) {
+            NodeResult a = only(LossesCalculator.calculate(network, FROM, TO));
+
+            assertThat(a.outcome()).isEqualTo(Outcome.CHARGED);
+            assertThat(a.losses()).isEqualTo(Quantity.ZERO);
+            assertThat(LossesRunViews.kwh(a.losses())).isEqualTo("0.000");
+            assertThat(a.shares()).isEmpty();
+            assertThat(a.noPlotConsumption()).isFalse();
+            assertThat(plan(network, Map.of(), electricity("4.3200")).charges()).isEmpty();
+        }
+        // -0.0006 kWh is -0.001 at three decimals: it stays negative
+        Quantity small = Quantity.ofFraction(BigInteger.valueOf(-6), BigInteger.valueOf(10_000));
+        assertThat(LossesCalculator.settled(small)).isEqualTo(small);
     }
 
     @Test

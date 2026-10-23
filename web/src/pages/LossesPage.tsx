@@ -43,12 +43,10 @@ export function LossesPage() {
           <LossesNodesTable nodes={result.nodes} />
         </>
       )}
-      partial={(result) => ({
-        blocked:
-          result.nodes.some((n) => n.outcome === 'ALREADY_CHARGED') ||
-          !result.nodes.some((n) => n.outcome === 'CHARGED'),
-        ids: result.nodes.filter((n) => n.outcome === 'CHARGED').map((n) => n.meterId),
-      })}
+      partial={(result) => {
+        const ids = result.nodes.filter((n) => n.outcome !== 'ALREADY_CHARGED').map((n) => n.meterId);
+        return { blocked: ids.length < result.nodes.length, ids };
+      }}
       blockedTexts={{ note: l.overlapNote, action: l.excludeOverlap, nothing: l.nothingToBook }}
       problemHint={(code) =>
         code === 'LOSSES_MODE_NOT_PROPORTIONAL' && canSettings ? (

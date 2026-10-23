@@ -336,6 +336,68 @@ class LossesRunsTests extends FreshCooperativeSupport {
     }
 
     @Test
+    void aRunOverSomeDaysOfAQueuedNodeNarrowsItsItemAndARunOverTheRestResolvesIt() throws Exception {
+        // quarter A is read on 31.08 only: the run of September queues it
+        quarterA = namedMeter("QUARTER", "Квартал А", null, 5000, null);
+        meterP1 = plotMeter(p1, quarterA, 1000, 1600);
+        meterP2 = plotMeter(p2, quarterA, 2000, 2400);
+        send(chairman, post(BOOK), range()).andExpect(status().isOk());
+        assertThat(lines(body(send(chairman, get(NOT_CHARGED), null)), "meterId", "from", "to"))
+                .containsExactly(quarterA + "|" + FROM + "|" + TO);
+
+        // read on 15.09: a run of 01.09-15.09 charges A (550 - 300 - 200 = 50), the item keeps 16.09-30.09
+        reading(quarterA, "2026-09-15", "5550");
+        JsonNode first = body(send(chairman, post(BOOK), range(FROM, "2026-09-15")).andExpect(status().isOk()));
+        assertThat(lines(first.get("nodes"), "name", "losses", "outcome")).containsExactly("Квартал А|50.000|CHARGED");
+        assertThat(lines(body(send(chairman, get(NOT_CHARGED), null)), "kind", "reason", "meterId", "from", "to"))
+                .containsExactly("LOSSES_NODE|UNKNOWN_NODE_VALUE|" + quarterA + "|2026-09-16|" + TO);
+        assertThat(owner().queryForList("select status from not_charged_item where tenant_id = ? and meter_id = ? "
+                + "and from_date = ?::date and to_date = ?::date", String.class, tenant, quarterA, FROM, TO))
+                .containsExactly("RESOLVED");
+
+        // read on 30.09: a run of the days left charges them and resolves the item
+        reading(quarterA, TO, "6100");
+        send(chairman, post(BOOK), range("2026-09-16", TO)).andExpect(status().isOk());
+        assertThat(body(send(chairman, get(NOT_CHARGED), null))).isEmpty();
+    }
+
+    @Test
+    void aRetryOfAnItemOtherRunsChargedSomeDaysOfNarrowsItToTheDaysLeft() throws Exception {
+        quarter();
+        send(chairman, post(BOOK), range()).andExpect(status().isOk());
+        // an open item of A over 16.09-10.10, of which the run above charged 16.09-30.09
+        UUID item = UUID.randomUUID();
+        owner().update("insert into not_charged_item (id, tenant_id, item_key, kind, charge_type_id, meter_id, "
+                + "from_date, to_date, reason) values (?, ?, ?, 'LOSSES_NODE', ?, ?, '2026-09-16', '2026-10-10', "
+                + "'UNKNOWN_NODE_VALUE')", item, tenant, "LOSSES_NODE:" + quarterA + ":2026-09-16:2026-10-10",
+                typeId("ELECTRICITY"), quarterA);
+
+        assertThat(body(send(chairman, post(RETRY.formatted(item)), null).andExpect(status().isOk()))
+                .get("resolved").asBoolean()).isTrue();
+
+        assertThat(lines(body(send(chairman, get(NOT_CHARGED), null)), "meterId", "from", "to"))
+                .containsExactly(quarterA + "|2026-10-01|2026-10-10");
+        assertThat(runCount()).isEqualTo(1);
+    }
+
+    @Test
+    void lossesThatAreZeroAtThreeDecimalsAreBookedAsZero() throws Exception {
+        // P1 reads 1 000 on 31.08 and 1 091.001 on 30.11 (91 days): the end of 30.09 is 1 000 + 91.001 x 30 / 91
+        // = 1 030.00033; quarter A 30 -> losses -0.00033 kWh, 0.000 at three decimals
+        quarterA = namedMeter("QUARTER", "Квартал А", null, 5000, 5030);
+        meterP1 = plotMeter(p1, quarterA, 1000, null);
+        reading(meterP1, "2026-11-30", "1091.001");
+
+        JsonNode booked = body(send(chairman, post(BOOK), range()).andExpect(status().isOk()));
+
+        assertThat(lines(booked.get("nodes"), "losses", "outcome")).containsExactly("0.000|CHARGED");
+        assertThat(booked.get("nodes").get(0).has("warning")).isFalse();
+        assertThat(booked.get("charges")).isEmpty();
+        assertThat(owner().queryForObject("select losses::text from losses_run_node where tenant_id = ?",
+                String.class, tenant)).isEqualTo("0.000");
+    }
+
+    @Test
     void aValueBetweenReadingsIsMarkedCalculated() throws Exception {
         quarterA = namedMeter("QUARTER", "Квартал А", null, 5000, 6100);
         // P1 read on 31.08 and 10.10 (40 days): the end of 30.09 is interpolated

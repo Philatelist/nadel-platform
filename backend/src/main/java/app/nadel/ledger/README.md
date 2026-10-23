@@ -203,11 +203,12 @@ Lock order of the slice: plot `FOR SHARE` -> charge type `FOR SHARE` -> billing 
   leave a gap. A node is a substation or quarter chain with a meter under it on a day of the range. Per node: losses =
   its consumption - its children's consumption over the days they were under it (plot meters, common consumers, quarter
   meters); `UNKNOWN` when its own or a child's value is unknown (no reading after the date); `SKIPPED_ABOVE` when a node
-  below it is unknown; `NEGATIVE` when the losses are below zero (nothing is charged); otherwise `CHARGED`: the losses
-  are shared among the plots under it (directly or through child nodes, within the days those were under it) in
-  proportion to each plot's consumption under it, exactly; a plot with zero consumption gets nothing. An interpolated
-  value marks the node `calculated`. The values a charged node read are listed (the points at, or on both sides of,
-  the end of the day before each slice and the end of each slice).
+  below it is unknown; `NEGATIVE` when the losses are below zero (nothing is charged; losses that are 0.000 kWh at
+  three decimals, the scale they are stored and shown at, count as zero: `LossesCalculator.settled`); otherwise
+  `CHARGED`: the losses are shared among the plots under it (directly or through child nodes, within the days those
+  were under it) in proportion to each plot's consumption under it, exactly; a plot with zero consumption gets nothing.
+  An interpolated value marks the node `calculated`. The values a charged node read are listed (the points at, or on
+  both sides of, the end of the day before each slice and the end of each slice).
 - **The price** (`LossesPlanning`, pure): a plot's kWh from every charged node are added and priced once with its
   electricity tariff over the range (`TariffResolver`; `ReadingChargeCalculator` spreads the kWh evenly over the days,
   split by days when the rate changes, one rounding); one `LOSSES` charge per plot. A plot that cannot be priced is
@@ -234,8 +235,10 @@ Lock order of the slice: plot `FOR SHARE` -> charge type `FOR SHARE` -> billing 
   from, to, nodeMeterId, calculated}], readings: [], runId, nodeMeterId (one node only)}`, one `charge_part` per node and
   version with `node_meter_id` and the exact kWh), one `meter_value_use` row (with `run_id`) per value the charged nodes
   read, an open item `LOSSES_NODE:{node}:{from}:{to}` (reason `UNKNOWN_NODE_VALUE`, `meter_id` the node, charge type
-  `ELECTRICITY`) per `UNKNOWN` or `SKIPPED_ABOVE` node, closes the open items of a charged node whose range meets the
-  run's (`RESOLVED`) and the item of a negative node for the same range (`OBSOLETE`), audit `LOSSES_RUN_BOOKED`
+  `ELECTRICITY`) per `UNKNOWN` or `SKIPPED_ABOVE` node, settles the open items of a charged node whose range meets the
+  run's (`LossesRuns.settle`: `RESOLVED` when the booked runs that charged the node cover every day of the item; else
+  the item is `RESOLVED` and narrowed to the days left, an open item `LOSSES_NODE:{node}:{from}:{to}` per run of
+  uncharged days) and closes the item of a negative node for the same range (`OBSOLETE`), audit `LOSSES_RUN_BOOKED`
   (entity type `LOSSES_RUN`, label `from/to`, values `from`, `to`, `billingMonth`, `nodes`, `count`, `total`) and
   `ChargesBooked`.
 - **Reversal** (`reverse`): reason required (400 `REQUIRED`; `TOO_LONG` over 500); 404 `NOT_FOUND`; 409
@@ -251,6 +254,15 @@ Lock order of the slice: plot `FOR SHARE` -> charge type `FOR SHARE` -> billing 
 - **Locks:** the cooperative's advisory lock of losses runs (`ledger.losses-runs:{tenant}`; bookings, reversals and
   retries one at a time) -> every electricity meter `FOR SHARE` -> the queue lock -> the charge types and tariffs
   `FOR SHARE` -> the billing month `FOR SHARE`: the order of the month run.
+  A known, rare deadlock: a booking or retry locks every electricity meter `FOR SHARE` in id order
+  (`MeterNetwork.lockSharedNetwork`), while the replacement of a substation or quarter meter (`meters` `MeterParents`)
+  holds the old meter `FOR UPDATE` and then locks the meters under it `FOR UPDATE` in id order. When the run already
+  holds a child whose id sorts before the old meter's and waits for the old meter, the two wait for each other;
+  Postgres detects it and aborts one of them (SQLSTATE `40P01`, answered as a 500 with nothing written). It is
+  recoverable: the aborted action is simply repeated. Not fixed in code: the replacement locks the old meter first (it
+  has to read and check it before it knows its children), so locking it together with its children in id order would
+  mean reading the children unlocked and re-checking them after the locks, more change than a rare, harmless abort is
+  worth.
 
 ## Common consumer runs (tag `common-consumer-runs`, slice 7)
 
@@ -340,7 +352,8 @@ Lock order of the slice: plot `FOR SHARE` -> charge type `FOR SHARE` -> billing 
   `RESOLVED`/`OBSOLETE`/`OPEN`).
 - **Retry** of a `LOSSES_NODE` item (`LossesRuns.retry`, under the locks of a booking, the item `FOR UPDATE` after the
   queue lock): a run of that node alone over the item's range. Charged now -> the run is booked (audit
-  `LOSSES_RUN_BOOKED`) and the item `RESOLVED`; charged by another run meanwhile -> `RESOLVED`; negative, no longer a
+  `LOSSES_RUN_BOOKED`) and the item `RESOLVED`; charged by other runs meanwhile -> `RESOLVED` (for some of its days
+  only: narrowed to the days left, as a booking does); negative, no longer a
   node of the range, or the losses mode not proportional -> `OBSOLETE`; still unknown -> open. Audit
   `NOT_CHARGED_RETRIED` with entity type `METER` about the node meter (label its name; `kind`, `reason`, `from`, `to`,
   `outcome`, `runId` when a run was booked).
@@ -516,16 +529,18 @@ charged, a reading inside a charged interval, a new reading after one, accepted 
 `TariffVersionUsageTests` (409 after the run, accepted after the reversal), `LossesCalculatorTests` (pure: the losses
 rows of §3 - quarter, substation, negative -50, unknown skipping above - shares, a plot moved between quarters,
 calculated values, the values read, the price once per plot, a rate change, overlaps, plots without a tariff, the
-digest), `LossesRunsTests` (preview, booking with charges, parts, value uses and audit, a stale digest, the overlap
-refusal, the reversal of every charge with the run's reason, a closed month, a skipped node charged later by retries,
-calculated marks, the readings a run uses, the mode, validation, node selection, permissions),
-`LossesRunTenantIsolationTests` (V17), `CommonConsumerSplitCalculatorTests` and `CommonConsumerPlanningTests` (pure:
-the common consumer rows of §3 - equal 54.00, connected plots 86.40, plot-days 24/24/12 kWh, users 43.20, not charged -
-the price over a plot's own days with a rate change, rounding once, plots that cannot be priced, outcomes, no tariff,
-overlaps, the values read, the digest, the calculation), `CommonConsumerRunsTests` (the modes, booking with charges,
-parts, value uses, account and audit, no tariff, overlap, stale digest, reversal, a closed month, an unknown consumer
-queued and retried, the readings a run uses, validation, consumer selection, the settings of a consumer with
-validation and audit, permissions), `CommonConsumerTenantIsolationTests` (V18), the water rows of `MonthRunTests` (25.00 for
+digest, losses that are 0.000 kWh at three decimals), `LossesRunsTests` (preview, booking with charges, parts, value
+uses and audit, a stale digest, the overlap refusal, the reversal of every charge with the run's reason, a closed
+month, a skipped node charged later by retries, an item narrowed by a run or a retry over some of its days and resolved
+by a run over the rest, losses booked as 0.000, calculated marks, the readings a run uses, the mode, validation, node
+selection, permissions), `LossesRunTenantIsolationTests` (V17), `CommonConsumerSplitCalculatorTests` and
+`CommonConsumerPlanningTests` (pure: the common consumer rows of §3 - equal 54.00, connected plots 86.40, plot-days
+24/24/12 kWh, users 43.20, not charged - the price over a plot's own days with a rate change, rounding once, plots that
+cannot be priced, outcomes, no tariff, overlaps, the values read, the digest, the calculation), `CommonConsumerRunsTests`
+(the modes, booking with charges, parts, value uses, account and audit, no tariff, overlap, stale digest, reversal, a
+closed month, an unknown consumer queued and retried, the readings a run uses, validation, consumer selection, the
+settings of a consumer with validation and audit, permissions), `CommonConsumerTenantIsolationTests` (V18), the water
+rows of `MonthRunTests` (25.00 for
 a connected plot, nothing and nothing queued for one that is not, 12.90 from the 16th, a conflict only for a connected
 plot) and of `ReadingChargesTests` (a plot not connected for the whole interval: nothing and nothing queued; the
 connected days only),

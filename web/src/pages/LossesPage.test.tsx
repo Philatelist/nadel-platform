@@ -16,6 +16,7 @@ import {
   lossesPreview,
   negativeNode,
   reversedRun,
+  unknownNode,
 } from '../components/charges/lossesFixtures';
 import { queryResult, withQueries } from '../test/meterFixtures';
 import { renderWithApp } from '../test/render';
@@ -138,7 +139,7 @@ describe('LossesPage', () => {
   describe('when a node was already charged for these days', () => {
     const overlapping: LossesRunResult = {
       ...lossesPreview,
-      nodes: [chargedNode, alreadyChargedNode],
+      nodes: [chargedNode, alreadyChargedNode, unknownNode, negativeNode],
     };
 
     it('refuses to book everything, names the run and lets the user book the other nodes', async () => {
@@ -154,16 +155,23 @@ describe('LossesPage', () => {
 
       await userEvent.click(screen.getByRole('button', { name: 'Preview without the charged nodes' }));
       expect(mutate).toHaveBeenLastCalledWith(
-        { data: { from: '2026-10-01', to: '2026-10-23', nodeIds: ['qa'] }, params: { preview: true } },
+        {
+          data: { from: '2026-10-01', to: '2026-10-23', nodeIds: ['qa', 'qc', 'qb'] },
+          params: { preview: true },
+        },
         expect.any(Object),
       );
       await act(async () => {
-        await callbacks().onSuccess?.({ ...lossesPreview, nodes: [chargedNode], digest: 'd2' });
+        await callbacks().onSuccess?.({
+          ...lossesPreview,
+          nodes: [chargedNode, unknownNode, negativeNode],
+          digest: 'd2',
+        });
       });
       await userEvent.click(screen.getByRole('button', { name: 'Book' }));
       expect(mutate).toHaveBeenLastCalledWith(
         {
-          data: { from: '2026-10-01', to: '2026-10-23', nodeIds: ['qa'], digest: 'd2' },
+          data: { from: '2026-10-01', to: '2026-10-23', nodeIds: ['qa', 'qc', 'qb'], digest: 'd2' },
           params: { preview: false },
         },
         expect.any(Object),
@@ -171,7 +179,7 @@ describe('LossesPage', () => {
     });
 
     it('says nothing can be booked when no node is left', async () => {
-      await showPreview({ ...overlapping, nodes: [alreadyChargedNode, negativeNode] });
+      await showPreview({ ...overlapping, nodes: [alreadyChargedNode] });
       expect(screen.getByText('No node can be charged for this range.')).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Book' })).toBeNull();
       expect(screen.queryByRole('button', { name: 'Preview without the charged nodes' })).toBeNull();
@@ -184,6 +192,15 @@ describe('LossesPage', () => {
       expect(await screen.findByRole('alert')).toHaveTextContent('have already been calculated for a node');
       expect(screen.getByRole('button', { name: 'Preview again' })).toBeInTheDocument();
     });
+  });
+
+  it('books a range where no node is charged but some are unknown', async () => {
+    await showPreview({ ...lossesPreview, nodes: [unknownNode, negativeNode], charges: [], plots: 0 });
+    await userEvent.click(screen.getByRole('button', { name: 'Book' }));
+    expect(mutate).toHaveBeenLastCalledWith(
+      { data: { from: '2026-10-01', to: '2026-10-23', digest: 'd1' }, params: { preview: false } },
+      expect.any(Object),
+    );
   });
 
   it('hints at the settings when losses are not proportional', async () => {
