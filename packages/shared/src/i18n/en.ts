@@ -354,7 +354,7 @@ export const en = {
     templateTitle: 'Template',
     templateHint: 'Download the Excel template, fill it in with the cooperative data and save the file.',
     sheetsHelp:
-      'The Opening balances sheet carries debts from the previous accounting: plot number, charge type, amount, date and an optional basis. Enter one row per plot and charge type, and reverse an existing opening balance in the ledger before importing a new one.',
+      'The Opening balances sheet carries debts from the previous accounting: plot number, charge type, amount, date and an optional basis. Enter one row per plot, charge type and date, and reverse an existing opening balance in the ledger before importing a new one.',
     waterHelp:
       'The Water column of the Plots sheet: yes connects the plot to the cooperative supply, a source name connects it to that common consumer meter, no or empty leaves the plot as it is. The import never disconnects a plot.',
     downloadTemplate: 'Download template',

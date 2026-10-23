@@ -192,9 +192,15 @@ class WaterConnectionImportService implements WaterConnectionImport {
         LocalDate today = LocalDate.now(clock);
         Instant now = clock.instant();
         List<WaterConnectionRecord> created = new ArrayList<>();
-        for (Item item : plan.items()) {
+        Map<UUID, String> fileNumbers = new HashMap<>();
+        for (int index = 0; index < plan.items().size(); index++) {
+            Item item = plan.items().get(index);
             if (item.action() == Action.NEW) {
                 created.add(WaterConnectionRecord.of(tenantId, item.plotId(), item.sourceMeterId(), today, now));
+                String number = rows.get(index).plotNumber();
+                if (number != null) {
+                    fileNumbers.putIfAbsent(item.plotId(), number.strip());
+                }
             }
         }
         if (created.isEmpty()) {
@@ -218,7 +224,7 @@ class WaterConnectionImportService implements WaterConnectionImport {
             PlotFacts plot = plotFacts.get(connection.getPlotId());
             String source = label(connection.getSourceMeterId(), labels);
             events.add(audit.waterEvent(tenantId, actor, WaterAction.WATER_CONNECTED, connection.getPlotId(),
-                    plot == null ? null : plot.number(), List.of(
+                    plot == null ? fileNumbers.get(connection.getPlotId()) : plot.number(), List.of(
                             new FieldChange("source", null, source),
                             new FieldChange("from", null, connection.getValidFrom().toString()))));
         }

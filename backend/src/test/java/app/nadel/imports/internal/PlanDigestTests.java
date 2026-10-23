@@ -263,7 +263,7 @@ class PlanDigestTests extends ImportsIntegrationTest {
                 new PlotImportPlan(List.of(new PlotImportItem(2, PlotImportAction.NEW, newPlot, List.of(), List.of()))),
                 List.of(), new MemberImportPlan(List.of()), List.of(), new OwnershipImportPlan(List.of()),
                 List.of(), new MeterImportPlan(List.of()),
-                List.of(new WaterConnectionImport.Row(2, null)), new WaterConnectionImport.Plan(List.of(water)),
+                List.of(new WaterConnectionImport.Row(2, "P-1", null)), new WaterConnectionImport.Plan(List.of(water)),
                 List.of(opening), new OpeningBalanceImport.Plan(List.of(openingItem)));
     }
 

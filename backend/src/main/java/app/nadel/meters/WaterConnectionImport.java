@@ -19,11 +19,13 @@ public interface WaterConnectionImport {
     /**
      * The water cell of one Plots row that asks for a connection.
      *
-     * @param row    the Excel row number of the Plots row (its plot is that row's plot)
-     * @param source the name of an active common consumer meter (a well) as typed, or null for the cooperative's water
-     *               supply (the cell said yes)
+     * @param row        the Excel row number of the Plots row (its plot is that row's plot)
+     * @param plotNumber the plot number of that Plots row as typed, the plot's label in the audit log when the plot
+     *                   cannot be read back
+     * @param source     the name of an active common consumer meter (a well) as typed, or null for the cooperative's
+     *                   water supply (the cell said yes)
      */
-    record Row(int row, @Nullable String source) {
+    record Row(int row, @Nullable String plotNumber, @Nullable String source) {
     }
 
     /** What the import does with a row. */

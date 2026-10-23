@@ -113,13 +113,15 @@ indexes.
   problem is not checked further); `DUPLICATE_IN_FILE` for an earlier valid row with the same plot, charge type and
   date; last, against the plot's opening balances that no reversal cancels: the same charge type, date and amount is
   `UNCHANGED` (so the same file uploaded again books nothing twice), the same charge type and date with another amount
-  is `OPENING_BALANCE_EXISTS` with `params.amount` (reverse it on the account first), anything else is `NEW`.
+  is `OPENING_BALANCE_EXISTS` with `params.amount` (reverse it on the account first; of several such balances, the
+  earliest booked one), anything else is `NEW`.
 - **Lock**: the stored plots of the `NEW` rows `FOR SHARE`, then their charge types `FOR SHARE`, in id order.
 - **Apply**: every `NEW` row through `OpeningBalances.book` with the source key `OPENING:{importId}:{row}` (the partial
   unique index `charge_source_key_uq` makes a second booking of the row impossible; a violation is 409
   `IMPORT_STALE`), in the month `BillingMonths.openForBooking` gives for the month of its date (one call per month);
-  without a reason the source key is the reference to the import. One `ChargesBooked` for the plots; one
-  `OPENING_BALANCE_ENTERED` audit event per balance, returned to the import, which publishes them as `AuditBatch`es.
+  without a reason the source key is the reference to the import. `ChargesBooked` for the plots, at most 500 plots per
+  event (`TariffChargeWriter.PLOTS_PER_EVENT`, as the runs); one `OPENING_BALANCE_ENTERED` audit event per balance,
+  returned to the import, which publishes them as `AuditBatch`es.
 
 ## Billing months (tag `billing`, slice 2)
 

@@ -2,7 +2,6 @@ package app.nadel.ledger.internal;
 
 import app.nadel.audit.Actor;
 import app.nadel.audit.AuditEvent;
-import app.nadel.ledger.ChargesBooked;
 import app.nadel.ledger.OpeningBalanceImport;
 import app.nadel.money.Money;
 import app.nadel.plots.PlotCatalog;
@@ -22,6 +21,7 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -56,6 +56,8 @@ class OpeningBalanceImportService implements OpeningBalanceImport {
     private static final String REASON_FIELD = "reason";
     private static final String COMMON_KIND = "COMMON";
     private static final String SOURCE_KEY_INDEX = "charge_source_key_uq";
+    private static final Comparator<ChargeRecord> EARLIEST_BOOKED = Comparator.comparing(ChargeRecord::getCreatedAt)
+            .thenComparing(ChargeRecord::getId);
 
     private final PlotCatalog plots;
     private final ChargeTypeCatalog chargeTypes;
@@ -68,8 +70,8 @@ class OpeningBalanceImportService implements OpeningBalanceImport {
     private final Clock clock;
 
     OpeningBalanceImportService(PlotCatalog plots, ChargeTypeCatalog chargeTypes, ChargeRepository charges,
-            OpeningBalances openingBalances, BillingMonths billingMonths, LedgerAuditPublisher audit, ApplicationEventPublisher events,
-            EntityManager entityManager, Clock clock) {
+            OpeningBalances openingBalances, BillingMonths billingMonths, LedgerAuditPublisher audit,
+            ApplicationEventPublisher events, EntityManager entityManager, Clock clock) {
         this.plots = plots;
         this.chargeTypes = chargeTypes;
         this.charges = charges;
@@ -202,10 +204,14 @@ class OpeningBalanceImportService implements OpeningBalanceImport {
         return new Valid(key(plotNumber), type, amount, date);
     }
 
-    /** {@code UNCHANGED}, {@code OPENING_BALANCE_EXISTS} or {@code NEW}, from the plot's standing opening balances. */
+    /**
+     * {@code UNCHANGED}, {@code OPENING_BALANCE_EXISTS} or {@code NEW}, from the plot's standing opening balances. When
+     * several standing balances share the charge type and the date and none has the amount, the problem names the
+     * amount of the earliest booked one (then the smallest id), so the same file always gets the same message.
+     */
     private static Item planAgainstStored(Row row, Valid valid, Resolved plot,
             Map<UUID, List<ChargeRecord>> standing) {
-        Money other = null;
+        ChargeRecord other = null;
         for (ChargeRecord charge : standing.getOrDefault(plot.plotId(), List.of())) {
             if (!charge.getChargeTypeId().equals(valid.type().id()) || !charge.getAccruedOn().equals(valid.date())) {
                 continue;
@@ -213,10 +219,13 @@ class OpeningBalanceImportService implements OpeningBalanceImport {
             if (charge.getAmount().equals(valid.amount())) {
                 return new Item(row.row(), Action.UNCHANGED, plot.plotId(), valid.type().id(), List.of());
             }
-            other = charge.getAmount();
+            if (other == null || EARLIEST_BOOKED.compare(charge, other) < 0) {
+                other = charge;
+            }
         }
         if (other != null) {
-            return problem(row, AMOUNT_FIELD, ProblemCodes.OPENING_BALANCE_EXISTS, Map.of("amount", other.toString()));
+            return problem(row, AMOUNT_FIELD, ProblemCodes.OPENING_BALANCE_EXISTS,
+                    Map.of("amount", other.getAmount().toString()));
         }
         return new Item(row.row(), Action.NEW, plot.plotId(), valid.type().id(), List.of());
     }
@@ -361,7 +370,8 @@ class OpeningBalanceImportService implements OpeningBalanceImport {
             entries.add(audit.event(tenantId, actor, LedgerAuditPublisher.Action.OPENING_BALANCE_ENTERED, plotId,
                     number, balance.auditChanges()));
         }
-        events.publishEvent(new ChargesBooked(tenantId, plotIds));
+        // as the tariff runs do: at most PLOTS_PER_EVENT plots per event, so a large sheet never makes one huge event
+        TariffChargeWriter.publishBooked(events, tenantId, plotIds);
         return entries;
     }
 

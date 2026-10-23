@@ -381,10 +381,11 @@ class ImportPlanner {
             return null;
         }
         String yesNo = ImportVocabulary.get().canonicalValue(ImportVocabulary.YES_NO, row.water());
+        PlotImportRow plot = row.row();
         if (yesNo == null) {
-            return new WaterConnectionImport.Row(row.row().row(), row.water());
+            return new WaterConnectionImport.Row(plot.row(), plot.number(), row.water());
         }
-        return Boolean.parseBoolean(yesNo) ? new WaterConnectionImport.Row(row.row().row(), null) : null;
+        return Boolean.parseBoolean(yesNo) ? new WaterConnectionImport.Row(plot.row(), plot.number(), null) : null;
     }
 
     /**

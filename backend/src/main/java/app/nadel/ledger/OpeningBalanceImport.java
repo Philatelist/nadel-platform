@@ -96,8 +96,8 @@ public interface OpeningBalanceImport {
      * problem is not checked further); {@code DUPLICATE_IN_FILE} on {@code chargeType} for an earlier row without
      * problems with the same plot, charge type and date; last, against the stored opening balances of the plot that are
      * not reversed: the same charge type, date and amount is {@code UNCHANGED}, the same charge type and date with
-     * another amount {@code OPENING_BALANCE_EXISTS} on {@code amount} (parameter {@code amount}, the stored one), else
-     * {@code NEW}. Runs inside the caller's transaction.
+     * another amount {@code OPENING_BALANCE_EXISTS} on {@code amount} (parameter {@code amount}, the stored one; of
+     * several, the earliest booked), else {@code NEW}. Runs inside the caller's transaction.
      *
      * @param plotRows the rows of the Plots sheet, in file order
      * @param plotPlan their plan; the caller replaces the item of a row with a problem by an item without action
@@ -117,10 +117,11 @@ public interface OpeningBalanceImport {
     /**
      * Books the {@code NEW} rows as opening balances (kind and source {@code OPENING}) with the source key
      * {@code OPENING:{importId}:{row}}, each in the month of its date or the earliest open month after it, publishes
-     * one {@link ChargesBooked} for their plots and builds one {@code OPENING_BALANCE_ENTERED} audit event per balance
-     * credited to {@code actor}, as when entered by hand. The audit events are <b>returned, not published</b>: the
-     * caller publishes them in batches in the same transaction. Must run in the caller's transaction, after the plots
-     * the rows name were created in it. A source key that exists already is refused with 409 {@code IMPORT_STALE}.
+     * {@link ChargesBooked} for their plots (at most 500 plots per event) and builds one
+     * {@code OPENING_BALANCE_ENTERED} audit event per balance credited to {@code actor}, as when entered by hand. The
+     * audit events are <b>returned, not published</b>: the caller publishes them in batches in the same transaction.
+     * Must run in the caller's transaction, after the plots the rows name were created in it. A source key that exists
+     * already is refused with 409 {@code IMPORT_STALE}.
      *
      * @param rows the rows the plan was computed from
      * @param plan the plan of {@code rows}, computed in the same transaction after {@link #lock}

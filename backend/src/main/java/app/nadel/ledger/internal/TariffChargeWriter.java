@@ -122,6 +122,15 @@ class TariffChargeWriter {
 
     /** Publishes {@link ChargesBooked} for the plots, at most {@value #PLOTS_PER_EVENT} plots per event. */
     void publishBooked(UUID tenantId, Set<UUID> plotIds) {
+        publishBooked(events, tenantId, plotIds);
+    }
+
+    /**
+     * Publishes {@link ChargesBooked} for the plots through {@code events}, at most {@value #PLOTS_PER_EVENT} plots
+     * per event, the plots in id order; nothing for no plots. Also for a booking outside the tariff runs (the opening
+     * balances of the Excel import).
+     */
+    static void publishBooked(ApplicationEventPublisher events, UUID tenantId, Set<UUID> plotIds) {
         List<UUID> all = new ArrayList<>(new TreeSet<>(plotIds));
         for (int from = 0; from < all.size(); from += PLOTS_PER_EVENT) {
             events.publishEvent(new ChargesBooked(tenantId,
