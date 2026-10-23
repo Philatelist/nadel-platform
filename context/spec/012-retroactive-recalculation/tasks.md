@@ -35,11 +35,11 @@ Do not commit; report every file created or changed.
   - [x] Web: `components/recalculation/RecalculationPreview.tsx`, `RecalculationStep.tsx`, `RecalcHint.tsx`; `RecalculationNewPage` (`RequirePermission RECALCULATION_RUN`; months, charge types, plots, reason) → preview → book → detail page; "Новий перерахунок" button on the list; `invalidateAfterRecalculation`; hints on `PlotForm` (area), `ScopeEditor`, `WaterConnectionPanel`, `MeterTreePage`/`MoveMeterDialog`; audit labels (`RECALCULATION_BOOKED`, entity `RECALCULATION`, fields); i18n; unit tests. **[Agent: react-frontend]**
   - [x] Verify: `cd backend && ./mvnw -B test -Dtest='ManualRecalculationTests,MonthRunTests,NotChargedQueueTests,ModularityTests'` green; `pnpm gen:api` stable; `pnpm -r test && pnpm -r typecheck && pnpm -r lint && pnpm format:check` green. **[Agent: spring-backend]**
 
-- [ ] **Slice 4: Intervals and fixed-percentage losses**
+- [x] **Slice 4: Intervals and fixed-percentage losses**
 
   > Recalculations cover electricity and water interval charges and their fixed losses: corrected endpoints, merged and split intervals, queued intervals charged and resolved.
-  - [ ] Backend: `IntervalCharging.expected(points, snapshot, window)` and `book` with key override, reason and recalculation id; the planner input for interval identities in manual scope (charge types electricity/water); queue resolution for `INTERVAL` items; `meter_value_use` rows for new charges and adjustments. Tests: `IntervalRecalculationTests` (manual scope over intervals after a tariff version change: 4.32 → new rate open/closed, fixed losses 5 % reversal 14.04 + new, queued "немає тарифу" interval charged and resolved, water days), `ReadingChargesTests` still green. **[Agent: spring-backend]**
-  - [ ] Verify: `cd backend && ./mvnw -B test -Dtest='IntervalRecalculationTests,ReadingChargesTests,ReadingChargeCalculatorTests,ModularityTests'` green. **[Agent: spring-backend]**
+  - [x] Backend: `IntervalCharging.expected(points, snapshot, window)` and `book` with key override, reason and recalculation id; the planner input for interval identities in manual scope (charge types electricity/water); queue resolution for `INTERVAL` items; `meter_value_use` rows for new charges and adjustments. Tests: `IntervalRecalculationTests` (manual scope over intervals after a tariff version change: 4.32 → new rate open/closed, fixed losses 5 % reversal 14.04 + new, queued "немає тарифу" interval charged and resolved, water days), `ReadingChargesTests` still green. **[Agent: spring-backend]**
+  - [x] Verify: `cd backend && ./mvnw -B test -Dtest='IntervalRecalculationTests,ReadingChargesTests,ReadingChargeCalculatorTests,ModularityTests'` green. **[Agent: spring-backend]**
 
 - [ ] **Slice 5: Losses and common consumers runs**
 

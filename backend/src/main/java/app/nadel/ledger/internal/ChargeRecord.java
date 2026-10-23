@@ -181,6 +181,19 @@ class ChargeRecord {
     static ChargeRecord reading(UUID tenantId, UUID plotId, UUID chargeTypeId, UUID billingMonthId, ChargeSource source,
             UUID tariffId, UUID meterId, Money amount, LocalDate serviceFrom, LocalDate serviceTo, LocalDate accruedOn,
             String sourceKey, Map<String, Object> calculation, @Nullable UUID createdBy, Instant now) {
+        return reading(tenantId, plotId, chargeTypeId, billingMonthId, source, tariffId, meterId, amount, serviceFrom,
+                serviceTo, accruedOn, sourceKey, calculation, null, createdBy, now);
+    }
+
+    /**
+     * A charge of a meter interval as {@link #reading} makes it, booked by the recalculation {@code recalculationId}
+     * (feature 012: the charge that replaces a reversed one, or a charge that was missing), or by 011 when null. The
+     * recalculation books it with the base key, or with {@code base#r{recalculationId}} when a charge has the base key.
+     */
+    static ChargeRecord reading(UUID tenantId, UUID plotId, UUID chargeTypeId, UUID billingMonthId, ChargeSource source,
+            UUID tariffId, UUID meterId, Money amount, LocalDate serviceFrom, LocalDate serviceTo, LocalDate accruedOn,
+            String sourceKey, Map<String, Object> calculation, @Nullable UUID recalculationId,
+            @Nullable UUID createdBy, Instant now) {
         if (source != ChargeSource.CONSUMPTION && source != ChargeSource.LOSSES) {
             throw new IllegalArgumentException("A reading charge is a consumption or a losses charge");
         }
@@ -200,6 +213,7 @@ class ChargeRecord {
         charge.sourceKey = sourceKey;
         charge.tariffId = tariffId;
         charge.meterId = meterId;
+        charge.recalculationId = recalculationId;
         charge.createdBy = createdBy;
         charge.createdAt = now;
         return charge;

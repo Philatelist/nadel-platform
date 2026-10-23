@@ -79,6 +79,26 @@ class NotChargedViews {
         return dto;
     }
 
+    /**
+     * A meter interval a recalculation cannot charge (feature 012): the stored open item of the interval when there is
+     * one (its id and creation time), with the reason and tariffs of the recalculation's plan.
+     *
+     * @param from the first day of the interval
+     * @param to   the date of the reading that closes it
+     */
+    NotChargedItem interval(UUID plotId, UUID chargeTypeId, UUID meterId, LocalDate from, LocalDate to,
+            NotChargedItemRecord.Reason reason, List<UUID> tariffIds, @Nullable NotChargedItemRecord open,
+            Context context) {
+        NotChargedItem dto = item(NotChargedKind.INTERVAL, NotChargedReason.fromValue(reason.name()), plotId,
+                chargeTypeId, null, from, to, tariffIds, context);
+        dto.setMeterId(meterId);
+        if (open != null) {
+            dto.setId(open.getId());
+            dto.setCreatedAt(open.getCreatedAt().atOffset(ZoneOffset.UTC));
+        }
+        return dto;
+    }
+
     private static NotChargedItem item(NotChargedKind kind, NotChargedReason reason, @Nullable UUID plotId,
             @Nullable UUID chargeTypeId, @Nullable YearMonth month, @Nullable LocalDate from, @Nullable LocalDate to,
             List<UUID> tariffIds, Context context) {

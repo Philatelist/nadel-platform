@@ -1,5 +1,6 @@
 package app.nadel.meters.internal;
 
+import app.nadel.meters.MeterKind;
 import app.nadel.meters.MeterResource;
 import jakarta.persistence.LockModeType;
 import java.time.LocalDate;
@@ -97,4 +98,10 @@ interface MeterRepository extends JpaRepository<MeterRecord, UUID> {
     /** The plots among {@code plotIds} that have an active meter. */
     @Query("select distinct m.plotId from MeterRecord m where m.plotId in :plotIds and m.removedOn is null")
     List<UUID> plotIdsWithActiveMeter(@Param("plotIds") Collection<UUID> plotIds);
+
+    /** The meters of the kind and resources of the plots, active and removed, in id order. */
+    @Query("select m.id from MeterRecord m where m.plotId in :plotIds and m.kind = :kind "
+            + "and m.resource in :resources order by m.id")
+    List<UUID> idsOfPlots(@Param("plotIds") Collection<UUID> plotIds, @Param("kind") MeterKind kind,
+            @Param("resources") Collection<MeterResource> resources);
 }

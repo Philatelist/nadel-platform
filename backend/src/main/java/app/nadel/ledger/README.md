@@ -116,19 +116,29 @@ Everything else is in `internal`.
   reversal it booked, `reasons`, the created charge ids) and the differences per charge type in the order of the
   types. Entities `RecalculationRecord` and `RecalculationLineRecord` are `@Immutable`. `ChargeRecord.adjustment` and
   `ChargeRecord.recalculationReversalOf` build the rows a booking will write.
-- **Recalculation** (`RecalculationService`, feature 012 slice 3: cause `MANUAL`, charges of recurring tariffs). Any
-  other `cause.type` is 400 `VALIDATION_FAILED` with `cause.type` `UNSUPPORTED` until slices 6 and 7; the charges of
-  readings and runs join with slices 4 and 5 (their identities are not in this slice's booked chains). Validation:
+- **Recalculation** (`RecalculationService`, feature 012 slices 3 and 4: cause `MANUAL`, charges of recurring tariffs
+  and of plot meter intervals). Any other `cause.type` is 400 `VALIDATION_FAILED` with `cause.type` `UNSUPPORTED` until
+  slices 6 and 7; the lines of losses and common consumer runs join with slice 5 (their identities are not in the
+  booked chains yet). Validation:
   `cause.manual` `REQUIRED`; `cause.manual.to` before `from` `INVALID`, after the current month `DATE_IN_FUTURE`
   (400); more than 24 months 409 `RECALCULATION_RANGE_TOO_LONG`; a booking needs `reason` (trimmed, 1-500: `REQUIRED`,
   `TOO_LONG`; the contract's `maxLength` 500 catches it at the boundary too). One `TransactionTemplate` transaction; a
-  preview marks it rollback-only and it is the outermost one. Locks: the charging lock -> the queue lock -> charge types
-  and tariffs `FOR SHARE` -> every billing month `FOR SHARE` (no month closes under the plan). Scope: the months
+  preview marks it rollback-only and it is the outermost one. Locks: the charging lock -> the plot meters of the scope's
+  plots in id order (`MeterCatalog.plotMeterIds`, active and removed, only the resources of the chosen charge types;
+  each through `IntervalCharging.lockPoints`: `FOR SHARE` with its points, then its advisory lock, as the listener) ->
+  the queue lock -> charge types and tariffs `FOR SHARE` -> every billing month `FOR SHARE` (no month closes under the
+  plan). Scope: the months
   `from`..`to`; the chosen charge types (unknown 400 `NOT_FOUND`, inactive or archived `INVALID`) or every active one;
   the chosen plots (`UNKNOWN_PLOT`, `PLOT_ARCHIVED`, `PLOT_COMMON_LAND`) or every chargeable one. Expected:
-  `MonthRun.expected` (the month run's plan loop with its water days, `key -> false`); booked chains: the `REGULAR`
-  `TARIFF` charges of the scope's plots and types whose key month is in the scope (a key that is not a month-run key is
-  left alone), with their reversals and adjustments; queue: the open `TARIFF_MONTH` items of the scope. Then
+  `MonthRun.expected` (the month run's plan loop with its water days, `key -> false`) and
+  `IntervalCharging.expected` for every locked meter (the listener's `ReadingChargePlanning` with its tariffs, water
+  days and losses percentage, `key -> false`) over the intervals whose closing reading is dated in the months; a charge
+  type that is not active (water before it is switched on) is not in the scope, so its charges are neither reversed nor
+  charged. Booked chains: the `REGULAR` `TARIFF` charges of the scope's plots and types whose key month is in the scope
+  (a key that is not a month-run key is left alone) and the `REGULAR` `CONSUMPTION`/`LOSSES` charges without a run of
+  the locked meters whose `accrued_on` (the date of the reading that closes the interval) is in the months, with their
+  reversals and adjustments; queue: the open `TARIFF_MONTH` items of the scope and the open `INTERVAL` items of the
+  locked meters whose interval ends in the months. Then
   `RecalculationPlanner` and `RecalculationDigest` (the line's plot is part of it). A booking with another digest is
   409 `PREVIEW_OUTDATED`; a plan without lines is 409 `NOTHING_TO_RECALCULATE` on booking and an answer with no lines
   on preview. A plan without lines books nothing at all, its queue outcomes included (a preview of it lists no
@@ -136,12 +146,16 @@ Everything else is in `internal`.
   `recalculation` row (cause, scope with `causeType`, `months`, the chosen `chargeTypeIds` and `plotIds` - empty means
   all -, reason, total, counts, digest, author); the reversals (`ChargeRecord.recalculationReversalOf`, source
   `RECALCULATION`, the reason, in the reversed charge's month); the new `REGULAR` charges with their parts
-  (`TariffChargeWriter.bookRecalculated`: the base key, or `base#r{recalculationId}` when a charge has the base key;
-  `recalculation_id` set; in the month the month run would book them in); the adjustments (`ChargeRecord.adjustment`:
-  the difference, the original's service period, `accrued_on`, tariff, the reason, booked in the earliest open month
-  through `BillingMonths.openForBooking(original.accruedOn)`, calculation `{amount, parts: [], readings: []}` and one
-  `charge_part` per version of the expected charge, so those versions count as used); the queue (an item that cannot be
-  charged opened or refreshed with its tariffs, a charged one `RESOLVED`, one with nothing left `OBSOLETE`); the
+  (`TariffChargeWriter.bookRecalculated` or `IntervalCharging.bookRecalculated`, which also writes the two
+  `meter_value_use` rows of the interval: the base key, or `base#r{recalculationId}` when a charge has the base key, so
+  the listener never books the interval again; `recalculation_id` set; in the month 011 would book them in); the
+  adjustments (`ChargeRecord.adjustment`: the difference, the original's service period, `accrued_on`, tariff, meter,
+  the reason, booked in the earliest open month through `BillingMonths.openForBooking(original.accruedOn)`, calculation
+  `{amount, parts: [], readings: []}` and one `charge_part` per version of the expected charge, so those versions count
+  as used, and for an interval the two `meter_value_use` rows of the expected interval
+  (`IntervalCharging.writePartsAndUse`), so `ReadingUsage` keeps its readings used); the queue (an item that cannot be
+  charged opened or refreshed with its tariffs - an `INTERVAL` item also with the first point and day of the interval
+  now -, a charged one `RESOLVED`, one with nothing left `OBSOLETE`); the
   `recalculation_line` rows (by plot in natural order, service period, charge type; reasons as
   `RecalculationChangeReason` codes; the charge ids each line booked); one `AuditBatch` with `RECALCULATION_BOOKED`;
   `ChargesBooked` for the plots of the lines. The answer is the contract's `Recalculation`: a preview without `id`,

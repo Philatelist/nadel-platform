@@ -18,3 +18,10 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `167f42e..0ef7ec0` | PASS | — | minor: `Plan.isEmpty()` ignores queue-only outcomes (Slice 3 decides); digest line text has no plot/charge type id; `closed(...)` repeats the month-order rule of `BillingCalendar`; `ExpectedCharges` map put could overwrite (assertion); requirement §3 closed-September reading dates cannot put the first interval in September — tests shift them one month (amounts unchanged), align the doc in Slice 8 |
+
+## Slice 3 — Manual recalculation of tariff charges
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `0ef7ec0..4e38655` | MAJOR_ISSUES | M1 empty reason only disables "Провести перерахунок"; "Вкажіть причину" never shown (key unused, uk text "Вкажіть пояснення") | minor: field errors other than `reason` hide the Notice; label "Пояснення" vs "причина"; booking without digest skips the stale check (MonthRun pattern); `findOfPlotsAndTypes` loads all history then filters by month |
+| 2 | + `c6926e6` | PASS | M1 resolved | minor: `reasonTooLong` still says "Пояснення задовге" |
