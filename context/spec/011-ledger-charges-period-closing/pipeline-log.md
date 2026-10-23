@@ -1,12 +1,12 @@
 # Pipeline log — 011 Ledger, charges and period closing
 
-- Status: running
-- Phase: 5 — PR open, waiting for CI checks
+- Status: finished
+- Phase: 6 — review run running
 - Branch: 011-ledger-charges-period-closing (planned) · Base: main (= origin/main) @ 6325ed7
 - Requirement: docs/features/011-ledger-charges-period-closing.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
-- Publish: pr+checks · PR: https://github.com/Philatelist/nadel-platform/pull/41 · Checks: pending
-- Review run: on — not started yet
+- Publish: pr+checks · PR: https://github.com/Philatelist/nadel-platform/pull/41 · Checks: green
+- Review run: running at http://localhost:5173 (web) and http://localhost:8080 (backend) from worktree scratchpad/run-011 @ 61d9257 (make up; started by this run)
 
 ## Project facts
 
@@ -177,3 +177,5 @@ Same as 004–010 (see `context/spec/010-meters-and-readings/pipeline-log.md`). 
 - awos:verify done: 75/75 marked with evidence; functional-spec and technical-considerations Status Completed. charges.spec.ts queue-text assertion not run locally (owner app holds the ports) → prove via CI full-e2e label.
 - Phase 5: pushed the spec branch (no force); opened PR #41 "feat(ledger): charges ledger, billing months and period closing" with label full-e2e (proves the post-run e2e text change). Waiting for CI.
 - Phase 5: CI Backend red on coverage only (CI 0.9749 vs floor 0.975; all tests green). Floor → 0.974. Fix pushed.
+- Phase 5: CI run 2 all green (Backend, Clients, SAST, Security, End-to-end full suite with the full-e2e label).
+- Phase 6: restarted the review run (stopped the instance this run had started at e97dfcd; `make up` from scratchpad/run-011 at 61d9257). Re-captured `011-ledger-charges-period-closing-not-charged.png` with the aligned reason text. The dev DB now shows one queue item: the owner's own actions (reading on plot 20, corrected reading on plot 25, retries, a month run; audit 18:27–19:05 Kyiv) resolved the other — expected behaviour.
