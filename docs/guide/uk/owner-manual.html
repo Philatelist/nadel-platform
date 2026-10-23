@@ -283,6 +283,20 @@ make e2e-install    # один раз: браузер для наскрізни�
         Потрібно, коли змінено <code>infra/keycloak/nadel-realm.json</code> або демо зіпсоване тестовими
         даними.
       </p>
+      <h3>Образ PostGIS на Mac з Apple Silicon</h3>
+      <p>
+        Типовий образ <code>postgis/postgis:17-3.5</code> існує лише для Intel (linux/amd64); на Mac із
+        процесором M-серії Docker запускає його через емуляцію, і база, зокрема в тестах бекенду, працює в
+        рази повільніше. Локальний стек і тести бекенду (Testcontainers) беруть образ зі змінної середовища
+        <code>NADEL_POSTGIS_IMAGE</code>. На Mac додайте до профілю оболонки (<code>~/.zshrc</code>)
+        мультиархітектурну збірку тих самих PostgreSQL 17 + PostGIS 3.5:
+      </p>
+      <pre class="formula">export NADEL_POSTGIS_IMAGE=imresamu/postgis:17-3.5</pre>
+      <p>
+        Її збирає один із супровідників офіційних образів PostGIS з тих самих вихідних кодів. Після
+        перемикання один раз скиньте локальну базу (вище): том із даними не переноситься між архітектурами
+        процесора. CI і сервери лишаються на типовому образі.
+      </p>
     </section>
 
     <section class="chapter" id="keycloak">
@@ -1379,13 +1393,16 @@ END $$;</pre>
           <tr>
             <td>Попередження «platform (linux/amd64) does not match» для postgres</td>
             <td>
-              Образ PostGIS лише для Intel, на Mac працює через емуляцію — повільніше, зокрема тести.
-              Заплановано перевірити arm64-образ локально.
+              Типовий образ PostGIS лише для Intel, на Mac працює через емуляцію — повільніше, зокрема тести.
+              Задайте <code>NADEL_POSTGIS_IMAGE</code> з arm64-образом (розділ 2) і скиньте локальну базу.
             </td>
           </tr>
           <tr>
             <td>Повільні тести бекенду, CI довго</td>
-            <td>Тести бекенду — найдовша частина; заплановано заміряти й прискорити.</td>
+            <td>
+              На Mac спершу перевірте <code>NADEL_POSTGIS_IMAGE</code> (розділ 2): з емуляцією набір тестів
+              іде в рази довше. Час кожного класу тестів — у <code>backend/target/surefire-reports</code>.
+            </td>
           </tr>
           <tr>
             <td>Git: «File exists … .lock»</td>

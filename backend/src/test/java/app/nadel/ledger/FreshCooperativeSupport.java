@@ -19,8 +19,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
-import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
@@ -50,9 +48,6 @@ abstract class FreshCooperativeSupport extends LedgerTestSupport {
     @Autowired
     JsonMapper json;
 
-    /** One reused connection as the database owner (autocommit), instead of a new connection per statement. */
-    private static JdbcTemplate owner;
-
     UUID tenant;
     String chairman;
     String treasurer;
@@ -62,14 +57,9 @@ abstract class FreshCooperativeSupport extends LedgerTestSupport {
     record Tariff(UUID id, UUID version) {
     }
 
-    /** SQL as the database owner (superuser, bypasses RLS) over one reused connection. */
+    /** SQL as the database owner (superuser, bypasses RLS). */
     static JdbcTemplate owner() {
-        if (owner == null) {
-            DriverManagerDataSource source = (DriverManagerDataSource) ownerJdbc().getDataSource();
-            owner = new JdbcTemplate(new SingleConnectionDataSource(source.getUrl(), source.getUsername(),
-                    source.getPassword(), true));
-        }
-        return owner;
+        return ownerJdbc();
     }
 
     @BeforeEach

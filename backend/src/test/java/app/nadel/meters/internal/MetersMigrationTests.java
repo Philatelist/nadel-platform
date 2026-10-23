@@ -2,6 +2,7 @@ package app.nadel.meters.internal;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import app.nadel.TestPostgis;
 import java.util.List;
 import java.util.UUID;
 import org.flywaydb.core.Flyway;
@@ -9,7 +10,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.testcontainers.postgresql.PostgreSQLContainer;
-import org.testcontainers.utility.DockerImageName;
 
 /**
  * V12 on a database that already has cooperatives: the four meter permissions are added by targeted inserts only (never
@@ -28,8 +28,7 @@ class MetersMigrationTests {
 
     @Test
     void existingCooperativesGetTheMeterPermissionsByTargetedInserts() {
-        try (PostgreSQLContainer postgres = new PostgreSQLContainer(
-                DockerImageName.parse("postgis/postgis:17-3.5").asCompatibleSubstituteFor("postgres"))
+        try (PostgreSQLContainer postgres = new PostgreSQLContainer(TestPostgis.image())
                 .withInitScript("db/test-init.sql")) {
             postgres.start();
             flyway(postgres, "11").migrate();

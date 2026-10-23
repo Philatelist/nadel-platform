@@ -289,6 +289,20 @@ make e2e-install    # once: the browser for end-to-end tests</pre>
         Needed after changing <code>infra/keycloak/nadel-realm.json</code> or when test data has spoiled the
         demo.
       </p>
+      <h3>PostGIS image on a Mac with Apple Silicon</h3>
+      <p>
+        The default image <code>postgis/postgis:17-3.5</code> exists only for Intel (linux/amd64); on an
+        M-series Mac Docker runs it emulated, and the database, the backend tests included, is several times
+        slower. Both the local stack and the backend tests (Testcontainers) take the image from the
+        environment variable <code>NADEL_POSTGIS_IMAGE</code>. On a Mac put the multi-architecture build of
+        the same PostgreSQL 17 + PostGIS 3.5 into the shell profile (<code>~/.zshrc</code>):
+      </p>
+      <pre class="formula">export NADEL_POSTGIS_IMAGE=imresamu/postgis:17-3.5</pre>
+      <p>
+        It is built by a maintainer of the official PostGIS images from the same sources. After switching,
+        reset the local database once (above): a data volume is not moved between processor architectures. CI
+        and servers keep the default image.
+      </p>
     </section>
 
     <section class="chapter" id="keycloak">
@@ -1377,13 +1391,17 @@ END $$;</pre>
           <tr>
             <td>"platform (linux/amd64) does not match" for postgres</td>
             <td>
-              The PostGIS image is Intel-only and runs emulated on a Mac — slower, tests included. An arm64
-              image is to be tried locally.
+              The default PostGIS image is Intel-only and runs emulated on a Mac — slower, tests included. Set
+              <code>NADEL_POSTGIS_IMAGE</code> to the arm64 image (chapter 2) and reset the local database.
             </td>
           </tr>
           <tr>
             <td>Slow backend tests, long CI</td>
-            <td>Backend tests are the longest part; measuring and speeding them up is planned.</td>
+            <td>
+              On a Mac first check <code>NADEL_POSTGIS_IMAGE</code> (chapter 2): under emulation the suite
+              takes several times longer. The time of every test class is in
+              <code>backend/target/surefire-reports</code>.
+            </td>
           </tr>
           <tr>
             <td>Git: "File exists … .lock"</td>

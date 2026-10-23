@@ -3,6 +3,22 @@
 `make infra` starts PostgreSQL + PostGIS and Keycloak and waits until both are healthy
 (Keycloak health is probed on its management port, `/health/ready`).
 
+## PostGIS image (Apple Silicon)
+
+The default image `postgis/postgis:17-3.5` is published for linux/amd64 only, so Docker on an Apple Silicon Mac
+runs PostgreSQL under emulation: the local database and the backend tests are several times slower. Both
+`docker-compose.yml` and the Testcontainers base class (`backend/src/test/java/app/nadel/IntegrationTest.java`)
+read the image from `NADEL_POSTGIS_IMAGE`. On a Mac set it to the multi-arch build of the same PostgreSQL 17 +
+PostGIS 3.5, made by a maintainer of the official images from the same sources:
+
+```bash
+# ~/.zshrc
+export NADEL_POSTGIS_IMAGE=imresamu/postgis:17-3.5
+```
+
+A data volume is not portable between architectures: after switching, recreate it once with
+`docker compose -f infra/docker-compose.yml down -v && make infra`. CI and servers keep the default image.
+
 ## Keycloak realm changes
 
 `keycloak/nadel-realm.json` is imported only when the realm does not exist yet. After editing it,
