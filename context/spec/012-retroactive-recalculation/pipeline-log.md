@@ -57,3 +57,4 @@
   - AUTO: electrician: 409 READING_IN_USE from the reading endpoint, 403 from /recalculations; web hint without RECALCULATION_RUN.
 - tasks.md written: 9 slices (adjustments + list; pure planner; manual tariff recalculation; intervals; runs; tariff version causes; reading causes; demo/docs/guides/e2e; Feature Testing & Regression with testing-expert). No staffing gaps. The `<!-- not-user-reviewed -->` marker was removed (pipeline rule; the plan is listed in the final report for review).
 - Phase 2 end.
+- Slice 1: 167f42e — verify green (backend 447, web 592, clients green) — review PASS (r1)
