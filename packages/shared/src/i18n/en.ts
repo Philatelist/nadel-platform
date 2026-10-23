@@ -1111,6 +1111,13 @@ export const en = {
     save: 'Save',
     saving: 'Saving…',
     saved: 'Saved',
+    usedNeedsChairman: 'The reading has already been charged — ask the chairman',
+    recalc: {
+      title: 'Recalculation for the reading',
+      entered: 'Reading saved, recalculation booked',
+      corrected: 'Reading corrected, recalculation booked',
+      deleted: 'Reading deleted, recalculation booked',
+    },
     empty: 'There are no meters to read',
     nothingFound: 'No meters match these filters',
     listLabel: 'Meters of the round',

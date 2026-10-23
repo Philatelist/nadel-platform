@@ -40,3 +40,9 @@
 |---|---|---|---|---|
 | 1 | `bd66a08..e161d9a` | MAJOR_ISSUES | M1 a run's open/closed state is taken from the first live charge (a NEW plot of a closed run is booked in the open month), so a closed run can be reversed and rebooked; `rebookRun` takes the month from the first line | minor: losses mode not re-checked — after a switch PROPORTIONAL→FIXED a recalculation can add fixed losses and rebook the proportional run (double losses; decision/doc needed); a chosen plot pulls the whole run in (document); no test for RunAction.REVERSE or the plot-scope filter; known gaps (hand-reversed plot left out of a rebooked run; unknown node in a closed month gets no queue item) |
 | 2 | + `0dbe2f1` | PASS | M1 resolved | minor: test fixture derives run months from the earliest REGULAR row; `requireNonNull` without a message; the fix commit carried the Slice 4 r2 log row |
+
+## Slice 6 — Correcting tariff versions
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `47aa592..99f3084` | PASS | — | minor: inactive charge type → tariff cause gives an empty plan and saves silently (web blocks it; document or 409); moving an unused version's start into a charged month saves plainly (spec §2.4) unlike the add path; `tariffOf` loads the version before the tariff lock (stale-state 500 in a rare race); empty re-preview after PREVIEW_OUTDATED does not save; `statesInOrder()` read before `lockAllForShare()` |

@@ -11,7 +11,8 @@ import { useState } from 'react';
 import { Link } from 'react-router';
 import { useLocale, useT } from '../../i18n';
 import { meterLabel, resourceUnit } from '../../meters';
-import { problemMessage } from '../../problem';
+import { useCan } from '../../me';
+import { problemCode, problemMessage } from '../../problem';
 import { invalidateAfterReading } from '../charges/chargeInvalidation';
 import { UserContent, formatUser } from '../UserContent';
 import { Badge, Button, Notice } from '../ui';
@@ -28,6 +29,7 @@ export function PendingReadingCard({ item }: { item: PendingReading }) {
   const unit = resourceUnit(t, meter.resource);
   const [rejecting, setRejecting] = useState(false);
   const [error, setError] = useState<string>();
+  const canRecalculate = useCan('RECALCULATION_RUN');
 
   async function refresh(): Promise<void> {
     await Promise.all([
@@ -41,7 +43,12 @@ export function PendingReadingCard({ item }: { item: PendingReading }) {
   const approve = useApproveReading({
     mutation: {
       onSuccess: refresh,
-      onError: (e: unknown) => setError(problemMessage(t, e)),
+      onError: (e: unknown) =>
+        setError(
+          problemCode(e) === 'READING_IN_USE' && !canRecalculate
+            ? t.readings.usedNeedsChairman
+            : problemMessage(t, e),
+        ),
     },
   });
 

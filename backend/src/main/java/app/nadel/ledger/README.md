@@ -117,8 +117,8 @@ Everything else is in `internal`.
   types. Entities `RecalculationRecord` and `RecalculationLineRecord` are `@Immutable`. `ChargeRecord.adjustment` and
   `ChargeRecord.recalculationReversalOf` build the rows a booking will write.
 - **Recalculation** (`RecalculationService`, feature 012 slices 3 to 6: cause `MANUAL` and the tariff version causes,
-  charges of recurring tariffs, of plot meter intervals and of runs). A `READING_*` cause is 400 `VALIDATION_FAILED`
-  with `cause.type` `UNSUPPORTED` until slice 7. Validation of a manual one:
+  charges of recurring tariffs, of plot meter intervals and of runs; slice 7 the reading causes). Validation of a
+  manual one:
   `cause.manual` `REQUIRED`; `cause.manual.to` before `from` `INVALID`, after the current month `DATE_IN_FUTURE`
   (400); more than 24 months 409 `RECALCULATION_RANGE_TOO_LONG`; a booking needs `reason` (trimmed, 1-500: `REQUIRED`,
   `TOO_LONG`; the contract's `maxLength` 500 catches it at the boundary too). One `TransactionTemplate` transaction; a
@@ -179,6 +179,27 @@ Everything else is in `internal`.
   `TARIFF_VERSION`, `cause_ref_id` the version, the scope with `tariffId` and `tariffVersionId`, and the change's audit
   entry (`TARIFF_VERSION_ADDED`/`UPDATED`/`DELETED`, with `recalculationId`) first in the `AuditBatch` of
   `RECALCULATION_BOOKED`. Test: `TariffRecalculationTests`.
+- **Reading causes** (`READING_ENTER`, `_CORRECT`, `_DELETE`, slice 7; functional spec §2.5): the reading change and
+  its recalculation are one transaction. 403 `PERMISSION_DENIED` without `READINGS_ENTER` (besides `RECALCULATION_RUN`
+  on the endpoint); `cause.reading`, its `meterId` (enter), `readingId` (correct, delete) and `reading` (enter,
+  correct) are `REQUIRED`. Under the charging lock the change is applied through the meters facade `ReadingChanges`
+  (`Propagation.MANDATORY`: the meter `FOR UPDATE`, the reading rules with the field codes under `cause.reading.`
+  (`meterId`) and `cause.reading.reading.` (`takenOn`, `value`), no use check, **no `PlotMeterPointsChanged`**), then
+  the plan: for a plot meter of a chargeable plot, the meter's intervals closed by a point from the first day the
+  change reaches to the last point whose interval it alters (`Change.from`/`through`: around the old and the new date,
+  the previous and the next points; the meter locked as the listener locks it), and the booked runs that read the meter
+  on a day the change reaches (`meter_value_use` rows of the run meet `Change.from`/`to`, as `LedgerReadingUsage`
+  asks: `findBookedReadingMeter`), of the charge type of the meter's resource (for electricity also
+  `COMMON_CONSUMERS`); no tariff charge. A node or common consumer meter has runs only. The digest's cause is the
+  meter and the old and new date and value (never a reading id: a correction's new row has a new id). A preview rolls
+  the change back with the plan. A booking: 409 `PREVIEW_OUTDATED` on another digest; a plan without lines saves the
+  change alone (no reason needed, no record, `booked` false, the change's audit entry alone) and applies its queue
+  outcomes, since no point event follows (an interval that cannot be charged queued, an item whose interval is gone
+  `OBSOLETE`); otherwise a reason is required and the plan is booked with cause `READING`, `cause_ref_id` the meter,
+  the scope with `meterId`, the reading corrected or deleted (or the one entered) as `readingId` and the plot, and the
+  change's audit entry (`READING_ENTERED`/`REPLACED`/`CORRECTED`/`DELETED`, with `recalculationId`) first in the
+  `AuditBatch`. The new charges of an interval get the base key of the new interval (its points' keys), so a later
+  point event finds them charged. Test: `ReadingRecalculationTests`.
 
 The value rules (amount, date, reason) and the audit values live in `OpeningBalanceRules`, the booking itself in
 `OpeningBalances.book`; the import uses both, so the two ways of entering a balance cannot disagree.
@@ -641,11 +662,12 @@ The charges themselves are the ledger and are not repeated in the log. Reasons a
 Entity type `RECALCULATION` (`LedgerAuditPublisher.recalculationEvent`, published in one `AuditBatch` with the change
 that caused it, from slice 6), about the recalculation, label its months `from/to` (`YYYY-MM`):
 
-- `RECALCULATION_BOOKED`: `cause` (the cause type, `MANUAL` or `TARIFF_VERSION_ADD`/`_UPDATE`/`_DELETE`), `from`, `to`, `chargeTypes` (`base:<CODE>` or the stored
+- `RECALCULATION_BOOKED`: `cause` (the cause type, `MANUAL`, `TARIFF_VERSION_ADD`/`_UPDATE`/`_DELETE` or `READING_ENTER`/`_CORRECT`/`_DELETE`), `from`, `to`, `chargeTypes` (`base:<CODE>` or the stored
   name, joined by ", "; only when chosen), `plots` (plot numbers in natural order; only when chosen), `reason`, `count`
   (lines) and `total` (the sum of the differences). A tariff version cause puts the version change's own entry
   (`TARIFF_VERSION_ADDED`/`UPDATED`/`DELETED` of the tariffs module, old and new values) before it in the same batch,
-  with the field `recalculationId` (new value: the recalculation's id).
+  with the field `recalculationId` (new value: the recalculation's id); a reading cause the reading change's entry
+  (`READING_ENTERED`/`REPLACED`/`CORRECTED`/`DELETED` of the meters module) the same way.
 
 Every action is a constant of `LedgerAuditPublisher.Action` and must also be a value of `AuditAction` in
 `api/openapi.yaml`: the audit listing maps stored entries with `AuditAction.fromValue`, so a missing value breaks it

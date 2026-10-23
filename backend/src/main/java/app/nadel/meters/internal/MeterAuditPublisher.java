@@ -70,6 +70,22 @@ class MeterAuditPublisher {
         publish(actor, action, METER_READING, meter, changes);
     }
 
+    /**
+     * The entry {@link #publishReading} would publish, without publishing it: a reading change booked with a
+     * recalculation ({@code ReadingChanges}) returns it to the ledger, which publishes it with the recalculation's
+     * entry, or drops it with a rolled-back preview.
+     */
+    AuditEvent readingEvent(AccessProfile actor, String action, MeterRecord meter, List<FieldChange> changes) {
+        return AuditEvent.now(Objects.requireNonNull(actor.tenantId()),
+                new Actor(actor.memberId(), actor.subject(), actor.displayName()), action, METER_READING,
+                meter.getId(), meter.auditLabel(), changes);
+    }
+
+    /** Publishes an entry made by {@link #readingEvent}. */
+    void publish(AuditEvent event) {
+        events.publishEvent(event);
+    }
+
     private void publish(AccessProfile actor, String action, String entityType, MeterRecord meter,
             List<FieldChange> changes) {
         events.publishEvent(AuditEvent.now(Objects.requireNonNull(actor.tenantId()),

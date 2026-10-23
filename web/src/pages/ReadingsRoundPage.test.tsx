@@ -19,6 +19,7 @@ let sent: ReadingBatch[];
 let respond: (batch: ReadingBatch) => ReadingRowResult;
 let roundParams: unknown[];
 
+vi.mock('../me', () => ({ useCan: () => true, useOptionalMe: () => null }));
 vi.mock('@nadel/api-client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@nadel/api-client')>()),
   useGetReadingRound: (params: unknown) => {
