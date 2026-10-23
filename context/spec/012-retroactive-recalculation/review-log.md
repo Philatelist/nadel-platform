@@ -32,6 +32,7 @@
 |---|---|---|---|---|
 | 1 | `c6926e6..bd66a08` | MAJOR_ISSUES | M1 an INTERVAL item opened after a recalculation REVERSE is marked RESOLVED by the next retry/month run without charging (the reversed original keeps its key, `charged` predicate says AlreadyCharged); same pattern for TARIFF_MONTH items from Slice 3 | minor: NEW interval line after a back-dated version shows reason METER_TREE (ChangeReasons fallback); current losses mode applied to past fixed-losses charges (document); all-history load then in-memory filter; deviations 1–3 accepted |
 | 2 | + `6abf51c` | MAJOR_ISSUES | M1 resolved (open month); M2 closed-month path: an identity adjusted to 0.00 and queued still counts as charged (`ChargeKeys`), so the next retry/month run resolves it without charging | minor: `revisionsOf` substring scan cannot use the index; Javadoc/README wording narrower than the code; long README line |
+| 3 | + `47aa592` | PASS | M2 resolved | minor: comment why `setAsideBy` adjustment branch ignores `:source`; two long Javadoc lines; no test for a chain set aside twice |
 
 ## Slice 5 — Losses and common consumers runs
 

@@ -116,10 +116,9 @@ Everything else is in `internal`.
   reversal it booked, `reasons`, the created charge ids) and the differences per charge type in the order of the
   types. Entities `RecalculationRecord` and `RecalculationLineRecord` are `@Immutable`. `ChargeRecord.adjustment` and
   `ChargeRecord.recalculationReversalOf` build the rows a booking will write.
-- **Recalculation** (`RecalculationService`, feature 012 slices 3 and 4: cause `MANUAL`, charges of recurring tariffs
-  and of plot meter intervals). Any other `cause.type` is 400 `VALIDATION_FAILED` with `cause.type` `UNSUPPORTED` until
-  slices 6 and 7; the lines of losses and common consumer runs join with slice 5 (their identities are not in the
-  booked chains yet). Validation:
+- **Recalculation** (`RecalculationService`, feature 012 slices 3 to 6: cause `MANUAL` and the tariff version causes,
+  charges of recurring tariffs, of plot meter intervals and of runs). A `READING_*` cause is 400 `VALIDATION_FAILED`
+  with `cause.type` `UNSUPPORTED` until slice 7. Validation of a manual one:
   `cause.manual` `REQUIRED`; `cause.manual.to` before `from` `INVALID`, after the current month `DATE_IN_FUTURE`
   (400); more than 24 months 409 `RECALCULATION_RANGE_TOO_LONG`; a booking needs `reason` (trimmed, 1-500: `REQUIRED`,
   `TOO_LONG`; the contract's `maxLength` 500 catches it at the boundary too). One `TransactionTemplate` transaction; a
@@ -160,6 +159,26 @@ Everything else is in `internal`.
   `RecalculationChangeReason` codes; the charge ids each line booked); one `AuditBatch` with `RECALCULATION_BOOKED`;
   `ChargesBooked` for the plots of the lines. The answer is the contract's `Recalculation`: a preview without `id`,
   with the `digest`; a booking with `id`, `reason`, `createdAt`, `createdByName` and each line's created charge ids.
+- **Tariff version causes** (`TARIFF_VERSION_ADD`, `_UPDATE`, `_DELETE`, slice 6; functional spec §2.4): the change and
+  its recalculation are one transaction, so the version changes only with the recalculation. 403
+  `PERMISSION_DENIED` without `TARIFFS_MANAGE` (besides `RECALCULATION_RUN` on the endpoint); `cause.tariffVersion`,
+  its `versionId` (update, delete) and `version` (add, update) are `REQUIRED`; a `versionId` that is not a version of
+  `tariffId` in the `TariffBook` snapshot is 404 before anything changes. Under the charging lock the change is applied
+  through the tariffs facade `TariffVersionChanges` (`Propagation.MANDATORY`: the tariff `FOR UPDATE`, its charge type
+  `FOR SHARE`, the endpoint's validation with the field codes under `cause.tariffVersion.version.`, no use check, a
+  delete soft) and the plan is made with the change applied: the tariff's charge type (only while it charges), the
+  chargeable plots the tariff covers (`TariffBook` snapshot, read after the change), the billing months from the start
+  to the end of the old and new validity of the version (`Change.from`/`to`) clipped to the cooperative's first billing
+  month and the current month, and the interval charges and runs that close from the first of those months to the end
+  of the current month (an interval or run that covers a changed day may close later). A version that touches no such
+  month gives an empty plan. The digest's cause is the type, the tariff, the version id of an update or delete and the
+  new terms and note (never the id of an added version), so a preview and its booking agree. A preview rolls the
+  change back with the plan. A booking: 409 `PREVIEW_OUTDATED` on another digest; a plan without lines saves the change
+  alone (no reason needed, no record, `booked` false, `changeApplied` true, the change's audit entry alone); otherwise a
+  reason is required (400 `REQUIRED`) and the plan is booked by the same code as a manual one, with cause
+  `TARIFF_VERSION`, `cause_ref_id` the version, the scope with `tariffId` and `tariffVersionId`, and the change's audit
+  entry (`TARIFF_VERSION_ADDED`/`UPDATED`/`DELETED`, with `recalculationId`) first in the `AuditBatch` of
+  `RECALCULATION_BOOKED`. Test: `TariffRecalculationTests`.
 
 The value rules (amount, date, reason) and the audit values live in `OpeningBalanceRules`, the booking itself in
 `OpeningBalances.book`; the import uses both, so the two ways of entering a balance cannot disagree.
@@ -622,9 +641,11 @@ The charges themselves are the ledger and are not repeated in the log. Reasons a
 Entity type `RECALCULATION` (`LedgerAuditPublisher.recalculationEvent`, published in one `AuditBatch` with the change
 that caused it, from slice 6), about the recalculation, label its months `from/to` (`YYYY-MM`):
 
-- `RECALCULATION_BOOKED`: `cause` (the cause type, `MANUAL`), `from`, `to`, `chargeTypes` (`base:<CODE>` or the stored
+- `RECALCULATION_BOOKED`: `cause` (the cause type, `MANUAL` or `TARIFF_VERSION_ADD`/`_UPDATE`/`_DELETE`), `from`, `to`, `chargeTypes` (`base:<CODE>` or the stored
   name, joined by ", "; only when chosen), `plots` (plot numbers in natural order; only when chosen), `reason`, `count`
-  (lines) and `total` (the sum of the differences).
+  (lines) and `total` (the sum of the differences). A tariff version cause puts the version change's own entry
+  (`TARIFF_VERSION_ADDED`/`UPDATED`/`DELETED` of the tariffs module, old and new values) before it in the same batch,
+  with the field `recalculationId` (new value: the recalculation's id).
 
 Every action is a constant of `LedgerAuditPublisher.Action` and must also be a value of `AuditAction` in
 `api/openapi.yaml`: the audit listing maps stored entries with `AuditAction.fromValue`, so a missing value breaks it

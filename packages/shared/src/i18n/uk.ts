@@ -689,6 +689,10 @@ export const uk: Messages = {
       deleteConfirm: 'Видалити',
       saved: 'Версію виправлено',
       deleted: 'Версію видалено',
+      added: 'Версію додано',
+      addedRecalculated: 'Версію додано, перерахунок проведено',
+      savedRecalculated: 'Версію виправлено, перерахунок проведено',
+      deletedRecalculated: 'Версію видалено, перерахунок проведено',
       inUse: 'Цю версію вже використано в нарахуваннях — виправлення через перерахунок',
     },
     scope: {
@@ -922,6 +926,7 @@ export const uk: Messages = {
       consumers: 'Споживачі',
       split: 'Розподіл',
       servicePlots: 'Користувачі споживача',
+      recalculationId: 'Перерахунок',
       recalcLines: 'Рядків перерахунку',
       cause: 'Причина перерахунку',
       chargeTypes: 'Види нарахувань',

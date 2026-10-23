@@ -142,13 +142,27 @@ class TariffVersionCorrectionTests extends TariffScopeSupport {
     }
 
     @Test
-    void anUnchangedRequestOnAVersionInUseIsRefusedLikeAnyOther() throws Exception {
+    void aVersionInUseKeepsItsTermsButItsNoteCanBeCorrected() throws Exception {
         UUID tariff = newTariff("For members");
         UUID version = versionId(tariff, "2026-01-01");
         usedVersions.used.add(version);
 
+        // a correction that changes no term changes no amount (feature 012 §2.4): no use check
         send(chairman(), put(path(tariff, version)), terms("2026-01-01", "PER_AREA_SOTKA", "YEARLY", "50", null, null))
-                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("TARIFF_VERSION_IN_USE"));
+                .andExpect(status().isOk());
+        send(chairman(), put(path(tariff, version)), terms("2026-01-01", "PER_AREA_SOTKA", "YEARLY", "50.0000", null,
+                "Decision of 12.04.2026")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.note").value("Decision of 12.04.2026"));
+        // a term together with the note is a correction of a used version
+        send(chairman(), put(path(tariff, version)), terms("2026-01-01", "PER_AREA_SOTKA", "YEARLY", "51", null,
+                "Another note")).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("TARIFF_VERSION_IN_USE"));
+
+        assertThat(storedRate(version)).isEqualByComparingTo("50");
+        assertThat(ownerJdbc().queryForObject("select note from tariff_version where id = ?", String.class, version))
+                .isEqualTo("Decision of 12.04.2026");
+        assertThat(changes(awaitEntries(tariff, "TARIFF_VERSION_UPDATED", 1).getFirst()))
+                .containsExactly(new Change("note", null, "Decision of 12.04.2026"));
     }
 
     @Test

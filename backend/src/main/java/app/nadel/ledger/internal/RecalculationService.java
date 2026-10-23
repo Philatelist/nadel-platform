@@ -1,8 +1,10 @@
 package app.nadel.ledger.internal;
 
 import app.nadel.audit.ActorNames;
+import app.nadel.audit.AuditEvent;
 import app.nadel.audit.FieldChange;
 import app.nadel.identity.AccessProfile;
+import app.nadel.identity.Permission;
 import app.nadel.ledger.internal.BillingCalendar.MonthState;
 import app.nadel.ledger.internal.ExpectedCharges.Charge;
 import app.nadel.ledger.internal.ExpectedCharges.Expected;
@@ -33,9 +35,12 @@ import app.nadel.problem.FieldProblem;
 import app.nadel.problem.ProblemCodes;
 import app.nadel.tariffs.ChargeTypeCatalog;
 import app.nadel.tariffs.ChargeTypeCatalog.ChargeTypeFacts;
+import app.nadel.tariffs.TariffBook;
 import app.nadel.tariffs.TariffBook.ChargeTypeEntry;
 import app.nadel.tariffs.TariffBook.Snapshot;
 import app.nadel.tariffs.TariffBook.TariffEntry;
+import app.nadel.tariffs.TariffVersionChanges;
+import app.nadel.tariffs.VersionTerms;
 import jakarta.persistence.EntityManager;
 import java.time.Clock;
 import java.time.Instant;
@@ -72,6 +77,8 @@ import nadel.contract.model.RecalculationChangeReason;
 import nadel.contract.model.RecalculationLine;
 import nadel.contract.model.RecalculationManualScope;
 import nadel.contract.model.RecalculationRequest;
+import nadel.contract.model.RecalculationTariffVersionChange;
+import nadel.contract.model.TariffVersionCreate;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -79,11 +86,13 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * Previews and books recalculations ({@code POST /recalculations?preview=}, feature 012 §2.1, §2.2 and §2.6). It handles
- * the cause {@code MANUAL} over the charges of recurring tariffs (the month run's charges), the charges of plot meter
- * intervals (consumption, fixed-percentage losses, electricity and water) and the charges of proportional losses runs
- * and common consumer runs; any other cause type is 400 {@code VALIDATION_FAILED} with {@code cause.type}
- * {@code UNSUPPORTED} until slices 6 and 7.
+ * Previews and books recalculations ({@code POST /recalculations?preview=}, feature 012 §2.1, §2.2, §2.4, §2.6).
+ * It handles the cause {@code MANUAL} and the tariff version causes {@code TARIFF_VERSION_ADD}, {@code _UPDATE} and
+ * {@code _DELETE} ({@link #tariffVersion}: the change applied through {@link TariffVersionChanges} in the same
+ * transaction, the scope from the tariff and the version's validity) over the charges of recurring tariffs (the month
+ * run's charges), the charges of plot meter intervals (consumption, fixed-percentage losses, electricity and water) and
+ * the charges of proportional losses runs and common consumer runs; any other cause type is 400
+ * {@code VALIDATION_FAILED} with {@code cause.type} {@code UNSUPPORTED} until slice 7.
  * <p>
  * Validation before anything is read: {@code cause.manual} is required; {@code to} before {@code from} is
  * {@code INVALID}, {@code to} after the current month in Europe/Kyiv {@code DATE_IN_FUTURE} (400, field
@@ -144,6 +153,10 @@ class RecalculationService {
     private static final String WATER = "WATER";
     private static final String ELECTRICITY = "ELECTRICITY";
     private static final String COMMON_CONSUMERS = CommonConsumerPlanning.COMMON_CONSUMERS;
+    private static final Set<RecalculationCauseType> TARIFF_CAUSES = EnumSet.of(
+            RecalculationCauseType.TARIFF_VERSION_ADD, RecalculationCauseType.TARIFF_VERSION_UPDATE,
+            RecalculationCauseType.TARIFF_VERSION_DELETE);
+    private static final String VERSION_FIELDS = "cause.tariffVersion.version.";
 
     private final TransactionTemplate transaction;
     private final ChargingLock chargingLock;
@@ -165,6 +178,8 @@ class RecalculationService {
     private final NotChargedViews itemViews;
     private final LedgerAuditPublisher audit;
     private final ActorNames actorNames;
+    private final TariffVersionChanges tariffVersions;
+    private final TariffBook tariffBook;
     private final EntityManager entityManager;
     private final Clock clock;
 
@@ -175,7 +190,8 @@ class RecalculationService {
             PlotCatalog plots, ChargeTypeCatalog chargeTypes,
             ChargeRepository charges, BillingMonthRepository months, BillingMonths billingMonths,
             NotChargedItemRepository items, NotChargedViews itemViews, LedgerAuditPublisher audit,
-            ActorNames actorNames, EntityManager entityManager, Clock clock) {
+            ActorNames actorNames, TariffVersionChanges tariffVersions, TariffBook tariffBook,
+            EntityManager entityManager, Clock clock) {
         this.transaction = new TransactionTemplate(transactionManager);
         this.chargingLock = chargingLock;
         this.writer = writer;
@@ -196,6 +212,8 @@ class RecalculationService {
         this.itemViews = itemViews;
         this.audit = audit;
         this.actorNames = actorNames;
+        this.tariffVersions = tariffVersions;
+        this.tariffBook = tariffBook;
         this.entityManager = entityManager;
         this.clock = clock;
     }
@@ -210,6 +228,44 @@ class RecalculationService {
                 all.add(month);
             }
             return all;
+        }
+    }
+
+    /** A validated tariff version cause: the change to book with the recalculation, the reason, the digest. */
+    private record TariffCause(RecalculationCauseType type, UUID tariffId, @Nullable UUID versionId,
+            @Nullable TariffVersionCreate version, @Nullable String reason, @Nullable String digest) {
+    }
+
+    /**
+     * What a recalculation covers, from the manual request or from the change it books.
+     *
+     * @param months        the billing months of the tariff charges (empty: nothing to compare)
+     * @param window        the days whose interval charges (by the reading that closes them) and runs (by their end)
+     *                      are compared; null when the months are empty
+     * @param chargeTypeIds the charge types chosen (empty: every charging one)
+     * @param plotIds       the plots chosen (empty: every chargeable one, or the plots of the tariff)
+     * @param tariffId      the tariff of a tariff version cause: its plots are the scope; null for a manual one
+     * @param digestCause   the normalised cause of the digest (no generated ids)
+     * @param storedScope   the scope as stored and shown (ids and codes)
+     */
+    private record Target(RecalculationCauseType causeType, List<YearMonth> months,
+            IntervalCharging.@Nullable Window window, List<UUID> chargeTypeIds, List<UUID> plotIds,
+            @Nullable UUID tariffId, RecalculationDigest.Cause digestCause, Map<String, Object> storedScope) {
+
+        static Target of(Manual manual) {
+            return new Target(RecalculationCauseType.MANUAL, manual.months(),
+                    new IntervalCharging.Window(manual.from().atDay(1), manual.to().atEndOfMonth()),
+                    manual.chargeTypeIds(), manual.plotIds(), null, RecalculationDigest.Cause.manual(),
+                    RecalculationService.storedScope(RecalculationCauseType.MANUAL, manual.months(),
+                            manual.chargeTypeIds(), manual.plotIds()));
+        }
+
+        boolean manual() {
+            return causeType == RecalculationCauseType.MANUAL;
+        }
+
+        RecalculationRecord.Cause kind() {
+            return manual() ? RecalculationRecord.Cause.MANUAL : RecalculationRecord.Cause.TARIFF_VERSION;
         }
     }
 
@@ -253,30 +309,92 @@ class RecalculationService {
     }
 
     /**
-     * @throws ApiProblemException 400 for an invalid request, 409 {@code RECALCULATION_RANGE_TOO_LONG},
-     *                             {@code PREVIEW_OUTDATED} or {@code NOTHING_TO_RECALCULATE}
+     * @throws ApiProblemException 400 for an invalid request, 403 without the permission of a cause-driven change, 409
+     *                             {@code RECALCULATION_RANGE_TOO_LONG}, {@code PREVIEW_OUTDATED},
+     *                             {@code NOTHING_TO_RECALCULATE} or a refusal of the change
      */
     Recalculation run(RecalculationRequest request, boolean preview, AccessProfile actor) {
+        RecalculationCauseType type = request.getCause().getType();
+        if (type == RecalculationCauseType.MANUAL) {
+            return manual(request, preview, actor);
+        }
+        if (TARIFF_CAUSES.contains(type)) {
+            return tariffVersion(request, preview, actor);
+        }
+        throw invalid("cause.type", ProblemCodes.UNSUPPORTED);
+    }
+
+    private Recalculation manual(RecalculationRequest request, boolean preview, AccessProfile actor) {
         Manual manual = validate(request, preview);
+        Target target = Target.of(manual);
         UUID tenantId = Objects.requireNonNull(actor.tenantId());
         return transaction.execute(status -> {
             if (preview) {
                 // the outermost transaction: rolling it back never throws UnexpectedRollbackException
                 status.setRollbackOnly();
             }
-            Planned planned = plan(tenantId, manual);
+            chargingLock.lock(tenantId);
+            Planned planned = plan(tenantId, target);
             if (preview) {
-                return result(manual, planned, true, null, Map.of(), null);
+                return result(target, planned, true, false, null, Map.of(), null);
             }
-            if (manual.digest() != null && !manual.digest().equals(planned.digest())) {
-                throw conflict(ProblemCodes.PREVIEW_OUTDATED,
-                        "The charges changed since the preview. Preview again before booking.");
-            }
+            checkDigest(manual.digest(), planned);
             if (planned.plan().isEmpty()) {
                 throw conflict(ProblemCodes.NOTHING_TO_RECALCULATE, "Nothing to recalculate.");
             }
-            return book(tenantId, manual, planned, actor);
+            return book(tenantId, target, planned, actor, Objects.requireNonNull(manual.reason()), null, null);
         });
+    }
+
+    /**
+     * A tariff version added, corrected or deleted together with its recalculation (feature 012 §2.4): needs
+     * {@code TARIFFS_MANAGE} besides {@code RECALCULATION_RUN} (403). Under the charging lock, the change is applied
+     * through {@link TariffVersionChanges} (its locks and validation, field problems under
+     * {@code cause.tariffVersion.version.}), then the plan is made over the plots of the tariff and the months the old
+     * and new validity of the version touch ({@link #tariffTarget}); a preview rolls both back. A booking: 409
+     * {@code PREVIEW_OUTDATED} when the digest differs; a plan without lines keeps the change and books no
+     * recalculation (no reason needed, {@code booked} false, the change's audit entry alone); otherwise a reason is
+     * required and the recalculation is booked as a manual one, with cause {@code TARIFF_VERSION}, the version as
+     * {@code cause_ref_id}, and the change's audit entry (with {@code recalculationId}) in the batch of
+     * {@code RECALCULATION_BOOKED}.
+     */
+    private Recalculation tariffVersion(RecalculationRequest request, boolean preview, AccessProfile actor) {
+        if (!actor.can(Permission.TARIFFS_MANAGE)) {
+            throw new ApiProblemException(HttpStatus.FORBIDDEN, ProblemCodes.PERMISSION_DENIED,
+                    "You do not have permission to perform this action.");
+        }
+        TariffCause cause = validateTariff(request, preview);
+        UUID tenantId = Objects.requireNonNull(actor.tenantId());
+        return transaction.execute(status -> {
+            if (preview) {
+                status.setRollbackOnly();
+            }
+            chargingLock.lock(tenantId);
+            TariffVersionChanges.Change change = apply(cause, actor);
+            Target target = tariffTarget(cause, change, preview);
+            Planned planned = plan(tenantId, target);
+            if (preview) {
+                return result(target, planned, true, false, null, Map.of(), null);
+            }
+            checkDigest(cause.digest(), planned);
+            if (planned.plan().isEmpty()) {
+                if (change.audit() != null) {
+                    audit.publishBatch(tenantId, List.of(change.audit()));
+                }
+                return result(target, planned, false, true, null, Map.of(), null);
+            }
+            if (cause.reason() == null || cause.reason().isEmpty()) {
+                throw invalid("reason", ProblemCodes.REQUIRED);
+            }
+            return book(tenantId, target, planned, actor, cause.reason(), change.versionId(), change.audit());
+        });
+    }
+
+    private static void checkDigest(@Nullable String digest, Planned planned) {
+        if (digest != null && !digest.equals(planned.digest())) {
+            throw conflict(ProblemCodes.PREVIEW_OUTDATED,
+                    "The charges changed since the preview. Preview again before booking.");
+        }
     }
 
     // ---- validation
@@ -301,17 +419,131 @@ class RecalculationService {
             throw conflict(ProblemCodes.RECALCULATION_RANGE_TOO_LONG,
                     "A manual recalculation spans at most " + MAX_MONTHS + " months.");
         }
+        String reason = reason(request, preview, true);
+        return new Manual(from, to, distinct(scope.getChargeTypeIds()), distinct(scope.getPlotIds()), reason,
+                request.getDigest());
+    }
+
+    /**
+     * The trimmed reason; a booking's is at most 500 characters ({@code TOO_LONG}) and, when {@code required}, not
+     * blank ({@code REQUIRED}). A preview needs none.
+     */
+    private static @Nullable String reason(RecalculationRequest request, boolean preview, boolean required) {
         String reason = request.getReason() == null ? null : request.getReason().strip();
         if (!preview) {
-            if (reason == null || reason.isEmpty()) {
+            if (required && (reason == null || reason.isEmpty())) {
                 throw invalid("reason", ProblemCodes.REQUIRED);
             }
-            if (reason.length() > MAX_REASON) {
+            if (reason != null && reason.length() > MAX_REASON) {
                 throw invalid("reason", ProblemCodes.TOO_LONG);
             }
         }
-        return new Manual(from, to, distinct(scope.getChargeTypeIds()), distinct(scope.getPlotIds()), reason,
-                request.getDigest());
+        return reason;
+    }
+
+    /**
+     * {@code cause.tariffVersion} is required, its {@code version} for an add or an update, its {@code versionId} for
+     * an update or a deletion ({@code REQUIRED}); a booking's reason is checked for its length here and required only
+     * when the plan has lines.
+     */
+    private static TariffCause validateTariff(RecalculationRequest request, boolean preview) {
+        RecalculationCauseType type = request.getCause().getType();
+        RecalculationTariffVersionChange change = request.getCause().getTariffVersion();
+        if (change == null) {
+            throw invalid("cause.tariffVersion", ProblemCodes.REQUIRED);
+        }
+        List<FieldProblem> problems = new ArrayList<>();
+        if (type != RecalculationCauseType.TARIFF_VERSION_ADD && change.getVersionId() == null) {
+            problems.add(new FieldProblem("cause.tariffVersion.versionId", ProblemCodes.REQUIRED));
+        }
+        if (type != RecalculationCauseType.TARIFF_VERSION_DELETE && change.getVersion() == null) {
+            problems.add(new FieldProblem("cause.tariffVersion.version", ProblemCodes.REQUIRED));
+        }
+        throwIfAny(problems);
+        String reason = reason(request, preview, false);
+        return new TariffCause(type, change.getTariffId(),
+                type == RecalculationCauseType.TARIFF_VERSION_ADD ? null : change.getVersionId(),
+                type == RecalculationCauseType.TARIFF_VERSION_DELETE ? null : change.getVersion(),
+                reason == null || reason.isEmpty() ? null : reason, request.getDigest());
+    }
+
+    /**
+     * Applies the change in the running transaction. A version that is not one of the tariff {@code tariffId} (not
+     * found, deleted, of another tariff or cooperative) is 404 before anything changes; the change's field problems
+     * are reported under {@code cause.tariffVersion.version.}.
+     */
+    private TariffVersionChanges.Change apply(TariffCause cause, AccessProfile actor) {
+        if (cause.versionId() != null && tariffBook.snapshot().tariff(cause.tariffId()).stream()
+                .flatMap(tariff -> tariff.versions().stream()).noneMatch(v -> v.id().equals(cause.versionId()))) {
+            throw ApiProblemException.notFound();
+        }
+        try {
+            return switch (cause.type()) {
+                case TARIFF_VERSION_ADD -> tariffVersions.add(cause.tariffId(),
+                        Objects.requireNonNull(cause.version()), actor);
+                case TARIFF_VERSION_UPDATE -> tariffVersions.update(Objects.requireNonNull(cause.versionId()),
+                        Objects.requireNonNull(cause.version()), actor);
+                case TARIFF_VERSION_DELETE -> tariffVersions.delete(Objects.requireNonNull(cause.versionId()), actor);
+                default -> throw invalid("cause.type", ProblemCodes.UNSUPPORTED);
+            };
+        } catch (ApiProblemException e) {
+            if (e.errors().isEmpty()) {
+                throw e;
+            }
+            throw new ApiProblemException(e.status(), e.code(), e.getMessage(), e.errors().stream()
+                    .map(problem -> new FieldProblem(VERSION_FIELDS + problem.field(), problem.code())).toList());
+        }
+    }
+
+    /**
+     * The scope of a tariff version cause: the charge type of the tariff and its plots (every chargeable plot the
+     * tariff covers, {@link #plotScope}); the months the old and new validity of the version touch, from the
+     * cooperative's first billing month (nothing was charged before it) to the current month at the latest; and, for
+     * the interval charges and runs, the days from the first of those months to the end of the current month (an
+     * interval or a run that covers a changed day may close after the version's validity). Nothing when the change
+     * touches no such month (a version that starts in the future, or before anything was charged and ends before it).
+     */
+    private Target tariffTarget(TariffCause cause, TariffVersionChanges.Change change, boolean preview) {
+        YearMonth current = YearMonth.now(clock);
+        List<BillingMonthRepository.MonthStatus> states = months.statesInOrder();
+        List<YearMonth> touched = new ArrayList<>();
+        IntervalCharging.Window window = null;
+        if (!states.isEmpty()) {
+            YearMonth first = YearMonth.from(states.getFirst().month());
+            YearMonth from = YearMonth.from(change.from());
+            YearMonth to = change.to() == null ? current : YearMonth.from(change.to());
+            from = from.isBefore(first) ? first : from;
+            to = to.isAfter(current) ? current : to;
+            for (YearMonth month = from; !month.isAfter(to); month = month.plusMonths(1)) {
+                touched.add(month);
+            }
+            if (!touched.isEmpty()) {
+                window = new IntervalCharging.Window(touched.getFirst().atDay(1), current.atEndOfMonth());
+            }
+        }
+        List<UUID> types = List.of(change.chargeTypeId());
+        Map<String, String> values = new LinkedHashMap<>();
+        values.put("tariffId", change.tariffId().toString());
+        if (cause.versionId() != null) {
+            values.put("versionId", cause.versionId().toString());
+        }
+        VersionTerms terms = change.terms();
+        if (terms != null) {
+            values.put("validFrom", terms.validFrom().toString());
+            values.put("basis", terms.basis().name());
+            values.put("frequency", terms.frequency().name());
+            values.put("rate", terms.rate().value().setScale(4).toPlainString());
+            values.put("dueDate", String.valueOf(terms.dueDate()));
+            values.put("note", String.valueOf(change.note()));
+        }
+        Map<String, Object> stored = storedScope(cause.type(), touched, types, List.of());
+        stored.put("tariffId", change.tariffId().toString());
+        // a new version's id is generated anew by the booking: the preview does not show it
+        if (!(preview && cause.type() == RecalculationCauseType.TARIFF_VERSION_ADD)) {
+            stored.put("tariffVersionId", change.versionId().toString());
+        }
+        return new Target(cause.type(), touched, window, types, List.of(), change.tariffId(),
+                new RecalculationDigest.Cause(cause.type().getValue(), values), stored);
     }
 
     private static YearMonth month(String value, String field) {
@@ -328,33 +560,33 @@ class RecalculationService {
 
     // ---- the plan (preview and booking)
 
-    private Planned plan(UUID tenantId, Manual manual) {
-        chargingLock.lock(tenantId);
+    /** The plan of the target; the caller holds the charging lock (and has applied the change, if any). */
+    private Planned plan(UUID tenantId, Target target) {
         // the plots first (read, not locked), then their meters in id order: the meter locks come before the queue lock
-        PlotScope plotScope = plotScope(manual);
-        List<MeterPoints> lockedMeters = lockMeters(tenantId, plotScope.plots(), manual.chargeTypeIds());
+        PlotScope plotScope = plotScope(target);
+        IntervalCharging.Window window = target.window();
+        List<MeterPoints> lockedMeters = window == null ? List.of()
+                : lockMeters(tenantId, plotScope.plots(), target.chargeTypeIds());
         // the runs: their locks and the shared network after the plot meters, before the queue lock
-        RunScope runScope = lockRuns(tenantId, manual);
+        RunScope runScope = window == null ? RunScope.none() : lockRuns(tenantId, target, window);
         writer.lockQueue(tenantId);
         Snapshot snapshot = writer.lockTariffs();
         months.lockAllForShare();
 
-        Scope scope = scope(manual, snapshot, plotScope);
+        Scope scope = scope(target, snapshot, plotScope);
         Set<UUID> typeIds = scope.types().stream().map(ChargeTypeEntry::id).collect(Collectors.toSet());
         Map<UUID, PlotFacts> plotById = scope.plots().stream()
                 .collect(Collectors.toMap(PlotFacts::id, Function.identity(), (a, b) -> a, LinkedHashMap::new));
         Set<YearMonth> inScope = new HashSet<>(scope.months());
-        IntervalCharging.Window window = new IntervalCharging.Window(scope.months().getFirst().atDay(1),
-                scope.months().getLast().atEndOfMonth());
 
         // the expected charges: the month run's, then the intervals of the plots' meters closed in the window
-        List<Expected> expected = new ArrayList<>(monthRun.expected(snapshot, scope.plots(), scope.types(),
-                scope.months()));
+        List<Expected> expected = new ArrayList<>(scope.months().isEmpty() ? List.of()
+                : monthRun.expected(snapshot, scope.plots(), scope.types(), scope.months()));
         Map<String, ScopedInterval> scopedIntervals = new LinkedHashMap<>();
         Set<UUID> meterIds = new HashSet<>();
         for (MeterPoints points : lockedMeters) {
             UUID plotId = points.plotId();
-            if (plotId == null || !plotById.containsKey(plotId)) {
+            if (window == null || plotId == null || !plotById.containsKey(plotId)) {
                 continue;
             }
             meterIds.add(points.meterId());
@@ -393,7 +625,8 @@ class RecalculationService {
                             source)) {
                         // a losses charge of a run has its run: runs are recalculated as runs
                         if (charge.getRunId() == null && charge.getMeterId() != null
-                                && meterIds.contains(charge.getMeterId()) && window.contains(charge.getAccruedOn())) {
+                                && meterIds.contains(charge.getMeterId()) && window != null
+                                && window.contains(charge.getAccruedOn())) {
                             originals.put(charge.getId(), charge);
                         }
                     }
@@ -444,7 +677,7 @@ class RecalculationService {
         for (NotChargedItemRecord item : items.findByKindAndStatus(Kind.INTERVAL, Status.OPEN)) {
             if (item.getMeterId() != null && meterIds.contains(item.getMeterId())
                     && plotById.containsKey(item.getPlotId()) && typeIds.contains(item.getChargeTypeId())
-                    && item.getToDate() != null && window.contains(item.getToDate())) {
+                    && item.getToDate() != null && window != null && window.contains(item.getToDate())) {
                 openItems.put(item.getItemKey(), item);
             }
         }
@@ -452,9 +685,9 @@ class RecalculationService {
                 .map(ChargeTypeEntry::id).collect(Collectors.toSet());
 
         Plan plan = RecalculationPlanner.plan(new RecalculationPlanner.Input(booked, expected, states,
-                LocalDate.now(clock), openItems.keySet(), RecalculationRecord.Cause.MANUAL, water, runMonths));
-        String digest = RecalculationDigest.of(RecalculationDigest.Cause.manual(),
-                new RecalculationDigest.Scope(scope.months(), manual.chargeTypeIds(), manual.plotIds()), plan);
+                LocalDate.now(clock), openItems.keySet(), target.kind(), water, runMonths));
+        String digest = RecalculationDigest.of(target.digestCause(),
+                new RecalculationDigest.Scope(scope.months(), target.chargeTypeIds(), target.plotIds()), plan);
         Map<ChargeIdentity, Expected> expectedById = new HashMap<>();
         expected.forEach(entry -> expectedById.put(entry.identity(), entry));
         // a run line may be of a plot outside the chosen ones: its number is shown too
@@ -474,27 +707,27 @@ class RecalculationService {
     }
 
     /**
-     * The booked runs whose range ends in the months, of the chosen charge types (losses runs are electricity charges,
+     * The booked runs whose range ends in the window, of the chosen charge types (losses runs are electricity charges,
      * common consumer runs {@code COMMON_CONSUMERS}; every type when none is chosen); with plots chosen, only the runs
      * with a charge of one of them (a run is recalculated as a whole: its other plots are shown too). When there are
      * any: the advisory lock of the losses runs, then that of the common consumer runs (each after the charging lock,
      * which is taken already), then every electricity meter {@code FOR SHARE} with the network of each run's range
      * ({@link MeterNetwork#lockSharedNetwork}), the order of a run's booking.
      */
-    private RunScope lockRuns(UUID tenantId, Manual manual) {
+    private RunScope lockRuns(UUID tenantId, Target target, IntervalCharging.Window window) {
         Set<String> codes = new HashSet<>();
-        if (manual.chargeTypeIds().isEmpty()) {
+        if (target.chargeTypeIds().isEmpty()) {
             codes.addAll(List.of(ELECTRICITY, COMMON_CONSUMERS));
         } else {
             Map<UUID, ChargeTypeFacts> typeById = chargeTypes.all().stream()
                     .collect(Collectors.toMap(ChargeTypeFacts::id, Function.identity()));
-            manual.chargeTypeIds().stream().map(typeById::get).filter(Objects::nonNull).map(ChargeTypeFacts::code)
+            target.chargeTypeIds().stream().map(typeById::get).filter(Objects::nonNull).map(ChargeTypeFacts::code)
                     .filter(Objects::nonNull).forEach(codes::add);
         }
-        LocalDate from = manual.from().atDay(1);
-        LocalDate to = manual.to().atEndOfMonth();
+        LocalDate from = window.from();
+        LocalDate to = window.to();
         Map<UUID, List<ChargeRecord>> runCharges = new HashMap<>();
-        Set<UUID> chosenPlots = new HashSet<>(manual.plotIds());
+        Set<UUID> chosenPlots = new HashSet<>(target.plotIds());
         Predicate<UUID> touches = runId -> {
             List<ChargeRecord> charges = this.charges.findByRunIdAndKind(runId, ChargeKind.REGULAR);
             runCharges.put(runId, charges);
@@ -563,15 +796,22 @@ class RecalculationService {
         return locked;
     }
 
-    /** The charge types of the scope checked under the tariff locks, then the plots resolved before. */
-    private Scope scope(Manual manual, Snapshot snapshot, PlotScope plotScope) {
+    /**
+     * The charge types of the scope checked under the tariff locks, then the plots resolved before. The charge type of
+     * a tariff version cause is in the scope only while it charges (active, not archived): an inactive type charges
+     * nothing, and its booked charges are left to a manual recalculation.
+     */
+    private Scope scope(Target target, Snapshot snapshot, PlotScope plotScope) {
         List<ChargeTypeEntry> types = new ArrayList<>();
-        if (manual.chargeTypeIds().isEmpty()) {
+        if (target.chargeTypeIds().isEmpty()) {
             snapshot.chargeTypes().stream().filter(ChargeTypeEntry::charges).forEach(types::add);
+        } else if (!target.manual()) {
+            target.chargeTypeIds().stream().map(snapshot::chargeType).flatMap(Optional::stream)
+                    .filter(ChargeTypeEntry::charges).forEach(types::add);
         } else {
             List<FieldProblem> problems = new ArrayList<>();
-            for (int i = 0; i < manual.chargeTypeIds().size(); i++) {
-                Optional<ChargeTypeEntry> type = snapshot.chargeType(manual.chargeTypeIds().get(i));
+            for (int i = 0; i < target.chargeTypeIds().size(); i++) {
+                Optional<ChargeTypeEntry> type = snapshot.chargeType(target.chargeTypeIds().get(i));
                 String field = "cause.manual.chargeTypeIds[" + i + "]";
                 if (type.isEmpty()) {
                     problems.add(new FieldProblem(field, ProblemCodes.NOT_FOUND));
@@ -584,19 +824,31 @@ class RecalculationService {
             throwIfAny(problems);
         }
         throwIfAny(plotScope.problems());
-        return new Scope(manual.months(), types, plotScope.plots());
+        return new Scope(target.months(), types, plotScope.plots());
     }
 
-    /** The plots chosen ({@code UNKNOWN_PLOT}, {@code PLOT_ARCHIVED}, {@code PLOT_COMMON_LAND}) or every chargeable one. */
-    private PlotScope plotScope(Manual manual) {
-        if (manual.plotIds().isEmpty()) {
+    /**
+     * The plots chosen ({@code UNKNOWN_PLOT}, {@code PLOT_ARCHIVED}, {@code PLOT_COMMON_LAND}) or every chargeable one;
+     * for a tariff version cause the chargeable plots the tariff covers (its scope, read with the change applied; the
+     * tariff row is locked by the change), none when no month is touched.
+     */
+    private PlotScope plotScope(Target target) {
+        if (target.tariffId() != null) {
+            if (target.months().isEmpty()) {
+                return new PlotScope(List.of(), List.of());
+            }
+            TariffEntry tariff = tariffBook.snapshot().tariff(target.tariffId()).orElseThrow();
+            return new PlotScope(plots.findChargeable().stream().filter(plot -> tariff.covers(plot.id())).toList(),
+                    List.of());
+        }
+        if (target.plotIds().isEmpty()) {
             return new PlotScope(plots.findChargeable(), List.of());
         }
-        Map<UUID, PlotFacts> found = plots.findAll(manual.plotIds());
+        Map<UUID, PlotFacts> found = plots.findAll(target.plotIds());
         List<FieldProblem> problems = new ArrayList<>();
         List<PlotFacts> chosen = new ArrayList<>();
-        for (int i = 0; i < manual.plotIds().size(); i++) {
-            PlotFacts plot = found.get(manual.plotIds().get(i));
+        for (int i = 0; i < target.plotIds().size(); i++) {
+            PlotFacts plot = found.get(target.plotIds().get(i));
             String field = "cause.manual.plotIds[" + i + "]";
             if (plot == null) {
                 problems.add(new FieldProblem(field, ProblemCodes.UNKNOWN_PLOT));
@@ -642,17 +894,22 @@ class RecalculationService {
 
     // ---- the booking
 
-    private Recalculation book(UUID tenantId, Manual manual, Planned planned, AccessProfile actor) {
+    /**
+     * Books the plan (it has lines) with the reason; {@code causeRefId} is the version or reading of a cause-driven
+     * recalculation and {@code change} the audit entry of its change, published in the batch of
+     * {@code RECALCULATION_BOOKED} with the recalculation's id.
+     */
+    private Recalculation book(UUID tenantId, Target target, Planned planned, AccessProfile actor, String reason,
+            @Nullable UUID causeRefId, @Nullable AuditEvent change) {
         Instant now = clock.instant();
         UUID createdBy = actor.memberId();
-        String reason = Objects.requireNonNull(manual.reason());
         UUID recalculationId = UUID.randomUUID();
         List<Line> lines = ordered(planned.plan().lines(), planned.plotById());
         Set<UUID> plotIds = lines.stream().map(Line::plotId).collect(Collectors.toCollection(LinkedHashSet::new));
 
-        entityManager.persist(RecalculationRecord.booked(recalculationId, tenantId, RecalculationRecord.Cause.MANUAL,
-                null, storedScope(manual), reason, planned.plan().total(), lines.size(), plotIds.size(),
-                planned.digest(), createdBy, now));
+        entityManager.persist(RecalculationRecord.booked(recalculationId, tenantId, target.kind(), causeRefId,
+                target.storedScope(), reason, planned.plan().total(), lines.size(), plotIds.size(), planned.digest(),
+                createdBy, now));
         entityManager.flush();
 
         Map<YearMonth, BillingMonthRecord> booking = new HashMap<>();
@@ -768,18 +1025,33 @@ class RecalculationService {
         }
         entityManager.flush();
 
-        // 7. the audit entry and the plot statuses
-        audit.publishBatch(tenantId, List.of(audit.recalculationEvent(actor, recalculationId,
-                manual.from() + "/" + manual.to(), auditChanges(manual, planned, lines, reason))));
+        // 7. the audit entries (the change that caused it first) and the plot statuses
+        List<AuditEvent> entries = new ArrayList<>();
+        if (change != null) {
+            entries.add(withRecalculation(change, recalculationId));
+        }
+        entries.add(audit.recalculationEvent(actor, recalculationId,
+                target.months().getFirst() + "/" + target.months().getLast(),
+                auditChanges(target, planned, lines, reason)));
+        audit.publishBatch(tenantId, entries);
         writer.publishBooked(tenantId, plotIds);
 
-        Recalculation result = result(manual, planned, false, recalculationId, createdByLine, notCharged);
+        Recalculation result = result(target, planned, false, !target.manual(), recalculationId, createdByLine,
+                notCharged);
         result.setReason(reason);
         result.setCreatedAt(now.atOffset(ZoneOffset.UTC));
         if (createdBy != null) {
             result.setCreatedByName(actorNames.displayNames(List.of(createdBy)).get(createdBy));
         }
         return result;
+    }
+
+    /** The audit entry of the change with the field {@code recalculationId}: the recalculation booked with it. */
+    private static AuditEvent withRecalculation(AuditEvent change, UUID recalculationId) {
+        List<FieldChange> changes = new ArrayList<>(change.changes());
+        changes.add(new FieldChange("recalculationId", null, recalculationId.toString()));
+        return new AuditEvent(change.eventId(), change.tenantId(), change.occurredAt(), change.actor(),
+                change.action(), change.entityType(), change.entityId(), change.entityLabel(), changes);
     }
 
     private static ChargeRecord original(Planned planned, Line line) {
@@ -964,8 +1236,13 @@ class RecalculationService {
         return rank;
     }
 
-    private Recalculation result(Manual manual, Planned planned, boolean preview, @Nullable UUID id,
-            Map<Line, RecalculationLineRecord.Created> created, @Nullable List<NotChargedItem> notCharged) {
+    /**
+     * The answer: a preview ({@code preview}), a booked recalculation ({@code id} present) or, for a cause-driven
+     * change whose plan has no lines, the saved change alone ({@code changeApplied}, nothing booked).
+     */
+    private Recalculation result(Target target, Planned planned, boolean preview, boolean changeApplied,
+            @Nullable UUID id, Map<Line, RecalculationLineRecord.Created> created,
+            @Nullable List<NotChargedItem> notCharged) {
         List<Line> lines = ordered(planned.plan().lines(), planned.plotById());
         Map<UUID, ChargeTypeFacts> typeById = chargeTypes.all().stream()
                 .collect(Collectors.toMap(ChargeTypeFacts::id, Function.identity()));
@@ -974,11 +1251,11 @@ class RecalculationService {
         List<RecalculationLine> shown = lines.stream().map(line -> line(line, planned.plotById(), typeById,
                 created.get(line))).toList();
         int plotCount = (int) lines.stream().map(Line::plotId).distinct().count();
-        Recalculation result = new Recalculation(preview, !preview, false, RecalculationCauseKind.MANUAL,
-                RecalculationQueries.scope(storedScope(manual)), shown, RecalculationQueries.totals(byType, typeById),
-                planned.plan().total().toString(), plotCount,
+        Recalculation result = new Recalculation(preview, id != null, changeApplied,
+                RecalculationCauseKind.fromValue(target.kind().name()), RecalculationQueries.scope(target.storedScope()),
+                shown, RecalculationQueries.totals(byType, typeById), planned.plan().total().toString(), plotCount,
                 notCharged != null ? notCharged : notCharged(planned), planned.digest());
-        result.setCauseType(RecalculationCauseType.MANUAL);
+        result.setCauseType(target.causeType());
         result.setId(id);
         return result;
     }
@@ -1043,14 +1320,16 @@ class RecalculationService {
 
     /**
      * The scope as stored and shown: ids and codes under the keys of the contract's {@code RecalculationScope}, plus
-     * {@code causeType}. The charge types and plots are the chosen ones; none chosen means all.
+     * {@code causeType}. The charge types and plots are the chosen ones; none chosen means all (for a tariff version
+     * cause: the plots of the tariff, which the caller adds as {@code tariffId}).
      */
-    private static Map<String, Object> storedScope(Manual manual) {
+    private static Map<String, Object> storedScope(RecalculationCauseType causeType, List<YearMonth> months,
+            List<UUID> chargeTypeIds, List<UUID> plotIds) {
         Map<String, Object> scope = new LinkedHashMap<>();
-        scope.put("causeType", RecalculationCauseType.MANUAL.getValue());
-        scope.put("months", manual.months().stream().map(YearMonth::toString).toList());
-        scope.put("chargeTypeIds", manual.chargeTypeIds().stream().map(UUID::toString).toList());
-        scope.put("plotIds", manual.plotIds().stream().map(UUID::toString).toList());
+        scope.put("causeType", causeType.getValue());
+        scope.put("months", months.stream().map(YearMonth::toString).toList());
+        scope.put("chargeTypeIds", chargeTypeIds.stream().map(UUID::toString).toList());
+        scope.put("plotIds", plotIds.stream().map(UUID::toString).toList());
         return scope;
     }
 
@@ -1059,20 +1338,20 @@ class RecalculationService {
      * {@code to}, the chosen charge types ({@code base:<CODE>} or the stored name) and plots (numbers) when some were
      * chosen, the reason as typed, the number of lines and the total difference.
      */
-    private List<FieldChange> auditChanges(Manual manual, Planned planned, List<Line> lines, String reason) {
+    private List<FieldChange> auditChanges(Target target, Planned planned, List<Line> lines, String reason) {
         List<FieldChange> changes = new ArrayList<>();
-        changes.add(new FieldChange("cause", null, RecalculationCauseType.MANUAL.getValue()));
-        changes.add(new FieldChange("from", null, manual.from().toString()));
-        changes.add(new FieldChange("to", null, manual.to().toString()));
-        if (!manual.chargeTypeIds().isEmpty()) {
+        changes.add(new FieldChange("cause", null, target.causeType().getValue()));
+        changes.add(new FieldChange("from", null, target.months().getFirst().toString()));
+        changes.add(new FieldChange("to", null, target.months().getLast().toString()));
+        if (!target.chargeTypeIds().isEmpty()) {
             Map<UUID, ChargeTypeFacts> typeById = chargeTypes.all().stream()
                     .collect(Collectors.toMap(ChargeTypeFacts::id, Function.identity()));
-            changes.add(new FieldChange("chargeTypes", null, manual.chargeTypeIds().stream()
+            changes.add(new FieldChange("chargeTypes", null, target.chargeTypeIds().stream()
                     .map(typeById::get).filter(Objects::nonNull).map(ChargeTypeFacts::auditName)
                     .collect(Collectors.joining(", "))));
         }
-        if (!manual.plotIds().isEmpty()) {
-            changes.add(new FieldChange("plots", null, plots.inNaturalOrder(manual.plotIds()).stream()
+        if (!target.plotIds().isEmpty()) {
+            changes.add(new FieldChange("plots", null, plots.inNaturalOrder(target.plotIds()).stream()
                     .map(planned.plotById()::get).filter(Objects::nonNull).map(PlotFacts::number)
                     .collect(Collectors.joining(", "))));
         }

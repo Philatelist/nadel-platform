@@ -100,6 +100,10 @@ class TariffVersionRecord {
         return id;
     }
 
+    UUID getTenantId() {
+        return tenantId;
+    }
+
     UUID getTariffId() {
         return tariffId;
     }
@@ -127,6 +131,14 @@ class TariffVersionRecord {
 
     @Nullable String getNote() {
         return note;
+    }
+
+    /**
+     * Deletes the version softly ({@code deleted_at}): a recalculation removes a version that charges used (feature 012),
+     * whose charge parts keep pointing at it. From the next query on, the version no longer exists for the application.
+     */
+    void deleteSoftly(Instant now) {
+        this.deletedAt = now;
     }
 
     /** Whether the version was deleted softly (a recalculation removed a used version). */

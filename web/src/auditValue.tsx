@@ -223,13 +223,20 @@ export function auditValue(
       if (Object.hasOwn(t.billing.notCharged.reason, raw)) return catalog(t.billing.notCharged.reason);
       return user(raw);
     case 'cause':
-      return catalog(t.recalculation.causeType);
+      // the stored kind (TARIFF_VERSION, READING) or the cause type of a booking
+      return catalog({ ...t.recalculation.causeKind, ...t.recalculation.causeType });
     case 'outcome':
       return catalog(a.outcome);
     case 'runId':
       return (
         <Link to={`/charges/losses?run=${raw}`} className="text-accent underline">
           {t.charges.detail.openRun}
+        </Link>
+      );
+    case 'recalculationId':
+      return (
+        <Link to={`/charges/recalculations/${raw}`} className="text-accent underline">
+          {t.recalculation.open}
         </Link>
       );
     case 'source':

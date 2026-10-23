@@ -16,6 +16,22 @@ describe('auditValue for recalculations', () => {
     expect(text(auditValue('RECALCULATION', 'cause', 'MANUAL', en, 'en'))).toBe('Manual recalculation');
   });
 
+  it('shows the cause of a tariff version change, as a type or as the stored kind', () => {
+    expect(text(auditValue('RECALCULATION', 'cause', 'TARIFF_VERSION_UPDATE', en, 'en'))).toBe(
+      'Tariff version corrected',
+    );
+    expect(text(auditValue('RECALCULATION', 'cause', 'TARIFF_VERSION', uk, 'uk'))).toBe('Версія тарифу');
+  });
+
+  it('links the recalculation that came with a tariff version change', () => {
+    const link = render(
+      <MemoryRouter>{auditValue('TARIFF', 'recalculationId', 'r7', en, 'en')}</MemoryRouter>,
+    ).getByRole('link', { name: 'Open' });
+    expect(link).toHaveAttribute('href', '/charges/recalculations/r7');
+    expect(en.audit.fields.recalculationId).toBe('Recalculation');
+    expect(uk.audit.fields.recalculationId).toBe('Перерахунок');
+  });
+
   it('formats the months, the total and the count', () => {
     expect(text(auditValue('RECALCULATION', 'from', '2026-09', en, 'en'))).toBe('2026-09');
     expect(text(auditValue('RECALCULATION', 'total', '-17.00', uk, 'uk'))).toMatch(/^−17,00\s₴$/);

@@ -204,14 +204,23 @@ export const getRunRecalculationUrl = (params: RunRecalculationParams,) => {
  * `TOO_LONG` (over 500 characters) for a booking, `cause.manual` `REQUIRED` for `MANUAL`, `cause.manual.to`
  * `INVALID` (before `from`) or `DATE_IN_FUTURE` (after the current month), `cause.manual.chargeTypeIds[i]`
  * `NOT_FOUND` (unknown) or `INVALID` (inactive or archived), `cause.manual.plotIds[i]` `UNKNOWN_PLOT`,
- * `PLOT_ARCHIVED` or `PLOT_COMMON_LAND`. Until the cause-driven recalculations arrive (feature 012, slices 6 and
- * 7) a `cause.type` other than `MANUAL` is 400 `VALIDATION_FAILED` with `cause.type` `UNSUPPORTED`, and a manual
- * recalculation covers the charges of recurring tariffs only (slices 4 and 5 add the charges of readings and
- * runs). Conflicts (409): the manual range spans more than 24 months (`RECALCULATION_RANGE_TOO_LONG`), a manual
- * recalculation finds nothing to change when booked (`NOTHING_TO_RECALCULATE`), a booking is sent with the
- * digest of a preview that no longer matches (`PREVIEW_OUTDATED`). Requires `RECALCULATION_RUN`, and also
- * `TARIFFS_MANAGE` for a tariff version cause and `READINGS_ENTER` for a reading cause; a booking is written to
- * the audit log (`RECALCULATION_BOOKED`, entity type `RECALCULATION`).
+ * `PLOT_ARCHIVED` or `PLOT_COMMON_LAND`. A tariff version cause needs `cause.tariffVersion` (`REQUIRED`), its
+ * `versionId` for an update or a delete and its `version` for an add or an update (`REQUIRED`); the version is
+ * checked as on the tariff endpoints, with the field codes under `cause.tariffVersion.version.` (for example
+ * `cause.tariffVersion.version.frequency` `FREQUENCY_BASIS_MISMATCH`), but a version that charges used may be
+ * changed here (a delete is soft); a version that is not one of `tariffId` is 404 `NOT_FOUND`. Its scope is the
+ * tariff's charge type and plots and the billing months the old and new validity of the version touch (from the
+ * first billing month of the cooperative to the current month at most), and the meter intervals and runs that
+ * close from the first of them on. When such a plan has no lines, a booking saves the change alone without a
+ * reason (`booked` false, `changeApplied` true, no record). Until the reading causes arrive (feature 012, slice
+ * 7) `READING_*` is 400 `VALIDATION_FAILED` with `cause.type` `UNSUPPORTED`. Conflicts (409): the manual range
+ * spans more than 24 months (`RECALCULATION_RANGE_TOO_LONG`), a manual recalculation finds nothing to change when
+ * booked (`NOTHING_TO_RECALCULATE`), a booking is sent with the digest of a preview that no longer matches
+ * (`PREVIEW_OUTDATED`), the change of a tariff version is refused (`TARIFF_VERSION_DATE_TAKEN`,
+ * `TARIFF_LAST_VERSION`, `CHARGE_TYPE_ARCHIVED`). Requires `RECALCULATION_RUN`, and also `TARIFFS_MANAGE` for a
+ * tariff version cause and `READINGS_ENTER` for a reading cause (403 `PERMISSION_DENIED`); a booking is written
+ * to the audit log (`RECALCULATION_BOOKED`, entity type `RECALCULATION`, after the entry of the version or
+ * reading change, which then carries `recalculationId`).
  * @summary Preview or book a recalculation
  */
 export const runRecalculation = async (recalculationRequest: RecalculationRequest,

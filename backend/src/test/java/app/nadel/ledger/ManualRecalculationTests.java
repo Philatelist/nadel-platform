@@ -531,8 +531,8 @@ class ManualRecalculationTests extends FreshCooperativeSupport {
                 .andExpect(jsonPath("$.errors[0].field").value("cause.manual"))
                 .andExpect(jsonPath("$.errors[0].code").value("REQUIRED"));
         send(chairman, post(RECALCULATIONS).param("preview", "true"),
-                Map.of("cause", Map.of("type", "TARIFF_VERSION_UPDATE", "tariffVersion",
-                        Map.of("tariffId", membership.id().toString()))))
+                Map.of("cause", Map.of("type", "READING_CORRECT", "reading",
+                        Map.of("readingId", UUID.randomUUID().toString()))))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errors[0].field").value("cause.type"))
                 .andExpect(jsonPath("$.errors[0].code").value("UNSUPPORTED"));

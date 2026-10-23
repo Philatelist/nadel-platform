@@ -5,14 +5,17 @@ import {
   useUpdateTariffVersion,
   type Tariff,
   type TariffVersion,
+  type TariffVersionCreate,
 } from '@nadel/api-client';
 import { format, formatDay, formatRateWithCurrency } from '@nadel/shared';
 import { useQueryClient } from '@tanstack/react-query';
-import { useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useLocale, useT } from '../../i18n';
 import { useCan } from '../../me';
 import { problemCode, problemMessage, type FieldErrors } from '../../problem';
 import { ConfirmDialog } from '../ConfirmDialog';
+import { RecalculationStep } from '../recalculation/RecalculationStep';
+import { useCauseDrivenChange } from '../recalculation/useCauseDrivenChange';
 import { Button, Notice } from '../ui';
 import { UserContent } from '../UserContent';
 import {
@@ -38,7 +41,9 @@ function valuesOf(version: TariffVersion): VersionValues {
 /**
  * The versions of a tariff as the server sends them (newest first). With TARIFFS_MANAGE (and a live charge type)
  * each version can be corrected in place or deleted; a version already used in charges answers 409, and from then
- * on its controls are disabled with a hint (the API has no "in use" flag on the version).
+ * on its controls are disabled with a hint (the API has no "in use" flag on the version). Holders of
+ * RECALCULATION_RUN get step 2 of a recalculation instead (`TARIFF_VERSION_UPDATE` / `TARIFF_VERSION_DELETE`):
+ * the change and the recalculation are saved together. A change of the note alone is a plain save.
  */
 export function VersionHistory({ tariff }: { tariff: Tariff }) {
   const t = useT();
@@ -48,6 +53,8 @@ export function VersionHistory({ tariff }: { tariff: Tariff }) {
   const canManage = useCan('TARIFFS_MANAGE') && tariff.chargeType.active;
   const [editingId, setEditingId] = useState<string>();
   const [deleting, setDeleting] = useState<TariffVersion>();
+  const [recalcDelete, setRecalcDelete] = useState<TariffVersion>();
+  const canRecalculate = useCan('RECALCULATION_RUN');
   const [inUse, setInUse] = useState<ReadonlySet<string>>(new Set());
   const [status, setStatus] = useState<{ tone: 'success' | 'danger'; text: string }>();
 
@@ -68,8 +75,10 @@ export function VersionHistory({ tariff }: { tariff: Tariff }) {
         await refresh();
       },
       onError: (error: unknown) => {
-        if (problemCode(error) === 'TARIFF_VERSION_IN_USE' && deleting) markInUse(deleting.id);
+        const used = problemCode(error) === 'TARIFF_VERSION_IN_USE' && deleting;
         setDeleting(undefined);
+        if (used && canRecalculate) return setRecalcDelete(deleting);
+        if (used) markInUse(deleting.id);
         setStatus({ tone: 'danger', text: problemMessage(t, error) });
       },
     },
@@ -86,13 +95,25 @@ export function VersionHistory({ tariff }: { tariff: Tariff }) {
               key={version.id}
               className="flex flex-col gap-1 border-b border-line-subtle py-3 first:pt-0 last:border-b-0 last:pb-0"
             >
-              {editingId === version.id ? (
+              {recalcDelete?.id === version.id ? (
+                <DeleteViaRecalculation
+                  tariffId={tariff.id}
+                  version={version}
+                  onDone={async (recalculated) => {
+                    setRecalcDelete(undefined);
+                    setStatus({ tone: 'success', text: recalculated ? c.deletedRecalculated : c.deleted });
+                    await refresh();
+                  }}
+                  onCancel={() => setRecalcDelete(undefined)}
+                />
+              ) : editingId === version.id ? (
                 <EditVersion
                   tariffId={tariff.id}
                   version={version}
-                  onDone={async () => {
+                  canRecalculate={canRecalculate}
+                  onDone={async (recalculated) => {
                     setEditingId(undefined);
-                    setStatus({ tone: 'success', text: c.saved });
+                    setStatus({ tone: 'success', text: recalculated ? c.savedRecalculated : c.saved });
                     await refresh();
                   }}
                   onInUse={() => {
@@ -170,16 +191,60 @@ export function VersionHistory({ tariff }: { tariff: Tariff }) {
   );
 }
 
+/** Step 2 for the deletion of a used version: previews on mount, books the deletion with the recalculation. */
+function DeleteViaRecalculation({
+  tariffId,
+  version,
+  onDone,
+  onCancel,
+}: {
+  tariffId: string;
+  version: TariffVersion;
+  onDone: (recalculated: boolean) => Promise<void>;
+  onCancel: () => void;
+}) {
+  const t = useT();
+  const [error, setError] = useState<unknown>();
+  const change = useCauseDrivenChange((result) => onDone(result.booked));
+  const started = useRef(false);
+  const { start } = change;
+  useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+    start({ type: 'TARIFF_VERSION_DELETE', tariffVersion: { tariffId, versionId: version.id } }).catch(
+      setError,
+    );
+  }, [start, tariffId, version.id]);
+
+  if (change.state.kind === 'preview') {
+    return <RecalculationStep run={change.run} onBack={onCancel} onBooked={change.finish} />;
+  }
+  return error !== undefined ? (
+    <div className="flex flex-col gap-3">
+      <Notice tone="danger">{problemMessage(t, error)}</Notice>
+      <div>
+        <Button variant="secondary" onClick={onCancel}>
+          {t.recalculation.step.back}
+        </Button>
+      </div>
+    </div>
+  ) : (
+    <Notice tone="warning">{t.recalculation.step.loading}</Notice>
+  );
+}
+
 function EditVersion({
   tariffId,
   version,
+  canRecalculate,
   onDone,
   onInUse,
   onCancel,
 }: {
   tariffId: string;
   version: TariffVersion;
-  onDone: () => Promise<void>;
+  canRecalculate: boolean;
+  onDone: (recalculated: boolean) => Promise<void>;
   onInUse: () => void;
   onCancel: () => void;
 }) {
@@ -189,14 +254,27 @@ function EditVersion({
   const [errors, setErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string>();
 
+  const sent = useRef<TariffVersionCreate>(undefined);
+  const change = useCauseDrivenChange((result) => onDone(result.booked));
+
+  function showError(error: unknown) {
+    const { fields, form } = versionSaveErrors(t, error);
+    setErrors(fields);
+    setFormError(form);
+  }
+
   const update = useUpdateTariffVersion({
     mutation: {
-      onSuccess: onDone,
+      onSuccess: () => onDone(false),
       onError: (error: unknown) => {
-        if (problemCode(error) === 'TARIFF_VERSION_IN_USE') return onInUse();
-        const { fields, form } = versionSaveErrors(t, error);
-        setErrors(fields);
-        setFormError(form);
+        if (problemCode(error) !== 'TARIFF_VERSION_IN_USE') return showError(error);
+        if (!canRecalculate || !sent.current) return onInUse();
+        change
+          .start({
+            type: 'TARIFF_VERSION_UPDATE',
+            tariffVersion: { tariffId, versionId: version.id, version: sent.current },
+          })
+          .catch(showError);
       },
     },
   });
@@ -206,16 +284,23 @@ function EditVersion({
     setFormError(undefined);
     const checked = validateVersion(values, t);
     setErrors(checked.errors ?? {});
-    if (checked.data) update.mutate({ id: tariffId, versionId: version.id, data: checked.data });
+    if (!checked.data) return;
+    sent.current = checked.data;
+    update.mutate({ id: tariffId, versionId: version.id, data: checked.data });
   }
+
+  if (change.state.kind === 'preview') {
+    return <RecalculationStep run={change.run} onBack={change.back} onBooked={change.finish} />;
+  }
+  const busy = update.isPending || change.state.kind === 'saving';
 
   return (
     <form onSubmit={submit} noValidate aria-label={c.editVersion} className="flex flex-col gap-4">
       <VersionFields values={values} onChange={setValues} errors={errors} />
       {formError && <Notice tone="danger">{formError}</Notice>}
       <div className="flex gap-2">
-        <Button type="submit" disabled={update.isPending}>
-          {update.isPending ? c.saving : c.save}
+        <Button type="submit" disabled={busy}>
+          {busy ? c.saving : c.save}
         </Button>
         <Button variant="secondary" onClick={onCancel}>
           {t.memberForm.cancel}

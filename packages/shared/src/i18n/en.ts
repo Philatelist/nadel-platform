@@ -674,6 +674,10 @@ export const en = {
       deleteConfirm: 'Delete',
       saved: 'Version corrected',
       deleted: 'Version deleted',
+      added: 'Version added',
+      addedRecalculated: 'Version added, recalculation booked',
+      savedRecalculated: 'Version corrected, recalculation booked',
+      deletedRecalculated: 'Version deleted, recalculation booked',
       inUse: 'This version is already used in charges — correct it through a recalculation',
     },
     scope: {
@@ -907,6 +911,7 @@ export const en = {
       consumers: 'Consumers',
       split: 'Split',
       servicePlots: 'Service users',
+      recalculationId: 'Recalculation',
       recalcLines: 'Recalculation lines',
       cause: 'Recalculation cause',
       chargeTypes: 'Charge types',

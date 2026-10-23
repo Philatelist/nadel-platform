@@ -482,7 +482,8 @@ export const useAddTariffVersion = <TError = BadRequestResponse | UnauthorizedRe
 /**
  * Replaces the terms of a version (the same fields and rules as `POST /tariffs/{id}/versions`; `validFrom` may
  * change too). A version can be corrected until a charge uses it: then 409 `TARIFF_VERSION_IN_USE` (a later
- * correction goes through recalculation, feature 012). The tariff and the version are 404 when unknown or of
+ * correction goes through recalculation, `POST /recalculations` with `TARIFF_VERSION_UPDATE`), except for a
+ * request that changes no term (only the note, or nothing), which changes no amount. The tariff and the version are 404 when unknown or of
  * another cooperative, and also when the version belongs to another tariff. Two versions of one tariff cannot
  * start on the same date (409 `TARIFF_VERSION_DATE_TAKEN`, `errors[{field: validFrom}]`). The charge type must
  * not be archived (409 `CHARGE_TYPE_ARCHIVED`). Field codes of 400 `VALIDATION_FAILED` are those of the create

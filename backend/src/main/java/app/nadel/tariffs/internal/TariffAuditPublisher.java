@@ -26,6 +26,20 @@ class TariffAuditPublisher {
 
     void publish(UUID tenantId, Actor actor, String action, String entityType, UUID entityId, String label,
             List<FieldChange> changes) {
-        events.publishEvent(AuditEvent.now(tenantId, actor, action, entityType, entityId, label, changes));
+        events.publishEvent(event(tenantId, actor, action, entityType, entityId, label, changes));
+    }
+
+    /** Publishes an event built by {@link #event}. */
+    void publish(AuditEvent event) {
+        events.publishEvent(event);
+    }
+
+    /**
+     * The event {@link #publish} would publish, without publishing it: a change of a tariff version that a
+     * recalculation books (feature 012) is published by the ledger, together with the recalculation's entry.
+     */
+    AuditEvent event(UUID tenantId, Actor actor, String action, String entityType, UUID entityId, String label,
+            List<FieldChange> changes) {
+        return AuditEvent.now(tenantId, actor, action, entityType, entityId, label, changes);
     }
 }
