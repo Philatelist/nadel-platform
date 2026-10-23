@@ -158,7 +158,7 @@ describe('CommonConsumersPage', () => {
       await userEvent.click(screen.getByRole('button', { name: 'Book' }));
       act(() => callbacks().onError?.(new ApiError(409, { code: 'COMMON_CONSUMER_RANGE_OVERLAP' })));
       expect(await screen.findByRole('alert')).toHaveTextContent(
-        'already been charged for a common consumer',
+        'This common consumer has already been charged for these days',
       );
       expect(screen.getByRole('button', { name: 'Preview again' })).toBeInTheDocument();
     });

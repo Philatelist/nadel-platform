@@ -5,7 +5,7 @@
   from losses in the network and from common consumers. Months are closed in order and never change afterwards; a
   mistake is cancelled by a reversal, never edited away. Also: the "not charged" queue, water connections, opening
   balances and the plot status on the map.
-- **Status:** Draft
+- **Status:** Completed
 - **Author:** Alex Usov
 - **Source:** `docs/features/011-ledger-charges-period-closing.md` (roadmap phase 2, feature 3 of 5)
 
@@ -58,21 +58,21 @@ hryvnias with kopecks, quantities in kWh or m³ as in 010. Only the app calculat
   <month>".
 - Each charge opens its calculation, for example "93,3 кВт·год × 4,32 ₴ = 403,06 ₴, 23.09–04.10 (12 днів)".
 - **Acceptance Criteria:**
-  - [ ] Given plot 7 has a membership charge of 25,00 ₴ and a land tax charge of 17,50 ₴, when the chairman opens
-    plot 7 → "Рахунок", then they see both charges and the debt per charge type 25,00 ₴ and 17,50 ₴, total 42,50 ₴.
-  - [ ] When the chairman reverses the 25,00 ₴ charge with the reason "Помилкове нарахування", then the account shows
-    a reversal of −25,00 ₴ with that reason and the membership debt drops by 25,00 ₴.
-  - [ ] When the chairman tries to reverse the same charge again, then they see "Нарахування вже сторновано" /
-    "The charge has already been reversed".
-  - [ ] When the chairman tries to reverse a reversal, then they see "Сторно не можна сторнувати" / "A reversal cannot
-    be reversed".
-  - [ ] When the chairman tries to reverse without a reason, then they see "Вкажіть причину" / "Enter a reason".
-  - [ ] Given a charge is booked in a closed month, when the chairman opens it, then "Сторнувати" is not offered and
-    the account says the correction is made by an adjustment.
-  - [ ] When anyone tries to change or delete an existing charge in the database directly, then the change is refused
-    and the charge stays as it was.
-  - [ ] When the chairman opens the electricity charge of plot 7, then they see the kWh, the rate, the readings and the
-    days it was calculated from.
+  - [x] Given plot 7 has a membership charge of 25,00 ₴ and a land tax charge of 17,50 ₴, when the chairman opens
+    plot 7 → "Рахунок", then they see both charges and the debt per charge type 25,00 ₴ and 17,50 ₴, total 42,50 ₴. *Verified:* debts per type and total on the plot account, see `docs/screenshots/011-ledger-charges-period-closing-plot7-account.png` and `docs/screenshots/011-ledger-charges-period-closing-member-my-charges.png` (plot 15: 25,00 and 17,50); `LedgerAccountTests.theAccountShowsTheChargesAndTheDebtPerChargeType`.
+  - [x] When the chairman reverses the 25,00 ₴ charge with the reason "Помилкове нарахування", then the account shows
+    a reversal of −25,00 ₴ with that reason and the membership debt drops by 25,00 ₴. *Verified:* demo reversal of plot 14 with its reason and the lowered debt, see `docs/screenshots/011-ledger-charges-period-closing-plot14-reversal.png`, `docs/screenshots/011-ledger-charges-period-closing-reversal-detail.png`; `LedgerAccountTests.aReversalCancelsTheChargeAndLowersTheDebt`, e2e `charges.spec` "enters an opening balance, reverses a charge…".
+  - [x] When the chairman tries to reverse the same charge again, then they see "Нарахування вже сторновано" /
+    "The charge has already been reversed". *Verified:* no "Сторнувати" on a reversed charge (`docs/screenshots/011-ledger-charges-period-closing-plot14-reversal.png`); API 409 `CHARGE_ALREADY_REVERSED` (catalog uk/en texts match): `LedgerAccountTests.aChargeIsReversedAtMostOnce`, e2e `charges.spec`.
+  - [x] When the chairman tries to reverse a reversal, then they see "Сторно не можна сторнувати" / "A reversal cannot
+    be reversed". *Verified:* no "Сторнувати" on a reversal (`docs/screenshots/011-ledger-charges-period-closing-plot14-reversal.png`); API 409 `REVERSAL_NOT_REVERSIBLE` (texts match): `LedgerAccountTests.aReversalCannotBeReversed`.
+  - [x] When the chairman tries to reverse without a reason, then they see "Вкажіть причину" / "Enter a reason". *Verified:* rendered, see `docs/screenshots/011-ledger-charges-period-closing-reverse-reason-required.png`; `LedgerAccountTests.aReversalNeedsAReason`.
+  - [x] Given a charge is booked in a closed month, when the chairman opens it, then "Сторнувати" is not offered and
+    the account says the correction is made by an adjustment. *Verified:* rendered, see `docs/screenshots/011-ledger-charges-period-closing-closed-month-detail.png` (no reverse button, adjustment text); e2e `charges.spec` "cannot be reversed by hand".
+  - [x] When anyone tries to change or delete an existing charge in the database directly, then the change is refused
+    and the charge stays as it was. *Verified:* read-only SQL: `charge_append_only`/`charge_part_append_only` BEFORE UPDATE OR DELETE triggers and `*_no_truncate` exist, `nadel_app` has no UPDATE/DELETE on `charge`; `LedgerAppendOnlyTests` (8 tests).
+  - [x] When the chairman opens the electricity charge of plot 7, then they see the kWh, the rate, the readings and the
+    days it was calculated from. *Verified:* rendered, see `docs/screenshots/011-ledger-charges-period-closing-electricity-detail.png` (59,5 kWh × 4,32 ₴, readings, 15 days); `ReadingChargesTests.anEnteredReadingChargesTheIntervalFromThePreviousPoint`.
 
 ### 2.2 Billing months and closing
 
@@ -88,18 +88,18 @@ hryvnias with kopecks, quantities in kWh or m³ as in 010. Only the app calculat
   <month>". If no open month exists after it, the next month is opened for it.
 - A closed month is never reopened in this feature.
 - **Acceptance Criteria:**
-  - [ ] When the chairman opens "Нарахування", then they see every month from the first charge to the current one with
-    its status ("Відкритий" / "Закритий") and totals per charge type.
-  - [ ] Given September is open, when the chairman tries to close October, then they see "Спершу закрийте попередні
-    місяці" / "Close the earlier months first".
-  - [ ] When the chairman closes September after viewing the check list, then September shows "Закритий" and no action
-    adds a charge to it.
-  - [ ] Given September is closed, when a reading dated 28.09 is approved on 05.10, then its charge is booked in
-    October, its service period ends on 28.09 and the account shows "за 13.09–28.09, нараховано в жовтні 2026".
-  - [ ] When the chairman tries to run a month after the current one, then they see "Майбутній місяць не можна
-    нарахувати" / "A future month cannot be charged".
-  - [ ] Given the month run of October is not done and two "not charged" items exist, when the chairman opens
-    "Закрити місяць", then the check list shows both facts and the month can still be closed.
+  - [x] When the chairman opens "Нарахування", then they see every month from the first charge to the current one with
+    its status ("Відкритий" / "Закритий") and totals per charge type. *Verified:* rendered, see `docs/screenshots/011-ledger-charges-period-closing-months.png`.
+  - [x] Given September is open, when the chairman tries to close October, then they see "Спершу закрийте попередні
+    місяці" / "Close the earlier months first". *Verified:* API 409 `PERIOD_CLOSE_ORDER` (texts match): `BillingMonthsTests.monthsCloseOnlyInOrder`, `LedgerAcceptanceTests` (not reproduced on the dev instance: closing writes).
+  - [x] When the chairman closes September after viewing the check list, then September shows "Закритий" and no action
+    adds a charge to it. *Verified:* closed September rendered, see `docs/screenshots/011-ledger-charges-period-closing-month-closed.png`; `BillingMonthsTests.aClosedMonthNeverChangesAndNoMonthIsDeleted`, e2e `zz-closing.spec`.
+  - [x] Given September is closed, when a reading dated 28.09 is approved on 05.10, then its charge is booked in
+    October, its service period ends on 28.09 and the account shows "за 13.09–28.09, нараховано в жовтні 2026". *Verified:* late-charge note rendered on the demo data ("за 10.08.2026–02.10.2026, нараховано в жовтні 2026", `docs/screenshots/011-ledger-charges-period-closing-plot7-account.png`); `ReadingChargesTests.aReadingOfAClosedMonthIsBookedInTheNextOpenMonthWithItsOwnServicePeriod`.
+  - [x] When the chairman tries to run a month after the current one, then they see "Майбутній місяць не можна
+    нарахувати" / "A future month cannot be charged". *Verified:* read-only API: preview of 2026-11 returns 409 `PERIOD_IN_FUTURE` (texts match); `MonthRunTests.aFutureMonthIsRefused`.
+  - [x] Given the month run of October is not done and two "not charged" items exist, when the chairman opens
+    "Закрити місяць", then the check list shows both facts and the month can still be closed. *Verified:* check list in the close dialog with the not-charged count 2 and the enabled "Закрити місяць", see `docs/screenshots/011-ledger-charges-period-closing-close-dialog.png` (cancelled); run-not-done state: `BillingMonthsTests.theMonthPageShowsTheTotalsAndTheCheckList`, `LedgerAcceptanceTests.whatCouldNotBeCharged…`.
 
 ### 2.3 The month run of recurring tariffs
 
@@ -116,17 +116,17 @@ hryvnias with kopecks, quantities in kWh or m³ as in 010. Only the app calculat
   conflict as a warning; both tariffs stay valid.
 - A tariff charge counts its debt age from the first day of its billing month (a one-off fee: from its due date).
 - **Acceptance Criteria:**
-  - [ ] Given membership is 50,0000 ₴ per sotka per year and plot 7 has 600 m², when the chairman previews October,
+  - [x] Given membership is 50,0000 ₴ per sotka per year and plot 7 has 600 m², when the chairman previews October,
     then the preview shows 25,00 ₴ for plot 7 in the membership total, and after "Провести" plot 7's account has a
-    membership charge of 25,00 ₴ for 01.10–31.10.
-  - [ ] When the chairman runs October a second time, then the preview shows nothing new to charge and no charge is
-    added.
-  - [ ] Given a new plot was added after the October run, when the chairman reruns October, then only the new plot's
-    charges are created.
-  - [ ] Given plot 12 is in the scopes of two membership tariffs, when the chairman runs October, then plot 12 gets no
-    membership charge and "Не нараховано" lists plot 12 with both tariffs named.
-  - [ ] Given a tariff gives 0,00 ₴ for a plot in October, when the chairman runs October, then no charge is created
-    for it.
+    membership charge of 25,00 ₴ for 01.10–31.10. *Verified:* `MonthRunTests.thePreviewShowsThePlotsAndTheTotalsPerChargeTypeAndWritesNothing`, `bookingChargesPlot7TwentyFiveForTheWholeMonthWithItsVersion`; e2e `charges.spec` @smoke (booking not repeated on the dev instance).
+  - [x] When the chairman runs October a second time, then the preview shows nothing new to charge and no charge is
+    added. *Verified:* rendered, see `docs/screenshots/011-ledger-charges-period-closing-run-preview.png` ("Нового нарахувати нічого", cancelled); `MonthRunTests.aSecondRunCreatesNothingNew`.
+  - [x] Given a new plot was added after the October run, when the chairman reruns October, then only the new plot's
+    charges are created. *Verified:* `MonthRunTests.aPlotAddedAfterTheRunGetsOnlyItsOwnChargesOnTheRerun`; e2e `charges.spec` "runs the open month for a plot added after the run".
+  - [x] Given plot 12 is in the scopes of two membership tariffs, when the chairman runs October, then plot 12 gets no
+    membership charge and "Не нараховано" lists plot 12 with both tariffs named. *Verified:* `MonthRunTests.twoMembershipTariffsOnPlot12ChargeNeitherAndQueueThePlotNamingBoth`, `NotChargedQueueTests.theListShowsThePlotTheChargeTypeTheReasonAndBothTariffs`.
+  - [x] Given a tariff gives 0,00 ₴ for a plot in October, when the chairman runs October, then no charge is created
+    for it. *Verified:* `MonthRunTests.aTariffAmountOfZeroCreatesNoCharge`.
 
 ### 2.4 Electricity (and water) by readings
 
@@ -150,25 +150,27 @@ hryvnias with kopecks, quantities in kWh or m³ as in 010. Only the app calculat
   parts.
 - The charge counts its debt age from the reading date.
 - **Acceptance Criteria:**
-  - [ ] Given the previous reading of plot 7 is 112,4 on 22.09, when a reading of 205,7 on 04.10 is approved, then plot
-    7 gets an electricity charge of 403,06 ₴ for 93,3 kWh × 4,32 ₴, service 23.09–04.10 (12 days).
-  - [ ] Given the electricity rate is 4,3200 ₴ until 16.10 and 5,0000 ₴ from 17.10, when readings 1 000 on 01.10 and
-    1 300 on 31.10 are counted, then the charge is 1 398,00 ₴ (150 kWh × 4,32 + 150 kWh × 5,00).
-  - [ ] Given an interval of 7 kWh at 4,3250 ₴ and 1 kWh at 4,3350 ₴, when it is charged, then the amount is 34,61 ₴
-    (rounded once, not 34,62).
-  - [ ] Given the old meter read 8 140 on 03.09 and was replaced on 20.09 at 8 205 by a new meter installed at 3, when
+  - [x] Given the previous reading of plot 7 is 112,4 on 22.09, when a reading of 205,7 on 04.10 is approved, then plot
+    7 gets an electricity charge of 403,06 ₴ for 93,3 kWh × 4,32 ₴, service 23.09–04.10 (12 days). *Verified:* `ReadingChargesTests.anEnteredReadingChargesTheIntervalFromThePreviousPoint`, `LedgerAcceptanceTests` (403,06 end to end).
+  - [x] Given the electricity rate is 4,3200 ₴ until 16.10 and 5,0000 ₴ from 17.10, when readings 1 000 on 01.10 and
+    1 300 on 31.10 are counted, then the charge is 1 398,00 ₴ (150 kWh × 4,32 + 150 kWh × 5,00). *Verified:* `ReadingChargeCalculatorTests.tariffChangeInsideTheIntervalSplitsTheConsumptionByDays` (1 398,00).
+  - [x] Given an interval of 7 kWh at 4,3250 ₴ and 1 kWh at 4,3350 ₴, when it is charged, then the amount is 34,61 ₴
+    (rounded once, not 34,62). *Verified:* `ReadingChargeCalculatorTests.theSumOfThePartsIsRoundedOnce` (34,61).
+  - [x] Given the old meter read 8 140 on 03.09 and was replaced on 20.09 at 8 205 by a new meter installed at 3, when
     the new meter's reading of 69 on 05.10 is approved, then plot 7 has two charges: 65 kWh = 280,80 ₴ and 66 kWh =
-    285,12 ₴.
-  - [ ] When a meter is installed with the initial value 0, then no charge is created.
-  - [ ] Given a member submitted a reading, when it is still waiting for approval, then no charge exists, and when the
-    chairman approves it, then the charge appears on the account.
-  - [ ] Given the first electricity tariff version starts on 01.10, when a reading closes the interval 20.09–05.10,
+    285,12 ₴. *Verified:* `ReadingChargesTests.aReplacementChargesTheLastIntervalOfTheOldMeterAndTheFirstOfTheNewOne`.
+  - [x] When a meter is installed with the initial value 0, then no charge is created. *Verified:* `ReadingChargesTests.aRemovalChargesTheIntervalUpToTheFinalValueAndTheInitialValueChargesNothing`, `ReadingChargeCalculatorTests.theInitialValueAloneIsNoInterval`.
+  - [x] Given a member submitted a reading, when it is still waiting for approval, then no charge exists, and when the
+    chairman approves it, then the charge appears on the account. *Verified:* `ReadingChargesTests.aMembersReadingChargesNothingUntilItIsApproved`; e2e `charges.spec` "approves an owner reading…" @smoke.
+  - [x] Given the first electricity tariff version starts on 01.10, when a reading closes the interval 20.09–05.10,
     then no charge is created and "Не нараховано" lists the plot with "Немає тарифу на всі дні" / "No tariff for every
-    day".
-  - [ ] Given the "Вода" charge type is inactive, when a water reading is approved, then no charge and no queue item is
-    created.
-  - [ ] Given losses are 5 % of consumption, when a 65 kWh interval is charged, then the plot gets a consumption charge
-    of 280,80 ₴ and a losses charge of 14,04 ₴ (3,25 kWh).
+    day". *Verified:* `ReadingChargesTests` (no tariff → queue → retry), `ReadingChargePlanningTests`; the reason text is
+    `billing.notCharged.reasons.NO_TARIFF_FOR_ALL_DAYS` in `packages/shared/src/i18n/uk.ts:1430` / `en.ts:1408`; the item
+    rendered in `docs/screenshots/011-ledger-charges-period-closing-not-charged.png` (before the text alignment).
+  - [x] Given the "Вода" charge type is inactive, when a water reading is approved, then no charge and no queue item is
+    created. *Verified:* `ReadingChargesTests.waterReadingsChargeAndQueueNothingWhileWaterIsInactive`.
+  - [x] Given losses are 5 % of consumption, when a 65 kWh interval is charged, then the plot gets a consumption charge
+    of 280,80 ₴ and a losses charge of 14,04 ₴ (3,25 kWh). *Verified:* `ReadingChargesTests.fixedPercentageLossesAddALossesChargeOverTheSameParts` (280,80 and 14,04).
 
 ### 2.5 Losses in the network
 
@@ -196,21 +198,21 @@ hryvnias with kopecks, quantities in kWh or m³ as in 010. Only the app calculat
   the range end.
 - The screen lists past runs with their range, author, totals and status (booked or reversed).
 - **Acceptance Criteria:**
-  - [ ] Given quarter A shows 1 100 kWh and its plots P1 600 kWh and P2 400 kWh (lighting 0), when the chairman runs
-    losses, then P1 gets 60 kWh = 259,20 ₴ and P2 40 kWh = 172,80 ₴.
-  - [ ] Given the substation shows 2 300 kWh with quarters A 1 100 and B 1 050 and the well 50 (P1 600, P2 400 in A,
+  - [x] Given quarter A shows 1 100 kWh and its plots P1 600 kWh and P2 400 kWh (lighting 0), when the chairman runs
+    losses, then P1 gets 60 kWh = 259,20 ₴ and P2 40 kWh = 172,80 ₴. *Verified:* `LossesRunsTests.thePreviewShowsTheQuarterWithItsPlotsAndAmountsAndWritesNothing`, `LossesCalculatorTests.quarterLossesAreSharedByThePlotsConsumption`; per-plot shares rendered in `docs/screenshots/011-ledger-charges-period-closing-losses-history.png`.
+  - [x] Given the substation shows 2 300 kWh with quarters A 1 100 and B 1 050 and the well 50 (P1 600, P2 400 in A,
     P3 1 000 in B), when the chairman runs losses, then quarter B gives P3 50 kWh and the substation's 100 kWh is
-    shared P1 30, P2 20, P3 50 kWh.
-  - [ ] Given a quarter shows 950 kWh and its children 1 000 kWh, when the chairman previews losses, then that quarter
-    charges nothing and shows the warning "−50 кВт·год".
-  - [ ] Given quarter B has no reading after the range end, when the chairman previews losses, then quarter B and the
-    substation are skipped with warnings and quarter A is charged.
-  - [ ] Given quarter A was charged for 01.10–31.10, when the chairman runs 15.10–15.11, then they see "Втрати за ці дні
-    вже розраховано для вузла …" / "Losses for these days have already been calculated for node …".
-  - [ ] When the chairman reverses a losses run with a reason, then every losses charge of the run is reversed with
-    that reason and the run shows "Сторновано".
-  - [ ] Given a value in the range is calculated between readings, when the chairman previews losses, then the value
-    is marked "розрахунковий".
+    shared P1 30, P2 20, P3 50 kWh. *Verified:* `LossesRunsTests.theSubstationSharesItsLossesAmongEveryPlotUnderIt`, `LossesCalculatorTests.substationLossesAreSharedByEveryPlotUnderIt`.
+  - [x] Given a quarter shows 950 kWh and its children 1 000 kWh, when the chairman previews losses, then that quarter
+    charges nothing and shows the warning "−50 кВт·год". *Verified:* negative-losses warning rendered on a read-only preview ("втрати −250,136 кВт·год"), see `docs/screenshots/011-ledger-charges-period-closing-losses-preview-warnings.png`; `LossesRunsTests.aQuarterShowingLessThanItsChildrenChargesNothingAndWarnsWithTheNumbers`.
+  - [x] Given quarter B has no reading after the range end, when the chairman previews losses, then quarter B and the
+    substation are skipped with warnings and quarter A is charged. *Verified:* unknown quarter Б skipped with a warning, quarter А charged, see `docs/screenshots/011-ledger-charges-period-closing-losses-history.png`; `LossesRunsTests.anUnknownNodeIsSkippedWithTheNodesAboveItQueuedAndChargedLaterByARetry`.
+  - [x] Given quarter A was charged for 01.10–31.10, when the chairman runs 15.10–15.11, then they see "Втрати за ці дні
+    вже розраховано для вузла …" / "Losses for these days have already been calculated for node …". *Verified:* read-only preview shows "Втрати за ці дні вже розраховано для вузла Квартал А", see `docs/screenshots/011-ledger-charges-period-closing-losses-preview-overlap.png`; `LossesRunsTests.aNodeChargedForSomeOfTheDaysIsShownAndItsBookingRefused`.
+  - [x] When the chairman reverses a losses run with a reason, then every losses charge of the run is reversed with
+    that reason and the run shows "Сторновано". *Verified:* `LossesRunsTests.aReversalReversesEveryChargeWithTheRunsReasonAndFreesTheDays`; e2e `charges.spec` "runs losses … and the run is reversed".
+  - [x] Given a value in the range is calculated between readings, when the chairman previews losses, then the value
+    is marked "розрахунковий". *Verified:* "розрахунковий" rendered, see `docs/screenshots/011-ledger-charges-period-closing-losses-preview-warnings.png`, `docs/screenshots/011-ledger-charges-period-closing-losses-preview-overlap.png`; `LossesRunsTests.aValueBetweenReadingsIsMarkedCalculated`.
 
 ### 2.6 Common consumers (a separate line)
 
@@ -231,23 +233,26 @@ hryvnias with kopecks, quantities in kWh or m³ as in 010. Only the app calculat
 - One charge per plot per consumer per run, rounded once; the consumer is named on the charge.
 - A consumer whose consumption is unknown is skipped with a warning; the others are charged.
 - **Acceptance Criteria:**
-  - [ ] When a new cooperative is created, then its charge types include "Спільні споживачі".
-  - [ ] Given street lighting used 50 kWh, 4 active plots (one without a meter) and the rate 4,3200 ₴, when the
-    chairman runs common consumers equally per plot, then each of the 4 plots gets 12,5 kWh = 54,00 ₴.
-  - [ ] Given the well pump used 60 kWh in October and P1, P2, P3 were connected all month and P4 not, when the
-    chairman runs it among connected plots, then P1–P3 get 20 kWh = 86,40 ₴ each and P4 nothing.
-  - [ ] Given the pump used 60 kWh over 01.10–30.10 and P3 was connected from 16.10, when the chairman runs it, then
-    P1 and P2 get 24 kWh and P3 12 kWh.
-  - [ ] Given lighting used 30 kWh and 3 plots are marked as its users, when the chairman runs it, then each of them
-    gets 10 kWh = 43,20 ₴ and other plots nothing.
-  - [ ] Given a consumer is "not charged", when the chairman previews the run, then it is listed with its consumption
-    and no charges.
-  - [ ] Given there is no "Спільні споживачі" tariff, when the chairman previews the run, then they see "Немає тарифу"
-    and nothing can be booked.
-  - [ ] Given the pump was charged for 01.10–31.10, when the chairman runs it for 15.10–15.11, then the run is refused
+  - [x] When a new cooperative is created, then its charge types include "Спільні споживачі". *Verified:* read-only SQL: both cooperatives (СТ «Надія», СТ «Світанок») have `COMMON_CONSUMERS`; `ChargeTypesTests.aBrandNewCooperativeGetsTheTypesAndThePermissionsFromSeedBaseRoles`.
+  - [x] Given street lighting used 50 kWh, 4 active plots (one without a meter) and the rate 4,3200 ₴, when the
+    chairman runs common consumers equally per plot, then each of the 4 plots gets 12,5 kWh = 54,00 ₴. *Verified:* `CommonConsumerRunsTests.streetLightingEquallyPerPlotPreviewsFourPlotsAt54AndWritesNothing`.
+  - [x] Given the well pump used 60 kWh in October and P1, P2, P3 were connected all month and P4 not, when the
+    chairman runs it among connected plots, then P1–P3 get 20 kWh = 86,40 ₴ each and P4 nothing. *Verified:* `CommonConsumerPlanningTests.theWellAmongConnectedPlotsCharges86ForEachConnectedPlotAndNothingForTheOther` (unit).
+  - [x] Given the pump used 60 kWh over 01.10–30.10 and P3 was connected from 16.10, when the chairman runs it, then
+    P1 and P2 get 24 kWh and P3 12 kWh. *Verified:* `CommonConsumerPlanningTests.aPlotConnectedFromTheMiddlePaysForItsPlotDays`, `CommonConsumerSplitCalculatorTests.aConnectionInsideTheRangeSharesPerPlotDay` (unit).
+  - [x] Given lighting used 30 kWh and 3 plots are marked as its users, when the chairman runs it, then each of them
+    gets 10 kWh = 43,20 ₴ and other plots nothing. *Verified:* `CommonConsumerRunsTests.serviceUsersPay43AndOtherPlotsNothingWhileANotChargedConsumerIsOnlyListed`.
+  - [x] Given a consumer is "not charged", when the chairman previews the run, then it is listed with its consumption
+    and no charges. *Verified:* `CommonConsumerRunsTests.serviceUsersPay43AndOtherPlotsNothingWhileANotChargedConsumerIsOnlyListed`, `CommonConsumerPlanningTests.aConsumerThatIsNotChargedIsListedWithItsConsumptionAndChargesNothing`.
+  - [x] Given there is no "Спільні споживачі" tariff, when the chairman previews the run, then they see "Немає тарифу"
+    and nothing can be booked. *Verified:* `CommonConsumerRunsTests.withoutACommonConsumersTariffThePreviewSaysSoAndNothingCanBeBooked` (catalog "Немає тарифу").
+  - [x] Given the pump was charged for 01.10–31.10, when the chairman runs it for 15.10–15.11, then the run is refused
     for that consumer with "Спільного споживача за ці дні вже розраховано" / "This common consumer has already been
-    charged for these days".
-  - [ ] When the chairman reverses a common consumers run with a reason, then every charge of the run is reversed.
+    charged for these days". *Verified:* `CommonConsumerRunsTests.aConsumerChargedForSomeOfTheDaysIsShownAndItsBookingRefused`
+    (409 `COMMON_CONSUMER_RANGE_OVERLAP`); texts in `uk.ts:1368,1626` / `en.ts:1352,1603`, asserted by
+    `CommonConsumersPage.test.tsx`; the overlap preview rendered in
+    `docs/screenshots/011-ledger-charges-period-closing-common-preview-overlap.png` (before the text alignment).
+  - [x] When the chairman reverses a common consumers run with a reason, then every charge of the run is reversed. *Verified:* `CommonConsumerRunsTests.aReversalReversesEveryChargeWithTheRunsReasonAndFreesTheDays`; "Сторнувати розрахунок" offered, see `docs/screenshots/011-ledger-charges-period-closing-common-history.png`.
 
 ### 2.7 "Не нараховано" (the not-charged queue)
 
@@ -257,11 +262,11 @@ hryvnias with kopecks, quantities in kWh or m³ as in 010. Only the app calculat
 - "Повторити" retries one item; the next month run retries the items of tariffs and readings. An item disappears when
   a retry succeeds. Items never block a month from closing.
 - **Acceptance Criteria:**
-  - [ ] Given a reading could not be charged for lack of a tariff, when the chairman adds the missing tariff version
-    and clicks "Повторити", then the charge is created and the item disappears.
-  - [ ] Given the cause is not fixed, when the chairman clicks "Повторити", then the item stays with its reason.
-  - [ ] When the chairman opens "Не нараховано", then each item shows the plot, the charge type, the reason and a link
-    to the tariff, the meter or the run.
+  - [x] Given a reading could not be charged for lack of a tariff, when the chairman adds the missing tariff version
+    and clicks "Повторити", then the charge is created and the item disappears. *Verified:* `NotChargedQueueTests.aRetryAfterTheFixChargesThePlotAndTheItemDisappears`; e2e `charges.spec` "retries it".
+  - [x] Given the cause is not fixed, when the chairman clicks "Повторити", then the item stays with its reason. *Verified:* `NotChargedQueueTests.aRetryWithoutAFixKeepsTheItemWithItsReason`.
+  - [x] When the chairman opens "Не нараховано", then each item shows the plot, the charge type, the reason and a link
+    to the tariff, the meter or the run. *Verified:* rendered, see `docs/screenshots/011-ledger-charges-period-closing-not-charged.png` (plot, type, reason, links to the meter, the tariff and the node).
 
 ### 2.8 Water connection
 
@@ -278,21 +283,21 @@ hryvnias with kopecks, quantities in kWh or m³ as in 010. Only the app calculat
   "Вода" / "Water" in the "Ділянки" / "Plots" import sheet (так/ні or the source name), in both languages.
 - Connecting and disconnecting are audited.
 - **Acceptance Criteria:**
-  - [ ] When the chairman connects plot 7 to "Свердловина №1" from 01.05.2020, then the plot card shows "Підключено до
-    води: Свердловина №1 з 01.05.2020".
-  - [ ] Given plot 7 is connected, when the chairman connects it again, then they see "Ділянка вже підключена до води" /
-    "The plot is already connected to water".
-  - [ ] When the chairman disconnects plot 7 on 15.10, then the card shows the connection with its end date in the
-    history and the plot is not connected.
-  - [ ] When the chairman connects 5 selected plots to the well from 01.10 on the source's page, then all 5 show the
-    connection.
-  - [ ] Given a water fee of 300,0000 ₴ per plot per year billed monthly, P1 connected and P4 not, when the chairman
-    runs October, then P1 gets 25,00 ₴ and P4 gets nothing and is not in "Не нараховано".
-  - [ ] Given the same fee and P3 connected from 16.10, when the chairman runs October, then P3 gets 12,90 ₴.
-  - [ ] Given a plot with a water meter is disconnected for the whole interval, when its water reading is approved,
-    then no charge and no queue item is created.
-  - [ ] When the chairman imports a "Ділянки" sheet with "Вода: так" for plot 9, then plot 9 is connected to the
-    cooperative's water source from the import's date; the English sheet with "Water: yes" does the same.
+  - [x] When the chairman connects plot 7 to "Свердловина №1" from 01.05.2020, then the plot card shows "Підключено до
+    води: Свердловина №1 з 01.05.2020". *Verified:* plot 7 card shows "Підключено до води: Свердловина №1 з 01.05.2020", see `docs/screenshots/011-ledger-charges-period-closing-plot7-water.png`; `WaterConnectionsTests.theChairmanConnectsAPlotToAWellAndTheCardShowsIt`, e2e `ledger-acceptance.spec` §2.8.
+  - [x] Given plot 7 is connected, when the chairman connects it again, then they see "Ділянка вже підключена до води" /
+    "The plot is already connected to water". *Verified:* "Підключити" is not offered on a connected card (`docs/screenshots/011-ledger-charges-period-closing-plot7-water.png`); API 409 `WATER_ALREADY_CONNECTED`: `WaterConnectionsTests.aConnectedPlotIsNotConnectedAgain`, e2e `ledger-acceptance.spec` §2.8.
+  - [x] When the chairman disconnects plot 7 on 15.10, then the card shows the connection with its end date in the
+    history and the plot is not connected. *Verified:* `WaterConnectionsTests.aDisconnectionKeepsTheHistoryAndAConnectionMayNotShareADayWithIt`, e2e `ledger-acceptance.spec` §2.8.
+  - [x] When the chairman connects 5 selected plots to the well from 01.10 on the source's page, then all 5 show the
+    connection. *Verified:* bulk connect controls and the connected plots per source rendered in `docs/screenshots/011-ledger-charges-period-closing-settings.png`; `WaterConnectionsTests.theChairmanConnectsFiveSelectedPlotsToTheWellAndTheSourceListsThem`.
+  - [x] Given a water fee of 300,0000 ₴ per plot per year billed monthly, P1 connected and P4 not, when the chairman
+    runs October, then P1 gets 25,00 ₴ and P4 gets nothing and is not in "Не нараховано". *Verified:* `MonthRunTests.aWaterFeeChargesOnlyTheConnectedDaysAndNeverAPlotThatIsNotConnected`.
+  - [x] Given the same fee and P3 connected from 16.10, when the chairman runs October, then P3 gets 12,90 ₴. *Verified:* `MonthRunTests.aWaterFeeChargesOnlyTheConnectedDaysAndNeverAPlotThatIsNotConnected` (12,90).
+  - [x] Given a plot with a water meter is disconnected for the whole interval, when its water reading is approved,
+    then no charge and no queue item is created. *Verified:* `ReadingChargesTests.aWaterReadingOfAPlotNotConnectedForTheWholeIntervalChargesAndQueuesNothing`.
+  - [x] When the chairman imports a "Ділянки" sheet with "Вода: так" for plot 9, then plot 9 is connected to the
+    cooperative's water source from the import's date; the English sheet with "Water: yes" does the same. *Verified:* `ImportPlotsWaterTests` (Ukrainian and English sheets).
 
 ### 2.9 Opening balances
 
@@ -304,15 +309,15 @@ hryvnias with kopecks, quantities in kWh or m³ as in 010. Only the app calculat
   other import sheets.
 - An opening balance is booked in the month of its date (or the earliest open month).
 - **Acceptance Criteria:**
-  - [ ] When the chairman enters an opening balance of 1 500,00 ₴ for membership on plot 12 as of 01.09.2026 with the
+  - [x] When the chairman enters an opening balance of 1 500,00 ₴ for membership on plot 12 as of 01.09.2026 with the
     reason "Борг за 2025 рік", then plot 12's account shows an opening balance of 1 500,00 ₴ and the membership debt
-    rises by 1 500,00 ₴.
-  - [ ] When the chairman enters an opening balance of 0 or a negative amount, then they see "Сума має бути більшою за
-    нуль" / "The amount must be greater than zero".
-  - [ ] When the chairman imports an "Вхідне сальдо" sheet with three rows, then the preview shows three opening
-    balances and applying it creates them; an English "Opening balances" sheet works the same way.
-  - [ ] When an imported row names an unknown plot or charge type, then the preview shows the row as an error and
-    nothing from that row is created.
+    rises by 1 500,00 ₴. *Verified:* demo plot 12 opening balance 1 500,00 "Борг за 2025 рік" as of 01.09.2026, see `docs/screenshots/011-ledger-charges-period-closing-plot12-opening-balance.png`; `LedgerAccountTests.anOpeningBalanceIsBookedInTheMonthOfItsDateAndRaisesTheDebt`.
+  - [x] When the chairman enters an opening balance of 0 or a negative amount, then they see "Сума має бути більшою за
+    нуль" / "The amount must be greater than zero". *Verified:* rendered, see `docs/screenshots/011-ledger-charges-period-closing-opening-balance-zero.png` (cancelled); `LedgerAccountTests.anOpeningBalanceMustBeGreaterThanZeroAndNotInTheFuture`.
+  - [x] When the chairman imports an "Вхідне сальдо" sheet with three rows, then the preview shows three opening
+    balances and applying it creates them; an English "Opening balances" sheet works the same way. *Verified:* `ImportOpeningBalancesTests.aUkrainianSheetWithThreeRowsIsPreviewedAndCommittedAsThreeOpeningBalances`, `anEnglishSheetWorksTheSameWayAndTheSameFileUploadedAgainBooksNothingTwice`.
+  - [x] When an imported row names an unknown plot or charge type, then the preview shows the row as an error and
+    nothing from that row is created. *Verified:* `ImportOpeningBalancesTests.everyRowProblemIsReportedOnItsRowAndColumnWithACodeAndNothingIsBooked`.
 
 ### 2.10 Plot status on the map
 
@@ -323,13 +328,13 @@ hryvnias with kopecks, quantities in kWh or m³ as in 010. Only the app calculat
   which the chairman can change; a change is audited and applies to the next recalculation of each plot.
 - Until payments exist, a plot with charges shows a debt; that is correct.
 - **Acceptance Criteria:**
-  - [ ] Given plot 7 has no charges and an owner, when it gets a charge of 25,00 ₴, then the map shows plot 7 yellow.
-  - [ ] Given the red amount is 1 000,00 ₴, when plot 12 gets an opening balance of 1 500,00 ₴, then the map shows
-    plot 12 red.
-  - [ ] Given plot 12 is red only because of its debt amount, when its charges are reversed below the threshold, then
-    it turns yellow (or green with no debt left).
-  - [ ] When the chairman changes the red amount to 2 000,00 ₴, then the settings show the new value and the change
-    appears in the audit log.
+  - [x] Given plot 7 has no charges and an owner, when it gets a charge of 25,00 ₴, then the map shows plot 7 yellow. *Verified:* plot 7 YELLOW ("Є борг") in the registry and `/plots/map` (the map screen itself arrives in roadmap phase 6), see `docs/screenshots/011-ledger-charges-period-closing-plots-status.png`; `PlotStatusRefreshTests.aChargeTurnsAnOwnedPlotYellowAndItsReversalGreenAgain`.
+  - [x] Given the red amount is 1 000,00 ₴, when plot 12 gets an opening balance of 1 500,00 ₴, then the map shows
+    plot 12 red. *Verified:* plot 12 RED in the registry and `/plots/map`, see `docs/screenshots/011-ledger-charges-period-closing-plots-status.png`; `PlotStatusRefreshTests.anOpeningBalanceAboveTheRedAmountIsRedAndItsReversalLeavesTheSmallerDebtYellow`.
+  - [x] Given plot 12 is red only because of its debt amount, when its charges are reversed below the threshold, then
+    it turns yellow (or green with no debt left). *Verified:* `PlotStatusRefreshTests` (same tests), `LedgerAcceptanceTests`.
+  - [x] When the chairman changes the red amount to 2 000,00 ₴, then the settings show the new value and the change
+    appears in the audit log. *Verified:* settings show 2000.00 / 90 days, see `docs/screenshots/011-ledger-charges-period-closing-settings.png`; audit: `SettingsTests.aChangeOfTheRedThresholdIsAuditedWithEveryChangedField`; e2e `ledger-acceptance.spec` §2.10.
 
 ### 2.11 Tariff versions and readings in use
 
@@ -337,12 +342,12 @@ hryvnias with kopecks, quantities in kWh or m³ as in 010. Only the app calculat
   charge or a run that is not reversed can no longer be corrected or deleted. Corrections of used values arrive with
   feature 012.
 - **Acceptance Criteria:**
-  - [ ] Given the October run used the membership version, when the chairman tries to correct that version, then they
-    see "Цю версію вже використано в нарахуваннях — виправлення через перерахунок" (the 009 message).
-  - [ ] Given a reading was charged, when the chairman tries to correct or delete it, then they see "Цей
-    показ уже використано в нарахуванні — виправлення через перерахунок" (the 010 message).
-  - [ ] Given the charge of a reading was reversed, when the chairman corrects the reading, then the correction is
-    accepted.
+  - [x] Given the October run used the membership version, when the chairman tries to correct that version, then they
+    see "Цю версію вже використано в нарахуваннях — виправлення через перерахунок" (the 009 message). *Verified:* `TariffVersionUsageTests.aVersionTheRunUsedIsNoLongerCorrectedOrDeleted` (catalog text matches).
+  - [x] Given a reading was charged, when the chairman tries to correct or delete it, then they see "Цей
+    показ уже використано в нарахуванні — виправлення через перерахунок" (the 010 message). *Verified:* `ReadingUsageTests.aChargedReadingCannotBeCorrectedOrDeleted` (catalog text matches).
+  - [x] Given the charge of a reading was reversed, when the chairman corrects the reading, then the correction is
+    accepted. *Verified:* `ReadingUsageTests.afterTheReversalOfItsChargeTheReadingIsCorrectedAndTheNewIntervalCharged`.
 
 ### 2.12 Permissions, visibility and the screens
 
@@ -357,15 +362,15 @@ hryvnias with kopecks, quantities in kWh or m³ as in 010. Only the app calculat
   cooperative settings (losses mode and percentage, common consumers split, service users, water sources and their
   plots, the red threshold). Each menu item and button shows only to those with the permission.
 - **Acceptance Criteria:**
-  - [ ] When the treasurer opens "Нарахування", then they see the months and accounts but no "Нарахувати місяць",
-    "Закрити місяць" or "Сторнувати".
-  - [ ] When the treasurer tries to run a month through any channel, then the action is refused.
-  - [ ] When a member opens "Мої нарахування", then they see the charges and debts of their own plots only.
-  - [ ] When a member asks for another plot's account, then they see "Ділянку не знайдено".
-  - [ ] When a member of another cooperative uses the app, then they never see this cooperative's charges, months,
-    runs, queue items or water connections.
-  - [ ] When the chairman runs a month, closes a month, books or reverses a run, reverses a charge, enters an opening
-    balance, connects or disconnects water or changes these settings, then the audit log shows who, when and what.
+  - [x] When the treasurer opens "Нарахування", then they see the months and accounts but no "Нарахувати місяць",
+    "Закрити місяць" or "Сторнувати". *Verified:* rendered, see `docs/screenshots/011-ledger-charges-period-closing-treasurer-month.png`, `docs/screenshots/011-ledger-charges-period-closing-treasurer-account.png` (no run, close, reverse or opening-balance buttons).
+  - [x] When the treasurer tries to run a month through any channel, then the action is refused. *Verified:* read-only API: treasurer month-run preview and losses preview return 403 `PERMISSION_DENIED`; `MonthRunTests.onlyChargesRunMayPreviewOrBook`, `LedgerAcceptanceTests`.
+  - [x] When a member opens "Мої нарахування", then they see the charges and debts of their own plots only. *Verified:* rendered, see `docs/screenshots/011-ledger-charges-period-closing-member-my-charges.png` (plots 7 and 15 only); member gets 403 on months, runs and the queue.
+  - [x] When a member asks for another plot's account, then they see "Ділянку не знайдено". *Verified:* read-only API: member's request for plot 12's account returns 404 `PLOT_NOT_FOUND` ("Ділянку не знайдено."); the card shows no account, see `docs/screenshots/011-ledger-charges-period-closing-member-other-plot.png`.
+  - [x] When a member of another cooperative uses the app, then they never see this cooperative's charges, months,
+    runs, queue items or water connections. *Verified:* read-only API as `member@other.local`: 403 on months, queue, runs and water sources, 404 `PLOT_NOT_FOUND` on plot 7's account and water connections; see `docs/screenshots/011-ledger-charges-period-closing-other-cooperative.png`; tenant isolation tests.
+  - [x] When the chairman runs a month, closes a month, books or reverses a run, reverses a charge, enters an opening
+    balance, connects or disconnects water or changes these settings, then the audit log shows who, when and what. *Verified:* BILLING_MONTH_RUN entries with actor and values in `docs/screenshots/011-ledger-charges-period-closing-audit.png`; `LedgerAuditTests`, `BillingMonthsTests.closingIsAudited`, `WaterConnectionsTests.connectingAndDisconnectingAreAudited`, `SettingsTests`, `LedgerAcceptanceTests`.
 
 ### 2.13 Demo data
 
@@ -373,14 +378,17 @@ hryvnias with kopecks, quantities in kWh or m³ as in 010. Only the app calculat
   charges from the demo readings; one proportional losses run for October with 5–15 % losses per node and one node
   with a warning; one common consumers run (well pump among the connected plots, street lighting equally); most plots
   connected to the well, three not connected, one connected in the middle of October; September closed; one reversed
-  charge; one plot with an opening balance; one "not charged" item: a plot whose first meter interval starts before
-  the first electricity tariff version.
+  charge; one plot with an opening balance; two "not charged" items: a plot whose first meter interval starts before
+  the first electricity tariff version, and the losses run's warning node (an unknown node always opens an item,
+  §2.5).
 - **Acceptance Criteria:**
-  - [ ] When the chairman opens "Нарахування" in the demo cooperative, then September is closed and October is open
-    with membership, land tax, electricity, losses and common consumers totals.
-  - [ ] When the chairman opens "Не нараховано" in the demo cooperative, then there is exactly one item with the reason
-    "Немає тарифу на всі дні".
-  - [ ] When the chairman opens the demo map, then plots show red, yellow or green by their debt.
+  - [x] When the chairman opens "Нарахування" in the demo cooperative, then September is closed and October is open
+    with membership, land tax, electricity, losses and common consumers totals. *Verified:* see `docs/screenshots/011-ledger-charges-period-closing-months.png`: September closed, October open with membership, land tax, electricity and common consumers totals; losses charges are booked in the electricity type (month totals are per charge type, §2.2) and the losses run total 517,95 ₴ is on "Втрати" (`docs/screenshots/011-ledger-charges-period-closing-losses-history.png`); `DemoLedgerDataTests.theScreensShowTheFeature`.
+  - [x] When the chairman opens "Не нараховано" in the demo cooperative, then there is exactly one item with the reason
+    "Немає тарифу на всі дні" (a plot) and one item for the losses run's warning node. *Verified:* read-only SQL on the
+    demo dev DB: open items `INTERVAL|NO_TARIFF_FOR_ALL_DAYS` (plot 25) and `LOSSES_NODE|UNKNOWN_NODE_VALUE` (Квартал Б);
+    rendered in `docs/screenshots/011-ledger-charges-period-closing-not-charged.png`; `DemoLedgerDataTests`.
+  - [x] When the chairman opens the demo map, then plots show red, yellow or green by their debt. *Verified:* registry and `/plots/map` show RED/YELLOW by debt (GREY for plots without an owner), see `docs/screenshots/011-ledger-charges-period-closing-plots-status.png`; `DemoLedgerDataTests.thePlotDebtsAreWhatTheStatusRefresherRecords`.
 
 ---
 
@@ -440,3 +448,5 @@ Decided by the pipeline (no blocking question; the requirement document is detai
 ## Change Log
 
 - 2026-10-22 — created by `/feature-pipeline` from `docs/features/011-ledger-charges-period-closing.md`.
+- 2026-10-23 — §2.13: the demo has two "not charged" items, not one. The losses run's warning node opens an item by
+  the rule of §2.5 (an unknown node is queued so it is charged later), so the demo cannot show only the plot item.

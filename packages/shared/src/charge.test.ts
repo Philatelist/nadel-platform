@@ -10,7 +10,7 @@ const en = messages('en');
 describe('chargePeriodNote', () => {
   it('names the service period and the billing month when the period leaves the month', () => {
     const charge = { billingMonth: '2026-10', serviceFrom: '2026-09-23', serviceTo: '2026-10-04' };
-    expect(chargePeriodNote(charge, uk, 'uk')).toBe('за 23.09.2026–04.10.2026, нараховано в жовтні 2026');
+    expect(chargePeriodNote(charge, uk, 'uk')).toBe('за 23.09.2026–04.10.2026, нараховано у жовтні 2026');
     expect(chargePeriodNote(charge, en, 'en')).toBe('for 23 Sep 2026–4 Oct 2026, charged in October 2026');
   });
 
@@ -21,7 +21,7 @@ describe('chargePeriodNote', () => {
 
   it('shows a single day once', () => {
     const charge = { billingMonth: '2026-10', serviceFrom: '2026-09-30', serviceTo: '2026-09-30' };
-    expect(chargePeriodNote(charge, uk, 'uk')).toBe('за 30.09.2026, нараховано в жовтні 2026');
+    expect(chargePeriodNote(charge, uk, 'uk')).toBe('за 30.09.2026, нараховано у жовтні 2026');
   });
 });
 

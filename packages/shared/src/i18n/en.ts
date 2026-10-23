@@ -1348,7 +1348,8 @@ export const en = {
         UNKNOWN_VALUE:
           '{consumer} is skipped: its meter has no reading after the end of the range (last reading {date}).',
         UNKNOWN_VALUE_NEVER: '{consumer} is skipped: its meter has no reading after the end of the range.',
-        ALREADY_CHARGED: '{consumer} has already been charged for these days (run {run}).',
+        ALREADY_CHARGED:
+          'This common consumer has already been charged for these days: {consumer} (run {run}).',
         NO_PLOTS: '{consumer}: no plot shares it in the range, so nobody is charged.',
       },
     },
@@ -1404,7 +1405,7 @@ export const en = {
         COMMON_CONSUMER: 'Common consumer',
       },
       reason: {
-        NO_TARIFF_FOR_ALL_DAYS: 'No tariff covers every day of the period',
+        NO_TARIFF_FOR_ALL_DAYS: 'No tariff for every day',
         CONFLICTING_TARIFFS: 'Two tariffs apply on the same day; change the plots of one of them',
         OUTSIDE_SCOPE: 'The plot is outside the plots of every tariff',
         EXCLUDED: 'The plot is excluded from the tariff',
@@ -1599,7 +1600,7 @@ export const en = {
     NO_COMMON_CONSUMERS_TARIFF:
       'There is no tariff for common consumers, so the run cannot be booked. Add the tariff first.',
     COMMON_CONSUMER_RANGE_OVERLAP:
-      'Some of these days have already been charged for a common consumer. Preview again and book the other consumers.',
+      'This common consumer has already been charged for these days. Preview again and book the other consumers.',
     UNKNOWN: 'Something went wrong. Please try again.',
   },
   map: {

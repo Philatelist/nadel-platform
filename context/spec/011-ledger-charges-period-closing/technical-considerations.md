@@ -1,7 +1,7 @@
 # Technical Specification: Ledger, charges and period closing
 
 - **Functional Specification:** [functional-spec.md](functional-spec.md)
-- **Status:** Draft
+- **Status:** Completed
 - **Author(s):** Alex Usov (drafted by `/feature-pipeline` with spring-backend, postgres-database and react-frontend input)
 
 ---

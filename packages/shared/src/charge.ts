@@ -12,7 +12,7 @@ export interface ChargePeriod {
 }
 
 /**
- * "за 23.09.2026–04.10.2026, нараховано в жовтні 2026": the service period and the billing month, but only when
+ * "за 23.09.2026–04.10.2026, нараховано у жовтні 2026": the service period and the billing month, but only when
  * the service period reaches outside the billing month; otherwise undefined (the month alone says it all).
  * Compares the texts of the dates, no date arithmetic.
  */

@@ -321,7 +321,7 @@ test.describe('charges and period closing', () => {
     const plot25 = table
       .getByRole('row')
       .filter({ has: page.getByRole('link', { name: '25', exact: true }) });
-    await expect(plot25).toContainText('No tariff covers every day of the period');
+    await expect(plot25).toContainText('No tariff for every day');
     await expect(
       table.getByRole('row').filter({ hasText: 'A meter value of the period is unknown' }).first(),
     ).toBeVisible();
