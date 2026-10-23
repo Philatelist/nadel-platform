@@ -166,7 +166,7 @@ class CommonConsumerRuns {
         UUID tenantId = Objects.requireNonNull(actor.tenantId());
         List<UUID> consumerIds = request.getConsumerIds() == null ? List.of() : request.getConsumerIds();
         if (preview) {
-            Plan plan = plan(network.network(from, to), from, to, consumerIds, book.snapshot());
+            Plan plan = plan(network.network(from, to), from, to, consumerIds, book.snapshot(), Set.of(), false);
             return CommonConsumerRunViews.result(plan, true, null, Map.of(), billingMonths.bookingMonth(to),
                     lookups(plan));
         }
@@ -175,7 +175,7 @@ class CommonConsumerRuns {
         Network locked = network.lockSharedNetwork(from, to);
         writer.lockQueue(tenantId);
         Snapshot snapshot = writer.lockTariffs();
-        Plan plan = plan(locked, from, to, consumerIds, snapshot);
+        Plan plan = plan(locked, from, to, consumerIds, snapshot, Set.of(), false);
         if (plan.noTariff()) {
             throw conflict(ProblemCodes.NO_COMMON_CONSUMERS_TARIFF,
                     "There is no per-kWh tariff of the common consumers charge type for the range.");
@@ -187,20 +187,24 @@ class CommonConsumerRuns {
         if (!plan.overlapping().isEmpty()) {
             throw overlap();
         }
-        Booked booked = book(tenantId, plan, snapshot, actor, clock.instant());
+        Booked booked = bookAndAudit(tenantId, plan, snapshot, actor, clock.instant());
         return CommonConsumerRunViews.result(plan, false, booked.run().getId(), booked.chargeIds(),
                 booked.month().yearMonth(), lookups(plan));
     }
 
     /** What a booking wrote; {@code chargeIds} by {@link CommonConsumerRunViews#chargeKey}. */
-    private record Booked(CommonConsumerRunRecord run, BillingMonthRecord month, Map<String, UUID> chargeIds) {
+    record Booked(CommonConsumerRunRecord run, BillingMonthRecord month, Map<String, UUID> chargeIds) {
     }
 
     /**
      * The plan of the run: every common consumer of the network in the range (or the selected ones), by name, with its
-     * split, the plots that may share it and the booked run that charged it already.
+     * split, the plots that may share it and the booked run that charged it already (except {@code ignoreRunIds}: a
+     * recalculation plans a booked run again without it overlapping itself). An id of {@code consumerIds} that is not a
+     * consumer of the range is 400 {@code NOT_FOUND}, or left out when {@code dropUnknown} (then no consumer is
+     * selected when none is left).
      */
-    private Plan plan(Network net, LocalDate from, LocalDate to, List<UUID> consumerIds, Snapshot snapshot) {
+    private Plan plan(Network net, LocalDate from, LocalDate to, List<UUID> consumerIds, Snapshot snapshot,
+            Set<UUID> ignoreRunIds, boolean dropUnknown) {
         Map<UUID, NetworkChain> chainOfMeter = new HashMap<>();
         List<NetworkChain> consumers = new ArrayList<>();
         for (NetworkChain chain : net.chains()) {
@@ -214,7 +218,9 @@ class CommonConsumerRuns {
         for (int i = 0; i < consumerIds.size(); i++) {
             NetworkChain chain = chainOfMeter.get(consumerIds.get(i));
             if (chain == null) {
-                problems.add(new FieldProblem("consumerIds[" + i + "]", ProblemCodes.NOT_FOUND));
+                if (!dropUnknown) {
+                    problems.add(new FieldProblem("consumerIds[" + i + "]", ProblemCodes.NOT_FOUND));
+                }
             } else {
                 selected.add(chain.key());
             }
@@ -223,9 +229,10 @@ class CommonConsumerRuns {
             throw new ApiProblemException(HttpStatus.BAD_REQUEST, ProblemCodes.VALIDATION_FAILED,
                     "The request is not valid.", problems);
         }
+        boolean all = consumerIds.isEmpty();
         Collator collator = Collator.getInstance(Locale.forLanguageTag("uk"));
         List<NetworkChain> chosen = consumers.stream()
-                .filter(chain -> selected.isEmpty() || selected.contains(chain.key()))
+                .filter(chain -> all || selected.contains(chain.key()))
                 .sorted(Comparator.comparing((NetworkChain chain) -> Objects.requireNonNullElse(chain.name(), ""),
                         collator).thenComparing(NetworkChain::key))
                 .toList();
@@ -235,7 +242,9 @@ class CommonConsumerRuns {
         if (!chosen.isEmpty()) {
             for (CommonConsumerRunLineRecord row : lines.chargedOverlapping(
                     chosen.stream().map(NetworkChain::key).toList(), from, to)) {
-                overlaps.putIfAbsent(row.getConsumerMeterId(), overlapOf(row));
+                if (!ignoreRunIds.contains(row.getRunId())) {
+                    overlaps.putIfAbsent(row.getConsumerMeterId(), overlapOf(row));
+                }
             }
             stored = billing.of(chosen.stream().flatMap(chain -> chain.meterIds().stream()).toList());
         }
@@ -291,11 +300,40 @@ class CommonConsumerRuns {
         return new Overlap(run.getId(), run.getFromDate(), run.getToDate());
     }
 
-    /** Writes the run, its lines, charges, parts, value uses and queue items; audits and publishes. */
-    private Booked book(UUID tenantId, Plan plan, Snapshot snapshot, AccessProfile actor, Instant now) {
+    /** Writes the run with every charge of the plan ({@link #book}), audits it and publishes. */
+    private Booked bookAndAudit(UUID tenantId, Plan plan, Snapshot snapshot, AccessProfile actor, Instant now) {
+        Booked booked = book(tenantId, plan, plan.charges(), snapshot, actor.memberId(), now, null);
+        CommonConsumerRunRecord run = booked.run();
+        audit.publishCommonConsumerRun(actor, LedgerAuditPublisher.Action.COMMON_CONSUMER_RUN_BOOKED, run.getId(),
+                run.label(), List.of(new FieldChange("from", null, plan.from().toString()),
+                        new FieldChange("to", null, plan.to().toString()),
+                        new FieldChange("billingMonth", null, booked.month().yearMonth().toString()),
+                        new FieldChange("consumers", null, Long.toString(plan.lines().stream()
+                                .filter(PlannedLine::charges).count())),
+                        new FieldChange("count", null, Integer.toString(plan.charges().size())),
+                        new FieldChange("total", null, plan.total().toString())));
+        Set<UUID> plotIds = plan.charges().stream().map(PlannedCharge::plotId).collect(Collectors.toSet());
+        if (!plotIds.isEmpty()) {
+            writer.publishBooked(tenantId, plotIds);
+        }
+        return booked;
+    }
+
+    /**
+     * Writes a run of the plan: the run (its total the sum of {@code charges}), its lines, the given charges (the
+     * plan's, or those of a recalculation's lines; with {@code recalculationId} when a recalculation books the run
+     * again), their parts, the value uses of the charged consumers and the queue items. Neither audits nor publishes:
+     * the caller does (a recalculation in its own audit entry). The run's month is the month of {@code to}, or the
+     * earliest open month after it. Under the locks of a booking; 409 {@code COMMON_CONSUMER_RANGE_OVERLAP} when a
+     * charged consumer meets a booked run's days.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    Booked book(UUID tenantId, Plan plan, List<PlannedCharge> charges, Snapshot snapshot, @Nullable UUID createdBy,
+            Instant now, @Nullable UUID recalculationId) {
         BillingMonthRecord month = billingMonths.openForBooking(tenantId, plan.to());
+        Money runTotal = charges.stream().map(PlannedCharge::amount).reduce(Money.ZERO, Money::plus);
         CommonConsumerRunRecord run = CommonConsumerRunRecord.booked(tenantId, plan.from(), plan.to(), month.getId(),
-                plan.total(), actor.memberId(), now);
+                runTotal, createdBy, now);
         entityManager.persist(run);
         List<PlannedLine> planLines = plan.lines();
         for (int i = 0; i < planLines.size(); i++) {
@@ -317,43 +355,39 @@ class CommonConsumerRuns {
         UUID type = Objects.requireNonNull(CommonConsumerPlanning.commonConsumersType(snapshot));
         Map<String, UUID> chargeIds = new LinkedHashMap<>();
         List<ChargeRecord> written = new ArrayList<>();
-        for (PlannedCharge charge : plan.charges()) {
+        for (PlannedCharge charge : charges) {
             ChargeRecord record = ChargeRecord.commonConsumerRun(tenantId, charge.plotId(), type, month.getId(),
                     charge.tariff().id(), run.getId(), charge.amount(), plan.from(), plan.to(),
-                    "COMMON_CONSUMER_RUN:" + run.getId() + ":" + charge.consumerKey() + ":" + charge.plotId(),
-                    charge.calculation(run.getId()), actor.memberId(), now);
+                    sourceKey(run.getId(), charge.consumerKey(), charge.plotId()), charge.calculation(run.getId()),
+                    recalculationId, createdBy, now);
             entityManager.persist(record);
             written.add(record);
             chargeIds.put(CommonConsumerRunViews.chargeKey(charge.consumerKey(), charge.plotId()), record.getId());
         }
         entityManager.flush();
-        for (int i = 0; i < plan.charges().size(); i++) {
-            PlannedCharge charge = plan.charges().get(i);
-            List<UUID> versionIds = charge.versionIds();
-            for (int p = 0; p < charge.parts().size(); p++) {
-                PricedPart part = charge.parts().get(p);
-                entityManager.persist(ChargePartRecord.of(tenantId, written.get(i).getId(), versionIds.get(p),
-                        part.days(), new BigDecimal(part.quantity().numerator()),
-                        new BigDecimal(part.quantity().denominator()), part.terms().rate().value()));
-            }
+        for (int i = 0; i < charges.size(); i++) {
+            writeParts(tenantId, written.get(i).getId(), charges.get(i));
         }
         entityManager.flush();
         writeUses(tenantId, run.getId(), planLines);
         updateQueue(tenantId, plan, type, now);
-
-        Set<UUID> plotIds = plan.charges().stream().map(PlannedCharge::plotId).collect(Collectors.toSet());
-        audit.publishCommonConsumerRun(actor, LedgerAuditPublisher.Action.COMMON_CONSUMER_RUN_BOOKED, run.getId(),
-                run.label(), List.of(new FieldChange("from", null, plan.from().toString()),
-                        new FieldChange("to", null, plan.to().toString()),
-                        new FieldChange("billingMonth", null, month.yearMonth().toString()),
-                        new FieldChange("consumers", null, Long.toString(planLines.stream()
-                                .filter(PlannedLine::charges).count())),
-                        new FieldChange("count", null, Integer.toString(plan.charges().size())),
-                        new FieldChange("total", null, plan.total().toString())));
-        if (!plotIds.isEmpty()) {
-            writer.publishBooked(tenantId, plotIds);
-        }
         return new Booked(run, month, chargeIds);
+    }
+
+    /** The source key of a plot's charge of a consumer of a run: {@code COMMON_CONSUMER_RUN:{run}:{consumer}:{plot}}. */
+    static String sourceKey(UUID runId, UUID consumerKey, UUID plotId) {
+        return "COMMON_CONSUMER_RUN:" + runId + ":" + consumerKey + ":" + plotId;
+    }
+
+    /** One part per tariff version of the charge. */
+    private void writeParts(UUID tenantId, UUID chargeId, PlannedCharge charge) {
+        List<UUID> versionIds = charge.versionIds();
+        for (int p = 0; p < charge.parts().size(); p++) {
+            PricedPart part = charge.parts().get(p);
+            entityManager.persist(ChargePartRecord.of(tenantId, chargeId, versionIds.get(p), part.days(),
+                    new BigDecimal(part.quantity().numerator()), new BigDecimal(part.quantity().denominator()),
+                    part.terms().rate().value()));
+        }
     }
 
     /** One {@code meter_value_use} row per value the charged consumers read, in one statement. */
@@ -435,6 +469,58 @@ class CommonConsumerRuns {
         }
     }
 
+    // ---- a recalculation of a booked run (feature 012)
+
+    /**
+     * The run as 011 would book it today: the plan of its range over the consumers it charged, priced with
+     * {@code snapshot}, with the run itself ignored so it does not overlap itself; a consumer that is no longer a
+     * consumer of the range is left out. The consumers the run did not charge stay with their "not charged" items.
+     *
+     * @param net the network of the run's range, locked by the caller ({@link MeterNetwork#lockSharedNetwork})
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    Plan planAgain(CommonConsumerRunRecord run, Network net, Snapshot snapshot) {
+        List<UUID> charged = lines.findByRunIdIn(List.of(run.getId())).stream()
+                .filter(line -> line.getOutcome() == Outcome.CHARGED)
+                .sorted(Comparator.comparing(CommonConsumerRunLineRecord::getPosition))
+                .map(CommonConsumerRunLineRecord::getConsumerMeterId).toList();
+        if (charged.isEmpty()) {
+            return new Plan(run.getFromDate(), run.getToDate(), false, List.of(), List.of());
+        }
+        return plan(net, run.getFromDate(), run.getToDate(), charged, snapshot, Set.of(run.getId()), true);
+    }
+
+    /**
+     * Writes one plot's charge of a consumer of the run {@code runId} booked by a recalculation without booking the run
+     * again (a plot new to a run of a closed month): the planned charge under {@code sourceKey} in the billing month,
+     * its parts and the values it reads ({@link #writePartsAndUse}). Flushes.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    ChargeRecord bookLine(UUID tenantId, UUID runId, Plan plan, PlannedCharge charge, UUID chargeTypeId,
+            UUID billingMonthId, String sourceKey, UUID recalculationId, @Nullable UUID createdBy, Instant now) {
+        ChargeRecord record = ChargeRecord.commonConsumerRun(tenantId, charge.plotId(), chargeTypeId, billingMonthId,
+                charge.tariff().id(), runId, charge.amount(), plan.from(), plan.to(), sourceKey,
+                charge.calculation(runId), recalculationId, createdBy, now);
+        entityManager.persist(record);
+        entityManager.flush();
+        writePartsAndUse(tenantId, record.getId(), plan, charge);
+        return record;
+    }
+
+    /**
+     * Writes the parts of the planned charge and the values of its consumer ({@code meter_value_use} rows of the
+     * charge) for {@code chargeId}: a charge or an adjustment of a run booked by a recalculation. Flushes.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    void writePartsAndUse(UUID tenantId, UUID chargeId, Plan plan, PlannedCharge charge) {
+        writeParts(tenantId, chargeId, charge);
+        entityManager.flush();
+        Set<ValueUse> uses = new LinkedHashSet<>();
+        plan.lines().stream().filter(line -> line.charges() && line.chain().key().equals(charge.consumerKey()))
+                .forEach(line -> uses.addAll(line.uses()));
+        LossesRuns.writeChargeUses(entityManager, tenantId, chargeId, uses);
+    }
+
     // ---- the history
 
     @Transactional(readOnly = true)
@@ -505,22 +591,50 @@ class CommonConsumerRuns {
         }
         Instant now = clock.instant();
         BillingMonthRecord booking = billingMonths.openForBooking(tenantId, month.yearMonth().atDay(1));
+        String label = run.label();
+        String runFrom = run.getFromDate().toString();
+        String runTo = run.getToDate().toString();
+        LossesRuns.Reversed reversed = reverseLocked(run, booking.getId(), reason, ChargeSource.MANUAL_REVERSAL, null,
+                actor.memberId(), now);
+        audit.publishCommonConsumerRun(actor, LedgerAuditPublisher.Action.COMMON_CONSUMER_RUN_REVERSED, id,
+                label, List.of(
+                        new FieldChange("from", null, runFrom),
+                        new FieldChange("to", null, runTo),
+                        new FieldChange("count", null, Integer.toString(reversed.reversalOf().size())),
+                        new FieldChange("total", null, reversed.total().toString()),
+                        new FieldChange("reason", null, reason)));
+        if (!reversed.plotIds().isEmpty()) {
+            writer.publishBooked(tenantId, reversed.plotIds());
+        }
+        return details(runs.findById(id).orElseThrow(), actor);
+    }
+
+    /**
+     * Reverses every charge of the booked run that is not reversed yet in {@code billingMonthId} (the run's month, open)
+     * with the reason, then marks the run and its lines reversed, as {@link LossesRuns#reverseLocked} does for a losses
+     * run (source {@code MANUAL_REVERSAL}, or {@code RECALCULATION} with the recalculation's id). Clears the persistence
+     * context. 409 {@code CHARGE_ALREADY_REVERSED} when a charge was reversed meanwhile.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    LossesRuns.Reversed reverseLocked(CommonConsumerRunRecord run, UUID billingMonthId, String reason,
+            ChargeSource source, @Nullable UUID recalculationId, @Nullable UUID by, Instant now) {
+        UUID id = run.getId();
         List<ChargeRecord> runCharges = charges.findByRunIdAndKind(id, ChargeKind.REGULAR);
         Set<UUID> reversed = runCharges.isEmpty() ? Set.of()
                 : new HashSet<>(charges.reversedAmong(runCharges.stream().map(ChargeRecord::getId).toList()));
+        Map<UUID, UUID> reversalOf = new LinkedHashMap<>();
         Money total = Money.ZERO;
         Set<UUID> plotIds = new HashSet<>();
-        int count = 0;
         for (ChargeRecord charge : runCharges) {
             if (reversed.contains(charge.getId())) {
                 continue;
             }
-            ChargeRecord reversal = ChargeRecord.reversalOf(charge, booking.getId(), reason,
-                    ChargeViews.plainCalculation(charge.getAmount().negate()), actor.memberId(), now);
+            ChargeRecord reversal = ChargeRecord.reversalOf(charge, billingMonthId, source, recalculationId, reason,
+                    ChargeViews.plainCalculation(charge.getAmount().negate()), by, now);
             entityManager.persist(reversal);
+            reversalOf.put(charge.getId(), reversal.getId());
             total = total.plus(reversal.getAmount());
             plotIds.add(charge.getPlotId());
-            count++;
         }
         try {
             entityManager.flush();
@@ -530,19 +644,9 @@ class CommonConsumerRuns {
             }
             throw e;
         }
-        run.reverse(actor.memberId(), reason, now);
+        run.reverse(by, reason, now);
         lines.markReversed(id); // flushes the run first, then clears the persistence context
-        audit.publishCommonConsumerRun(actor, LedgerAuditPublisher.Action.COMMON_CONSUMER_RUN_REVERSED, id,
-                run.label(), List.of(
-                        new FieldChange("from", null, run.getFromDate().toString()),
-                        new FieldChange("to", null, run.getToDate().toString()),
-                        new FieldChange("count", null, Integer.toString(count)),
-                        new FieldChange("total", null, total.toString()),
-                        new FieldChange("reason", null, reason)));
-        if (!plotIds.isEmpty()) {
-            writer.publishBooked(tenantId, plotIds);
-        }
-        return details(runs.findById(id).orElseThrow(), actor);
+        return new LossesRuns.Reversed(reversalOf, total, plotIds);
     }
 
     // ---- the retry of a common consumer item
@@ -578,7 +682,7 @@ class CommonConsumerRuns {
         Snapshot snapshot = writer.lockTariffs();
         Plan plan;
         try {
-            plan = plan(locked, from, to, List.of(consumer), snapshot);
+            plan = plan(locked, from, to, List.of(consumer), snapshot, Set.of(), false);
         } catch (ApiProblemException notAConsumer) {
             return closed(item, Status.OBSOLETE, now, name); // the meter worked on no day of the range any more
         }
@@ -595,7 +699,7 @@ class CommonConsumerRuns {
         if (only.outcome() != Outcome.CHARGED || plan.noTariff()) {
             return new Retried(Status.OPEN, null, name);
         }
-        Booked booked = book(tenantId, plan, snapshot, actor, now);
+        Booked booked = bookAndAudit(tenantId, plan, snapshot, actor, now);
         if (item.getStatus() == Status.OPEN) {
             item.close(Status.RESOLVED, now);
             items.flush();
@@ -611,8 +715,13 @@ class CommonConsumerRuns {
 
     // ---- helpers
 
-    /** The cooperative's charging lock ({@link ChargingLock}), then the advisory lock of its common consumer runs. */
-    private void lockRuns(UUID tenantId) {
+    /**
+     * The cooperative's charging lock ({@link ChargingLock}), then the advisory lock of its common consumer runs. A
+     * recalculation that covers runs takes it after the lock of the losses runs ({@link LossesRuns#lockRuns}) and before
+     * the shared network and the queue lock.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    void lockRuns(UUID tenantId) {
         // every booking, reversal and retry books or reverses charges: the cooperative's charging lock comes first
         chargingLock.lock(tenantId);
         entityManager.createNativeQuery(

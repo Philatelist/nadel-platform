@@ -146,8 +146,8 @@ class LossesRuns {
         this.clock = clock;
     }
 
-    /** A plan with what the views need about it. */
-    private record Planned(Plan plan, Map<UUID, NetworkChain> chains) {
+    /** A plan with what the views and a booking need about it. */
+    record Planned(Plan plan, Map<UUID, NetworkChain> chains) {
     }
 
     // ---- preview and booking
@@ -166,7 +166,7 @@ class LossesRuns {
         UUID tenantId = Objects.requireNonNull(actor.tenantId());
         List<UUID> nodeIds = request.getNodeIds() == null ? List.of() : request.getNodeIds();
         if (preview) {
-            Planned planned = plan(network.network(from, to), from, to, nodeIds, book.snapshot());
+            Planned planned = plan(network.network(from, to), from, to, nodeIds, book.snapshot(), Set.of(), false);
             return LossesRunViews.result(planned.plan(), true, null, Map.of(), billingMonths.bookingMonth(to),
                     planned.chains(), lookups(planned));
         }
@@ -175,7 +175,7 @@ class LossesRuns {
         Network locked = network.lockSharedNetwork(from, to);
         writer.lockQueue(tenantId);
         Snapshot snapshot = writer.lockTariffs();
-        Planned planned = plan(locked, from, to, nodeIds, snapshot);
+        Planned planned = plan(locked, from, to, nodeIds, snapshot, Set.of(), false);
         String digest = request.getDigest();
         if (digest != null && !digest.equals(planned.plan().digest())) {
             throw conflict(ProblemCodes.PREVIEW_OUTDATED, "The run would now book something else than the preview.");
@@ -183,20 +183,24 @@ class LossesRuns {
         if (!planned.plan().overlapping().isEmpty()) {
             throw overlap();
         }
-        Booked booked = book(tenantId, planned, snapshot, actor, clock.instant());
+        Booked booked = bookAndAudit(tenantId, planned, snapshot, actor, clock.instant());
         return LossesRunViews.result(planned.plan(), false, booked.run().getId(), booked.chargeIds(),
                 booked.month().yearMonth(), planned.chains(), lookups(planned));
     }
 
-    /** What a booking wrote. */
-    private record Booked(LossesRunRecord run, BillingMonthRecord month, Map<UUID, UUID> chargeIds) {
+    /** What a booking wrote: the run, the month of its charges and the charge of each plot. */
+    record Booked(LossesRunRecord run, BillingMonthRecord month, Map<UUID, UUID> chargeIds) {
     }
 
     /**
      * The plan of the run over the network: every node worked out, the selected ones in their order (substations,
-     * then quarter meters, each by name), the booked runs that charged them already, and the plot facts for pricing.
+     * then quarter meters, each by name), the booked runs that charged them already (except {@code ignoreRunIds}: a
+     * recalculation plans a booked run again without it overlapping itself), and the plot facts for pricing. An id of
+     * {@code nodeIds} that is not a node of the range is 400 {@code NOT_FOUND}, or left out when {@code dropUnknown}
+     * (then no node is selected when none is left).
      */
-    private Planned plan(Network net, LocalDate from, LocalDate to, List<UUID> nodeIds, Snapshot snapshot) {
+    private Planned plan(Network net, LocalDate from, LocalDate to, List<UUID> nodeIds, Snapshot snapshot,
+            Set<UUID> ignoreRunIds, boolean dropUnknown) {
         Map<UUID, NetworkChain> chains = new LinkedHashMap<>();
         Map<UUID, UUID> chainOfMeter = new HashMap<>();
         for (NetworkChain chain : net.chains()) {
@@ -211,7 +215,9 @@ class LossesRuns {
         for (int i = 0; i < nodeIds.size(); i++) {
             UUID key = chainOfMeter.get(nodeIds.get(i));
             if (key == null || !byKey.containsKey(key)) {
-                problems.add(new FieldProblem("nodeIds[" + i + "]", ProblemCodes.NOT_FOUND));
+                if (!dropUnknown) {
+                    problems.add(new FieldProblem("nodeIds[" + i + "]", ProblemCodes.NOT_FOUND));
+                }
             } else {
                 selected.add(key);
             }
@@ -220,8 +226,9 @@ class LossesRuns {
             throw new ApiProblemException(HttpStatus.BAD_REQUEST, ProblemCodes.VALIDATION_FAILED,
                     "The request is not valid.", problems);
         }
+        boolean all = nodeIds.isEmpty();
         Collator collator = Collator.getInstance(Locale.forLanguageTag("uk"));
-        List<NodeResult> chosen = results.stream().filter(r -> selected.isEmpty() || selected.contains(r.nodeKey()))
+        List<NodeResult> chosen = results.stream().filter(r -> all || selected.contains(r.nodeKey()))
                 .sorted(Comparator.comparing((NodeResult r) -> KIND_ORDER.getOrDefault(chains.get(r.nodeKey()).kind(),
                         9))
                         .thenComparing(r -> Objects.requireNonNullElse(chains.get(r.nodeKey()).name(), ""), collator)
@@ -232,7 +239,9 @@ class LossesRuns {
         if (!chosen.isEmpty()) {
             for (LossesRunNodeRecord row : nodes.chargedOverlapping(
                     chosen.stream().map(NodeResult::nodeKey).toList(), from, to)) {
-                overlaps.putIfAbsent(row.getNodeMeterId(), overlapOf(row));
+                if (!ignoreRunIds.contains(row.getRunId())) {
+                    overlaps.putIfAbsent(row.getNodeMeterId(), overlapOf(row));
+                }
             }
         }
         List<PlannedInput> inputs = chosen.stream()
@@ -252,12 +261,42 @@ class LossesRuns {
         return new Overlap(run.getId(), run.getFromDate(), run.getToDate());
     }
 
-    /** Writes the run, its nodes, charges, parts, value uses and queue items; audits and publishes. */
-    private Booked book(UUID tenantId, Planned planned, Snapshot snapshot, AccessProfile actor, Instant now) {
+    /** Writes the run with every charge of the plan ({@link #book}), audits it and publishes. */
+    private Booked bookAndAudit(UUID tenantId, Planned planned, Snapshot snapshot, AccessProfile actor, Instant now) {
+        Plan plan = planned.plan();
+        Booked booked = book(tenantId, planned, plan.charges(), snapshot, actor.memberId(), now, null);
+        LossesRunRecord run = booked.run();
+        audit.publishLossesRun(actor, LedgerAuditPublisher.Action.LOSSES_RUN_BOOKED, run.getId(), run.label(),
+                List.of(new FieldChange("from", null, plan.from().toString()),
+                        new FieldChange("to", null, plan.to().toString()),
+                        new FieldChange("billingMonth", null, booked.month().yearMonth().toString()),
+                        new FieldChange("nodes", null, Long.toString(plan.nodes().stream()
+                                .filter(PlannedNode::charges).count())),
+                        new FieldChange("count", null, Integer.toString(plan.charges().size())),
+                        new FieldChange("total", null, plan.total().toString())));
+        Set<UUID> plotIds = plan.charges().stream().map(PlannedCharge::plotId).collect(Collectors.toSet());
+        if (!plotIds.isEmpty()) {
+            writer.publishBooked(tenantId, plotIds);
+        }
+        return booked;
+    }
+
+    /**
+     * Writes a run of the plan: the run (its total the sum of {@code charges}), its nodes, the given charges (the
+     * plan's, or those of a recalculation's lines; with {@code recalculationId} when a recalculation books the run
+     * again), their parts, the value uses of the charged nodes and the queue items. Neither audits nor publishes: the
+     * caller does (a recalculation in its own audit entry). The run's month is the month of {@code to}, or the earliest
+     * open month after it. Under the locks of a booking; 409 {@code LOSSES_RANGE_OVERLAP} when a charged node meets a
+     * booked run's days.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    Booked book(UUID tenantId, Planned planned, List<PlannedCharge> charges, Snapshot snapshot,
+            @Nullable UUID createdBy, Instant now, @Nullable UUID recalculationId) {
         Plan plan = planned.plan();
         BillingMonthRecord month = billingMonths.openForBooking(tenantId, plan.to());
-        LossesRunRecord run = LossesRunRecord.booked(tenantId, plan.from(), plan.to(), month.getId(), plan.total(),
-                actor.memberId(), now);
+        Money runTotal = charges.stream().map(PlannedCharge::amount).reduce(Money.ZERO, Money::plus);
+        LossesRunRecord run = LossesRunRecord.booked(tenantId, plan.from(), plan.to(), month.getId(), runTotal,
+                createdBy, now);
         entityManager.persist(run);
         List<PlannedNode> planNodes = plan.nodes();
         for (int i = 0; i < planNodes.size(); i++) {
@@ -276,45 +315,40 @@ class LossesRuns {
                 .map(ChargeTypeEntry::id).findFirst().orElse(null);
         Map<UUID, UUID> chargeIds = new LinkedHashMap<>();
         List<ChargeRecord> written = new ArrayList<>();
-        for (PlannedCharge charge : plan.charges()) {
+        for (PlannedCharge charge : charges) {
             ChargeRecord record = ChargeRecord.lossesRun(tenantId, charge.plotId(), Objects.requireNonNull(electricity),
                     month.getId(), charge.tariff().id(), run.getId(), charge.amount(), plan.from(), plan.to(),
-                    "LOSSES_RUN:" + run.getId() + ":" + charge.plotId(), charge.calculation(run.getId()),
-                    actor.memberId(), now);
+                    sourceKey(run.getId(), charge.plotId()), charge.calculation(run.getId()), recalculationId,
+                    createdBy, now);
             entityManager.persist(record);
             written.add(record);
             chargeIds.put(charge.plotId(), record.getId());
         }
         entityManager.flush();
-        for (int i = 0; i < plan.charges().size(); i++) {
-            PlannedCharge charge = plan.charges().get(i);
-            List<UUID> versionIds = charge.versionIds();
-            for (int p = 0; p < charge.parts().size(); p++) {
-                NodePart nodePart = charge.parts().get(p);
-                PricedPart part = nodePart.part();
-                entityManager.persist(ChargePartRecord.ofNode(tenantId, written.get(i).getId(), versionIds.get(p),
-                        part.days(), new BigDecimal(part.quantity().numerator()),
-                        new BigDecimal(part.quantity().denominator()), part.terms().rate().value(),
-                        nodePart.nodeKey()));
-            }
+        for (int i = 0; i < charges.size(); i++) {
+            writeParts(tenantId, written.get(i).getId(), charges.get(i));
         }
         entityManager.flush();
         writeUses(tenantId, run.getId(), planNodes);
         updateQueue(tenantId, plan, electricity, now);
-
-        Set<UUID> plotIds = plan.charges().stream().map(PlannedCharge::plotId).collect(Collectors.toSet());
-        audit.publishLossesRun(actor, LedgerAuditPublisher.Action.LOSSES_RUN_BOOKED, run.getId(), run.label(),
-                List.of(new FieldChange("from", null, plan.from().toString()),
-                        new FieldChange("to", null, plan.to().toString()),
-                        new FieldChange("billingMonth", null, month.yearMonth().toString()),
-                        new FieldChange("nodes", null, Long.toString(planNodes.stream()
-                                .filter(PlannedNode::charges).count())),
-                        new FieldChange("count", null, Integer.toString(plan.charges().size())),
-                        new FieldChange("total", null, plan.total().toString())));
-        if (!plotIds.isEmpty()) {
-            writer.publishBooked(tenantId, plotIds);
-        }
         return new Booked(run, month, chargeIds);
+    }
+
+    /** The source key of a plot's charge of a run: {@code LOSSES_RUN:{run}:{plot}}. */
+    static String sourceKey(UUID runId, UUID plotId) {
+        return "LOSSES_RUN:" + runId + ":" + plotId;
+    }
+
+    /** One part per node and tariff version of the charge. */
+    private void writeParts(UUID tenantId, UUID chargeId, PlannedCharge charge) {
+        List<UUID> versionIds = charge.versionIds();
+        for (int p = 0; p < charge.parts().size(); p++) {
+            NodePart nodePart = charge.parts().get(p);
+            PricedPart part = nodePart.part();
+            entityManager.persist(ChargePartRecord.ofNode(tenantId, chargeId, versionIds.get(p), part.days(),
+                    new BigDecimal(part.quantity().numerator()), new BigDecimal(part.quantity().denominator()),
+                    part.terms().rate().value(), nodePart.nodeKey()));
+        }
     }
 
     private static LossesRunNodeRecord nodeRow(UUID tenantId, UUID runId, Plan plan, PlannedNode node, int position,
@@ -408,6 +442,82 @@ class LossesRuns {
         }
     }
 
+    // ---- a recalculation of a booked run (feature 012)
+
+    /**
+     * The run as 011 would book it today: the plan of its range over the nodes it charged, priced with
+     * {@code snapshot}, with the run itself ignored so it does not overlap itself ({@code ignoreRunIds}); a node that is
+     * no longer a node of the range is left out (its plots then have no expected charge from it). The nodes the run did
+     * not charge (unknown, skipped, negative) stay with their "not charged" items and the retry.
+     *
+     * @param net the network of the run's range, locked by the caller ({@link MeterNetwork#lockSharedNetwork})
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    Planned planAgain(LossesRunRecord run, Network net, Snapshot snapshot) {
+        List<UUID> charged = nodes.findByRunIdIn(List.of(run.getId())).stream()
+                .filter(node -> node.getOutcome() == Outcome.CHARGED)
+                .sorted(Comparator.comparing(LossesRunNodeRecord::getPosition))
+                .map(LossesRunNodeRecord::getNodeMeterId).toList();
+        if (charged.isEmpty()) {
+            return new Planned(new Plan(run.getFromDate(), run.getToDate(), List.of(), List.of()), Map.of());
+        }
+        Planned planned = plan(net, run.getFromDate(), run.getToDate(), charged, snapshot, Set.of(run.getId()), true);
+        if (planned.plan().nodes().isEmpty()) {
+            return new Planned(new Plan(run.getFromDate(), run.getToDate(), List.of(), List.of()), Map.of());
+        }
+        return planned;
+    }
+
+    /**
+     * Writes one plot's charge of the run {@code runId} booked by a recalculation without booking the run again (a plot
+     * new to a run of a closed month): the planned charge under {@code sourceKey} in the billing month, its parts and
+     * the values it reads ({@link #writePartsAndUse}). Flushes.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    ChargeRecord bookLine(UUID tenantId, UUID runId, Plan plan, PlannedCharge charge, UUID chargeTypeId,
+            UUID billingMonthId, String sourceKey, UUID recalculationId, @Nullable UUID createdBy, Instant now) {
+        ChargeRecord record = ChargeRecord.lossesRun(tenantId, charge.plotId(), chargeTypeId, billingMonthId,
+                charge.tariff().id(), runId, charge.amount(), plan.from(), plan.to(), sourceKey,
+                charge.calculation(runId), recalculationId, createdBy, now);
+        entityManager.persist(record);
+        entityManager.flush();
+        writePartsAndUse(tenantId, record.getId(), plan, charge);
+        return record;
+    }
+
+    /**
+     * Writes the parts of the planned charge and the values of the nodes it shares in ({@code meter_value_use} rows of
+     * the charge) for {@code chargeId}: a charge or an adjustment of a run booked by a recalculation, whose parts are
+     * those of the expected charge. Flushes.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    void writePartsAndUse(UUID tenantId, UUID chargeId, Plan plan, PlannedCharge charge) {
+        writeParts(tenantId, chargeId, charge);
+        entityManager.flush();
+        Set<UUID> nodeKeys = charge.parts().stream().map(NodePart::nodeKey).collect(Collectors.toSet());
+        Set<ValueUse> uses = new LinkedHashSet<>();
+        plan.nodes().stream().filter(node -> node.charges() && nodeKeys.contains(node.chain().key()))
+                .forEach(node -> uses.addAll(node.result().uses()));
+        writeChargeUses(entityManager, tenantId, chargeId, uses);
+    }
+
+    /** One {@code meter_value_use} row of the charge per value, in one statement. */
+    static void writeChargeUses(EntityManager entityManager, UUID tenantId, UUID chargeId, Set<ValueUse> uses) {
+        if (uses.isEmpty()) {
+            return;
+        }
+        String meterIds = uses.stream().map(use -> use.meterId().toString()).collect(Collectors.joining(","));
+        String dates = uses.stream().map(use -> use.on().toString()).collect(Collectors.joining(","));
+        entityManager.createNativeQuery("insert into meter_value_use (tenant_id, meter_id, used_on, charge_id) "
+                + "select :tenant, u.meter_id, u.used_on, :charge from unnest(cast(string_to_array(:meters, ',') "
+                + "as uuid[]), cast(string_to_array(:dates, ',') as date[])) as u(meter_id, used_on)")
+                .setParameter("tenant", tenantId)
+                .setParameter("charge", chargeId)
+                .setParameter("meters", meterIds)
+                .setParameter("dates", dates)
+                .executeUpdate();
+    }
+
     // ---- the history
 
     @Transactional(readOnly = true)
@@ -486,22 +596,61 @@ class LossesRuns {
         }
         Instant now = clock.instant();
         BillingMonthRecord booking = billingMonths.openForBooking(tenantId, month.yearMonth().atDay(1));
+        String label = run.label();
+        String runFrom = run.getFromDate().toString();
+        String runTo = run.getToDate().toString();
+        Reversed reversed = reverseLocked(run, booking.getId(), reason, ChargeSource.MANUAL_REVERSAL, null,
+                actor.memberId(), now);
+        audit.publishLossesRun(actor, LedgerAuditPublisher.Action.LOSSES_RUN_REVERSED, id, label, List.of(
+                new FieldChange("from", null, runFrom),
+                new FieldChange("to", null, runTo),
+                new FieldChange("count", null, Integer.toString(reversed.reversalOf().size())),
+                new FieldChange("total", null, reversed.total().toString()),
+                new FieldChange("reason", null, reason)));
+        if (!reversed.plotIds().isEmpty()) {
+            writer.publishBooked(tenantId, reversed.plotIds());
+        }
+        return details(runs.findById(id).orElseThrow(), actor);
+    }
+
+    /**
+     * What a reversal of a run wrote.
+     *
+     * @param reversalOf the reversal of each charge reversed, by the charge's id
+     * @param total      the sum of the reversals
+     * @param plotIds    the plots of the charges reversed
+     */
+    record Reversed(Map<UUID, UUID> reversalOf, Money total, Set<UUID> plotIds) {
+    }
+
+    /**
+     * Reverses every charge of the booked run that is not reversed yet in {@code billingMonthId} (the run's month, open)
+     * with the reason: source {@code MANUAL_REVERSAL} for a reversal by hand, {@code RECALCULATION} with the
+     * recalculation's id for a recalculation (feature 012); then marks the run and its nodes reversed, which frees their
+     * days for another run. The caller holds the run's locks and the run {@code FOR UPDATE}, and has checked that it is
+     * booked and its month open. Clears the persistence context (the nodes are marked by a statement): entities read
+     * before are detached afterwards. 409 {@code CHARGE_ALREADY_REVERSED} when a charge was reversed meanwhile.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    Reversed reverseLocked(LossesRunRecord run, UUID billingMonthId, String reason, ChargeSource source,
+            @Nullable UUID recalculationId, @Nullable UUID by, Instant now) {
+        UUID id = run.getId();
         List<ChargeRecord> runCharges = charges.findByRunIdAndKind(id, ChargeKind.REGULAR);
         Set<UUID> reversed = runCharges.isEmpty() ? Set.of()
                 : new HashSet<>(charges.reversedAmong(runCharges.stream().map(ChargeRecord::getId).toList()));
+        Map<UUID, UUID> reversalOf = new LinkedHashMap<>();
         Money total = Money.ZERO;
         Set<UUID> plotIds = new HashSet<>();
-        int count = 0;
         for (ChargeRecord charge : runCharges) {
             if (reversed.contains(charge.getId())) {
                 continue;
             }
-            ChargeRecord reversal = ChargeRecord.reversalOf(charge, booking.getId(), reason,
-                    ChargeViews.plainCalculation(charge.getAmount().negate()), actor.memberId(), now);
+            ChargeRecord reversal = ChargeRecord.reversalOf(charge, billingMonthId, source, recalculationId, reason,
+                    ChargeViews.plainCalculation(charge.getAmount().negate()), by, now);
             entityManager.persist(reversal);
+            reversalOf.put(charge.getId(), reversal.getId());
             total = total.plus(reversal.getAmount());
             plotIds.add(charge.getPlotId());
-            count++;
         }
         try {
             entityManager.flush();
@@ -511,18 +660,9 @@ class LossesRuns {
             }
             throw e;
         }
-        run.reverse(actor.memberId(), reason, now);
+        run.reverse(by, reason, now);
         nodes.markReversed(id); // flushes the run first, then clears the persistence context
-        audit.publishLossesRun(actor, LedgerAuditPublisher.Action.LOSSES_RUN_REVERSED, id, run.label(), List.of(
-                new FieldChange("from", null, run.getFromDate().toString()),
-                new FieldChange("to", null, run.getToDate().toString()),
-                new FieldChange("count", null, Integer.toString(count)),
-                new FieldChange("total", null, total.toString()),
-                new FieldChange("reason", null, reason)));
-        if (!plotIds.isEmpty()) {
-            writer.publishBooked(tenantId, plotIds);
-        }
-        return details(runs.findById(id).orElseThrow(), actor);
+        return new Reversed(reversalOf, total, plotIds);
     }
 
     // ---- the retry of a losses node item
@@ -559,7 +699,7 @@ class LossesRuns {
         Planned planned = null;
         if (settings.lossesMode() == LossesMode.PROPORTIONAL) {
             try {
-                planned = plan(locked, from, to, List.of(node), snapshot);
+                planned = plan(locked, from, to, List.of(node), snapshot, Set.of(), false);
             } catch (ApiProblemException notANode) {
                 planned = null; // the node had no meter under it in the range any more
             }
@@ -581,7 +721,7 @@ class LossesRuns {
         if (outcome != Outcome.CHARGED) {
             return new Retried(Status.OPEN, null, name);
         }
-        Booked booked = book(tenantId, planned, snapshot, actor, now);
+        Booked booked = bookAndAudit(tenantId, planned, snapshot, actor, now);
         if (item.getStatus() == Status.OPEN) {
             item.close(Status.RESOLVED, now);
             items.flush();
@@ -604,8 +744,13 @@ class LossesRuns {
         }
     }
 
-    /** The cooperative's charging lock ({@link ChargingLock}), then the advisory lock of its losses runs. */
-    private void lockRuns(UUID tenantId) {
+    /**
+     * The cooperative's charging lock ({@link ChargingLock}), then the advisory lock of its losses runs. A
+     * recalculation that covers runs takes it after the charging lock and the plot meters and before the shared
+     * network ({@link MeterNetwork#lockSharedNetwork}) and the queue lock, as the booking of a run does.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    void lockRuns(UUID tenantId) {
         // every booking, reversal and retry books or reverses charges: the cooperative's charging lock comes first
         chargingLock.lock(tenantId);
         entityManager.createNativeQuery(

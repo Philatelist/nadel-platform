@@ -25,3 +25,9 @@
 |---|---|---|---|---|
 | 1 | `0ef7ec0..4e38655` | MAJOR_ISSUES | M1 empty reason only disables "Провести перерахунок"; "Вкажіть причину" never shown (key unused, uk text "Вкажіть пояснення") | minor: field errors other than `reason` hide the Notice; label "Пояснення" vs "причина"; booking without digest skips the stale check (MonthRun pattern); `findOfPlotsAndTypes` loads all history then filters by month |
 | 2 | + `c6926e6` | PASS | M1 resolved | minor: `reasonTooLong` still says "Пояснення задовге" |
+
+## Slice 4 — Intervals and fixed-percentage losses
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `c6926e6..bd66a08` | MAJOR_ISSUES | M1 an INTERVAL item opened after a recalculation REVERSE is marked RESOLVED by the next retry/month run without charging (the reversed original keeps its key, `charged` predicate says AlreadyCharged); same pattern for TARIFF_MONTH items from Slice 3 | minor: NEW interval line after a back-dated version shows reason METER_TREE (ChangeReasons fallback); current losses mode applied to past fixed-losses charges (document); all-history load then in-memory filter; deviations 1–3 accepted |

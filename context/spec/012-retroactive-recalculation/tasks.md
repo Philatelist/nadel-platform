@@ -41,11 +41,11 @@ Do not commit; report every file created or changed.
   - [x] Backend: `IntervalCharging.expected(points, snapshot, window)` and `book` with key override, reason and recalculation id; the planner input for interval identities in manual scope (charge types electricity/water); queue resolution for `INTERVAL` items; `meter_value_use` rows for new charges and adjustments. Tests: `IntervalRecalculationTests` (manual scope over intervals after a tariff version change: 4.32 → new rate open/closed, fixed losses 5 % reversal 14.04 + new, queued "немає тарифу" interval charged and resolved, water days), `ReadingChargesTests` still green. **[Agent: spring-backend]**
   - [x] Verify: `cd backend && ./mvnw -B test -Dtest='IntervalRecalculationTests,ReadingChargesTests,ReadingChargeCalculatorTests,ModularityTests'` green. **[Agent: spring-backend]**
 
-- [ ] **Slice 5: Losses and common consumers runs**
+- [x] **Slice 5: Losses and common consumers runs**
 
   > A run in an open month whose numbers change is reversed as a whole and booked again for the same range; a run in a closed month gets per-plot adjustments.
-  - [ ] Backend: `LossesRuns` / `CommonConsumerRuns`: `plan(…, ignoreRunIds)`, `book(…)`, `reverseLocked(run, reason, source, recalculationId)` extracted; run identities in the planner input; run scope (manual: runs whose `to` lies in the months). Tests: `RunRecalculationTests` (losses run open: reversed + rebooked; closed: per-plot adjustments; common consumers run open/closed; a plot new to a closed run), `LossesRunsTests`, `CommonConsumerRunsTests` still green. **[Agent: spring-backend]**
-  - [ ] Verify: `cd backend && ./mvnw -B test -Dtest='RunRecalculationTests,LossesRunsTests,CommonConsumerRunsTests,ModularityTests'` green. **[Agent: spring-backend]**
+  - [x] Backend: `LossesRuns` / `CommonConsumerRuns`: `plan(…, ignoreRunIds)`, `book(…)`, `reverseLocked(run, reason, source, recalculationId)` extracted; run identities in the planner input; run scope (manual: runs whose `to` lies in the months). Tests: `RunRecalculationTests` (losses run open: reversed + rebooked; closed: per-plot adjustments; common consumers run open/closed; a plot new to a closed run), `LossesRunsTests`, `CommonConsumerRunsTests` still green. **[Agent: spring-backend]**
+  - [x] Verify: `cd backend && ./mvnw -B test -Dtest='RunRecalculationTests,LossesRunsTests,CommonConsumerRunsTests,ModularityTests'` green. **[Agent: spring-backend]**
 
 - [ ] **Slice 6: Correcting tariff versions**
 

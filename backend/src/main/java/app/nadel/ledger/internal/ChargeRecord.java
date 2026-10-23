@@ -11,6 +11,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import org.hibernate.annotations.Immutable;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -227,6 +228,17 @@ class ChargeRecord {
     static ChargeRecord lossesRun(UUID tenantId, UUID plotId, UUID chargeTypeId, UUID billingMonthId, UUID tariffId,
             UUID runId, Money amount, LocalDate serviceFrom, LocalDate serviceTo, String sourceKey,
             Map<String, Object> calculation, @Nullable UUID createdBy, Instant now) {
+        return lossesRun(tenantId, plotId, chargeTypeId, billingMonthId, tariffId, runId, amount, serviceFrom,
+                serviceTo, sourceKey, calculation, null, createdBy, now);
+    }
+
+    /**
+     * A losses charge of a run as {@link #lossesRun} makes it, booked by the recalculation {@code recalculationId}
+     * (feature 012: a charge of a run booked again, or a plot new to a run of a closed month), or by 011 when null.
+     */
+    static ChargeRecord lossesRun(UUID tenantId, UUID plotId, UUID chargeTypeId, UUID billingMonthId, UUID tariffId,
+            UUID runId, Money amount, LocalDate serviceFrom, LocalDate serviceTo, String sourceKey,
+            Map<String, Object> calculation, @Nullable UUID recalculationId, @Nullable UUID createdBy, Instant now) {
         ChargeRecord charge = new ChargeRecord();
         charge.id = UUID.randomUUID();
         charge.tenantId = tenantId;
@@ -243,6 +255,7 @@ class ChargeRecord {
         charge.sourceKey = sourceKey;
         charge.tariffId = tariffId;
         charge.runId = runId;
+        charge.recalculationId = recalculationId;
         charge.createdBy = createdBy;
         charge.createdAt = now;
         return charge;
@@ -257,8 +270,19 @@ class ChargeRecord {
     static ChargeRecord commonConsumerRun(UUID tenantId, UUID plotId, UUID chargeTypeId, UUID billingMonthId,
             UUID tariffId, UUID runId, Money amount, LocalDate serviceFrom, LocalDate serviceTo, String sourceKey,
             Map<String, Object> calculation, @Nullable UUID createdBy, Instant now) {
+        return commonConsumerRun(tenantId, plotId, chargeTypeId, billingMonthId, tariffId, runId, amount, serviceFrom,
+                serviceTo, sourceKey, calculation, null, createdBy, now);
+    }
+
+    /**
+     * A charge of a common consumer run as {@link #commonConsumerRun} makes it, booked by the recalculation
+     * {@code recalculationId} (feature 012), or by 011 when null.
+     */
+    static ChargeRecord commonConsumerRun(UUID tenantId, UUID plotId, UUID chargeTypeId, UUID billingMonthId,
+            UUID tariffId, UUID runId, Money amount, LocalDate serviceFrom, LocalDate serviceTo, String sourceKey,
+            Map<String, Object> calculation, @Nullable UUID recalculationId, @Nullable UUID createdBy, Instant now) {
         ChargeRecord charge = lossesRun(tenantId, plotId, chargeTypeId, billingMonthId, tariffId, runId, amount,
-                serviceFrom, serviceTo, sourceKey, calculation, createdBy, now);
+                serviceFrom, serviceTo, sourceKey, calculation, recalculationId, createdBy, now);
         charge.source = ChargeSource.COMMON_CONSUMER;
         return charge;
     }
@@ -281,6 +305,23 @@ class ChargeRecord {
             String reason, Map<String, Object> calculation, @Nullable UUID createdBy, Instant now) {
         return reversal(original, billingMonthId, ChargeSource.RECALCULATION, recalculationId, reason, calculation,
                 createdBy, now);
+    }
+
+    /**
+     * The reversal of {@code original} by hand ({@code MANUAL_REVERSAL}, {@link #reversalOf}) or by the recalculation
+     * {@code recalculationId} ({@code RECALCULATION}, {@link #recalculationReversalOf}): the reversal of a whole run.
+     *
+     * @throws IllegalArgumentException for another source, or a recalculation's reversal without its recalculation
+     */
+    static ChargeRecord reversalOf(ChargeRecord original, UUID billingMonthId, ChargeSource source,
+            @Nullable UUID recalculationId, String reason, Map<String, Object> calculation, @Nullable UUID createdBy,
+            Instant now) {
+        return switch (source) {
+            case MANUAL_REVERSAL -> reversalOf(original, billingMonthId, reason, calculation, createdBy, now);
+            case RECALCULATION -> recalculationReversalOf(original, billingMonthId, Objects.requireNonNull(
+                    recalculationId, "recalculationId"), reason, calculation, createdBy, now);
+            default -> throw new IllegalArgumentException("A reversal is made by hand or by a recalculation");
+        };
     }
 
     /**

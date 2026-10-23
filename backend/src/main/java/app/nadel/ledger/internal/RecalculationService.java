@@ -18,8 +18,12 @@ import app.nadel.ledger.internal.RecalculationLineRecord.Action;
 import app.nadel.ledger.internal.RecalculationPlanner.Line;
 import app.nadel.ledger.internal.RecalculationPlanner.Plan;
 import app.nadel.ledger.internal.RecalculationPlanner.QueueOutcome;
+import app.nadel.ledger.internal.RecalculationPlanner.RunAction;
+import app.nadel.ledger.internal.RecalculationPlanner.RunOutcome;
 import app.nadel.meters.MeterCatalog;
+import app.nadel.meters.MeterNetwork;
 import app.nadel.meters.MeterNetwork.MeterPoints;
+import app.nadel.meters.MeterNetwork.Network;
 import app.nadel.meters.MeterResource;
 import app.nadel.money.Money;
 import app.nadel.plots.PlotCatalog;
@@ -55,6 +59,7 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import nadel.contract.model.NotChargedItem;
@@ -75,10 +80,10 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Previews and books recalculations ({@code POST /recalculations?preview=}, feature 012 §2.1, §2.2 and §2.6). It handles
- * the cause {@code MANUAL} over the charges of recurring tariffs (the month run's charges) and the charges of plot meter
- * intervals (consumption, fixed-percentage losses, electricity and water); any other cause type is 400
- * {@code VALIDATION_FAILED} with {@code cause.type} {@code UNSUPPORTED} until slices 6 and 7, and the lines of losses
- * and common consumer runs join with slice 5.
+ * the cause {@code MANUAL} over the charges of recurring tariffs (the month run's charges), the charges of plot meter
+ * intervals (consumption, fixed-percentage losses, electricity and water) and the charges of proportional losses runs
+ * and common consumer runs; any other cause type is 400 {@code VALIDATION_FAILED} with {@code cause.type}
+ * {@code UNSUPPORTED} until slices 6 and 7.
  * <p>
  * Validation before anything is read: {@code cause.manual} is required; {@code to} before {@code from} is
  * {@code INVALID}, {@code to} after the current month in Europe/Kyiv {@code DATE_IN_FUTURE} (400, field
@@ -89,27 +94,40 @@ import org.springframework.transaction.support.TransactionTemplate;
  * outermost transaction and is marked rollback-only, so it writes nothing. The locks, in this order: the cooperative's
  * charging lock ({@link ChargingLock}), the plot meters of the plots of the scope in id order (each {@code FOR SHARE}
  * with its points and its advisory lock, {@link IntervalCharging#lockPoints}; only the resources of the chosen charge
- * types), the queue lock, the charge types and tariffs {@code FOR SHARE} ({@link TariffChargeWriter#lockTariffs}),
- * every billing month {@code FOR SHARE} (no month closes under the plan). Then the scope: the months {@code from} to
+ * types), when runs are in the scope the advisory lock of the losses runs, then that of the common consumer runs
+ * ({@link LossesRuns#lockRuns}, {@link CommonConsumerRuns#lockRuns}) and every electricity meter {@code FOR SHARE}
+ * ({@link MeterNetwork#lockSharedNetwork}, the order of a run's booking), the queue lock, the charge types and tariffs
+ * {@code FOR SHARE} ({@link TariffChargeWriter#lockTariffs}), every billing month {@code FOR SHARE} (no month closes
+ * under the plan). Then the scope: the months {@code from} to
  * {@code to}; the charge types chosen (unknown 400 {@code NOT_FOUND}, inactive or archived 400 {@code INVALID}) or every
  * active one; the plots chosen ({@code UNKNOWN_PLOT}, {@code PLOT_ARCHIVED}, {@code PLOT_COMMON_LAND}) or every
  * chargeable one. The expected charges come from the month run's plan loop ({@link MonthRun#expected}) and from the
  * listener's planning of the meters' intervals whose closing reading is dated in the months
  * ({@link IntervalCharging#expected}; a charge type that is not active, water before it is switched on, is not in the
- * scope and charges nothing). The booked chains are the tariff charges of the scope (by the month of their source key)
- * and the interval charges of the locked meters (by their debt date, the date of the reading that closes the interval;
- * not the charges of runs), with their reversals and adjustments; {@link RecalculationPlanner} compares them; the
- * digest is {@link RecalculationDigest}.
+ * scope and charges nothing), and from the booked runs whose range ends in the months: the losses runs when electricity
+ * is in the scope, the common consumer runs when {@code COMMON_CONSUMERS} is; with plots chosen, the runs with a charge
+ * of one of them, each as a whole. A run is planned again over its range and the nodes or consumers it charged, the run
+ * itself ignored so it does not overlap itself ({@link LossesRuns#planAgain}, {@link CommonConsumerRuns#planAgain}).
+ * The booked chains are the tariff charges of the scope (by the month of their source key), the interval charges of
+ * the locked meters (by their debt date, the date of the reading that closes the interval) and the charges of the
+ * runs, with their reversals and adjustments; {@link RecalculationPlanner} compares them; the digest is
+ * {@link RecalculationDigest}.
  * <p>
  * A booking whose digest differs from the one of the plan now is 409 {@code PREVIEW_OUTDATED}; a plan without lines is
  * 409 {@code NOTHING_TO_RECALCULATE} (a preview of it answers with no lines, "No changes"). A plan without lines books
  * nothing at all, not even its queue outcomes: the queue is left to the month run, the listener and "Повторити", and
  * the preview of such a plan lists no "not charged" items. Otherwise, in this order: the {@code recalculation} row; the
+ * runs of open months whose lines differ, each reversed as a whole (source {@code RECALCULATION}, the run and its nodes
+ * or lines marked reversed) and, unless nothing is left to charge, booked again as a new run of the same range and
+ * nodes or consumers with the lines' expected charges ({@link LossesRuns#book}, {@link CommonConsumerRuns#book}: its
+ * value uses, its "not charged" items as 011 writes them, no run audit entry); the
  * reversals (source {@code RECALCULATION}, the reason, in the reversed charge's month); the new {@code REGULAR} charges
  * with their parts, and for an interval the two points it reads ({@code meter_value_use}) (the base key, or
  * {@code base#r{recalculation}} when a charge has the base key; in the month 011 would book them in); the adjustments
  * ({@link ChargeRecord#adjustment}, the difference, the original's service period and {@code accrued_on}, booked in the
- * earliest open month, with the parts of the expected charge and, for an interval, its two points); the queue (an item
+ * earliest open month, with the parts of the expected charge and, for an interval, its two points, for a run line the
+ * values of the nodes or the consumer it shares in); a plot new to a run of a closed month gets a charge of the original
+ * run (key {@code LOSSES_RUN:{run}:{plot}} or {@code COMMON_CONSUMER_RUN:{run}:{consumer}:{plot}}); the queue (an item
  * that cannot be charged opened or refreshed, an interval item with the first point of its interval now, a charged one
  * {@code RESOLVED}, one with nothing left {@code OBSOLETE}); the {@code recalculation_line} rows; one
  * {@code AuditBatch} with {@code RECALCULATION_BOOKED}; {@code ChargesBooked} for the plots of the lines. The reason is
@@ -125,6 +143,7 @@ class RecalculationService {
     private static final int CHUNK = 1000;
     private static final String WATER = "WATER";
     private static final String ELECTRICITY = "ELECTRICITY";
+    private static final String COMMON_CONSUMERS = CommonConsumerPlanning.COMMON_CONSUMERS;
 
     private final TransactionTemplate transaction;
     private final ChargingLock chargingLock;
@@ -132,6 +151,11 @@ class RecalculationService {
     private final MonthRun monthRun;
     private final IntervalCharging intervals;
     private final MeterCatalog meters;
+    private final MeterNetwork network;
+    private final LossesRuns lossesRuns;
+    private final CommonConsumerRuns commonConsumerRuns;
+    private final LossesRunRepository lossesRunRecords;
+    private final CommonConsumerRunRepository commonConsumerRunRecords;
     private final PlotCatalog plots;
     private final ChargeTypeCatalog chargeTypes;
     private final ChargeRepository charges;
@@ -146,6 +170,8 @@ class RecalculationService {
 
     RecalculationService(PlatformTransactionManager transactionManager, ChargingLock chargingLock,
             TariffChargeWriter writer, MonthRun monthRun, IntervalCharging intervals, MeterCatalog meters,
+            MeterNetwork network, LossesRuns lossesRuns, CommonConsumerRuns commonConsumerRuns,
+            LossesRunRepository lossesRunRecords, CommonConsumerRunRepository commonConsumerRunRecords,
             PlotCatalog plots, ChargeTypeCatalog chargeTypes,
             ChargeRepository charges, BillingMonthRepository months, BillingMonths billingMonths,
             NotChargedItemRepository items, NotChargedViews itemViews, LedgerAuditPublisher audit,
@@ -156,6 +182,11 @@ class RecalculationService {
         this.monthRun = monthRun;
         this.intervals = intervals;
         this.meters = meters;
+        this.network = network;
+        this.lossesRuns = lossesRuns;
+        this.commonConsumerRuns = commonConsumerRuns;
+        this.lossesRunRecords = lossesRunRecords;
+        this.commonConsumerRunRecords = commonConsumerRunRecords;
         this.plots = plots;
         this.chargeTypes = chargeTypes;
         this.charges = charges;
@@ -194,10 +225,29 @@ class RecalculationService {
     private record ScopedInterval(UUID plotId, MeterInterval interval) {
     }
 
-    /** What the plan is made of, and what the booking writes from. */
+    /**
+     * The booked runs of the scope (their range ends in the months), each with its regular charges and the network of
+     * its range, locked before the queue.
+     */
+    private record RunScope(List<LossesRunRecord> losses, List<CommonConsumerRunRecord> commonConsumers,
+            Map<UUID, List<ChargeRecord>> charges, Map<UUID, Network> networks) {
+
+        static RunScope none() {
+            return new RunScope(List.of(), List.of(), Map.of(), Map.of());
+        }
+    }
+
+    /**
+     * What the plan is made of, and what the booking writes from.
+     *
+     * @param plotById            the plots of the scope and of the run lines (their numbers are shown)
+     * @param lossesPlans         the losses runs of the scope planned again, by run id
+     * @param commonConsumerPlans the common consumer runs of the scope planned again, by run id
+     */
     private record Planned(Plan plan, String digest, Snapshot snapshot, Map<UUID, ChargeRecord> originals,
             Map<ChargeIdentity, Expected> expected, Map<String, NotChargedItemRecord> openItems,
-            Map<String, ScopedInterval> intervals, Map<UUID, PlotFacts> plotById) {
+            Map<String, ScopedInterval> intervals, Map<UUID, PlotFacts> plotById,
+            Map<UUID, LossesRuns.Planned> lossesPlans, Map<UUID, CommonConsumerPlanning.Plan> commonConsumerPlans) {
     }
 
     /**
@@ -281,6 +331,8 @@ class RecalculationService {
         // the plots first (read, not locked), then their meters in id order: the meter locks come before the queue lock
         PlotScope plotScope = plotScope(manual);
         List<MeterPoints> lockedMeters = lockMeters(tenantId, plotScope.plots(), manual.chargeTypeIds());
+        // the runs: their locks and the shared network after the plot meters, before the queue lock
+        RunScope runScope = lockRuns(tenantId, manual);
         writer.lockQueue(tenantId);
         Snapshot snapshot = writer.lockTariffs();
         months.lockAllForShare();
@@ -346,6 +398,28 @@ class RecalculationService {
                 }
             }
         }
+        // the runs of the scope's charge types: planned again over their range, the run itself ignored
+        Map<UUID, LossesRuns.Planned> lossesPlans = new LinkedHashMap<>();
+        Map<UUID, CommonConsumerPlanning.Plan> commonConsumerPlans = new LinkedHashMap<>();
+        UUID electricity = typeOf(snapshot, ELECTRICITY);
+        if (electricity != null && typeIds.contains(electricity)) {
+            for (LossesRunRecord run : runScope.losses()) {
+                LossesRuns.Planned again = lossesRuns.planAgain(run, runScope.networks().get(run.getId()), snapshot);
+                lossesPlans.put(run.getId(), again);
+                expected.addAll(ExpectedCharges.ofLossesRun(again.plan(), run.getId(), electricity));
+                runScope.charges().get(run.getId()).forEach(charge -> originals.put(charge.getId(), charge));
+            }
+        }
+        UUID commonConsumers = typeOf(snapshot, COMMON_CONSUMERS);
+        if (commonConsumers != null && typeIds.contains(commonConsumers)) {
+            for (CommonConsumerRunRecord run : runScope.commonConsumers()) {
+                CommonConsumerPlanning.Plan again = commonConsumerRuns.planAgain(run,
+                        runScope.networks().get(run.getId()), snapshot);
+                commonConsumerPlans.put(run.getId(), again);
+                expected.addAll(ExpectedCharges.ofCommonConsumerRun(again, run.getId(), commonConsumers));
+                runScope.charges().get(run.getId()).forEach(charge -> originals.put(charge.getId(), charge));
+            }
+        }
         List<BookedCharge> booked = new ArrayList<>();
         originals.values().forEach(charge -> booked.add(booked(charge, monthOf)));
         for (List<UUID> chunk : chunks(originals.keySet())) {
@@ -375,7 +449,75 @@ class RecalculationService {
                 new RecalculationDigest.Scope(scope.months(), manual.chargeTypeIds(), manual.plotIds()), plan);
         Map<ChargeIdentity, Expected> expectedById = new HashMap<>();
         expected.forEach(entry -> expectedById.put(entry.identity(), entry));
-        return new Planned(plan, digest, snapshot, originals, expectedById, openItems, scopedIntervals, plotById);
+        // a run line may be of a plot outside the chosen ones: its number is shown too
+        Map<UUID, PlotFacts> shown = new LinkedHashMap<>(plotById);
+        Set<UUID> missing = plan.lines().stream().map(Line::plotId).filter(id -> !shown.containsKey(id))
+                .collect(Collectors.toSet());
+        if (!missing.isEmpty()) {
+            shown.putAll(plots.findAll(missing));
+        }
+        return new Planned(plan, digest, snapshot, originals, expectedById, openItems, scopedIntervals, shown,
+                lossesPlans, commonConsumerPlans);
+    }
+
+    private static @Nullable UUID typeOf(Snapshot snapshot, String code) {
+        return snapshot.chargeTypes().stream().filter(type -> code.equals(type.code())).map(ChargeTypeEntry::id)
+                .findFirst().orElse(null);
+    }
+
+    /**
+     * The booked runs whose range ends in the months, of the chosen charge types (losses runs are electricity charges,
+     * common consumer runs {@code COMMON_CONSUMERS}; every type when none is chosen); with plots chosen, only the runs
+     * with a charge of one of them (a run is recalculated as a whole: its other plots are shown too). When there are
+     * any: the advisory lock of the losses runs, then that of the common consumer runs (each after the charging lock,
+     * which is taken already), then every electricity meter {@code FOR SHARE} with the network of each run's range
+     * ({@link MeterNetwork#lockSharedNetwork}), the order of a run's booking.
+     */
+    private RunScope lockRuns(UUID tenantId, Manual manual) {
+        Set<String> codes = new HashSet<>();
+        if (manual.chargeTypeIds().isEmpty()) {
+            codes.addAll(List.of(ELECTRICITY, COMMON_CONSUMERS));
+        } else {
+            Map<UUID, ChargeTypeFacts> typeById = chargeTypes.all().stream()
+                    .collect(Collectors.toMap(ChargeTypeFacts::id, Function.identity()));
+            manual.chargeTypeIds().stream().map(typeById::get).filter(Objects::nonNull).map(ChargeTypeFacts::code)
+                    .filter(Objects::nonNull).forEach(codes::add);
+        }
+        LocalDate from = manual.from().atDay(1);
+        LocalDate to = manual.to().atEndOfMonth();
+        Map<UUID, List<ChargeRecord>> runCharges = new HashMap<>();
+        Set<UUID> chosenPlots = new HashSet<>(manual.plotIds());
+        Predicate<UUID> touches = runId -> {
+            List<ChargeRecord> charges = this.charges.findByRunIdAndKind(runId, ChargeKind.REGULAR);
+            runCharges.put(runId, charges);
+            return chosenPlots.isEmpty() || charges.stream().anyMatch(c -> chosenPlots.contains(c.getPlotId()));
+        };
+        List<LossesRunRecord> losses = !codes.contains(ELECTRICITY) ? List.of()
+                : lossesRunRecords.findBookedEndingBetween(from, to).stream().filter(run -> touches.test(run.getId()))
+                        .toList();
+        List<CommonConsumerRunRecord> consumers = !codes.contains(COMMON_CONSUMERS) ? List.of()
+                : commonConsumerRunRecords.findBookedEndingBetween(from, to).stream()
+                        .filter(run -> touches.test(run.getId())).toList();
+        if (losses.isEmpty() && consumers.isEmpty()) {
+            return RunScope.none();
+        }
+        if (!losses.isEmpty()) {
+            lossesRuns.lockRuns(tenantId);
+        }
+        if (!consumers.isEmpty()) {
+            commonConsumerRuns.lockRuns(tenantId);
+        }
+        Map<String, Network> byRange = new HashMap<>();
+        Map<UUID, Network> networks = new HashMap<>();
+        for (LossesRunRecord run : losses) {
+            networks.put(run.getId(), byRange.computeIfAbsent(run.label(),
+                    k -> network.lockSharedNetwork(run.getFromDate(), run.getToDate())));
+        }
+        for (CommonConsumerRunRecord run : consumers) {
+            networks.put(run.getId(), byRange.computeIfAbsent(run.label(),
+                    k -> network.lockSharedNetwork(run.getFromDate(), run.getToDate())));
+        }
+        return new RunScope(losses, consumers, runCharges, networks);
     }
 
     /**
@@ -509,9 +651,25 @@ class RecalculationService {
         Function<LocalDate, BillingMonthRecord> monthFor = date -> booking.computeIfAbsent(YearMonth.from(date),
                 m -> billingMonths.openForBooking(tenantId, date));
 
-        // 1. the reversals, in the reversed charge's month
+        // 1. the runs of open months whose lines differ: reversed as a whole, and booked again for the same range
+        Map<UUID, RunAction> runActions = new HashMap<>();
+        planned.plan().runs().forEach(run -> runActions.put(run.runId(), run.action()));
+        Predicate<Line> wholeRun = line -> line.runId() != null
+                && runActions.getOrDefault(line.runId(), RunAction.PER_LINE) != RunAction.PER_LINE;
         Map<Line, UUID> reversals = new HashMap<>();
+        Map<Line, UUID> created = new HashMap<>();
+        for (RunOutcome run : planned.plan().runs()) {
+            if (run.action() != RunAction.PER_LINE) {
+                rebookRun(tenantId, planned, run, lines, monthFor, recalculationId, reason, createdBy, now, reversals,
+                        created);
+            }
+        }
+
+        // 2. the reversals, in the reversed charge's month
         for (Line line : lines) {
+            if (wholeRun.test(line)) {
+                continue;
+            }
             if (line.action() == Action.REVERSE_AND_RECHARGE || line.action() == Action.REVERSE) {
                 ChargeRecord original = original(planned, line);
                 BillingMonthRecord month = monthFor.apply(Objects.requireNonNull(line.original()).billingMonth()
@@ -524,32 +682,38 @@ class RecalculationService {
         }
         entityManager.flush();
 
-        // 2. the new regular charges, under the base key unless a charge has it already
+        // 3. the new regular charges, under the base key unless a charge has it already
         Map<Line, Charge> recharges = new LinkedHashMap<>();
         for (Line line : lines) {
-            if (line.recharge() != null) {
+            if (line.recharge() != null && !wholeRun.test(line)) {
                 recharges.put(line, line.recharge());
             }
         }
         Set<String> existing = recharges.isEmpty() ? Set.of() : new HashSet<>(charges.existingSourceKeys(
-                recharges.values().stream().map(RecalculationService::sourceKey).toList()));
-        Map<Line, UUID> created = new HashMap<>();
+                recharges.keySet().stream().map(RecalculationService::sourceKey).toList()));
         for (Map.Entry<Line, Charge> entry : recharges.entrySet()) {
+            Line line = entry.getKey();
             Charge charge = entry.getValue();
-            BillingMonthRecord month = bookedIn(monthFor.apply(charge.accruedOn()), entry.getKey());
-            String base = sourceKey(charge);
+            BillingMonthRecord month = bookedIn(monthFor.apply(charge.accruedOn()), line);
+            String base = sourceKey(line);
             String key = existing.contains(base) ? base + "#r" + recalculationId : base;
             ChargeRecord record = switch (charge.planned()) {
                 case OfTariff tariff -> writer.bookRecalculated(tenantId, tariff.charge(), month.getId(), key,
                         recalculationId, createdBy, now);
                 case OfInterval interval -> intervals.bookRecalculated(tenantId, interval.charge(), month.getId(),
                         key, recalculationId, createdBy, now);
-                case OfLossesRun _, OfCommonConsumerRun _ -> throw runsNotYet();
+                // a plot new to a run of a closed month: a charge of the original run
+                case OfLossesRun run -> lossesRuns.bookLine(tenantId, Objects.requireNonNull(line.runId()),
+                        run.plan(), run.charge(), line.chargeTypeId(), month.getId(), key, recalculationId, createdBy,
+                        now);
+                case OfCommonConsumerRun run -> commonConsumerRuns.bookLine(tenantId,
+                        Objects.requireNonNull(line.runId()), run.plan(), run.charge(), line.chargeTypeId(),
+                        month.getId(), key, recalculationId, createdBy, now);
             };
-            created.put(entry.getKey(), record.getId());
+            created.put(line, record.getId());
         }
 
-        // 3. the adjustments, in the earliest open month, with the original's service period and debt date
+        // 4. the adjustments, in the earliest open month, with the original's service period and debt date
         Map<Line, UUID> adjustments = new HashMap<>();
         for (Line line : lines) {
             if (line.action() == Action.ADJUST) {
@@ -566,7 +730,10 @@ class RecalculationService {
                         case OfTariff tariff -> writer.writeParts(tenantId, adjustment.getId(), tariff.charge());
                         case OfInterval interval -> intervals.writePartsAndUse(tenantId, adjustment.getId(),
                                 interval.charge());
-                        case OfLossesRun _, OfCommonConsumerRun _ -> throw runsNotYet();
+                        case OfLossesRun run -> lossesRuns.writePartsAndUse(tenantId, adjustment.getId(),
+                                run.plan(), run.charge());
+                        case OfCommonConsumerRun run -> commonConsumerRuns.writePartsAndUse(tenantId,
+                                adjustment.getId(), run.plan(), run.charge());
                     }
                 }
                 adjustments.put(line, adjustment.getId());
@@ -574,10 +741,10 @@ class RecalculationService {
         }
         entityManager.flush();
 
-        // 4. the queue
+        // 5. the queue
         List<NotChargedItem> notCharged = applyQueue(tenantId, planned, now);
 
-        // 5. the lines
+        // 6. the lines
         Map<Line, RecalculationLineRecord.Created> createdByLine = new HashMap<>();
         for (int i = 0; i < lines.size(); i++) {
             Line line = lines.get(i);
@@ -593,7 +760,7 @@ class RecalculationService {
         }
         entityManager.flush();
 
-        // 6. the audit entry and the plot statuses
+        // 7. the audit entry and the plot statuses
         audit.publishBatch(tenantId, List.of(audit.recalculationEvent(actor, recalculationId,
                 manual.from() + "/" + manual.to(), auditChanges(manual, planned, lines, reason))));
         writer.publishBooked(tenantId, plotIds);
@@ -611,17 +778,79 @@ class RecalculationService {
         return Objects.requireNonNull(planned.originals().get(Objects.requireNonNull(line.original()).id()));
     }
 
-    /** The source key 011 gives the expected charge: the base key of the charge a recalculation books. */
-    private static String sourceKey(Charge charge) {
+    /**
+     * The source key 011 gives the expected charge of a line: the base key of the charge a recalculation books (a plot's
+     * charge of a run of a closed month: the key of the original run).
+     */
+    private static String sourceKey(Line line) {
+        Charge charge = Objects.requireNonNull(line.recharge());
         return switch (charge.planned()) {
             case OfTariff tariff -> tariff.charge().sourceKey();
             case OfInterval interval -> interval.charge().sourceKey();
-            case OfLossesRun _, OfCommonConsumerRun _ -> throw runsNotYet();
+            case OfLossesRun run -> LossesRuns.sourceKey(Objects.requireNonNull(line.runId()), run.charge().plotId());
+            case OfCommonConsumerRun run -> CommonConsumerRuns.sourceKey(Objects.requireNonNull(line.runId()),
+                    run.charge().consumerKey(), run.charge().plotId());
         };
     }
 
-    private static IllegalStateException runsNotYet() {
-        return new IllegalStateException("The lines of losses and common consumer runs are booked from slice 5");
+    /**
+     * A run of an open month whose lines differ: every live charge reversed (source {@code RECALCULATION}, the
+     * recalculation's id and reason, in the run's month), the run and its nodes or lines marked reversed, and, for
+     * {@code REBOOK}, a new run of the same range and nodes or consumers booked with the lines' expected charges (with
+     * the recalculation's id; its value uses and queue items as a run's booking writes them). Records the reversal and
+     * the new charge of each line. The reversal clears the persistence context.
+     */
+    private void rebookRun(UUID tenantId, Planned planned, RunOutcome run, List<Line> lines,
+            Function<LocalDate, BillingMonthRecord> monthFor, UUID recalculationId, String reason,
+            @Nullable UUID createdBy, Instant now, Map<Line, UUID> reversals, Map<Line, UUID> created) {
+        UUID runId = run.runId();
+        List<Line> runLines = lines.stream().filter(line -> runId.equals(line.runId())).toList();
+        YearMonth runMonth = runLines.stream().map(Line::original).filter(Objects::nonNull)
+                .map(BookedCharge::billingMonth).findFirst().orElseThrow();
+        UUID monthId = monthFor.apply(runMonth.atDay(1)).getId();
+        boolean losses = planned.lossesPlans().containsKey(runId);
+        LossesRuns.Reversed reversed = losses
+                ? lossesRuns.reverseLocked(lossesRunRecords.findByIdForUpdate(runId).orElseThrow(), monthId, reason,
+                        ChargeSource.RECALCULATION, recalculationId, createdBy, now)
+                : commonConsumerRuns.reverseLocked(commonConsumerRunRecords.findByIdForUpdate(runId).orElseThrow(),
+                        monthId, reason, ChargeSource.RECALCULATION, recalculationId, createdBy, now);
+        for (Line line : runLines) {
+            if (line.original() != null) {
+                reversals.put(line, Objects.requireNonNull(reversed.reversalOf().get(line.original().id()),
+                        "a live charge of the run is reversed with it"));
+            }
+        }
+        if (run.action() != RunAction.REBOOK) {
+            return;
+        }
+        List<Line> recharged = runLines.stream().filter(line -> line.recharge() != null).toList();
+        YearMonth bookedIn;
+        if (losses) {
+            List<LossesPlanning.PlannedCharge> toBook = recharged.stream()
+                    .map(line -> ((OfLossesRun) Objects.requireNonNull(line.recharge()).planned()).charge()).toList();
+            LossesRuns.Booked booked = lossesRuns.book(tenantId, planned.lossesPlans().get(runId), toBook,
+                    planned.snapshot(), createdBy, now, recalculationId);
+            bookedIn = booked.month().yearMonth();
+            recharged.forEach(line -> created.put(line, booked.chargeIds().get(line.plotId())));
+        } else {
+            List<CommonConsumerPlanning.PlannedCharge> toBook = recharged.stream()
+                    .map(line -> ((OfCommonConsumerRun) Objects.requireNonNull(line.recharge()).planned()).charge())
+                    .toList();
+            CommonConsumerRuns.Booked booked = commonConsumerRuns.book(tenantId,
+                    planned.commonConsumerPlans().get(runId), toBook, planned.snapshot(), createdBy, now,
+                    recalculationId);
+            bookedIn = booked.month().yearMonth();
+            for (int i = 0; i < recharged.size(); i++) {
+                created.put(recharged.get(i), booked.chargeIds().get(CommonConsumerRunViews.chargeKey(
+                        toBook.get(i).consumerKey(), toBook.get(i).plotId())));
+            }
+        }
+        for (Line line : recharged) {
+            if (!bookedIn.equals(line.bookedIn())) {
+                throw conflict(ProblemCodes.PREVIEW_OUTDATED,
+                        "The charges changed since the preview. Preview again before booking.");
+            }
+        }
     }
 
     /**
@@ -644,7 +873,8 @@ class RecalculationService {
      */
     private List<NotChargedItem> applyQueue(UUID tenantId, Planned planned, Instant now) {
         for (QueueOutcome outcome : planned.plan().queue()) {
-            NotChargedItemRecord open = planned.openItems().get(outcome.itemKey());
+            // the reversal of a run clears the persistence context: an item read by the plan is read again
+            NotChargedItemRecord open = attached(planned.openItems().get(outcome.itemKey()));
             ScopedInterval scoped = planned.intervals().get(outcome.itemKey());
             if (outcome.status() == Status.OPEN && scoped != null) {
                 // a meter interval: the item keeps the interval's first point and day of this plan
@@ -678,6 +908,13 @@ class RecalculationService {
         }
         items.flush();
         return notCharged(planned);
+    }
+
+    private @Nullable NotChargedItemRecord attached(@Nullable NotChargedItemRecord item) {
+        if (item == null || entityManager.contains(item)) {
+            return item;
+        }
+        return items.findById(item.getId()).orElseThrow();
     }
 
     /** The charge type of the identity a queue outcome is about. */

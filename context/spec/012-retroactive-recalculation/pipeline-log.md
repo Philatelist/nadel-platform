@@ -60,3 +60,4 @@
 - Slice 1: 167f42e — verify green (backend 447, web 592, clients green) — review PASS (r1)
 - Slice 2: 0ef7ec0 — verify green (40 tests) — review PASS (r1)
 - Slice 3: 4e38655 (+ fix c6926e6) — verify green (backend 68 + builder 164, web 616) — review PASS (r2)
+- Slice 4: bd66a08 — verify green (backend 112) — review r1 running
