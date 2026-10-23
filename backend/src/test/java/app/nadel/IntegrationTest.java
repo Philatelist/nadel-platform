@@ -1,22 +1,22 @@
 package app.nadel;
 
 import app.nadel.tenancy.TenantContext;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Function;
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.postgresql.PostgreSQLContainer;
-import org.testcontainers.utility.DockerImageName;
 
 /**
  * Base for integration tests: real PostgreSQL + PostGIS in a container.
@@ -33,12 +33,19 @@ public abstract class IntegrationTest {
     protected static final UUID DEMO_TENANT = UUID.fromString("11111111-1111-1111-1111-111111111111");
     protected static final UUID OTHER_TENANT = UUID.fromString("22222222-2222-2222-2222-222222222222");
 
-    static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer(
-            DockerImageName.parse("postgis/postgis:17-3.5").asCompatibleSubstituteFor("postgres"))
+    static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer(TestPostgis.image())
             .withInitScript("db/test-init.sql");
+
+    /** The owner connections of {@link #ownerJdbc()}: pooled, a new connection costs a backend start and SCRAM. */
+    private static final OwnerDataSource OWNER;
 
     static {
         POSTGRES.start();
+        OWNER = new OwnerDataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+        // Outbox listeners finish within milliseconds; the default (first check after 100 ms, then every 100 ms) made
+        // each wait for an event cost at least 100 ms. The timeouts stay as each test sets them.
+        Awaitility.setDefaultPollDelay(Duration.ZERO);
+        Awaitility.setDefaultPollInterval(Duration.ofMillis(10));
     }
 
     @DynamicPropertySource
@@ -65,11 +72,11 @@ public abstract class IntegrationTest {
 
     /**
      * SQL as the container owner (superuser, bypasses RLS): for fixtures the application role cannot create, such as
-     * a whole cooperative. Autocommit; the caller removes what it creates.
+     * a whole cooperative. Autocommit, over pooled connections that come back without an open transaction; the
+     * caller removes what it creates.
      */
     protected static JdbcTemplate ownerJdbc() {
-        return new JdbcTemplate(new DriverManagerDataSource(
-                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword()));
+        return OWNER.jdbc();
     }
 
     /** Runs SQL as the given cooperative (RLS applies), in one transaction. */
