@@ -53,6 +53,12 @@ interface ChargeRepository extends JpaRepository<ChargeRecord, UUID> {
     @Query("select c.sourceKey from ChargeRecord c where c.sourceKey in :keys")
     List<String> existingSourceKeys(@Param("keys") Collection<String> keys);
 
+    /** The opening balances of the plots that no reversal cancels, in no particular order (the Excel import). */
+    @Query("select c from ChargeRecord c where c.plotId in :plotIds and c.kind = :kind and not exists "
+            + "(select r.id from ChargeRecord r where r.reversesChargeId = c.id)")
+    List<ChargeRecord> findStandingOfKind(@Param("plotIds") Collection<UUID> plotIds,
+            @Param("kind") ChargeKind kind);
+
     /** The plots among {@code plotIds} that have at least one charge of any kind. */
     @Query("select distinct c.plotId from ChargeRecord c where c.plotId in :plotIds")
     List<UUID> plotIdsWithCharges(@Param("plotIds") Collection<UUID> plotIds);

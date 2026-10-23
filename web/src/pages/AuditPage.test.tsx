@@ -117,6 +117,8 @@ describe('AuditPage ownership entries', () => {
         { field: 'plotsCreated', newValue: '5' },
         { field: 'membersUpdated', newValue: '2' },
         { field: 'ownershipsUnchanged', newValue: '1' },
+        { field: 'waterConnectionsCreated', newValue: '6' },
+        { field: 'openingBalancesUnchanged', newValue: '2' },
       ],
     };
     renderWithApp(<AuditPage />);
@@ -125,6 +127,8 @@ describe('AuditPage ownership entries', () => {
     expect(screen.getByText(/Plots created:/)).toBeInTheDocument();
     expect(screen.getByText(/Members updated:/)).toBeInTheDocument();
     expect(screen.getByText(/Owners unchanged:/)).toBeInTheDocument();
+    expect(screen.getByText(/Water connections created:/)).toBeInTheDocument();
+    expect(screen.getByText(/Opening balances unchanged:/)).toBeInTheDocument();
   });
 });
 

@@ -1,5 +1,5 @@
 import type { ImportEntityCounts, ImportPreview, ImportProblem } from '@nadel/api-client';
-import { format, formatDateTime } from '@nadel/shared';
+import { format, formatDateTime, formatMoney, isMoney } from '@nadel/shared';
 import { importErrorCode } from '../../importError';
 import { formatUser } from '../UserContent';
 import { Button, DataTable, Notice, Panel, type Column } from '../ui';
@@ -8,7 +8,7 @@ import { useLocale, useT } from '../../i18n';
 /** How many problems the table shows; the rest is summarised as "and N more". */
 export const maxShownProblems = 200;
 
-const entities = ['plots', 'members', 'ownerships', 'meters'] as const;
+const entities = ['plots', 'members', 'ownerships', 'meters', 'waterConnections', 'openingBalances'] as const;
 
 interface ImportPreviewPanelProps {
   preview: ImportPreview;
@@ -44,6 +44,7 @@ export function ImportPreviewPanel({
     MEMBERS: t.importColumns.members,
     OWNERSHIP: t.importColumns.ownership,
     METERS: t.importColumns.meters,
+    OPENING_BALANCES: t.importColumns.openingBalances,
   };
   const messages: Readonly<Record<string, string>> = t.importProblem;
 
@@ -75,7 +76,18 @@ export function ImportPreviewPanel({
     {
       key: 'message',
       header: s.colMessage,
-      cell: (p) => formatUser(messages[p.code] ?? t.importProblem.UNKNOWN, p.params ?? {}),
+      cell: (p) => {
+        const text =
+          messages[`${p.code}_${p.sheet}_${p.column ?? ''}`] ??
+          messages[`${p.code}_${p.sheet}`] ??
+          messages[p.code] ??
+          t.importProblem.UNKNOWN;
+        const params = { ...p.params };
+        if (params.amount !== undefined && isMoney(params.amount)) {
+          params.amount = formatMoney(params.amount, locale);
+        }
+        return formatUser(text, params);
+      },
     },
   ];
 

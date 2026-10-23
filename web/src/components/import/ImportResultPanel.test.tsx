@@ -15,6 +15,8 @@ const result: ImportResult = {
     members: { created: 2, updated: 0, unchanged: 1 },
     ownerships: { created: 4, updated: 0, unchanged: 0 },
     meters: { created: 6, updated: 0, unchanged: 2 },
+    waterConnections: { created: 8, updated: 0, unchanged: 3 },
+    openingBalances: { created: 9, updated: 0, unchanged: 1 },
   },
 };
 
@@ -29,6 +31,10 @@ describe('ImportResultPanel', () => {
     expect(row.map((c) => c.textContent)).toEqual(['Plots', '5', '3', '7']);
     const meters = within(screen.getByRole('row', { name: /Meters/ })).getAllByRole('cell');
     expect(meters.map((c) => c.textContent)).toEqual(['Meters', '6', '0', '2']);
+    const water = within(screen.getByRole('row', { name: /Water connections/ })).getAllByRole('cell');
+    expect(water.map((c) => c.textContent)).toEqual(['Water connections', '8', '0', '3']);
+    const balances = within(screen.getByRole('row', { name: /Opening balances/ })).getAllByRole('cell');
+    expect(balances.map((c) => c.textContent)).toEqual(['Opening balances', '9', '0', '1']);
     expect(screen.getByRole('link', { name: 'Go to plots' })).toHaveAttribute('href', '/plots');
     expect(screen.getByRole('link', { name: 'Go to members' })).toHaveAttribute('href', '/members');
   });

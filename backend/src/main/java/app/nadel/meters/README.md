@@ -51,6 +51,7 @@ within the working period; that a `REJECTED` or `APPROVED` row carries `decided_
 | `MeterNetwork` | Read API for the ledger (`internal.JpaMeterNetwork`, feature 011): `lockSharedPoints(meterId)` locks the meter `FOR SHARE` (a reading write holds it `FOR UPDATE`) and returns its points with stable keys (`INSTALL:{meter}`, the reading id, `REMOVAL:{meter}`; a reading on a boundary date takes its place), in the caller's transaction; `staleMeters(asOf, days)` lists the plot meters that worked on `asOf` (installed on or before it, not removed on or before it) whose last point on or before `asOf` (the latest approved reading, else the installation) is dated before `asOf - days`, as `StaleMeter(meterId, plotId, resource, lastReadingOn)`; the rule of the round's `noReadingSince` filter, as of a date. The closing check list of a billing month asks it with 60 days; `network(from, to)` (and `lockSharedNetwork`, every electricity meter `FOR SHARE` in id order first) gives the electricity tree for the losses runs: every chain that worked in the range with its meters' histories (all approved readings) and its places in the tree by days (`Placement(parentKey, from, to)`, through the day of the final removal, `null` parent for the days without one), built by `TreeQueries.network` like the tree screen. Tests: `MeterNetworkTests`, the ledger's `LossesRunsTests` |
 | `WaterConnections` | Read API for the ledger (`internal.JpaWaterConnections`, feature 011): `connectedDays(plotIds, from, to)` gives, per plot, the days it was connected to any water source in the range (clipped, oldest first; a plot without such a day is absent), `connectedToSource(sourceMeterId, from, to)` the same for one source (null = the cooperative's water supply), for the common consumer split of a well pump. In the caller's transaction |
 | `MeterImport` | Facade of the Excel import's Meters sheet (`internal.MeterImportService`): `plan`, `lock`, `apply`, with `MeterImportRow`, `MeterImportPlan`, `MeterImportItem`, `MeterImportAction` (`NEW`, `UNCHANGED`) and `MeterImportProblem`. See The Excel sheet |
+| `WaterConnectionImport` | Facade of the water column of the Excel import's Plots sheet (`internal.WaterConnectionImportService`, feature 011 slice 8): `plan`, `lock`, `apply`, with the nested `Row`, `Item`, `Plan` and `Action` (`NEW`, `UNCHANGED`). See Water connections |
 
 ### The calculation
 
@@ -343,7 +344,7 @@ connection, 23505); `DELETE` and `TRUNCATE` revoked from `nadel_app` (the histor
 row). Tests: `WaterConnectionTenantIsolationTests`.
 
 Internal: `WaterConnectionRecord`, `WaterConnectionRepository`, `WaterConnectionCommands`, `WaterConnectionQueries`,
-`JpaWaterConnections`, `WaterController` (tag `water`).
+`JpaWaterConnections`, `WaterConnectionImportService`, `WaterController` (tag `water`).
 
 | Endpoint | Operation | Who |
 |---|---|---|
@@ -381,8 +382,22 @@ Internal: `WaterConnectionRecord`, `WaterConnectionRepository`, `WaterConnection
   `WATER_DISCONNECTED` (`source`, `from`, `until`); `source` is the meter's name (user content) or
   `base:COOPERATIVE_SUPPLY`. One entry per plot of a bulk change. Guarded by `WaterAuditActionsTests` (the actions
   are values of the contract's `AuditAction`).
+- **The Excel import** (`WaterConnectionImport`, slice 8): the optional `water` column of the Plots sheet. The import
+  passes only the cells that ask for a connection: a yes word is the cooperative's water supply, any other text the
+  name of an active common consumer meter; a no word and an empty cell never reach the facade, so the import never
+  disconnects a plot. Plan, per row with the rules of a connection by hand: a plot whose Plots row has a problem is
+  not checked; common land (the row's kind, else the stored one) is `PLOT_COMMON_LAND`; a name matches the active
+  common consumer meters ignoring case and extra spaces (`WATER_SOURCE_INVALID` for none, `WATER_SOURCE_AMBIGUOUS` for
+  two or more); a plot of the file is `NEW`; a stored plot with a lasting connection is `UNCHANGED` for a yes (to any
+  source) or the name of its current source, `WATER_ALREADY_CONNECTED` for another source; a stored plot with a
+  connection that ends today or later is `WATER_ALREADY_CONNECTED`; any other plot is `NEW`. Lock: the stored plots of
+  the `NEW` rows `FOR SHARE`, then the connections of every planned plot `FOR UPDATE` (the order of a connection by
+  hand). Apply: the `NEW` plots are connected from the day of the commit (Europe/Kyiv); a constraint violation is 409
+  `IMPORT_STALE`; one `WATER_CONNECTED` event per plot is returned to the import, which publishes it in an
+  `AuditBatch`.
 - Tests: `WaterConnectionsTests` (history, one lasting connection, overlap 409, bulk, sources, permissions, audit,
-  missing readings, the facade, the delete guard), `MeterNetworkTests` (stale water meters).
+  missing readings, the facade, the delete guard), `MeterNetworkTests` (stale water meters); the import column in
+  `imports` (`ImportPlotsWaterTests`).
 
 ## Permissions
 

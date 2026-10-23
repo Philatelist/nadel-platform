@@ -12,11 +12,13 @@
 import type { ImportEntityCounts } from './importEntityCounts';
 
 /**
- * Records per sheet. Rows with a problem are not counted.
+ * Records per sheet. Rows with a problem are not counted. `waterConnections` counts the plots of the `water` column of the `Plots` sheet. An upload from before a sheet existed counts zero for it.
  */
 export interface ImportCounts {
   plots: ImportEntityCounts;
   members: ImportEntityCounts;
   ownerships: ImportEntityCounts;
   meters: ImportEntityCounts;
+  waterConnections: ImportEntityCounts;
+  openingBalances: ImportEntityCounts;
 }

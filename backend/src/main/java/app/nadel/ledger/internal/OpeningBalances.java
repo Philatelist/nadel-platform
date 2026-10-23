@@ -21,6 +21,7 @@ import java.util.Set;
 import java.util.UUID;
 import nadel.contract.model.Charge;
 import nadel.contract.model.OpeningBalanceInput;
+import org.jspecify.annotations.Nullable;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -42,9 +43,6 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 class OpeningBalances {
-
-    /** {@code numeric(14,2)}: at most 12 digits before the point. */
-    private static final int MAX_INTEGER_DIGITS = 12;
 
     private final PlotCatalog plots;
     private final ChargeTypeCatalog chargeTypes;
@@ -72,19 +70,19 @@ class OpeningBalances {
         Money amount = Money.parse(input.getAmount());
         LocalDate date = input.getDate();
         List<FieldProblem> errors = new ArrayList<>();
-        if (amount.signum() <= 0) {
-            errors.add(new FieldProblem("amount", ProblemCodes.AMOUNT_NOT_POSITIVE));
-        } else if (amount.value().precision() - amount.value().scale() > MAX_INTEGER_DIGITS) {
-            errors.add(new FieldProblem("amount", ProblemCodes.INVALID));
+        String amountProblem = OpeningBalanceRules.amountProblem(amount);
+        if (amountProblem != null) {
+            errors.add(new FieldProblem("amount", amountProblem));
         }
-        if (date.isAfter(LocalDate.now(clock))) {
-            errors.add(new FieldProblem("date", ProblemCodes.DATE_IN_FUTURE));
+        String dateProblem = OpeningBalanceRules.dateProblem(date, LocalDate.now(clock));
+        if (dateProblem != null) {
+            errors.add(new FieldProblem("date", dateProblem));
         }
         if (!errors.isEmpty()) {
             throw new ApiProblemException(HttpStatus.BAD_REQUEST, ProblemCodes.VALIDATION_FAILED,
                     "The request is not valid.", errors);
         }
-        String reason = input.getReason() == null || input.getReason().isBlank() ? null : input.getReason().strip();
+        String reason = OpeningBalanceRules.reason(input.getReason());
 
         PlotFacts plot = plots.findAndLockShared(plotId).orElseThrow(LedgerAccess::plotNotFound);
         if (plot.archived()) {
@@ -105,22 +103,38 @@ class OpeningBalances {
         }
 
         UUID tenantId = Objects.requireNonNull(actor.tenantId());
-        BillingMonthRecord month = billingMonths.openForBooking(tenantId, date);
-        ChargeRecord charge = ChargeRecord.opening(tenantId, plotId, type.id(), month.getId(), amount, date, reason,
-                ChargeViews.plainCalculation(amount), actor.memberId(), clock.instant());
-        entityManager.persist(charge);
+        Booked booked = book(tenantId, plotId, type, amount, date, reason, null, actor.memberId(),
+                billingMonths.openForBooking(tenantId, date));
         entityManager.flush();
 
-        List<FieldChange> changes = new ArrayList<>(List.of(
-                new FieldChange("chargeType", null, type.auditName()),
-                new FieldChange("amount", null, amount.toString()),
-                new FieldChange("date", null, date.toString()),
-                new FieldChange("billingMonth", null, month.yearMonth().toString())));
-        if (reason != null) {
-            changes.add(new FieldChange("reason", null, reason));
-        }
-        audit.publish(actor, LedgerAuditPublisher.Action.OPENING_BALANCE_ENTERED, plotId, plot.number(), changes);
+        audit.publish(actor, LedgerAuditPublisher.Action.OPENING_BALANCE_ENTERED, plotId, plot.number(),
+                booked.auditChanges());
         events.publishEvent(new ChargesBooked(tenantId, Set.of(plotId)));
-        return views.view(charge, null, views.context(List.of(charge), actor));
+        return views.view(booked.charge(), null, views.context(List.of(booked.charge()), actor));
+    }
+
+    /**
+     * A booked opening balance and the audit values that describe it.
+     *
+     * @param charge       the new charge, persisted but not flushed
+     * @param auditChanges the values of its {@code OPENING_BALANCE_ENTERED} entry
+     */
+    record Booked(ChargeRecord charge, List<FieldChange> auditChanges) {
+    }
+
+    /**
+     * Books an opening balance whose values passed {@link OpeningBalanceRules} and whose plot and charge type were
+     * checked and locked by the caller, in {@code month}: the month {@link BillingMonths#openForBooking} gave for
+     * {@code date} (the month of the date or the earliest open month after it), locked by it. The charge is persisted,
+     * not flushed, and nothing is published: the caller flushes and audits. Runs in the caller's transaction.
+     *
+     * @param sourceKey {@code OPENING:{importId}:{row}} for an imported balance, null for one entered by hand
+     */
+    Booked book(UUID tenantId, UUID plotId, ChargeTypeFacts type, Money amount, LocalDate date,
+            @Nullable String reason, @Nullable String sourceKey, @Nullable UUID createdBy, BillingMonthRecord month) {
+        ChargeRecord charge = ChargeRecord.opening(tenantId, plotId, type.id(), month.getId(), amount, date, reason,
+                sourceKey, ChargeViews.plainCalculation(amount), createdBy, clock.instant());
+        entityManager.persist(charge);
+        return new Booked(charge, OpeningBalanceRules.auditChanges(type, amount, date, month.yearMonth(), reason));
     }
 }

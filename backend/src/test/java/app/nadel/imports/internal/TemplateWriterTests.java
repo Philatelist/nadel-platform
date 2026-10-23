@@ -29,17 +29,18 @@ class TemplateWriterTests {
     // ---- English: unchanged content
 
     @Test
-    void englishHasThePlotsMembersOwnershipAndMetersSheetsInThatOrder() throws IOException {
+    void englishHasThePlotsMembersOwnershipMetersAndOpeningBalancesSheetsInThatOrder() throws IOException {
         try (ReadableWorkbook workbook = open(en)) {
             assertThat(workbook.getSheets().map(Sheet::getName)).containsExactly("Plots", "Members", "Ownership",
-                    "Meters");
+                    "Meters", "Opening balances");
         }
     }
 
     @Test
     void englishHeadersAreTheCanonicalColumnNames() throws IOException {
         assertThat(headers(en, "Plots")).containsExactly(
-                "number", "street", "kind", "area_m2", "area_sotky", "cadastral_number", "has_building", "notes");
+                "number", "street", "kind", "area_m2", "area_sotky", "cadastral_number", "has_building", "notes",
+                "water");
         assertThat(headers(en, "Members")).containsExactly(
                 "external_id", "last_name", "first_name", "middle_name", "phones", "email", "postal_address",
                 "delivery_channel", "telegram_username", "viber_phone");
@@ -47,6 +48,22 @@ class TemplateWriterTests {
                 "plot_number", "member_external_id", "share", "valid_from");
         assertThat(headers(en, "Meters")).containsExactly(
                 "plot_number", "resource", "serial", "installed_on", "initial_reading");
+        assertThat(headers(en, "Opening balances")).containsExactly(
+                "plot_number", "charge_type", "amount", "date", "reason");
+    }
+
+    @Test
+    void englishOpeningBalanceRowsExplainTheColumnsAndGiveAMembershipDebtOfTheExamplePlot() throws IOException {
+        try (ReadableWorkbook workbook = open(en)) {
+            assertThat(rowTexts(workbook, "Opening balances", 1)).containsExactly(
+                    "# Required. Number of a plot from the Plots sheet or an existing plot",
+                    "Required. Name of the charge type as the cooperative calls it, for example Membership fee",
+                    "Required. Debt in UAH, greater than zero, up to 2 decimals",
+                    "Required. As of date, DD.MM.YYYY, not in the future",
+                    "Optional. Reason or document reference, at most 500 characters");
+            assertThat(rowTexts(workbook, "Opening balances", 2)).containsExactly(
+                    "# example: 12a", "Membership fee", "1500.00", "01.09.2026", "Debt for 2025");
+        }
     }
 
     @Test
@@ -71,10 +88,12 @@ class TemplateWriterTests {
                     "PLOT or COMMON (common land). Required for a new plot",
                     "Area in square metres. Fill exactly one of area_m2 and area_sotky",
                     "Area in sotky (1 sotka = 100 m2). Fill exactly one of the two",
-                    "Optional. Format 1234567890:12:345:6789", "yes or no. Default no", "Free text");
+                    "Optional. Format 1234567890:12:345:6789", "yes or no. Default no", "Free text",
+                    "Optional. yes connects the plot to the cooperative's water supply; the name of a well connects it "
+                            + "to that well; no or empty changes nothing");
             assertThat(rowTexts(workbook, "Plots", 2)).containsExactly(
                     "# example: 12a", "Garden street", "PLOT", "600", "", "1234567890:12:345:6789", "yes",
-                    "Corner plot");
+                    "Corner plot", "yes");
             assertThat(rowTexts(workbook, "Members", 1)).containsExactly(
                     "# Required. Any key unique within this file, used by the Ownership sheet", "Required", "Required",
                     "Optional", "Comma-separated, international format",
@@ -107,7 +126,7 @@ class TemplateWriterTests {
     void ukrainianHasTheUkrainianSheetNamesInThatOrder() throws IOException {
         try (ReadableWorkbook workbook = open(uk)) {
             assertThat(workbook.getSheets().map(Sheet::getName)).containsExactly("Ділянки", "Члени", "Власність",
-                    "Лічильники");
+                    "Лічильники", "Вхідне сальдо");
         }
     }
 
@@ -115,13 +134,31 @@ class TemplateWriterTests {
     void ukrainianHeadersAreTheFirstWordsOfTheVocabulary() throws IOException {
         assertThat(headers(uk, "Ділянки")).containsExactly(
                 "Номер ділянки", "Вулиця", "Тип ділянки", "Площа, м²", "Площа, сот.", "Кадастровий номер",
-                "Є будівля", "Примітки");
+                "Є будівля", "Примітки", "Вода");
         assertThat(headers(uk, "Члени")).containsExactly(
                 "Ключ члена", "Прізвище", "Ім'я", "По батькові", "Телефони", "Електронна пошта", "Поштова адреса",
                 "Канал доставки", "Нік у Telegram", "Телефон Viber");
         assertThat(headers(uk, "Власність")).containsExactly("Номер ділянки", "Ключ члена", "Частка", "Власник з");
         assertThat(headers(uk, "Лічильники")).containsExactly("Номер ділянки", "Ресурс", "Заводський номер",
                 "Дата встановлення", "Початковий показ");
+        assertThat(headers(uk, "Вхідне сальдо")).containsExactly("Номер ділянки", "Вид нарахування", "Сума", "Дата",
+                "Підстава");
+    }
+
+    @Test
+    void ukrainianOpeningBalanceRowsAreUkrainianAndTheExampleIsADebtOfTheExamplePlot() throws IOException {
+        try (ReadableWorkbook workbook = open(uk)) {
+            assertThat(rowTexts(workbook, "Вхідне сальдо", 1)).containsExactly(
+                    "# Обов'язково. Номер ділянки з аркуша «Ділянки» або наявної ділянки",
+                    "Обов'язково. Назва виду нарахування, як у кооперативі, наприклад Членський внесок",
+                    "Обов'язково. Борг у гривнях, більше нуля, до 2 знаків після коми",
+                    "Обов'язково. Станом на дату, ДД.ММ.РРРР, не пізніше сьогодні",
+                    "Необов'язково. Підстава або документ, до 500 символів");
+            assertThat(rowTexts(workbook, "Вхідне сальдо", 2)).containsExactly(
+                    "# приклад: 31а", "Членський внесок", "1500,00", "01.09.2026", "Борг за 2025 рік");
+            String plot = rowTexts(workbook, "Ділянки", 2).get(0);
+            assertThat(rowTexts(workbook, "Вхідне сальдо", 2).get(0)).isEqualTo(plot);
+        }
     }
 
     @Test
@@ -149,7 +186,9 @@ class TemplateWriterTests {
                     "Площа в квадратних метрах. Заповніть рівно одну з колонок «Площа, м²» і «Площа, сот.»",
                     "Площа в сотках (1 сотка = 100 м²). Заповніть рівно одну з двох колонок",
                     "Необов'язково. Формат 1234567890:12:345:6789", "так або ні. За замовчуванням ні",
-                    "Довільний текст");
+                    "Довільний текст",
+                    "Необов'язково. так — підключити до водопроводу кооперативу; назва свердловини — до неї; ні або "
+                            + "порожньо — не змінювати");
             assertThat(rowTexts(workbook, "Члени", 1)).hasSize(10).allSatisfy(text -> assertThat(text).isNotBlank());
             assertThat(rowTexts(workbook, "Члени", 1).get(0)).contains("«Власність»");
             assertThat(rowTexts(workbook, "Члени", 1).get(7))
@@ -164,7 +203,7 @@ class TemplateWriterTests {
         try (ReadableWorkbook workbook = open(uk)) {
             assertThat(rowTexts(workbook, "Ділянки", 2)).containsExactly(
                     "# приклад: 31а", "вулиця Садова", "ДІЛЯНКА", "600", "", "1234567890:12:345:6789", "так",
-                    "Кутова ділянка");
+                    "Кутова ділянка", "так");
             assertThat(rowTexts(workbook, "Члени", 2)).containsExactly(
                     "# приклад: Ч-001", "Шевченко", "Тарас", "Григорович", "+380 67 123 45 67",
                     "taras.shevchenko@example.com", "вулиця Садова, 1, Київ", "ЕЛ. ПОШТА", "", "");
@@ -213,6 +252,8 @@ class TemplateWriterTests {
         assertThat(textColumns(template, 3)).containsExactly(1, 2, 3);
         // Meters plot_number and serial (a serial number can start with zeros)
         assertThat(textColumns(template, 4)).containsExactly(1, 3);
+        // Opening balances plot_number
+        assertThat(textColumns(template, 5)).containsExactly(1);
         assertThat(entry(template, "xl/styles.xml")).contains("formatCode=\"@\"");
     }
 
@@ -255,9 +296,9 @@ class TemplateWriterTests {
         Row cells = workbook.findSheet(sheet).orElseThrow().read().get(row);
         List<String> texts = new ArrayList<>();
         int count = switch (sheet) {
-            case "Plots", "Ділянки" -> 8;
+            case "Plots", "Ділянки" -> 9;
             case "Members", "Члени" -> 10;
-            case "Meters", "Лічильники" -> 5;
+            case "Meters", "Лічильники", "Opening balances", "Вхідне сальдо" -> 5;
             default -> 4;
         };
         for (int column = 0; column < count; column++) {

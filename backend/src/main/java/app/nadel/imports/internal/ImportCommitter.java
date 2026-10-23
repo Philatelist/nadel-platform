@@ -5,8 +5,10 @@ import app.nadel.audit.AuditBatch;
 import app.nadel.audit.AuditEvent;
 import app.nadel.audit.FieldChange;
 import app.nadel.identity.AccessProfile;
+import app.nadel.ledger.OpeningBalanceImport;
 import app.nadel.members.MemberImport;
 import app.nadel.meters.MeterImport;
+import app.nadel.meters.WaterConnectionImport;
 import app.nadel.plots.PlotImport;
 import app.nadel.problem.ApiProblemException;
 import app.nadel.problem.ProblemCodes;
@@ -36,14 +38,17 @@ import org.springframework.transaction.support.TransactionTemplate;
  *       before the run is known to be committable);</li>
  *   <li>the stored rows are planned once to learn which existing plots, meters and members they touch; the
  *       persistence context is cleared; those plots are locked ({@code FOR UPDATE}), then the plots that get a new
- *       meter ({@code FOR SHARE}) and the unchanged meters ({@code FOR UPDATE}), then those members
+ *       meter ({@code FOR SHARE}) and the unchanged meters ({@code FOR UPDATE}), then the plots that get a water
+ *       connection ({@code FOR SHARE}) and the connections of the plots of the water column ({@code FOR UPDATE}), then
+ *       the plots that get an opening balance and its charge types ({@code FOR SHARE}), then those members
  *       ({@code FOR UPDATE}), each set in id order: the order of a change of owner, which locks the plot first and then
- *       its owners, and of a meter replacement, which locks the plot and then the meter;</li>
+ *       its owners, of a meter replacement, which locks the plot and then the meter, of a connection by hand (plot,
+ *       then its connections) and of an opening balance by hand (plot, then charge type, then month);</li>
  *   <li>the rows are planned again under the locks and the digest is compared with the preview's: any difference or
  *       problem is {@code IMPORT_STALE}. Without the clear in between, the second planning would read the first one's
  *       entities from the persistence context instead of the locked rows;</li>
- *   <li>members, then plots with their status rows, then first owners, then meters are saved (the facades'
- *       {@code apply}), each
+ *   <li>members, then plots with their status rows, then first owners, then meters, then water connections (from the
+ *       day of the commit), then opening balances are saved (the facades' {@code apply}), each
  *       record audited as when entered by hand: the facades return the audit events and this class publishes them as
  *       {@link AuditBatch}es of {@value AuditBatch#MAX_ENTRIES}, not one event per record; then the
  *       {@code IMPORT_COMMITTED} summary; then the run is marked committed and its plan dropped.</li>
@@ -64,6 +69,8 @@ class ImportCommitter {
     private final MemberImport memberImport;
     private final PlotImport plotImport;
     private final MeterImport meterImport;
+    private final WaterConnectionImport waterImport;
+    private final OpeningBalanceImport openingImport;
     private final ApplicationEventPublisher events;
     private final TransactionTemplate transaction;
     private final TransactionTemplate outcomeTransaction;
@@ -73,13 +80,16 @@ class ImportCommitter {
     private EntityManager entityManager;
 
     ImportCommitter(ImportRunRepository runs, ImportPlanner planner, MemberImport memberImport,
-            PlotImport plotImport, MeterImport meterImport, ApplicationEventPublisher events,
+            PlotImport plotImport, MeterImport meterImport, WaterConnectionImport waterImport,
+            OpeningBalanceImport openingImport, ApplicationEventPublisher events,
             PlatformTransactionManager transactions, Clock clock) {
         this.runs = runs;
         this.planner = planner;
         this.memberImport = memberImport;
         this.plotImport = plotImport;
         this.meterImport = meterImport;
+        this.waterImport = waterImport;
+        this.openingImport = openingImport;
         this.events = events;
         this.transaction = new TransactionTemplate(transactions);
         this.outcomeTransaction = new TransactionTemplate(transactions);
@@ -118,18 +128,20 @@ class ImportCommitter {
 
         // first planning: which existing plots and members do the rows touch? Locks come before the real planning.
         ImportPlan preliminary = planner.plan(tenantId, importId, sheets.plots(), sheets.members(), sheets.ownership(),
-                sheets.meters());
+                sheets.meters(), sheets.openings());
         requireSamePlan(preliminary, digest);
         entityManager.clear();
         ImportPlan.Apply touched = preliminary.apply();
         plotImport.lock(touched.plotPlan(), touched.ownershipPlan());
         meterImport.lock(touched.meterPlan());
+        waterImport.lock(touched.waterPlan());
+        openingImport.lock(touched.openingPlan());
         memberImport.lock(touched.memberPlan());
         entityManager.clear();
 
         // second planning, under the locks: this is the plan that is saved
         ImportPlan plan = planner.plan(tenantId, importId, sheets.plots(), sheets.members(), sheets.ownership(),
-                sheets.meters());
+                sheets.meters(), sheets.openings());
         requireSamePlan(plan, digest);
         ImportPlan.Apply apply = plan.apply();
         Actor author = new Actor(profile.memberId(), profile.subject(), profile.displayName());
@@ -139,6 +151,9 @@ class ImportCommitter {
                 apply.ownershipPlan(), author));
         // after the plots: a meter may belong to a plot the same import has just created
         entries.addAll(meterImport.apply(tenantId, apply.meterRows(), apply.meterPlan(), author));
+        // after the plots as well: plots of the same import are connected and get opening balances
+        entries.addAll(waterImport.apply(tenantId, apply.waterRows(), apply.waterPlan(), author));
+        entries.addAll(openingImport.apply(tenantId, importId, apply.openingRows(), apply.openingPlan(), author));
         // one batch event per AuditBatch.MAX_ENTRIES records, stored by the outbox in this transaction
         AuditBatch.of(tenantId, entries).forEach(events::publishEvent);
         publishSummary(tenantId, author, importId, fileName, plan.counts());
@@ -173,7 +188,8 @@ class ImportCommitter {
     private static void requireSamePlan(ImportPlan plan, String previewDigest) {
         if (plan.hasProblems() || plan.digest() == null || !plan.digest().equals(previewDigest)) {
             throw conflict(ProblemCodes.IMPORT_STALE,
-                    "The plots, members, owners or meters changed after the preview; upload the file again.");
+                    "The plots, members, owners, meters, water connections or opening balances changed after the "
+                            + "preview; upload the file again.");
         }
     }
 
@@ -187,6 +203,14 @@ class ImportCommitter {
         // meters are never updated either
         fields.add(new FieldChange("metersCreated", null, String.valueOf(counts.meters().created())));
         fields.add(new FieldChange("metersUnchanged", null, String.valueOf(counts.meters().unchanged())));
+        // water connections and opening balances are never updated either (feature 011)
+        fields.add(new FieldChange("waterConnectionsCreated", null,
+                String.valueOf(counts.waterConnections().created())));
+        fields.add(new FieldChange("waterConnectionsUnchanged", null,
+                String.valueOf(counts.waterConnections().unchanged())));
+        fields.add(new FieldChange("openingBalancesCreated", null, String.valueOf(counts.openingBalances().created())));
+        fields.add(new FieldChange("openingBalancesUnchanged", null,
+                String.valueOf(counts.openingBalances().unchanged())));
         events.publishEvent(AuditEvent.now(tenantId, author, "IMPORT_COMMITTED", "IMPORT", importId, fileName, fields));
     }
 
@@ -218,7 +242,7 @@ class ImportCommitter {
 
     private static boolean changesAnything(Map<String, Object> counts) {
         int total = 0;
-        for (String sheet : List.of("plots", "members", "ownerships", "meters")) {
+        for (String sheet : PlanCounts.KEYS) {
             if (counts.get(sheet) instanceof Map<?, ?> entity) {
                 total += number(entity.get("created")) + number(entity.get("updated"));
             }

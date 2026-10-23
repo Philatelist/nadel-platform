@@ -62,12 +62,12 @@ file created or changed.
   - [x] Web: `/charges/common` via `RunRangePage` (per consumer: consumption, split, plots, amounts, "Немає тарифу"); `CommonConsumersSection` in Settings (split per consumer, service users picker, cooperative default); texts; unit tests. **[Agent: react-frontend]**
   - [x] Verify: `cd backend && ./mvnw -B test -Dtest='app.nadel.ledger.**,ModularityTests'` green; `pnpm gen:api` stable; `pnpm -r test && pnpm -r typecheck && pnpm -r lint && pnpm format:check` green. **[Agent: spring-backend]**
 
-- [ ] **Slice 8: Import — opening balances sheet and the water column**
+- [x] **Slice 8: Import — opening balances sheet and the water column**
 
   > The "Вхідне сальдо" / "Opening balances" sheet and the "Вода" / "Water" column of the Plots sheet work in both languages with preview and validation.
-  - [ ] Backend: `ImportSheet.OPENING_BALANCES` via `ledger.OpeningBalanceImport` (plot number, charge type by customised or default name in either language, amount > 0, date not in the future, optional reason; key `OPENING:{importId}:{row}`); `PlotColumn.WATER` via `meters.WaterConnectionImport` (так/yes, ні/no/empty, source name); templates, aliases, `imports/README.md`; `AuditBatch`. Tests: `ImportOpeningBalancesTests` (uk and en, errors per row, apply, idempotent re-import), `ImportPlotsWaterTests`, `ModularityTests`. **[Agent: spring-backend]**
-  - [ ] Web: import screen shows the new sheet and column texts (uk/en), row errors; unit tests. **[Agent: react-frontend]**
-  - [ ] Verify: `cd backend && ./mvnw -B test -Dtest='app.nadel.imports.**,app.nadel.ledger.**,ModularityTests'` green; `pnpm gen:api` stable; `pnpm -r test && pnpm -r typecheck && pnpm -r lint && pnpm format:check` green. **[Agent: spring-backend]**
+  - [x] Backend: `ImportSheet.OPENING_BALANCES` via `ledger.OpeningBalanceImport` (plot number, charge type by customised or default name in either language, amount > 0, date not in the future, optional reason; key `OPENING:{importId}:{row}`); `PlotColumn.WATER` via `meters.WaterConnectionImport` (так/yes, ні/no/empty, source name); templates, aliases, `imports/README.md`; `AuditBatch`. Tests: `ImportOpeningBalancesTests` (uk and en, errors per row, apply, idempotent re-import), `ImportPlotsWaterTests`, `ModularityTests`. **[Agent: spring-backend]**
+  - [x] Web: import screen shows the new sheet and column texts (uk/en), row errors; unit tests. **[Agent: react-frontend]**
+  - [x] Verify: `cd backend && ./mvnw -B test -Dtest='app.nadel.imports.**,app.nadel.ledger.**,ModularityTests'` green; `pnpm gen:api` stable; `pnpm -r test && pnpm -r typecheck && pnpm -r lint && pnpm format:check` green. **[Agent: spring-backend]**
 
 - [ ] **Slice 9: Demo data, docs, guides, e2e and the coverage floor**
 

@@ -98,11 +98,13 @@ class ChargeRecord {
 
     /**
      * An opening balance: kind and source {@code OPENING}, the service period and the debt age are the one day
-     * {@code date}; {@code reason} is the optional reason or document reference (user content), null when none.
+     * {@code date}; {@code reason} is the optional reason or document reference (user content), null when none;
+     * {@code sourceKey} is {@code OPENING:{importId}:{row}} for a balance of the Excel import (a commit never books a row
+     * twice) and null for one entered by hand.
      */
     static ChargeRecord opening(UUID tenantId, UUID plotId, UUID chargeTypeId, UUID billingMonthId, Money amount,
-            LocalDate date, @Nullable String reason, Map<String, Object> calculation, @Nullable UUID createdBy,
-            Instant now) {
+            LocalDate date, @Nullable String reason, @Nullable String sourceKey, Map<String, Object> calculation,
+            @Nullable UUID createdBy, Instant now) {
         ChargeRecord charge = new ChargeRecord();
         charge.id = UUID.randomUUID();
         charge.tenantId = tenantId;
@@ -116,6 +118,7 @@ class ChargeRecord {
         charge.serviceTo = date;
         charge.accruedOn = date;
         charge.reason = reason;
+        charge.sourceKey = sourceKey;
         charge.calculation = calculation;
         charge.createdBy = createdBy;
         charge.createdAt = now;

@@ -94,6 +94,8 @@ describe('ImportPage', () => {
         members: { created: 0, updated: 0, unchanged: 0 },
         ownerships: { created: 0, updated: 0, unchanged: 0 },
         meters: { created: 0, updated: 0, unchanged: 0 },
+        waterConnections: { created: 0, updated: 0, unchanged: 0 },
+        openingBalances: { created: 0, updated: 0, unchanged: 0 },
       },
       problems: [],
       problemCount: 0,

@@ -14,6 +14,9 @@ import org.springframework.data.repository.query.Param;
 // no tenant_id filter needed: RLS hides other cooperatives' rows
 interface WaterConnectionRepository extends JpaRepository<WaterConnectionRecord, UUID> {
 
+    /** Every connection the plots have had, in no particular order (the Excel import's plan). */
+    List<WaterConnectionRecord> findByPlotIdIn(Collection<UUID> plotIds);
+
     /** Every connection the plot has had, newest first. */
     List<WaterConnectionRecord> findByPlotIdOrderByValidFromDesc(UUID plotId);
 

@@ -14,8 +14,9 @@
  * meters over a range), the event
  * {@link app.nadel.meters.PlotMeterPointsChanged} (the points of a plot meter changed; the ledger charges the intervals),
  * the read API {@link app.nadel.meters.WaterConnections} (the days plots are connected to water, for the ledger)
- * and the import facade {@link app.nadel.meters.MeterImport} with its
- * records (the Meters sheet of the Excel import). The meter register (entity, commands, queries, the endpoints of tag
+ * and the import facades {@link app.nadel.meters.MeterImport} with its
+ * records (the Meters sheet of the Excel import) and {@link app.nadel.meters.WaterConnectionImport} (the water column of
+ * the Plots sheet). The meter register (entity, commands, queries, the endpoints of tag
  * {@code meters} and the plot guard {@code MeterPlotGuard}, an implementation of {@link app.nadel.plots.PlotChangeGuard}),
  * the readings (entity, rules, commands, the round, the member's submission, approvals and the endpoints of tag
  * {@code readings}), replacement with the tree periods it moves, range consumption over a chain of meters and the water

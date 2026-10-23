@@ -57,9 +57,18 @@ class LedgerAuditPublisher {
     }
 
     void publish(AccessProfile actor, Action action, UUID plotId, String plotNumber, List<FieldChange> changes) {
-        events.publishEvent(AuditEvent.now(Objects.requireNonNull(actor.tenantId()),
-                new Actor(actor.memberId(), actor.subject(), actor.displayName()), action.name(), CHARGE, plotId,
-                plotNumber, changes));
+        events.publishEvent(event(Objects.requireNonNull(actor.tenantId()),
+                new Actor(actor.memberId(), actor.subject(), actor.displayName()), action, plotId, plotNumber,
+                changes));
+    }
+
+    /**
+     * The {@code CHARGE} entry {@link #publish} would publish, without publishing it: the Excel import returns its
+     * events to the caller, which publishes them in batches ({@code audit.AuditBatch}).
+     */
+    AuditEvent event(UUID tenantId, Actor actor, Action action, UUID plotId, String plotNumber,
+            List<FieldChange> changes) {
+        return AuditEvent.now(tenantId, actor, action.name(), CHARGE, plotId, plotNumber, changes);
     }
 
     /**

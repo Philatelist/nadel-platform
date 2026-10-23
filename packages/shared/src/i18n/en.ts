@@ -349,9 +349,14 @@ export const en = {
   },
   import: {
     title: 'Import',
-    description: 'Bring plots, members and owners over from an Excel file.',
+    description:
+      'Bring plots, members, owners, water connections and opening balances over from an Excel file.',
     templateTitle: 'Template',
     templateHint: 'Download the Excel template, fill it in with the cooperative data and save the file.',
+    sheetsHelp:
+      'The Opening balances sheet carries debts from the previous accounting: plot number, charge type, amount, date and an optional basis. Enter one row per plot and charge type, and reverse an existing opening balance in the ledger before importing a new one.',
+    waterHelp:
+      'The Water column of the Plots sheet: yes connects the plot to the cooperative supply, a source name connects it to that common consumer meter, no or empty leaves the plot as it is. The import never disconnects a plot.',
     downloadTemplate: 'Download template',
     downloading: 'Downloading…',
     uploadTitle: 'Upload file',
@@ -364,7 +369,14 @@ export const en = {
     fileName: 'File: {name}',
     validUntil: 'Can be imported until {time}',
     countsCaption: 'What the import will do',
-    entity: { plots: 'Plots', members: 'Members', ownerships: 'Owners', meters: 'Meters' },
+    entity: {
+      plots: 'Plots',
+      members: 'Members',
+      ownerships: 'Owners',
+      meters: 'Meters',
+      waterConnections: 'Water connections',
+      openingBalances: 'Opening balances',
+    },
     created: 'New',
     updated: 'Updated',
     unchanged: 'Unchanged',
@@ -423,8 +435,16 @@ export const en = {
     MEMBERS: 'Members',
     OWNERSHIP: 'Ownership',
     METERS: 'Meters',
+    OPENING_BALANCES: 'Opening balances',
   },
   importColumns: {
+    openingBalances: {
+      plot_number: 'Plot number',
+      charge_type: 'Charge type',
+      amount: 'Amount',
+      date: 'Date',
+      reason: 'Basis',
+    },
     plots: {
       number: 'Number',
       street: 'Street',
@@ -434,6 +454,7 @@ export const en = {
       cadastral_number: 'Cadastral number',
       has_building: 'Has building',
       notes: 'Notes',
+      water: 'Water',
     },
     members: {
       external_id: 'Member key',
@@ -496,6 +517,22 @@ export const en = {
     METER_VALUE_INVALID: 'The initial reading must be a non-negative number with at most three decimals.',
     READING_DATE_IN_FUTURE: 'The date cannot be in the future.',
     PLOT_HAS_METER: 'The plot has a meter — remove it first.',
+    AMOUNT_NOT_POSITIVE: 'The amount must be greater than zero.',
+    INVALID_OPENING_BALANCES_amount: 'The amount has more than two decimals or is too large.',
+    INVALID_OPENING_BALANCES_charge_type: 'This name stands for two charge types — use the full name.',
+    DATE_IN_FUTURE: 'The date cannot be in the future.',
+    UNKNOWN_PLOT_OPENING_BALANCES: 'There is no such active plot in the cooperative.',
+    PLOT_COMMON_LAND_OPENING_BALANCES: 'Common land cannot have an opening balance.',
+    PLOT_COMMON_LAND_PLOTS_water: 'Common land is never connected to water.',
+    UNKNOWN_CHARGE_TYPE: 'There is no such charge type in the cooperative.',
+    CHARGE_TYPE_ARCHIVED: 'This charge type is archived.',
+    DUPLICATE_IN_FILE_OPENING_BALANCES: 'This plot and charge type are already in the file above.',
+    OPENING_BALANCE_EXISTS:
+      'The plot already has an opening balance of {amount} for this charge type — reverse it first.',
+    WATER_SOURCE_INVALID: 'Write yes, no, or the name of a common consumer meter.',
+    WATER_SOURCE_AMBIGUOUS: 'This name matches more than one common consumer meter — use a unique name.',
+    WATER_ALREADY_CONNECTED:
+      'The plot is already connected to water in another way — change it in the register.',
   },
   settings: {
     title: 'Cooperative settings',
@@ -829,6 +866,10 @@ export const en = {
       ownershipsUnchanged: 'Owners unchanged',
       metersCreated: 'Meters created',
       metersUnchanged: 'Meters unchanged',
+      waterConnectionsCreated: 'Water connections created',
+      waterConnectionsUnchanged: 'Water connections unchanged',
+      openingBalancesCreated: 'Opening balances created',
+      openingBalancesUnchanged: 'Opening balances unchanged',
       replacementMeter: 'New meter (serial number)',
       source: 'Water source',
       until: 'Last connected day',

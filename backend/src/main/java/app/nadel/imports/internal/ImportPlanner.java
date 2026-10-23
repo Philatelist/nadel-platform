@@ -1,5 +1,6 @@
 package app.nadel.imports.internal;
 
+import app.nadel.ledger.OpeningBalanceImport;
 import app.nadel.members.MemberImport;
 import app.nadel.members.MemberImportItem;
 import app.nadel.members.MemberImportPlan;
@@ -9,6 +10,7 @@ import app.nadel.meters.MeterImportItem;
 import app.nadel.meters.MeterImportPlan;
 import app.nadel.meters.MeterImportProblem;
 import app.nadel.meters.MeterImportRow;
+import app.nadel.meters.WaterConnectionImport;
 import app.nadel.plots.OwnershipImportItem;
 import app.nadel.plots.OwnershipImportOutcome;
 import app.nadel.plots.OwnershipImportPlan;
@@ -42,7 +44,11 @@ import org.springframework.stereotype.Component;
  * problem is not reported again: the problem is already listed on the Members sheet, and every plot with such a row is
  * checked no further until it is fixed (a second message per ownership row would only repeat it). A plot whose own
  * Plots row has a problem is treated the same way. The Meters sheet is planned after the Plots sheet with the same rule:
- * a meter of a plot whose Plots row has a problem is not checked further.
+ * a meter of a plot whose Plots row has a problem is not checked further. The water column of the Plots sheet and the
+ * Opening balances sheet (feature 011) are planned last, by the meters and ledger modules, with the same rule.
+ * <p>
+ * The water cell: a yes word ({@code так}, {@code yes}, {@code true}) asks for the cooperative's water supply, a no
+ * word and an empty cell ask for nothing (the import never disconnects), any other text is the name of a water source.
  */
 @Component
 class ImportPlanner {
@@ -81,22 +87,35 @@ class ImportPlanner {
             "installedOn", MeterColumn.INSTALLED_ON,
             "initialReading", MeterColumn.INITIAL_READING);
 
+    private static final Map<String, OpeningBalanceColumn> COLUMN_OF_OPENING_FIELD = Map.of(
+            "plotNumber", OpeningBalanceColumn.PLOT_NUMBER,
+            "chargeType", OpeningBalanceColumn.CHARGE_TYPE,
+            "amount", OpeningBalanceColumn.AMOUNT,
+            "date", OpeningBalanceColumn.DATE,
+            "reason", OpeningBalanceColumn.REASON);
+
     private final PlotImport plotImport;
     private final MemberImport memberImport;
     private final MeterImport meterImport;
+    private final WaterConnectionImport waterImport;
+    private final OpeningBalanceImport openingImport;
 
-    ImportPlanner(PlotImport plotImport, MemberImport memberImport, MeterImport meterImport) {
+    ImportPlanner(PlotImport plotImport, MemberImport memberImport, MeterImport meterImport,
+            WaterConnectionImport waterImport, OpeningBalanceImport openingImport) {
         this.plotImport = plotImport;
         this.memberImport = memberImport;
         this.meterImport = meterImport;
+        this.waterImport = waterImport;
+        this.openingImport = openingImport;
     }
 
     ImportPlan plan(UUID tenantId, UUID importId, PlotsSheet.Parsed plots, MembersSheet.Parsed members,
-            OwnershipSheet.Parsed ownership, MetersSheet.Parsed meters) {
+            OwnershipSheet.Parsed ownership, MetersSheet.Parsed meters, OpeningBalancesSheet.Parsed openings) {
         List<RowProblem> problems = new ArrayList<>(plots.problems());
         problems.addAll(members.problems());
         problems.addAll(ownership.problems());
         problems.addAll(meters.problems());
+        problems.addAll(openings.problems());
         List<PlotImportRow> plotInput = plots.rows().stream().map(PlotsSheet.ParsedRow::row).toList();
         PlotsPlanned plotsPlanned = planPlots(tenantId, importId, plots, plotInput, problems);
         List<MemberImportRow> memberInput = members.rows();
@@ -105,19 +124,25 @@ class ImportPlanner {
                 membersPlanned, problems);
         MetersPlanned metersPlanned = planMeters(tenantId, importId, plotInput, plotsPlanned.effective(), meters,
                 problems);
+        WaterPlanned waterPlanned = planWater(tenantId, plots, plotInput, plotsPlanned.effective(), problems);
+        OpeningPlanned openingPlanned = planOpenings(tenantId, plotInput, plotsPlanned.effective(), openings,
+                problems);
         problems.sort(Comparator.comparing((RowProblem problem) -> problem.sheet().ordinal())
                 .thenComparingInt(RowProblem::row));
 
         PlanCounts counts = new PlanCounts(plotsPlanned.counts(), membersPlanned.counts(), ownershipPlanned.counts(),
-                metersPlanned.counts());
+                metersPlanned.counts(), waterPlanned.counts(), openingPlanned.counts());
         boolean clean = problems.isEmpty();
         return new ImportPlan(counts, problems,
-                clean ? storedRows(plotInput, memberInput, ownership.rows(), meters.rows()) : Map.of(),
+                clean ? storedRows(plots.rows(), memberInput, ownership.rows(), meters.rows(), openings.rows())
+                        : Map.of(),
                 clean ? membersPlanned.ids() : Map.of(),
                 clean ? PlanDigest.of(plotInput, plotsPlanned.plan(), memberInput, membersPlanned.plan(),
-                        ownership.rows(), ownershipPlanned.plan(), meters.rows(), metersPlanned.plan()) : null,
+                        ownership.rows(), ownershipPlanned.plan(), meters.rows(), metersPlanned.plan(),
+                        waterPlanned.rows(), waterPlanned.plan(), openings.rows(), openingPlanned.plan()) : null,
                 clean ? new ImportPlan.Apply(plotInput, plotsPlanned.plan(), memberInput, membersPlanned.plan(),
-                        ownershipPlanned.input(), ownershipPlanned.plan(), meters.rows(), metersPlanned.plan())
+                        ownershipPlanned.input(), ownershipPlanned.plan(), meters.rows(), metersPlanned.plan(),
+                        waterPlanned.rows(), waterPlanned.plan(), openings.rows(), openingPlanned.plan())
                         : null);
     }
 
@@ -134,6 +159,14 @@ class ImportPlanner {
     }
 
     private record MetersPlanned(PlanCounts.EntityCounts counts, MeterImportPlan plan) {
+    }
+
+    /** {@code rows}: the water cells that ask for a connection, in file order. */
+    private record WaterPlanned(PlanCounts.EntityCounts counts, List<WaterConnectionImport.Row> rows,
+            WaterConnectionImport.Plan plan) {
+    }
+
+    private record OpeningPlanned(PlanCounts.EntityCounts counts, OpeningBalanceImport.Plan plan) {
     }
 
     /**
@@ -310,6 +343,88 @@ class ImportPlanner {
         return new MetersPlanned(new PlanCounts.EntityCounts(created, 0, unchanged), plan);
     }
 
+    /**
+     * Adds the problems of the water cells to {@code problems} (on the Plots sheet, column {@code water}). A no word and
+     * an empty cell ask for nothing; a cell whose row already has a problem is not checked (its plan item has no
+     * action). A plot counts when its cell has no problem: created when it is connected, unchanged when it stays.
+     */
+    private WaterPlanned planWater(UUID tenantId, PlotsSheet.Parsed plots, List<PlotImportRow> plotInput,
+            PlotImportPlan plotPlan, List<RowProblem> problems) {
+        List<WaterConnectionImport.Row> rows = new ArrayList<>();
+        for (PlotsSheet.ParsedRow row : plots.rows()) {
+            WaterConnectionImport.Row water = waterRow(row);
+            if (water != null) {
+                rows.add(water);
+            }
+        }
+        if (rows.isEmpty()) {
+            return new WaterPlanned(PlanCounts.EntityCounts.NONE, List.of(), new WaterConnectionImport.Plan(List.of()));
+        }
+        WaterConnectionImport.Plan plan = waterImport.plan(tenantId, plotInput, plotPlan, rows);
+        int created = 0;
+        int unchanged = 0;
+        for (WaterConnectionImport.Item item : plan.items()) {
+            if (item.problem() != null) {
+                problems.add(new RowProblem(ImportSheet.PLOTS, item.row(), PlotColumn.WATER.key(), item.problem()));
+            } else if (item.action() == WaterConnectionImport.Action.NEW) {
+                created++;
+            } else if (item.action() == WaterConnectionImport.Action.UNCHANGED) {
+                unchanged++;
+            }
+        }
+        return new WaterPlanned(new PlanCounts.EntityCounts(created, 0, unchanged), rows, plan);
+    }
+
+    /** What the water cell of a Plots row asks for; null for a no word and an empty cell. */
+    private static WaterConnectionImport.@Nullable Row waterRow(PlotsSheet.ParsedRow row) {
+        if (row.water() == null) {
+            return null;
+        }
+        String yesNo = ImportVocabulary.get().canonicalValue(ImportVocabulary.YES_NO, row.water());
+        if (yesNo == null) {
+            return new WaterConnectionImport.Row(row.row().row(), row.water());
+        }
+        return Boolean.parseBoolean(yesNo) ? new WaterConnectionImport.Row(row.row().row(), null) : null;
+    }
+
+    /**
+     * Adds the problems of the opening balance rows to {@code problems}: those of the ledger, except where the same
+     * cell already has a problem found while reading it. A row counts when it has no problem at all; opening balances
+     * are never updated.
+     */
+    private OpeningPlanned planOpenings(UUID tenantId, List<PlotImportRow> plotInput, PlotImportPlan plotPlan,
+            OpeningBalancesSheet.Parsed sheet, List<RowProblem> problems) {
+        if (sheet.rows().isEmpty()) {
+            return new OpeningPlanned(PlanCounts.EntityCounts.NONE, new OpeningBalanceImport.Plan(List.of()));
+        }
+        Set<String> reported = new HashSet<>();
+        Set<Integer> rowsWithProblems = new HashSet<>();
+        for (RowProblem problem : sheet.problems()) {
+            reported.add(problem.row() + "/" + problem.column());
+            rowsWithProblems.add(problem.row());
+        }
+        OpeningBalanceImport.Plan plan = openingImport.plan(tenantId, plotInput, plotPlan, sheet.rows());
+        int created = 0;
+        int unchanged = 0;
+        for (OpeningBalanceImport.Item item : plan.items()) {
+            for (OpeningBalanceImport.Problem problem : item.problems()) {
+                String column = COLUMN_OF_OPENING_FIELD.get(problem.field()).key();
+                if (reported.add(item.row() + "/" + column)) {
+                    problems.add(new RowProblem(ImportSheet.OPENING_BALANCES, item.row(), column, problem.code(),
+                            problem.params()));
+                }
+            }
+            if (item.action() == null || rowsWithProblems.contains(item.row())) {
+                continue;
+            }
+            switch (item.action()) {
+                case NEW -> created++;
+                case UNCHANGED -> unchanged++;
+            }
+        }
+        return new OpeningPlanned(new PlanCounts.EntityCounts(created, 0, unchanged), plan);
+    }
+
     /** The key of a Members row or an Ownership row: trimmed, lower case; null when empty. */
     private static @Nullable String key(@Nullable String text) {
         return text == null || text.isBlank() ? null : text.strip().toLowerCase(Locale.ROOT);
@@ -321,11 +436,16 @@ class ImportPlanner {
         return column == null ? null : column.key();
     }
 
-    /** The rows as stored with a preview: only the cells that have a value, the area as plain decimal text. */
-    private static Map<String, Object> storedRows(List<PlotImportRow> rows, List<MemberImportRow> memberRows,
-            List<OwnershipSheet.ParsedRow> ownershipRows, List<MeterImportRow> meterRows) {
-        List<Map<String, Object>> stored = new ArrayList<>(rows.size());
-        for (PlotImportRow row : rows) {
+    /**
+     * The rows as stored with a preview: only the cells that have a value, the area as plain decimal text, the water
+     * cell as typed.
+     */
+    private static Map<String, Object> storedRows(List<PlotsSheet.ParsedRow> parsedRows,
+            List<MemberImportRow> memberRows, List<OwnershipSheet.ParsedRow> ownershipRows,
+            List<MeterImportRow> meterRows, List<OpeningBalanceImport.Row> openingRows) {
+        List<Map<String, Object>> stored = new ArrayList<>(parsedRows.size());
+        for (PlotsSheet.ParsedRow parsed : parsedRows) {
+            PlotImportRow row = parsed.row();
             Map<String, Object> map = new LinkedHashMap<>();
             map.put("row", row.row());
             putIfPresent(map, "number", row.number());
@@ -335,6 +455,7 @@ class ImportPlanner {
             putIfPresent(map, "cadastralNumber", row.cadastralNumber());
             putIfPresent(map, "hasBuilding", row.hasBuilding());
             putIfPresent(map, "notes", row.notes());
+            putIfPresent(map, "water", parsed.water());
             stored.add(map);
         }
         Map<String, Object> plan = new LinkedHashMap<>();
@@ -343,7 +464,24 @@ class ImportPlanner {
         plan.put("members", storedMembers(memberRows));
         plan.put("ownership", storedOwnership(ownershipRows));
         plan.put("meters", storedMeters(meterRows));
+        plan.put("openingBalances", storedOpenings(openingRows));
         return plan;
+    }
+
+    /** The amount as plain decimal text (never rounded), the date as an ISO date, the reason as typed. */
+    private static List<Map<String, Object>> storedOpenings(List<OpeningBalanceImport.Row> rows) {
+        List<Map<String, Object>> stored = new ArrayList<>(rows.size());
+        for (OpeningBalanceImport.Row row : rows) {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("row", row.row());
+            putIfPresent(map, "plotNumber", row.plotNumber());
+            putIfPresent(map, "chargeType", row.chargeType());
+            putIfPresent(map, "amount", row.amount() == null ? null : row.amount().toPlainString());
+            putIfPresent(map, "date", row.date() == null ? null : row.date().toString());
+            putIfPresent(map, "reason", row.reason());
+            stored.add(map);
+        }
+        return stored;
     }
 
     /** The reading as plain decimal text, the date as an ISO date. */

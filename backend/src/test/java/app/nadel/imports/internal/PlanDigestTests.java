@@ -8,6 +8,7 @@ import static app.nadel.imports.internal.ImportWorkbooks.owner;
 import static app.nadel.imports.internal.ImportWorkbooks.plot;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import app.nadel.ledger.OpeningBalanceImport;
 import app.nadel.members.MemberImportAction;
 import app.nadel.members.MemberImportItem;
 import app.nadel.members.MemberImportPlan;
@@ -16,6 +17,7 @@ import app.nadel.meters.MeterImportAction;
 import app.nadel.meters.MeterImportItem;
 import app.nadel.meters.MeterImportPlan;
 import app.nadel.meters.MeterImportRow;
+import app.nadel.meters.WaterConnectionImport;
 import app.nadel.plots.OwnershipImportItem;
 import app.nadel.plots.OwnershipImportOutcome;
 import app.nadel.plots.OwnershipImportPlan;
@@ -166,7 +168,8 @@ class PlanDigestTests extends ImportsIntegrationTest {
                 List.of(ownership),
                 new OwnershipImportPlan(List.of(new OwnershipImportItem(2, OwnershipImportOutcome.FIRST_OWNERS,
                         ownedPlot, List.of()))),
-                List.of(), new MeterImportPlan(List.of()));
+                List.of(), new MeterImportPlan(List.of()), List.of(), new WaterConnectionImport.Plan(List.of()),
+                List.of(), new OpeningBalanceImport.Plan(List.of()));
     }
 
     /** One new plot and one meter row on it (or on an existing plot), with the given action and meter id. */
@@ -176,7 +179,8 @@ class PlanDigestTests extends ImportsIntegrationTest {
                 new PlotImportPlan(List.of(new PlotImportItem(2, PlotImportAction.NEW, newPlot, List.of(), List.of()))),
                 List.of(), new MemberImportPlan(List.of()), List.of(), new OwnershipImportPlan(List.of()),
                 List.of(meter), new MeterImportPlan(List.of(new MeterImportItem(meter.row(), action, meterId,
-                        meterPlot, List.of()))));
+                        meterPlot, List.of()))), List.of(), new WaterConnectionImport.Plan(List.of()), List.of(),
+                new OpeningBalanceImport.Plan(List.of()));
     }
 
     private static MeterImportRow meterRow(String plot, String resource, String serial, String reading) {
@@ -250,5 +254,57 @@ class PlanDigestTests extends ImportsIntegrationTest {
                 .isNotEqualTo(digest(id, id, plotRow("P-1", "600"), moved, owned, id));
         assertThat(digest(id, id, plotRow("P-1", "600"), empty, owned, id))
                 .isNotEqualTo(digest(id, id, plotRow("P-1", "600"), missing, owned, id));
+    }
+
+    /** One new plot P-1 (row 2) with a water cell and one opening balance row of plot P-1 or an existing plot. */
+    private static String feature011Digest(UUID newPlot, WaterConnectionImport.Item water,
+            OpeningBalanceImport.Row opening, OpeningBalanceImport.Item openingItem) {
+        return PlanDigest.of(List.of(plotRow("P-1", "600")),
+                new PlotImportPlan(List.of(new PlotImportItem(2, PlotImportAction.NEW, newPlot, List.of(), List.of()))),
+                List.of(), new MemberImportPlan(List.of()), List.of(), new OwnershipImportPlan(List.of()),
+                List.of(), new MeterImportPlan(List.of()),
+                List.of(new WaterConnectionImport.Row(2, null)), new WaterConnectionImport.Plan(List.of(water)),
+                List.of(opening), new OpeningBalanceImport.Plan(List.of(openingItem)));
+    }
+
+    private static OpeningBalanceImport.Row openingRow(String plot, String amount, String reason) {
+        return new OpeningBalanceImport.Row(5, plot, "Membership fee", new BigDecimal(amount), SINCE, reason);
+    }
+
+    @Test
+    void waterCellsAndOpeningBalancesArePartOfTheDigestWithoutTheIdsOfNewPlots() {
+        UUID first = UUID.randomUUID();
+        UUID second = UUID.randomUUID();
+        UUID type = UUID.randomUUID();
+        UUID well = UUID.randomUUID();
+        OpeningBalanceImport.Row row = openingRow("P-1", "1500.00", "Debt");
+
+        String one = feature011Digest(first, new WaterConnectionImport.Item(2, WaterConnectionImport.Action.NEW, first,
+                null, null), row, new OpeningBalanceImport.Item(5, OpeningBalanceImport.Action.NEW, first, type,
+                List.of()));
+        // the plot the import creates has another id in another preview of the same file: same digest
+        assertThat(feature011Digest(second, new WaterConnectionImport.Item(2, WaterConnectionImport.Action.NEW,
+                second, null, null), openingRow(" p-1 ", "1500", "Debt"), new OpeningBalanceImport.Item(5,
+                OpeningBalanceImport.Action.NEW, second, type, List.of()))).isEqualTo(one);
+
+        // another source, another action, another amount, reason or charge type: another plan
+        assertThat(feature011Digest(first, new WaterConnectionImport.Item(2, WaterConnectionImport.Action.NEW, first,
+                well, null), row, new OpeningBalanceImport.Item(5, OpeningBalanceImport.Action.NEW, first, type,
+                List.of()))).isNotEqualTo(one);
+        assertThat(feature011Digest(first, new WaterConnectionImport.Item(2, WaterConnectionImport.Action.UNCHANGED,
+                first, null, null), row, new OpeningBalanceImport.Item(5, OpeningBalanceImport.Action.NEW, first,
+                type, List.of()))).isNotEqualTo(one);
+        WaterConnectionImport.Item water = new WaterConnectionImport.Item(2, WaterConnectionImport.Action.NEW, first,
+                null, null);
+        assertThat(feature011Digest(first, water, openingRow("P-1", "1500.01", "Debt"),
+                new OpeningBalanceImport.Item(5, OpeningBalanceImport.Action.NEW, first, type, List.of())))
+                .isNotEqualTo(one);
+        assertThat(feature011Digest(first, water, openingRow("P-1", "1500.00", "Other"),
+                new OpeningBalanceImport.Item(5, OpeningBalanceImport.Action.NEW, first, type, List.of())))
+                .isNotEqualTo(one);
+        assertThat(feature011Digest(first, water, row, new OpeningBalanceImport.Item(5,
+                OpeningBalanceImport.Action.UNCHANGED, first, type, List.of()))).isNotEqualTo(one);
+        assertThat(feature011Digest(first, water, row, new OpeningBalanceImport.Item(5,
+                OpeningBalanceImport.Action.NEW, first, UUID.randomUUID(), List.of()))).isNotEqualTo(one);
     }
 }

@@ -1,6 +1,9 @@
 package app.nadel.imports.internal;
 
-/** The columns of the Plots sheet, in template order. */
+/**
+ * The columns of the Plots sheet, in template order. {@link #WATER} (feature 011) is not a field of the plot: it asks
+ * the meters module to connect the plot to water.
+ */
 enum PlotColumn implements SheetColumn {
     NUMBER("number", true),
     STREET("street", false),
@@ -9,7 +12,8 @@ enum PlotColumn implements SheetColumn {
     AREA_SOTKY("area_sotky", false),
     CADASTRAL_NUMBER("cadastral_number", false),
     HAS_BUILDING("has_building", false),
-    NOTES("notes", false);
+    NOTES("notes", false),
+    WATER("water", false);
 
     private final String key;
     private final boolean required;

@@ -93,6 +93,8 @@ export function ImportPage() {
       <Panel title={s.templateTitle}>
         <div className="flex max-w-xl flex-col gap-3">
           <p className="text-sm text-ink-muted">{s.templateHint}</p>
+          <p className="text-sm text-ink-muted">{s.sheetsHelp}</p>
+          <p className="text-sm text-ink-muted">{s.waterHelp}</p>
           {template.isError && <Notice tone="danger">{problemMessage(t, template.error)}</Notice>}
           <div>
             <Button type="button" disabled={template.isPending} onClick={() => template.mutate()}>

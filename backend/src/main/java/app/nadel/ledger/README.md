@@ -38,6 +38,7 @@ index `charge_reversed_once_uq` lets a charge be reversed once.
 | Type | Use |
 |---|---|
 | `ChargesBooked(tenantId, plotIds)` | Published inside the transaction of every booking or reversal (a reversal, an opening balance, the month run, a retry and the charges of readings, at most 500 plots per event; every later booking path must publish it too). `PlotStatusRefresher` recomputes the debt of those plots from the committed ledger. Ids only, no personal data; the set is never empty |
+| `OpeningBalanceImport` (with `Row`, `Item`, `Plan`, `Problem`, `Action`) | The "Opening balances" sheet of the Excel import (slice 8), `plan`/`lock`/`apply` like `meters.MeterImport`; implemented by `internal.OpeningBalanceImportService`, see Opening balances from the import |
 
 Everything else is in `internal`.
 
@@ -88,9 +89,35 @@ Everything else is in `internal`.
   The optional reason (at most 500, trimmed, blank means none) is stored on the charge (`reason` in the account) and
   in the audit entry. Answer 201 with the charge.
 
+The value rules (amount, date, reason) and the audit values live in `OpeningBalanceRules`, the booking itself in
+`OpeningBalances.book`; the import uses both, so the two ways of entering a balance cannot disagree.
+
 Lock order: plot `FOR SHARE` -> charge type `FOR SHARE` -> billing month `FOR SHARE`. The ledger never locks a `charge`
 row (`FOR SHARE` would need `UPDATE`, which `nadel_app` does not have); concurrency on charges is settled by unique
 indexes.
+
+## Opening balances from the import (slice 8)
+
+`OpeningBalanceImportService` (`OpeningBalanceImport`) is the ledger's side of the "Opening balances" / "Вхідне
+сальдо" sheet; the `imports` module reads the cells and calls it in its own transaction.
+
+- **Plan** (nothing saved): per row `REQUIRED` (plot number, charge type, amount, date), the value rules of
+  `OpeningBalanceRules` (`AMOUNT_NOT_POSITIVE`, `INVALID` for more than 12 integer digits, `DATE_IN_FUTURE`), `INVALID`
+  for an amount with more than two decimals (never rounded), `TOO_LONG` for a reason over 500 characters; the charge
+  type by name through `tariffs.ChargeTypeCatalog.findByNames` (the stored name, and for a seeded type that was never
+  renamed its default name in English or Ukrainian; letter case and extra spaces ignored): `UNKNOWN_CHARGE_TYPE`,
+  `CHARGE_TYPE_ARCHIVED` (only an archived type has the name), `INVALID` (two types); the plot: a plot of the file's
+  Plots sheet (its plan) or an active plot by number (`UNKNOWN_PLOT`, `PLOT_COMMON_LAND`; a plot whose Plots row has a
+  problem is not checked further); `DUPLICATE_IN_FILE` for an earlier valid row with the same plot, charge type and
+  date; last, against the plot's opening balances that no reversal cancels: the same charge type, date and amount is
+  `UNCHANGED` (so the same file uploaded again books nothing twice), the same charge type and date with another amount
+  is `OPENING_BALANCE_EXISTS` with `params.amount` (reverse it on the account first), anything else is `NEW`.
+- **Lock**: the stored plots of the `NEW` rows `FOR SHARE`, then their charge types `FOR SHARE`, in id order.
+- **Apply**: every `NEW` row through `OpeningBalances.book` with the source key `OPENING:{importId}:{row}` (the partial
+  unique index `charge_source_key_uq` makes a second booking of the row impossible; a violation is 409
+  `IMPORT_STALE`), in the month `BillingMonths.openForBooking` gives for the month of its date (one call per month);
+  without a reason the source key is the reference to the import. One `ChargesBooked` for the plots; one
+  `OPENING_BALANCE_ENTERED` audit event per balance, returned to the import, which publishes them as `AuditBatch`es.
 
 ## Billing months (tag `billing`, slice 2)
 
@@ -494,16 +521,17 @@ Every action is a constant of `LedgerAuditPublisher.Action` and must also be a v
 
 ## Dependencies
 
-`tariffs` (the read facade `ChargeTypeCatalog`: `find`, `findAndLockShared`, `all`; `TariffBook`: `snapshot`,
+`tariffs` (the read facade `ChargeTypeCatalog`: `find`, `findAndLockShared`, `all`, `findByNames`; `TariffBook`: `snapshot`,
 `tariffIds`, `lockShared`; the pure `TariffResolver`, `ChargeCalculator.breakdown` and `DaySet`; the port
 `TariffVersionUsage`, implemented here), `plots` (`PlotCatalog`: `find`, `findAll`, `findAndLockShared`,
-`inNaturalOrder`, `findChargeable`; the SPI `PlotChangeGuard`; the debt cache writer `PlotDebtCache`),
+`inNaturalOrder`, `findChargeable`, `findActiveByNumbers`, `findAllAndLockShared`; the SPI `PlotChangeGuard`; the debt
+cache writer `PlotDebtCache`; the import records `PlotImportRow`, `PlotImportPlan`),
 `meters` (`MeterNetwork.staleMeters`, `lockSharedPoints`, `network` and `lockSharedNetwork`, the event
 `PlotMeterPointsChanged`, `ConsumptionCalculator`, `Quantity`, `MeterValue`, `WaterConnections.connectedDays` and
 `connectedToSource`, `MeterCatalog.find`; the port `ReadingUsage`, implemented here), `settings`
 (`CooperativeSettings.lossesMode`, `lossesPercent`, `commonConsumerDefaultSplit`; `CommonConsumerSplit`), `money` (`Money`), `identity` (`CurrentUser`, `AccessProfile`, `Permission`,
-`OwnedPlotsSource`), `audit` (events, `ActorNames`), `problem`, `tenancy` (`TenantContext`). Nothing depends on
-`ledger`.
+`OwnedPlotsSource`), `audit` (events, `ActorNames`), `problem`, `tenancy` (`TenantContext`). Only `imports` depends on
+`ledger` (`OpeningBalanceImport`).
 
 ## Permissions
 
@@ -552,4 +580,6 @@ rules of §3, opening balances, booking after a closed month, the plot guard, al
 chairman, the treasurer, custom roles, a member for their own and another plot, the other cooperative and the platform
 operator); `LedgerAuditTests` (entries and `ChargesBooked`); `LedgerTenantIsolationTests` and `LedgerAppendOnlyTests`
 (the tables); `LedgerMigrationTests` (V13 on existing cooperatives); `ChargesBookedTests`. Test helpers clear ledger rows
-and billing months as `nadel_owner` with the maintenance setting (`LedgerTestSupport`).
+and billing months as `nadel_owner` with the maintenance setting (`LedgerTestSupport`). The opening balances sheet is
+tested in `imports` (`ImportOpeningBalancesTests`: both languages, row problems, booking, a re-import of the same file,
+a reversed balance imported again, a renamed seeded type, a stale preview).

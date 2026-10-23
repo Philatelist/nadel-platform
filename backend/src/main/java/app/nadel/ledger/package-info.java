@@ -10,7 +10,8 @@
  * consumer run changes only by its reversal (trigger {@code run_reversal_guard}).
  * <p>
  * Public API: the event {@link app.nadel.ledger.ChargesBooked}, published after every booking or reversal so that the
- * plot status can follow the debt. Everything else is internal: the entities, the pure rules {@code BillingCalendar}
+ * plot status can follow the debt, and the import facade {@link app.nadel.ledger.OpeningBalanceImport} (the "Opening
+ * balances" sheet of the Excel import). Everything else is internal: the entities, the pure rules {@code BillingCalendar}
  * (which month a charge is booked in) and {@code DebtCalculator} (debt per charge type), the reversal and opening
  * balance commands, the account query, the billing months (list, check list, closing in order), the month run
  * ({@code MonthRun}, {@code TariffMonthPlanning}), the charges of plot meter intervals ({@code ReadingCharges}, the
@@ -32,7 +33,7 @@
  * {@code WaterConnections}: water tariffs charge only the days a plot is connected, a well pump is shared among the
  * plots connected to it),
  * {@code settings} ({@code CooperativeSettings}), {@code money}, {@code identity}, {@code audit},
- * {@code problem} and {@code tenancy}; no module depends on it.
+ * {@code problem} and {@code tenancy}; only {@code imports} depends on it (the opening balances sheet).
  */
 @org.springframework.modulith.ApplicationModule(displayName = "Ledger and charges")
 package app.nadel.ledger;

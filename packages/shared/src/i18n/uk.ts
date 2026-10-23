@@ -363,9 +363,14 @@ export const uk: Messages = {
   },
   import: {
     title: 'Імпорт',
-    description: 'Перенесіть ділянки, членів кооперативу та власників з Excel-файлу.',
+    description:
+      'Перенесіть ділянки, членів кооперативу, власників, підключення до води та вхідне сальдо з Excel-файлу.',
     templateTitle: 'Шаблон',
     templateHint: 'Завантажте шаблон Excel, заповніть його даними кооперативу та збережіть файл.',
+    sheetsHelp:
+      'Аркуш «Вхідне сальдо» переносить борги з попереднього обліку: номер ділянки, вид нарахування, сума, дата та необов’язкова підстава. Один рядок на ділянку й вид нарахування; наявне вхідне сальдо спершу сторнуйте в журналі.',
+    waterHelp:
+      'Стовпець «Вода» аркуша «Ділянки»: «так» — підключення до водогону кооперативу, назва джерела — підключення до цього лічильника спільних споживачів, «ні» або порожньо — без змін. Імпорт ніколи не відключає ділянку.',
     downloadTemplate: 'Завантажити шаблон',
     downloading: 'Завантажуємо…',
     uploadTitle: 'Завантажити файл',
@@ -379,7 +384,14 @@ export const uk: Messages = {
     fileName: 'Файл: {name}',
     validUntil: 'Можна імпортувати до {time}',
     countsCaption: 'Що зробить імпорт',
-    entity: { plots: 'Ділянки', members: 'Члени кооперативу', ownerships: 'Власники', meters: 'Лічильники' },
+    entity: {
+      plots: 'Ділянки',
+      members: 'Члени кооперативу',
+      ownerships: 'Власники',
+      meters: 'Лічильники',
+      waterConnections: 'Підключення до води',
+      openingBalances: 'Вхідне сальдо',
+    },
     created: 'Нові',
     updated: 'Оновлені',
     unchanged: 'Без змін',
@@ -438,8 +450,16 @@ export const uk: Messages = {
     MEMBERS: 'Члени кооперативу',
     OWNERSHIP: 'Власники',
     METERS: 'Лічильники',
+    OPENING_BALANCES: 'Вхідне сальдо',
   },
   importColumns: {
+    openingBalances: {
+      plot_number: 'Номер ділянки',
+      charge_type: 'Вид нарахування',
+      amount: 'Сума',
+      date: 'Дата',
+      reason: 'Підстава',
+    },
     plots: {
       number: 'Номер',
       street: 'Вулиця',
@@ -449,6 +469,7 @@ export const uk: Messages = {
       cadastral_number: 'Кадастровий номер',
       has_building: 'Є будівля',
       notes: 'Примітки',
+      water: 'Вода',
     },
     members: {
       external_id: 'Ключ члена',
@@ -511,6 +532,23 @@ export const uk: Messages = {
     METER_VALUE_INVALID: 'Початковий показ має бути невід’ємним числом, не більше трьох знаків після коми.',
     READING_DATE_IN_FUTURE: 'Дата не може бути в майбутньому.',
     PLOT_HAS_METER: 'Ділянка має лічильник — спершу зніміть його.',
+    AMOUNT_NOT_POSITIVE: 'Сума має бути більшою за нуль.',
+    INVALID_OPENING_BALANCES_amount: 'У сумі більше двох знаків після коми або вона завелика.',
+    INVALID_OPENING_BALANCES_charge_type:
+      'Ця назва підходить до двох видів нарахувань — вкажіть повну назву.',
+    DATE_IN_FUTURE: 'Дата не може бути в майбутньому.',
+    UNKNOWN_PLOT_OPENING_BALANCES: 'Такої активної ділянки в кооперативі немає.',
+    PLOT_COMMON_LAND_OPENING_BALANCES: 'Ділянка спільного користування не може мати вхідного сальдо.',
+    PLOT_COMMON_LAND_PLOTS_water: 'Ділянка спільного користування ніколи не підключається до води.',
+    UNKNOWN_CHARGE_TYPE: 'Такого виду нарахування в кооперативі немає.',
+    CHARGE_TYPE_ARCHIVED: 'Цей вид нарахування в архіві.',
+    DUPLICATE_IN_FILE_OPENING_BALANCES: 'Така ділянка з цим видом нарахування вже є у файлі вище.',
+    OPENING_BALANCE_EXISTS:
+      'Ділянка вже має вхідне сальдо {amount} за цим видом нарахування — спершу сторнуйте його.',
+    WATER_SOURCE_INVALID: 'Напишіть «так», «ні» або назву лічильника спільних споживачів.',
+    WATER_SOURCE_AMBIGUOUS:
+      'Ця назва збігається з кількома лічильниками спільних споживачів — вкажіть унікальну.',
+    WATER_ALREADY_CONNECTED: 'Ділянка вже підключена до води іншим способом — змініть це в реєстрі.',
   },
   settings: {
     title: 'Налаштування кооперативу',
@@ -843,6 +881,10 @@ export const uk: Messages = {
       ownershipsUnchanged: 'Власників без змін',
       metersCreated: 'Лічильників створено',
       metersUnchanged: 'Лічильників без змін',
+      waterConnectionsCreated: 'Підключень до води створено',
+      waterConnectionsUnchanged: 'Підключень до води без змін',
+      openingBalancesCreated: 'Вхідного сальдо створено',
+      openingBalancesUnchanged: 'Вхідного сальдо без змін',
       replacementMeter: 'Новий лічильник (серійний номер)',
       source: 'Джерело води',
       until: 'Останній день підключення',

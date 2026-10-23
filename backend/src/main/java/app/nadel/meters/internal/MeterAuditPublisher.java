@@ -47,9 +47,18 @@ class MeterAuditPublisher {
      */
     void publishWater(AccessProfile actor, WaterAction action, UUID plotId, String plotNumber,
             List<FieldChange> changes) {
-        events.publishEvent(AuditEvent.now(Objects.requireNonNull(actor.tenantId()),
-                new Actor(actor.memberId(), actor.subject(), actor.displayName()), action.name(), PLOT, plotId,
-                plotNumber, changes));
+        events.publishEvent(waterEvent(Objects.requireNonNull(actor.tenantId()),
+                new Actor(actor.memberId(), actor.subject(), actor.displayName()), action, plotId, plotNumber,
+                changes));
+    }
+
+    /**
+     * The water entry {@link #publishWater} would publish, without publishing it: the Excel import returns its events
+     * to the caller, which publishes them in batches ({@code audit.AuditBatch}).
+     */
+    AuditEvent waterEvent(UUID tenantId, Actor actor, WaterAction action, UUID plotId, String plotNumber,
+            List<FieldChange> changes) {
+        return AuditEvent.now(tenantId, actor, action.name(), PLOT, plotId, plotNumber, changes);
     }
 
     void publish(AccessProfile actor, String action, MeterRecord meter, List<FieldChange> changes) {

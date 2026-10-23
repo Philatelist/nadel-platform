@@ -188,6 +188,15 @@ public final class ProblemCodes {
     public static final String OWNERSHIP_CONFLICT = "OWNERSHIP_CONFLICT";
     /** The rows of one plot do not all have the same owner-since date. */
     public static final String OWNERSHIP_DATE_MISMATCH = "OWNERSHIP_DATE_MISMATCH";
+    /** An Opening balances row names a charge type that no charge type of the cooperative is called. */
+    public static final String UNKNOWN_CHARGE_TYPE = "UNKNOWN_CHARGE_TYPE";
+    /**
+     * An Opening balances row: the plot already has an opening balance of the charge type and date with another
+     * amount that is not reversed.
+     */
+    public static final String OPENING_BALANCE_EXISTS = "OPENING_BALANCE_EXISTS";
+    /** The water column of a Plots row names a water source that two or more active common consumer meters share. */
+    public static final String WATER_SOURCE_AMBIGUOUS = "WATER_SOURCE_AMBIGUOUS";
 
     private ProblemCodes() {
     }

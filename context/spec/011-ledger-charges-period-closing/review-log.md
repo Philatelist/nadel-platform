@@ -63,3 +63,16 @@
 - M1 and minors 1-3 resolved.
 - Minor: `LossesPage.tsx:46-49` a preview with no nodes shows Book and books an empty run (history row + audit, no ledger data). → carry into the Slice 7 web task.
 - Minor: `LossesRunsTests.aRetryOfAnItemOtherRunsChargedSomeDaysOfNarrowsItToTheDaysLeft` does not assert the original item RESOLVED / the audit outcome. → noted for Slice 10.
+
+## Slice 7 — round 1 (645c371, combined with dce08db/4cbd139): PASS
+- Minor 1 `CommonConsumerRuns.java:390-397`, `:554-556`: a COMMON_CONSUMER item is resolved by a run over part of its range (Slice 6 fixed the same in LossesRuns). → fixing in the review worktree.
+- Minor 2 `CommonConsumerSettings.ofChain` vs `CommonConsumerBillings.get`: after a meter replacement the settings screen shows the default while the run uses the old meter's settings. → fixing.
+- Minor 3 `CommonConsumerPlanning.plan:255`: a consumer whose shares all fail to price is CHARGED 0.00 and blocks its range, no queue item (same as losses). → README note.
+- Minor 4 `CommonConsumerSettings.ofChain`: a newer meter with only service users hides an older split. → fixing with minor 2.
+
+## Slice 7 — round 2 (7ff6122): PASS
+- Minors 1, 2, 4 resolved; 3 documented.
+- Minor: `JpaMeterCatalog.java:38-43` `chainOf` has no direct test. → Slice 10.
+- Minor: `UnchargedDays` has no unit test. → Slice 10.
+- Minor: `CommonConsumerBillings.java:84-86` chain read before the advisory lock (harmless). → noted.
+- Minor: openapi description line wrap. → noted.

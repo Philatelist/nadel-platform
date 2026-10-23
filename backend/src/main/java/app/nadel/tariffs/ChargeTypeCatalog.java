@@ -1,6 +1,8 @@
 package app.nadel.tariffs;
 
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -49,4 +51,16 @@ public interface ChargeTypeCatalog {
 
     /** Every charge type of the cooperative, archived ones included, in list order (position, then id). */
     List<ChargeTypeFacts> all();
+
+    /**
+     * The charge types each name a person typed stands for (the Excel import): a type has its stored name and, while a
+     * seeded type is not renamed, also its default name in English and in Ukrainian. Names are compared ignoring letter
+     * case, surrounding spaces and runs of spaces. Archived types are included (the caller decides about them); among
+     * the types that are not archived a name normally stands for at most one, since their names are unique, defaults
+     * included.
+     *
+     * @return the matching types of every given name, keyed by the name as given; a name without a match maps to an
+     *         empty list
+     */
+    Map<String, List<ChargeTypeFacts>> findByNames(Collection<String> names);
 }
