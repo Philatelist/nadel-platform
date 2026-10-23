@@ -40,8 +40,9 @@ import org.jspecify.annotations.Nullable;
  * {@code MeterNetwork.Point}); when the key counts as charged ({@link ChargeKeys}: a charge with it stands or was
  * reversed by hand) there is nothing new ({@link AlreadyCharged}): a redelivered event never books twice and an
  * interval reversed by hand is not re-created (its correction is a new reading, which has new keys). An interval whose
- * charge only a recalculation reversed is planned again. Otherwise {@link TariffResolver} picks the tariff of the meter's
- * charge type ({@code ELECTRICITY} or {@code WATER}) over the days of the interval:
+ * charge only a recalculation set aside (reversed, or adjusted to {@code 0.00} in a closed month) is planned again.
+ * Otherwise {@link TariffResolver} picks the tariff of the meter's charge type ({@code ELECTRICITY} or {@code WATER})
+ * over the days of the interval:
  * <ul>
  * <li>one tariff: {@link ReadingChargeCalculator} prices it. A positive amount is a {@link NewCharges}; {@code 0.00}
  * (no consumption) or a tariff not charged by the meter on any applicable day is {@link Nothing}; a tariff that does

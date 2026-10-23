@@ -1,5 +1,6 @@
 package app.nadel.ledger.internal;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -23,10 +24,12 @@ import org.springframework.transaction.annotation.Transactional;
  * A key counts as charged while a charge with it, or with a key {@code base#r{recalculation}} it was booked again
  * under, still stands, or was reversed by hand ({@code MANUAL_REVERSAL}): a redelivered event or a rerun never books
  * twice, and a charge reversed by hand is not re-created (its correction is a new reading or a recalculation). A key
- * whose every charge a recalculation reversed (feature 012, a {@code REVERSE} line that queued the case) is not
- * charged: once the case can be charged, 011 charges it again, under {@code base#r{recalculation}} with a
- * recalculation that reversed one of those charges (the base key is taken, {@code charge_source_key_uq}; such a
- * recalculation booked no standing charge under its own suffix, so one of these keys is free).
+ * whose every charge a recalculation set aside (feature 012: reversed it in an open month, or adjusted it to
+ * {@code 0.00} in a closed one; a line that queued the case) is not charged: once the case can be charged, 011 charges
+ * it again, under {@code base#r{recalculation}} with a recalculation that set aside one of those charges (the base key
+ * is taken, {@code charge_source_key_uq}; such a recalculation booked no standing charge under its own suffix, so one
+ * of these keys is free). A charge adjusted to {@code 0.00} stands in its closed month; the new one is booked like any
+ * 011 charge (its own month if open, else the earliest open month with its own service period).
  */
 @Component
 class ChargeKeys {
@@ -44,9 +47,9 @@ class ChargeKeys {
     Set<String> charged(Collection<String> keys) {
         Set<String> charged = new HashSet<>();
         for (List<String> existing : existing(keys)) {
-            Set<String> reversed = new HashSet<>(charges.reversedBy(existing, ChargeSource.RECALCULATION));
+            Set<String> setAside = new HashSet<>(charges.setAsideBy(existing, ChargeSource.RECALCULATION));
             for (String key : existing) {
-                if (!reversed.contains(key) || revisionsOf(key).charged()) {
+                if (!setAside.contains(key) || revisionsOf(key).charged()) {
                     charged.add(key);
                 }
             }
@@ -86,37 +89,70 @@ class ChargeKeys {
 
     private Revisions revisionsOf(String base) {
         String prefix = base + "#r";
+        Map<String, Revision> cancelled = cancelledOf(base, prefix);
         List<Revision> revisions = new ArrayList<>();
         for (Object[] row : charges.revisionsOf(base, prefix, prefix.length())) {
-            revisions.add(new Revision((String) row[0], (ChargeSource) row[1], (UUID) row[2], (Instant) row[3]));
+            String key = (String) row[0];
+            Revision revision = new Revision(key, (ChargeSource) row[1], (UUID) row[2], (Instant) row[3]);
+            revisions.add(row[1] == null && cancelled.containsKey(key) ? cancelled.get(key) : revision);
         }
         return new Revisions(revisions);
     }
 
-    /** A charge with the base key or a {@code base#r...} key, and the reversal that cancels it (null: it stands). */
-    private record Revision(String sourceKey, @Nullable ChargeSource reversedBy, @Nullable UUID recalculationId,
-            @Nullable Instant reversedAt) {
+    /**
+     * The charges of the keys whose adjustments bring them to {@code 0.00}, by key, each set aside by the recalculation
+     * of its latest adjustment (the one that brought it to zero).
+     */
+    private Map<String, Revision> cancelledOf(String base, String prefix) {
+        Map<String, BigDecimal> sums = new HashMap<>();
+        Map<String, Revision> latest = new HashMap<>();
+        Comparator<Revision> order = Comparator.comparing(Revision::setAsideAt,
+                Comparator.nullsFirst(Comparator.naturalOrder()))
+                .thenComparing(revision -> String.valueOf(revision.recalculationId()));
+        for (Object[] row : charges.adjustmentsOf(base, prefix, prefix.length())) {
+            String key = (String) row[0];
+            sums.putIfAbsent(key, (BigDecimal) row[1]);
+            sums.merge(key, (BigDecimal) row[2], BigDecimal::add);
+            Revision adjustment = new Revision(key, ChargeSource.RECALCULATION, (UUID) row[3], (Instant) row[4]);
+            latest.merge(key, adjustment, (a, b) -> order.compare(a, b) >= 0 ? a : b);
+        }
+        Map<String, Revision> cancelled = new HashMap<>();
+        latest.forEach((key, revision) -> {
+            BigDecimal effective = sums.get(key);
+            if (effective.signum() == 0) {
+                cancelled.put(key, revision);
+            }
+        });
+        return cancelled;
+    }
 
-        boolean reversedByRecalculation() {
-            return reversedBy == ChargeSource.RECALCULATION && recalculationId != null;
+    /**
+     * A charge with the base key or a {@code base#r...} key, and what set it aside (null: it stands): the reversal that
+     * cancels it, or the adjustment of a recalculation that brought it to {@code 0.00}.
+     */
+    private record Revision(String sourceKey, @Nullable ChargeSource setAsideBy, @Nullable UUID recalculationId,
+            @Nullable Instant setAsideAt) {
+
+        boolean setAsideByRecalculation() {
+            return setAsideBy == ChargeSource.RECALCULATION && recalculationId != null;
         }
     }
 
     private record Revisions(List<Revision> revisions) {
 
-        /** Whether one of the charges stands or was reversed by hand. */
+        /** Whether one of the charges stands (not adjusted to {@code 0.00}) or was reversed by hand. */
         boolean charged() {
-            return revisions.stream().anyMatch(revision -> !revision.reversedByRecalculation());
+            return revisions.stream().anyMatch(revision -> !revision.setAsideByRecalculation());
         }
 
-        /** {@code base#r{recalculation}} of the latest recalculation reversal whose key no charge has. */
+        /** {@code base#r{recalculation}} of the latest recalculation that set a charge aside, whose key is free. */
         String bookingKey(String base) {
             if (charged()) {
                 throw new IllegalStateException("The key counts as charged");
             }
             Set<String> taken = new HashSet<>(revisions.stream().map(Revision::sourceKey).toList());
             return revisions.stream()
-                    .sorted(Comparator.comparing(Revision::reversedAt, Comparator.nullsLast(Comparator.reverseOrder()))
+                    .sorted(Comparator.comparing(Revision::setAsideAt, Comparator.nullsLast(Comparator.reverseOrder()))
                             .thenComparing(revision -> String.valueOf(revision.recalculationId())))
                     .map(revision -> base + "#r" + revision.recalculationId())
                     .filter(key -> !taken.contains(key))

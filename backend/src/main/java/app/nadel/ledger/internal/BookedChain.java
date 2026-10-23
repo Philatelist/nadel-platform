@@ -18,7 +18,9 @@ import org.jspecify.annotations.Nullable;
  * <ul>
  * <li>The <b>effective amount</b> is the sum of the chain: a reversed charge and its reversal come to {@code 0.00}, an
  * adjusted charge counts with its adjustments.</li>
- * <li>The <b>live</b> charge is the {@code REGULAR} charge that is not reversed (at most one).</li>
+ * <li>The <b>live</b> charge is the {@code REGULAR} charge that is not reversed (at most one). A charge of a closed
+ * month that adjustments brought to {@code 0.00} stays in its month; when 011 charged the identity again (the case
+ * became chargeable, {@link ChargeKeys}), the new charge is the live one.</li>
  * <li>A chain whose charge was reversed by hand ({@code MANUAL_REVERSAL}) and not booked again is <b>frozen</b>: a
  * recalculation leaves it as it is.</li>
  * </ul>
@@ -85,12 +87,16 @@ record BookedChain(ChargeIdentity identity, List<BookedCharge> regulars, List<Bo
     }
 
     /**
-     * The {@code REGULAR} charge that is not reversed; null when every one is.
+     * The {@code REGULAR} charge that is not reversed; null when every one is. Of two or more, those adjusted to
+     * {@code 0.00} do not count.
      *
-     * @throws IllegalStateException when two are not reversed
+     * @throws IllegalStateException when two are not reversed and not adjusted to {@code 0.00}
      */
     @Nullable BookedCharge live() {
         List<BookedCharge> live = regulars.stream().filter(charge -> !reversed(charge.id())).toList();
+        if (live.size() > 1) {
+            live = live.stream().filter(charge -> !adjustedToZero(charge)).toList();
+        }
         if (live.size() > 1) {
             throw new IllegalStateException("Two live charges of one identity: " + identity);
         }
@@ -114,6 +120,16 @@ record BookedChain(ChargeIdentity identity, List<BookedCharge> regulars, List<Bo
     /** Whether the charge was reversed by hand and not booked again: the recalculation leaves the chain alone. */
     boolean frozen() {
         return live() == null && reversals.stream().anyMatch(r -> r.source() == ChargeSource.MANUAL_REVERSAL);
+    }
+
+    private boolean adjustedToZero(BookedCharge charge) {
+        Money sum = charge.amount();
+        for (BookedCharge adjustment : adjustments) {
+            if (charge.id().equals(adjustment.adjustsChargeId())) {
+                sum = sum.plus(adjustment.amount());
+            }
+        }
+        return sum.signum() == 0;
     }
 
     private boolean reversed(UUID chargeId) {

@@ -258,9 +258,11 @@ Lock order of the slice: plot `FOR SHARE` -> charge type `FOR SHARE` -> billing 
 - **Idempotent:** a key counts as charged (`ChargeKeys`) while a charge with it, or with its `base#r{recalculation}`
   key, stands or was reversed by hand (`MANUAL_REVERSAL`); such a key is never booked again, so a rerun creates only
   what is missing (a plot or tariff added later) and a tariff charge reversed by hand is not re-created (its correction
-  is feature 012). A key whose every charge a recalculation reversed (a `REVERSE` line that queued the case) does not
-  count: the run, a retry or the listener charges the case again once it can be charged, under
-  `base#r{recalculation}` (the recalculation that made the reversal; the base key stays the reversed charge's). Runs of one month are serialised by a transaction advisory lock (`ledger.month-run:{tenant}:{YYYY-MM}`).
+  is feature 012). A key whose every charge a recalculation set aside (a `REVERSE` line in an open month, or an
+  `ADJUST` line that brought a closed month's charge to `0.00`, that queued the case) does not count: the run, a retry
+  or the listener charges the case again once it can be charged, under `base#r{recalculation}` (the recalculation that
+  made the reversal or the adjustment; the base key stays the original charge's), in its own month if open, else in the
+  earliest open month with its own service period. Runs of one month are serialised by a transaction advisory lock (`ledger.month-run:{tenant}:{YYYY-MM}`).
 - **Conflicts** go to the queue: item `TARIFF_MONTH`, key `TARIFF_MONTH:{plot}:{chargeType}:{YYYY-MM}`, reason
   `CONFLICTING_TARIFFS`, `params.tariffIds` the tariffs that would charge more than `0.00`; an open item of the key is
   refreshed, never duplicated. A plot that already has the month's charge of one of the tariffs (a tariff whose scope
@@ -506,7 +508,7 @@ no interval, so it publishes nothing). `ReadingCharges` listens with the ADR 000
 - **The decision** (`ReadingChargePlanning`, pure): key `CONSUMPTION:{fromKey}:{toKey}`; a key that counts as charged
   (`ChargeKeys`, as for the month run: a charge stands or was reversed by hand) is never booked again, so a redelivered
   event writes nothing and an interval reversed by hand is not re-created (a correction is a new reading with a new
-  key); an interval only a recalculation reversed is charged again once it can be, under `base#r{recalculation}`. `tariffs.TariffResolver` over the days of the interval for
+  key); an interval only a recalculation set aside (reversed, or adjusted to `0.00` in a closed month) is charged again once it can be, under `base#r{recalculation}`. `tariffs.TariffResolver` over the days of the interval for
   the charge type of the resource (`ELECTRICITY`, `WATER`): one tariff is priced; of two or more only the tariffs that
   would charge the interval by the meter take part (one of them is then the tariff, two or more `CONFLICTING_TARIFFS`,
   none nothing); an inactive or archived type charges and queues nothing (water until it is switched on); no tariff

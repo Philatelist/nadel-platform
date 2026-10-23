@@ -27,9 +27,9 @@ import tools.jackson.databind.JsonNode;
  * consumption and fixed-percentage losses, compared per interval (the meter, the source and the dates of its two
  * readings). A new rate reverses and charges again an interval of an open month and adjusts one of a closed month in
  * the earliest open month with the original's service period and debt date; fixed losses follow the consumption; a
- * queued interval is charged and its item resolved, an interval that can no longer be charged is reversed and queued
- * (a retry or the month run keeps it queued until it can be charged, then charges it once under the recalculation's
- * suffix); water is charged for the connected days only while the water type is active; a second run finds nothing;
+ * queued interval is charged and its item resolved, an interval that can no longer be charged is reversed (open
+ * month) or adjusted to 0.00 (closed month) and queued (a retry or the month run keeps it queued until it can be
+ * charged, then charges it once under the recalculation's suffix, a closed month's in the earliest open month); water is charged for the connected days only while the water type is active; a second run finds nothing;
  * new charges and adjustments read the points of their interval ({@code meter_value_use}). Months are relative to the
  * current month in Europe/Kyiv: the readings are dated in the previous month ("September"), the current one
  * ("October") is open. Electricity 4.32 per kWh: 65 kWh = 280.80.
@@ -428,6 +428,94 @@ class IntervalRecalculationTests extends ReadingChargeSupport {
         send(chairman, post(RUN.formatted(october, false)), null).andExpect(status().isOk());
         assertThat(chargeCount()).isEqualTo(before);
         assertThat(plotTotal()).isEqualTo("280.80");
+    }
+
+    // ---- an interval of a closed month a recalculation adjusted to 0.00 and queued
+
+    /**
+     * September charged and closed, then the version turns out to start on the 15th: the recalculation adjusts the
+     * interval to 0.00 in October (the closed month keeps its charge) and queues it.
+     */
+    private ReversedInterval adjustedToZeroAndQueued() throws Exception {
+        Tariff electricity = tariff("ELECTRICITY", "Електроенергія", "PER_KWH", "MONTHLY", "4.3200", "2020-01-01");
+        UUID meter = electricityMeter(plot, day(september, 3), "8140");
+        UUID reading = entered(meter, day(september, 20), "8205");
+        awaitCharges(1);
+        closeMonth(september.toString());
+        owner().update("update tariff_version set valid_from = ?::date where id = ?", day(september, 15),
+                electricity.version());
+        JsonNode preview = preview(electricityScope(null, null));
+        JsonNode booked = book(electricityScope(REASON, preview.get("digest").asString()));
+        assertThat(booked.get("lines")).singleElement().satisfies(line -> {
+            assertThat(line.get("action").asString()).isEqualTo("ADJUST");
+            assertThat(line.get("difference").asString()).isEqualTo("-280.80");
+            assertThat(line.get("bookedIn").asString()).isEqualTo(october.toString());
+        });
+        UUID item = (UUID) openItems().getFirst().get("id");
+        return new ReversedInterval(electricity, meter, reading, item,
+                UUID.fromString(booked.get("id").asString()));
+    }
+
+    /** Charged once more in October, with its own service period, under the recalculation's suffix. */
+    private void chargedAgainInTheEarliestOpenMonth(ReversedInterval adjusted) throws Exception {
+        assertThat(regularCharges()).extracting(c -> c.get("source_key"), c -> c.get("amount"),
+                c -> c.get("billing_month"), c -> c.get("service_from"), c -> c.get("service_to"))
+                .containsExactly(
+                        tuple(adjusted.baseKey(), "280.80", september.toString(), day(september, 4),
+                                day(september, 20)),
+                        tuple(adjusted.baseKey() + "#r" + adjusted.recalculation(), "280.80", october.toString(),
+                                day(september, 4), day(september, 20)));
+        assertThat(plotTotal()).isEqualTo("280.80");
+        assertThat(openItems()).isEmpty();
+        assertThat(owner().queryForObject("select status from not_charged_item where id = ?", String.class,
+                adjusted.item())).isEqualTo("RESOLVED");
+        // a further run, a redelivered event or a recalculation books nothing
+        int before = chargeCount();
+        send(chairman, post(RUN.formatted(october, false)), null).andExpect(status().isOk());
+        new TransactionTemplate(transactions).executeWithoutResult(status -> events.publishEvent(
+                new PlotMeterPointsChanged(tenant, adjusted.meter(), plot, MeterResource.ELECTRICITY,
+                        september.atDay(20), PlotMeterPointsChanged.Cause.READING_ENTERED)));
+        awaitListeners();
+        assertThat(preview(electricityScope(null, null)).get("lines")).isEmpty();
+        assertThat(chargeCount()).isEqualTo(before);
+    }
+
+    @Test
+    void aRetryKeepsAClosedMonthIntervalAdjustedToZeroQueuedOpenUntilItCanBeChargedAndThenChargesItOnce()
+            throws Exception {
+        ReversedInterval adjusted = adjustedToZeroAndQueued();
+
+        // still no tariff for every day: a retry and the month run keep the item open and book nothing
+        JsonNode unresolved = body(send(chairman, post(RETRY.formatted(adjusted.item())), null)
+                .andExpect(status().isOk()));
+        assertThat(unresolved.get("resolved").asBoolean()).isFalse();
+        send(chairman, post(RUN.formatted(october, false)), null).andExpect(status().isOk());
+        assertThat(openItems()).singleElement().satisfies(item -> assertThat(item.get("id"))
+                .isEqualTo(adjusted.item()));
+        assertThat(plotTotal()).isEqualTo("0.00");
+
+        fixTheVersion(adjusted);
+        JsonNode resolved = body(send(chairman, post(RETRY.formatted(adjusted.item())), null)
+                .andExpect(status().isOk()));
+
+        assertThat(resolved.get("resolved").asBoolean()).isTrue();
+        chargedAgainInTheEarliestOpenMonth(adjusted);
+    }
+
+    @Test
+    void theMonthRunKeepsAClosedMonthIntervalAdjustedToZeroQueuedOpenUntilItCanBeChargedAndThenChargesItOnce()
+            throws Exception {
+        ReversedInterval adjusted = adjustedToZeroAndQueued();
+
+        send(chairman, post(RUN.formatted(october, false)), null).andExpect(status().isOk());
+        assertThat(openItems()).singleElement().satisfies(item -> assertThat(item.get("id"))
+                .isEqualTo(adjusted.item()));
+        assertThat(plotTotal()).isEqualTo("0.00");
+
+        fixTheVersion(adjusted);
+        send(chairman, post(RUN.formatted(october, false)), null).andExpect(status().isOk());
+
+        chargedAgainInTheEarliestOpenMonth(adjusted);
     }
 
     // ---- water

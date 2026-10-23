@@ -1,6 +1,7 @@
 package app.nadel.ledger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.awaitility.Awaitility.await;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -23,8 +24,9 @@ import tools.jackson.databind.JsonNode;
  * the preview writes nothing, the booking reverses and charges again in the open month and adjusts the closed month in
  * the earliest open month, with the original's service period and debt date; a second run finds nothing; a stale
  * preview, a missing or too long reason, a future month and a range over 24 months are refused; a closed month keeps
- * its charges and totals; a charge reversed by hand stays; a month the recalculation reversed and queued stays queued
- * on a retry or a month run until it can be charged, then is charged once under the recalculation's suffix; the record,
+ * its charges and totals; a charge reversed by hand stays; a month the recalculation reversed (open) or adjusted to
+ * 0.00 (closed) and queued stays queued on a retry or a month run until it can be charged, then is charged once under
+ * the recalculation's suffix (a closed month's in the earliest open month); the record,
  * its lines and its audit entry; who may preview and book. Months are relative to the current month in Europe/Kyiv: the
  * previous month ("September") is closed, the current one ("October") open. Membership 50.00 per sotka per year:
  * 600 m2 pays 25.00 a month, 700 m2 29.17.
@@ -432,6 +434,53 @@ class ManualRecalculationTests extends FreshCooperativeSupport {
         assertThat(membershipDebt()).isEqualTo("50.00");
         int before = chargeCount();
         send(chairman, post(RUN.formatted(october, false)), null).andExpect(status().isOk());
+        assertThat(chargeCount()).isEqualTo(before);
+    }
+
+    @Test
+    void aClosedMonthAdjustedToZeroStaysQueuedOpenUntilItCanBeChargedAndIsThenChargedOnceInTheEarliestOpenMonth()
+            throws Exception {
+        bookSeptemberAndOctoberThenCloseSeptember();
+        Tariff extra = tariff("MEMBERSHIP", "Додатковий внесок", "PER_PLOT", "MONTHLY", "100.0000", "2020-01-01");
+        select(extra, plot7);
+        Map<String, Object> scope = manual(september, september, List.of(typeId("MEMBERSHIP")), List.of(plot7), null,
+                null);
+        JsonNode preview = preview(scope);
+        assertThat(preview.get("lines")).singleElement().satisfies(line -> {
+            assertThat(line.get("action").asString()).isEqualTo("ADJUST");
+            assertThat(line.get("difference").asString()).isEqualTo("-25.00");
+        });
+        JsonNode booked = book(manual(september, september, List.of(typeId("MEMBERSHIP")), List.of(plot7), REASON,
+                preview.get("digest").asString()));
+        UUID recalculation = UUID.fromString(booked.get("id").asString());
+        UUID item = owner().queryForObject("select id from not_charged_item where tenant_id = ? and status = 'OPEN' "
+                + "and kind = 'TARIFF_MONTH'", UUID.class, tenant);
+        String base = "TARIFF:" + membership.id() + ":" + plot7 + ":" + september;
+
+        // still a conflict: a retry and the month run keep the item open and book nothing
+        JsonNode unresolved = body(send(chairman, post(RETRY.formatted(item)), null).andExpect(status().isOk()));
+        assertThat(unresolved.get("resolved").asBoolean()).isFalse();
+        send(chairman, post(RUN.formatted(october, false)), null).andExpect(status().isOk());
+        assertThat(itemStatus(item)).isEqualTo("OPEN");
+        assertThat(membershipDebt()).isEqualTo("25.00");
+
+        unselect(extra, plot7);
+        JsonNode resolved = body(send(chairman, post(RETRY.formatted(item)), null).andExpect(status().isOk()));
+
+        assertThat(resolved.get("resolved").asBoolean()).isTrue();
+        assertThat(itemStatus(item)).isEqualTo("RESOLVED");
+        // September keeps its charge; the new one is booked in October with September's service period
+        assertThat(charges(plot7).stream().filter(c -> "REGULAR".equals(c.get("kind")))
+                .filter(c -> membership.id().equals(c.get("tariff_id")))
+                .filter(c -> date(c.get("service_from")).equals(YearMonth.parse(september).atDay(1))).toList())
+                .extracting(c -> c.get("source_key"), c -> date(c.get("billing_month")))
+                .containsExactlyInAnyOrder(tuple(base, YearMonth.parse(september).atDay(1)),
+                        tuple(base + "#r" + recalculation, YearMonth.parse(october).atDay(1)));
+        assertThat(membershipDebt()).isEqualTo("50.00");
+        // a further run, retry or recalculation books nothing
+        int before = chargeCount();
+        send(chairman, post(RUN.formatted(october, false)), null).andExpect(status().isOk());
+        assertThat(preview(scope).get("lines")).isEmpty();
         assertThat(chargeCount()).isEqualTo(before);
     }
 
