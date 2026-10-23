@@ -104,3 +104,15 @@
 - Minor: `support/api.ts:76` `pastRange` counts back from today, not the demo anchor (reused local DB). → Slice 10.
 - Minor: `ownership.spec.ts:247-248` filter check could count labelled rows. → Slice 10.
 - Minor: `support/api.ts:63-64` `demoMonths` should pick the latest month of each status. → Slice 10.
+
+## Slice 10 — round 1 (e97dfcd): PASS
+- No production code changed; matrix spot-checked (>25 rows); new tests assert behaviour; no date dependence found; no cause for the two e2e flakes in this slice.
+- Minors 1-8 (test strength: expected month computed before commit, awaitCharges(12), 409 + code, @Tag regression, demo status filter, comment 75 days, coverage count, MeterCatalogTests cleanup loop). → fixing in the review worktree (testing-expert), test-only.
+
+## Slice 10 — review fixes (7f56623 → cherry-picked): accepted; test-only, 39 targeted green.
+
+## Phase 4 — full suite (one run, per the owner's rule)
+- `make check` at e97dfcd: exit 0. Backend 2,143 tests, 0 failures, 0 errors, 0 skipped (baseline on main: 1,733, green). Clients: ui-tokens 56, api-client 7, shared 130, web 573 (baseline web 438). Contract, format, lint green.
+- Line coverage 11,337 / 11,625 = 0.9752 (baseline 0.9794). Floor raised 0.97 → 0.975; `jacoco:check` passes at 0.975 and fails at 0.98 on the same data.
+- Compared with the baseline: no failures before or after; nothing new failing.
+- After the run: Slice 10 review fixes cherry-picked; their 5 classes re-run (39 green); typecheck and format green.
