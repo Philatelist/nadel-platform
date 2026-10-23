@@ -43,6 +43,7 @@ export function LossesPage() {
           <LossesNodesTable nodes={result.nodes} />
         </>
       )}
+      hasLines={(result) => result.nodes.length > 0}
       partial={(result) => {
         const ids = result.nodes.filter((n) => n.outcome !== 'ALREADY_CHARGED').map((n) => n.meterId);
         return { blocked: ids.length < result.nodes.length, ids };

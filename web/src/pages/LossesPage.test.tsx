@@ -194,6 +194,12 @@ describe('LossesPage', () => {
     });
   });
 
+  it('does not offer to book a range without any node', async () => {
+    await showPreview({ ...lossesPreview, nodes: [], charges: [], plots: 0 });
+    expect(screen.getByText('No node can be charged for this range.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Book' })).toBeNull();
+  });
+
   it('books a range where no node is charged but some are unknown', async () => {
     await showPreview({ ...lossesPreview, nodes: [unknownNode, negativeNode], charges: [], plots: 0 });
     await userEvent.click(screen.getByRole('button', { name: 'Book' }));
