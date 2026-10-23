@@ -917,6 +917,8 @@ export const en = {
     nothingFound: 'Nothing found',
     noValue: '—',
     splitDefault: 'By default',
+    permissionAdded: '+ {name}',
+    permissionRemoved: '− {name}',
     unlabelled: 'Deleted or unnamed record',
   },
   water: {

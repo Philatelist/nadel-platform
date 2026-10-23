@@ -362,24 +362,28 @@ describe('AuditPage stored codes', () => {
   });
 
   it.each([
-    ['en', 'View members, Edit plots', 'Email → Viber'],
-    ['uk', 'Перегляд членів, Редагування ділянок', 'Електронна пошта → Viber'],
-  ] as const)('maps permission codes and channel codes in %s', (locale, permissions, channels) => {
-    show(
-      {
-        action: 'ROLE_UPDATED',
-        entityType: 'ROLE',
-        entityLabel: 'base:TREASURER',
-        changes: [
-          { field: 'permissions', oldValue: 'MEMBERS_VIEW', newValue: 'MEMBERS_VIEW, PLOTS_EDIT' },
-          { field: 'deliveryChannel', oldValue: 'EMAIL', newValue: 'VIBER' },
-        ],
-      },
-      locale,
-    );
-    expect(screen.getByText(new RegExp(permissions.replace(/[()]/g, '')))).toBeInTheDocument();
-    expect(screen.getByText(channels, { exact: false })).toBeInTheDocument();
-  });
+    ['en', '+ Edit plots', 'Email → Viber'],
+    ['uk', '+ Редагування ділянок', 'Електронна пошта → Viber'],
+  ] as const)(
+    'shows the permission difference and maps channel codes in %s',
+    (locale, permissions, channels) => {
+      show(
+        {
+          action: 'ROLE_UPDATED',
+          entityType: 'ROLE',
+          entityLabel: 'base:TREASURER',
+          changes: [
+            { field: 'permissions', oldValue: 'MEMBERS_VIEW', newValue: 'MEMBERS_VIEW, PLOTS_EDIT' },
+            { field: 'deliveryChannel', oldValue: 'EMAIL', newValue: 'VIBER' },
+          ],
+        },
+        locale,
+      );
+      expect(screen.getByText(permissions)).toBeInTheDocument();
+      expect(screen.queryByText(/View members|Перегляд членів/)).not.toBeInTheDocument();
+      expect(screen.getByText(channels, { exact: false })).toBeInTheDocument();
+    },
+  );
 
   it.each([
     ['uk', 'Член кооперативу', 'Казначей', 'Повний доступ'],

@@ -74,6 +74,18 @@ class ReadingAuditTests extends MeterTestSupport {
     }
 
     @Test
+    void aCorrectionWritesOnlyTheFieldsThatChanged() throws Exception {
+        meter = register(plotMeter(newPlot("MT вул. Садова"), "WATER", "MT-1", "2026-06-01", "1"));
+        UUID reading = entered(meter, "2026-09-03", "12.125");
+
+        send(chairman(), put(READINGS + "/" + reading), Map.of("takenOn", "2026-09-03", "value", "12.5"))
+                .andExpect(status().isOk());
+
+        Map<String, Object> entry = awaitEntries(meter, "READING_CORRECTED", 1).getFirst();
+        assertThat(changes(entry)).containsExactly(new Change("value", "12.125", "12.500"));
+    }
+
+    @Test
     void aDeletionWritesTheOldDateAndValue() throws Exception {
         meter = register(plotMeter(newPlot("MT вул. Садова"), "ELECTRICITY", "MT-1", "2026-06-01", "0"));
         UUID reading = entered(meter, "2026-09-03", "140");

@@ -208,9 +208,8 @@ export function auditValue(
     case 'month':
       return /^\d{4}-\d{2}$/.test(raw) ? formatMonth(raw, locale) : raw;
     case 'permissions':
-      return raw
-        .split(', ')
-        .map((code) => t.permission[code as keyof Messages['permission']]?.name ?? code)
+      return codes(raw)
+        .map((code) => permissionName(code, t))
         .join(', ');
     case 'owners':
       return ownersList(raw, t, locale);
@@ -246,6 +245,35 @@ export function auditValue(
       if (NUMBER_FIELDS.has(field) && PLAIN_NUMBER.test(raw)) return localeNumber(raw, locale);
       return user(raw);
   }
+}
+
+function codes(raw: string | undefined): string[] {
+  return raw ? raw.split(', ') : [];
+}
+
+function permissionName(code: string, t: Messages): string {
+  return t.permission[code as keyof Messages['permission']]?.name ?? code;
+}
+
+/**
+ * A change of a role's permission set as the difference of the two stored lists: one line per added permission,
+ * then one per removed one, instead of both full lists.
+ */
+export function auditPermissionChanges(
+  oldValue: string | undefined,
+  newValue: string | undefined,
+  t: Messages,
+): string[] {
+  const before = codes(oldValue);
+  const after = codes(newValue);
+  return [
+    ...after
+      .filter((code) => !before.includes(code))
+      .map((code) => format(t.audit.permissionAdded, { name: permissionName(code, t) })),
+    ...before
+      .filter((code) => !after.includes(code))
+      .map((code) => format(t.audit.permissionRemoved, { name: permissionName(code, t) })),
+  ];
 }
 
 /** The label of the changed record in the "Record" column. */

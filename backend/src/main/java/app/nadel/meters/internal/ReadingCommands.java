@@ -163,9 +163,14 @@ class ReadingCommands {
         MeterReadingRecord created = MeterReadingRecord.entered(meter.getTenantId(), meter.getId(), newDate, value,
                 actor.memberId(), clock.instant());
         replace(replaced, created);
-        audit.publishReading(actor, "READING_CORRECTED", meter, List.of(
-                new FieldChange("takenOn", oldDate.toString(), newDate.toString()),
-                new FieldChange("value", reading.getValue().toString(), value.toString())));
+        List<FieldChange> changes = new ArrayList<>();
+        if (!newDate.equals(oldDate)) {
+            changes.add(new FieldChange("takenOn", oldDate.toString(), newDate.toString()));
+        }
+        if (!value.equals(reading.getValue())) {
+            changes.add(new FieldChange("value", reading.getValue().toString(), value.toString()));
+        }
+        audit.publishReading(actor, "READING_CORRECTED", meter, changes);
         pointEvents.changed(meter, newDate, Cause.READING_CORRECTED);
         if (!oldDate.equals(newDate)) {
             pointEvents.changed(meter, oldDate, Cause.READING_CORRECTED);

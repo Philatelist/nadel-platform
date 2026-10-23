@@ -932,6 +932,8 @@ export const uk: Messages = {
     nothingFound: 'Нічого не знайдено',
     noValue: '—',
     splitDefault: 'За замовчуванням',
+    permissionAdded: '+ {name}',
+    permissionRemoved: '− {name}',
     unlabelled: 'Видалений або безіменний запис',
   },
   water: {
