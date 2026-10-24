@@ -47,12 +47,12 @@ Rules for every slice: contract first (`api/openapi.yaml`, then `make gen`), Fly
   - [x] Tests: part-month connection, source filter, meter with only a pending reading, water meter of an unconnected plot. **[Agent: spring-backend]**
   - [x] Verify: `cd backend && ./mvnw test -Dtest='app.nadel.reports.**,app.nadel.meters.**,app.nadel.ledger.**,app.nadel.ModularityTests'`; delete temporary files. **[Agent: spring-backend]**
 
-- [ ] **Slice 8: Report templates: storage, tax slot, upload, versions, archive**
-  - [ ] Contract for `GET|POST /report-templates`, `/versions`, `/archive`, `/versions/{id}/file`; error codes; `make gen`. **[Agent: spring-backend]**
-  - [ ] `TemplateStore` (JPA, `content` never loaded in lists), upload validation with `WorkbookGuard`, 2 MB cap, magic bytes, macro and external-link refusal and stripping, dry parse for one repeating set per sheet, version numbering, archive, fixed tax slot entry, audit events for upload and archive. **[Agent: spring-backend]**
-  - [ ] Web `ReportTemplatesPage`: tax slot card, list with versions, upload with client pre-validation, archive with confirm, version download; i18n. **[Agent: react-frontend]**
-  - [ ] Tests: refusals (macros, oversize, not xlsx, zip bomb), versions and archive, tax slot status, allowed and denied per endpoint, tenant isolation. **[Agent: spring-backend]**
-  - [ ] Verify: `cd backend && ./mvnw test -Dtest='app.nadel.reports.**,app.nadel.xlsx.**,app.nadel.ModularityTests'` and `pnpm --filter web exec vitest run src/pages/ReportTemplatesPage.test.tsx src/reportTemplateFile.test.ts`; delete temporary files. **[Agent: spring-backend]**
+- [x] **Slice 8: Report templates: storage, tax slot, upload, versions, archive**
+  - [x] Contract for `GET|POST /report-templates`, `/versions`, `/archive`, `/versions/{id}/file`; error codes; `make gen`. **[Agent: spring-backend]**
+  - [x] `TemplateStore` (JPA, `content` never loaded in lists), upload validation with `WorkbookGuard`, 2 MB cap, magic bytes, macro and external-link refusal and stripping, dry parse for one repeating set per sheet, version numbering, archive, fixed tax slot entry, audit events for upload and archive. **[Agent: spring-backend]**
+  - [x] Web `ReportTemplatesPage`: tax slot card, list with versions, upload with client pre-validation, archive with confirm, version download; i18n. **[Agent: react-frontend]**
+  - [x] Tests: refusals (macros, oversize, not xlsx, zip bomb), versions and archive, tax slot status, allowed and denied per endpoint, tenant isolation. **[Agent: spring-backend]**
+  - [x] Verify: `cd backend && ./mvnw test -Dtest='app.nadel.reports.**,app.nadel.xlsx.**,app.nadel.ModularityTests'` and `pnpm --filter web exec vitest run src/pages/ReportTemplatesPage.test.tsx src/reportTemplateFile.test.ts`; delete temporary files. **[Agent: spring-backend]**
 
 - [ ] **Slice 9: Template filling, field catalog and Generate**
   - [ ] ADR 0015 (engine decision: own streaming OOXML filler, POI fallback), spike on formula and merged-range shifting first. **[Agent: spring-backend]**

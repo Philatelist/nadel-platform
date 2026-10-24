@@ -10,9 +10,10 @@ import { ReportsPage } from './ReportsPage';
 const unknownReportCode = 'not-a-report' as ReportCode;
 
 let reports: unknown[] = [];
+let canManageTemplates = true;
 
 vi.mock('../me', () => ({
-  useCan: () => true,
+  useCan: (permission: string) => permission !== 'REPORT_TEMPLATES_MANAGE' || canManageTemplates,
   useMe: () => ({ permissions: [] }),
   useOptionalMe: () => null,
 }));
@@ -25,6 +26,7 @@ describe('ReportsPage', () => {
   beforeEach(() => {
     window.localStorage.setItem('nadel.locale', 'en');
     reports = [chargesByMonthInfo];
+    canManageTemplates = true;
   });
 
   it('lists a card per report the API returns, with its title, description and link', () => {
@@ -46,6 +48,7 @@ describe('ReportsPage', () => {
 
   it('shows nothing for a report code the catalog has no title for', () => {
     reports = [{ ...chargesByMonthInfo, code: unknownReportCode }];
+    canManageTemplates = false;
     renderWithApp(<ReportsPage />);
     expect(screen.queryByRole('link')).not.toBeInTheDocument();
     expect(screen.getByText('No reports are available.')).toBeInTheDocument();
@@ -57,5 +60,16 @@ describe('ReportsPage', () => {
     reports = [chargesByMonthInfo, { ...chargesByMonthInfo, code: 'debtors', personalData: true }];
     renderWithApp(<ReportsPage />);
     expect(screen.getByRole('link', { name: 'Debtors' })).toHaveAttribute('href', '/reports/debtors');
+  });
+
+  it('links to the report templates only with REPORT_TEMPLATES_MANAGE', () => {
+    renderWithApp(<ReportsPage />);
+    expect(screen.getByRole('link', { name: 'Report templates' })).toHaveAttribute(
+      'href',
+      '/reports/templates',
+    );
+    canManageTemplates = false;
+    renderWithApp(<ReportsPage />);
+    expect(screen.getAllByRole('link', { name: 'Report templates' })).toHaveLength(1);
   });
 });

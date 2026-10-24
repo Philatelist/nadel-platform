@@ -62,6 +62,10 @@ tags:
     description: >-
       Built-in reports over what the app has booked (charges, debts, meters, water, land tax, corrections): the list of
       reports the caller may run, the on-screen preview and the Excel file
+  - name: report-templates
+    description: >-
+      Report templates of the cooperative: Excel forms with placeholders that the app fills in, the fixed tax report
+      slot, their versions and their archive
 
 paths:
   /me:
@@ -4111,6 +4115,271 @@ paths:
         '422':
           $ref: '#/components/responses/ReportTooLarge'
 
+  /report-templates:
+    get:
+      tags: [report-templates]
+      operationId: listReportTemplates
+      summary: The tax report slot and the templates of the cooperative
+      description: |
+        The fixed tax report slot first, then every other template of the cooperative: active ones before archived
+        ones, each group by name ignoring case. The slot is a fixed entry of the app, not a stored row: while no active
+        template is in it, it is listed with `status` `NOT_ADDED`, its `slot`, `versionCount` 0 and no `id`, `name`,
+        `description` or `latestVersion` (the client shows the slot's name from its catalogs). Once an active template
+        is in the slot, that template is the first entry. An archived template of the slot is listed among the other
+        templates with its `slot`, and the slot shows `NOT_ADDED` again until a template is uploaded into it.
+
+        `latestVersion` is the version generation uses. The file contents are never part of the list.
+        Requires `REPORTS_VIEW` or `REPORT_TEMPLATES_MANAGE`; the platform operator has no cooperative data: 403.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReportTemplate'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [report-templates]
+      operationId: uploadReportTemplate
+      summary: Upload a new template as its version 1
+      description: |
+        Stores a new active template of the cooperative with the uploaded workbook as its version 1, either a free
+        template (no `slot`) or the template of the tax report slot (`slot` given). A template is data: placeholders
+        `${...}` are filled and one row per sheet may repeat; no formula and no code of a template is ever run.
+        Surrounding spaces of `name` and `description` are removed; an empty `description` is none.
+
+        Refusals (nothing is stored):
+
+        - 400 `VALIDATION_FAILED`: `name` missing, blank or over 200 characters, `description` over 500 characters,
+          `file` missing (`errors[{field}]`); an unknown `slot` is 400 `MALFORMED_REQUEST`;
+        - 422 `TEMPLATE_TOO_LARGE`: the file is over 2 MB (2 097 152 bytes), checked before the file is read; a
+          request over the upload limit of 10 MB is 413 `FILE_TOO_LARGE`;
+        - 400 `TEMPLATE_INVALID`: the file is not a usable template, with one `errors[{field: file, code}]` naming why:
+          - `NOT_XLSX`: the name does not end in `.xlsx`, the content does not start with the zip signature, or the
+            archive is not an Excel workbook (`.xlsm`, `.xls` and any other file are refused);
+          - `MACROS`: a macro-enabled workbook content type or a `vbaProject.bin` part;
+          - `ACTIVE_CONTENT`: ActiveX controls or embedded OLE objects;
+          - `BROKEN_ZIP`: the archive or one of its parts is damaged or encrypted, or a part is not well-formed XML or
+            declares a document type;
+          - `UNPACKED_TOO_LARGE`: too many parts, too large when unpacked or compressed too highly (a compressed bomb),
+            with the limits of the Excel import;
+          - `TWO_ROW_SETS`: a sheet has more than one repeating row, or one row mixes placeholders of two row sets;
+        - 409 `TEMPLATE_NAME_TAKEN` (`errors[{field: name}]`): another active template of the cooperative has the name,
+          ignoring case;
+        - 409 `TEMPLATE_SLOT_TAKEN` (`errors[{field: slot}]`): an active template is in the slot already; upload a
+          new version of it instead (an archived template frees its slot and its name).
+
+        Links to other workbooks and data connections are removed from the stored file and listed in `warnings`
+        (`EXTERNAL_LINKS_REMOVED`). `fileName` of the version is the base name of the uploaded file, sanitised;
+        `sha256` and `sizeBytes` are those of the stored file. Written to the audit log as
+        `REPORT_TEMPLATE_UPLOADED` (entity type `REPORT_TEMPLATE`, label the name, fields the version number and file
+        name). Requires `REPORT_TEMPLATES_MANAGE`; the platform operator has no cooperative data: 403.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, name]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: The workbook (`.xlsx`, at most 2 MB)
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 200
+                  description: Name of the template, unique among the active templates ignoring case
+                description:
+                  type: string
+                  maxLength: 500
+                slot:
+                  $ref: '#/components/schemas/ReportTemplateSlot'
+      responses:
+        '201':
+          description: The stored template with its version 1 and the warnings of the upload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportTemplateUploadResult'
+        '400':
+          $ref: '#/components/responses/ReportTemplateBadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: >-
+            Another active template has the name (code `TEMPLATE_NAME_TAKEN`, with `errors[{field: name}]`) or the
+            slot holds an active template (code `TEMPLATE_SLOT_TAKEN`, with `errors[{field: slot}]`)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '422':
+          $ref: '#/components/responses/ReportTemplateTooLarge'
+
+  /report-templates/{id}/versions:
+    get:
+      tags: [report-templates]
+      operationId: listReportTemplateVersions
+      summary: The versions of a template, newest first
+      description: |
+        Every version of the template, newest (highest `versionNo`) first, also of an archived template. The file
+        contents are not part of the list; a version is downloaded with `downloadReportTemplateVersion`. An unknown
+        id, and the id of another cooperative's template, is 404. Requires `REPORT_TEMPLATES_MANAGE`; the platform
+        operator has no cooperative data: 403.
+      parameters:
+        - $ref: '#/components/parameters/ReportTemplateIdPath'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReportTemplateVersion'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      tags: [report-templates]
+      operationId: uploadReportTemplateVersion
+      summary: Upload a new version of a template
+      description: |
+        Stores the uploaded workbook as the next version of the template (its latest `versionNo` plus one); generation
+        uses it from now on and the older versions stay downloadable. The file is checked as by
+        `uploadReportTemplate` (400 `TEMPLATE_INVALID` with the same `errors[{field: file, code}]`, 422
+        `TEMPLATE_TOO_LARGE`, 413 `FILE_TOO_LARGE`, 400 `VALIDATION_FAILED` without a file) and links to other
+        workbooks are removed and listed in `warnings` the same way. An archived template takes no new version: 409
+        `TEMPLATE_ARCHIVED`. Two uploads at the same moment get consecutive numbers. An unknown id, and the id of
+        another cooperative's template, is 404. Nothing is stored when the upload is refused. Written to the audit log
+        as `REPORT_TEMPLATE_UPLOADED` with the new version. Requires `REPORT_TEMPLATES_MANAGE`; the platform operator
+        has no cooperative data: 403.
+      parameters:
+        - $ref: '#/components/parameters/ReportTemplateIdPath'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: The workbook (`.xlsx`, at most 2 MB)
+      responses:
+        '201':
+          description: The template with its new latest version and the warnings of the upload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportTemplateUploadResult'
+        '400':
+          $ref: '#/components/responses/ReportTemplateBadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: >-
+            The template is archived and takes no new version (code `TEMPLATE_ARCHIVED`), or another file was stored
+            for the template at the same moment despite the lock (code `TEMPLATE_VERSION_CONFLICT`; send the file
+            again)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '422':
+          $ref: '#/components/responses/ReportTemplateTooLarge'
+
+  /report-templates/{id}/archive:
+    post:
+      tags: [report-templates]
+      operationId: archiveReportTemplate
+      summary: Archive a template
+      description: |
+        Archives the template: it can no longer be generated from or take a new version, it stays in the list as
+        `ARCHIVED` and its versions stay downloadable. Its name and its slot are free again for a new template.
+        Archiving cannot be undone. Archiving an archived template changes nothing and answers 200 with the template
+        as it is, without a new audit entry. An unknown id, and the id of another cooperative's template, is 404.
+        Written to the audit log as `REPORT_TEMPLATE_ARCHIVED` (entity type `REPORT_TEMPLATE`, label the name, field
+        the latest version number). Requires `REPORT_TEMPLATES_MANAGE`; the platform operator has no cooperative
+        data: 403.
+      parameters:
+        - $ref: '#/components/parameters/ReportTemplateIdPath'
+      responses:
+        '200':
+          description: The archived template
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportTemplate'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /report-templates/{id}/versions/{versionId}/file:
+    get:
+      tags: [report-templates]
+      operationId: downloadReportTemplateVersion
+      summary: Download the file of a template version
+      description: |
+        The stored workbook of the version as it is kept (links to other workbooks already removed), also of an
+        archived template, sent as an attachment. The file name is the version's `fileName`, in the
+        `Content-Disposition` header (`filename*` in UTF-8 with an ASCII `filename` fallback). An unknown template or
+        version, a version of another template and anything of another cooperative is 404. Downloading is not written
+        to the audit log. Requires `REPORT_TEMPLATES_MANAGE`; the platform operator has no cooperative data: 403.
+      parameters:
+        - $ref: '#/components/parameters/ReportTemplateIdPath'
+        - name: versionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The template workbook, sent as an attachment
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -4263,8 +4532,38 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/Problem'
+    ReportTemplateBadRequest:
+      description: >-
+        Malformed request or failed validation of a form field (code `VALIDATION_FAILED` or `MALFORMED_REQUEST`), or a
+        file that is not a usable template (code `TEMPLATE_INVALID`, with one `errors[{field: file, code}]` whose code
+        is `NOT_XLSX`, `MACROS`, `ACTIVE_CONTENT`, `BROKEN_ZIP`, `UNPACKED_TOO_LARGE` or `TWO_ROW_SETS`, see
+        `uploadReportTemplate`)
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    ReportTemplateTooLarge:
+      description: The template file is over 2 MB (code `TEMPLATE_TOO_LARGE`); nothing is stored
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Problem'
 
   parameters:
+    ReportTemplateIdPath:
+      name: id
+      in: path
+      required: true
+      description: Id of a report template of the cooperative
+      schema:
+        type: string
+        format: uuid
     ReportCodePath:
       name: code
       in: path
@@ -5709,7 +6008,8 @@ components:
             Europe/Kyiv), `NOT_FOUND` (no such charge type in the cooperative, or not a node of the meter tree in the
             range of a losses run), `PLOT_COMMON_LAND` (common land is
             never connected to water), `IBAN_INVALID` (not a valid Ukrainian IBAN; with the top-level code
-            `IBAN_INVALID`)
+            `IBAN_INVALID`); with `TEMPLATE_INVALID` on `file`: `NOT_XLSX`, `MACROS`, `ACTIVE_CONTENT`,
+            `BROKEN_ZIP`, `UNPACKED_TOO_LARGE`, `TWO_ROW_SETS` (see `uploadReportTemplate`)
         message:
           type: string
 
@@ -8994,3 +9294,104 @@ components:
           maxItems: 2
           items:
             $ref: '#/components/schemas/ReportSheet'
+
+    ReportTemplateSlot:
+      type: string
+      description: >-
+        A fixed place of the app that a template fills. The only one is the tax report slot, which every cooperative
+        has; its official form is uploaded into it like any other template.
+      enum: [TAX]
+
+    ReportTemplateStatus:
+      type: string
+      description: >-
+        `ACTIVE`: the template can be generated from and takes new versions. `ARCHIVED`: hidden from generation, its
+        versions stay downloadable. `NOT_ADDED`: only the tax report slot while no active template is in it.
+      enum: [ACTIVE, ARCHIVED, NOT_ADDED]
+
+    ReportTemplate:
+      type: object
+      description: >-
+        A template of the cooperative, or the empty tax report slot (`status` `NOT_ADDED`, which has neither `id`,
+        `name`, `description` nor `latestVersion`, and `versionCount` 0)
+      required: [status, versionCount]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Absent only for the empty tax report slot
+        slot:
+          $ref: '#/components/schemas/ReportTemplateSlot'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: As the chairman entered it; absent only for the empty tax report slot
+        description:
+          type: string
+          maxLength: 500
+          description: As the chairman entered it; absent when there is none
+        status:
+          $ref: '#/components/schemas/ReportTemplateStatus'
+        latestVersion:
+          $ref: '#/components/schemas/ReportTemplateVersion'
+        versionCount:
+          type: integer
+          format: int32
+          minimum: 0
+
+    ReportTemplateVersion:
+      type: object
+      description: One uploaded file of a template; versions are never changed or deleted
+      required: [id, versionNo, fileName, sizeBytes, sha256, uploadedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        versionNo:
+          type: integer
+          format: int32
+          minimum: 1
+          description: 1 for the first upload, then one more for each new file
+        fileName:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Base name of the uploaded file, sanitised
+        sizeBytes:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 2097152
+          description: Size of the stored file in bytes
+        sha256:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+          description: SHA-256 digest of the stored file, lower-case hex
+        uploadedAt:
+          type: string
+          format: date-time
+        uploadedByName:
+          type: string
+          description: >-
+            The current name of the member who uploaded the file; absent when the member no longer exists
+
+    ReportTemplateUploadWarning:
+      type: string
+      description: >-
+        `EXTERNAL_LINKS_REMOVED`: the file linked to other workbooks or had data connections; they were removed from the
+        stored file
+      enum: [EXTERNAL_LINKS_REMOVED]
+
+    ReportTemplateUploadResult:
+      type: object
+      description: >-
+        A stored upload: the template with the new file as its `latestVersion`, and what was changed in the file
+      required: [template, warnings]
+      properties:
+        template:
+          $ref: '#/components/schemas/ReportTemplate'
+        warnings:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReportTemplateUploadWarning'

@@ -15,6 +15,7 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router';
 import { UserContent } from './components/UserContent';
 import { billingMonthLabel } from './components/charges/billingMonth';
+import { reportTexts } from './reportTexts';
 
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
 const BASE_PREFIX = 'base:';
@@ -123,6 +124,8 @@ const NUMBER_FIELDS = new Set([
   'waterConnectionsUnchanged',
   'openingBalancesCreated',
   'openingBalancesUnchanged',
+  'rows',
+  'version',
 ]);
 
 function localeNumber(raw: string, locale: string): string {
@@ -154,6 +157,7 @@ export function auditValue(
     case 'archived':
     case 'hasBuilding':
     case 'active':
+    case 'personalData':
       return raw === 'true' ? a.yes : a.no;
     case 'kind':
       if (Object.hasOwn(t.billing.notCharged.kind, raw)) return catalog(t.billing.notCharged.kind);
@@ -227,6 +231,10 @@ export function auditValue(
       return catalog({ ...t.recalculation.causeKind, ...t.recalculation.causeType });
     case 'outcome':
       return catalog(a.outcome);
+    case 'output':
+      return catalog(a.output);
+    case 'report':
+      return reportTexts(t, raw)?.title ?? raw;
     case 'runId':
       return (
         <Link to={`/charges/losses?run=${raw}`} className="text-accent underline">
@@ -314,6 +322,7 @@ export function auditRecordLabel(
   }
   if (entityType === 'SETTINGS') return t.settings.title;
   if (entityType === 'BILLING_MONTH') return billingMonthLabel(label, t);
+  if (entityType === 'REPORT') return reportTexts(t, label)?.title ?? label;
   if (entityType === 'ROLE') return baseToken(label, t.roles);
   if (entityType === 'CHARGE_TYPE') return auditChargeTypeName(label, t);
   return user(label);

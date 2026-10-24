@@ -2,7 +2,8 @@
 
 Built-in reports over what the app has booked: charges by month, plot balances, debtors, electricity by the meter tree,
 water, missing readings, land tax and corrections. Each is shown as an on-screen preview and downloaded as an Excel
-file; report templates follow. Requirements: `docs/features/013-reports.md`; specs: `context/spec/013-reports/`.
+file. Report templates are stored, versioned and archived here; generating from them follows. Requirements:
+`docs/features/013-reports.md`; specs: `context/spec/013-reports/`.
 
 The module adds no money rule. It reads only through the public read facades that the owning modules publish
 (ledger, meters, plots, members, tariffs, settings, tenancy) and never reads their tables (ADR 0001).
@@ -28,6 +29,125 @@ Every code of `ReportCode` has its definition: `charges-by-month`, `plot-balance
 `water`, `missing-readings`, `land-tax` and `corrections`. `GET /reports` runs in a read-only transaction: the debtors' defaults are settings of
 the cooperative.
 
+### Report templates (tag `report-templates`, generated `ReportTemplatesApi`)
+
+| Endpoint | Operation | Who |
+|---|---|---|
+| `GET /report-templates` | `listReportTemplates` | `REPORTS_VIEW` or `REPORT_TEMPLATES_MANAGE`; the tax report slot first (`NOT_ADDED` while no active template holds slot `TAX`), then the templates, active before archived, by name |
+| `POST /report-templates` | `uploadReportTemplate` | `REPORT_TEMPLATES_MANAGE`; multipart `file`, `name` (1..200), `description` (<= 500), `slot` (`TAX`); 201 `ReportTemplateUploadResult` (template with version 1 and `warnings`) |
+| `GET /report-templates/{id}/versions` | `listReportTemplateVersions` | `REPORT_TEMPLATES_MANAGE`; newest first |
+| `POST /report-templates/{id}/versions` | `uploadReportTemplateVersion` | `REPORT_TEMPLATES_MANAGE`; multipart `file`; 201 with the next version; archived is 409 `TEMPLATE_ARCHIVED` |
+| `POST /report-templates/{id}/archive` | `archiveReportTemplate` | `REPORT_TEMPLATES_MANAGE`; 200, idempotent (archiving again changes nothing and writes no audit entry) |
+| `GET /report-templates/{id}/versions/{versionId}/file` | `downloadReportTemplateVersion` | `REPORT_TEMPLATES_MANAGE`; the stored `.xlsx`, also of an archived template |
+
+Upload refusals (nothing stored): 400 `VALIDATION_FAILED` (form fields), 422 `TEMPLATE_TOO_LARGE` (over 2 MB, checked
+before the file is read; 422 like `REPORT_TOO_LARGE`, while a request over the 10 MB multipart limit stays 413
+`FILE_TOO_LARGE`), 400 `TEMPLATE_INVALID` with one `errors[{field: file, code}]` (`NOT_XLSX`, `MACROS`,
+`ACTIVE_CONTENT`, `BROKEN_ZIP`, `UNPACKED_TOO_LARGE`, `TWO_ROW_SETS`), 409 `TEMPLATE_NAME_TAKEN` (`errors[{field:
+name}]`) and 409 `TEMPLATE_SLOT_TAKEN` (`errors[{field: slot}]`). Links to other workbooks and data connections are
+removed and reported as the warning `EXTERNAL_LINKS_REMOVED`. `ReportTemplatesController` checks the permission with
+`@PreAuthorize` on every operation before the file is read (`ReportTemplatesAccessTests`). A missing `file` or `name`
+is 400 `VALIDATION_FAILED` with that field and `REQUIRED` (a local `@ExceptionHandler`; elsewhere a missing part stays
+`MALFORMED_REQUEST`). A new version stored by another request at the same moment despite the row lock (only the unique
+key's backstop) is 409 `TEMPLATE_VERSION_CONFLICT`.
+
+## Template store (`internal`, functional spec 2.11 and 2.12)
+
+| Type | Role |
+|---|---|
+| `ReportTemplateRecord`, `TemplateStatus` | Table `report_template`: name, description, `slot` (`TAX` or none), `ACTIVE`/`ARCHIVED`, created and archived by and at. Archived, never deleted |
+| `ReportTemplateVersionRecord` | Table `report_template_version`, `@Immutable`, used only to insert a version (file, size and SHA-256 of the stored bytes, uploader, time) |
+| `TemplateVersionRow`, `TemplateFile` | Projections: a version without its file (every list), and the file name with the bytes (the download only) |
+| `ReportTemplateRepository`, `ReportTemplateVersionRepository` | Queries that name the cooperative on top of RLS. The version repository is a plain `Repository` without `findAll`/`findById`, so nothing can load a version entity with its file by accident |
+| `TemplateUploadChecks`, `TemplateXml`, `ExternalLinkStripper`, `TemplateRowSet` | Upload checks (below), the safe StAX reader, link stripping and the row sets `plots`, `months`, `meters`, `water` |
+| `ReportTemplateService` | List, upload, new version, versions, archive, download |
+| `ReportTemplatesController` | The six endpoints, generated `ReportTemplatesApi` |
+
+- **Cooperative** from the caller's profile (the token), never from the request.
+- **Transactions**: the file is checked before any transaction (no database needed, no row lock held while parsing);
+  then one `TransactionTemplate` stores it and publishes the audit event last. A refused upload stores nothing and
+  writes no entry. The list, the versions and the download are read-only transactions.
+- **Files never loaded by lists**: the entity has no lazy basic attribute (no bytecode enhancement), so every read is
+  a JPQL constructor projection without `content`; `ReportTemplatesTests.listsNeverLoadAVersionWithItsFile` asserts
+  through Hibernate statistics that the list, the versions and the archive load no `ReportTemplateVersionRecord`.
+  `content` has `STORAGE EXTERNAL` (V20), so a row without it reads no TOAST.
+- **List**: the tax report slot first, either the active template with slot `TAX` or the fixed entry `NOT_ADDED`
+  (`slot` `TAX`, `versionCount` 0, nothing else; a fixed entry of the code, not a seeded row), then every other
+  template, active before archived, by `lower(name)`, the id breaking ties. Each with its latest version and count.
+- **Names and slot**: a name is stripped (blank is 400 `VALIDATION_FAILED` `name` `REQUIRED`) and unique among the active
+  templates ignoring case (409 `TEMPLATE_NAME_TAKEN`); one active template holds the slot (409 `TEMPLATE_SLOT_TAKEN`).
+  Both are checked first and guaranteed by the partial unique indexes `report_template_name_uq` and
+  `report_template_slot_uq` (a violation is mapped to the same 409). Archiving frees both: a new template with the name,
+  or a new template in the slot, is allowed again. The same name is free in another cooperative.
+- **Versions**: a new version is `max(version_no) + 1` read under `PESSIMISTIC_WRITE` on the template row, so two uploads
+  get consecutive numbers; the unique key `report_template_version_no_uq` is the backstop (409
+  `TEMPLATE_VERSION_CONFLICT`). An archived template takes no new version (409 `TEMPLATE_ARCHIVED`). Versions are
+  listed newest first with `uploadedByName`, the current "Last First Middle" of the uploader from
+  `members.MemberDirectory.find` (absent when the member no longer exists).
+- **Archive**: idempotent. The first archive sets `archived_by`/`archived_at` and writes the audit entry; archiving again
+  answers 200 with the template as it is and writes nothing.
+- **Download**: the stored bytes, `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`,
+  `Content-Disposition: attachment; filename="<ASCII, other characters as _>"; filename*=UTF-8''<percent-encoded>`.
+  Also of an archived template. Not audited. An unknown template or version, a version of another template and
+  anything of another cooperative is 404.
+
+### Upload checks (`TemplateUploadChecks`)
+
+In this order; the first that fails answers and nothing is stored:
+
+1. Over 2 MiB (2 097 152 bytes): 422 `TEMPLATE_TOO_LARGE`, from the declared size before the bytes are read and again
+   on the bytes. The multipart limit stays 10 MB (`application.yml`), so 2 to 10 MB gets this problem and a larger
+   request 413 `FILE_TOO_LARGE`.
+2. The name does not end in `.xlsx` (ignoring case): `NOT_XLSX`. `.xlsm` is refused here as `NOT_XLSX` (as the contract
+   says), like `.xls`, `.xltx` and a file without a name; a macro-enabled workbook renamed to `.xlsx` is refused below as
+   `MACROS`.
+3. The content does not start with `PK\3\4`: `NOT_XLSX`.
+4. `xlsx.WorkbookGuard.withLimits(200, 20 MiB, 40 MiB)`: 200 entries, 20 MiB per entry, 40 MiB unpacked in total,
+   counted from the bytes decompression really produces. Tight on purpose: a 2 MiB template has tens of parts and
+   unpacks to a few MiB, while the import's defaults (50/100 MiB) are for 10 MB data files. `NOT_A_ZIP`,
+   `NOT_A_WORKBOOK`, `WRONG_EXTENSION` are `NOT_XLSX`; `TOO_MANY_ENTRIES`, `ENTRY_TOO_LARGE`, `TOTAL_TOO_LARGE` are
+   `UNPACKED_TOO_LARGE` (a compressed bomb); `UNREADABLE` (corrupt, truncated, encrypted) is `BROKEN_ZIP`.
+5. Two entries whose names differ only in case (OPC part names are case-insensitive): `BROKEN_ZIP`.
+6. `MACROS`: a part whose name contains `vbaProject`, an Excel 4.0 macro sheet (`xl/macrosheets/`), or a content type in
+   `[Content_Types].xml` containing `macroEnabled`, `vbaProject` or `macrosheet`.
+7. `ACTIVE_CONTENT`: `xl/activeX/` or `xl/embeddings/` (OLE objects), or a content type containing `activeX` or
+   `oleObject`.
+8. Every `.xml` and `.rels` part is read with `TemplateXml`: the JDK's own StAX parser
+   (`XMLInputFactory.newDefaultFactory()`), DTDs and external entities off, entity references not replaced, and any
+   `<!DOCTYPE` refused outright (with DTD support off the JDK parser would skip one silently). Not well-formed or a
+   document type: `BROKEN_ZIP`. Every part is read through a bound of 20 MiB, never trusting declared sizes.
+9. `TWO_ROW_SETS`, the dry parse of the repeating rows: placeholders `${...}` are read from the shared strings (rich-text
+   runs joined, phonetic runs left out) and inline strings of every `xl/worksheets/*.xml`; a row with placeholders of two
+   row sets (`rows.<set>.` of `plots`, `months`, `meters`, `water`), or a sheet with two rows of row-set placeholders, is
+   refused. Unknown sets and single values are not refused (the filler leaves an unknown placeholder visible and warns).
+10. Links (`ExternalLinkStripper`): `xl/externalLinks/*` (with their relationships), `xl/connections.xml` and
+    `xl/queryTables/*` are dropped; in every other `.rels` part the relationships that point at a dropped part or have
+    the type `externalLink`, `connections` or `queryTable` are removed, as are `<externalReferences>` in
+    `xl/workbook.xml` and the content-type `Override`s of dropped parts. Only those elements are cut out of the text
+    (namespaces and every other byte stay as they were); the archive is written again (deflated, original order) and
+    the cleaned bytes are stored with their own size and SHA-256 and the warning `EXTERNAL_LINKS_REMOVED`. A file
+    without links is stored byte for byte. Formulas that referred to a link keep their text; pivot caches whose source
+    is another workbook are not touched.
+
+Refusals carry a fixed English detail; the file name and anything read from the file are never logged or returned.
+
+### Audit of templates
+
+Entity type `REPORT_TEMPLATE`, entity id the template id, label the template's name as entered (user content).
+`REPORT_TEMPLATE_UPLOADED` for a new template and for each new version, new values `version` (the number) and
+`fileName` (the stored base name, user content); `REPORT_TEMPLATE_ARCHIVED` with `version` (the latest version
+number), once. Never the file. Published last in the transaction that stores the change (`ReportAuditPublisher`).
+
+### Tests
+
+`TemplateUploadChecksTests` (unit: every refusal in order, rich text, inline strings, link stripping and the cleaned
+file opening with fastexcel-reader, target resolution, file names), `ReportTemplatesTests` (HTTP in a throw-away
+cooperative: versions and byte-identical downloads, list order, the tax slot, names, form validation, every refusal
+storing nothing, links removed, the archive, audit entries, another cooperative, unknown ids, lists loading no file),
+`ReportTemplatesAccessTests` (401/403 per endpoint). `TemplateFiles` builds the test workbooks with fastexcel and
+hand-made zips. Deferred to slice 9: generation from a template (`POST /report-templates/{id}/generate`, the filler,
+the field catalog).
+
 ## Framework (`internal`)
 
 | Type | Role |
@@ -41,7 +161,7 @@ the cooperative.
 | `ReportLimits` | The row cap, 20 000 per sheet (property `nadel.reports.row-cap`), and the 200 preview rows |
 | `XlsxReportWriter` | fastexcel workbook, one worksheet per sheet |
 | `ReportLanguage`, `ReportTexts` | The file's language (`lang`, else `Accept-Language`, else `uk`, as `imports.internal.TemplateLanguage`) and its texts |
-| `ReportAuditPublisher` | The `REPORT_GENERATED` entry |
+| `ReportAuditPublisher` | The `REPORT_GENERATED` entry, and `REPORT_TEMPLATE_UPLOADED` / `REPORT_TEMPLATE_ARCHIVED` |
 | `ReportsController` | The three endpoints, generated `ReportsApi` |
 
 ### The preview

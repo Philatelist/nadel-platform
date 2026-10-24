@@ -33,3 +33,9 @@ Backend `./mvnw verify` on 6c121fb (detached worktree): green, exit 0, no failin
 - Reviewer judgements: TreeQueries refactor is a pure extraction (no endpoint drift); losses percent rounding mirrors `LossesRunViews.pct` (not a second rule); row cap per sheet acceptable, spec wording "each report is capped" should be clarified.
 - Minor notes (not fixed): `TreeFigures.percent` duplicates `LossesRunViews.pct` (add "keep in step" comments); a blank losses percent for consumption <= 0 has no reason code; tree sheet and run queries are not bounded by `rowLimit`; no test for a reversal of an already adjusted charge (cannot occur in the current ledger).
 
+### Slice 7 — Water and Missing readings (ac01355)
+- Round 1: PASS. Backend slice tests green on the reviewer side (exit 0); web code read only.
+- Reviewer judgement (minor, needs owner confirmation): missing-readings treats a meter installed or removed INSIDE the range as having a reading point, so it is never listed for that range. The spec only excludes meters installed after the range or removed before it. Residual gap: a new plot meter that gets no first reading inside the range is invisible for that range. Suggested: confirm this reading or list such meters using the installation date as the last point (`initial=true` is already modelled).
+- The pump share (COMMON_CONSUMER, split CONNECTED_PLOTS) appears in both electricity-tree and water: accepted, documented in the READMEs.
+- Minor notes (not fixed): a long javadoc line in `LedgerReadModel.java:20`; `waterCharged` javadoc wording about cap+1.
+

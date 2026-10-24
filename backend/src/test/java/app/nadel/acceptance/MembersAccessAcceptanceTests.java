@@ -437,9 +437,13 @@ class MembersAccessAcceptanceTests extends IntegrationTest {
     /** §2.6 #10: the contract and the card carry no tax number, passport or date of birth. */
     @Test
     void noTaxPassportOrBirthDataExistsInTheContractOrOnTheCard() throws Exception {
-        // the land tax is a charge of the cooperative (and a report of feature 013), not a personal tax number
+        // the land tax is a charge of the cooperative (and a report of feature 013), and the tax report slot of the
+        // report templates (enum ReportTemplateSlot, its only value TAX) is a form of the cooperative: neither is a
+        // personal tax number, so exactly these phrases are left out; any other word starting with "tax" still fails
         String contract = Files.readString(Path.of("..", "api", "openapi.yaml")).toLowerCase()
-                .replaceAll("land[-_ ]tax", "land");
+                .replaceAll("land[-_ ]tax", "land")
+                .replaceAll("\\btax[-_\\s]report\\b", "report")
+                .replace("enum: [tax]", "enum: [slot]");
         for (String word : List.of("tax", "passport", "birth", "dob", "inn")) {
             assertThat(contract).as("openapi mentions '%s'", word).doesNotContainPattern("\\b" + word + "\\w*\\b");
         }

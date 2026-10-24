@@ -44,3 +44,24 @@ describe('auditValue for common consumers', () => {
     expect(label.container.textContent).toBe('1 Oct 2026 – 15 Oct 2026');
   });
 });
+
+describe('auditValue for reports and report templates', () => {
+  const en = messages('en');
+  const uk = messages('uk');
+
+  it('shows the report by its title, the output and personal data as text, rows and version as numbers', () => {
+    expect(text(auditValue('REPORT', 'report', 'charges-by-month', en, 'en'))).toBe('Charges by month');
+    expect(text(auditValue('REPORT', 'output', 'XLSX', uk, 'uk'))).toBe('Файл Excel');
+    expect(text(auditValue('REPORT', 'personalData', 'true', en, 'en'))).toBe('Yes');
+    expect(text(auditValue('REPORT', 'rows', '12345', en, 'en'))).toBe('12,345');
+    expect(text(auditValue('REPORT_TEMPLATE', 'version', '3', en, 'en'))).toBe('3');
+  });
+
+  it('shows the template file name as user content and labels a report by its title', () => {
+    const name = render(<>{auditValue('REPORT_TEMPLATE', 'fileName', 'tax.xlsx', en, 'en')}</>);
+    expect(name.container.querySelector('[data-user-content]')?.textContent).toBe('tax.xlsx');
+    const label = render(<>{auditRecordLabel('REPORT', 'charges-by-month', en, 'en')}</>);
+    expect(label.container.textContent).toBe('Charges by month');
+    expect(en.audit.fields.fileName).toBe('File name');
+  });
+});

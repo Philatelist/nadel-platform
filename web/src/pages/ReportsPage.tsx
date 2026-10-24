@@ -3,6 +3,7 @@ import { Link } from 'react-router';
 import { QueryBoundary } from '../components/QueryBoundary';
 import { PageHeader } from '../components/ui';
 import { useT } from '../i18n';
+import { useCan } from '../me';
 import { reportTexts } from '../reportTexts';
 import { useDocumentTitle } from '../useDocumentTitle';
 
@@ -10,6 +11,7 @@ export function ReportsPage() {
   const t = useT();
   useDocumentTitle(t.reports.title);
   const query = useListReports();
+  const canManageTemplates = useCan('REPORT_TEMPLATES_MANAGE');
   return (
     <div className="flex flex-col gap-4 text-[15px]">
       <PageHeader title={t.reports.title} description={t.reports.intro} />
@@ -41,6 +43,14 @@ export function ReportsPage() {
           </ul>
         )}
       </QueryBoundary>
+      {canManageTemplates && (
+        <section className="flex flex-col gap-2 rounded-panel border border-line bg-surface p-4">
+          <Link to="/reports/templates" className="text-[17px] font-semibold text-accent underline">
+            {t.reportTemplates.cardTitle}
+          </Link>
+          <p className="text-ink-muted">{t.reportTemplates.cardText}</p>
+        </section>
+      )}
     </div>
   );
 }

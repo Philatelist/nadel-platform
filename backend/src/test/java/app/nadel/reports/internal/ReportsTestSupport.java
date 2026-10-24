@@ -25,7 +25,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
-import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import org.springframework.test.web.servlet.request.AbstractMockHttpServletRequestBuilder;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
@@ -96,15 +96,20 @@ abstract class ReportsTestSupport extends IntegrationTest {
 
     @AfterEach
     void removeCooperative() {
+        removeCooperative(tenant);
+    }
+
+    /** Removes everything of the cooperative, once its owed audit entries are written. */
+    static void removeCooperative(UUID id) {
         try {
             await().atMost(Duration.ofSeconds(10)).until(() -> ownerJdbc().queryForObject(
                     "select count(*) from event_publication where completion_date is null and serialized_event like ?",
-                    Integer.class, "%" + tenant + "%") == 0);
+                    Integer.class, "%" + id + "%") == 0);
         } catch (ConditionTimeoutException e) {
             // a listener that failed stays incomplete; the cleanup goes on
         }
-        UUID id = tenant;
         asLedgerOwner(sql -> {
+            sql.update("delete from report_template_version where tenant_id = ?", id);
             sql.update("delete from meter_value_use where tenant_id = ?", id);
             sql.update("delete from recalculation_line where tenant_id = ?", id);
             sql.update("delete from charge_part where tenant_id = ?", id);
@@ -126,7 +131,7 @@ abstract class ReportsTestSupport extends IntegrationTest {
         ownerJdbc().update("delete from meter where tenant_id = ? and replaces_meter_id is not null", id);
         for (String table : List.of("common_consumer_user", "common_consumer_billing", "meter", "audit_entry",
                 "ownership", "plot_status", "tariff_scope_plot", "tariff_version", "tariff", "plot", "member_role",
-                "role_permission", "role", "member", "charge_type", "cooperative_settings")) {
+                "role_permission", "role", "report_template", "member", "charge_type", "cooperative_settings")) {
             ownerJdbc().update("delete from " + table + " where tenant_id = ?", id);
         }
         ownerJdbc().update("delete from tenant where id = ?", id);
@@ -267,7 +272,7 @@ abstract class ReportsTestSupport extends IntegrationTest {
 
     // ---- requests
 
-    ResultActions send(String bearer, MockHttpServletRequestBuilder request) throws Exception {
+    ResultActions send(String bearer, AbstractMockHttpServletRequestBuilder<?> request) throws Exception {
         if (bearer != null) {
             request.header(HttpHeaders.AUTHORIZATION, bearer);
         }
@@ -496,13 +501,19 @@ abstract class ReportsTestSupport extends IntegrationTest {
 
     /** A member of the cooperative with one base role; returns a token. */
     private String person(String baseRole) {
+        return person(tenant, baseRole);
+    }
+
+    /** A member of that cooperative, named "Звітний {baseRole}", with one base role; returns a token. */
+    static String person(UUID cooperative, String baseRole) {
         UUID id = UUID.randomUUID();
         String email = baseRole.toLowerCase() + "-" + id + "@reports.test";
         ownerJdbc().update("insert into member (id, tenant_id, last_name, first_name, email) "
-                + "values (?, ?, 'Звітний', ?, ?)", id, tenant, baseRole, email);
+                + "values (?, ?, 'Звітний', ?, ?)", id, cooperative, baseRole, email);
         ownerJdbc().update("insert into member_role (tenant_id, member_id, role_id) "
-                + "select ?, ?, id from role where tenant_id = ? and base_code = ?", tenant, id, tenant, baseRole);
-        return TestTokens.bearer(tenant, "sub-" + email, email);
+                + "select ?, ?, id from role where tenant_id = ? and base_code = ?", cooperative, id, cooperative,
+                baseRole);
+        return TestTokens.bearer(cooperative, "sub-" + email, email);
     }
 
     /** Runs the work as nadel_owner with app.ledger_maintenance = 'on', in one transaction. */

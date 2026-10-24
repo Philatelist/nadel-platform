@@ -17,18 +17,30 @@ import org.springframework.stereotype.Component;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * Publishes the audit entry of one run of a report ({@code REPORT_GENERATED}, entity type {@code REPORT}). The entity
+ * Publishes the audit entries of the reports module: one run of a report, and the uploads and archiving of report
+ * templates.
+ * <p>
+ * A run of a report is {@code REPORT_GENERATED}, entity type {@code REPORT}. The entity
  * id is fixed per report (a name-based UUID of {@code report:<code>}), so the log can be filtered by report; the label
  * is the report code. The fields are new values only: {@code report} (the code), {@code output} ({@code PREVIEW} or
  * {@code XLSX}), {@code filters} (a JSON array of {@code {param, value}} as the query string carries them: ids, codes,
  * dates and the street as typed), {@code rows} (the rows of every sheet) and {@code personalData}. Never the contents.
  * The outbox stores the publication in the runner's transaction.
+ * <p>
+ * A template entry is about the template (entity type {@code REPORT_TEMPLATE}, entity id the template id, label its
+ * name as entered): {@code REPORT_TEMPLATE_UPLOADED} for a new template and for a new version, with the new values
+ * {@code version} (the version number) and {@code fileName} (the stored file name as uploaded); and
+ * {@code REPORT_TEMPLATE_ARCHIVED} with {@code version} (the latest version number). Never the file's contents. Each
+ * is published last in the transaction that stores the change.
  */
 @Component
 class ReportAuditPublisher {
 
     static final String ACTION = "REPORT_GENERATED";
     static final String ENTITY_TYPE = "REPORT";
+    static final String TEMPLATE_UPLOADED = "REPORT_TEMPLATE_UPLOADED";
+    static final String TEMPLATE_ARCHIVED = "REPORT_TEMPLATE_ARCHIVED";
+    static final String TEMPLATE_ENTITY_TYPE = "REPORT_TEMPLATE";
 
     /** What a run produced. */
     enum Output {
@@ -61,6 +73,26 @@ class ReportAuditPublisher {
         events.publishEvent(AuditEvent.now(Objects.requireNonNull(caller.tenantId()),
                 new Actor(caller.memberId(), caller.subject(), caller.displayName()), ACTION, ENTITY_TYPE,
                 entityId(code), code.getValue(), changes));
+    }
+
+    /** A new template or a new version of one was stored. */
+    void templateUploaded(AccessProfile caller, UUID templateId, String name, int versionNo, String fileName) {
+        publishTemplate(caller, TEMPLATE_UPLOADED, templateId, name, List.of(
+                new FieldChange("version", null, Integer.toString(versionNo)),
+                new FieldChange("fileName", null, fileName)));
+    }
+
+    /** The template was archived; {@code latestVersionNo} is the version generation used until now. */
+    void templateArchived(AccessProfile caller, UUID templateId, String name, int latestVersionNo) {
+        publishTemplate(caller, TEMPLATE_ARCHIVED, templateId, name, List.of(
+                new FieldChange("version", null, Integer.toString(latestVersionNo))));
+    }
+
+    private void publishTemplate(AccessProfile caller, String action, UUID templateId, String name,
+            List<FieldChange> changes) {
+        events.publishEvent(AuditEvent.now(Objects.requireNonNull(caller.tenantId()),
+                new Actor(caller.memberId(), caller.subject(), caller.displayName()), action, TEMPLATE_ENTITY_TYPE,
+                templateId, name, changes));
     }
 
     /** The entity id of every entry about the report. */

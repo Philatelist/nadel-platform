@@ -149,6 +149,33 @@ public final class ProblemCodes {
     public static final String REPORT_FILTER_INVALID = "REPORT_FILTER_INVALID";
     /** 422: a sheet of the report would have more than 20 000 rows; the user narrows the filters. */
     public static final String REPORT_TOO_LARGE = "REPORT_TOO_LARGE";
+    /**
+     * 400: the uploaded file is not a usable report template; {@code errors[]} has one entry on {@code file} whose code
+     * names why ({@link #NOT_XLSX}, {@link #MACROS}, {@link #ACTIVE_CONTENT}, {@link #BROKEN_ZIP},
+     * {@link #UNPACKED_TOO_LARGE}, {@link #TWO_ROW_SETS}).
+     */
+    public static final String TEMPLATE_INVALID = "TEMPLATE_INVALID";
+    /** 422: the template file is over 2 MB; checked before the file is read. */
+    public static final String TEMPLATE_TOO_LARGE = "TEMPLATE_TOO_LARGE";
+    /** 409: the template is archived: it is not generated from and takes no new version. */
+    public static final String TEMPLATE_ARCHIVED = "TEMPLATE_ARCHIVED";
+    /** 409: another active template of the cooperative has the name, ignoring case; {@code errors[]} names it. */
+    public static final String TEMPLATE_NAME_TAKEN = "TEMPLATE_NAME_TAKEN";
+    /** 409: an active template is in the slot already; a new file goes in as its new version. */
+    public static final String TEMPLATE_SLOT_TAKEN = "TEMPLATE_SLOT_TAKEN";
+    /**
+     * 409: another version of the template was stored at the same moment (the backstop of the version number's unique
+     * key behind the row lock on the template); the client sends the file again.
+     */
+    public static final String TEMPLATE_VERSION_CONFLICT = "TEMPLATE_VERSION_CONFLICT";
+
+    /** Codes of {@code errors[{field: file}]} with {@link #TEMPLATE_INVALID}. */
+    public static final String NOT_XLSX = "NOT_XLSX";
+    public static final String MACROS = "MACROS";
+    public static final String ACTIVE_CONTENT = "ACTIVE_CONTENT";
+    public static final String BROKEN_ZIP = "BROKEN_ZIP";
+    public static final String UNPACKED_TOO_LARGE = "UNPACKED_TOO_LARGE";
+    public static final String TWO_ROW_SETS = "TWO_ROW_SETS";
 
     /** Codes of single fields in {@code errors[]}. */
     public static final String REQUIRED = "REQUIRED";
