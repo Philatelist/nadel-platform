@@ -1,12 +1,12 @@
 # Pipeline log — 012 Retroactive recalculation
 
-- Status: running
-- Phase: 5 (publish)
+- Status: finished
+- Phase: 6 (review run) — done
 - Branch: 012-retroactive-recalculation · Base: main @ 2e51e81
 - Requirement: document docs/features/012-retroactive-recalculation.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
-- Publish: pr+checks · PR: https://github.com/Philatelist/nadel-platform/pull/45 · Checks: red: Security (pnpm audit GHSA-mrhx-c7xc-m3w5)
-- Review run: on (not started yet)
+- Publish: pr+checks · PR: https://github.com/Philatelist/nadel-platform/pull/45 · Checks: green (run 40080983173)
+- Review run: running at http://localhost:5173 (web) and http://localhost:8080 (API), from worktree scratchpad/run-012 at 9c58e55 (PIDs in scratchpad/run-012.pids)
 
 ## Project facts (Phase 0)
 
@@ -100,3 +100,9 @@
 - Owner's answer (stop point 2): accept the advisory in a separate commit `chore(security): accept GHSA-mrhx-c7xc-m3w5 (zod 3.x via Expo CLI)`, reason including "revisit when Expo moves @expo/cli to zod 4 or a patched 3.x appears", and list it as a check for the mobile phase (PR follow-ups). Done: pnpm-workspace.yaml `auditConfig.ignoreGhsas` and osv-scanner.toml; local `pnpm audit --prod --audit-level high` exit 0.
 - CI run 40079019007 (after 7627b72/a2c1e6f): Backend, Clients, SAST pass; npm audit now passes; **Security** red on OSV: fast-uri 3.1.8 (4 GHSAs, fixed 3.1.9) and undici 7.29.1 (3 GHSAs, fixed 7.30.1), both only via orval (packages/api-client devDependency) — patched versions exist, so upgrade (CI fix attempt 1, devops-infra); **End-to-end** red: language-purity.spec.ts:269 (en) found the demo charge type "Ремонт дороги" in the opening balance form's select (passed in the first run) — CI fix attempt 1, react-frontend.
 - CI fix attempt 1: 15a9328 (chore(deps) fast-uri 3.1.9 via lockfile; exact override undici@7: 7.30.1) and 47b4e02 (opening balance options of custom charge types marked as user content; full Playwright 130/130 locally) — fix review PASS (r1). Pushed.
+- checks: green — run 40080983173 at 9c58e55 (Backend, Clients, End-to-end full suite, SAST, Security). Phase 5 end.
+
+## Phase 6 — review run
+
+- `make up` from a detached worktree at 9c58e55 (nohup, disowned); dev DB `nadel` migrated to V19 with the demo recalculation (1 recalculation, 1 adjustment). Web http://localhost:5173, API http://localhost:8080, Keycloak http://localhost:8180. Logs: scratchpad/run-012.log. Stop: kill the PIDs in scratchpad/run-012.pids, check ports, `git worktree remove` the run worktree.
+- Try (password `nadel`): chairman@demo.local — plot 2 account (adjustment −5,00 ₴ for 09, "Лише коригування"), Нарахування → Перерахунки (demo record with links), Новий перерахунок (preview, "Змін немає" on a second run), tariff card: edit a used version (step 2), meter card: correct a charged reading (step 2); electrician@demo.local — correcting a charged reading shows "Показ уже нараховано — зверніться до голови"; treasurer@demo.local — Перерахунки read-only; member@demo.local — own plots only, no recalculations.
