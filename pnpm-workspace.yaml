@@ -13,3 +13,8 @@ auditConfig:
     # zod 3.x via @expo/cli: Expo CLI dev/build tooling only, never shipped in the app or the server; no patched 3.x yet.
     # Revisit when Expo moves @expo/cli to zod 4 or a patched 3.x appears.
     - GHSA-mrhx-c7xc-m3w5
+
+# Transitive security fixes: @scalar/json-magic (via orval) pins undici 7.29.1 exactly. Scoped to 7.x so jsdom's undici 8 is untouched.
+# Remove when @scalar/json-magic ships a version that depends on undici >= 7.30.1.
+overrides:
+  undici@7: 7.30.1
