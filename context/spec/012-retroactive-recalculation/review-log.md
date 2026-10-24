@@ -53,3 +53,9 @@
 |---|---|---|---|---|
 | 1 | `99f3084..23e808a` | MAJOR_ISSUES | M1 a corrected interval can be charged twice: after an ADJUST (closed month) or an empty plan no charge carries the new 011 key (`CONSUMPTION:…:{newReadingId}`), so a redelivered/republished `PlotMeterPointsChanged` books a full REGULAR charge again | minor: `RoundRow` builds the READING_ENTER cause from render-time values, not the refused request; approvals have no step 2 (record as a spec deviation in the spec assumptions and guides); reading scope uses all charge types (comment that it is intentional) |
 | 2 | + `b45a8e2` | PASS | M1 resolved | minor: interval identity rule now exists in SQL and in `ChargeIdentity` (cross-reference or test); README could say a hand-reversed charge counts only by its own key |
+
+## Slice 8 — Demo recalculation, docs, guides and end-to-end specs
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `b45a8e2..6a3618e` | MAJOR_ISSUES | M1 `web/e2e/recalculation.spec.ts:200-203` waits for the async reading charge with a single check and swallows a `bookMonth` failure (timing-dependent) | minor: demo recalculation has no RECALCULATION_BOOKED audit row and is MANUAL while the story is a version correction; demo status cache `oldest` does not skip adjustments; guide "Known limit" wording differs from money-rules §5.3 (pending reading in a charged interval); approvals step 2 still a recorded deviation; ReadingHistory change judged correct |

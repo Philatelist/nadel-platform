@@ -166,7 +166,7 @@ test.describe('retroactive recalculation', () => {
     let meterId = '';
     await loginAs(page, 'chairman@demo.local');
     try {
-      const { open } = await demoMonths(page);
+      await demoMonths(page);
       plot = await createPlot(page, `E2E-RC-R${stamp}`);
       const me = await signedInPage(browser, 'member@demo.local');
       let memberId: string;
@@ -197,10 +197,14 @@ test.describe('retroactive recalculation', () => {
         200,
       );
       expect(saved.rows[0]?.outcome).toBe('SAVED');
-      await bookMonth(page, open).catch(() => undefined);
       const electricity = async () =>
         (await accountOf(page, plot!.id)).charges.filter((c) => c.chargeType.code === 'ELECTRICITY');
-      expect((await electricity()).filter((c) => c.kind === 'REGULAR').length).toBeGreaterThan(0);
+      // the charge is booked by an async listener: wait for it
+      await expect
+        .poll(async () => (await electricity()).filter((c) => c.kind === 'REGULAR').length, {
+          timeout: 15_000,
+        })
+        .toBeGreaterThan(0);
 
       // the electrician cannot correct a reading a charge uses: the hint, nothing changes
       const electrician = await signedInPage(browser, 'electrician@demo.local');

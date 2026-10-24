@@ -67,3 +67,4 @@
 - AUTO: (Slice 7) a reading change whose plan is empty is saved with booked=false and still applies the plan's queue updates (no reading event follows on this path).
 - Slice 7: 23e808a (+ fix b45a8e2) — verify green (backend 348 + builder 360, web 635; fix 98) — review PASS (r2)
 - Follow-ups for the owner (Slice 8 docs): `context/product/product-definition.md` still says automatic recalculation with notifications (suggest `/awos:product`); ADR 0007 still lists "retroactive recalculation of large ranges" as JobRunr work while 012 runs synchronously (capped at 24 months) — ADR note for the owner.
+- Slice 8: 6a3618e — verify green (DemoLedgerDataTests+Modularity 11, web 636; e2e recalculation 4/4 twice, @smoke 14/14 by the builder) — includes a Slice 7 web gap fix (meter card hid Correct/Delete for charged readings) — review r1 running
