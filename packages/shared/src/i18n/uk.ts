@@ -1870,6 +1870,8 @@ export const uk: Messages = {
     no: 'Ні',
     filtersLabel: 'Фільтри звіту',
     notChargedLink: 'Відкрити «Не нараховано»',
+    monthReportLink: 'Звіт',
+    plotBalancesLink: 'Звіт «Залишки по ділянках» для цієї вулиці',
     basis: {
       BILLING_MONTHS: 'Період рахується за місяцями нарахувань.',
       SERVICE_DAYS: 'Період рахується за днями послуг.',

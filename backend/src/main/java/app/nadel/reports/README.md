@@ -666,6 +666,32 @@ number for number, defaults, the cap over the ledger rows, audit, 403 for a memb
 default kinds and the named meters, resource and street, the note count, the file, the cap, audit, 403),
 `ReportTextsTests`; on the web `ReportPage.test.tsx` (code texts and the queue link).
 
+## Measured (performance, functional spec 2.2)
+
+`ReportsPerformanceTests` reports a throw-away cooperative of the size the spec names: 300 plots (60 with two owners),
+12 billing months, about 14 600 ledger rows (membership, electricity, land tax and water charges, a tenth reversed and
+a tenth adjusted in the next month, two losses and two common consumer runs with their charges), the electricity tree
+(1 substation, 10 quarters, 5 common consumers, 300 plot meters), 40 water meters and 4 400 readings. Each report runs
+through MockMvc as the chairman, as a preview and as a file, after one warm-up call; every call must take under 5 s.
+Indicative numbers (dev machine, Testcontainers PostgreSQL, one run; they vary by a few tens of ms):
+
+| Report | Rows | Preview ms | File ms |
+|---|---|---|---|
+| `charges-by-month` (year 2025) | 124 | 50 | 52 |
+| `plot-balances` | 300 | 63 | 73 |
+| `debtors` | 300 | 48 | 49 |
+| `electricity-tree` (year 2025, both sheets) | 5 853 | 300 | 305 |
+| `water` (year 2025) | 42 | 46 | 49 |
+| `missing-readings` (all meter kinds, a range with no reading day) | 357 | 23 | 30 |
+| `land-tax` (2025) | 300 | 47 | 38 |
+| `corrections` (year 2025) | 2 162 | 44 | 58 |
+
+The plot balances and debtors previews run 18 SQL statements each for 300 plots (the test bounds them at 40, counted
+with Hibernate statistics), so no query runs per plot. EXPLAIN (ANALYZE, BUFFERS) of the heaviest ledger queries on this
+fixture, as `nadel_app` under RLS: corrections 6.6 ms, the electricity "charged" rows 18.7 ms (the correction lookup
+uses `charge_adjusts_idx`, V19, 690 index probes), debts as of a day 19 ms; all read the 14 600 rows through
+`charge_tenant_idx`. Nothing was slow, so no index was added (no V21).
+
 ## Depends on
 
 `ledger` (`LedgerReadModel`), `meters` (`MeterReports`, `Quantity`), `plots` (`PlotCatalog`, `PlotOwners`, `PlotStatuses`), `members` (`MemberDirectory`:

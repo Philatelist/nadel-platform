@@ -119,3 +119,14 @@ export function reportFileName(code: string, values: FilterValues): string {
   const period = periodDays(values);
   return period === undefined ? `${code}.xlsx` : `${code}_${period.from}_${period.to}.xlsx`;
 }
+
+/** A link to a report with some filters preset; the query is encoded, values are never concatenated by hand. */
+export function reportPath(
+  code: string,
+  params: Readonly<Partial<Record<ReportFilterParam, string>>>,
+): string {
+  const search = new URLSearchParams();
+  for (const [name, value] of Object.entries(params)) if (value) search.set(name, value);
+  const query = search.toString();
+  return `/reports/${code}${query ? `?${query}` : ''}`;
+}

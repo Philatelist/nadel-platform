@@ -13,6 +13,7 @@ import { UserContent } from '../components/UserContent';
 import { Badge, Button, PageHeader, Panel } from '../components/ui';
 import { useLocale, useT } from '../i18n';
 import { useCan } from '../me';
+import { reportPath } from '../reportFilters';
 import { useDocumentTitle } from '../useDocumentTitle';
 
 export function ChargesMonthPage() {
@@ -36,6 +37,7 @@ function MonthView({ month }: { month: BillingMonthDetails }) {
   const { locale } = useLocale();
   const canClose = useCan('PERIODS_CLOSE');
   const canRun = useCan('CHARGES_RUN');
+  const canViewReports = useCan('REPORTS_VIEW');
   const [closing, setClosing] = useState(false);
   const [running, setRunning] = useState(false);
   const closed = month.status === 'CLOSED';
@@ -58,10 +60,18 @@ function MonthView({ month }: { month: BillingMonthDetails }) {
           ) : undefined
         }
         actions={
-          !closed && (canRun || canClose) ? (
+          canViewReports || (!closed && (canRun || canClose)) ? (
             <>
-              {canRun && <Button onClick={() => setRunning(true)}>{t.billing.run.action}</Button>}
-              {canClose && (
+              {canViewReports && (
+                <Link
+                  to={reportPath('charges-by-month', { fromMonth: month.month, toMonth: month.month })}
+                  className="text-accent underline"
+                >
+                  {t.reports.monthReportLink}
+                </Link>
+              )}
+              {!closed && canRun && <Button onClick={() => setRunning(true)}>{t.billing.run.action}</Button>}
+              {!closed && canClose && (
                 <Button variant="secondary" onClick={() => setClosing(true)}>
                   {t.billing.close.action}
                 </Button>

@@ -745,6 +745,16 @@ BEGIN
         common_consumer_default_split = EXCLUDED.common_consumer_default_split, red_amount = EXCLUDED.red_amount,
         red_days = EXCLUDED.red_days, updated_at = now();
 
+    -- Fake requisites for the report templates (feature 013). Filled only while empty, so a chairman's own are kept.
+    -- The EDRPOU, the address and the IBAN (a valid mod 97 number) belong to no real organisation.
+    UPDATE cooperative_settings SET
+        official_name = COALESCE(official_name, 'Садівниче товариство «Надія»'),
+        legal_address = COALESCE(legal_address, '01001, м. Київ, вул. Садова, 1'),
+        bank_name = COALESCE(bank_name, 'АТ «Демо-банк»'),
+        iban = COALESCE(iban, 'UA213223130000026007233566001')
+    WHERE tenant_id = demo;
+    UPDATE tenant SET edrpou = '12345678' WHERE id = demo AND edrpou IS NULL;
+
     -- The tariff of the "Спільні споживачі" charge type (seeded by seed_charge_types).
     INSERT INTO tariff (id, tenant_id, charge_type_id, name, scope_kind)
     VALUES (cc_tariff, demo, common, 'Спільні споживачі за лічильником', 'ALL_PLOTS')

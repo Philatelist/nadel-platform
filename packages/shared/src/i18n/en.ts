@@ -1847,6 +1847,8 @@ export const en = {
     no: 'No',
     filtersLabel: 'Report filters',
     notChargedLink: 'Open “Not charged”',
+    monthReportLink: 'Report',
+    plotBalancesLink: 'Plot balances report for this street',
     basis: {
       BILLING_MONTHS: 'The period is counted in billing months.',
       SERVICE_DAYS: 'The period is counted in service days.',
