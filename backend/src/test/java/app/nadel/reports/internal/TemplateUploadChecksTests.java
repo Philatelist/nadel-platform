@@ -11,6 +11,8 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import nadel.contract.model.ReportTemplateUploadWarning;
 import org.dhatim.fastexcel.reader.ReadableWorkbook;
 import org.dhatim.fastexcel.reader.Row;
@@ -295,6 +297,99 @@ class TemplateUploadChecksTests {
         assertThat(parts).doesNotContainKey("xl/queryTables/queryTable1.xml");
         assertThat(TemplateFiles.text(parts.get("xl/worksheets/_rels/sheet1.xml.rels")))
                 .doesNotContain("queryTable").contains("hyperlink");
+    }
+
+    @Test
+    void linkElementsWithVeryLongAttributeListsAreRemovedAndOthersKeptWithoutError() {
+        String padding = longAttributeList();
+        byte[] linked = TemplateFiles.withExternalLink();
+        linked = TemplateFiles.withText(linked, TemplateFiles.WORKBOOK_RELS, rels -> rels
+                .replaceFirst("<Relationship ", "<Relationship " + padding + " ")
+                .replace("<Relationship Id=\"rIdLink\"", "<Relationship " + padding + " Id=\"rIdLink\""));
+        linked = TemplateFiles.withText(linked, TemplateFiles.CONTENT_TYPES, types -> types
+                .replaceFirst("<Override ", "<Override " + padding + " ")
+                .replace("<Override PartName=\"/xl/externalLinks/", "<Override " + padding
+                        + " PartName=\"/xl/externalLinks/"));
+        linked = TemplateFiles.withText(linked, TemplateFiles.WORKBOOK, workbook -> workbook
+                .replace("<externalReferences>", "<externalReferences " + padding + ">"));
+        Map<String, byte[]> uploaded = TemplateFiles.parts(linked);
+
+        TemplateUploadChecks.Checked checked = checks.check("linked.xlsx", linked);
+
+        assertThat(checked.warnings()).containsExactly(ReportTemplateUploadWarning.EXTERNAL_LINKS_REMOVED);
+        Map<String, byte[]> parts = TemplateFiles.parts(checked.content());
+        String rels = TemplateFiles.text(parts.get(TemplateFiles.WORKBOOK_RELS));
+        assertThat(rels).doesNotContain("externalLink").doesNotContain("connections")
+                .contains("<Relationship " + padding + " ");
+        String types = TemplateFiles.text(parts.get(TemplateFiles.CONTENT_TYPES));
+        assertThat(types).doesNotContain("externalLink").doesNotContain("connections")
+                .contains("<Override " + padding + " ");
+        assertThat(TemplateFiles.text(parts.get(TemplateFiles.WORKBOOK)))
+                .isEqualTo(TemplateFiles.text(uploaded.get(TemplateFiles.WORKBOOK)).replace("<externalReferences "
+                        + padding + "><externalReference r:id=\"rIdLink\"/></externalReferences>", ""));
+        assertThat(checks.check("linked.xlsx", checked.content()).warnings()).isEmpty();
+    }
+
+    @Test
+    void aFileWithoutLinksButWithVeryLongStartTagsIsStoredByteForByte() {
+        String padding = longAttributeList();
+        byte[] padded = TemplateFiles.withText(TemplateFiles.withText(TemplateFiles.valid(),
+                TemplateFiles.WORKBOOK_RELS, rels -> rels.replace("<Relationship ", "<Relationship " + padding + " ")),
+                TemplateFiles.CONTENT_TYPES, types -> types.replace("<Override ", "<Override " + padding + " "));
+
+        TemplateUploadChecks.Checked checked = checks.check("statement.xlsx", padded);
+
+        assertThat(checked.content()).isSameAs(padded);
+        assertThat(checked.warnings()).isEmpty();
+    }
+
+    @Test
+    void anyFailureEscapingTheArchiveChecksIsABrokenZipNeverAnError() {
+        ApiProblemException tooLarge = TemplateUploadChecks.invalid(ProblemCodes.UNPACKED_TOO_LARGE);
+
+        assertThatThrownBy(() -> TemplateUploadChecks.refusingFailures(() -> {
+            throw new StackOverflowError();
+        })).isInstanceOfSatisfying(ApiProblemException.class, e -> assertThat(e.errors())
+                .containsExactly(new FieldProblem("file", ProblemCodes.BROKEN_ZIP)));
+        assertThatThrownBy(() -> TemplateUploadChecks.refusingFailures(() -> {
+            throw new IllegalStateException("a parser failure");
+        })).isInstanceOfSatisfying(ApiProblemException.class, e -> assertThat(e.errors())
+                .containsExactly(new FieldProblem("file", ProblemCodes.BROKEN_ZIP)));
+        assertThatThrownBy(() -> TemplateUploadChecks.refusingFailures(() -> {
+            throw new IOException("truncated");
+        })).isInstanceOfSatisfying(ApiProblemException.class, e -> assertThat(e.errors())
+                .containsExactly(new FieldProblem("file", ProblemCodes.BROKEN_ZIP)));
+        assertThatThrownBy(() -> TemplateUploadChecks.refusingFailures(() -> {
+            throw tooLarge;
+        })).isSameAs(tooLarge);
+        assertThat(TemplateUploadChecks.refusingFailures(() -> "stored")).isEqualTo("stored");
+    }
+
+    @Test
+    void elementsAreFoundByOneForwardPassOverTheMarkup() {
+        String xml = "<?xml version=\"1.0\"?><!-- <Relationship Id=\"c\"/> --><Relationships><![CDATA[<Relationship/>]]>"
+                + "<Relationship Id=\"a\" Target='x>y/>z'/><pr:Relationship Id=\"b\">\n</pr:Relationship>"
+                + "<Relationship Id=\"d\"><inner><Relationship Id=\"e\"/></inner></Relationship>"
+                + "<RelationshipX Id=\"f\"/><Relationship\tId='g'/></Relationships>";
+
+        List<ExternalLinkStripper.Element> found = ExternalLinkStripper.elements(xml, "Relationship");
+
+        assertThat(found).extracting(element -> xml.substring(element.start(), element.end())).containsExactly(
+                "<Relationship Id=\"a\" Target='x>y/>z'/>", "<pr:Relationship Id=\"b\">\n</pr:Relationship>",
+                "<Relationship Id=\"d\"><inner><Relationship Id=\"e\"/></inner></Relationship>",
+                "<Relationship\tId='g'/>");
+        assertThat(found).extracting(ExternalLinkStripper.Element::attributes).containsExactly(
+                " Id=\"a\" Target='x>y/>z'", " Id=\"b\"", " Id=\"d\"", "\tId='g'");
+        assertThat(ExternalLinkStripper.elements("<a><Relationship Id=\"unterminated", "Relationship")).isEmpty();
+    }
+
+    /**
+     * About 100 KB of attributes for one start tag: 100 short attributes (the JDK parser allows 200 per element)
+     * separated by runs of 1,000 spaces. Each of those characters is one step of a pattern that walks a start tag.
+     */
+    private static String longAttributeList() {
+        return IntStream.range(0, 100).mapToObj(index -> "pad" + index + "=\"v\"")
+                .collect(Collectors.joining(" ".repeat(1_000)));
     }
 
     @Test

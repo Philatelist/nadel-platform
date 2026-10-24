@@ -5,12 +5,14 @@ import java.io.IOException;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
@@ -31,9 +33,12 @@ import org.apache.commons.compress.archivers.zip.ZipFile;
  * workbook are not touched.
  * <p>
  * The parts were all read with the safe parser before ({@link TemplateUploadChecks}), so they are well-formed and
- * without a document type; the few elements removed are found with patterns over that text, which leaves every other
- * byte of a part as it was (namespaces, {@code mc:Ignorable} and the order of attributes matter to Excel). The archive
- * is written again only when something was removed; otherwise the uploaded file is stored byte for byte.
+ * without a document type; the few elements removed are found by one forward pass over that text ({@link #elements}),
+ * which leaves every other byte of a part as it was (namespaces, {@code mc:Ignorable} and the order of attributes
+ * matter to Excel). The pass is a plain loop, linear in the length of the part and without recursion, so a start tag
+ * of any length cannot exhaust the stack (a regular expression with a repeated group over a start tag recurses once
+ * per character). The archive is written again only when something was removed; otherwise the uploaded file is
+ * stored byte for byte.
  */
 final class ExternalLinkStripper {
 
@@ -44,15 +49,13 @@ final class ExternalLinkStripper {
         byte[] read(ZipArchiveEntry entry) throws IOException;
     }
 
-    private static final String PREFIX = "(?:[A-Za-z_][\\w.\\-]*:)?";
-    /** The attributes of a start tag: quoted values may hold {@code >} and {@code /}. */
-    private static final String ATTRIBUTES = "((?:[^>\"']|\"[^\"]*\"|'[^']*')*?)";
-    private static final Pattern RELATIONSHIP = Pattern.compile("<" + PREFIX + "Relationship\\b" + ATTRIBUTES
-            + "(?:/>|>\\s*</" + PREFIX + "Relationship\\s*>)");
-    private static final Pattern OVERRIDE = Pattern.compile("<" + PREFIX + "Override\\b" + ATTRIBUTES
-            + "(?:/>|>\\s*</" + PREFIX + "Override\\s*>)");
-    private static final Pattern EXTERNAL_REFERENCES = Pattern.compile("<" + PREFIX + "externalReferences\\b"
-            + ATTRIBUTES + "(?:/>|>.*?</" + PREFIX + "externalReferences\\s*>)", Pattern.DOTALL);
+    /** One element of a part: its text from {@code <} to the end of its end tag, and its attributes as written. */
+    record Element(int start, int end, String attributes) {
+    }
+
+    private static final String RELATIONSHIP = "Relationship";
+    private static final String OVERRIDE = "Override";
+    private static final String EXTERNAL_REFERENCES = "externalReferences";
     private static final Pattern ATTRIBUTE = Pattern.compile(
             "([A-Za-z_][\\w.\\-:]*)\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)')");
     private static final Pattern CHARACTER_REFERENCE = Pattern.compile("&#(x[0-9A-Fa-f]+|[0-9]+);");
@@ -82,7 +85,8 @@ final class ExternalLinkStripper {
             if (name.endsWith(".rels")) {
                 rewritten = withoutLinkRelationships(text(reader.read(entry)), baseOf(name));
             } else if (name.equals(WORKBOOK)) {
-                rewritten = removeAll(text(reader.read(entry)), EXTERNAL_REFERENCES);
+                String workbook = text(reader.read(entry));
+                rewritten = remove(workbook, elements(workbook, EXTERNAL_REFERENCES), element -> true);
             } else if (name.equals(CONTENT_TYPES)) {
                 rewritten = withoutLinkOverrides(text(reader.read(entry)));
             }
@@ -127,42 +131,135 @@ final class ExternalLinkStripper {
 
     /** The relationships part without the link relationships; null when it has none. */
     private static String withoutLinkRelationships(String rels, String base) {
-        Matcher relationship = RELATIONSHIP.matcher(rels);
-        StringBuilder result = new StringBuilder();
-        boolean removed = false;
-        while (relationship.find()) {
-            Map<String, String> attributes = attributes(relationship.group(1));
+        return remove(rels, elements(rels, RELATIONSHIP), relationship -> {
+            Map<String, String> attributes = attributes(relationship.attributes());
             String type = attributes.getOrDefault("Type", "").toLowerCase(Locale.ROOT);
             boolean external = "external".equalsIgnoreCase(attributes.get("TargetMode"));
             boolean linkType = LINK_RELATIONSHIP_TYPES.stream().anyMatch(type::endsWith);
             String target = attributes.get("Target");
             boolean linkTarget = !external && target != null && isLinkPart(resolve(base, target));
-            relationship.appendReplacement(result, linkType || linkTarget ? "" : Matcher.quoteReplacement(
-                    relationship.group()));
-            removed |= linkType || linkTarget;
-        }
-        relationship.appendTail(result);
-        return removed ? result.toString() : null;
+            return linkType || linkTarget;
+        });
     }
 
     /** {@code [Content_Types].xml} without the overrides of link parts; null when it has none. */
     private static String withoutLinkOverrides(String contentTypes) {
-        Matcher override = OVERRIDE.matcher(contentTypes);
-        StringBuilder result = new StringBuilder();
-        boolean removed = false;
-        while (override.find()) {
-            String part = attributes(override.group(1)).getOrDefault("PartName", "");
-            boolean link = isLinkPart(resolve("", part));
-            override.appendReplacement(result, link ? "" : Matcher.quoteReplacement(override.group()));
-            removed |= link;
-        }
-        override.appendTail(result);
-        return removed ? result.toString() : null;
+        return remove(contentTypes, elements(contentTypes, OVERRIDE), override -> isLinkPart(resolve("",
+                attributes(override.attributes()).getOrDefault("PartName", ""))));
     }
 
-    private static String removeAll(String xml, Pattern element) {
-        Matcher matcher = element.matcher(xml);
-        return matcher.find() ? matcher.replaceAll("") : null;
+    /** The text without the elements the test picks, every other character kept; null when none is picked. */
+    private static String remove(String xml, List<Element> elements, Predicate<Element> removed) {
+        StringBuilder result = new StringBuilder(xml.length());
+        int copied = 0;
+        for (Element element : elements) {
+            if (removed.test(element)) {
+                result.append(xml, copied, element.start());
+                copied = element.end();
+            }
+        }
+        if (copied == 0) {
+            return null;
+        }
+        return result.append(xml, copied, xml.length()).toString();
+    }
+
+    /**
+     * Every element of the part with this local name (any namespace prefix, or none) that is not inside another one,
+     * in document order. One forward pass: comments, CDATA sections, processing instructions and declarations are
+     * skipped whole; a start tag ends at its first {@code >} outside a quoted attribute value; an element that is not
+     * empty ends with its matching end tag (open elements are counted). The text is well-formed XML (checked before),
+     * and a text that is not still ends the loop: every step moves forward.
+     */
+    static List<Element> elements(String xml, String localName) {
+        List<Element> found = new ArrayList<>();
+        int length = xml.length();
+        int depth = 0;
+        int openStart = -1;
+        int openDepth = 0;
+        String openAttributes = "";
+        int position = 0;
+        while (position < length) {
+            int lt = xml.indexOf('<', position);
+            if (lt < 0) {
+                break;
+            }
+            if (xml.startsWith("<!--", lt)) {
+                position = after(xml, "-->", lt + 4);
+            } else if (xml.startsWith("<![CDATA[", lt)) {
+                position = after(xml, "]]>", lt + 9);
+            } else if (xml.startsWith("<?", lt)) {
+                position = after(xml, "?>", lt + 2);
+            } else if (xml.startsWith("<!", lt)) {
+                position = after(xml, ">", lt + 2);
+            } else if (xml.startsWith("</", lt)) {
+                position = after(xml, ">", lt + 2);
+                depth--;
+                if (openStart >= 0 && depth == openDepth) {
+                    found.add(new Element(openStart, position, openAttributes));
+                    openStart = -1;
+                }
+            } else {
+                int nameEnd = lt + 1;
+                while (nameEnd < length && !endsName(xml.charAt(nameEnd))) {
+                    nameEnd++;
+                }
+                int gt = endOfStartTag(xml, nameEnd);
+                if (gt < 0) {
+                    break;
+                }
+                boolean empty = xml.charAt(gt - 1) == '/';
+                if (openStart < 0 && localName(xml.substring(lt + 1, nameEnd)).equals(localName)) {
+                    String attributes = xml.substring(nameEnd, empty ? gt - 1 : gt);
+                    if (empty) {
+                        found.add(new Element(lt, gt + 1, attributes));
+                    } else {
+                        openStart = lt;
+                        openDepth = depth;
+                        openAttributes = attributes;
+                    }
+                }
+                if (!empty) {
+                    depth++;
+                }
+                position = gt + 1;
+            }
+        }
+        return found;
+    }
+
+    /** The index of the {@code >} that ends the start tag, outside quoted values; -1 when the text ends first. */
+    private static int endOfStartTag(String xml, int from) {
+        char quote = 0;
+        for (int index = from; index < xml.length(); index++) {
+            char character = xml.charAt(index);
+            if (quote != 0) {
+                if (character == quote) {
+                    quote = 0;
+                }
+            } else if (character == '"' || character == '\'') {
+                quote = character;
+            } else if (character == '>') {
+                return index;
+            }
+        }
+        return -1;
+    }
+
+    private static int after(String xml, String token, int from) {
+        int index = xml.indexOf(token, from);
+        return index < 0 ? xml.length() : index + token.length();
+    }
+
+    private static boolean endsName(char character) {
+        return character == '/' || character == '>' || character == ' ' || character == '\t' || character == '\r'
+                || character == '\n';
+    }
+
+    /** The name without a single namespace prefix: {@code Relationship} for {@code pr:Relationship}. */
+    private static String localName(String name) {
+        int colon = name.indexOf(':');
+        return colon < 0 ? name : name.substring(colon + 1);
     }
 
     /** The attributes of a start tag by local name, values with their entities resolved. */

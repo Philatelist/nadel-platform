@@ -59,7 +59,8 @@ import org.springframework.http.HttpStatus;
  * </ol>
  * Links to other workbooks and data connections are then removed ({@link ExternalLinkStripper}); the stored file is
  * the cleaned one, with the warning {@code EXTERNAL_LINKS_REMOVED}, and its size and SHA-256 are those of the stored
- * bytes. A file without links is stored byte for byte as uploaded.
+ * bytes. A file without links is stored byte for byte as uploaded. Whatever else fails while the archive is read,
+ * parsed or cleaned (a runtime exception, a stack overflow) is {@code BROKEN_ZIP} ({@link #refusingFailures}).
  * <p>
  * Every refusal is an {@link ApiProblemException} with a fixed English detail; neither the file name nor anything read
  * from the file is logged or put into an answer. Instances are stateless and thread-safe.
@@ -127,22 +128,45 @@ final class TemplateUploadChecks {
         } catch (UnsafeWorkbookException e) {
             throw invalid(reasonCode(e.reason()));
         }
-        byte[] stored;
-        try (ZipFile zip = ZipFile.builder().setSeekableByteChannel(new SeekableInMemoryByteChannel(content)).get()) {
-            Map<String, ZipArchiveEntry> parts = partsByLowerName(zip);
-            refuseCode(zip, parts);
-            refuseUnsafeXmlAndTwoRowSets(zip, parts);
-            stored = ExternalLinkStripper.strip(zip, new ArrayList<>(parts.values()), entry -> read(zip, entry))
-                    .orElse(content);
-        } catch (IOException e) {
-            throw invalid(ProblemCodes.BROKEN_ZIP);
-        }
+        byte[] stored = refusingFailures(() -> {
+            try (ZipFile zip = ZipFile.builder().setSeekableByteChannel(new SeekableInMemoryByteChannel(content))
+                    .get()) {
+                Map<String, ZipArchiveEntry> parts = partsByLowerName(zip);
+                refuseCode(zip, parts);
+                refuseUnsafeXmlAndTwoRowSets(zip, parts);
+                return ExternalLinkStripper.strip(zip, new ArrayList<>(parts.values()), entry -> read(zip, entry))
+                        .orElse(content);
+            }
+        });
         if (stored == content) {
             return new Checked(fileName, content, sha256(content), List.of());
         }
         requireSize(stored.length);
         return new Checked(fileName, stored, sha256(stored),
                 List.of(ReportTemplateUploadWarning.EXTERNAL_LINKS_REMOVED));
+    }
+
+    /** Work on the uploaded archive, which may fail reading it. */
+    @FunctionalInterface
+    interface ArchiveWork<T> {
+
+        T run() throws IOException;
+    }
+
+    /**
+     * Runs work on the uploaded archive so that nothing but a refusal leaves the upload gate: an
+     * {@link ApiProblemException} passes as it is; an {@link IOException}, any other runtime exception and a
+     * {@link StackOverflowError} (a hostile part driving a parser or a pattern too deep) are 400 {@code BROKEN_ZIP},
+     * never a 500. Nothing of the failure is kept: its message can quote the file.
+     */
+    static <T> T refusingFailures(ArchiveWork<T> work) {
+        try {
+            return work.run();
+        } catch (ApiProblemException e) {
+            throw e;
+        } catch (IOException | RuntimeException | StackOverflowError e) {
+            throw invalid(ProblemCodes.BROKEN_ZIP);
+        }
     }
 
     /** 400 {@code TEMPLATE_INVALID} with the reason as the code of {@code errors[{field: file}]}. */
