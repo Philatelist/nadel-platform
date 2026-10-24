@@ -85,3 +85,9 @@
 |---|---|---|---|---|
 | 1 | `50fac8f..037e106` | MAJOR_ISSUES | M1 `tariffs-acceptance.spec.ts:225-227` books a recalculation for an ALL_PLOTS tariff: every run adds permanent charges to every demo plot (shared DB) | minor: missing-original fallback shows a bare month; fragile `not '5.00'` assertion; hard-coded 20 |
 | 2 | + `4fa32b5` | PASS | M1 resolved | minor: loose `getByText(plot.number)` locator; a charged throwaway plot may stay unarchived (allowed by the leftover policy) |
+
+## Fix — CI: Security/OSV (fast-uri, undici) and e2e language purity (opening balance option)
+
+| Round | Commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `a2c1e6f..47b4e02` | PASS | — | minor: fixture `t3` order |
