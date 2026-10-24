@@ -10,12 +10,13 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ReportTemplate } from './reportTemplate';
-import type { ReportTemplateUploadWarning } from './reportTemplateUploadWarning';
+import type { ReportTemplateWarningCode } from './reportTemplateWarningCode';
 
 /**
  * A stored upload: the template with the new file as its `latestVersion`, and what was changed in the file
  */
 export interface ReportTemplateUploadResult {
   template: ReportTemplate;
-  warnings: ReportTemplateUploadWarning[];
+  /** What was changed in the stored file; an upload lists only `EXTERNAL_LINKS_REMOVED` */
+  warnings: ReportTemplateWarningCode[];
 }

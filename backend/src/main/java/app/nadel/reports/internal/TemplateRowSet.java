@@ -1,6 +1,7 @@
 package app.nadel.reports.internal;
 
 import java.util.Optional;
+import nadel.contract.model.ReportTemplateRowSet;
 
 /**
  * The row sets a template row can repeat over (feature 013, section 4.1): a row whose placeholders are
@@ -25,6 +26,11 @@ enum TemplateRowSet {
 
     String key() {
         return key;
+    }
+
+    /** The row set as the API names it. */
+    ReportTemplateRowSet contract() {
+        return ReportTemplateRowSet.valueOf(name());
     }
 
     /**

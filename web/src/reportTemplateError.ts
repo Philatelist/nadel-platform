@@ -30,8 +30,12 @@ export function reportTemplateNameError(t: Messages, error: unknown): string | u
     : undefined;
 }
 
-/** User-facing text for a failed template call; HTTP 413 means the size limit. Server text is never shown. */
-export function reportTemplateErrorMessage(t: Messages, error: unknown): string {
+/** User-facing text for a failed template call (`generate` for filling a template); HTTP 413 means the size limit. Server text is never shown. */
+export function reportTemplateErrorMessage(
+  t: Messages,
+  error: unknown,
+  context: 'upload' | 'generate' = 'upload',
+): string {
   const texts = t.reportTemplates;
   if (error instanceof ApiError && error.status === 413) return texts.errors.FILE_TOO_LARGE;
   const code = problemCode(error);
@@ -40,6 +44,8 @@ export function reportTemplateErrorMessage(t: Messages, error: unknown): string 
     const invalid: Readonly<Record<string, string>> = texts.invalid;
     return (reason !== undefined ? invalid[reason] : undefined) ?? texts.errors.TEMPLATE_INVALID;
   }
-  const known: Readonly<Record<string, string>> = texts.errors;
+  if (context === 'generate' && code === 'TEMPLATE_ARCHIVED') return texts.generate.archived;
+  // REPORT_TOO_LARGE and REPORT_FILTER_INVALID of a generation have the texts of the reports.
+  const known: Readonly<Record<string, string>> = { ...t.reports.errors, ...texts.errors };
   return (code !== undefined ? known[code] : undefined) ?? problemMessage(t, error);
 }

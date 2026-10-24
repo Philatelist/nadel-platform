@@ -369,6 +369,13 @@ Methods:
   (`charge_plot_type_idx`). Test: `LedgerChargedInYearTests` (the year boundary, a late-booked December charge, an
   adjustment and a reversal, an opening balance, another type and an unknown code, another cooperative, the caller's
   transaction).
+- `chargedByType(from, to)` (report templates, `totals.charged.<type>`, 013 §4.1): the same rule per charge type over
+  a range of days and every plot of the cooperative (archived plots and common land included): `SUM(amount)` of the
+  `REGULAR`, `REVERSAL` and `ADJUSTMENT` rows whose `service_from` is from `from` to `to`, grouped by
+  `charge_type_id`; a type without such rows is absent (`0.00`). Opening balances are left out. One query (bounded by
+  the charge types; it reads the cooperative's charges through `charge_tenant_idx`). `to` before `from` is an
+  `IllegalArgumentException`. Test: `LedgerChargedInYearTests` (a range of three months and of one, without the
+  opening balance, another cooperative, a range backwards, the caller's transaction).
 - `electricityCharged(from, to, limit)` (electricity report, "Charged" sheet, 013 §3.4): one `ChargedRow` per ledger
   row (`REGULAR`, `REVERSAL`, `ADJUSTMENT`; never an opening) of the `REGULAR` charges of source `CONSUMPTION` or
   `LOSSES` of the type `ELECTRICITY` (resolved by code through `tariffs.ChargeTypeCatalog`) and of source

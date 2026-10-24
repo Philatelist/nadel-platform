@@ -14,8 +14,10 @@ import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -24,7 +26,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.xml.stream.XMLStreamConstants;
 import javax.xml.stream.XMLStreamReader;
-import nadel.contract.model.ReportTemplateUploadWarning;
+import nadel.contract.model.ReportTemplateWarningCode;
 import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
 import org.apache.commons.compress.archivers.zip.ZipFile;
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
@@ -55,7 +57,8 @@ import org.springframework.http.HttpStatus;
  *       entities): a part that is not well-formed or declares a document type is {@code BROKEN_ZIP};</li>
  *   <li>the dry parse of the repeating rows: a row of a sheet that mixes placeholders of two row sets, or a sheet with
  *       two repeating rows: {@code TWO_ROW_SETS} (placeholders are read from the shared strings, rich-text runs joined,
- *       and from inline strings).</li>
+ *       and from inline strings); an array formula whose range spans the repeating row and another row:
+ *       {@code ARRAY_ACROSS_ROW} (Excel refuses to insert rows inside an array, ADR 0015).</li>
  * </ol>
  * Links to other workbooks and data connections are then removed ({@link ExternalLinkStripper}); the stored file is
  * the cleaned one, with the warning {@code EXTERNAL_LINKS_REMOVED}, and its size and SHA-256 are those of the stored
@@ -89,7 +92,7 @@ final class TemplateUploadChecks {
     private static final String DETAIL = "The template file is not valid.";
 
     /** A file that may be stored. */
-    record Checked(String fileName, byte[] content, String sha256, List<ReportTemplateUploadWarning> warnings) {
+    record Checked(String fileName, byte[] content, String sha256, List<ReportTemplateWarningCode> warnings) {
 
         Checked {
             warnings = List.copyOf(warnings);
@@ -143,7 +146,7 @@ final class TemplateUploadChecks {
         }
         requireSize(stored.length);
         return new Checked(fileName, stored, sha256(stored),
-                List.of(ReportTemplateUploadWarning.EXTERNAL_LINKS_REMOVED));
+                List.of(ReportTemplateWarningCode.EXTERNAL_LINKS_REMOVED));
     }
 
     /** Work on the uploaded archive, which may fail reading it. */
@@ -279,74 +282,131 @@ final class TemplateUploadChecks {
             if (scan != null && scan.twoRowSets) {
                 throw invalid(ProblemCodes.TWO_ROW_SETS);
             }
+            if (scan != null && scan.arrayAcrossRow()) {
+                throw invalid(ProblemCodes.ARRAY_ACROSS_ROW);
+            }
         }
     }
 
-    /** The texts of the shared string table in order, rich-text runs joined, phonetic runs left out. */
-    private static List<String> sharedStrings(ZipFile zip, @Nullable ZipArchiveEntry part) throws IOException {
-        List<String> strings = new ArrayList<>();
-        if (part == null) {
-            return strings;
-        }
+    /** One entry of the shared string table: its text (runs joined) and whether it had rich-text runs. */
+    record SharedString(String text, boolean rich) {
+    }
+
+    /** The shared string table in order, rich-text runs joined, phonetic runs left out. */
+    static List<SharedString> sharedStrings(InputStream in) throws TemplateXml.UnsafeXmlException {
+        List<SharedString> strings = new ArrayList<>();
         StringBuilder[] current = new StringBuilder[1];
         int[] phonetic = new int[1];
         boolean[] inText = new boolean[1];
-        try (InputStream in = bounded(zip, part)) {
-            TemplateXml.read(in, reader -> {
-                switch (reader.getEventType()) {
-                    case XMLStreamConstants.START_ELEMENT -> {
-                        switch (reader.getLocalName()) {
-                            case "si" -> current[0] = new StringBuilder();
-                            case "rPh" -> phonetic[0]++;
-                            case "t" -> inText[0] = true;
-                            default -> { }
+        boolean[] rich = new boolean[1];
+        TemplateXml.read(in, reader -> {
+            switch (reader.getEventType()) {
+                case XMLStreamConstants.START_ELEMENT -> {
+                    switch (reader.getLocalName()) {
+                        case "si" -> {
+                            current[0] = new StringBuilder();
+                            rich[0] = false;
                         }
+                        case "r" -> rich[0] = true;
+                        case "rPh" -> phonetic[0]++;
+                        case "t" -> inText[0] = true;
+                        default -> { }
                     }
-                    case XMLStreamConstants.CHARACTERS, XMLStreamConstants.CDATA, XMLStreamConstants.SPACE -> {
-                        if (inText[0] && phonetic[0] == 0 && current[0] != null) {
-                            current[0].append(reader.getText());
-                        }
-                    }
-                    case XMLStreamConstants.END_ELEMENT -> {
-                        switch (reader.getLocalName()) {
-                            case "si" -> {
-                                strings.add(current[0] == null ? "" : current[0].toString());
-                                current[0] = null;
-                            }
-                            case "rPh" -> phonetic[0]--;
-                            case "t" -> inText[0] = false;
-                            default -> { }
-                        }
-                    }
-                    default -> { }
                 }
-            });
-        } catch (TemplateXml.UnsafeXmlException e) {
-            throw invalid(ProblemCodes.BROKEN_ZIP);
-        }
+                case XMLStreamConstants.CHARACTERS, XMLStreamConstants.CDATA, XMLStreamConstants.SPACE -> {
+                    if (inText[0] && phonetic[0] == 0 && current[0] != null) {
+                        current[0].append(reader.getText());
+                    }
+                }
+                case XMLStreamConstants.END_ELEMENT -> {
+                    switch (reader.getLocalName()) {
+                        case "si" -> {
+                            strings.add(new SharedString(current[0] == null ? "" : current[0].toString(), rich[0]));
+                            current[0] = null;
+                        }
+                        case "rPh" -> phonetic[0]--;
+                        case "t" -> inText[0] = false;
+                        default -> { }
+                    }
+                }
+                default -> { }
+            }
+        });
         return strings;
     }
 
+    private static List<String> sharedStrings(ZipFile zip, @Nullable ZipArchiveEntry part) throws IOException {
+        if (part == null) {
+            return List.of();
+        }
+        try (InputStream in = bounded(zip, part)) {
+            return sharedStrings(in).stream().map(SharedString::text).toList();
+        } catch (TemplateXml.UnsafeXmlException e) {
+            throw invalid(ProblemCodes.BROKEN_ZIP);
+        }
+    }
+
     /**
-     * Reads one sheet and notes whether a row mixes placeholders of two row sets or the sheet has two repeating rows.
-     * Cells are shared strings ({@code t="s"}) or inline strings ({@code t="inlineStr"}); formula results and numbers
-     * hold no placeholder.
+     * Reads one sheet and notes whether a row mixes placeholders of two row sets, the sheet has two repeating rows or an
+     * array formula's range crosses the repeating row. Cells are shared strings ({@code t="s"}) or inline strings
+     * ({@code t="inlineStr"}); formula results and numbers hold no placeholder. The filler reads the same scan for its
+     * plan ({@link TemplateFiller}): the repeating row and its set, every placeholder key, and the master cell and text
+     * of each shared formula. Rows and cells without {@code r} count on from the one before.
      */
-    private static final class SheetScan implements TemplateXml.Handler {
+    static final class SheetScan implements TemplateXml.Handler {
+
+        /** The master of a shared formula: its cell (1-based) and its text. */
+        record Master(int column, int row, String text) {
+        }
 
         private final List<String> sharedStrings;
         private final Set<TemplateRowSet> rowSets = EnumSet.noneOf(TemplateRowSet.class);
         private final StringBuilder text = new StringBuilder();
+        private final StringBuilder formula = new StringBuilder();
+        private final Set<String> keys = new LinkedHashSet<>();
+        private final List<int[]> arrays = new ArrayList<>();
+        private final Map<String, Master> shared = new HashMap<>();
         private @Nullable String cellType;
+        private @Nullable String masterSi;
         private boolean inValue;
         private boolean inInline;
         private boolean inText;
+        private boolean inFormula;
         private int phonetic;
         private int repeatingRows;
+        private int row;
+        private int column;
+        private int repeatRow;
+        private @Nullable TemplateRowSet repeatSet;
         boolean twoRowSets;
 
         SheetScan(List<String> sharedStrings) {
             this.sharedStrings = sharedStrings;
+        }
+
+        /** The repeating row (1-based), 0 when the sheet has none. */
+        int repeatRow() {
+            return repeatRow;
+        }
+
+        @Nullable TemplateRowSet repeatSet() {
+            return repeatSet;
+        }
+
+        /** Every placeholder key of the sheet, in the order first seen. */
+        Set<String> keys() {
+            return keys;
+        }
+
+        /** The shared formulas' masters by {@code si}. */
+        Map<String, Master> shared() {
+            return shared;
+        }
+
+        /** Whether an array formula's range spans the repeating row and another row. */
+        boolean arrayAcrossRow() {
+            return repeatRow > 0 && arrays.stream().anyMatch(rows -> rows[0] < rows[1] && rows[0] <= repeatRow
+                    && repeatRow <= rows[1]);
         }
 
         @Override
@@ -356,6 +416,8 @@ final class TemplateUploadChecks {
                 case XMLStreamConstants.CHARACTERS, XMLStreamConstants.CDATA, XMLStreamConstants.SPACE -> {
                     if ((inValue && "s".equals(cellType)) || (inInline && inText && phonetic == 0)) {
                         text.append(reader.getText());
+                    } else if (inFormula) {
+                        formula.append(reader.getText());
                     }
                 }
                 case XMLStreamConstants.END_ELEMENT -> end(reader.getLocalName());
@@ -365,11 +427,18 @@ final class TemplateUploadChecks {
 
         private void start(XMLStreamReader reader) {
             switch (reader.getLocalName()) {
-                case "row" -> rowSets.clear();
+                case "row" -> {
+                    rowSets.clear();
+                    row = number(reader.getAttributeValue(null, "r"), row + 1);
+                    column = 0;
+                }
                 case "c" -> {
                     cellType = reader.getAttributeValue(null, "t");
                     text.setLength(0);
+                    int[] cell = FormulaShifter.cell(String.valueOf(reader.getAttributeValue(null, "r")));
+                    column = cell == null ? column + 1 : cell[0];
                 }
+                case "f" -> formulaStart(reader);
                 case "v" -> inValue = true;
                 case "is" -> inInline = true;
                 case "t" -> inText = true;
@@ -378,17 +447,36 @@ final class TemplateUploadChecks {
             }
         }
 
+        private void formulaStart(XMLStreamReader reader) {
+            String type = reader.getAttributeValue(null, "t");
+            String ref = reader.getAttributeValue(null, "ref");
+            int[] rows = ref == null ? null : FormulaShifter.rows(ref);
+            if ("array".equals(type) && rows != null) {
+                arrays.add(rows);
+            }
+            masterSi = "shared".equals(type) && ref != null ? reader.getAttributeValue(null, "si") : null;
+            formula.setLength(0);
+            inFormula = true;
+        }
+
         private void end(String element) {
             switch (element) {
                 case "v" -> inValue = false;
                 case "is" -> inInline = false;
                 case "t" -> inText = false;
                 case "rPh" -> phonetic--;
+                case "f" -> {
+                    inFormula = false;
+                    if (masterSi != null) {
+                        shared.putIfAbsent(masterSi, new Master(column, row, formula.toString()));
+                    }
+                }
                 case "c" -> {
                     String value = cellText();
                     if (value != null) {
                         Matcher placeholder = PLACEHOLDER.matcher(value);
                         while (placeholder.find()) {
+                            keys.add(placeholder.group(1));
                             TemplateRowSet.of(placeholder.group(1)).ifPresent(rowSets::add);
                         }
                     }
@@ -397,6 +485,9 @@ final class TemplateUploadChecks {
                 case "row" -> {
                     if (rowSets.size() > 1 || (rowSets.size() == 1 && ++repeatingRows > 1)) {
                         twoRowSets = true;
+                    } else if (rowSets.size() == 1) {
+                        repeatRow = row;
+                        repeatSet = rowSets.iterator().next();
                     }
                 }
                 default -> { }
@@ -408,14 +499,18 @@ final class TemplateUploadChecks {
                 return text.toString();
             }
             if ("s".equals(cellType)) {
-                try {
-                    int index = Integer.parseInt(text.toString().strip());
-                    return index >= 0 && index < sharedStrings.size() ? sharedStrings.get(index) : null;
-                } catch (NumberFormatException e) {
-                    return null;
-                }
+                int index = number(text.toString().strip(), -1);
+                return index >= 0 && index < sharedStrings.size() ? sharedStrings.get(index) : null;
             }
             return null;
+        }
+
+        private static int number(@Nullable String text, int otherwise) {
+            try {
+                return text == null ? otherwise : Integer.parseInt(text);
+            } catch (NumberFormatException e) {
+                return otherwise;
+            }
         }
     }
 

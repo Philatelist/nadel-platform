@@ -14,6 +14,8 @@ export function TemplateRow({
   onToggleVersions,
   onUploadVersion,
   onArchive,
+  onGenerate,
+  manage = true,
   children,
 }: {
   template: ReportTemplate;
@@ -21,6 +23,10 @@ export function TemplateRow({
   onToggleVersions: () => void;
   onUploadVersion: () => void;
   onArchive: () => void;
+  /** Present for an active template the user may generate a file from. */
+  onGenerate?: () => void;
+  /** False hides upload, versions and archive (a user who may only generate files). */
+  manage?: boolean;
   children?: ReactNode;
 }) {
   const s = useT().reportTemplates;
@@ -49,15 +55,18 @@ export function TemplateRow({
         </p>
       )}
       <div className="flex flex-wrap gap-2">
-        {!archived && (
+        {!archived && onGenerate && <Button onClick={onGenerate}>{s.generate.button}</Button>}
+        {manage && !archived && (
           <Button variant="secondary" onClick={onUploadVersion}>
             {s.uploadVersion}
           </Button>
         )}
-        <Button variant="secondary" aria-expanded={versionsOpen} onClick={onToggleVersions}>
-          {versionsOpen ? s.hideVersions : s.versions}
-        </Button>
-        {!archived && (
+        {manage && (
+          <Button variant="secondary" aria-expanded={versionsOpen} onClick={onToggleVersions}>
+            {versionsOpen ? s.hideVersions : s.versions}
+          </Button>
+        )}
+        {manage && !archived && (
           <Button variant="danger" onClick={onArchive}>
             {s.archive}
           </Button>

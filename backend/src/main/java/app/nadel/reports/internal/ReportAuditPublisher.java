@@ -5,6 +5,7 @@ import app.nadel.audit.AuditEvent;
 import app.nadel.audit.FieldChange;
 import app.nadel.identity.AccessProfile;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -30,8 +31,11 @@ import tools.jackson.databind.json.JsonMapper;
  * A template entry is about the template (entity type {@code REPORT_TEMPLATE}, entity id the template id, label its
  * name as entered): {@code REPORT_TEMPLATE_UPLOADED} for a new template and for a new version, with the new values
  * {@code version} (the version number) and {@code fileName} (the stored file name as uploaded); and
- * {@code REPORT_TEMPLATE_ARCHIVED} with {@code version} (the latest version number). Never the file's contents. Each
- * is published last in the transaction that stores the change.
+ * {@code REPORT_TEMPLATE_ARCHIVED} with {@code version} (the latest version number). A file generated from a template is
+ * {@code REPORT_GENERATED} about the template, with {@code template} (the id), {@code version}, {@code filters} (as for
+ * a report, the params {@code from} and {@code to}), {@code rows} (the rows written for row sets), {@code personalData}
+ * ({@code false}: no placeholder names a person) and {@code output} ({@code XLSX}). Never the file's contents. Each is
+ * published last in the transaction that stores the change or makes the file.
  */
 @Component
 class ReportAuditPublisher {
@@ -86,6 +90,27 @@ class ReportAuditPublisher {
     void templateArchived(AccessProfile caller, UUID templateId, String name, int latestVersionNo) {
         publishTemplate(caller, TEMPLATE_ARCHIVED, templateId, name, List.of(
                 new FieldChange("version", null, Integer.toString(latestVersionNo))));
+    }
+
+    /** A file was generated from the version of the template for the period. */
+    void templateGenerated(AccessProfile caller, UUID templateId, String name, int versionNo, LocalDate from,
+            LocalDate to, int rows) {
+        publishTemplate(caller, ACTION, templateId, name, List.of(
+                new FieldChange("template", null, templateId.toString()),
+                new FieldChange("version", null, Integer.toString(versionNo)),
+                new FieldChange("filters", null, json.writeValueAsString(List.of(filter("from", from.toString()),
+                        filter("to", to.toString())))),
+                new FieldChange("rows", null, Integer.toString(rows)),
+                new FieldChange("personalData", null, Boolean.toString(false)),
+                new FieldChange("output", null, Output.XLSX.name())));
+    }
+
+    /** One filter as the audit entry lists it, {@code param} first. */
+    private static Map<String, String> filter(String param, String value) {
+        Map<String, String> entry = new LinkedHashMap<>();
+        entry.put("param", param);
+        entry.put("value", value);
+        return entry;
     }
 
     private void publishTemplate(AccessProfile caller, String action, UUID templateId, String name,

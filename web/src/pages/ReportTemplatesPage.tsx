@@ -12,6 +12,8 @@ import { useState } from 'react';
 import { Link } from 'react-router';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { QueryBoundary } from '../components/QueryBoundary';
+import { FieldCatalog } from '../components/reportTemplates/FieldCatalog';
+import { GenerateDialog } from '../components/reportTemplates/GenerateDialog';
 import { TaxSlotEmpty } from '../components/reportTemplates/TaxSlotCard';
 import { TemplateRow } from '../components/reportTemplates/TemplateList';
 import { TemplateUploadForm, type UploadTarget } from '../components/reportTemplates/TemplateUploadForm';
@@ -37,6 +39,7 @@ export function ReportTemplatesPage() {
   const [uploaded, setUploaded] = useState<ReportTemplateUploadResult | null>(null);
   const [openVersions, setOpenVersions] = useState<ReadonlySet<string>>(new Set());
   const [archiving, setArchiving] = useState<ReportTemplate | null>(null);
+  const [generating, setGenerating] = useState<ReportTemplate | null>(null);
 
   const archive = useMutation({
     mutationFn: (id: string) => archiveReportTemplate(id),
@@ -88,6 +91,7 @@ export function ReportTemplatesPage() {
         versionsOpen={openVersions.has(id)}
         onToggleVersions={() => toggleVersions(id)}
         onUploadVersion={() => show({ kind: 'version', id })}
+        onGenerate={() => setGenerating(template)}
         onArchive={() => {
           archive.reset();
           setArchiving(template);
@@ -148,6 +152,13 @@ export function ReportTemplatesPage() {
           );
         }}
       </QueryBoundary>
+      <FieldCatalog />
+      {generating?.id !== undefined && (
+        <GenerateDialog
+          template={{ id: generating.id, name: generating.name ?? '' }}
+          onClose={() => setGenerating(null)}
+        />
+      )}
       {archiving?.id !== undefined && (
         <ConfirmDialog
           title={s.archiveTitle}

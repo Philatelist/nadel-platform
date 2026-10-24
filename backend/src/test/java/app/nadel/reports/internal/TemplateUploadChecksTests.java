@@ -13,7 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import nadel.contract.model.ReportTemplateUploadWarning;
+import nadel.contract.model.ReportTemplateWarningCode;
 import org.dhatim.fastexcel.reader.ReadableWorkbook;
 import org.dhatim.fastexcel.reader.Row;
 import org.junit.jupiter.api.Test;
@@ -218,6 +218,28 @@ class TemplateUploadChecksTests {
     }
 
     @Test
+    void anArrayFormulaAcrossTheRepeatingRowIsRefusedAndOneOnItOrBesideItIsFine() {
+        // valid(): the repeating row is 3, the totals row 4 (B4 = SUM(B3:B3))
+        byte[] across = TemplateFiles.withText(TemplateFiles.valid(), TemplateFiles.SHEET, sheet -> sheet.replace(
+                "<f>SUM(B3:B3)</f>", "<f t=\"array\" ref=\"B3:B4\">B3:B3*2</f>"));
+        assertInvalid("statement.xlsx", across, ProblemCodes.ARRAY_ACROSS_ROW);
+        byte[] fromAbove = TemplateFiles.withText(TemplateFiles.valid(), TemplateFiles.SHEET, sheet -> sheet.replace(
+                "<f>SUM(B3:B3)</f>", "<f t=\"array\" ref=\"C1:C3\">A1:A3</f>"));
+        assertInvalid("statement.xlsx", fromAbove, ProblemCodes.ARRAY_ACROSS_ROW);
+
+        for (String ref : List.of("C3", "C3:D3", "C4:C9", "C1:C2")) {
+            byte[] fine = TemplateFiles.withText(TemplateFiles.valid(), TemplateFiles.SHEET, sheet -> sheet.replace(
+                    "<f>SUM(B3:B3)</f>", "<f t=\"array\" ref=\"" + ref + "\">B3*2</f>"));
+            assertThat(checks.check("statement.xlsx", fine).warnings()).as(ref).isEmpty();
+        }
+        // without a repeating row an array may span any rows
+        byte[] noRepeat = TemplateFiles.withInlineRows(new String[] {"${period.year}"});
+        byte[] spanning = TemplateFiles.withText(noRepeat, TemplateFiles.SHEET, sheet -> sheet.replace("</row>",
+                "<c r=\"B1\"><f t=\"array\" ref=\"B1:B9\">A1:A9</f></c></row>"));
+        assertThat(checks.check("statement.xlsx", spanning).warnings()).isEmpty();
+    }
+
+    @Test
     void sharedStringsAreReadForTheRowSetsIncludingRichText() {
         byte[] twoInSharedStrings = TemplateFiles.workbook(sheet -> {
             sheet.value(0, 0, "${rows.plots.number}");
@@ -247,7 +269,7 @@ class TemplateUploadChecksTests {
 
         TemplateUploadChecks.Checked checked = checks.check("linked.xlsx", linked);
 
-        assertThat(checked.warnings()).containsExactly(ReportTemplateUploadWarning.EXTERNAL_LINKS_REMOVED);
+        assertThat(checked.warnings()).containsExactly(ReportTemplateWarningCode.EXTERNAL_LINKS_REMOVED);
         assertThat(checked.content()).isNotEqualTo(linked);
         assertThat(checked.sha256()).isEqualTo(TemplateUploadChecks.sha256(checked.content()));
         Map<String, byte[]> parts = TemplateFiles.parts(checked.content());
@@ -316,7 +338,7 @@ class TemplateUploadChecksTests {
 
         TemplateUploadChecks.Checked checked = checks.check("linked.xlsx", linked);
 
-        assertThat(checked.warnings()).containsExactly(ReportTemplateUploadWarning.EXTERNAL_LINKS_REMOVED);
+        assertThat(checked.warnings()).containsExactly(ReportTemplateWarningCode.EXTERNAL_LINKS_REMOVED);
         Map<String, byte[]> parts = TemplateFiles.parts(checked.content());
         String rels = TemplateFiles.text(parts.get(TemplateFiles.WORKBOOK_RELS));
         assertThat(rels).doesNotContain("externalLink").doesNotContain("connections")

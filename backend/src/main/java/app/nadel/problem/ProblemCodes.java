@@ -152,7 +152,7 @@ public final class ProblemCodes {
     /**
      * 400: the uploaded file is not a usable report template; {@code errors[]} has one entry on {@code file} whose code
      * names why ({@link #NOT_XLSX}, {@link #MACROS}, {@link #ACTIVE_CONTENT}, {@link #BROKEN_ZIP},
-     * {@link #UNPACKED_TOO_LARGE}, {@link #TWO_ROW_SETS}).
+     * {@link #UNPACKED_TOO_LARGE}, {@link #TWO_ROW_SETS}, {@link #ARRAY_ACROSS_ROW}).
      */
     public static final String TEMPLATE_INVALID = "TEMPLATE_INVALID";
     /** 422: the template file is over 2 MB; checked before the file is read. */
@@ -176,6 +176,7 @@ public final class ProblemCodes {
     public static final String BROKEN_ZIP = "BROKEN_ZIP";
     public static final String UNPACKED_TOO_LARGE = "UNPACKED_TOO_LARGE";
     public static final String TWO_ROW_SETS = "TWO_ROW_SETS";
+    public static final String ARRAY_ACROSS_ROW = "ARRAY_ACROSS_ROW";
 
     /** Codes of single fields in {@code errors[]}. */
     public static final String REQUIRED = "REQUIRED";

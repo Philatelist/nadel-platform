@@ -4,6 +4,7 @@ import app.nadel.identity.CurrentUser;
 import app.nadel.problem.FieldProblem;
 import app.nadel.problem.ProblemCodes;
 import app.nadel.problem.ProblemWriter;
+import jakarta.servlet.http.HttpServletRequest;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -11,6 +12,8 @@ import java.util.UUID;
 import nadel.contract.api.ReportTemplatesApi;
 import nadel.contract.model.Problem;
 import nadel.contract.model.ReportTemplate;
+import nadel.contract.model.ReportTemplateField;
+import nadel.contract.model.ReportTemplateGenerateRequest;
 import nadel.contract.model.ReportTemplateSlot;
 import nadel.contract.model.ReportTemplateUploadResult;
 import nadel.contract.model.ReportTemplateVersion;
@@ -30,10 +33,11 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
 
 /**
- * Endpoints of the report templates (feature 013, functional spec 2.11 and 2.12). The list needs {@code REPORTS_VIEW}
- * or {@code REPORT_TEMPLATES_MANAGE}; uploading, versions, archiving and downloading a version need
- * {@code REPORT_TEMPLATES_MANAGE}. The platform operator holds no cooperative permission and is refused with 403. The
- * permission is checked before anything else, also before the file is read. The work is {@link ReportTemplateService}.
+ * Endpoints of the report templates (feature 013, functional spec 2.11 and 2.12). The list and the field catalog need
+ * {@code REPORTS_VIEW} or {@code REPORT_TEMPLATES_MANAGE}; generating needs {@code REPORTS_VIEW}; uploading, versions,
+ * archiving and downloading a version need {@code REPORT_TEMPLATES_MANAGE}. The platform operator holds no cooperative
+ * permission and is refused with 403. The permission is checked before anything else, also before the file is read.
+ * The work is {@link ReportTemplateService}.
  * <p>
  * A missing form field ({@code file}, {@code name}) is 400 {@code VALIDATION_FAILED} with the field and
  * {@code REQUIRED}, as the contract of these operations says (elsewhere a missing part is {@code MALFORMED_REQUEST}).
@@ -45,12 +49,22 @@ class ReportTemplatesController implements ReportTemplatesApi {
     static final MediaType XLSX = MediaType.parseMediaType(
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
 
+    /** The number of warnings of a generated file. */
+    static final String WARNINGS = "X-Report-Warnings";
+    /** The first warnings of a generated file, base64url JSON. */
+    static final String WARNINGS_DETAIL = "X-Report-Warnings-Detail";
+
     private final CurrentUser currentUser;
     private final ReportTemplateService service;
+    private final TemplateGenerator generator;
+    private final HttpServletRequest servletRequest;
 
-    ReportTemplatesController(CurrentUser currentUser, ReportTemplateService service) {
+    ReportTemplatesController(CurrentUser currentUser, ReportTemplateService service, TemplateGenerator generator,
+            HttpServletRequest servletRequest) {
         this.currentUser = currentUser;
         this.service = service;
+        this.generator = generator;
+        this.servletRequest = servletRequest;
     }
 
     @Override
@@ -96,6 +110,37 @@ class ReportTemplatesController implements ReportTemplatesApi {
                 .contentLength(file.content().length)
                 .header(HttpHeaders.CONTENT_DISPOSITION, contentDisposition(file.fileName()))
                 .body(new ByteArrayResource(file.content()));
+    }
+
+    @Override
+    @PreAuthorize("hasAnyAuthority('PERM_REPORTS_VIEW', 'PERM_REPORT_TEMPLATES_MANAGE')")
+    public ResponseEntity<List<ReportTemplateField>> getReportTemplateCatalog() {
+        return ResponseEntity.ok(service.catalog());
+    }
+
+    /**
+     * The filled workbook ({@link TemplateGenerator}) with {@code X-Report-Warnings} (the count) and, when there are
+     * warnings, {@code X-Report-Warnings-Detail}. The generated interface validates the body ({@code @Valid}) before
+     * the permission is checked, so a malformed body is 400 for every caller with a token; a well-formed one is checked
+     * for the permission first (403), then for the period.
+     */
+    @Override
+    @PreAuthorize("hasAuthority('PERM_REPORTS_VIEW')")
+    public ResponseEntity<Resource> generateReportTemplate(UUID id, ReportTemplateGenerateRequest request) {
+        ReportLanguage language = ReportLanguage.resolve(request.getLang() == null ? null
+                : request.getLang().getValue(), servletRequest.getHeader(HttpHeaders.ACCEPT_LANGUAGE));
+        TemplateGenerator.Generated file = generator.generate(id, request.getFrom(), request.getTo(), language);
+        ResponseEntity.BodyBuilder response = ResponseEntity.ok()
+                .contentType(XLSX)
+                .contentLength(file.content().length)
+                .varyBy(HttpHeaders.ACCEPT_LANGUAGE)
+                .header(HttpHeaders.CONTENT_DISPOSITION, contentDisposition(file.fileName()))
+                .header(WARNINGS, Integer.toString(file.warnings().size()));
+        String detail = generator.detail(file.warnings());
+        if (detail != null) {
+            response.header(WARNINGS_DETAIL, detail);
+        }
+        return response.body(new ByteArrayResource(file.content()));
     }
 
     @ExceptionHandler(MissingServletRequestPartException.class)

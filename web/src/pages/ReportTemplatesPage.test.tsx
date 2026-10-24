@@ -27,6 +27,7 @@ vi.mock('@nadel/api-client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@nadel/api-client')>()),
   useListReportTemplates: () => queryResult(templates),
   useListReportTemplateVersions: () => queryResult(versions),
+  useGetReportTemplateCatalog: () => queryResult([]),
   uploadReportTemplate: (...args: unknown[]) => uploadReportTemplate(...args),
   uploadReportTemplateVersion: (...args: unknown[]) => uploadReportTemplateVersion(...args),
   archiveReportTemplate: (...args: unknown[]) => archiveReportTemplate(...args),
@@ -256,5 +257,13 @@ describe('ReportTemplatesPage', () => {
     permissions = ['REPORTS_VIEW'];
     renderPage();
     expect(screen.queryByRole('heading', { level: 1, name: 'Report templates' })).not.toBeInTheDocument();
+  });
+
+  it('offers Generate on active templates only and shows the placeholder catalog', () => {
+    renderPage();
+    const items = within(screen.getByRole('list', { name: 'Other templates' })).getAllByRole('listitem');
+    expect(within(items[0]!).getByRole('button', { name: 'Generate' })).toBeInTheDocument();
+    expect(within(items[1]!).queryByRole('button', { name: 'Generate' })).not.toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Placeholders' })).toBeInTheDocument();
   });
 });

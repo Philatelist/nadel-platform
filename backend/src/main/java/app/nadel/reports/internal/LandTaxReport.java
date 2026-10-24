@@ -76,13 +76,33 @@ class LandTaxReport implements ReportDefinition {
         return FILTERS;
     }
 
-    @Override
-    public ReportResult load(ReportFilters filters, ReportContext context) {
-        int year = filters.year();
+    /** A plot of the sheet: what the land tax is expected to charge it for the year and what was charged. */
+    record PlotLandTax(PlotFacts plot, YearExpectation expectation, Money charged) {
+    }
+
+    /**
+     * The plots of the sheet for the year, natural order of the number: the active plots without common land that the
+     * land tax charges on some day of the year. The rows of this report and the land tax of the template row set
+     * {@code plots} and totals ({@link TemplateValues}).
+     */
+    List<PlotLandTax> plots(int year) {
         List<PlotFacts> active = plots.findActive(null);
         Map<UUID, YearExpectation> expected = expectedAmounts.yearByVersion(LAND_TAX, year,
                 active.stream().map(PlotFacts::id).toList());
         Map<UUID, Money> charged = ledger.chargedInYear(LAND_TAX, year, List.copyOf(expected.keySet()));
+        List<PlotLandTax> result = new ArrayList<>();
+        for (PlotFacts plot : active) {
+            YearExpectation expectation = expected.get(plot.id());
+            if (expectation != null) {
+                result.add(new PlotLandTax(plot, expectation, charged.getOrDefault(plot.id(), Money.ZERO)));
+            }
+        }
+        return result;
+    }
+
+    @Override
+    public ReportResult load(ReportFilters filters, ReportContext context) {
+        int year = filters.year();
 
         List<Column> columns = List.of(
                 Column.of("number", ReportColumnType.TEXT),
@@ -99,12 +119,10 @@ class LandTaxReport implements ReportDefinition {
 
         List<Row> rows = new ArrayList<>();
         int marked = 0;
-        for (PlotFacts plot : active) {
-            YearExpectation expectation = expected.get(plot.id());
-            if (expectation == null) {
-                continue;
-            }
-            Money chargedForYear = charged.getOrDefault(plot.id(), Money.ZERO);
+        for (PlotLandTax landTax : plots(year)) {
+            PlotFacts plot = landTax.plot();
+            YearExpectation expectation = landTax.expectation();
+            Money chargedForYear = landTax.charged();
             boolean mismatch = !expectation.total().equals(chargedForYear);
             if (mismatch) {
                 marked++;

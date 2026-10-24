@@ -25,6 +25,7 @@ import java.util.UUID;
 import nadel.contract.model.ReportCode;
 import nadel.contract.model.ReportColumnType;
 import nadel.contract.model.ReportNoteCode;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 
 /**
@@ -74,19 +75,42 @@ class PlotBalancesReport implements ReportDefinition {
         return FILTERS;
     }
 
+    /**
+     * One active plot on the day: the plot, its number of current owners, its debts of the chosen types and its status
+     * over every type (null only if the status cache has no row for it).
+     */
+    record Balance(PlotFacts plot, int owners, PlotDebts debts, @Nullable PlotStatus status) {
+    }
+
+    /**
+     * The balances of every active plot that is not common land on {@code asOf}, natural order of the number, before
+     * the status filter: the rows of this report and of the template row set {@code plots} ({@link TemplateValues}).
+     *
+     * @param chargeTypeIds the types the debts count; empty means every type (the status always counts every type)
+     * @param typesLeftOut  true when {@code chargeTypeIds} leaves out some type of the cooperative
+     */
+    List<Balance> balances(LocalDate asOf, List<UUID> chargeTypeIds, boolean typesLeftOut, @Nullable String street,
+            ReportContext context) {
+        boolean today = asOf.equals(context.today());
+        List<PlotFacts> active = plots.findActive(street);
+        List<UUID> ids = active.stream().map(PlotFacts::id).toList();
+        Map<UUID, PlotDebts> debts = ledger.debtsAsOf(asOf, new LinkedHashSet<>(chargeTypeIds), ids);
+        Map<UUID, PlotStatus> status = today ? statuses.current(ids)
+                : statuses.classify(statusDebts(typesLeftOut ? ledger.debtsAsOf(asOf, Set.of(), ids) : debts),
+                        asOf);
+        Map<UUID, Integer> ownerCounts = owners.ownerCounts(ids);
+        return active.stream().map(plot -> new Balance(plot, ownerCounts.getOrDefault(plot.id(), 0),
+                debts.getOrDefault(plot.id(), PlotDebts.none(plot.id())), status.get(plot.id()))).toList();
+    }
+
     @Override
     public ReportResult load(ReportFilters filters, ReportContext context) {
         LocalDate asOf = filters.asOf();
         boolean today = asOf.equals(context.today());
         boolean typesLeftOut = DebtColumns.someTypesLeftOut(filters, context);
-        List<PlotFacts> active = plots.findActive(filters.street());
-        List<UUID> ids = active.stream().map(PlotFacts::id).toList();
-        Map<UUID, PlotDebts> debts = ledger.debtsAsOf(asOf, new LinkedHashSet<>(filters.chargeTypeIds()), ids);
-        Map<UUID, PlotStatus> status = today ? statuses.current(ids)
-                : statuses.classify(statusDebts(typesLeftOut ? ledger.debtsAsOf(asOf, Set.of(), ids) : debts),
-                        asOf);
-        Map<UUID, Integer> ownerCounts = owners.ownerCounts(ids);
-        List<ChargeTypeFacts> types = DebtColumns.types(filters, context, debts.values());
+        List<Balance> balances = balances(asOf, filters.chargeTypeIds(), typesLeftOut, filters.street(), context);
+        List<ChargeTypeFacts> types = DebtColumns.types(filters, context,
+                balances.stream().map(Balance::debts).toList());
 
         List<Column> columns = new ArrayList<>();
         columns.add(Column.of("number", ReportColumnType.TEXT));
@@ -99,16 +123,17 @@ class PlotBalancesReport implements ReportDefinition {
         columns.add(Column.codes("status", "reports.filters.options.statuses"));
 
         List<Row> rows = new ArrayList<>();
-        for (PlotFacts plot : active) {
-            PlotStatus plotStatus = status.get(plot.id());
+        for (Balance balance : balances) {
+            PlotStatus plotStatus = balance.status();
             if (!filters.statuses().isEmpty() && !filters.statuses().contains(plotStatus)) {
                 continue;
             }
-            PlotDebts debt = debts.getOrDefault(plot.id(), PlotDebts.none(plot.id()));
+            PlotFacts plot = balance.plot();
+            PlotDebts debt = balance.debts();
             List<Cell> cells = new ArrayList<>();
             cells.add(Cell.of(plot.number()));
             cells.add(Cell.of(plot.street()));
-            cells.add(Cell.of(ownerCounts.getOrDefault(plot.id(), 0)));
+            cells.add(Cell.of(balance.owners()));
             cells.addAll(DebtColumns.cells(types, debt));
             cells.add(Cell.of(debt.total()));
             cells.add(Cell.of(debt.oldestUnpaid()));

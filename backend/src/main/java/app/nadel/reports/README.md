@@ -2,7 +2,8 @@
 
 Built-in reports over what the app has booked: charges by month, plot balances, debtors, electricity by the meter tree,
 water, missing readings, land tax and corrections. Each is shown as an on-screen preview and downloaded as an Excel
-file. Report templates are stored, versioned and archived here; generating from them follows. Requirements:
+file. Report templates are stored, versioned and archived here, with the field catalog, the values a template is
+filled with and the filler (ADR 0015). Requirements:
 `docs/features/013-reports.md`; specs: `context/spec/013-reports/`.
 
 The module adds no money rule. It reads only through the public read facades that the owning modules publish
@@ -39,11 +40,13 @@ the cooperative.
 | `POST /report-templates/{id}/versions` | `uploadReportTemplateVersion` | `REPORT_TEMPLATES_MANAGE`; multipart `file`; 201 with the next version; archived is 409 `TEMPLATE_ARCHIVED` |
 | `POST /report-templates/{id}/archive` | `archiveReportTemplate` | `REPORT_TEMPLATES_MANAGE`; 200, idempotent (archiving again changes nothing and writes no audit entry) |
 | `GET /report-templates/{id}/versions/{versionId}/file` | `downloadReportTemplateVersion` | `REPORT_TEMPLATES_MANAGE`; the stored `.xlsx`, also of an archived template |
+| `GET /report-templates/catalog` | `getReportTemplateCatalog` | `REPORTS_VIEW` or `REPORT_TEMPLATES_MANAGE`; the field catalog (below) |
+| `POST /report-templates/{id}/generate` | `generateReportTemplate` | `REPORTS_VIEW`; body `{from, to, lang}`; the filled `.xlsx` of the latest version with `X-Report-Warnings` and `X-Report-Warnings-Detail` (section "Template filler") |
 
 Upload refusals (nothing stored): 400 `VALIDATION_FAILED` (form fields), 422 `TEMPLATE_TOO_LARGE` (over 2 MB, checked
 before the file is read; 422 like `REPORT_TOO_LARGE`, while a request over the 10 MB multipart limit stays 413
 `FILE_TOO_LARGE`), 400 `TEMPLATE_INVALID` with one `errors[{field: file, code}]` (`NOT_XLSX`, `MACROS`,
-`ACTIVE_CONTENT`, `BROKEN_ZIP`, `UNPACKED_TOO_LARGE`, `TWO_ROW_SETS`), 409 `TEMPLATE_NAME_TAKEN` (`errors[{field:
+`ACTIVE_CONTENT`, `BROKEN_ZIP`, `UNPACKED_TOO_LARGE`, `TWO_ROW_SETS`, `ARRAY_ACROSS_ROW`), 409 `TEMPLATE_NAME_TAKEN` (`errors[{field:
 name}]`) and 409 `TEMPLATE_SLOT_TAKEN` (`errors[{field: slot}]`). Links to other workbooks and data connections are
 removed and reported as the warning `EXTERNAL_LINKS_REMOVED`. `ReportTemplatesController` checks the permission with
 `@PreAuthorize` on every operation before the file is read (`ReportTemplatesAccessTests`). A missing `file` or `name`
@@ -60,8 +63,10 @@ key's backstop) is 409 `TEMPLATE_VERSION_CONFLICT`.
 | `TemplateVersionRow`, `TemplateFile` | Projections: a version without its file (every list), and the file name with the bytes (the download only) |
 | `ReportTemplateRepository`, `ReportTemplateVersionRepository` | Queries that name the cooperative on top of RLS. The version repository is a plain `Repository` without `findAll`/`findById`, so nothing can load a version entity with its file by accident |
 | `TemplateUploadChecks`, `TemplateXml`, `ExternalLinkStripper`, `TemplateRowSet` | Upload checks (below), the safe StAX reader, link stripping and the row sets `plots`, `months`, `meters`, `water` |
-| `ReportTemplateService` | List, upload, new version, versions, archive, download |
-| `ReportTemplatesController` | The six endpoints, generated `ReportTemplatesApi` |
+| `ReportTemplateService` | List, upload, new version, versions, archive, download, the field catalog |
+| `ReportTemplatesController` | The endpoints, generated `ReportTemplatesApi` |
+| `TemplateField`, `TemplateValue`, `TemplateValues` | The field catalog, one placeholder's value, the values of one fill (sections below) |
+| `TemplateGenerator`, `TemplateFiller`, `SheetFiller`, `XmlTree`, `FormulaShifter` | Generating a file: the transaction and the audit entry, the filler, the rewrite of one sheet, the small XML trees and the streaming copy, the A1 reference shifter (section "Template filler") |
 
 - **Cooperative** from the caller's profile (the token), never from the request.
 - **Transactions**: the file is checked before any transaction (no database needed, no row lock held while parsing);
@@ -120,6 +125,8 @@ In this order; the first that fails answers and nothing is stored:
    runs joined, phonetic runs left out) and inline strings of every `xl/worksheets/*.xml`; a row with placeholders of two
    row sets (`rows.<set>.` of `plots`, `months`, `meters`, `water`), or a sheet with two rows of row-set placeholders, is
    refused. Unknown sets and single values are not refused (the filler leaves an unknown placeholder visible and warns).
+   `ARRAY_ACROSS_ROW`: an array formula (`<f t="array" ref>`) whose range spans the repeating row and another row
+   (Excel refuses to insert rows inside an array); one lying only on the repeating row is copied per copy.
 10. Links (`ExternalLinkStripper`): `xl/externalLinks/*` (with their relationships), `xl/connections.xml` and
     `xl/queryTables/*` are dropped; in every other `.rels` part the relationships that point at a dropped part or have
     the type `externalLink`, `connections` or `queryTable` are removed, as are `<externalReferences>` in
@@ -144,9 +151,180 @@ number), once. Never the file. Published last in the transaction that stores the
 file opening with fastexcel-reader, target resolution, file names), `ReportTemplatesTests` (HTTP in a throw-away
 cooperative: versions and byte-identical downloads, list order, the tax slot, names, form validation, every refusal
 storing nothing, links removed, the archive, audit entries, another cooperative, unknown ids, lists loading no file),
-`ReportTemplatesAccessTests` (401/403 per endpoint). `TemplateFiles` builds the test workbooks with fastexcel and
-hand-made zips. Deferred to slice 9: generation from a template (`POST /report-templates/{id}/generate`, the filler,
-the field catalog).
+`ReportTemplatesAccessTests` (401/403 per endpoint, the catalog and generating open to the treasurer, 200 on a stored
+template for the chairman and the treasurer). `TemplateFiles` builds the test workbooks with fastexcel and hand-made
+zips; `SampleTemplates` builds the sample "land tax statement" (also written to `target/sample-templates/` by
+`TemplateFillerTests` for a look in Excel and for the demo data).
+
+## Field catalog (`TemplateField`, feature 013 §4.1 and §4.2)
+
+`GET /report-templates/catalog` lists every placeholder `${key}` the app fills, in the order of the enum, each with its
+`type` (`ReportTemplateFieldType`: `TEXT`, `NUMBER`, `MONEY`, `QUANTITY`, `INT`, `DATE`, `MONTH`, `DATE_TIME`), its
+`rowSet` (absent for a single value), a language-neutral `example` (absent for text that depends on the language or on
+what the cooperative entered) and the `permission` (`REPORTS_VIEW` for every one). The server returns codes only: the
+description is `reportTemplates.fields.<field>` in the web catalogs, a nested path. `field` is the key itself for a
+fixed placeholder; the two families that depend on the charge types, `totals.charged.<type>` and
+`rows.plots.debt.<type>`, have the description codes `totals.charged.byChargeType` and `rows.plots.debt.byChargeType`
+(texts with `{chargeType}`, which the client fills with the type's name; `byChargeType` is lower case, so it never
+meets a code or an id). They are listed once per charge type of the cooperative, archived ones included, in the
+configured order, with `pattern` and `chargeTypeId`; `<type>` is the code of a seeded type and the id of a custom one,
+and a template may also name a seeded type by its id (`TemplateField.resolve`). A key the app does not know (not in the
+catalog, a type the cooperative lacks) resolves to nothing: the filler leaves it in place with `UNKNOWN_PLACEHOLDER`.
+
+| Group | Keys |
+|---|---|
+| Cooperative | `cooperative.name`, `cooperative.officialName`, `cooperative.edrpou`, `cooperative.address` (legal address), `cooperative.bankName`, `cooperative.iban` |
+| Period and file | `period.from`, `period.to`, `period.year`, `generatedAt`, `generatedBy` |
+| Totals | `totals.landTax.expected`, `totals.landTax.charged`, `totals.charged.<type>`, `totals.debt`, `totals.plots.count`, `totals.plots.areaSotka` |
+| `plots` | `rows.plots.number`, `.street`, `.area` (m²), `.areaSotka`, `.ownersCount`, `.debt.total`, `.debt.<type>`, `.status`, `.oldestUnpaid`, `.daysOverdue`, `.landTax.rate`, `.landTax.expected`, `.landTax.charged` |
+| `months` | `rows.months.month`, `.status`, `.regular`, `.opening`, `.reversals`, `.adjustments`, `.effective` |
+| `meters` | `rows.meters.level`, `.name`, `.serial`, `.kind`, `.startValue`, `.endValue`, `.consumption`, `.childrenConsumption`, `.lossesKwh`, `.lossesPercent`, `.plotsFed` |
+| `water` | `rows.water.number`, `.street`, `.source`, `.connectedDays`, `.serial`, `.cubicMetres`, `.total` |
+
+No name, phone or e-mail of a person is a placeholder (spec 4.2): the plots carry the number of owners, never who they
+are. `generatedBy` is the person making the file, as in the header block of every report file.
+
+## Template values (`TemplateValues`)
+
+`TemplateValues.resolver(from, to, language, generatedBy, generatedAt)`, inside the caller's transaction, gives
+`single(key)` (a `TemplateValue`, or empty for an unknown key; a row set's key is filled per row) and `rows(set)` (per
+row the value of every placeholder of the set by key; the families under the code and under the id). A `TemplateValue`
+is a typed value, empty (written empty, no warning) or not known with a `ReportTemplateValueReason` (written empty and
+listed as `VALUE_UNKNOWN`, never `0`). Everything is read when first asked for and kept for the fill. No money rule is
+added: the values are the read models of the built-in reports (the same beans: `PlotBalancesReport.balances`,
+`LandTaxReport.plots`, `ChargesByMonthReport.load`, `ElectricityTreeReport.consumption`, `WaterReport.load`) and one
+ledger facade, and every total is a `Money` sum of the rows it stands for. The period, `from` to `to` (both included,
+Kyiv days), means:
+
+- `period.from`, `period.to`: the days; `period.year`: the year of `to`. `generatedAt`: when the fill started, Kyiv
+  wall time to the second (`DATE_TIME`); `generatedBy`: the caller's display name.
+- `cooperative.*`: name and ЄДРПОУ from `tenancy.TenantDirectory`, the requisites from `settings.Requisites`; one that
+  is not entered is not known (`NOT_SET`), so the warnings tell the chairman to fill it in.
+- `totals.debt`, `totals.plots.count`, `totals.plots.areaSotka` and the row set `plots`: the plot balances of every
+  active plot without common land, every charge type, as of `to`, or as of today when `to` is later (there is no
+  balance of a day to come). The debt is the sum of the plots' debts (the plot balances report's total for that day),
+  the area the sum of `tariffs.ChargeCalculator.sotkas` of their areas (exact). Statuses as on that report (the map's
+  status today, worked out with today's thresholds for a past day), written in the file's language.
+- `totals.landTax.*` and `rows.plots.landTax.*`: the land tax report for the year of `to`: its totals; per plot the
+  expected and charged amounts and the rate when one rate charged it all year (`SEVERAL_RATES` otherwise); a plot the
+  land tax does not charge in that year has these cells empty.
+- `totals.charged.<type>`: `ledger.LedgerReadModel.chargedByType(from, to)`, the effective amount (charges, reversals
+  and adjustments, without opening balances) of the type's charges whose first service day lies in the period, booked
+  whenever, on every plot: the land tax report's year rule over any range of days. A type without such charges is
+  `0.00`.
+- `months`: per billing month from the month of `from` to the month of `to` that has charges, the cooperative's
+  totals of the month: the subtotal rows of the charges by month report's sheet by billing month.
+- `meters`: the consumption sheet of the electricity report for the service days (in the order of the tree, `level`
+  its depth); a value without a reading and everything worked out from it stay not known with their reasons.
+- `water`: the main sheet of the water report for the service days, every source and street.
+
+A row set of more than the reports' row cap (20 000) is 422 `REPORT_TOO_LARGE`. Texts of codes (statuses, meter
+kinds, water sources, month statuses) come from the report bundles in the file's language. The bundles also hold the
+catalog's descriptions (`reportTemplates.fields.*`, so `TemplateFieldTests` checks every field has both texts and the
+web test checks they equal the catalogs), the warnings (`reportTemplates.warnings.<ReportTemplateWarningCode>`, the
+same texts the upload uses), the reasons (`reportTemplates.valueReasons.*`) and the warnings sheet
+(`reportTemplates.warningsSheet.name` and `.columns.*`).
+
+Tests: `TemplateFieldTests` (unique and well-formed keys, no personal data, row sets by prefix, examples in the format
+of their type, the families by code and id, resolving, descriptions and warning texts in both languages),
+`TemplateCatalogTests` (the endpoint with a custom and an archived charge type, who may read it), `TemplateValuesTests`
+(a worked ledger, requisites, land tax, water and a tree with an unknown quarter: the single values, every total and
+row set equal to the built-in report of the same period through the API, an unknown value, two rates, the as-of day,
+the row cap), `ledger.LedgerChargedInYearTests` (`chargedByType`).
+
+## Template filler (`TemplateFiller`, ADR 0015)
+
+`POST /report-templates/{id}/generate` with `{from, to, lang}`: `TemplateGenerator.generate`, one plain
+`@Transactional` (the value facades are `MANDATORY`; the outbox stores the audit publication). In order: the period
+(`to` before `from`, or `to` on or after the same day a year later: 400 `REPORT_FILTER_INVALID` with
+`errors[{field: to, code: INVALID}]`), the template of the caller's cooperative (404 for an unknown one or one of another
+cooperative, 409 `TEMPLATE_ARCHIVED`), its latest version's file, the values (`TemplateValues.resolver`, the caller's
+display name, now), the fill, and **last** the audit event: `REPORT_GENERATED`, entity type `REPORT_TEMPLATE`, entity
+id the template, label its name, fields `template` (id), `version`, `filters` (`[{param: from}, {param: to}]`), `rows`
+(rows written for row sets), `personalData` (`false`) and `output` (`XLSX`). A refused or failed generation leaves no
+entry. The language is `lang`, else `Accept-Language`, else `uk` (`ReportLanguage`). The answer is the workbook with
+`Content-Disposition` `<template name>_<from>_<to>.xlsx` (the ASCII fallback and the RFC 8187 `filename*` of the
+template download), `Vary: Accept-Language`, `X-Report-Warnings` (the count, `0` without warnings) and, with
+warnings, `X-Report-Warnings-Detail`: the first warnings as `ReportTemplateWarning` JSON in base64url without padding,
+at most 50 and fewer while the encoded value would reach 4 096 characters (`TemplateGenerator.detail`; the sheet always
+lists all). There is no CORS configuration in the backend (the web app is same-origin behind Caddy and the Vite proxy),
+so nothing exposes the headers; a cross-origin deployment must list both in `Access-Control-Expose-Headers`.
+
+The generated `ReportTemplatesApi` validates the body (`@Valid`) while Spring resolves the arguments, before the
+`@PreAuthorize` check runs: a malformed body (`to` missing, `lang` not `uk`/`en`) is 400 for any caller with a token, a
+well-formed one is 403 for a caller without `REPORTS_VIEW`, and no token is 401 (`TemplateGenerateTests`). The 400
+says nothing about the cooperative, so this order is accepted rather than moving the check into the security filter
+chain.
+
+`TemplateFiller.fill(bytes, name, version, values, texts, rowCap)`, three steps:
+
+1. **Checks and plan, no database.** The stored bytes pass `TemplateUploadChecks.check` again (the guard with the
+   template limits, macros, active content, every part through `TemplateXml` with `<!DOCTYPE` refused, bounded reads,
+   `TWO_ROW_SETS`, `ARRAY_ACROSS_ROW`): a stored file that no longer passes is 400 `TEMPLATE_INVALID` with the reason.
+   Then the parts (each read through the 20 MiB bound), `workbook.xml` (sheets, `date1904`), the relationships, the
+   shared strings (runs joined, phonetic runs left out, rich or not) and per sheet the upload's `SheetScan`: the
+   repeating row and its set, every placeholder key, the master cell and text of each shared formula.
+2. **Values**, in the caller's transaction: the rows of each repeating row's set (`Resolver.rows`, 422 past the cap)
+   and every single value. More than the cap (20 000) rows for row sets in all is 422 `REPORT_TOO_LARGE`.
+3. **Write** with `java.util.zip`, every part not named here byte for byte. Sheets stream through `SheetFiller`
+   (StAX reader of `TemplateXml`, the JDK's StAX writer, a row at a time as a small `XmlTree.Node`, no document
+   model). Output that would unpack to more than 256 MiB is 422 `REPORT_TOO_LARGE`. Steps 1 and 3 turn any other
+   failure (an I/O error, a runtime exception, a stack overflow) into 400 `TEMPLATE_INVALID` `BROKEN_ZIP`, never a 500
+   or a stack trace; no regular expression runs over XML (the only patterns are the placeholder and the A1 tokens of a
+   formula).
+
+What the filler does (the promise of ADR 0015):
+
+- **Placeholders** `${key}` in shared strings (`t="s"`) and inline strings. Alone in the cell (spaces around it
+  ignored): a typed cell with the cell's style (`s`) kept: `MONEY`, `NUMBER`, `QUANTITY`, `INT` as numbers (`<v>`
+  plain decimal), `DATE`, `MONTH` (its first day), `DATE_TIME` as Excel serials (`TemplateValue.serial`; 1900
+  system: days since 30.12.1899; a workbook with `date1904` counts from 01.01.1904; a time is the fraction of the
+  day), `TEXT` as an inline string. Inside text: the text with the values formatted (`TemplateValue.text`: amounts,
+  numbers, quantities `1 250,50` with a no-break space in Ukrainian, `1,250.50` in English, their scale as given;
+  whole numbers without separators, so a year is `2025`; days `dd.MM.yyyy`, months `MM.yyyy`, times
+  `dd.MM.yyyy HH:mm`), written as an inline string. `sharedStrings.xml` is never changed (other cells may share a
+  string). A cell whose shared or inline string had rich-text runs loses the run formatting: `RICH_TEXT_FLATTENED`.
+- An **unknown placeholder** (not in the catalog, a charge type the cooperative lacks, an unknown row set) stays in the
+  cell as written (the cell untouched when nothing else in it is known): `UNKNOWN_PLACEHOLDER`, once per template cell.
+  A known placeholder **without a value** is written empty, never `0`: `VALUE_UNKNOWN` with the reason, once per
+  output cell. An empty value is written empty without a warning.
+- **The repeating row** (the row with placeholders of one row set) is written once per row of the set, renumbered
+  (`<row r>`, `<c r>`); with an empty set it is removed. Placeholders of single values on it are filled in every copy.
+  Rows below move by `copies - 1`.
+- **References** (`FormulaShifter`): cell formulas on every sheet (references to another repeated sheet first, then the
+  sheet's own), formulas of the copies filled down (`copy`), shared formulas expanded to plain formulas (`offset`) on a
+  repeated sheet and wherever the master names a repeated sheet (others stay shared), array formulas' text and `ref`
+  (an array on the repeating row is copied per copy), merged ranges (one only on the repeating row copied per copy,
+  the `count` kept true), the `dimension`, the `autoFilter`, conditional formatting and data validation `sqref` lists
+  (a cell on the repeating row grows to every copy: `D5` becomes `D5:D7`) and their formulas, hyperlinks (`ref` per
+  copy on the repeating row, `location` shifted), row breaks after the repeating row or below it, defined names (print
+  area, print titles, names), tables (`ref` and their `autoFilter`) and drawing anchors (`xdr:row` below the repeating
+  row). An element whose reference is lost with an empty set (`#REF!`) is dropped. Charts are not shifted: a chart
+  that names a repeated sheet gives `CHART_REFS_NOT_SHIFTED` (once per sheet).
+- **No formula is evaluated**: `xl/calcChain.xml` is removed with its relationship and content type override,
+  `<calcPr fullCalcOnLoad="1">` is set (added before the elements that follow it in the schema when missing), and the
+  cached value `<v>` and value type `t` of every formula cell are dropped.
+- **Warnings sheet**: added last when there is at least one warning, named `reportTemplates.warningsSheet.name`
+  («Попередження» / "Warnings", ` (2)`, ` (3)` ... when a sheet of that name exists, ignoring case), columns sheet,
+  cell, placeholder, warning (`reportTemplates.warnings.<code>`) and reason (`reportTemplates.valueReasons.<reason>`),
+  inline strings; with its own part, relationship (`rIdNadel<n>`) and content type.
+- **Document properties**: `docProps/core.xml` gets `dc:title` (the template's name) and `cp:version` (the version
+  number), every other property kept; a template without the part gets one with its relationship and content type.
+
+Engine size (ADR 0015 fallback trigger: about 2 000 lines of filler and shifter without tests): `FormulaShifter`,
+`TemplateFiller`, `SheetFiller` and `XmlTree` together are about 1 910 lines with their documentation, about 1 510
+without blank and comment lines: close to the threshold, not past it (how a value is written, `TemplateValue.text` and
+`.serial`, lives with the value). A further feature of the filler should reopen the POI question.
+
+Tests: `TemplateFillerTests` (unit: typed cells and styles, the 1904 system, text in both languages, unknown
+placeholders and values, rich text, inline strings, the repeating row with 0, 1, 3 and 300 copies and the sums below
+it, every place references move, the empty set, shared and array formulas, other sheets, drawings, tables and charts,
+two repeated sheets, the calculation chain, the warnings sheet and its name, document properties, the checks again at
+fill time, the row cap and the output bound, a 100 KB attribute list, 20 000 rows of 20 columns under 5 s, every file
+read back with fastexcel-reader), `TemplateGenerateTests` (HTTP: the sample land tax statement equal to the land tax
+report, the audit entry once, the headers and the warnings sheet in English with an unknown tree value, the period,
+404, 409, the row cap and a stored file that no longer passes, all without an entry, and the order of validation and
+permission), `TemplateUploadChecksTests` (`ARRAY_ACROSS_ROW`).
 
 ## Framework (`internal`)
 
@@ -491,6 +669,6 @@ default kinds and the named meters, resource and street, the note count, the fil
 ## Depends on
 
 `ledger` (`LedgerReadModel`), `meters` (`MeterReports`, `Quantity`), `plots` (`PlotCatalog`, `PlotOwners`, `PlotStatuses`), `members` (`MemberDirectory`:
-debtors' contacts, names of who booked a correction), `settings` (`CooperativeSettings`: red amount and days, losses mode and percent),
-`tariffs` (`ChargeTypeCatalog`, `ExpectedAmounts`), `tenancy` (`TenantDirectory`), `identity` (`CurrentUser`,
+debtors' contacts, names of who booked a correction), `settings` (`CooperativeSettings`: red amount and days, losses mode and percent, requisites),
+`tariffs` (`ChargeTypeCatalog`, `ExpectedAmounts`, `ChargeCalculator.sotkas`), `tenancy` (`TenantDirectory`), `identity` (`CurrentUser`,
 `AccessProfile`, `Permission`), `audit`, `money` and `problem`. No module depends on `reports`.

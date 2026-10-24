@@ -33,11 +33,15 @@ import type {
   NotFoundResponse,
   PayloadTooLargeResponse,
   Problem,
+  ReportBadRequestResponse,
   ReportTemplate,
   ReportTemplateBadRequestResponse,
+  ReportTemplateField,
+  ReportTemplateGenerateRequest,
   ReportTemplateTooLargeResponse,
   ReportTemplateUploadResult,
   ReportTemplateVersion,
+  ReportTooLargeResponse,
   UnauthorizedResponse,
   UploadReportTemplateBody,
   UploadReportTemplateVersionBody
@@ -204,6 +208,8 @@ export const getUploadReportTemplateUrl = () => {
  *   - `UNPACKED_TOO_LARGE`: too many parts, too large when unpacked or compressed too highly (a compressed bomb),
  *     with the limits of the Excel import;
  *   - `TWO_ROW_SETS`: a sheet has more than one repeating row, or one row mixes placeholders of two row sets;
+ *   - `ARRAY_ACROSS_ROW`: an array formula's range crosses the repeating row of its sheet (Excel refuses to
+ *     insert rows there too);
  * - 409 `TEMPLATE_NAME_TAKEN` (`errors[{field: name}]`): another active template of the cooperative has the name,
  *   ignoring case;
  * - 409 `TEMPLATE_SLOT_TAKEN` (`errors[{field: slot}]`): an active template is in the slot already; upload a
@@ -287,7 +293,120 @@ export const useUploadReportTemplate = <TError = ReportTemplateBadRequestRespons
       > => {
       return useMutation(getUploadReportTemplateMutationOptions(options), queryClient);
     }
-    export const getListReportTemplateVersionsUrl = (id: string,) => {
+    export const getGetReportTemplateCatalogUrl = () => {
+
+
+
+
+  return `/api/v1/report-templates/catalog`
+}
+
+/**
+ * The field catalog (feature 013 §4.2): every placeholder `${key}` the app fills, in a fixed order (the
+ * cooperative, the period, when and by whom, the totals, then the row sets `plots`, `months`, `meters`, `water`),
+ * each with its value type, its row set (absent for a single value), a language-neutral example where one exists
+ * and the permission it needs. The server returns codes, never text: the description of an entry is
+ * `reportTemplates.fields.<field>` in the client's catalogs.
+ *
+ * Two families depend on the cooperative's charge types and are listed once per charge type, archived ones
+ * included, in the configured order: `totals.charged.<type>` and `rows.plots.debt.<type>`, where `<type>` is the
+ * code of a seeded type (`MEMBERSHIP`, `ELECTRICITY`, `LAND_TAX`, `WATER`, `COMMON_CONSUMERS`) and the id of a
+ * custom type. Such an entry carries the family in `pattern`, the description code of the family in `field` and
+ * the type in `chargeTypeId` (the client names it). Names, phones and e-mails of people are never placeholders.
+ *
+ * Requires `REPORTS_VIEW` or `REPORT_TEMPLATES_MANAGE`; the platform operator has no cooperative data: 403.
+ * @summary Every placeholder a template can use
+ */
+export const getReportTemplateCatalog = async ( options?: Parameters<typeof nadelFetch>[1]): Promise<ReportTemplateField[]> => {
+
+  return nadelFetch<ReportTemplateField[]>(getGetReportTemplateCatalogUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetReportTemplateCatalogQueryKey = () => {
+    return [
+    `/api/v1/report-templates/catalog`
+    ] as const;
+    }
+
+
+export const getGetReportTemplateCatalogQueryOptions = <TData = Awaited<ReturnType<typeof getReportTemplateCatalog>>, TError = UnauthorizedResponse | ForbiddenResponse>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getReportTemplateCatalog>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetReportTemplateCatalogQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getReportTemplateCatalog>>> = ({ signal }) => getReportTemplateCatalog({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getReportTemplateCatalog>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetReportTemplateCatalogQueryResult = NonNullable<Awaited<ReturnType<typeof getReportTemplateCatalog>>>
+export type GetReportTemplateCatalogQueryError = UnauthorizedResponse | ForbiddenResponse
+
+
+export function useGetReportTemplateCatalog<TData = Awaited<ReturnType<typeof getReportTemplateCatalog>>, TError = UnauthorizedResponse | ForbiddenResponse>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getReportTemplateCatalog>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getReportTemplateCatalog>>,
+          TError,
+          Awaited<ReturnType<typeof getReportTemplateCatalog>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetReportTemplateCatalog<TData = Awaited<ReturnType<typeof getReportTemplateCatalog>>, TError = UnauthorizedResponse | ForbiddenResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getReportTemplateCatalog>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getReportTemplateCatalog>>,
+          TError,
+          Awaited<ReturnType<typeof getReportTemplateCatalog>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetReportTemplateCatalog<TData = Awaited<ReturnType<typeof getReportTemplateCatalog>>, TError = UnauthorizedResponse | ForbiddenResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getReportTemplateCatalog>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Every placeholder a template can use
+ */
+
+export function useGetReportTemplateCatalog<TData = Awaited<ReturnType<typeof getReportTemplateCatalog>>, TError = UnauthorizedResponse | ForbiddenResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getReportTemplateCatalog>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetReportTemplateCatalogQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export const getListReportTemplateVersionsUrl = (id: string,) => {
 
 
 
@@ -555,6 +674,136 @@ export const useArchiveReportTemplate = <TError = UnauthorizedResponse | Forbidd
         TContext
       > => {
       return useMutation(getArchiveReportTemplateMutationOptions(options), queryClient);
+    }
+    export const getGenerateReportTemplateUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/report-templates/${id}/generate`
+}
+
+/**
+ * Fills the latest version of an active template with the cooperative's data for the period and returns the
+ * workbook (feature 013 §4.3, ADR 0015). Nothing is stored. The template's styles, merged cells, column widths,
+ * print settings and formulas are kept; no formula is evaluated on the server (`fullCalcOnLoad`: Excel and
+ * LibreOffice calculate on opening).
+ *
+ * A placeholder alone in a cell becomes a typed value (a number, or a date as a date serial), so formulas still
+ * work on it; inside text it is written as text in Ukrainian number and date format. The row of a row set
+ * (`${rows.<set>.<field>}`) is copied once per row of the set, with the references below it moved. The period
+ * (`from` to `to`, both included, days in Europe/Kyiv) means for each value (see `getReportTemplateCatalog`):
+ *
+ * - `period.from`, `period.to` the days given, `period.year` the year of `to`;
+ * - `totals.landTax.*` and `rows.plots.landTax.*`: the land tax report for the year of `to`;
+ * - `totals.charged.<type>`: the effective amount (charges plus adjustments minus reversals, opening balances
+ *   left out) of the type's charges whose first service day is from `from` to `to`, booked whenever;
+ * - `totals.debt`, `totals.plots.*` and the row set `plots`: the plot balances of the active plots (common land
+ *   left out) as of `to`, or as of today when `to` is later;
+ * - the row set `months`: per billing month from the month of `from` to the month of `to` that has charges, the
+ *   cooperative's totals as on the charges by month report;
+ * - the row sets `meters` (the electricity tree's consumption) and `water` (the water report's plots): the
+ *   service days from `from` to `to`.
+ *
+ * Warnings, never errors, are listed in a sheet added at the end of the file when there is at least one
+ * ("Попередження" or "Warnings", made unique if the template has a sheet of that name) and in the response
+ * headers (`X-Report-Warnings` is `0` without warnings): a placeholder the app does not know is left in the cell as written
+ * (`UNKNOWN_PLACEHOLDER`); a known placeholder without a known value is written empty, never `0`
+ * (`VALUE_UNKNOWN`, with the reason); see `ReportTemplateWarningCode`.
+ *
+ * The texts of the file (the warnings sheet, codes such as statuses) are in `lang`; without it the best match of
+ * `uk` and `en` in `Accept-Language`, then `uk`. The file name is in `Content-Disposition`: the template's name
+ * and the period, `<name>_<from>_<to>.xlsx` (`filename*` in UTF-8 with an ASCII `filename` fallback). The
+ * document properties name the template (title) and its version.
+ *
+ * Errors: 400 `VALIDATION_FAILED` for a malformed body; 400 `REPORT_FILTER_INVALID` with
+ * `errors[{field: to, code: INVALID}]` when `to` is before `from` or the period is longer than one year (`to` on
+ * or after the same day a year after `from`); 404 for an unknown template or one of another cooperative; 409
+ * `TEMPLATE_ARCHIVED` for an archived template; 400 `TEMPLATE_INVALID` (with the reason, as at upload) when the
+ * stored file no longer passes the upload checks, which are run again before every fill; 422 `REPORT_TOO_LARGE`
+ * when a row set used by the template has more than 20 000 rows, the row sets together write more than 20 000
+ * rows, or the file would unpack to more than 256 MB. Every generated file is written to the audit log as `REPORT_GENERATED` (entity type
+ * `REPORT_TEMPLATE`, entity id the template, label its name) with the fields `template` (the id), `version`,
+ * `filters` (`from`, `to`), `rows` (the rows written for row sets), `personalData` (`false`) and `output`
+ * (`XLSX`), never the contents. Requires `REPORTS_VIEW`; the platform operator has no cooperative data: 403.
+ * @summary Fill the latest version of a template for a period
+ */
+export const generateReportTemplate = async (id: string,
+    reportTemplateGenerateRequest: ReportTemplateGenerateRequest, options?: Parameters<typeof nadelFetch>[1]): Promise<Blob> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return nadelFetch<Blob>(getGenerateReportTemplateUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(reportTemplateGenerateRequest)
+  }
+);}
+
+
+
+
+
+export const getGenerateReportTemplateMutationKey = () => ['generateReportTemplate'] as const;
+
+export const getGenerateReportTemplateMutationOptions = <TError = ReportBadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | Problem | ReportTooLargeResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generateReportTemplate>>, TError,GenerateReportTemplateMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof generateReportTemplate>>, TError,GenerateReportTemplateMutationVariables, TContext> => {
+
+const mutationKey = getGenerateReportTemplateMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof generateReportTemplate>>, GenerateReportTemplateMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  generateReportTemplate(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type GenerateReportTemplateMutationResult = NonNullable<Awaited<ReturnType<typeof generateReportTemplate>>>
+    export type GenerateReportTemplateMutationBody = ReportTemplateGenerateRequest
+    export type GenerateReportTemplateMutationError = ReportBadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | Problem | ReportTooLargeResponse
+    export type GenerateReportTemplateMutationVariables = {id: string;data: ReportTemplateGenerateRequest}
+
+    /**
+ * @summary Fill the latest version of a template for a period
+ */
+export const useGenerateReportTemplate = <TError = ReportBadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | Problem | ReportTooLargeResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generateReportTemplate>>, TError,GenerateReportTemplateMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof generateReportTemplate>>,
+        TError,
+        GenerateReportTemplateMutationVariables,
+        TContext
+      > => {
+      return useMutation(getGenerateReportTemplateMutationOptions(options), queryClient);
     }
     export const getDownloadReportTemplateVersionUrl = (id: string,
     versionId: string,) => {

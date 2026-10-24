@@ -7,6 +7,7 @@ import app.nadel.problem.ApiProblemException;
 import app.nadel.problem.ConstraintViolations;
 import app.nadel.problem.FieldProblem;
 import app.nadel.problem.ProblemCodes;
+import app.nadel.tariffs.ChargeTypeCatalog;
 import java.io.IOException;
 import java.time.Clock;
 import java.time.OffsetDateTime;
@@ -22,6 +23,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import nadel.contract.model.ReportTemplate;
+import nadel.contract.model.ReportTemplateField;
 import nadel.contract.model.ReportTemplateSlot;
 import nadel.contract.model.ReportTemplateStatus;
 import nadel.contract.model.ReportTemplateUploadResult;
@@ -60,17 +62,19 @@ class ReportTemplateService {
     private final ReportTemplateRepository templates;
     private final ReportTemplateVersionRepository versions;
     private final MemberDirectory members;
+    private final ChargeTypeCatalog chargeTypes;
     private final ReportAuditPublisher audit;
     private final TransactionTemplate writing;
     private final TransactionTemplate reading;
     private final Clock clock;
 
     ReportTemplateService(ReportTemplateRepository templates, ReportTemplateVersionRepository versions,
-            MemberDirectory members, ReportAuditPublisher audit, PlatformTransactionManager transactions,
-            Clock clock) {
+            MemberDirectory members, ChargeTypeCatalog chargeTypes, ReportAuditPublisher audit,
+            PlatformTransactionManager transactions, Clock clock) {
         this.templates = templates;
         this.versions = versions;
         this.members = members;
+        this.chargeTypes = chargeTypes;
         this.audit = audit;
         this.writing = new TransactionTemplate(transactions);
         this.reading = new TransactionTemplate(transactions);
@@ -82,6 +86,15 @@ class ReportTemplateService {
      * The tax report slot first (the active template in it, or the slot as {@code NOT_ADDED}), then every other
      * template: active before archived, by name ignoring case. Each with its latest version and version count.
      */
+    /**
+     * The field catalog ({@link TemplateField#catalog}): every placeholder, the charge type families once per charge
+     * type of the caller's cooperative. Read-only transaction (the charge types).
+     */
+    List<ReportTemplateField> catalog() {
+        return Objects.requireNonNull(reading.execute(status -> TemplateField.catalog(chargeTypes.all()).stream()
+                .map(TemplateField.Placeholder::toDto).toList()));
+    }
+
     List<ReportTemplate> list(AccessProfile caller) {
         UUID tenant = tenantOf(caller);
         return reading.execute(status -> {

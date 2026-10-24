@@ -517,7 +517,7 @@ abstract class ReportsTestSupport extends IntegrationTest {
     }
 
     /** Runs the work as nadel_owner with app.ledger_maintenance = 'on', in one transaction. */
-    private static void asLedgerOwner(Consumer<JdbcTemplate> work) {
+    static void asLedgerOwner(Consumer<JdbcTemplate> work) {
         JdbcTemplate sql = ownerJdbc();
         new TransactionTemplate(new DataSourceTransactionManager(sql.getDataSource())).executeWithoutResult(status -> {
             sql.execute("GRANT ALL ON ALL TABLES IN SCHEMA public TO nadel_owner");

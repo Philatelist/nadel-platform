@@ -109,6 +109,23 @@ public interface LedgerReadModel {
     Map<UUID, Money> chargedInYear(String chargeTypeCode, int year, Collection<UUID> plotIds);
 
     /**
+     * The effective amount charged per charge type for a range of service days (the totals
+     * {@code totals.charged.<type>} of report templates, feature 013 §4.1), the rule of {@link #chargedInYear} over a
+     * range and every plot: the signed sum (money rules 5.4) of the regular charges, reversals and adjustments of each
+     * charge type whose service period starts in the range ({@code service_from} from {@code from} to {@code to}), on
+     * every plot of the cooperative (archived plots and common land included: what was charged stays charged). A
+     * reversal and an adjustment keep the service period of the charge they correct, so they count with it, whatever
+     * month they were booked in. Opening balances are left out.
+     *
+     * @param from the first day, inclusive
+     * @param to   the last day, inclusive; not before {@code from}
+     * @return the charge types with at least one such row, keyed by id (a type without one is absent: {@code 0.00});
+     *         bounded by the charge types of the cooperative
+     * @throws IllegalArgumentException when {@code to} is before {@code from}
+     */
+    Map<UUID, Money> chargedByType(LocalDate from, LocalDate to);
+
+    /**
      * The electricity charges whose service period overlaps a range of days (the "Charged" sheet of the electricity
      * report, feature 013 §3.4), one {@link ChargedRow} per ledger row: the charges of source {@code CONSUMPTION} and
      * {@code LOSSES} of the charge type {@code ELECTRICITY} (resolved by code through {@code tariffs.ChargeTypeCatalog})

@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import app.nadel.money.Money;
 import app.nadel.tenancy.TenantContext;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -29,6 +30,10 @@ import org.springframework.transaction.support.TransactionTemplate;
  * </pre>
  * 2025: P1 17.50 + 2.50 + 17.50 + 17.50 = 55.00 (D24 and J26 belong to other years, membership is another type);
  * P2 17.50 - 17.50 = 0.00 (the opening balance is not a charge of the year); P3 0.00. 2024: P1 17.50.
+ * <p>
+ * Per charge type over a range of days ({@link LedgerReadModel#chargedByType}), every plot: 01.01-31.03.2025 land
+ * tax J25 17.50 + 2.50, F25 17.50, M25 17.50 - 17.50 = 37.50 (not the opening balance of 100.00), membership 25.00;
+ * February alone land tax 17.50 and no membership.
  */
 class LedgerChargedInYearTests extends FreshCooperativeSupport {
 
@@ -130,6 +135,40 @@ class LedgerChargedInYearTests extends FreshCooperativeSupport {
     }
 
     @Test
+    void perChargeTypeTheRangeOfServiceDaysCountsWithoutOpeningBalances() {
+        UUID landTax = typeId("LAND_TAX");
+        UUID membership = typeId("MEMBERSHIP");
+
+        assertThat(byType(tenant, "2025-01-01", "2025-03-31")).containsOnly(
+                Map.entry(landTax, Money.parse("37.50")), Map.entry(membership, Money.parse("25.00")));
+        assertThat(byType(tenant, "2025-02-01", "2025-02-28")).containsOnly(
+                Map.entry(landTax, Money.parse("17.50")));
+        assertThat(byType(tenant, "2027-01-01", "2027-12-31")).isEmpty();
+    }
+
+    @Test
+    void perChargeTypeNeverCountsAnotherCooperativeAndRefusesARangeBackwards() {
+        Side other = side(OTHER_TENANT);
+        UUID otherLandTax = ownerJdbc().queryForObject("select id from charge_type where tenant_id = ? "
+                + "and code = 'LAND_TAX'", UUID.class, OTHER_TENANT);
+        Money before = byType(OTHER_TENANT, "2025-06-01", "2025-06-30").getOrDefault(otherLandTax, Money.ZERO);
+        otherCharge = UUID.randomUUID();
+        ownerJdbc().update("insert into charge (id, tenant_id, plot_id, charge_type_id, billing_month_id, kind, "
+                + "source, amount, service_from, service_to, accrued_on, source_key) values (?, ?, ?, ?, ?, 'REGULAR', "
+                + "'TARIFF', 99.00, date '2025-06-01', date '2025-06-30', date '2025-06-01', ?)", otherCharge,
+                OTHER_TENANT, other.plot(), otherLandTax, other.month(), "TEST:" + otherCharge);
+
+        assertThat(byType(tenant, "2025-06-01", "2025-06-30")).isEmpty();
+        assertThat(byType(OTHER_TENANT, "2025-06-01", "2025-06-30")).containsEntry(otherLandTax,
+                before.plus(Money.parse("99.00")));
+        assertThatThrownBy(() -> byType(tenant, "2025-02-01", "2025-01-31"))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> TenantContext.runAs(tenant, () -> readModel.chargedByType(
+                LocalDate.parse("2025-01-01"), LocalDate.parse("2025-01-31"))))
+                .isInstanceOf(IllegalTransactionStateException.class);
+    }
+
+    @Test
     void itRunsOnlyInTheCallersTransaction() {
         assertThatThrownBy(() -> TenantContext.runAs(tenant, () -> readModel.chargedInYear("LAND_TAX", 2025,
                 List.of(p1)))).isInstanceOf(IllegalTransactionStateException.class);
@@ -140,6 +179,11 @@ class LedgerChargedInYearTests extends FreshCooperativeSupport {
     private Map<UUID, Money> charged(UUID cooperative, String code, int year, List<UUID> plots) {
         return TenantContext.runAs(cooperative, () -> tx.execute(status -> readModel.chargedInYear(code, year,
                 plots)));
+    }
+
+    private Map<UUID, Money> byType(UUID cooperative, String from, String to) {
+        return TenantContext.runAs(cooperative, () -> tx.execute(status -> readModel.chargedByType(
+                LocalDate.parse(from), LocalDate.parse(to))));
     }
 
     private UUID monthRow(String month) {

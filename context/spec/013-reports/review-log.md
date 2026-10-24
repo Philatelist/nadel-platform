@@ -39,3 +39,11 @@ Backend `./mvnw verify` on 6c121fb (detached worktree): green, exit 0, no failin
 - The pump share (COMMON_CONSUMER, split CONNECTED_PLOTS) appears in both electricity-tree and water: accepted, documented in the READMEs.
 - Minor notes (not fixed): a long javadoc line in `LedgerReadModel.java:20`; `waterCharged` javadoc wording about cap+1.
 
+### Slice 8 — Report templates: storage, tax slot, upload (0af4b79)
+- Round 1: MAJOR_ISSUES. Backend slice tests 183 green on the reviewer side.
+  - M1 `ExternalLinkStripper.java:518-526`: the RELATIONSHIP/OVERRIDE/EXTERNAL_REFERENCES regexes use a recursive lazy attribute group; a well-formed start tag with ~20 KB of attributes throws `StackOverflowError`, run on every accepted upload, so a crafted <=2 MiB file gets an unhandled 500 instead of 400 TEMPLATE_INVALID. Sent to the builder (spring-backend) for a minimal fix.
+- Minor notes (not fixed unless the owner asks): entry names are not checked for `../`, absolute paths or backslashes; formulas/defined names referencing `[1]` stay after externalReferences is removed (Excel may offer to repair; check with real Excel); DOCTYPE only checked on `.xml`/`.rels` parts; on the tax card a 409 TEMPLATE_NAME_TAKEN sets `nameError` but no name field exists there, so the user sees no message (when an ordinary template already carries the tax default name); no unit test for `contentDisposition` with CR/LF, quotes or non-ASCII names.
+
+- Fix commit 65a96af (`fix(reports): 013 slice 8 review fixes (round 1)`): non-recursive forward scanner replaces the regexes; `refusingFailures` maps IOException/RuntimeException/StackOverflowError to 400 BROKEN_ZIP. RED shown by the builder (StackOverflowError with the old code).
+- Round 2: PASS. 187 tests, 0 failures on the reviewer side. M1 resolved. Minor (not fixed): `attributes()` still uses an `ATTRIBUTE` regex (no repeated group, no stack risk); a StackOverflowError mapped to BROKEN_ZIP leaves no log line.
+

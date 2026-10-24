@@ -4169,6 +4169,8 @@ paths:
           - `UNPACKED_TOO_LARGE`: too many parts, too large when unpacked or compressed too highly (a compressed bomb),
             with the limits of the Excel import;
           - `TWO_ROW_SETS`: a sheet has more than one repeating row, or one row mixes placeholders of two row sets;
+          - `ARRAY_ACROSS_ROW`: an array formula's range crosses the repeating row of its sheet (Excel refuses to
+            insert rows there too);
         - 409 `TEMPLATE_NAME_TAKEN` (`errors[{field: name}]`): another active template of the cooperative has the name,
           ignoring case;
         - 409 `TEMPLATE_SLOT_TAKEN` (`errors[{field: slot}]`): an active template is in the slot already; upload a
@@ -4229,6 +4231,39 @@ paths:
           $ref: '#/components/responses/PayloadTooLarge'
         '422':
           $ref: '#/components/responses/ReportTemplateTooLarge'
+
+  /report-templates/catalog:
+    get:
+      tags: [report-templates]
+      operationId: getReportTemplateCatalog
+      summary: Every placeholder a template can use
+      description: |
+        The field catalog (feature 013 §4.2): every placeholder `${key}` the app fills, in a fixed order (the
+        cooperative, the period, when and by whom, the totals, then the row sets `plots`, `months`, `meters`, `water`),
+        each with its value type, its row set (absent for a single value), a language-neutral example where one exists
+        and the permission it needs. The server returns codes, never text: the description of an entry is
+        `reportTemplates.fields.<field>` in the client's catalogs.
+
+        Two families depend on the cooperative's charge types and are listed once per charge type, archived ones
+        included, in the configured order: `totals.charged.<type>` and `rows.plots.debt.<type>`, where `<type>` is the
+        code of a seeded type (`MEMBERSHIP`, `ELECTRICITY`, `LAND_TAX`, `WATER`, `COMMON_CONSUMERS`) and the id of a
+        custom type. Such an entry carries the family in `pattern`, the description code of the family in `field` and
+        the type in `chargeTypeId` (the client names it). Names, phones and e-mails of people are never placeholders.
+
+        Requires `REPORTS_VIEW` or `REPORT_TEMPLATES_MANAGE`; the platform operator has no cooperative data: 403.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReportTemplateField'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
   /report-templates/{id}/versions:
     get:
@@ -4345,6 +4380,108 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+
+  /report-templates/{id}/generate:
+    post:
+      tags: [report-templates]
+      operationId: generateReportTemplate
+      summary: Fill the latest version of a template for a period
+      description: |
+        Fills the latest version of an active template with the cooperative's data for the period and returns the
+        workbook (feature 013 §4.3, ADR 0015). Nothing is stored. The template's styles, merged cells, column widths,
+        print settings and formulas are kept; no formula is evaluated on the server (`fullCalcOnLoad`: Excel and
+        LibreOffice calculate on opening).
+
+        A placeholder alone in a cell becomes a typed value (a number, or a date as a date serial), so formulas still
+        work on it; inside text it is written as text in Ukrainian number and date format. The row of a row set
+        (`${rows.<set>.<field>}`) is copied once per row of the set, with the references below it moved. The period
+        (`from` to `to`, both included, days in Europe/Kyiv) means for each value (see `getReportTemplateCatalog`):
+
+        - `period.from`, `period.to` the days given, `period.year` the year of `to`;
+        - `totals.landTax.*` and `rows.plots.landTax.*`: the land tax report for the year of `to`;
+        - `totals.charged.<type>`: the effective amount (charges plus adjustments minus reversals, opening balances
+          left out) of the type's charges whose first service day is from `from` to `to`, booked whenever;
+        - `totals.debt`, `totals.plots.*` and the row set `plots`: the plot balances of the active plots (common land
+          left out) as of `to`, or as of today when `to` is later;
+        - the row set `months`: per billing month from the month of `from` to the month of `to` that has charges, the
+          cooperative's totals as on the charges by month report;
+        - the row sets `meters` (the electricity tree's consumption) and `water` (the water report's plots): the
+          service days from `from` to `to`.
+
+        Warnings, never errors, are listed in a sheet added at the end of the file when there is at least one
+        ("Попередження" or "Warnings", made unique if the template has a sheet of that name) and in the response
+        headers (`X-Report-Warnings` is `0` without warnings): a placeholder the app does not know is left in the cell as written
+        (`UNKNOWN_PLACEHOLDER`); a known placeholder without a known value is written empty, never `0`
+        (`VALUE_UNKNOWN`, with the reason); see `ReportTemplateWarningCode`.
+
+        The texts of the file (the warnings sheet, codes such as statuses) are in `lang`; without it the best match of
+        `uk` and `en` in `Accept-Language`, then `uk`. The file name is in `Content-Disposition`: the template's name
+        and the period, `<name>_<from>_<to>.xlsx` (`filename*` in UTF-8 with an ASCII `filename` fallback). The
+        document properties name the template (title) and its version.
+
+        Errors: 400 `VALIDATION_FAILED` for a malformed body; 400 `REPORT_FILTER_INVALID` with
+        `errors[{field: to, code: INVALID}]` when `to` is before `from` or the period is longer than one year (`to` on
+        or after the same day a year after `from`); 404 for an unknown template or one of another cooperative; 409
+        `TEMPLATE_ARCHIVED` for an archived template; 400 `TEMPLATE_INVALID` (with the reason, as at upload) when the
+        stored file no longer passes the upload checks, which are run again before every fill; 422 `REPORT_TOO_LARGE`
+        when a row set used by the template has more than 20 000 rows, the row sets together write more than 20 000
+        rows, or the file would unpack to more than 256 MB. Every generated file is written to the audit log as `REPORT_GENERATED` (entity type
+        `REPORT_TEMPLATE`, entity id the template, label its name) with the fields `template` (the id), `version`,
+        `filters` (`from`, `to`), `rows` (the rows written for row sets), `personalData` (`false`) and `output`
+        (`XLSX`), never the contents. Requires `REPORTS_VIEW`; the platform operator has no cooperative data: 403.
+      parameters:
+        - $ref: '#/components/parameters/ReportTemplateIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportTemplateGenerateRequest'
+      responses:
+        '200':
+          description: The filled workbook, sent as an attachment
+          headers:
+            X-Report-Warnings:
+              description: The number of warnings (all of them; the warnings sheet lists each)
+              schema:
+                type: integer
+                format: int32
+                minimum: 0
+            X-Report-Warnings-Detail:
+              description: >-
+                The first warnings as a JSON array of `ReportTemplateWarning`, UTF-8, encoded as base64url without
+                padding: at most 50, and fewer when the encoded value would reach 4 KB. Absent without warnings
+              schema:
+                type: string
+                pattern: '^[A-Za-z0-9_-]*$'
+            Content-Disposition:
+              description: '`attachment` with the file name `<name>_<from>_<to>.xlsx`'
+              schema:
+                type: string
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+        '400':
+          $ref: '#/components/responses/ReportBadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: The template is archived and can no longer be generated from (code `TEMPLATE_ARCHIVED`)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          $ref: '#/components/responses/ReportTooLarge'
 
   /report-templates/{id}/versions/{versionId}/file:
     get:
@@ -4536,8 +4673,8 @@ components:
       description: >-
         Malformed request or failed validation of a form field (code `VALIDATION_FAILED` or `MALFORMED_REQUEST`), or a
         file that is not a usable template (code `TEMPLATE_INVALID`, with one `errors[{field: file, code}]` whose code
-        is `NOT_XLSX`, `MACROS`, `ACTIVE_CONTENT`, `BROKEN_ZIP`, `UNPACKED_TOO_LARGE` or `TWO_ROW_SETS`, see
-        `uploadReportTemplate`)
+        is `NOT_XLSX`, `MACROS`, `ACTIVE_CONTENT`, `BROKEN_ZIP`, `UNPACKED_TOO_LARGE`, `TWO_ROW_SETS` or
+        `ARRAY_ACROSS_ROW`, see `uploadReportTemplate`)
       content:
         application/problem+json:
           schema:
@@ -5222,8 +5359,10 @@ components:
         report), its label the report code (for example `charges-by-month`), and its fields are `report` (the code),
         `output` (`PREVIEW` or `XLSX`), `filters` (a JSON array of `{param, value}` as the query string carries them:
         ids, codes, dates and the street as typed), `rows` (the rows of every sheet) and `personalData`, never its
-        contents. A `REPORT_TEMPLATE` entry (`REPORT_TEMPLATE_UPLOADED`, `REPORT_TEMPLATE_ARCHIVED`)
-        is about a report template: its label is the template's name and its fields name the version.
+        contents. A `REPORT_TEMPLATE` entry (`REPORT_TEMPLATE_UPLOADED`, `REPORT_TEMPLATE_ARCHIVED`, and
+        `REPORT_GENERATED` for a file generated from the template) is about a report template: its entity id is the
+        template, its label the template's name and its fields name the version; a generated file adds `template`,
+        `filters` (`from`, `to`), `rows`, `personalData` and `output` (`XLSX`), never the contents.
       enum:
         [
           MEMBER,
@@ -6009,7 +6148,7 @@ components:
             range of a losses run), `PLOT_COMMON_LAND` (common land is
             never connected to water), `IBAN_INVALID` (not a valid Ukrainian IBAN; with the top-level code
             `IBAN_INVALID`); with `TEMPLATE_INVALID` on `file`: `NOT_XLSX`, `MACROS`, `ACTIVE_CONTENT`,
-            `BROKEN_ZIP`, `UNPACKED_TOO_LARGE`, `TWO_ROW_SETS` (see `uploadReportTemplate`)
+            `BROKEN_ZIP`, `UNPACKED_TOO_LARGE`, `TWO_ROW_SETS`, `ARRAY_ACROSS_ROW` (see `uploadReportTemplate`)
         message:
           type: string
 
@@ -9376,12 +9515,125 @@ components:
           description: >-
             The current name of the member who uploaded the file; absent when the member no longer exists
 
-    ReportTemplateUploadWarning:
+    ReportTemplateWarningCode:
       type: string
       description: >-
+        What the app changed in or could not fill from a template; a warning never stops an upload or a generation.
         `EXTERNAL_LINKS_REMOVED`: the file linked to other workbooks or had data connections; they were removed from the
-        stored file
-      enum: [EXTERNAL_LINKS_REMOVED]
+        stored file (the only warning of an upload). The others come with a generated file:
+        `UNKNOWN_PLACEHOLDER`: the app does not know the placeholder (not in the catalog, or a charge type the
+        cooperative does not have); it was left in the cell as written. `VALUE_UNKNOWN`: the placeholder is known but
+        its value is not (a meter value without a reading, a requisite that is not set); the cell was left empty,
+        never `0`. `RICH_TEXT_FLATTENED`: a cell with a placeholder had text in several formats; it was written as
+        plain text. `CHART_REFS_NOT_SHIFTED`: a chart refers to a sheet whose rows were repeated; its references were
+        not moved
+      enum:
+        - EXTERNAL_LINKS_REMOVED
+        - UNKNOWN_PLACEHOLDER
+        - VALUE_UNKNOWN
+        - RICH_TEXT_FLATTENED
+        - CHART_REFS_NOT_SHIFTED
+
+    ReportTemplateValueReason:
+      type: string
+      description: >-
+        Why a known placeholder has no value (`VALUE_UNKNOWN`). `NO_READING`, `DERIVED_FROM_UNKNOWN` and
+        `SEVERAL_RATES` as in `ReportCellReason` (a land tax rate of a plot that two rates charged in the year is
+        `SEVERAL_RATES`). `NOT_SET`: a requisite of the cooperative (official name, legal address, bank, IBAN,
+        ЄДРПОУ) is not entered
+      enum: [NO_READING, DERIVED_FROM_UNKNOWN, SEVERAL_RATES, NOT_SET]
+
+    ReportTemplateWarning:
+      type: object
+      description: >-
+        One warning of a generated file, as the header `X-Report-Warnings-Detail` carries it. The sheet name and the
+        placeholder are as written in the template
+      required: [code]
+      properties:
+        code:
+          $ref: '#/components/schemas/ReportTemplateWarningCode'
+        sheet:
+          type: string
+          description: The sheet of the template; absent for a warning about the whole file
+        cell:
+          type: string
+          description: The cell in A1 notation in the generated file (`B7`); absent for a warning about the whole file
+        placeholder:
+          type: string
+          description: The placeholder key without `${` and `}`
+        reason:
+          $ref: '#/components/schemas/ReportTemplateValueReason'
+
+    ReportTemplateFieldType:
+      type: string
+      description: >-
+        The value of a placeholder. `TEXT`: text (codes such as a status are written in the file's language).
+        `NUMBER`: an exact number that is not money, for example an area or a rate. `MONEY`: an amount with two
+        decimals. `QUANTITY`: kWh or m³ with three decimals. `INT`: a whole number. `DATE`: a day. `MONTH`: a month
+        (alone in a cell, the date of its first day). `DATE_TIME`: a day and time in Europe/Kyiv
+      enum: [TEXT, NUMBER, MONEY, QUANTITY, INT, DATE, MONTH, DATE_TIME]
+
+    ReportTemplateRowSet:
+      type: string
+      description: >-
+        The rows a template row repeats over. `PLOTS`: the active plots with their balances and land tax. `MONTHS`:
+        the billing months with charges. `METERS`: the nodes of the electricity meter tree. `WATER`: the plots
+        connected to water, one row per plot and source
+      enum: [PLOTS, MONTHS, METERS, WATER]
+
+    ReportTemplateField:
+      type: object
+      description: One placeholder of the field catalog
+      required: [key, field, type, permission]
+      properties:
+        key:
+          type: string
+          pattern: '^[A-Za-z][A-Za-z0-9_.\-]*$'
+          description: What to write in the template between `${` and `}`, for example `totals.debt`
+        field:
+          type: string
+          description: >-
+            The description code: the description is `reportTemplates.fields.<field>` in the client's catalogs. The
+            key itself for a fixed placeholder; for a placeholder of a charge type family the family's code,
+            `totals.charged.byChargeType` or `rows.plots.debt.byChargeType`, whose text names the type
+            (`{chargeType}`)
+        pattern:
+          type: string
+          description: >-
+            Only for a charge type family: the family's keys, `totals.charged.<type>` or `rows.plots.debt.<type>`
+            (`<type>` the code of a seeded type or the id of a custom type)
+        chargeTypeId:
+          type: string
+          format: uuid
+          description: Only for a charge type family, the charge type of this entry
+        type:
+          $ref: '#/components/schemas/ReportTemplateFieldType'
+        rowSet:
+          $ref: '#/components/schemas/ReportTemplateRowSet'
+        example:
+          type: string
+          description: >-
+            A language-neutral example of the value as the API writes values (`"1250.50"`, `"2026-01-31"`,
+            `"152.400"`); absent for text that depends on the language or on what the cooperative entered
+        permission:
+          $ref: '#/components/schemas/Permission'
+
+    ReportTemplateGenerateRequest:
+      type: object
+      description: The period to fill a template for, both days included, in Europe/Kyiv
+      required: [from, to]
+      properties:
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+        lang:
+          type: string
+          enum: [uk, en]
+          description: >-
+            Language of the file's texts, `uk` or `en`. Without it the `Accept-Language` header decides, then `uk`
 
     ReportTemplateUploadResult:
       type: object
@@ -9393,5 +9645,6 @@ components:
           $ref: '#/components/schemas/ReportTemplate'
         warnings:
           type: array
+          description: What was changed in the stored file; an upload lists only `EXTERNAL_LINKS_REMOVED`
           items:
-            $ref: '#/components/schemas/ReportTemplateUploadWarning'
+            $ref: '#/components/schemas/ReportTemplateWarningCode'

@@ -12,6 +12,6 @@
 import type { Problem } from './problem';
 
 /**
- * Malformed request or failed validation of a form field (code `VALIDATION_FAILED` or `MALFORMED_REQUEST`), or a file that is not a usable template (code `TEMPLATE_INVALID`, with one `errors[{field: file, code}]` whose code is `NOT_XLSX`, `MACROS`, `ACTIVE_CONTENT`, `BROKEN_ZIP`, `UNPACKED_TOO_LARGE` or `TWO_ROW_SETS`, see `uploadReportTemplate`)
+ * Malformed request or failed validation of a form field (code `VALIDATION_FAILED` or `MALFORMED_REQUEST`), or a file that is not a usable template (code `TEMPLATE_INVALID`, with one `errors[{field: file, code}]` whose code is `NOT_XLSX`, `MACROS`, `ACTIVE_CONTENT`, `BROKEN_ZIP`, `UNPACKED_TOO_LARGE`, `TWO_ROW_SETS` or `ARRAY_ACROSS_ROW`, see `uploadReportTemplate`)
  */
 export type ReportTemplateBadRequestResponse = Problem;

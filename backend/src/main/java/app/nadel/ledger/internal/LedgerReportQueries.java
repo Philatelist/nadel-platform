@@ -75,6 +75,9 @@ import org.springframework.transaction.annotation.Transactional;
  * {@code tariffs.ChargeTypeCatalog}) whose {@code service_from} lies in the year, opening balances left out; plots go
  * 500 per {@code IN} list ({@code charge_plot_type_idx}).
  * <p>
+ * {@link #chargedByType}: the same rule per charge type over a range of days and every plot, one row per type
+ * ({@code charge_type_id} is in no index of its own: the query reads the cooperative's charges once, bounded by RLS).
+ * <p>
  * {@link #electricityCharged}: every row (regular, reversal, adjustment) of the regular consumption and losses charges
  * of the electricity type and of the common consumer charges whose service period overlaps the range, joined to the
  * charge it corrects for the source and the original service period; then the parts of the rows and of the states the
@@ -204,6 +207,15 @@ class LedgerReportQueries implements LedgerReadModel {
               and c.kind <> 'OPENING'
               and c.service_from between :from and :to
             group by c.plot_id
+            """;
+
+    /** Per charge type, the signed sum of the charges whose first service day lies in the range; no openings. */
+    private static final String CHARGED_BY_TYPE = """
+            select c.charge_type_id, sum(c.amount) as charged
+            from charge c
+            where c.kind <> 'OPENING'
+              and c.service_from between :from and :to
+            group by c.charge_type_id
             """;
 
     /**
@@ -447,6 +459,21 @@ class LedgerReportQueries implements LedgerReadModel {
                 Object[] values = (Object[]) row;
                 charged.put((UUID) values[0], money(values[1]));
             }
+        }
+        return charged;
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Map<UUID, Money> chargedByType(LocalDate from, LocalDate to) {
+        requireRange(from, to);
+        Map<UUID, Money> charged = new LinkedHashMap<>();
+        for (Object row : entityManager.createNativeQuery(CHARGED_BY_TYPE)
+                .setParameter("from", from)
+                .setParameter("to", to)
+                .getResultList()) {
+            Object[] values = (Object[]) row;
+            charged.put((UUID) values[0], money(values[1]));
         }
         return charged;
     }

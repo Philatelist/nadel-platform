@@ -1,4 +1,4 @@
-import type { ReportCode } from '@nadel/api-client';
+import type { ReportCode, ReportTemplate } from '@nadel/api-client';
 import { screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { queryResult } from '../test/meterFixtures';
@@ -11,6 +11,7 @@ const unknownReportCode = 'not-a-report' as ReportCode;
 
 let reports: unknown[] = [];
 let canManageTemplates = true;
+let templates: ReportTemplate[] = [];
 
 vi.mock('../me', () => ({
   useCan: (permission: string) => permission !== 'REPORT_TEMPLATES_MANAGE' || canManageTemplates,
@@ -20,6 +21,7 @@ vi.mock('../me', () => ({
 vi.mock('@nadel/api-client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@nadel/api-client')>()),
   useListReports: () => queryResult(reports),
+  useListReportTemplates: () => queryResult(templates),
 }));
 
 describe('ReportsPage', () => {
@@ -27,6 +29,7 @@ describe('ReportsPage', () => {
     window.localStorage.setItem('nadel.locale', 'en');
     reports = [chargesByMonthInfo];
     canManageTemplates = true;
+    templates = [];
   });
 
   it('lists a card per report the API returns, with its title, description and link', () => {
@@ -71,5 +74,30 @@ describe('ReportsPage', () => {
     canManageTemplates = false;
     renderWithApp(<ReportsPage />);
     expect(screen.getAllByRole('link', { name: 'Report templates' })).toHaveLength(1);
+  });
+
+  describe('generating from a template', () => {
+    const active: ReportTemplate = { id: 't-1', name: 'Water form', status: 'ACTIVE', versionCount: 1 };
+    const archived: ReportTemplate = { id: 't-2', name: 'Old form', status: 'ARCHIVED', versionCount: 1 };
+
+    it('offers Generate on active templates, and no upload, versions or archive, without REPORT_TEMPLATES_MANAGE', () => {
+      templates = [active, archived];
+      canManageTemplates = false;
+      renderWithApp(<ReportsPage />);
+      const items = within(screen.getByRole('region', { name: 'Report templates' })).getAllByRole('listitem');
+      expect(items).toHaveLength(1);
+      expect(within(items[0]!).getByText('Water form')).toBeInTheDocument();
+      expect(within(items[0]!).getByRole('button', { name: 'Generate' })).toBeInTheDocument();
+      expect(screen.queryByText('Old form')).not.toBeInTheDocument();
+      for (const name of ['Upload new version', 'Versions', 'Archive']) {
+        expect(screen.queryByRole('button', { name })).not.toBeInTheDocument();
+      }
+    });
+
+    it('leaves the templates to their own page for a user who manages them', () => {
+      templates = [active];
+      renderWithApp(<ReportsPage />);
+      expect(screen.queryByRole('button', { name: 'Generate' })).not.toBeInTheDocument();
+    });
   });
 });

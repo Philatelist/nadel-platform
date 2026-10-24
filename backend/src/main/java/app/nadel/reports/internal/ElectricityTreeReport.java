@@ -159,8 +159,7 @@ class ElectricityTreeReport implements ReportDefinition {
     public ReportResult load(ReportFilters filters, ReportContext context) {
         LocalDate from = filters.from();
         LocalDate to = filters.to();
-        List<Row> tree = meters.tree(from, to).rows().stream().map(ElectricityTreeReport::treeRow).toList();
-        Sheet consumption = new Sheet(CONSUMPTION, TREE_COLUMNS, tree, List.of());
+        Sheet consumption = consumption(from, to);
         Sheet charged = new Charged(ledger.electricityCharged(from, to, context.rowLimit()),
                 ledger.lossesRunsInRange(from, to), ledger.commonConsumerRunsInRange(from, to)).sheet();
         return new ReportResult(List.of(consumption, charged), List.of(lossesNote()));
@@ -176,6 +175,15 @@ class ElectricityTreeReport implements ReportDefinition {
     }
 
     // ---- the consumption sheet
+
+    /**
+     * The consumption sheet of the range: one row per node under each parent, in the order of the tree. Also the
+     * template row set {@code meters} ({@link TemplateValues}).
+     */
+    Sheet consumption(LocalDate from, LocalDate to) {
+        List<Row> tree = meters.tree(from, to).rows().stream().map(ElectricityTreeReport::treeRow).toList();
+        return new Sheet(CONSUMPTION, TREE_COLUMNS, tree, List.of());
+    }
 
     private static Row treeRow(MeterTreeReportRow node) {
         List<MeterTreeReportSlice> slices = node.slices();

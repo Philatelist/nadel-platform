@@ -9,13 +9,14 @@
  *
  * OpenAPI spec version: 0.1.0
  */
+import type { ReportTemplateGenerateRequestLang } from './reportTemplateGenerateRequestLang';
 
 /**
- * `EXTERNAL_LINKS_REMOVED`: the file linked to other workbooks or had data connections; they were removed from the stored file
+ * The period to fill a template for, both days included, in Europe/Kyiv
  */
-export type ReportTemplateUploadWarning = typeof ReportTemplateUploadWarning[keyof typeof ReportTemplateUploadWarning];
-
-
-export const ReportTemplateUploadWarning = {
-  EXTERNAL_LINKS_REMOVED: 'EXTERNAL_LINKS_REMOVED',
-} as const;
+export interface ReportTemplateGenerateRequest {
+  from: string;
+  to: string;
+  /** Language of the file's texts, `uk` or `en`. Without it the `Accept-Language` header decides, then `uk` */
+  lang?: ReportTemplateGenerateRequestLang;
+}
