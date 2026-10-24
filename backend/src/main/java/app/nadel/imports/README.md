@@ -90,8 +90,9 @@ the owning module (`INVALID`). Yes and no (`так`/`ні`, `yes`/`no`, `true`/`
 
 1. The size is checked (over 10 MB: 413 `FILE_TOO_LARGE`; the multipart limits in `application.yml` and the container
    answer the same way before the controller is reached).
-2. `ZipGuard` refuses anything that is not a safe `.xlsx` (400 `FILE_NOT_XLSX`): wrong extension, no zip signature (so
-   also the old `.xls` and encrypted workbooks, which are OLE2 files), a corrupt archive, missing
+2. `xlsx.WorkbookGuard` (module `xlsx`, default limits) refuses anything that is not a safe `.xlsx`, and the import
+   answers every refusal (`UnsafeWorkbookException`, whatever its reason) with 400 `FILE_NOT_XLSX`: wrong extension, no
+   zip signature (so also the old `.xls` and encrypted workbooks, which are OLE2 files), a corrupt archive, missing
    `[Content_Types].xml` or `xl/workbook.xml`, more than 200 entries, an entry over 50 MB or an archive over 100 MB once
    unpacked. Unpacked sizes are counted from the bytes decompression really produces, never from the sizes the archive
    declares (a zip bomb declares what it likes). The archive is read with commons-compress, which the spreadsheet

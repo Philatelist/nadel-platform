@@ -10,9 +10,9 @@ Rules for every slice: contract first (`api/openapi.yaml`, then `make gen`), Fly
   - [x] Isolation, privilege and constraint tests for the two new tables; migration test of V20 over V19. **[Agent: postgres-database]**
   - [x] Verify: `cd backend && ./mvnw test -Dtest='app.nadel.settings.**,app.nadel.members.**,app.nadel.tenancy.**,app.nadel.identity.**,app.nadel.ModularityTests'` and `pnpm -r typecheck && pnpm -r lint && pnpm --filter web exec vitest run src/pages/SettingsPage.test.tsx` and `pnpm --filter shared test`; delete temporary files. **[Agent: spring-backend]**
 
-- [ ] **Slice 2: Shared workbook guard (`xlsx` module)**
-  - [ ] Create module `app.nadel.xlsx` with public `WorkbookGuard` and `UnsafeWorkbookException`; move `ZipGuard` and its tests; rewire `imports` to map the exception to `FILE_NOT_XLSX` with unchanged behaviour. Update ADR 0012 note. **[Agent: spring-backend]**
-  - [ ] Verify: `cd backend && ./mvnw test -Dtest='app.nadel.xlsx.**,app.nadel.imports.**,app.nadel.ModularityTests'`; delete temporary files. **[Agent: spring-backend]**
+- [x] **Slice 2: Shared workbook guard (`xlsx` module)**
+  - [x] Create module `app.nadel.xlsx` with public `WorkbookGuard` and `UnsafeWorkbookException`; move `ZipGuard` and its tests; rewire `imports` to map the exception to `FILE_NOT_XLSX` with unchanged behaviour. Update ADR 0012 note. **[Agent: spring-backend]**
+  - [x] Verify: `cd backend && ./mvnw test -Dtest='app.nadel.xlsx.**,app.nadel.imports.**,app.nadel.ModularityTests'`; delete temporary files. **[Agent: spring-backend]**
 
 - [ ] **Slice 3: Reports section and Charges by month**
   - [ ] Contract: tag `reports` with `GET /reports`, `GET /reports/{code}`, `GET /reports/{code}.xlsx` (+ `lang`), the `ReportCode` enum of all eight reports, the typed filter union, error codes, `AuditAction` and `AuditEntityType` additions; run `make gen`. **[Agent: spring-backend]**

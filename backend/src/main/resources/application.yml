@@ -45,7 +45,7 @@ spring:
   servlet:
     multipart:
       # Excel import: one workbook of at most 10 MB per request. The service checks the size again for clients that
-      # bypass the container, and ZipGuard limits what the archive unpacks to.
+      # bypass the container, and xlsx.WorkbookGuard limits what the archive unpacks to.
       max-file-size: 10MB
       max-request-size: 11MB
   jackson:

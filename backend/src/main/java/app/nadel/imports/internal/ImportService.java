@@ -3,6 +3,8 @@ package app.nadel.imports.internal;
 import app.nadel.identity.AccessProfile;
 import app.nadel.problem.ApiProblemException;
 import app.nadel.problem.ProblemCodes;
+import app.nadel.xlsx.UnsafeWorkbookException;
+import app.nadel.xlsx.WorkbookGuard;
 import java.io.IOException;
 import java.time.Clock;
 import java.time.Duration;
@@ -43,7 +45,7 @@ class ImportService {
     /** Control and invisible formatting characters (bidirectional overrides, zero-width marks). */
     private static final Pattern INVISIBLE = Pattern.compile("[\\p{Cc}\\p{Cf}]");
 
-    private final ZipGuard zipGuard = new ZipGuard();
+    private final WorkbookGuard workbookGuard = WorkbookGuard.withDefaultLimits();
     private final ImportPlanner planner;
     private final ImportRunRepository runs;
     private final TransactionTemplate transaction;
@@ -70,7 +72,12 @@ class ImportService {
                     "The uploaded file is too large.");
         }
         byte[] content = read(file);
-        zipGuard.check(fileName, content);
+        try {
+            workbookGuard.check(fileName, content);
+        } catch (UnsafeWorkbookException e) {
+            // every reason gets the same answer, as before the guard moved to the xlsx module
+            throw WorkbookReader.notXlsx();
+        }
         PlotsSheet.Parsed plots;
         MembersSheet.Parsed members;
         OwnershipSheet.Parsed ownership;
@@ -101,7 +108,7 @@ class ImportService {
         try {
             return file.getBytes();
         } catch (IOException e) {
-            throw ZipGuard.notXlsx();
+            throw WorkbookReader.notXlsx();
         }
     }
 
