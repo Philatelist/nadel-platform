@@ -59,3 +59,4 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `b45a8e2..6a3618e` | MAJOR_ISSUES | M1 `web/e2e/recalculation.spec.ts:200-203` waits for the async reading charge with a single check and swallows a `bookMonth` failure (timing-dependent) | minor: demo recalculation has no RECALCULATION_BOOKED audit row and is MANUAL while the story is a version correction; demo status cache `oldest` does not skip adjustments; guide "Known limit" wording differs from money-rules §5.3 (pending reading in a charged interval); approvals step 2 still a recorded deviation; ReadingHistory change judged correct |
+| 2 | + `1de90c8` | PASS | M1 resolved | minor: 15 s poll timeout is a literal; round-1 minors stand |
