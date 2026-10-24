@@ -70,6 +70,13 @@ public interface PlotCatalog {
      */
     List<UUID> inStreetOrder(Collection<UUID> ids);
 
+    /**
+     * The ids of the plots on the street, archived plots and common land included (a report over past charges counts
+     * plots that were archived since): the street as stored is compared with {@code street} ignoring case and
+     * surrounding spaces. A blank {@code street} matches nothing; the order is unspecified.
+     */
+    List<UUID> idsOnStreet(String street);
+
     /** The number of plots a tariff for all plots applies to: active (not archived) and not common land. */
     long countChargeable();
 

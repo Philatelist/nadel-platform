@@ -193,6 +193,20 @@ class PlotCatalogTests extends IntegrationTest {
         assertThat(found).isEmpty();
     }
 
+    @Test
+    void idsOnStreetIgnoresCaseAndSpacesAndIncludesArchivedPlotsButNotOtherCooperatives() {
+        UUID a = plot(DEMO_TENANT, "PC-S1", "PLOT", "600.00", false, "Каштанова-PC");
+        UUID b = plot(DEMO_TENANT, "PC-S2", "PLOT", "600.00", true, "  каштанова-pc ");
+        UUID road = plot(DEMO_TENANT, "PC-S3", "COMMON", "100.00", false, "КАШТАНОВА-PC");
+        plot(DEMO_TENANT, "PC-S4", "PLOT", "600.00", false, "Каштанова-PC 2");
+        plot(OTHER_TENANT, "PC-S5", "PLOT", "600.00", false, "Каштанова-PC");
+
+        assertThat(as(DEMO_TENANT, () -> catalog.idsOnStreet(" каштанова-PC "))).containsExactlyInAnyOrder(a, b,
+                road);
+        assertThat(as(DEMO_TENANT, () -> catalog.idsOnStreet("   "))).isEmpty();
+        assertThat(as(DEMO_TENANT, () -> catalog.idsOnStreet("Невідома-PC"))).isEmpty();
+    }
+
     private <T> T as(UUID tenant, Supplier<T> work) {
         return TenantContext.runAs(tenant, () -> tx.execute(status -> work.get()));
     }

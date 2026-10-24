@@ -90,6 +90,13 @@ class JpaPlotCatalog implements PlotCatalog {
 
     @Override
     @Transactional(readOnly = true)
+    public List<UUID> idsOnStreet(String street) {
+        String wanted = street.strip();
+        return wanted.isEmpty() ? List.of() : plots.findIdsOnStreet(wanted);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public long countChargeable() {
         return plots.countByArchivedAtIsNullAndKindNot(PlotKind.COMMON);
     }

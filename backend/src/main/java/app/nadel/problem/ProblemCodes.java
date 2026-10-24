@@ -142,6 +142,14 @@ public final class ProblemCodes {
     /** 409: plots are or were connected to the meter as their water source, so it is not deleted. */
     public static final String WATER_SOURCE_IN_USE = "WATER_SOURCE_IN_USE";
 
+    /**
+     * 400: the filters do not fit the report (a required filter is missing, a range ends before it starts, an unknown
+     * charge type); {@code errors[]} names each query parameter.
+     */
+    public static final String REPORT_FILTER_INVALID = "REPORT_FILTER_INVALID";
+    /** 422: a sheet of the report would have more than 20 000 rows; the user narrows the filters. */
+    public static final String REPORT_TOO_LARGE = "REPORT_TOO_LARGE";
+
     /** Codes of single fields in {@code errors[]}. */
     public static final String REQUIRED = "REQUIRED";
     public static final String TOO_LONG = "TOO_LONG";

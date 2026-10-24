@@ -48,6 +48,7 @@ cooperative that is not reversed, and a reversal never target an adjustment or a
 |---|---|
 | `ChargesBooked(tenantId, plotIds)` | Published inside the transaction of every booking or reversal (a reversal, an opening balance, the month run, a retry and the charges of readings, at most 500 plots per event; every later booking path must publish it too). `PlotStatusRefresher` recomputes the debt of those plots from the committed ledger. Ids only, no personal data; the set is never empty |
 | `OpeningBalanceImport` (with `Row`, `Item`, `Plan`, `Problem`, `Action`) | The "Opening balances" sheet of the Excel import (slice 8), `plan`/`lock`/`apply` like `meters.MeterImport`; implemented by `internal.OpeningBalanceImportService`, see Opening balances from the import |
+| `LedgerReadModel` (with `MonthTypeTotals`, `MonthGrouping`, `MonthStatus`) | The read facade of the reports (feature 013), implemented by `internal.LedgerReportQueries`; see The read model of the reports |
 
 Everything else is in `internal`.
 
@@ -292,6 +293,37 @@ Opening balances do not take it (they are never recalculated).
   without a reason the source key is the reference to the import. `ChargesBooked` for the plots, at most 500 plots per
   event (`TariffChargeWriter.PLOTS_PER_EVENT`, as the runs); one `OPENING_BALANCE_ENTERED` audit event per balance,
   returned to the import, which publishes them as `AuditBatch`es.
+
+## The read model of the reports (feature 013)
+
+`LedgerReadModel` (implemented by `LedgerReportQueries`) gives the `reports` module the figures it needs without
+reading the ledger tables. Rules for every method:
+
+- It runs in the **caller's transaction** (`Propagation.MANDATORY`; a call without one fails with
+  `IllegalTransactionStateException`), which the tenant-aware transaction manager has bound to the cooperative, so RLS
+  hides other cooperatives' rows as for every ledger query. The caller (`reports.ReportRunner`) opens a plain,
+  not read-only, transaction.
+- It aggregates in the database (parameterised native queries, no N+1) and answers ids, codes and `Money` only: **no
+  personal data**, no names. The caller orders and names charge types (`tariffs.ChargeTypeCatalog`) and plots
+  (`plots.PlotCatalog`).
+- Results are bounded by their filters (months x charge types), so no row limit applies.
+
+Methods:
+
+- `monthTotals(fromMonth, toMonth, chargeTypeIds, plotIds, grouping)` (charges by month, 013 §3.1): one
+  `MonthTypeTotals` per month and charge type that has a row: `status` (`OPEN`/`CLOSED` of the billing month; `null`
+  by service month), `plotCount` (distinct plots with any row of any kind in the group), the sums of `regular`,
+  `opening`, `reversals` (negative) and `adjustments` (either sign), and `effective` = `SUM(amount)` of every row
+  (money rules 5.4: charges plus adjustments minus reversals). `BILLING_MONTH` groups by `charge.billing_month_id`
+  with the predicate of the billing months screen (`ChargeRepository.totalsPerMonthAndType`), so `effective` of a
+  month and type is the screen's total cent for cent; `SERVICE_MONTH` groups by the month of `service_from` over the
+  days from the first of `fromMonth` to the last of `toMonth` (an adjustment or a reversal keeps the service period of
+  its charge, so an adjustment booked in March for January counts in January; a reading interval that starts in the
+  previous month counts there). `chargeTypeIds` empty = every type; `plotIds` `null` = every plot (a street resolved by
+  the caller), empty = no rows. Rows by month, then type id; `toMonth` before `fromMonth` is an
+  `IllegalArgumentException`. Test: `LedgerReadModelTests` (a worked ledger with a reversal, an opening balance and
+  later-month adjustments in both groupings, reconciliation with `GET /billing-months` for every listed month, the
+  filters, another cooperative, the caller's transaction).
 
 ## Billing months (tag `billing`, slice 2)
 
@@ -788,8 +820,8 @@ cache writer `PlotDebtCache`; the import records `PlotImportRow`, `PlotImportPla
 `connectedToSource`, `MeterCatalog.find`, `chainOf` and `plotMeterIds`; the port `ReadingUsage`, implemented here;
 the facade `ReadingChanges`), `settings` (`CooperativeSettings.lossesMode`, `lossesPercent`,
 `commonConsumerDefaultSplit`; `LossesMode`, `CommonConsumerSplit`), `money` (`Money`), `identity` (`CurrentUser`, `AccessProfile`, `Permission`,
-`OwnedPlotsSource`), `audit` (events, `ActorNames`), `problem`, `tenancy` (`TenantContext`). Only `imports` depends on
-`ledger` (`OpeningBalanceImport`).
+`OwnedPlotsSource`), `audit` (events, `ActorNames`), `problem`, `tenancy` (`TenantContext`). `imports` depends on
+`ledger` (`OpeningBalanceImport`) and `reports` reads it through `LedgerReadModel`.
 
 ## Permissions
 

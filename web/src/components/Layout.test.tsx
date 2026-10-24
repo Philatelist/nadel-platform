@@ -67,6 +67,20 @@ describe('Layout', () => {
     expect(hrefs).toEqual(['/plots', '/members', '/roles', '/audit']);
   });
 
+  it('shows Reports after Charges, only with REPORTS_VIEW', () => {
+    me = meWith(['CHARGES_VIEW', 'REPORTS_VIEW']);
+    const { unmount } = renderWithApp(<Layout />);
+    const hrefs = () =>
+      Array.from(screen.getByRole('navigation', { name: 'Main menu' }).querySelectorAll('a')).map((a) =>
+        a.getAttribute('href'),
+      );
+    expect(hrefs()).toEqual(['/plots', '/charges', '/reports']);
+    unmount();
+    me = meWith(['CHARGES_VIEW']);
+    renderWithApp(<Layout />);
+    expect(hrefs()).toEqual(['/plots', '/charges']);
+  });
+
   it('shows Cooperative settings last, only with SETTINGS_MANAGE', () => {
     me = meWith(['MEMBERS_VIEW', 'SETTINGS_MANAGE']);
     const { unmount } = renderWithApp(<Layout />);

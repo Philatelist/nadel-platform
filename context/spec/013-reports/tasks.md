@@ -14,13 +14,13 @@ Rules for every slice: contract first (`api/openapi.yaml`, then `make gen`), Fly
   - [x] Create module `app.nadel.xlsx` with public `WorkbookGuard` and `UnsafeWorkbookException`; move `ZipGuard` and its tests; rewire `imports` to map the exception to `FILE_NOT_XLSX` with unchanged behaviour. Update ADR 0012 note. **[Agent: spring-backend]**
   - [x] Verify: `cd backend && ./mvnw test -Dtest='app.nadel.xlsx.**,app.nadel.imports.**,app.nadel.ModularityTests'`; delete temporary files. **[Agent: spring-backend]**
 
-- [ ] **Slice 3: Reports section and Charges by month**
-  - [ ] Contract: tag `reports` with `GET /reports`, `GET /reports/{code}`, `GET /reports/{code}.xlsx` (+ `lang`), the `ReportCode` enum of all eight reports, the typed filter union, error codes, `AuditAction` and `AuditEntityType` additions; run `make gen`. **[Agent: spring-backend]**
-  - [ ] `LedgerReadModel.monthTotals` (billing-month and service-month grouping, same predicate as the billing months screen). **[Agent: spring-backend]**
-  - [ ] Report framework in `reports`: `ReportCatalog`, `ReportDefinition`, `ReportRunner` (plain transaction, 20 000 cap, audit of preview and file, `REPORT_GENERATED`), `XlsxReportWriter`, `ReportLanguage`, uk and en bundles, `charges-by-month` definition with its second sheet, controllers, `reports/README.md`. **[Agent: spring-backend]**
-  - [ ] Web shell: route gating, menu item, `ReportsPage`, generic `ReportFilterForm`, `ReportPreviewTable`, download, error mapping, i18n uk and en, bundle-to-catalog parity test. **[Agent: react-frontend]**
-  - [ ] Tests: reconciliation of charges-by-month with billing months for every month on a worked fixture (reversal, later-month adjustment), 403/401/operator checks, `.xlsx` route precedence, audit entry, cap `REPORT_TOO_LARGE`, language of headers. **[Agent: spring-backend]**
-  - [ ] Verify: `cd backend && ./mvnw test -Dtest='app.nadel.reports.**,app.nadel.ledger.**,app.nadel.ModularityTests'` and `pnpm -r typecheck && pnpm -r lint && pnpm --filter web exec vitest run src/pages/ReportsPage.test.tsx src/pages/ReportPage.test.tsx` and `pnpm --filter shared test`; delete temporary files. **[Agent: spring-backend]**
+- [x] **Slice 3: Reports section and Charges by month**
+  - [x] Contract: tag `reports` with `GET /reports`, `GET /reports/{code}`, `GET /reports/{code}.xlsx` (+ `lang`), the `ReportCode` enum of all eight reports, the typed filter union, error codes, `AuditAction` and `AuditEntityType` additions; run `make gen`. **[Agent: spring-backend]**
+  - [x] `LedgerReadModel.monthTotals` (billing-month and service-month grouping, same predicate as the billing months screen). **[Agent: spring-backend]**
+  - [x] Report framework in `reports`: `ReportCatalog`, `ReportDefinition`, `ReportRunner` (plain transaction, 20 000 cap, audit of preview and file, `REPORT_GENERATED`), `XlsxReportWriter`, `ReportLanguage`, uk and en bundles, `charges-by-month` definition with its second sheet, controllers, `reports/README.md`. **[Agent: spring-backend]**
+  - [x] Web shell: route gating, menu item, `ReportsPage`, generic `ReportFilterForm`, `ReportPreviewTable`, download, error mapping, i18n uk and en, bundle-to-catalog parity test. **[Agent: react-frontend]**
+  - [x] Tests: reconciliation of charges-by-month with billing months for every month on a worked fixture (reversal, later-month adjustment), 403/401/operator checks, `.xlsx` route precedence, audit entry, cap `REPORT_TOO_LARGE`, language of headers. **[Agent: spring-backend]**
+  - [x] Verify: `cd backend && ./mvnw test -Dtest='app.nadel.reports.**,app.nadel.ledger.**,app.nadel.ModularityTests'` and `pnpm -r typecheck && pnpm -r lint && pnpm --filter web exec vitest run src/pages/ReportsPage.test.tsx src/pages/ReportPage.test.tsx` and `pnpm --filter shared test`; delete temporary files. **[Agent: spring-backend]**
 
 - [ ] **Slice 4: Plot balances and Debtors**
   - [ ] Facades: `PlotCatalog.findActive`, `PlotOwners`, `PlotStatuses` and `PlotStatus`, `LedgerReadModel.debtsAsOf`, `MemberDirectory.contacts`, settings thresholds. **[Agent: spring-backend]**

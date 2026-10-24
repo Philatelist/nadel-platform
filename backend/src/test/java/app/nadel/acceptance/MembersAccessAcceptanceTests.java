@@ -437,7 +437,9 @@ class MembersAccessAcceptanceTests extends IntegrationTest {
     /** §2.6 #10: the contract and the card carry no tax number, passport or date of birth. */
     @Test
     void noTaxPassportOrBirthDataExistsInTheContractOrOnTheCard() throws Exception {
-        String contract = Files.readString(Path.of("..", "api", "openapi.yaml")).toLowerCase();
+        // the land tax is a charge of the cooperative (and a report of feature 013), not a personal tax number
+        String contract = Files.readString(Path.of("..", "api", "openapi.yaml")).toLowerCase()
+                .replaceAll("land[-_ ]tax", "land");
         for (String word : List.of("tax", "passport", "birth", "dob", "inn")) {
             assertThat(contract).as("openapi mentions '%s'", word).doesNotContainPattern("\\b" + word + "\\w*\\b");
         }

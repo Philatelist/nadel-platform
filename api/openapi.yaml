@@ -58,6 +58,10 @@ tags:
     description: >-
       Recalculations of past charges (corrections of open months by reversal and new charge, of closed months by an
       adjustment in the earliest open month) and their history
+  - name: reports
+    description: >-
+      Built-in reports over what the app has booked (charges, debts, meters, water, land tax, corrections): the list of
+      reports the caller may run, the on-screen preview and the Excel file
 
 paths:
   /me:
@@ -3939,6 +3943,174 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
 
+  /reports:
+    get:
+      tags: [reports]
+      operationId: listReports
+      summary: The reports the caller may run, with their filters
+      description: |
+        The built-in reports the caller may run, in the order of `ReportCode`, each with its filters: what the filter
+        is (`key`, `type`), which query parameters of `getReport` and `downloadReport` it fills (`params`), whether
+        it must be given, the values it starts with (`defaults`) and, for a period, whether it means billing months,
+        service days or reading dates (`basis`). A report that needs a permission the caller lacks is not listed:
+        `debtors` also needs `MEMBERS_VIEW`. A cooperative that has booked nothing still gets every report it may run.
+
+        The server returns codes only: the name and description of a report and the label of a filter come from the
+        client's catalogs by the report code and the filter key, in the user's language. Defaults that depend on the
+        day (today, the previous calendar month, the current year) are worked out in Europe/Kyiv when the list is
+        read; the defaults of `debtors` (`minDebt`, `olderThanDays`) are the cooperative's current red amount and red
+        days. Requires `REPORTS_VIEW`; the platform operator has no cooperative data: 403.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReportInfo'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /reports/{code}:
+    get:
+      tags: [reports]
+      operationId: getReport
+      summary: The on-screen preview of a report
+      description: |
+        Runs the report with the given filters and returns its preview: per sheet the columns, the first 200 rows, the
+        totals over all rows and the number of rows. `downloadReport` with the same filters writes every row and the
+        same totals: preview and file come from one query, so their numbers always agree.
+
+        Filters are query parameters. A report reads only the parameters of its filters (see `listReports`) and
+        ignores the others; a filter left out takes its default. `fromMonth` and `toMonth` are billing months
+        (`YYYY-MM`, both included); `from` and `to` are calendar days in Europe/Kyiv, both included, meaning service
+        days or reading dates as the filter's `basis` says; `chargeTypeIds`, `statuses`, `meterKinds` and
+        `correctionKinds` left out mean all; `street` is compared with the plot's street as stored, ignoring case and
+        surrounding spaces; `resource` and `waterSource` left out mean all. In `debtors`, `minDebt` and
+        `olderThanDays` combine with OR, as in the red status.
+
+        A malformed parameter (a wrong format, a number out of range) is 400 `VALIDATION_FAILED`, an unknown enum
+        value 400 `MALFORMED_REQUEST`. Filters that do not fit the report are 400 `REPORT_FILTER_INVALID` with
+        `errors[{field, code}]`, where `field` is the parameter: `REQUIRED` (a required filter without a default is
+        missing), `INVALID` (`toMonth` before `fromMonth`, `to` before `from`), `NOT_FOUND` (`chargeTypeIds[i]` is not a
+        charge type of the cooperative). A sheet of more than 20 000 rows is 422 `REPORT_TOO_LARGE`: nothing is
+        returned and nothing is written to the audit log.
+
+        A cell holds a string formatted by its column type (see `ReportColumnType`): money with two decimals
+        (`"1250.50"`), kWh and m³ with three (`"152.400"`), ISO dates, `YYYY-MM` months and codes. A value that is not
+        known is absent with a `reason`, never `0`. Totals are the sums of the rows as listed, with no separate
+        rounding. "Charged" is always the effective amount (charges plus their adjustments, reversals counting
+        negative); columns that split it show regular charges, reversals and adjustments separately. Plots are listed in
+        the natural order of their numbers, meters in the order of the meter tree, charge types in their configured
+        order. No report has a "paid" column until payments exist.
+
+        Every run is written to the audit log (`REPORT_GENERATED`, entity type `REPORT`, `output` `PREVIEW`) with the
+        filters as ids, codes and dates, the row count and whether the report holds personal data, never its contents.
+        Requires `REPORTS_VIEW`; `debtors` also needs `MEMBERS_VIEW` (403 `PERMISSION_DENIED` otherwise). An unknown
+        code is 400 `MALFORMED_REQUEST`; a code of `ReportCode` this server does not produce yet is 404 `NOT_FOUND`.
+      parameters:
+        - $ref: '#/components/parameters/ReportCodePath'
+        - $ref: '#/components/parameters/ReportFromMonth'
+        - $ref: '#/components/parameters/ReportToMonth'
+        - $ref: '#/components/parameters/ReportFrom'
+        - $ref: '#/components/parameters/ReportTo'
+        - $ref: '#/components/parameters/ReportAsOf'
+        - $ref: '#/components/parameters/ReportYear'
+        - $ref: '#/components/parameters/ReportChargeTypeIds'
+        - $ref: '#/components/parameters/ReportStreet'
+        - $ref: '#/components/parameters/ReportStatuses'
+        - $ref: '#/components/parameters/ReportMinDebt'
+        - $ref: '#/components/parameters/ReportOlderThanDays'
+        - $ref: '#/components/parameters/ReportResource'
+        - $ref: '#/components/parameters/ReportMeterKinds'
+        - $ref: '#/components/parameters/ReportWaterSource'
+        - $ref: '#/components/parameters/ReportCorrectionKinds'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportPreview'
+        '400':
+          $ref: '#/components/responses/ReportBadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ReportTooLarge'
+
+  /reports/{code}.xlsx:
+    get:
+      tags: [reports]
+      operationId: downloadReport
+      summary: Download a report as an Excel file
+      description: |
+        The report of `getReport` with the same filters as an `.xlsx` workbook with every row and the same totals. One
+        sheet per sheet of the preview, each with a header block (the cooperative's name, the report's name, the
+        filters, when it was made in Europe/Kyiv time and the display name of who made it), a frozen header row,
+        numbers stored as numbers with a number format and dates as dates. A value that is not known is an empty cell
+        with its reason, never `0`. Plot numbers, names and anything else people typed are written as stored.
+
+        The texts of the file (sheet names, header block, column headers, codes) are in the language of the `lang`
+        query parameter; without it the best match of `uk` and `en` in the `Accept-Language` header decides, and
+        without a match `uk`, as for the import template. A `lang` other than `uk` and `en` is 400
+        `VALIDATION_FAILED`.
+
+        The file name is ASCII, in the `Content-Disposition` header: the report code and the period as ISO days,
+        `<code>_<from>_<to>.xlsx`, for example `land-tax_2026-01-01_2026-12-31.xlsx`. A month range gives the first
+        day of `fromMonth` and the last day of `toMonth`, a year its first and last day, an "as of" date that day
+        twice.
+
+        Errors, permissions and the audit entry are those of `getReport`, with `output` `XLSX`. This path is matched
+        before `/reports/{code}`.
+      parameters:
+        - $ref: '#/components/parameters/ReportCodePath'
+        - $ref: '#/components/parameters/ReportFromMonth'
+        - $ref: '#/components/parameters/ReportToMonth'
+        - $ref: '#/components/parameters/ReportFrom'
+        - $ref: '#/components/parameters/ReportTo'
+        - $ref: '#/components/parameters/ReportAsOf'
+        - $ref: '#/components/parameters/ReportYear'
+        - $ref: '#/components/parameters/ReportChargeTypeIds'
+        - $ref: '#/components/parameters/ReportStreet'
+        - $ref: '#/components/parameters/ReportStatuses'
+        - $ref: '#/components/parameters/ReportMinDebt'
+        - $ref: '#/components/parameters/ReportOlderThanDays'
+        - $ref: '#/components/parameters/ReportResource'
+        - $ref: '#/components/parameters/ReportMeterKinds'
+        - $ref: '#/components/parameters/ReportWaterSource'
+        - $ref: '#/components/parameters/ReportCorrectionKinds'
+        - name: lang
+          in: query
+          required: false
+          description: >-
+            Language of the file's texts, `uk` or `en`. Without it the `Accept-Language` header decides, then `uk`.
+          schema:
+            type: string
+            enum: [uk, en]
+            pattern: '^(uk|en)$'
+      responses:
+        '200':
+          description: The report workbook, sent as an attachment
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+        '400':
+          $ref: '#/components/responses/ReportBadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ReportTooLarge'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -4068,6 +4240,173 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/Problem'
+    ReportBadRequest:
+      description: >-
+        Malformed request or failed validation of a parameter (code `VALIDATION_FAILED` or `MALFORMED_REQUEST`), or
+        filters that do not fit the report (code `REPORT_FILTER_INVALID`, with `errors[{field, code}]` naming the
+        query parameter)
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    ReportTooLarge:
+      description: >-
+        The report would have more than 20 000 rows in a sheet (code `REPORT_TOO_LARGE`); the client asks the user to
+        narrow the filters
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+
+  parameters:
+    ReportCodePath:
+      name: code
+      in: path
+      required: true
+      description: The report, one of `ReportCode`
+      schema:
+        $ref: '#/components/schemas/ReportCode'
+    ReportFromMonth:
+      name: fromMonth
+      in: query
+      required: false
+      description: First billing month of the range, `YYYY-MM` (filter type `MONTH_RANGE`)
+      schema:
+        type: string
+        pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+    ReportToMonth:
+      name: toMonth
+      in: query
+      required: false
+      description: Last billing month of the range, `YYYY-MM`, not before `fromMonth` (filter type `MONTH_RANGE`)
+      schema:
+        type: string
+        pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+    ReportFrom:
+      name: from
+      in: query
+      required: false
+      description: First day of the range (filter type `DATE_RANGE`)
+      schema:
+        type: string
+        format: date
+    ReportTo:
+      name: to
+      in: query
+      required: false
+      description: Last day of the range, not before `from` (filter type `DATE_RANGE`)
+      schema:
+        type: string
+        format: date
+    ReportAsOf:
+      name: asOf
+      in: query
+      required: false
+      description: The day the report is made for (filter type `DATE`)
+      schema:
+        type: string
+        format: date
+    ReportYear:
+      name: year
+      in: query
+      required: false
+      description: A calendar year (filter type `YEAR`)
+      schema:
+        type: integer
+        format: int32
+        minimum: 2000
+        maximum: 2100
+    ReportChargeTypeIds:
+      name: chargeTypeIds
+      in: query
+      required: false
+      description: Charge types to include; left out means all (filter type `CHARGE_TYPES`)
+      schema:
+        type: array
+        maxItems: 100
+        items:
+          type: string
+          format: uuid
+    ReportStreet:
+      name: street
+      in: query
+      required: false
+      description: >-
+        Only plots on this street, compared with the street as stored, ignoring case and surrounding spaces (filter
+        type `STREET`)
+      schema:
+        type: string
+        maxLength: 100
+    ReportStatuses:
+      name: statuses
+      in: query
+      required: false
+      description: Only plots of these status colours; left out means all (filter type `STATUS`)
+      schema:
+        type: array
+        maxItems: 4
+        items:
+          $ref: '#/components/schemas/PlotStatus'
+    ReportMinDebt:
+      name: minDebt
+      in: query
+      required: false
+      description: A debt above this amount, two decimals, for example `1500.00` (filter type `MONEY`)
+      schema:
+        type: string
+        pattern: '^\d{1,12}\.\d{2}$'
+    ReportOlderThanDays:
+      name: olderThanDays
+      in: query
+      required: false
+      description: A debt older than this number of days (filter type `INT`)
+      schema:
+        type: integer
+        format: int32
+        minimum: 0
+        maximum: 36500
+    ReportResource:
+      name: resource
+      in: query
+      required: false
+      description: Only meters of this resource; left out means both (filter type `RESOURCE`)
+      schema:
+        $ref: '#/components/schemas/MeterResource'
+    ReportMeterKinds:
+      name: meterKinds
+      in: query
+      required: false
+      description: Only meters of these kinds; left out means the filter's default (filter type `METER_KIND`)
+      schema:
+        type: array
+        maxItems: 4
+        items:
+          $ref: '#/components/schemas/MeterKind'
+    ReportWaterSource:
+      name: waterSource
+      in: query
+      required: false
+      description: >-
+        Only plots connected to a source of this kind (`METER`: a well or another common consumer meter,
+        `COOPERATIVE_SUPPLY`: the cooperative's water supply); left out means all (filter type `WATER_SOURCE`)
+      schema:
+        $ref: '#/components/schemas/WaterSourceKind'
+    ReportCorrectionKinds:
+      name: correctionKinds
+      in: query
+      required: false
+      description: Only corrections of these kinds; left out means both (filter type `CORRECTION_KIND`)
+      schema:
+        type: array
+        maxItems: 2
+        items:
+          $ref: '#/components/schemas/ReportCorrectionKind'
 
   schemas:
     Money:
@@ -4564,6 +4903,9 @@ components:
         - COMMON_CONSUMER_RUN_REVERSED
         - COMMON_CONSUMER_BILLING_CHANGED
         - RECALCULATION_BOOKED
+        - REPORT_GENERATED
+        - REPORT_TEMPLATE_UPLOADED
+        - REPORT_TEMPLATE_ARCHIVED
 
     AuditEntityType:
       type: string
@@ -4576,7 +4918,13 @@ components:
         `NOT_CHARGED_RETRIED` entry of a losses node or common consumer item is a `METER` entry about the node or
         consumer meter, and so is `COMMON_CONSUMER_BILLING_CHANGED` (about the consumer meter, label its name). A
         `RECALCULATION` entry (`RECALCULATION_BOOKED`) is about a booked recalculation: its label is its months as
-        `from/to` (`YYYY-MM`).
+        `from/to` (`YYYY-MM`). A `REPORT` entry (`REPORT_GENERATED`) is about one run of a report: its entity id is
+        the same for every run of the report (the name-based UUID of `report:<code>`, so the log can be filtered by
+        report), its label the report code (for example `charges-by-month`), and its fields are `report` (the code),
+        `output` (`PREVIEW` or `XLSX`), `filters` (a JSON array of `{param, value}` as the query string carries them:
+        ids, codes, dates and the street as typed), `rows` (the rows of every sheet) and `personalData`, never its
+        contents. A `REPORT_TEMPLATE` entry (`REPORT_TEMPLATE_UPLOADED`, `REPORT_TEMPLATE_ARCHIVED`)
+        is about a report template: its label is the template's name and its fields name the version.
       enum:
         [
           MEMBER,
@@ -4594,6 +4942,8 @@ components:
           LOSSES_RUN,
           COMMON_CONSUMER_RUN,
           RECALCULATION,
+          REPORT,
+          REPORT_TEMPLATE,
         ]
 
     AuditFieldChange:
@@ -8313,3 +8663,327 @@ components:
         totalPages:
           type: integer
           format: int32
+
+    ReportCode:
+      type: string
+      description: >-
+        A built-in report. `charges-by-month`: what was charged per billing month and charge type, with a second sheet
+        by service period. `plot-balances`: the debt of every active plot per charge type on a day, without names.
+        `debtors`: the plots over the red amount or older than the red days, with the owners' names and contacts
+        (also needs `MEMBERS_VIEW`). `electricity-tree`: electricity from the substation down to the plots, with a
+        consumption sheet and a charged sheet. `water`: water use and water charges of the connected plots.
+        `missing-readings`: active meters without an approved reading in a range. `land-tax`: the expected and the
+        charged land tax per plot for a year. `corrections`: every reversal and adjustment booked in a range of
+        billing months.
+      enum:
+        - charges-by-month
+        - plot-balances
+        - debtors
+        - electricity-tree
+        - water
+        - missing-readings
+        - land-tax
+        - corrections
+
+    ReportFilterType:
+      type: string
+      description: >-
+        What a filter asks for and the query parameters it fills. `MONTH_RANGE`: billing months `fromMonth` and
+        `toMonth`. `DATE_RANGE`: days `from` and `to`. `DATE`: one day `asOf`. `YEAR`: `year`. `MONEY`: an amount
+        (`minDebt`). `INT`: a whole number (`olderThanDays`). `CHARGE_TYPES`: charge types `chargeTypeIds`, several.
+        `STREET`: one street `street`. `STATUS`: status colours `statuses`, several. `RESOURCE`: `resource`.
+        `METER_KIND`: meter kinds `meterKinds`, several. `WATER_SOURCE`: the kind of water source `waterSource`.
+        `CORRECTION_KIND`: `correctionKinds`, several.
+      enum:
+        - MONTH_RANGE
+        - DATE_RANGE
+        - DATE
+        - YEAR
+        - MONEY
+        - INT
+        - CHARGE_TYPES
+        - STREET
+        - STATUS
+        - RESOURCE
+        - METER_KIND
+        - WATER_SOURCE
+        - CORRECTION_KIND
+
+    ReportFilterParam:
+      type: string
+      description: A query parameter of `getReport` and `downloadReport` that a filter fills
+      enum:
+        - fromMonth
+        - toMonth
+        - from
+        - to
+        - asOf
+        - year
+        - chargeTypeIds
+        - street
+        - statuses
+        - minDebt
+        - olderThanDays
+        - resource
+        - meterKinds
+        - waterSource
+        - correctionKinds
+
+    ReportPeriodBasis:
+      type: string
+      description: >-
+        What the period of a report means; the filter label says so. `BILLING_MONTHS`: the billing months the entries
+        were booked in. `SERVICE_DAYS`: the days a service was provided (the service period of a charge).
+        `READING_DATES`: the dates of meter readings.
+      enum: [BILLING_MONTHS, SERVICE_DAYS, READING_DATES]
+
+    ReportCorrectionKind:
+      type: string
+      description: A kind of correction in the ledger, `REVERSAL` or `ADJUSTMENT`
+      enum: [REVERSAL, ADJUSTMENT]
+
+    ReportFilterValue:
+      type: object
+      description: >-
+        One value of a filter parameter as the query string carries it; a filter of several values (charge types,
+        statuses, meter kinds, correction kinds) has one entry per value
+      required: [param, value]
+      properties:
+        param:
+          $ref: '#/components/schemas/ReportFilterParam'
+        value:
+          type: string
+          maxLength: 100
+
+    ReportFilter:
+      type: object
+      description: One filter of a report
+      required: [key, type, params, required, defaults]
+      properties:
+        key:
+          type: string
+          pattern: '^[a-z][A-Za-z]*$'
+          description: >-
+            Names the filter in the client's catalogs: `period`, `asOf`, `year`, `chargeTypes`, `street`, `statuses`,
+            `minDebt`, `olderThanDays`, `resource`, `meterKinds`, `waterSource` or `correctionKinds`
+        type:
+          $ref: '#/components/schemas/ReportFilterType'
+        params:
+          type: array
+          description: The query parameters the filter fills, in order (`fromMonth`, `toMonth` for a month range)
+          minItems: 1
+          maxItems: 2
+          items:
+            $ref: '#/components/schemas/ReportFilterParam'
+        required:
+          type: boolean
+          description: True when the report cannot run without the filter; a required filter always has defaults
+        defaults:
+          type: array
+          description: The values the filter starts with; empty when it starts empty (meaning all)
+          items:
+            $ref: '#/components/schemas/ReportFilterValue'
+        basis:
+          $ref: '#/components/schemas/ReportPeriodBasis'
+
+    ReportInfo:
+      type: object
+      description: A report the caller may run
+      required: [code, personalData, filters]
+      properties:
+        code:
+          $ref: '#/components/schemas/ReportCode'
+        personalData:
+          type: boolean
+          description: True when the report holds names and contacts of people (only `debtors`)
+        filters:
+          type: array
+          description: The filters in the order the form shows them; the period comes first
+          items:
+            $ref: '#/components/schemas/ReportFilter'
+
+    ReportColumnType:
+      type: string
+      description: >-
+        How the values of a column are written and shown. `TEXT`: as stored, for example a plot number or a name.
+        `CODE`: an enum code the client shows from its catalog for the column key. `CHARGE_TYPE`: the id of one of the
+        report's `chargeTypes`. `MONEY`: an amount with two decimals (`"1250.50"`). `QUANTITY`: kWh or m³ with three
+        decimals (`"152.400"`). `PERCENT`: a percentage with two decimals (`"4.75"`). `INTEGER`: a whole number.
+        `DATE`: an ISO day. `MONTH`: a month `YYYY-MM`. `BOOLEAN`: `true` or `false`.
+      enum: [TEXT, CODE, CHARGE_TYPE, MONEY, QUANTITY, PERCENT, INTEGER, DATE, MONTH, BOOLEAN]
+
+    ReportColumn:
+      type: object
+      description: >-
+        A column of a sheet. The client shows the header from its catalog by the report code, the sheet key and the
+        column key; a column per charge type shows the charge type's name
+      required: [key, type]
+      properties:
+        key:
+          type: string
+          pattern: '^[a-z][A-Za-z0-9]*(\.[A-Za-z0-9-]+)?$'
+          description: >-
+            Stable within the report, for example `month`, `effective` or, for a column per charge type,
+            `debt.<chargeTypeId>`
+        type:
+          $ref: '#/components/schemas/ReportColumnType'
+        chargeTypeId:
+          type: string
+          format: uuid
+          description: Set on a column per charge type; one of the report's `chargeTypes`
+
+    ReportCellReason:
+      type: string
+      description: >-
+        Why a cell has no value. `NO_READING`: there is no counted reading at or around the day, so the meter value is
+        not known. `DERIVED_FROM_UNKNOWN`: the value is worked out from a value that is not known.
+      enum: [NO_READING, DERIVED_FROM_UNKNOWN]
+
+    ReportCell:
+      type: object
+      description: >-
+        One cell. `value` is absent when the cell is empty; an empty cell with a `reason` is a value that is not
+        known, which is never shown as `0`
+      properties:
+        value:
+          type: string
+          description: The value formatted by the column type
+        reason:
+          $ref: '#/components/schemas/ReportCellReason'
+
+    ReportRowKind:
+      type: string
+      description: '`DETAIL` a row of the report; `SUBTOTAL` the totals of the group above it, for example of a month'
+      enum: [DETAIL, SUBTOTAL]
+
+    ReportRow:
+      type: object
+      required: [kind, level, cells]
+      properties:
+        kind:
+          $ref: '#/components/schemas/ReportRowKind'
+        level:
+          type: integer
+          format: int32
+          minimum: 0
+          description: The depth in a tree report (0 for a root and in every report without a tree), shown as an indent
+        cells:
+          type: array
+          description: One cell per column, in the order of the columns
+          items:
+            $ref: '#/components/schemas/ReportCell'
+
+    ReportTotal:
+      type: object
+      description: A totals line over all rows of a sheet, not only the rows of the preview
+      required: [key, cells]
+      properties:
+        key:
+          type: string
+          pattern: '^[A-Za-z][A-Za-z0-9_]*$'
+          description: >-
+            Names the line in the client's catalogs: `all` for the whole report, a code for a part of it, for example
+            the charge source `CONSUMPTION` or `LOSSES`
+        cells:
+          type: array
+          description: One cell per column, in the order of the columns; columns without a total are empty
+          items:
+            $ref: '#/components/schemas/ReportCell'
+
+    ReportSheet:
+      type: object
+      description: >-
+        One sheet of a report; the file has one worksheet per sheet. `charges-by-month` has `byBillingMonth` and
+        `byServicePeriod`, `electricity-tree` has `consumption` and `charged`; a report with one sheet calls it `main`
+      required: [key, columns, rows, totals, rowCount, truncated]
+      properties:
+        key:
+          type: string
+          pattern: '^[a-z][A-Za-z]*$'
+        columns:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReportColumn'
+        rows:
+          type: array
+          description: The first 200 rows
+          maxItems: 200
+          items:
+            $ref: '#/components/schemas/ReportRow'
+        totals:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReportTotal'
+        rowCount:
+          type: integer
+          format: int32
+          minimum: 0
+          description: The number of rows of the sheet in all, at most 20 000; the file holds every one
+        truncated:
+          type: boolean
+          description: True when `rowCount` is more than the rows of the preview
+
+    ReportNoteCode:
+      type: string
+      description: >-
+        A sentence of the report header. `SERVICE_PERIOD_SHEET`: the second sheet groups the charges by the month of
+        the service, so an adjustment booked later shows under the month it is for. `PAST_DATE_STATUS`: for a past day
+        the status is worked out as of that day with today's thresholds. `STATUS_ALL_CHARGE_TYPES`: with a charge type
+        filter, today's status still counts every charge type. `OLDEST_UNPAID_IS_OLDEST_CHARGE`: until payments exist,
+        the oldest unpaid charge is the oldest charge with a debt. `LOSSES_MODE`: the cooperative's losses mode and
+        percentage now (params `mode`, `percent`); a run booked under another mode shows what it booked.
+        `RECALCULATION_SUGGESTED`: some rows differ from the expected amount and a recalculation may be due (param
+        `count`). `OPEN_NOT_CHARGED`: open "not charged" items exist for the listed meters (param `count`).
+      enum:
+        - SERVICE_PERIOD_SHEET
+        - PAST_DATE_STATUS
+        - STATUS_ALL_CHARGE_TYPES
+        - OLDEST_UNPAID_IS_OLDEST_CHARGE
+        - LOSSES_MODE
+        - RECALCULATION_SUGGESTED
+        - OPEN_NOT_CHARGED
+
+    ReportNote:
+      type: object
+      required: [code, params]
+      properties:
+        code:
+          $ref: '#/components/schemas/ReportNoteCode'
+        params:
+          type: object
+          description: Parameters of the sentence as codes, numbers and dates, never display text
+          additionalProperties:
+            type: string
+
+    ReportPreview:
+      type: object
+      description: The on-screen preview of a report
+      required: [code, generatedAt, filters, headerNotes, chargeTypes, sheets]
+      properties:
+        code:
+          $ref: '#/components/schemas/ReportCode'
+        generatedAt:
+          type: string
+          format: date-time
+        filters:
+          type: array
+          description: The filter values the report used, defaults filled in
+          items:
+            $ref: '#/components/schemas/ReportFilterValue'
+        headerNotes:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReportNote'
+        chargeTypes:
+          type: array
+          description: >-
+            The charge types the report refers to, in their configured order: a `CHARGE_TYPE` cell and a column with
+            `chargeTypeId` name one of them by id
+          items:
+            $ref: '#/components/schemas/ChargeTypeRef'
+        sheets:
+          type: array
+          minItems: 1
+          maxItems: 2
+          items:
+            $ref: '#/components/schemas/ReportSheet'

@@ -11,7 +11,7 @@
  */
 
 /**
- * Kind of the entity an audit entry is about. A `CHARGE` entry (a reversal, an opening balance, a retried "not charged" item) is about the plot whose account changed: its `entityId` is the plot id and its label the plot number. A `BILLING_MONTH` entry (a closing, a month run) is about a billing month: its label is the month as `YYYY-MM`. A `LOSSES_RUN` entry (a losses run booked or reversed) is about the run: its label is the range as `from/to` (ISO dates); so is a `COMMON_CONSUMER_RUN` entry (a common consumer run booked or reversed). A `NOT_CHARGED_RETRIED` entry of a losses node or common consumer item is a `METER` entry about the node or consumer meter, and so is `COMMON_CONSUMER_BILLING_CHANGED` (about the consumer meter, label its name). A `RECALCULATION` entry (`RECALCULATION_BOOKED`) is about a booked recalculation: its label is its months as `from/to` (`YYYY-MM`).
+ * Kind of the entity an audit entry is about. A `CHARGE` entry (a reversal, an opening balance, a retried "not charged" item) is about the plot whose account changed: its `entityId` is the plot id and its label the plot number. A `BILLING_MONTH` entry (a closing, a month run) is about a billing month: its label is the month as `YYYY-MM`. A `LOSSES_RUN` entry (a losses run booked or reversed) is about the run: its label is the range as `from/to` (ISO dates); so is a `COMMON_CONSUMER_RUN` entry (a common consumer run booked or reversed). A `NOT_CHARGED_RETRIED` entry of a losses node or common consumer item is a `METER` entry about the node or consumer meter, and so is `COMMON_CONSUMER_BILLING_CHANGED` (about the consumer meter, label its name). A `RECALCULATION` entry (`RECALCULATION_BOOKED`) is about a booked recalculation: its label is its months as `from/to` (`YYYY-MM`). A `REPORT` entry (`REPORT_GENERATED`) is about one run of a report: its entity id is the same for every run of the report (the name-based UUID of `report:<code>`, so the log can be filtered by report), its label the report code (for example `charges-by-month`), and its fields are `report` (the code), `output` (`PREVIEW` or `XLSX`), `filters` (a JSON array of `{param, value}` as the query string carries them: ids, codes, dates and the street as typed), `rows` (the rows of every sheet) and `personalData`, never its contents. A `REPORT_TEMPLATE` entry (`REPORT_TEMPLATE_UPLOADED`, `REPORT_TEMPLATE_ARCHIVED`) is about a report template: its label is the template's name and its fields name the version.
  */
 export type AuditEntityType = typeof AuditEntityType[keyof typeof AuditEntityType];
 
@@ -32,4 +32,6 @@ export const AuditEntityType = {
   LOSSES_RUN: 'LOSSES_RUN',
   COMMON_CONSUMER_RUN: 'COMMON_CONSUMER_RUN',
   RECALCULATION: 'RECALCULATION',
+  REPORT: 'REPORT',
+  REPORT_TEMPLATE: 'REPORT_TEMPLATE',
 } as const;

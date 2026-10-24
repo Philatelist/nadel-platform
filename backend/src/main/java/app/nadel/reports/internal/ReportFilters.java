@@ -1,0 +1,114 @@
+package app.nadel.reports.internal;
+
+import app.nadel.problem.ApiProblemException;
+import app.nadel.problem.FieldProblem;
+import app.nadel.problem.ProblemCodes;
+import java.time.LocalDate;
+import java.time.YearMonth;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+import java.util.UUID;
+import nadel.contract.model.ReportFilterParam;
+import nadel.contract.model.ReportFilterValue;
+import org.jspecify.annotations.Nullable;
+import org.springframework.http.HttpStatus;
+
+/**
+ * The filters of one run of a report, read from the query parameters by the report's
+ * {@link ReportFilterDefinition}s with the defaults filled in. Holds the typed values the definition loads with and
+ * the values as the query string carries them ({@link #values()}): the preview echoes those and the audit entry
+ * records them (ids, codes and dates only, never contents).
+ */
+final class ReportFilters {
+
+    /** The days a report covers, both included: the period of its file name. */
+    record Period(LocalDate from, LocalDate to) {
+    }
+
+    private @Nullable YearMonth fromMonth;
+    private @Nullable YearMonth toMonth;
+    private List<UUID> chargeTypeIds = List.of();
+    private @Nullable String street;
+    private final List<ReportFilterValue> values = new ArrayList<>();
+
+    ReportFilters() {
+    }
+
+    /**
+     * Reads the filters of a report.
+     *
+     * @throws ApiProblemException 400 {@code REPORT_FILTER_INVALID} with every field error when a filter does not
+     *                             fit the report
+     */
+    static ReportFilters parse(List<ReportFilterDefinition> definitions, RawFilters raw, ReportContext context) {
+        ReportFilters filters = new ReportFilters();
+        List<FieldProblem> errors = new ArrayList<>();
+        for (ReportFilterDefinition definition : definitions) {
+            definition.apply(raw, context, filters, errors);
+        }
+        if (!errors.isEmpty()) {
+            throw new ApiProblemException(HttpStatus.BAD_REQUEST, ProblemCodes.REPORT_FILTER_INVALID,
+                    "The filters do not fit the report.", errors);
+        }
+        return filters;
+    }
+
+    // ---- set by the filter definitions
+
+    void months(YearMonth from, YearMonth to) {
+        this.fromMonth = Objects.requireNonNull(from, "from");
+        this.toMonth = Objects.requireNonNull(to, "to");
+        values.add(new ReportFilterValue(ReportFilterParam.FROM_MONTH, from.toString()));
+        values.add(new ReportFilterValue(ReportFilterParam.TO_MONTH, to.toString()));
+    }
+
+    void chargeTypeIds(List<UUID> ids) {
+        this.chargeTypeIds = List.copyOf(ids);
+        ids.forEach(id -> values.add(new ReportFilterValue(ReportFilterParam.CHARGE_TYPE_IDS, id.toString())));
+    }
+
+    void street(String street) {
+        this.street = Objects.requireNonNull(street, "street");
+        values.add(new ReportFilterValue(ReportFilterParam.STREET, street));
+    }
+
+    // ---- read by the report definitions
+
+    /** The first billing month; only for a report with a month range. */
+    YearMonth fromMonth() {
+        return required(fromMonth, "month range");
+    }
+
+    /** The last billing month; only for a report with a month range. */
+    YearMonth toMonth() {
+        return required(toMonth, "month range");
+    }
+
+    /** The chosen charge types in the order given; empty means every type. */
+    List<UUID> chargeTypeIds() {
+        return chargeTypeIds;
+    }
+
+    /** The chosen street without surrounding spaces; null when every street counts. */
+    @Nullable String street() {
+        return street;
+    }
+
+    /** The days the report covers: a month range runs from the first day of its first to the last of its last month. */
+    Period period() {
+        return new Period(fromMonth().atDay(1), toMonth().atEndOfMonth());
+    }
+
+    /** The values used, as the query string carries them, in the order of the filters. */
+    List<ReportFilterValue> values() {
+        return values.stream().map(value -> new ReportFilterValue(value.getParam(), value.getValue())).toList();
+    }
+
+    private static <T> T required(@Nullable T value, String filter) {
+        if (value == null) {
+            throw new IllegalStateException("The report has no " + filter + " filter");
+        }
+        return value;
+    }
+}

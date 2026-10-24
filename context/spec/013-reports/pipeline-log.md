@@ -35,4 +35,6 @@ Out: official tax form, PDF, payment reports, scheduled reports, operator-shared
 - functional-spec.md, technical-considerations.md written. Assumptions: preview audited as well as file; IBAN_INVALID top-level 400; new upload into an archived tax slot allowed; slot code TAX; own OOXML filler chosen (POI fallback, ADR 0015); single migration V20.
 - tasks.md written (12 slices). No staffing gaps; slice 11 docs/guides run under general-purpose (no docs specialist), noted for the final report. The `not-user-reviewed` marker was never written to the file (nothing to remove).
 - Slice 1 · c4057b0 · slice verify green (backend narrow, typecheck, lint, vitest 24, shared 130) · review: PASS round 1
-- Slice 2 · (commit below) · slice verify green (xlsx+imports+Modularity) · review: running (round 1)
+- Slice 2 · 4562a10 · slice verify green (xlsx+imports+Modularity) · review: PASS round 1
+- Slice 3: the 'Tests' task was delivered inside the framework task (ChargesByMonthReportTests, ReportsAccessTests, ReportRunnerTests); marked done on that evidence.
+- Slice 3 · (see git log) · slice verify green (backend reports+ledger+Modularity, typecheck, lint, vitest 17, shared 130) · review: running (round 1)

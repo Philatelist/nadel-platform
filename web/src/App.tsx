@@ -174,6 +174,20 @@ const router = createBrowserRouter([
         ],
       },
       {
+        element: <RequirePermission permission="REPORTS_VIEW" />,
+        children: [
+          {
+            path: 'reports',
+            lazy: () => import('./pages/ReportsPage').then((m) => ({ Component: m.ReportsPage })),
+          },
+          // Declare `reports/templates` here, before `reports/:code`.
+          {
+            path: 'reports/:code',
+            lazy: () => import('./pages/ReportPage').then((m) => ({ Component: m.ReportPage })),
+          },
+        ],
+      },
+      {
         element: <RequirePermission permission="AUDIT_VIEW" />,
         children: [
           {
