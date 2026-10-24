@@ -60,3 +60,28 @@
 |---|---|---|---|---|
 | 1 | `b45a8e2..6a3618e` | MAJOR_ISSUES | M1 `web/e2e/recalculation.spec.ts:200-203` waits for the async reading charge with a single check and swallows a `bookMonth` failure (timing-dependent) | minor: demo recalculation has no RECALCULATION_BOOKED audit row and is MANUAL while the story is a version correction; demo status cache `oldest` does not skip adjustments; guide "Known limit" wording differs from money-rules §5.3 (pending reading in a charged interval); approvals step 2 still a recorded deviation; ReadingHistory change judged correct |
 | 2 | + `1de90c8` | PASS | M1 resolved | minor: 15 s poll timeout is a literal; round-1 minors stand |
+
+## Slice 9 — Feature Testing & Regression
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `1de90c8..bda3052` | PASS | — | minor: functional-spec "reading entered after the preview" wording is too strong — staleness means the plan changed (amend; optionally test a READING_CORRECT preview followed by the next reading); MyChargesPanel and the `/charges/recalculations/new` route have no own tests; WaterConnectionPanel test renders twice without cleanup; guide chapter checked by reading only |
+
+## Fix — web typecheck TS2339 `onSuccess` in `ScopeEditor.test.tsx` (Phase 4 full suite)
+
+| Round | Commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `bda3052..e13dcea` | PASS | — | — |
+
+## Fix — verify: §2.7 record lines link to the charges; §2.2/§2.3 labels and signs
+
+| Round | Commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `e13dcea..50fac8f` | PASS | — | minor: ADJUST label would end in a dangling "в" if `bookedIn` were missing; `formatSignedMoney` has no unit test of its own; `?charge=` opens nothing when the date filter hides the charge; state setter naming; "Оригінал" link sits under the "Записи" column |
+
+## Fix — e2e permission counts, tariffs-acceptance step, adjustment detail names its original
+
+| Round | Commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `50fac8f..037e106` | MAJOR_ISSUES | M1 `tariffs-acceptance.spec.ts:225-227` books a recalculation for an ALL_PLOTS tariff: every run adds permanent charges to every demo plot (shared DB) | minor: missing-original fallback shows a bare month; fragile `not '5.00'` assertion; hard-coded 20 |
+| 2 | + `4fa32b5` | PASS | M1 resolved | minor: loose `getByText(plot.number)` locator; a charged throwaway plot may stay unarchived (allowed by the leftover policy) |

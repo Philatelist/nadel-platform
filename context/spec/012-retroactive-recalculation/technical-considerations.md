@@ -2,7 +2,7 @@
 
 - **Functional Specification:** `context/spec/012-retroactive-recalculation/functional-spec.md`
 - **Requirement:** `docs/features/012-retroactive-recalculation.md`
-- **Status:** Draft
+- **Status:** Completed
 - **Author(s):** Alex Usov (pipeline; design input from the spring-backend, postgres-database and react-frontend
   specialists)
 

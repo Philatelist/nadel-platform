@@ -1,7 +1,7 @@
 # Pipeline log — 012 Retroactive recalculation
 
 - Status: running
-- Phase: 4 (verify and full suite)
+- Phase: 5 (publish)
 - Branch: 012-retroactive-recalculation · Base: main @ 2e51e81
 - Requirement: document docs/features/012-retroactive-recalculation.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
@@ -73,3 +73,22 @@
 - Phase 3 end: all 9 slices committed, every slice review PASS. Phase 4 started.
 - AUTO: (Phase 4) functional-spec §2.2 stale-preview criterion amended (change log 2026-10-24): staleness = the plan changed; a reading outside the plan does not make a preview stale.
 - Phase 4 full suite (`make -k check` at bda3052 in a separate worktree): contract (gen) OK, format OK, lint OK, backend `./mvnw verify` 2,281 tests 0 failures, coverage checks met (baseline main: 2,144); **web typecheck red**: `ScopeEditor.test.tsx(186,203)` TS2339 `onSuccess` on the captured mock options (Slice 9 test). Not a baseline failure → regression fix (test-only) sent to testing-expert.
+- Regression fix e13dcea (test typing only) — fix review PASS (r1); after it: pnpm -r typecheck/lint/test green (web 642). Backend unchanged since the green verify, so the backend suite was not repeated (owner's full-suite-once rule); CI runs everything on the PR.
+- /awos:verify (isolated stack, throwaway DB `nadel_verify`, Playwright screenshots, 45 in docs/screenshots/012-retroactive-recalculation-*.png): 46/47 criteria verified; NOT met: §2.7 record lines without links to the original and created charges → verify fix sent to react-frontend, together with spec texts the UI did not follow (ADJUST action "Коригування в <місяць>", two different "Причина" labels on one screen, "Пояснення задовге", no "+" on positive amounts).
+- AUTO: (Phase 4) spec wording aligned to app conventions instead of changing the UI: month shown as "09.2026"; "Сторно і нове нарахування" (change log 2026-10-24).
+- Infra note: creating a database from template1 fails on the local Postgres container (collation version mismatch); the verifier used TEMPLATE template0. `make e2e` may hit it.
+- Verify fix 50fac8f — fix review PASS (r1); §2.7 re-verified on an isolated stack (screenshots demo-detail, charge-link-opens-detail, manual-preview-plot7 refreshed).
+- `make e2e`: fails locally at `CREATE DATABASE` (template1 collation version mismatch 2.36 vs 2.31 on the local Postgres container — environment, not the branch; Makefile not edited). Same recipe by hand with TEMPLATE template0: 130 tests, 126 passed, **4 failed** (not in baseline): acceptance.spec.ts:223 and :339, role-names.spec.ts:44 expect 19 permissions (now 20 with RECALCULATION_RUN); tariffs-acceptance.spec.ts:165 saves a version dated yesterday and now meets the recalculation step. Plus a UI defect seen in verification: an adjustment's detail shows "Коригує нарахування:" naming itself instead of the original charge. → regression fix to react-frontend.
+- Regression fix 037e106 (e2e permission counts 19→20, tariffs-acceptance goes through the recalculation step, adjustment detail names its original) — fix review MAJOR (r1: test booked a recalculation on every demo plot) → 4fa32b5 (test tariff limited to its own throwaway plot) — PASS (r2). Affected e2e specs 66/66 and @smoke 14/14; tariffs-acceptance re-run twice; web 649.
+- Specs marked Completed (47/47 criteria verified; 0 `[?]`).
+- Phase 4 end.
+
+## Final report (Phase 4)
+
+- **Branch:** `012-retroactive-recalculation` from main @ 2e51e81; 22 commits (format fix, specs, 9 slices, 10 review/verify/regression fixes, docs).
+- **Acceptance criteria:** 47 / 47 verified with evidence (tests, read-only API/SQL on a throwaway DB, 45 screenshots `docs/screenshots/012-retroactive-recalculation-*.png`). Two criteria amended (change log 2026-10-24): stale preview = the plan changed; month format "09.2026" and "Сторно і".
+- **Reviews:** S1 PASS r1; S2 PASS r1; S3 PASS r2 (reason message); S4 PASS r3 (queue items set aside by a recalculation — open and closed month); S5 PASS r2 (a run's month from its record); S6 PASS r1; S7 PASS r2 (no double charge after a corrected interval); S8 PASS r2 (timing-dependent e2e); S9 PASS r1; fixes: typecheck PASS r1, verify fix PASS r1, e2e regression PASS r2. Minor notes in review-log.md.
+- **Full suite vs baseline:** backend 2,281 tests green, coverage met (baseline 2,144); contract, format, lint green; web typecheck regression fixed (e13dcea); clients green after fixes (web 649). e2e: 126/130 at first, the 4 regressions fixed and re-run green; `make e2e` itself cannot create its DB on this machine (template1 collation mismatch — local environment).
+- **Decided automatically:** see every `AUTO:` line above (cause-driven block on POST /recalculations; rolled-back preview; soft delete of used versions; interval identity; per-cooperative lock; 24-month cap; electrician 409/403; approvals without a recalculation step; reading empty plan applies queue updates; spec wording amendments).
+- **Known limitations (documented in money-rules and READMEs):** current losses mode applied to past intervals (PROPORTIONAL→FIXED switch can double losses if recalculated — check the preview); inactive charge type left out of a tariff cause; a chosen plot pulls in its whole run; approvals have no recalculation step; a hand-reversed plot is left out of a rebooked run; recalculation runs synchronously (ADR 0007 still names JobRunr for large ranges).
+- **Follow-ups for the owner:** `/awos:product` (product definition still says automatic recalculation with notifications); ADR 0007 note on synchronous recalculation; local Postgres container collation refresh (`ALTER DATABASE template1 REFRESH COLLATION VERSION` or recreate the volume) so `make e2e` works again; minor review notes.
