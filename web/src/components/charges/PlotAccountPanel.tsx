@@ -33,7 +33,8 @@ export function PlotAccountPanel({
   const [to, setTo] = useState('');
   const [searchParams, setSearchParams] = useSearchParams();
   const adjustmentsOnly = searchParams.get('adjustments') === '1';
-  const [opened, setOpened] = useState<Charge>();
+  const [chosen, setOpened] = useState<Charge>();
+  const [dismissedParam, setDismissedParam] = useState<string>();
   const [reversing, setReversing] = useState<Charge>();
   const [enteringBalance, setEnteringBalance] = useState(false);
   const [done, setDone] = useState<string>();
@@ -53,6 +54,14 @@ export function PlotAccountPanel({
       },
       { replace: true },
     );
+
+  // `?charge=<id>` (a link from a recalculation) opens that charge once the account is loaded; an unknown id is ignored.
+  const chargeParam = searchParams.get('charge');
+  const linked =
+    chargeParam && chargeParam !== dismissedParam
+      ? account.data?.charges.find((x) => x.id === chargeParam)
+      : undefined;
+  const opened = chosen ?? linked;
 
   if (account.error instanceof ApiError && (account.error.status === 404 || account.error.status === 403)) {
     return null;
@@ -139,7 +148,10 @@ export function PlotAccountPanel({
           charge={opened}
           charges={account.data?.charges}
           onOpenCharge={setOpened}
-          onClose={() => setOpened(undefined)}
+          onClose={() => {
+            setOpened(undefined);
+            setDismissedParam(chargeParam ?? undefined);
+          }}
         />
       )}
       {reversing && (

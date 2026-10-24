@@ -115,6 +115,16 @@ describe('PlotAccountPanel', () => {
     expect(screen.getByText('Check the dates')).toBeInTheDocument();
   });
 
+  it('opens the detail of the charge named by ?charge= once the account is loaded', () => {
+    renderWithApp(withQueries(<PlotAccountPanel plotId="p7" />), { route: '/?charge=c1' });
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('does nothing when ?charge= names a charge that is not in the list', () => {
+    renderWithApp(withQueries(<PlotAccountPanel plotId="p7" />), { route: '/?charge=missing' });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
   it('shows the calculation line and the reason as user content in the detail dialog', async () => {
     permissions = ['CHARGES_VIEW', 'CHARGES_REVERSE'];
     useGetPlotAccount.mockReturnValue(queryResult(account([reversal])));

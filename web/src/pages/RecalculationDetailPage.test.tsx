@@ -36,6 +36,7 @@ const line = (over: Partial<RecalculationLine>): RecalculationLine => ({
   reasons: ['TARIFF_VERSION'],
   createdChargeIds: ['a1'],
   adjustmentChargeId: 'a1',
+  bookedIn: '2026-10',
   ...over,
 });
 
@@ -123,13 +124,34 @@ describe('RecalculationDetailPage', () => {
         .map((h) => h.textContent),
     ).toEqual(['Sep 2026', 'Oct 2026', 'Sep 2026']);
     const rows = within(section).getAllByRole('row');
-    expect(rows[1]).toHaveTextContent('Adjustment');
+    expect(rows[1]).toHaveTextContent('Adjustment in Oct 2026');
     expect(rows[1]).toHaveTextContent('₴30.00');
     expect(rows[1]).toHaveTextContent('₴25.00');
     expect(rows[1]).toHaveTextContent('−₴5.00');
     expect(rows[1]).toHaveTextContent('A tariff version changed');
     expect(rows[3]).toHaveTextContent('Reversal and new charge');
     expect(rows[3]).toHaveTextContent('The plot area changed');
-    expect(rows[3]).toHaveTextContent('Reversal, New charge');
+    expect(rows[3]).toHaveTextContent('OriginalReversalNew charge');
+  });
+
+  it('links the original and every created charge to the plot account that opens it', () => {
+    render();
+    const section = screen.getByRole('region', { name: 'Recalculation lines' });
+    const rows = within(section).getAllByRole('row');
+    const href = (row: number, name: string) =>
+      within(rows[row]!).getByRole('link', { name }).getAttribute('href');
+    expect(href(1, 'Original')).toBe('/plots/p7?charge=c1');
+    expect(href(1, 'Adjustment')).toBe('/plots/p7?charge=a1');
+    expect(href(3, 'Reversal')).toBe('/plots/p7?charge=x1');
+    expect(href(3, 'New charge')).toBe('/plots/p7?charge=x2');
+  });
+
+  it('shows a positive difference with a leading plus', () => {
+    useGetRecalculation.mockReturnValue(
+      queryResult({ ...recalculation, lines: [line({ difference: '2.50', expected: '32.50' })] }),
+    );
+    render();
+    const section = screen.getByRole('region', { name: 'Recalculation lines' });
+    expect(within(section).getAllByRole('row')[1]).toHaveTextContent('+₴2.50');
   });
 });

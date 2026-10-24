@@ -136,9 +136,9 @@ function PlotLines({ plot }: { plot: PlotGroup }) {
       key: 'difference',
       header: d.columns.difference,
       numeric: true,
-      cell: (line) => <Money amount={line.difference} />,
+      cell: (line) => <Money amount={line.difference} signed />,
     },
-    { key: 'action', header: d.columns.action, cell: (line) => actionLabel(t, line.action) },
+    { key: 'action', header: d.columns.action, cell: (line) => actionLabel(t, line, locale) },
     {
       key: 'reasons',
       header: d.columns.reasons,
@@ -157,12 +157,25 @@ function PlotLines({ plot }: { plot: PlotGroup }) {
       key: 'created',
       header: d.columns.created,
       cell: (line) => {
-        const made = [
-          line.reversalChargeId ? d.created.reversal : undefined,
-          line.newChargeId ? d.created.newCharge : undefined,
-          line.adjustmentChargeId ? d.created.adjustment : undefined,
-        ].filter((x): x is string => x !== undefined);
-        return made.join(', ');
+        const links: [string | undefined, string][] = [
+          [line.originalChargeId, d.created.original],
+          [line.reversalChargeId, d.created.reversal],
+          [line.newChargeId, d.created.newCharge],
+          [line.adjustmentChargeId, d.created.adjustment],
+        ];
+        return (
+          <ul className="flex flex-col gap-0.5">
+            {links.map(([chargeId, label]) =>
+              chargeId ? (
+                <li key={label}>
+                  <Link to={`/plots/${line.plotId}?charge=${chargeId}`} className="text-accent underline">
+                    {label}
+                  </Link>
+                </li>
+              ) : null,
+            )}
+          </ul>
+        );
       },
     },
   ];

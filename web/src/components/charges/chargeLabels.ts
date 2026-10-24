@@ -1,5 +1,5 @@
 import type { Charge } from '@nadel/api-client';
-import { format, formatMoney, formatMonth, type Messages } from '@nadel/shared';
+import { format, formatSignedMoney, formatMonth, type Messages } from '@nadel/shared';
 
 /** What a ledger entry is called: a regular charge by its source, a reversal, an opening balance or an adjustment by their kind. */
 export function chargeEntryLabel(t: Messages, charge: Pick<Charge, 'kind' | 'source'>): string {
@@ -19,6 +19,6 @@ export function adjustmentLead(
 ): string {
   return format(t.charges.adjustment.line, {
     month: formatMonth(charge.adjusts?.billingMonth ?? charge.billingMonth, locale),
-    amount: formatMoney(charge.amount, locale),
+    amount: formatSignedMoney(charge.amount, locale),
   });
 }

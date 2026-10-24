@@ -169,9 +169,9 @@ function PlotLines({ plot }: { plot: PlotGroup }) {
       key: 'difference',
       header: d.columns.difference,
       numeric: true,
-      cell: (line) => <Money amount={line.difference} />,
+      cell: (line) => <Money amount={line.difference} signed />,
     },
-    { key: 'action', header: d.columns.action, cell: (line) => actionLabel(t, line.action) },
+    { key: 'action', header: d.columns.action, cell: (line) => actionLabel(t, line, locale) },
     {
       key: 'reasons',
       header: d.columns.reasons,

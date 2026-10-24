@@ -4,26 +4,31 @@ import type {
   RecalculationCauseType,
   RecalculationChangeReason,
 } from '@nadel/api-client';
-import type { Messages } from '@nadel/shared';
+import { format, formatMonth, type Messages } from '@nadel/shared';
 
 /** Adding a variant to a generated enum makes every switch below a compile error until it is handled. */
 export function assertNever(value: never): never {
   throw new Error(`Unhandled variant: ${String(value)}`);
 }
 
-export function actionLabel(t: Messages, action: RecalculationAction): string {
+/** An adjustment names the month it is booked in (`bookedIn`); the other actions are plain texts. */
+export function actionLabel(
+  t: Messages,
+  line: { action: RecalculationAction; bookedIn?: string },
+  locale: string,
+): string {
   const a = t.recalculation.action;
-  switch (action) {
+  switch (line.action) {
     case 'REVERSE_AND_RECHARGE':
       return a.REVERSE_AND_RECHARGE;
     case 'ADJUST':
-      return a.ADJUST;
+      return format(a.ADJUST, { month: line.bookedIn ? formatMonth(line.bookedIn, locale) : '' }).trim();
     case 'NEW':
       return a.NEW;
     case 'REVERSE':
       return a.REVERSE;
     default:
-      return assertNever(action);
+      return assertNever(line.action);
   }
 }
 

@@ -16,10 +16,19 @@ describe.each(['uk', 'en'] as const)('recalcLabels (%s)', (locale) => {
   };
 
   it('names every action, cause kind, cause type and change reason', () => {
-    distinct(Object.values(RecalculationAction).map((v) => actionLabel(t, v)));
+    distinct(
+      Object.values(RecalculationAction).map((v) =>
+        actionLabel(t, { action: v, bookedIn: '2026-10' }, locale),
+      ),
+    );
     distinct(Object.values(RecalculationCauseKind).map((v) => causeKindLabel(t, v)));
     distinct(Object.values(RecalculationCauseType).map((v) => causeTypeLabel(t, v)));
     distinct(Object.values(RecalculationChangeReason).map((v) => changeReasonLabel(t, v)));
+  });
+
+  it('names the booking month of an adjustment', () => {
+    const label = actionLabel(t, { action: 'ADJUST', bookedIn: '2026-10' }, locale);
+    expect(label).toBe(locale === 'uk' ? 'Коригування в 10.2026' : 'Adjustment in Oct 2026');
   });
 
   it('prefers the specific cause over its kind', () => {
