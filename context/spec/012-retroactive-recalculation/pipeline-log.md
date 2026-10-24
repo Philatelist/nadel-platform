@@ -65,3 +65,4 @@
 - Slice 6: 99f3084 — verify green (backend 293, web 628) — review PASS (r1)
 - AUTO: (Slice 7, rule `stops.notTestableLocally`/scope discipline — conservative choice) Approvals: approving a pending reading that lands in a charged interval has no recalculation step (no backend cause "approve"); users without RECALCULATION_RUN see "Показ уже нараховано — зверніться до голови", holders see the existing "виправлення через перерахунок" message. The meter card, the round and back-dated entry have the full step. Listed for the owner.
 - AUTO: (Slice 7) a reading change whose plan is empty is saved with booked=false and still applies the plan's queue updates (no reading event follows on this path).
+- Slice 7: 23e808a — verify green (backend 348 + builder 360, web 635) — review r1 running

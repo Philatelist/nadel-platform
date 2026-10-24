@@ -548,7 +548,7 @@ no interval, so it publishes nothing). `ReadingCharges` listens with the ADR 000
 - **The decision** (`ReadingChargePlanning`, pure): key `CONSUMPTION:{fromKey}:{toKey}`; a key that counts as charged
   (`ChargeKeys`, as for the month run: a charge stands or was reversed by hand) is never booked again, so a redelivered
   event writes nothing and an interval reversed by hand is not re-created (a correction is a new reading with a new
-  key); an interval only a recalculation set aside (reversed, or adjusted to `0.00` in a closed month) is charged again once it can be, under `base#r{recalculation}`. `tariffs.TariffResolver` over the days of the interval for
+  key); an interval only a recalculation set aside (reversed, or adjusted to `0.00` in a closed month) is charged again once it can be, under `base#r{recalculation}`. A key also counts as charged while a charge of the same interval (meter, source and point dates, `ChargeIdentity`) stands under another key (`ChargeKeys.standingOfInterval`): a reading corrected by a recalculation that adjusted the interval or left its amount unchanged keeps the charge under the old reading's key, and a redelivered event books no duplicate. `tariffs.TariffResolver` over the days of the interval for
   the charge type of the resource (`ELECTRICITY`, `WATER`): one tariff is priced; of two or more only the tariffs that
   would charge the interval by the meter take part (one of them is then the tariff, two or more `CONFLICTING_TARIFFS`,
   none nothing); an inactive or archived type charges and queues nothing (water until it is switched on); no tariff

@@ -229,8 +229,13 @@ class IntervalCharging {
      */
     private Processed process(UUID tenantId, Context context, MeterInterval interval, @Nullable UUID actor,
             Instant now) {
-        // charged: a charge of the interval stands or was reversed by hand (not one a recalculation reversed)
-        Set<String> charged = chargeKeys.charged(List.of(interval.consumptionKey(), interval.lossesKey()));
+        // charged: a charge of the interval stands or was reversed by hand (not one a recalculation reversed), or a
+        // charge of the same interval stands under another key (a reading corrected by a recalculation, feature 012)
+        List<String> keys = List.of(interval.consumptionKey(), interval.lossesKey());
+        Set<String> charged = new HashSet<>(chargeKeys.charged(keys));
+        if (!charged.containsAll(keys)) {
+            charged.addAll(chargeKeys.standingOfInterval(interval));
+        }
         Outcome outcome = plan(context, interval, charged::contains);
         String itemKey = NotChargedItemRecord.intervalKey(interval.meterId(), interval.to().key());
         Optional<NotChargedItemRecord> open = items.findOpen(itemKey);

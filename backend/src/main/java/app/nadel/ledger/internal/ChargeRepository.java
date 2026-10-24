@@ -64,6 +64,23 @@ interface ChargeRepository extends JpaRepository<ChargeRecord, UUID> {
     List<String> setAsideBy(@Param("keys") Collection<String> keys, @Param("source") ChargeSource source);
 
     /**
+     * The sources ({@code CONSUMPTION}, {@code LOSSES}) of the standing charges of one interval of the meter, whatever
+     * their source key: regular charges of no run whose calculation reads the two point dates (the interval's
+     * {@link ChargeIdentity}), not reversed and not adjusted to {@code 0.00} ({@link ChargeKeys#standingOfInterval}).
+     */
+    @Query(value = """
+            select distinct c.source from charge c
+            where c.meter_id = :meter and c.kind = 'REGULAR' and c.run_id is null
+              and c.source in ('CONSUMPTION', 'LOSSES')
+              and c.calculation -> 'readings' -> 0 ->> 'takenOn' = :fromDate
+              and c.calculation -> 'readings' -> 1 ->> 'takenOn' = :toDate
+              and not exists (select 1 from charge r where r.reverses_charge_id = c.id)
+              and coalesce((select sum(a.amount) from charge a where a.adjusts_charge_id = c.id), 0) <> -c.amount
+            """, nativeQuery = true)
+    List<String> standingIntervalSources(@Param("meter") UUID meterId, @Param("fromDate") String fromDate,
+            @Param("toDate") String toDate);
+
+    /**
      * The charges with the source key {@code base} or a key that starts with {@code prefix} ({@code base#r}: booked
      * again by a recalculation or after one), each as its key and the source, recalculation and time of the reversal
      * that cancels it (nulls while it stands); {@link ChargeKeys}.

@@ -46,3 +46,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `47aa592..99f3084` | PASS | — | minor: inactive charge type → tariff cause gives an empty plan and saves silently (web blocks it; document or 409); moving an unused version's start into a charged month saves plainly (spec §2.4) unlike the add path; `tariffOf` loads the version before the tariff lock (stale-state 500 in a rare race); empty re-preview after PREVIEW_OUTDATED does not save; `statesInOrder()` read before `lockAllForShare()` |
+
+## Slice 7 — Correcting readings
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `99f3084..23e808a` | MAJOR_ISSUES | M1 a corrected interval can be charged twice: after an ADJUST (closed month) or an empty plan no charge carries the new 011 key (`CONSUMPTION:…:{newReadingId}`), so a redelivered/republished `PlotMeterPointsChanged` books a full REGULAR charge again | minor: `RoundRow` builds the READING_ENTER cause from render-time values, not the refused request; approvals have no step 2 (record as a spec deviation in the spec assumptions and guides); reading scope uses all charge types (comment that it is intentional) |

@@ -357,8 +357,32 @@ class ReadingRecalculationTests extends ReadingChargeSupport {
         awaitListeners();
         assertThat(chargeCount()).isEqualTo(before + 3);
         assertThat(plotTotal()).isEqualTo("561.60");
+        // not even for a redelivered event: the adjusted charge of the interval stands under the old reading's key
+        redeliver(readings.meter(), day(september, 5));
+        assertThat(chargeCount()).isEqualTo(before + 3);
+        assertThat(plotTotal()).isEqualTo("561.60");
         assertThat(preview(correct(approvedReading(readings.meter(), day(september, 5)), day(september, 5), "8215",
                 null, null)).get("lines")).isEmpty();
+    }
+
+    @Test
+    void aCorrectionWhoseAmountsStayTheSameKeepsTheChargesAndARedeliveredEventBooksNoDuplicate() throws Exception {
+        Readings readings = chargedReadings(2);
+        int before = chargeCount();
+
+        // 65.001 kWh and 64.999 kWh: both intervals still 280.80, nothing to recalculate
+        JsonNode preview = preview(correct(readings.first(), day(september, 5), "8205.001", null, null));
+        assertThat(preview.get("lines")).isEmpty();
+        JsonNode saved = book(correct(readings.first(), day(september, 5), "8205.001", null,
+                preview.get("digest").asString()));
+        assertThat(saved.get("booked").asBoolean()).isFalse();
+        assertThat(approvedReadings(readings.meter())).containsExactly(day(september, 5) + "|8205.001",
+                day(october, 5) + "|8270.000");
+
+        // the charges of both intervals stand under the old reading's keys: a redelivered event books nothing
+        redeliver(readings.meter(), day(september, 5));
+        assertThat(chargeCount()).isEqualTo(before);
+        assertThat(plotTotal()).isEqualTo("561.60");
     }
 
     // ---- deleted reading: the intervals merge

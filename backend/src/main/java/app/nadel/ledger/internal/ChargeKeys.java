@@ -58,6 +58,24 @@ class ChargeKeys {
     }
 
     /**
+     * The keys of the interval ({@code CONSUMPTION:…}, {@code LOSSES:…}) whose charge stands under another key (feature
+     * 012): a recalculation of a corrected reading matches by identity (meter, source and point dates,
+     * {@link ChargeIdentity}), so an interval it adjusted or kept keeps its charge under the old reading's key while
+     * the corrected reading has a new one. Such a key counts as charged as well, so the listener never books the
+     * interval a second time. Only a standing charge counts here (not reversed, not adjusted to {@code 0.00}): after a
+     * reversal by hand the corrected reading is charged again (feature 011).
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    Set<String> standingOfInterval(ReadingChargePlanning.MeterInterval interval) {
+        Set<String> keys = new HashSet<>();
+        for (String source : charges.standingIntervalSources(interval.meterId(), interval.from().on().toString(),
+                interval.to().on().toString())) {
+            keys.add(ChargeSource.LOSSES.name().equals(source) ? interval.lossesKey() : interval.consumptionKey());
+        }
+        return keys;
+    }
+
+    /**
      * The key each of {@code keys} (base keys that do not count as charged, {@link #charged}) is booked under: the key
      * itself while no charge has it, else {@code base#r{recalculation}}.
      *
