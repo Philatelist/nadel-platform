@@ -6,6 +6,7 @@ import { useLocale, useT } from '../../i18n';
 import { kyivToday } from '../../kyivToday';
 import { chargeTypeName } from '../../chargeTypeName';
 import { problemFieldErrors, problemMessage, type FieldErrors } from '../../problem';
+import { isChargeTypeNameUserContent } from '../ChargeTypeName';
 import { Modal } from '../Modal';
 import { QueryBoundary } from '../QueryBoundary';
 import { Button, Notice, Select, TextArea, TextField } from '../ui';
@@ -92,7 +93,11 @@ function OpeningBalanceFields({
         onChange={(e) => edit(setChargeTypeId)(e.target.value)}
       >
         {types.map((type) => (
-          <option key={type.id} value={type.id}>
+          <option
+            key={type.id}
+            value={type.id}
+            {...(isChargeTypeNameUserContent(type) ? { 'data-user-content': '' } : {})}
+          >
             {chargeTypeName(type, t)}
           </option>
         ))}

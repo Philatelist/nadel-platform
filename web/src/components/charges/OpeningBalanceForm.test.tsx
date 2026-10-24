@@ -9,6 +9,7 @@ import { OpeningBalanceForm } from './OpeningBalanceForm';
 const mutate = vi.fn();
 const types: ChargeType[] = [
   { id: 't1', code: 'MEMBERSHIP', name: 'Membership fee', nameCustomized: false, active: true, position: 1 },
+  { id: 't3', name: 'Road repair', nameCustomized: true, active: true, position: 3 },
   { id: 't2', code: 'WATER', name: 'Water', nameCustomized: false, active: false, position: 2 },
 ];
 
@@ -32,6 +33,12 @@ describe('OpeningBalanceForm', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Add' }));
     expect(screen.getByText('Enter an amount like 1250.50')).toBeInTheDocument();
     expect(mutate).not.toHaveBeenCalled();
+  });
+
+  it('marks only the user-entered charge type names as user content', () => {
+    renderWithApp(withQueries(<OpeningBalanceForm plotId="p7" onDone={vi.fn()} onClose={vi.fn()} />));
+    expect(screen.getByRole('option', { name: 'Road repair' })).toHaveAttribute('data-user-content');
+    expect(screen.getByRole('option', { name: 'Membership fee' })).not.toHaveAttribute('data-user-content');
   });
 
   it.each(['-5', '0'])(
