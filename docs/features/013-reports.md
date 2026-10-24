@@ -1,89 +1,491 @@
-# 013. Reports for the board and report templates (tax report placeholder)
+# 013. Reports and report templates
 
-Roadmap phase 2, feature 5 of 5. Input for `/feature-pipeline`. Requires 009 (tariffs), 010 (meters and the meter
-tree), 011 (ledger, charges, period closing) and 012 (recalculation).
+Roadmap phase 2, feature 5 of 5. Input for `/feature-pipeline`. Requires 009 (tariffs), 010 (meters and readings),
+011 (ledger, charges, billing months, runs, water connections) and 012 (recalculation).
 
 ## 1. Goal
 
-The chairman and the treasurer get ready-made reports from the data the system already holds, can download them, and
-the platform gets a template mechanism: a report form (for example for the tax office) is uploaded as a file with
-placeholders, and the system fills it in automatically. The tax report itself is a placeholder in this feature: its
-official template is added later, without code changes.
+The chairman and the treasurer get ready-made reports built from data the system already holds. They can view each
+report on screen and download it as `.xlsx`. The system also gets a template mechanism: the chairman uploads a report
+form (for example a tax office form) as an `.xlsx` file with placeholders, and the system fills it in. The tax report
+itself is a placeholder in this feature: its official template is uploaded later, without code changes.
+
+Every report reads data that 010–012 already store. This feature adds no new money rule; it only adds read models,
+file output and templates.
 
 ## Context for the pipeline
 
-Read together with `CLAUDE.md`, `docs/domain/money-rules.md` (sections 2, 3, 6, 6.3, 9, 10), `docs/domain/glossary.md`,
-ADRs 0006, 0007, 0009, 0011, 0012 (the Excel import module already reads and writes `.xlsx` with fastexcel; reuse it).
+Read together with:
+- `CLAUDE.md`;
+- `docs/domain/money-rules.md` sections 1, 2, 3 (3.1–3.3), 4, 5.4, 6.3–6.7, 9, 10 and 11;
+- `docs/domain/glossary.md`;
+- the READMEs of `ledger`, `meters`, `tariffs`, `plots`, `members`, `settings` and `imports`;
+- ADRs 0006, 0007, 0009, 0011, 0012, 0013 and 0014;
+- the guides in `docs/guide/`.
 
-Phase 2 sequence: `009 Charge types and tariffs` → `010 Meters and readings` → `011 Ledger, charges and period
-closing` → `012 Retroactive recalculation` → `013 Reports`.
+Phase 2 sequence: `009` → `010` → `011` → `012` → `013 Reports`.
 
-## 2. Built-in reports
+The general rules are the same as in earlier features:
+- contract-first;
+- Flyway only (expand-only);
+- tenant-scoped tables with RLS and an isolation test;
+- permissions, not role names;
+- Problem Details with a `code`;
+- one UI language at a time, with every text through the i18n catalogs;
+- audit through the outbox;
+- only the server calculates money;
+- the verification levels and the guides rules of `CLAUDE.md`.
 
-Each report has filters (period from–to, charge type, street) and is shown on screen and downloadable as `.xlsx` (and
-`.pdf` later with phase 4 documents). Amounts come from the server (money-rules section 1); the client only displays.
+**Read through the module facades, never another module's tables.** Examples: `PlotCatalog`, `MemberDirectory`, the
+ledger's queries, the meter tree query, `CooperativeSettings` and the tariff resolver. A new module `reports` owns the
+report definitions, the templates and the file output. Any module that lacks a read facade a report needs gets one in
+that module. Feature 014 will encrypt contacts inside `members`, and reports must keep working without change. So the
+debtors report reads names and contacts only through `MemberDirectory`, never with SQL against `member`.
 
-| Report | Content |
-|---|---|
-| Charges by period | per charge type and month: number of plots, total charged, reversals and adjustments |
-| Plot balances | per plot: charged, allocated, debt per charge type, prepayment, status (money-rules 2, 9) |
-| Debtors | plots with debt above a chosen amount or age, owners and contacts (personal data: permission below) |
-| Electricity by meter tree | per substation, quarter meter and common consumer: readings (start, end), consumption, price per kWh, amount; plots and members fed; sum of plot readings; losses in kWh and % (money-rules 6.3 — the columns the chairman asked for) |
-| Missing readings | plots with an active meter and no reading for the period |
-| Land tax | per plot: area, rate, yearly amount; total for the cooperative |
+## 2. Common rules of every report
 
-Payments, allocations and cash reports join these when phase 3 adds payments: the reports are built so a new column
-set or report can be added without changing the others.
+- **Filters.** Each report has its own filters (listed per report), always including the period.
+  - Dates are Kyiv calendar days.
+  - A month filter means billing months (`billing_month`, money-rules 3.1).
+  - A date range means service days (`service_from..service_to` of a charge, or reading dates).
+  - Each report states which of the two it uses, and the UI labels it.
+- **Amounts** come from the server with two decimals (money-rules 1). kWh and m³ have three decimals (ADR 0014). The
+  client only displays them. Totals are sums of the rows exactly as listed, with no separate rounding.
+- **Effective amount.** Where a report shows "charged", it is the effective amount: charges plus their adjustments,
+  minus reversals (money-rules 5.4). Columns that split it show regular, reversals and adjustments separately, so the
+  treasurer can reconcile them with the plot accounts.
+- **Order:**
+  - plots: the natural order of the number (`PlotCatalog.inNaturalOrder`);
+  - meters: the order of the meter tree;
+  - charge types: their configured order.
+- **Screen and file match.** The on-screen preview shows the first 200 rows and the totals. The `.xlsx` holds every row
+  and the same totals. Both come from one server query, so they always agree.
+- **The `.xlsx` file:**
+  - one sheet per report;
+  - a header block: cooperative name, report name, filters, generated at (Kyiv time) and generated by (the user's
+    display name);
+  - a frozen header row;
+  - numbers as numbers (not text), with a number format;
+  - dates as dates;
+  - written with fastexcel, which `imports` already uses;
+  - file name `<report-code>_<from>_<to>.xlsx` (ASCII).
+- **Language.** Column headers and the header block follow the user's UI language (uk/en), from the same i18n keys as
+  the screen. Plot numbers, names and user content are written as stored.
+- **Personal data.** Only the debtors report contains names and contacts. No report writes personal data to logs.
+  Generating any report is audited (section 6).
+- **Limits.** Each report is capped at 20,000 rows. A larger result is 422 `REPORT_TOO_LARGE`, with the hint to narrow
+  the filters. Generation runs in the request (no job queue). The longest test fixture (300 plots × 12 months) must
+  finish in under 5 s.
+- **Payments.** Phase 3 adds payment and allocation columns and reports (paid, balance after payments, cash book). A
+  report definition is a list of columns over one read model, so a new column set or a new report needs no change to
+  the others. Until then no "paid" column is shown, not even an empty one.
 
-## 3. Report templates (the tax report placeholder)
+## 3. Built-in reports
 
-- A **report template** is an `.xlsx` file uploaded by the chairman (later also by the platform operator for all
-  cooperatives) with placeholders:
-  - single values: `${cooperative.name}`, `${cooperative.edrpou}`, `${period.from}`, `${period.to}`,
-    `${totals.landTax}`, `${totals.charged.MEMBERSHIP}`, `${generatedAt}`, …
-  - repeating rows: a row containing `${rows.plots.number}`, `${rows.plots.area}`, … is copied once per plot.
-- The cooperative's requisites that templates (and later invoices) need are added to the settings page of 007 in this
-  feature: full official name, ЄДРПОУ code, legal address, bank name and IBAN. They are public data of the legal
-  entity, not personal data.
-- The system publishes the **field catalog**: every placeholder it can fill, with a description and an example, shown
-  on the templates page and returned by the API, so the person preparing a template knows what to write.
-- Generating a report from a template: choose the template and the period → the system fills it and offers the file.
-  Unknown placeholders are left visible and listed as warnings, never silently dropped.
-- Templates are versioned (a new upload is a new version; generated files record which version was used). They are
-  tenant-scoped; files are stored in the database or object storage as the architecture allows (no new infrastructure
-  only for this).
-- **Tax report placeholder:** a template entry "Податкова звітність" exists for every cooperative with status "шаблон
-  ще не додано". When the official form is available, the owner uploads it with placeholders and adds any missing
-  catalog fields in a follow-up feature.
-- Security: templates are data, never code. Only `${...}` substitution and row repetition; no formulas are evaluated by
-  the server; uploads go through the same size and zip-bomb guards as the Excel import (ADR 0012).
+### 3.1 Charges by month (`charges-by-month`)
 
-## 4. Permissions
+**Filters:**
+- billing months from–to;
+- charge types (default all);
+- street (optional).
 
-- New `REPORTS_VIEW` (Chairman and Treasurer base roles): built-in reports without personal data.
-- Reports with names and contacts (Debtors) also require `MEMBERS_VIEW`.
-- New `REPORT_TEMPLATES_MANAGE` (Chairman): upload, version and archive templates.
-- Generating a report is audited (who, which report or template, period), because reports can contain personal data.
+**Rows:** one per billing month × charge type. Columns:
+- month, with its status (open or closed);
+- charge type;
+- number of plots charged;
+- regular charges (including opening balances, shown in their own column);
+- reversals;
+- adjustments;
+- effective total.
 
-## 5. Web UI
+**Totals** per month and for the whole range.
 
-1. **Звіти** (menu, with `REPORTS_VIEW`): list of built-in reports and templates; filters; preview table; "Завантажити
-   Excel".
-2. **Шаблони звітів** (with `REPORT_TEMPLATES_MANAGE`): upload, versions, field catalog with copy buttons, the tax
-   report placeholder with its status.
+**Acceptance:** for each month, the effective total over all charge types equals the total of that month on the
+billing months screen of 011, cent for cent.
 
-## 6. Out of scope
+A second sheet, "За період послуг" ("By service period"), groups the same charges by the month of `service_from`. An
+adjustment booked in March for January then shows under January. The header explains the difference in one sentence.
 
-The official tax form itself; PDF output (phase 4 documents); payments reports (phase 3, added to this mechanism);
-scheduled or e-mailed reports (phase 8).
+### 3.2 Plot balances (`plot-balances`)
 
-## 7. Acceptance criteria
+**Filters:**
+- an "as of" date (default today);
+- charge types;
+- street;
+- status (red, yellow, green, grey).
 
-- [ ] Every built-in report of section 2 shows on screen and downloads as `.xlsx`, with totals matching the ledger
-      (tested on fixed ledger fixtures with worked numbers).
-- [ ] Template upload, field catalog, placeholder filling, repeating rows and unknown-placeholder warnings work;
-      a sample template ships with the tests.
-- [ ] The tax report placeholder exists for every cooperative with status "template not added".
-- [ ] Permissions and audit as in section 4; isolation tests for new tables.
-- [ ] `make check` green; e2e: the chairman downloads the electricity report and generates a report from a sample
-      template.
+**Rows:** one per active plot, common land excluded. Columns:
+- number and street;
+- owners: the number of current owners only, no names;
+- debt per charge type: the effective amount of charges with `accrued_on` ≤ the as-of date;
+- total debt;
+- date of the oldest unpaid charge;
+- days overdue;
+- status.
+
+**Status:**
+- With the as-of date = today, the status comes from the `plot_status` cache and the current thresholds (money-rules
+  9).
+- For a past date the server recomputes the status from the ledger at that date, using today's thresholds, and the
+  header says so.
+
+Until phase 3 there is no prepayment and no paid column.
+
+### 3.3 Debtors (`debtors`)
+
+**Filters:**
+- debt above an amount (default the cooperative's `redAmount`);
+- or older than N days (default `redDays`);
+- charge types;
+- street.
+
+The two thresholds combine with OR, matching the red rule.
+
+**Rows:** one per plot that matches. Columns:
+- number and street;
+- owners: full names, plus phone and email from `MemberDirectory`;
+- debt per charge type;
+- total debt;
+- oldest unpaid charge date;
+- days overdue.
+
+It needs `MEMBERS_VIEW` in addition to `REPORTS_VIEW` (section 5). Without it the report is not listed, and its
+endpoint is 403. There is no "debtors without contacts" variant: plot balances filtered by status covers that need.
+
+### 3.4 Electricity by meter tree (`electricity-tree`)
+
+The report the chairman asked for (money-rules 6.3). It has two parts on two sheets.
+
+**Filters:** a date range (service days), default the previous calendar month.
+
+**Sheet "Споживання" ("Consumption")** uses the meter tree query of 010 (`GET /meter-tree` data) over the range. One row
+per node and slice, indented by level, with these columns:
+- kind;
+- name or plot number;
+- meter serial;
+- value at start and at end, with its type (real, calculated, unknown, plus the last reading date when unknown);
+- consumption (kWh);
+- sum of the children's consumption;
+- losses in kWh and as a % of the node's consumption, for substations and quarter meters with known values at both
+  ends;
+- number of plots fed.
+
+This sheet shows quantities only. When a value is unknown, every derived column on that row is empty, with the reason;
+it is never shown as zero.
+
+**Sheet "Нараховано" ("Charged")** comes from the ledger. It covers electricity charges whose service period overlaps
+the range, grouped by source:
+- **`CONSUMPTION`**, per plot: kWh, price per kWh from the tariff versions used (`charge_part`), amount.
+- **`LOSSES`:**
+  - with `FIXED_PERCENT`, the percentage and the amount per plot;
+  - with `PROPORTIONAL`, the booked losses runs in the range, per node, from `losses_run_node`: outcome, consumption,
+    children, losses kWh, %, amount, and the plots charged.
+- **`COMMON_CONSUMER`:** the booked common consumer runs in the range, per consumer, from `common_consumer_run_line`:
+  split, consumption, amount, plots and plot-days.
+- **Adjustments and reversals** of these sources, in their own rows. Each such row shows the original charge's service
+  period.
+
+**Totals:**
+- kWh consumed by plots;
+- kWh of losses charged;
+- kWh of common consumers charged;
+- amount per source;
+- total.
+
+The header shows the cooperative's losses mode and percentage as they are now. A run booked under another mode still
+shows what it booked.
+
+### 3.5 Water (`water`)
+
+The water counterpart of 3.4, without a tree.
+
+**Filters:**
+- a date range;
+- water source (a well, the cooperative's water supply, or all).
+
+**Rows:** one per plot that had a water connection in the range. Columns:
+- number and street;
+- source;
+- connected days in the range;
+- water meter serial (if any);
+- m³ in the range (range consumption of 010, only connected days);
+- water charges in the range by source (`CONSUMPTION`, fixed fee from `TARIFF`, a well pump's `COMMON_CONSUMER`
+  share), with adjustments.
+
+Plots that are not connected are not listed (money-rules 11). A per-source summary gives:
+- plots;
+- connected plot-days;
+- m³;
+- amount.
+
+### 3.6 Missing readings (`missing-readings`)
+
+**Filters:**
+- a date range;
+- resource (electricity, water, or both);
+- meter kind (plot meters by default; quarter meters, substations and common consumers optional);
+- street.
+
+**Rows:** one per active meter that has no approved reading in the range. Columns:
+- resource icon and kind;
+- plot number or meter name;
+- serial;
+- the last approved reading (date and value);
+- days since it;
+- whether a submitted reading is waiting for approval.
+
+**Exclusions:**
+- A water meter of a plot not connected on any day of the range is not listed (money-rules 11).
+- A meter installed after the range, or removed before it, is not listed.
+
+The report also counts the "not charged" queue items of kind `INTERVAL` that are open for those meters, with a link to
+the queue. This report does not replace the queue.
+
+### 3.7 Land tax (`land-tax`)
+
+**Filters:** a year.
+
+**Rows:** one per active plot that the `LAND_TAX` tariff applies to (money-rules 10; scope and exclusions as resolved
+by `TariffResolver`). Columns:
+- number and street;
+- area (m² and sotka);
+- rate per sotka (the version in force; when several versions apply in the year, one row per version with its days);
+- expected yearly amount (`ChargeCalculator`);
+- effective amount charged for that year (charges of type `LAND_TAX` with a service period in the year).
+
+Total for the cooperative. A plot whose expected and charged amounts differ is marked, and the report suggests a
+recalculation (012). It does not book one.
+
+### 3.8 Corrections (`corrections`)
+
+**Filters:**
+- billing months from–to;
+- charge types;
+- kind (reversal, adjustment, or both).
+
+**Rows:** every reversal and adjustment booked in those months. Columns:
+- booked on;
+- billing month;
+- plot;
+- charge type;
+- original charge (its service period and amount);
+- amount;
+- source (manual reversal, recalculation, run reversal);
+- the recalculation's cause and reason, when there is one;
+- booked by (display name).
+
+This lets the board present every change of the past to the general meeting.
+
+## 4. Report templates
+
+### 4.1 What a template is
+
+A **report template** is an `.xlsx` file uploaded by the chairman, with placeholders:
+- **Single values:**
+  - `${cooperative.name}`, `${cooperative.officialName}`, `${cooperative.edrpou}`, `${cooperative.address}`,
+    `${cooperative.bankName}`, `${cooperative.iban}`;
+  - `${period.from}`, `${period.to}`, `${period.year}`;
+  - `${generatedAt}`, `${generatedBy}`;
+  - totals such as `${totals.landTax.expected}`, `${totals.charged.MEMBERSHIP}` (by charge type code; a custom type by
+    its id), `${totals.debt}`, `${totals.plots.count}`, `${totals.plots.areaSotka}`.
+- **Repeating rows:** a row containing placeholders of one row set is copied once per row of that set. For example,
+  `${rows.plots.number}`, `${rows.plots.area}` and `${rows.plots.debt.total}` repeat once per plot. The row sets are the
+  rows of the built-in reports of section 3 without personal data:
+  - `plots`, built from plot balances and land tax;
+  - `months`;
+  - `meters`;
+  - `water`.
+
+  One repeating row set is allowed per sheet.
+- **Placeholder in a whole cell or inside text:**
+  - A placeholder that fills a whole cell is written as a typed value (number or date), so formulas in the template
+    still work on it.
+  - A placeholder inside text is written as formatted text (Ukrainian number and date format).
+
+### 4.2 Field catalog
+
+The system publishes the **field catalog**: every placeholder it can fill, with:
+- its type;
+- a description in uk and en;
+- an example value;
+- the permission it needs.
+
+The catalog is shown on the templates page with copy buttons and returned by the API, so the person preparing a
+template knows what to write. Contacts and names are not in the catalog in this feature.
+
+### 4.3 Generating from a template
+
+The user chooses the template and the period, and the system fills the template and returns the file. Warnings are
+returned with the file (a response header with the count, plus a "Попередження" ("Warnings") sheet appended to the
+file) and shown in the UI:
+- Unknown placeholders are left visible in the cell and listed as warnings. They are never silently dropped.
+- A placeholder whose value is unknown (for example a tree value that is unknown) is written empty and listed.
+
+### 4.4 Versions, storage, archive
+
+- A new upload of a template is a new version. Generating always uses the latest version. Older versions stay
+  downloadable.
+- The generated file records the template name and version in its document properties and in the audit entry.
+- Generated files are not stored.
+- Templates are tenant-scoped and stored in the database: table `report_template` (name, description, status) and
+  `report_template_version` (bytea content, size, SHA-256, uploaded by and at). There is no object storage, and none is
+  added just for this.
+- Archiving hides a template from generation and keeps its versions.
+
+### 4.5 Cooperative requisites
+
+The settings page (007) gets a block «Реквізити» ("Requisites") with:
+- full official name;
+- legal address;
+- bank name;
+- IBAN, validated as a Ukrainian IBAN (`UA` + 27 characters, mod 97).
+
+These are public data of the legal entity, not personal data. They are new columns of `cooperative_settings`, changed
+with `SETTINGS_MANAGE` and audited through the existing `SETTINGS_UPDATED` with the changed fields.
+
+ЄДРПОУ already exists on the tenant (`tenant.edrpou`, set by the platform operator when the cooperative is created). It
+is shown read-only in that block with the hint «змінює оператор платформи» ("changed by the platform operator"), and
+templates read it from there.
+
+### 4.6 Tax report placeholder
+
+The templates page always shows a built-in slot «Податкова звітність» ("Tax report") with the status «шаблон ще не
+додано» ("template not added yet") until the chairman uploads a template into that slot. The slot is a fixed entry of
+`reports`, not a seeded row per cooperative. Any catalog fields the official form needs that are missing get added in a
+follow-up feature.
+
+### 4.7 Filling engine and security
+
+**The constraint:** fastexcel writes new workbooks and reads them, but it cannot edit an existing workbook with its
+styles, merged cells and formulas.
+
+**The decision for Phase 1:** choose how to fill a template, and record the choice in ADR 0015 (report templates). The
+options:
+- Apache POI (XSSF), which keeps styles, merged cells and formulas but is a large dependency;
+- a small streaming OOXML filler: it copies the zip, substitutes placeholders in `sharedStrings.xml` and inline strings,
+  duplicates the repeated row in the sheet XML, and renumbers rows, merged ranges and formula references below it.
+
+The criteria:
+- styles and merged cells survive;
+- dependency size and CVE record (the `Security` CI job must stay green);
+- the zip-bomb and XXE guards.
+
+**Security** (both options):
+- Templates are data, never code. Only `${...}` substitution and row repetition are supported.
+- The server evaluates no formulas.
+- Macros are refused: `.xlsm` is refused, and so is a `vbaProject.bin` part.
+- External links are stripped and listed as a warning.
+- The XML parser has DTDs and external entities disabled.
+- Uploads go through the same size, entry-count and compression-ratio guards as the Excel import (ADR 0012). The cap is
+  2 MB per template file.
+- The content type is checked by its magic bytes as well as the extension.
+
+## 5. Permissions
+
+- **New `REPORTS_VIEW`** (Chairman and Treasurer base roles): the built-in reports without personal data, and
+  generating from templates.
+- **New `REPORT_TEMPLATES_MANAGE`** (Chairman): upload, version, archive and download templates, including the tax
+  report slot.
+- **Debtors** also needs `MEMBERS_VIEW`.
+- **`SETTINGS_MANAGE`** changes the requisites. Everyone with `REPORTS_VIEW` sees them in report headers.
+- **Seeding:** the new permissions are seeded by `seed_base_roles` and given to existing cooperatives with targeted
+  inserts, as in V19. The platform operator is 403, as everywhere in tenant data.
+- **Members and the electrician** get no report in this feature.
+
+## 6. Audit
+
+`REPORT_GENERATED` records:
+- the report code or the template and its version;
+- the filters (ids, codes and dates only);
+- the row count;
+- whether the report contains personal data.
+
+It never records the report contents.
+
+`REPORT_TEMPLATE_UPLOADED` and `REPORT_TEMPLATE_ARCHIVED` record the name and version.
+
+## 7. API (`api/openapi.yaml`, tag `reports`)
+
+- `GET /reports`: the reports the caller may run, with their filter definitions.
+- `GET /reports/{code}?filters…`: the preview JSON (first 200 rows, totals, `rowCount`).
+- `GET /reports/{code}.xlsx?filters…`: the file.
+- `GET /report-templates`, `POST /report-templates` (multipart), `POST /report-templates/{id}/versions`,
+  `POST /report-templates/{id}/archive`, `GET /report-templates/{id}/versions/{versionId}/file`.
+- `POST /report-templates/{id}/generate` with the period, returning the file.
+- `GET /report-templates/catalog`: the field catalog.
+- `GET|PUT /settings`: extended with the requisites; `edrpou` is read-only.
+
+**Error codes:**
+- `REPORT_TOO_LARGE`;
+- `REPORT_FILTER_INVALID` (with field errors);
+- `TEMPLATE_INVALID` (not an xlsx, macros, a broken zip);
+- `TEMPLATE_TOO_LARGE`;
+- `TEMPLATE_ARCHIVED`;
+- `IBAN_INVALID`.
+
+## 8. Web UI (style of 003)
+
+1. **Звіти (Reports)** (in the menu, with `REPORTS_VIEW`):
+   - cards of the built-in reports the user may run, then the templates;
+   - a report page with its filters, the preview table with totals, «Завантажити Excel» ("Download Excel"), and the
+     row count with a note when it shows only the first 200;
+   - empty and unknown values rendered as in the meter tree, never as 0.
+2. **Шаблони звітів (Report templates)** (with `REPORT_TEMPLATES_MANAGE`):
+   - the tax report slot with its status;
+   - the templates with their versions and the upload button;
+   - «Сформувати» ("Generate") with a period;
+   - the warnings after generation;
+   - the field catalog with search and copy buttons.
+3. **Налаштування → Реквізити (Settings → Requisites)**: the block of 4.5.
+4. **Links:** the plot account and the billing months screen link to the matching report with filters set.
+
+## 9. Docs and guides
+
+- `reports` module README.
+- ADR 0015.
+- `money-rules.md`: a short section 12 "Reports". It says that reports introduce no rules and lists which rule each
+  number comes from.
+- Glossary: report template, field catalog, requisites.
+- Guides, both languages:
+  - the board guide chapter 21 «Звіти та шаблони» ("Reports and templates") changes from "planned" to "works": each
+    report, how to read the electricity report, and how to prepare a template (with a small example);
+  - the owner manual: the screens-and-buttons table, the permissions matrix (`REPORTS_VIEW`,
+    `REPORT_TEMPLATES_MANAGE`), and template security;
+  - new screens in `docs/guide/scripts/capture-screens.mjs`: the reports list, the electricity report and the templates
+    page;
+  - the PDFs rebuilt.
+- Demo data: a sample template «Відомість земельного податку» ("Land tax statement"), stored with the test resources
+  and loaded into the demo cooperative, so «Сформувати» works in the dev demo.
+
+## 10. Out of scope
+
+- the official tax form;
+- PDF output (phase 4 documents);
+- payment, allocation and cash reports (phase 3, added to this mechanism);
+- scheduled or e-mailed reports (phase 8);
+- templates shared by the platform operator for all cooperatives;
+- names and contacts in templates;
+- charts.
+
+## 11. Acceptance criteria
+
+- [ ] Every report of section 3 shows on screen and downloads as `.xlsx`, and its totals match the ledger. Tested on
+      fixed ledger fixtures with worked numbers that include a reversal, an adjustment in a later month (012), a
+      proportional losses run, a common consumer run, a part-month water connection and a meter replacement.
+- [ ] Charges by month equals the billing months totals of 011 for every month. The electricity report's charged
+      amounts equal the ledger's electricity charges in the range.
+- [ ] Unknown tree values are empty with a reason, never 0. Unconnected plots do not appear in the water or
+      missing-readings reports.
+- [ ] Template upload, versions, archive, field catalog, whole-cell typed values, text substitution, repeating rows and
+      unknown-placeholder warnings all work. A sample template ships with the tests. Macros, an oversize file and a zip
+      bomb are refused.
+- [ ] The tax report slot is shown for every cooperative with "template not added" until one is uploaded.
+- [ ] The requisites block works, the IBAN is validated and ЄДРПОУ is read-only.
+- [ ] Permissions and audit as in sections 5 and 6, with allowed and denied tests per endpoint (debtors without
+      `MEMBERS_VIEW` is 403). Isolation tests for the new tables.
+- [ ] Docs and both guides (two languages) are updated, and the demo template is present.
+- [ ] `make check` is green. e2e:
+      - the chairman opens the electricity report and downloads it (`@smoke`);
+      - the chairman generates the demo land tax statement from its template;
+      - a custom role with `REPORTS_VIEW` but without `MEMBERS_VIEW` does not see the debtors report. The Treasurer base
+        role has both, so it sees it.
