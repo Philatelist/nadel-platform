@@ -156,10 +156,7 @@ public final class ProblemCodes {
     public static final String AMOUNT_NOT_POSITIVE = "AMOUNT_NOT_POSITIVE";
     /** A date that must not be after today in the cooperative's time zone (an opening balance) is in the future. */
     public static final String DATE_IN_FUTURE = "DATE_IN_FUTURE";
-    /**
-     * A value the server does not handle yet (a recalculation cause other than {@code MANUAL} until feature 012
-     * slices 6 and 7).
-     */
+    /** A value the server does not handle (a recalculation cause type it does not know). */
     public static final String UNSUPPORTED = "UNSUPPORTED";
     /** The same plot listed twice in one list of a request. */
     public static final String DUPLICATE = "DUPLICATE";

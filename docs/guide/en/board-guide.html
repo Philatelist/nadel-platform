@@ -49,9 +49,7 @@
           <a href="#r-losses">Network losses and common consumers</a><span class="tag done">works</span>
         </li>
         <li><a href="#r-water">Water and connections</a><span class="tag done">works</span></li>
-        <li>
-          <a href="#r-recalc">Corrections and recalculation</a><span class="tag planned">planned · 012</span>
-        </li>
+        <li><a href="#r-recalc">Corrections and recalculation</a><span class="tag done">works</span></li>
         <li><a href="#r-reports">Reports and templates</a><span class="tag planned">planned · 013</span></li>
         <li><a href="#next">What comes next</a><span class="tag planned">planned</span></li>
       </ol>
@@ -1474,7 +1472,7 @@ prepayment           = Σ payments − Σ allocated payments</pre>
     <section class="chapter" id="r-recalc">
       <h2>
         <span class="num">20</span> Corrections and recalculation
-        <span class="tag planned">planned · 012</span>
+        <span class="tag done">works</span>
       </h2>
       <p>A back-dated tariff version, a correction of a used version or of a used reading — one mechanism:</p>
       <ul>
@@ -1489,6 +1487,83 @@ prepayment           = Σ payments − Σ allocated payments</pre>
           debt".
         </li>
       </ul>
+      <h3>On screen</h3>
+      <p>
+        <strong>Recalculations</strong> is a tab of "Charges" (viewing needs "View charges"). It is a log:
+        when, the cause (manual, tariff version, reading), who booked it, the explanation and the "Total"
+        difference. "Open" shows one recalculation: the scope, the totals by charge type and the lines "was
+        charged → should be → difference", the action ("Reversal and new charge", "Adjustment") and the
+        entries created, with a link to the plot account. A recalculation is never changed or undone: a
+        mistake is corrected by the next recalculation.
+      </p>
+      <figure>
+        <img src="../img/en/recalculations.png" alt="Recalculations" />
+        <figcaption>The log of recalculations</figcaption>
+      </figure>
+      <figure>
+        <img src="../img/en/recalculation-detail.png" alt="Recalculation" />
+        <figcaption>
+          One booked recalculation: the adjustment of the closed month and the reversal of the open one
+        </figcaption>
+      </figure>
+      <p>
+        <strong>New recalculation</strong> ("Recalculate charges", the chairman only): choose "From month" and
+        "To month" (not later than the current month, at most 24 months), the charge types and the plots
+        ("All" or "Chosen"), and press "Preview". The preview step shows what would change: the plots, the
+        totals by charge type and the lines with their reasons ("A tariff version changed", "The plot area
+        changed"…). Nothing is written until you enter a <strong>reason</strong> (required, up to 500
+        characters) and press <strong>"Book the recalculation"</strong>; exactly the preview you saw is
+        booked. If the charges changed in the meantime, the preview is refreshed and must be confirmed again.
+        When the charges already match the data, the preview says "No changes" and there is nothing to book.
+      </p>
+      <figure>
+        <img src="../img/en/recalculation-new.png" alt="New recalculation" />
+        <figcaption>The form of a new recalculation</figcaption>
+      </figure>
+      <figure>
+        <img src="../img/en/recalculation-preview-empty.png" alt="No changes" />
+        <figcaption>A second preview: "No changes"</figcaption>
+      </figure>
+      <p>
+        <strong>Correcting a used tariff version</strong> is done on the tariff card: "Edit" or "Delete" the
+        version. When charges already use it, the same preview step opens instead of "Version corrected": the
+        change of the version and the recalculation are saved together or not at all. The same goes for a new
+        back-dated version.
+      </p>
+      <figure>
+        <img src="../img/en/tariff-recalculation-step.png" alt="Recalculation step on the tariff card" />
+        <figcaption>The preview step after a rate correction</figcaption>
+      </figure>
+      <p>
+        <strong>Correcting a charged reading</strong> is done on the meter card: "Correct" or "Delete". The
+        chairman gets the preview step ("Recalculation for the reading") with a reason; the electrician (may
+        enter readings, may not recalculate) sees "The reading has already been charged — ask the chairman"
+        and nothing changes.
+      </p>
+      <figure>
+        <img src="../img/en/reading-recalculation-step.png" alt="Recalculation step for a reading" />
+        <figcaption>The preview step for a corrected reading</figcaption>
+      </figure>
+      <figure>
+        <img src="../img/en/electrician-reading-hint.png" alt="Hint for the electrician" />
+        <figcaption>The electrician cannot correct a charged reading</figcaption>
+      </figure>
+      <p>
+        <strong>On the plot account</strong> the adjustment of a closed month is a separate row "Adjustment
+        for Sep 2026: −₴5.00" with the reason, the links "Original charge" and "Recalculation" and the badge
+        "Adjustment". The checkbox <strong>"Adjustments only"</strong> keeps only such rows. A member sees the
+        adjustments of their own plots (the reason, but not the recalculation). The demo data has such a row
+        on plot 2.
+      </p>
+      <figure>
+        <img src="../img/en/plot-account-adjustment.png" alt="Adjustment on the plot account" />
+        <figcaption>Plot 2: the September adjustment of −₴5.00</figcaption>
+      </figure>
+      <p>
+        Screens that change data affecting past charges (plot area, tariff scope, water connection, moving a
+        meter in the tree) recalculate nothing themselves and remind you: "Past charges have not changed. If
+        needed — Charges → Recalculation". Only those who may recalculate see the hint.
+      </p>
       <div class="example">
         <span class="callout-title">Example</span>
         <p>
@@ -1521,6 +1596,13 @@ prepayment           = Σ payments − Σ allocated payments</pre>
             </tr>
           </tbody>
         </table>
+      </div>
+      <div class="warn">
+        <span class="callout-title">Known limit</span>
+        <p>
+          "To approve" has no recalculation step. If a reading is already approved and charged, correct it on
+          the meter card, which has the preview step.
+        </p>
       </div>
     </section>
 

@@ -172,6 +172,17 @@ above), **not published**: the ledger publishes it with the recalculation's entr
 when the change alters no amount. The endpoints themselves keep refusing a used version (409), except for a
 correction of its note alone.
 
+- **Scope** (the ledger's, money rules 5.3): the tariff's charge type, the chargeable plots the tariff covers after the
+  change, the billing months the old and new validity touch, and the interval charges and runs of that type that close
+  from the first of those months on.
+- **An inactive charge type is left out.** A charge type that is inactive (water before it is switched on) charges
+  nothing, so a version change of one of its tariffs gives an empty plan and is saved without a recalculation, even
+  when the version was used. After the type is made active again, the board runs a manual recalculation
+  ("Нарахування → Перерахунок") for the months concerned.
+- **The web** previews first: a new version starting before the next month goes through `TARIFF_VERSION_ADD` (an empty
+  plan is saved by `POST /tariffs/{id}/versions`), and an edit or delete of a used version moves the dialog to the
+  recalculation step for holders of `RECALCULATION_RUN`; others see the 409 message.
+
 ### The port `TariffVersionUsage`
 
 `TariffVersionUsage.isUsed(UUID tenantId, UUID versionId)` is a public interface in the module root. The tariffs module
@@ -270,7 +281,8 @@ stands in (`TariffVersionCorrectionTests`).
   1200.0000 due 2026-12-01, all from 2026-01-01 for the demo cooperative (block `demo tariffs`). The block `demo ledger`
   (feature 011, dev profile only) adds the "Спільні споживачі за лічильником" tariff of the common consumers type (4.3200
   per kWh from 2026-01-01) and books the month runs, so in the dev demo the membership, land tax and electricity
-  versions are in use (`TARIFF_VERSION_IN_USE` on a correction).
+  versions are in use (`TARIFF_VERSION_IN_USE` on a correction; the chairman corrects them with the recalculation
+  step).
 
 ## Audit
 
@@ -281,7 +293,10 @@ when set). `TARIFF_VERSION_UPDATED` lists the changed fields only, each as old t
 `frequency`, `rate`, `dueDate`, `note` (a field that was or becomes unset has no old or no new value; a request that
 changes nothing writes no entry). `TARIFF_VERSION_DELETED` lists the old values (new is empty) of `validFrom`, `basis`,
 `frequency`, `rate` and, when set, `dueDate` and `note`. The version is identified by the values (the entry is about the
-tariff). The note text is part of the audit entry (like plot notes) but is never written to the application log.
+tariff). The note text is part of the audit entry (like plot notes) but is never written to the application log. A
+version change booked together with a recalculation (feature 012) is published by the ledger with the field
+`recalculationId` (new value: the recalculation's id) added, in one `AuditBatch` before the recalculation's
+`RECALCULATION_BOOKED`; a change whose plan is empty is published alone, without the field.
 
 A change of scope writes (entity type `TARIFF`, label = the tariff name), in this order:
 `TARIFF_SCOPE_CHANGED` when the kind or the selected plots changed, with `scope` (old to new kind, only when it

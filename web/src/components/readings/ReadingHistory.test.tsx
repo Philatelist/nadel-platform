@@ -9,6 +9,7 @@ import { ReadingHistory } from './ReadingHistory';
 const invalidateAfterReading = vi.fn();
 const mutate = vi.fn();
 let deleteOptions: { mutation: { onSuccess: () => Promise<void> } };
+let shown: MeterReading[] = [];
 
 const reading: MeterReading = {
   id: 'r1',
@@ -26,7 +27,7 @@ vi.mock('../charges/chargeInvalidation', () => ({
 vi.mock('../../me', () => ({ useCan: () => true, useOptionalMe: () => null }));
 vi.mock('@nadel/api-client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@nadel/api-client')>()),
-  useListMeterReadings: () => queryResult({ meterId: 'm1', intervals: [], readings: [reading] }),
+  useListMeterReadings: () => queryResult({ meterId: 'm1', intervals: [], readings: shown }),
   useDeleteReading: (o: typeof deleteOptions) => {
     deleteOptions = o;
     return { mutate, isPending: false };
@@ -38,6 +39,7 @@ describe('ReadingHistory', () => {
     window.localStorage.setItem('nadel.locale', 'en');
     invalidateAfterReading.mockReset();
     mutate.mockReset();
+    shown = [reading];
   });
 
   it('refreshes the plot and charge queries after a reading is deleted', async () => {
@@ -48,5 +50,15 @@ describe('ReadingHistory', () => {
     expect(mutate).toHaveBeenCalledWith({ id: 'r1' });
     await deleteOptions.mutation.onSuccess();
     expect(invalidateAfterReading).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers Correct and Delete on a counted reading a charge uses, and not on a pending one', () => {
+    shown = [
+      { ...reading, id: 'used', changeable: false },
+      { ...reading, id: 'pending', status: 'PENDING', changeable: false },
+    ];
+    renderWithApp(withQueries(<ReadingHistory meter={plotMeter as Meter} />));
+    expect(screen.getAllByRole('button', { name: 'Correct' })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: 'Delete reading' })).toHaveLength(1);
   });
 });

@@ -52,3 +52,4 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `99f3084..23e808a` | MAJOR_ISSUES | M1 a corrected interval can be charged twice: after an ADJUST (closed month) or an empty plan no charge carries the new 011 key (`CONSUMPTION:…:{newReadingId}`), so a redelivered/republished `PlotMeterPointsChanged` books a full REGULAR charge again | minor: `RoundRow` builds the READING_ENTER cause from render-time values, not the refused request; approvals have no step 2 (record as a spec deviation in the spec assumptions and guides); reading scope uses all charge types (comment that it is intentional) |
+| 2 | + `b45a8e2` | PASS | M1 resolved | minor: interval identity rule now exists in SQL and in `ChargeIdentity` (cross-reference or test); README could say a hand-reversed charge counts only by its own key |

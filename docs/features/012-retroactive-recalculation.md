@@ -152,6 +152,10 @@ closed, Oct open" unless stated.
 | Correction that changes nothing | note of a used version edited | saved, no recalculation |
 | Electrician corrects a charged reading | without `RECALCULATION_RUN` | 403; the round says "Показ уже нараховано — зверніться до голови" |
 
+Note (implementation): with the readings 03.09, 05.10 and 05.11 the first interval closes in October, so the two rows
+"first interval in a closed month" are tested with the readings one month earlier (03.08, 05.09, 05.10), which puts it
+in closed September; the amounts are unchanged (money-rules 5.8).
+
 ## 4. API (`api/openapi.yaml`)
 
 - `POST /recalculations?preview=true|false`: manual scope (months, charge types, plots), reason, digest for booking;

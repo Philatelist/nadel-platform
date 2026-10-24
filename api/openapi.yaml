@@ -3620,8 +3620,13 @@ paths:
         tariff's charge type and plots and the billing months the old and new validity of the version touch (from the
         first billing month of the cooperative to the current month at most), and the meter intervals and runs that
         close from the first of them on. When such a plan has no lines, a booking saves the change alone without a
-        reason (`booked` false, `changeApplied` true, no record). Until the reading causes arrive (feature 012, slice
-        7) `READING_*` is 400 `VALIDATION_FAILED` with `cause.type` `UNSUPPORTED`. Conflicts (409): the manual range
+        reason (`booked` false, `changeApplied` true, no record). A reading cause needs `cause.reading` (`REQUIRED`),
+        its `meterId` for an entry, its `readingId` for a correction or a deletion and its `reading` for an entry or a
+        correction (`REQUIRED`); the reading is checked as on the reading endpoints, with the field codes under
+        `cause.reading.` (`meterId`) and `cause.reading.reading.` (`takenOn`, `value`), but a reading that charges
+        used may be changed here. Its scope is the meter's intervals around the old and new date and the booked runs
+        that read the meter on a day the change reaches; a plan without lines saves the change alone as above.
+        Conflicts (409): the manual range
         spans more than 24 months (`RECALCULATION_RANGE_TOO_LONG`), a manual recalculation finds nothing to change when
         booked (`NOTHING_TO_RECALCULATE`), a booking is sent with the digest of a preview that no longer matches
         (`PREVIEW_OUTDATED`), the change of a tariff version is refused (`TARIFF_VERSION_DATE_TAKEN`,

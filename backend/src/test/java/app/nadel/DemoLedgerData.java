@@ -51,10 +51,11 @@ public final class DemoLedgerData {
             for (String table : new String[] {"meter_value_use", "charge_part"}) {
                 sql.update("delete from " + table + " where tenant_id in (?, ?)", DEMO_TENANT, OTHER_TENANT);
             }
-            sql.update("delete from charge where tenant_id in (?, ?) and reverses_charge_id is not null", DEMO_TENANT,
-                    OTHER_TENANT);
+            sql.update("delete from recalculation_line where tenant_id in (?, ?)", DEMO_TENANT, OTHER_TENANT);
+            sql.update("delete from charge where tenant_id in (?, ?) and (reverses_charge_id is not null "
+                    + "or adjusts_charge_id is not null)", DEMO_TENANT, OTHER_TENANT);
             for (String table : new String[] {"charge", "losses_run_node", "losses_run", "common_consumer_run_line",
-                    "common_consumer_run", "not_charged_item", "billing_month", "common_consumer_billing",
+                    "common_consumer_run", "not_charged_item", "recalculation", "billing_month", "common_consumer_billing",
                     "common_consumer_user", "plot_water_connection"}) {
                 sql.update("delete from " + table + " where tenant_id in (?, ?)", DEMO_TENANT, OTHER_TENANT);
             }

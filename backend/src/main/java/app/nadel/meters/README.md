@@ -192,7 +192,10 @@ rules and the warning), `ReadingProblem`, `ReadingCommands`, `ReadingQueries`, `
 Entity type `METER_READING`, entity id = the meter (the log links to the meter card, as `OWNERSHIP` entries carry the
 plot), label = the meter's label. `READING_ENTERED` (`takenOn`, `value` new), `READING_REPLACED` (`takenOn` old and new
 the same date, `value` old and new), `READING_CORRECTED` (old and new `takenOn` and `value`, only those that changed), `READING_DELETED`
-(`takenOn`, `value` old). Values are ISO dates and readings with three decimals.
+(`takenOn`, `value` old). Values are ISO dates and readings with three decimals. A change booked together with a
+recalculation (feature 012, `ReadingChanges`) is published by the ledger with the field `recalculationId` (new value:
+the recalculation's id) added, in one `AuditBatch` before the recalculation's `RECALCULATION_BOOKED`; a change whose
+plan is empty is published alone, without the field.
 
 ## Replacement and range consumption (slice 4)
 
@@ -264,7 +267,10 @@ Internal: `ApprovalQueries`; the commands are in `ReadingCommands` (`submit`, `a
   against the counted readings as they are now (`READING_DATE_OUTSIDE_METER`, `READING_OUT_OF_ORDER`), asks the
   `ReadingUsage` ports about the span around its date (`READING_IN_USE`), then supersedes a counted reading of the same
   date (flushed out of `APPROVED` first, then linked) and sets `APPROVED` with `decided_by_member_id` and `decided_at`.
-  The source stays `MEMBER`. 200 with the interval it now closes and its warnings.
+  The source stays `MEMBER`. 200 with the interval it now closes and its warnings. Approval has no recalculation step
+  (feature 012): a pending reading that falls inside a charged interval stays 409 `READING_IN_USE`; the board enters
+  the reading on the meter card instead (a back-dated entry, which goes through the recalculation step) and rejects the
+  member's pending one.
 - **Rejection** needs a `reason` (trimmed, 1 to 500 characters; blank is 400 `REQUIRED`), takes only a `PENDING`
   reading, sets `REJECTED` with the reason and the decider. The member reads the reason in the meter's history
   (`rejectReason`). The reason is user content: it is stored and audited, never logged.
@@ -444,4 +450,6 @@ only from the 12th day before the readings' anchor; so the four water meters are
 and a meter of plot 25 installed on 15.12.2025 under quarter Б with one reading 5 days before the anchor (its interval
 starts before the first electricity tariff version and is the demo's "not charged" item). The template readings and
 the node readings of this block leave plot 25 out, so a re-run gives the same values whether or not that meter exists.
-In the dev demo the readings of the charged intervals and of the runs are in use (`READING_IN_USE` on a correction).
+In the dev demo the readings of the charged intervals and of the runs are in use (`READING_IN_USE` on a correction;
+the chairman corrects them with the recalculation step, the electrician sees "Показ уже нараховано — зверніться до
+голови").

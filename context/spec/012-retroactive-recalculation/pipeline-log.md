@@ -65,4 +65,5 @@
 - Slice 6: 99f3084 — verify green (backend 293, web 628) — review PASS (r1)
 - AUTO: (Slice 7, rule `stops.notTestableLocally`/scope discipline — conservative choice) Approvals: approving a pending reading that lands in a charged interval has no recalculation step (no backend cause "approve"); users without RECALCULATION_RUN see "Показ уже нараховано — зверніться до голови", holders see the existing "виправлення через перерахунок" message. The meter card, the round and back-dated entry have the full step. Listed for the owner.
 - AUTO: (Slice 7) a reading change whose plan is empty is saved with booked=false and still applies the plan's queue updates (no reading event follows on this path).
-- Slice 7: 23e808a — verify green (backend 348 + builder 360, web 635) — review r1 running
+- Slice 7: 23e808a (+ fix b45a8e2) — verify green (backend 348 + builder 360, web 635; fix 98) — review PASS (r2)
+- Follow-ups for the owner (Slice 8 docs): `context/product/product-definition.md` still says automatic recalculation with notifications (suggest `/awos:product`); ADR 0007 still lists "retroactive recalculation of large ranges" as JobRunr work while 012 runs synchronously (capped at 24 months) — ADR note for the owner.

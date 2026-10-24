@@ -44,6 +44,7 @@ export function ReadingHistory({ meter }: { meter: Meter }) {
   const [success, setSuccess] = useState<string>();
   const [deleteCause, setDeleteCause] = useState<RecalculationCause>();
   const canRecalculate = useCan('RECALCULATION_RUN');
+  const canEnter = useCan('READINGS_ENTER');
 
   const remove = useDeleteReading({
     mutation: {
@@ -114,7 +115,8 @@ export function ReadingHistory({ meter }: { meter: Meter }) {
       key: 'actions',
       header: h.columns.actions,
       cell: (r) =>
-        r.changeable ? (
+        // a reading a charge uses is not `changeable`, but its correction opens the recalculation step (or the hint)
+        r.changeable || (r.status === 'APPROVED' && canEnter) ? (
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" onClick={() => open('correct', r)}>
               {h.correct}
