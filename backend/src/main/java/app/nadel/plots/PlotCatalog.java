@@ -9,7 +9,7 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Read-only facts about plots for other modules (tariffs, meters), so they never touch the plot table. The caller has
+ * Read-only facts about plots for other modules (tariffs, meters, ledger, reports), so they never touch the plot table. The caller has
  * bound the cooperative (a transaction of the tenant-aware transaction manager): plots of other cooperatives are
  * invisible.
  */
@@ -85,4 +85,12 @@ public interface PlotCatalog {
      * number (the ledger's month run, the conflict warning of the tariffs page).
      */
     List<PlotFacts> findChargeable();
+
+    /**
+     * The active (not archived) plots that are not common land, in natural order of the number, optionally of one
+     * street: the rows of the plot balances and debtors reports (feature 013). With a {@code street} the plot's street
+     * as stored is compared with it ignoring case and surrounding spaces, as {@link #idsOnStreet} does; {@code null} or
+     * blank means every street (then the result equals {@link #findChargeable()}).
+     */
+    List<PlotFacts> findActive(@Nullable String street);
 }

@@ -32,4 +32,14 @@ public interface MemberDirectory {
      * a transaction. Locks are taken in id order, so two callers cannot deadlock on each other.
      */
     Map<UUID, MemberRef> lockActive(Collection<UUID> ids);
+
+    /**
+     * The names, phones and e-mail of the given members, archived ones included, for the staff reports that list
+     * debtors with their contacts (feature 013). This is the only way another module reads member contacts; feature 014
+     * will encrypt them inside this module without changing the method. Ids that do not exist in the cooperative
+     * (unknown, or of another cooperative: RLS) are absent from the map. Runs in the caller's transaction
+     * ({@code Propagation.MANDATORY}); the caller checks that the viewer may see members ({@code MEMBERS_VIEW}).
+     * Nothing here logs the values.
+     */
+    Map<UUID, MemberContacts> contacts(Collection<UUID> ids);
 }

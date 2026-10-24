@@ -37,8 +37,11 @@ interface ReportDefinition {
      */
     ReportResult load(ReportFilters filters, ReportContext context);
 
-    /** The days of the file name {@code <code>_<from>_<to>.xlsx}; by default the period of the filters. */
-    default ReportFilters.Period filenameRange(ReportFilters filters) {
+    /**
+     * The days of the file name {@code <code>_<from>_<to>.xlsx}; by default the period of the filters. A report made for
+     * one day (plot balances: the as-of day; debtors: today) gives that day twice.
+     */
+    default ReportFilters.Period filenameRange(ReportFilters filters, ReportContext context) {
         return filters.period();
     }
 }

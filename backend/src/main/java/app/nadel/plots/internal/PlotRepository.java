@@ -99,6 +99,15 @@ interface PlotRepository extends JpaRepository<Plot, UUID> {
             + "order by p.number_sort_key, p.number, p.id", nativeQuery = true)
     List<Plot> findChargeableInNaturalOrder();
 
+    /**
+     * The active plots that are not common land whose street, without surrounding spaces, equals the given one ignoring
+     * case (lowered by the database, as {@link #findIdsOnStreet}), in natural order of the number.
+     */
+    @Query(value = "select * from plot p where p.archived_at is null and p.kind <> 'COMMON' "
+            + "and lower(btrim(p.street)) = lower(:street) order by p.number_sort_key, p.number, p.id",
+            nativeQuery = true)
+    List<Plot> findChargeableOnStreetInNaturalOrder(@Param("street") String street);
+
     /** The given plots' ids in natural order of the number (the order of the plots list). */
     @Query(value = "select p.id from plot p where p.id in (:ids) order by p.number_sort_key, p.number, p.id",
             nativeQuery = true)

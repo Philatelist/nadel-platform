@@ -48,7 +48,7 @@ cooperative that is not reversed, and a reversal never target an adjustment or a
 |---|---|
 | `ChargesBooked(tenantId, plotIds)` | Published inside the transaction of every booking or reversal (a reversal, an opening balance, the month run, a retry and the charges of readings, at most 500 plots per event; every later booking path must publish it too). `PlotStatusRefresher` recomputes the debt of those plots from the committed ledger. Ids only, no personal data; the set is never empty |
 | `OpeningBalanceImport` (with `Row`, `Item`, `Plan`, `Problem`, `Action`) | The "Opening balances" sheet of the Excel import (slice 8), `plan`/`lock`/`apply` like `meters.MeterImport`; implemented by `internal.OpeningBalanceImportService`, see Opening balances from the import |
-| `LedgerReadModel` (with `MonthTypeTotals`, `MonthGrouping`, `MonthStatus`) | The read facade of the reports (feature 013), implemented by `internal.LedgerReportQueries`; see The read model of the reports |
+| `LedgerReadModel` (with `MonthTypeTotals`, `MonthGrouping`, `MonthStatus`, `PlotDebts`) | The read facade of the reports (feature 013), implemented by `internal.LedgerReportQueries`; see The read model of the reports |
 
 Everything else is in `internal`.
 
@@ -306,7 +306,7 @@ reading the ledger tables. Rules for every method:
 - It aggregates in the database (parameterised native queries, no N+1) and answers ids, codes and `Money` only: **no
   personal data**, no names. The caller orders and names charge types (`tariffs.ChargeTypeCatalog`) and plots
   (`plots.PlotCatalog`).
-- Results are bounded by their filters (months x charge types), so no row limit applies.
+- Results are bounded by their filters (months x charge types, or the plots asked for), so no row limit applies.
 
 Methods:
 
@@ -324,6 +324,21 @@ Methods:
   `IllegalArgumentException`. Test: `LedgerReadModelTests` (a worked ledger with a reversal, an opening balance and
   later-month adjustments in both groupings, reconciliation with `GET /billing-months` for every listed month, the
   filters, another cooperative, the caller's transaction).
+- `debtsAsOf(asOf, chargeTypeIds, plotIds)` (plot balances and debtors, 013 §3.2 and §3.3): one `PlotDebts` per
+  distinct plot asked (a plot without counted charges, or an unknown id, is `PlotDebts.none`: no types, `0.00`, no
+  date), with `DebtCalculator`'s rule (money rules 2, 5.4, 9) applied in SQL to the charges with `accrued_on <= asOf`
+  of the given types (empty = every type): `byChargeType` is the signed sum per type (reversals negative, adjustments
+  with their sign, opening balances included; a type that sums to `0.00` is kept), `total` their sum, `oldestUnpaid`
+  the oldest `accrued_on` among the counted charges that are neither a reversal nor an adjustment, are not reversed by a
+  counted reversal and whose amount plus their counted adjustments is above `0.00` (no payments yet), and
+  `daysOverdue` = `asOf - oldestUnpaid` in days, computed here (null without a date). A reversal and an adjustment keep
+  the debt date and charge type of their charge, so both filters keep or drop a charge with its corrections, and the
+  per-type answer folds into `DebtCalculator`'s per-plot one. The day is the debt date, not the booking time: an
+  adjustment booked in March for a January charge counts as of any day from the charge's date, as on the account. As
+  of today with every type it equals the plot account and the `plot_status` cache. One query per 500 plots
+  (`charge_plot_type_idx`). Test: `LedgerDebtsAsOfTests` (a worked ledger with a reversal, an opening balance,
+  later-month adjustments, a fully adjusted and a reversed oldest charge, past days, the type filter, reconciliation
+  with `GET /plots/{id}/account` and the status cache, another cooperative, the caller's transaction).
 
 ## Billing months (tag `billing`, slice 2)
 

@@ -75,8 +75,12 @@ class ReportRunner {
         this.clock = clock;
     }
 
-    /** The reports the caller may run, with the defaults of today. */
-    List<ReportInfo> list() {
+    /**
+     * The reports the caller may run, with the defaults of today. Read-only transaction: some defaults are settings of
+     * the cooperative (the debtors' red amount and red days).
+     */
+    @Transactional(readOnly = true)
+    public List<ReportInfo> list() {
         return catalog.infos(currentUser.profile(), LocalDate.now(clock.withZone(KYIV)));
     }
 
@@ -101,7 +105,7 @@ class ReportRunner {
         byte[] content = writer.write(run.definition(), run.filters(), run.result(),
                 new XlsxReportWriter.Header(cooperative, run.startedAt().atZone(KYIV), run.caller().displayName()),
                 texts, chargeTypeNames(run.context(), texts));
-        ReportFilters.Period range = run.definition().filenameRange(run.filters());
+        ReportFilters.Period range = run.definition().filenameRange(run.filters(), run.context());
         publish(run, Output.XLSX);
         return new ReportFile(code.getValue() + "_" + range.from() + "_" + range.to() + ".xlsx", content);
     }

@@ -37,4 +37,6 @@ Out: official tax form, PDF, payment reports, scheduled reports, operator-shared
 - Slice 1 · c4057b0 · slice verify green (backend narrow, typecheck, lint, vitest 24, shared 130) · review: PASS round 1
 - Slice 2 · 4562a10 · slice verify green (xlsx+imports+Modularity) · review: PASS round 1
 - Slice 3: the 'Tests' task was delivered inside the framework task (ChargesByMonthReportTests, ReportsAccessTests, ReportRunnerTests); marked done on that evidence.
-- Slice 3 · (see git log) · slice verify green (backend reports+ledger+Modularity, typecheck, lint, vitest 17, shared 130) · review: running (round 1)
+- Slice 3 · c69e9b5 · slice verify green (backend reports+ledger+Modularity, typecheck, lint, vitest 17, shared 130) · review: PASS round 1
+- Slice 4: the 'Tests' task was delivered inside the definitions task (PlotBalancesReportTests, DebtorsReportTests, LedgerDebtsAsOfTests, PlotReportFacadesTests, MemberContactsTests); marked done on that evidence.
+- Slice 4 · (hash below) · slice verify green (backend reports+plots+members+ledger+Modularity, typecheck, lint, vitest 22, shared 130) · review: running (round 1)

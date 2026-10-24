@@ -31,6 +31,16 @@ vi.mock('@nadel/api-client', async (importOriginal) => ({
   downloadReport: (...args: unknown[]) => downloadReport(...args),
 }));
 
+const balancesInfo = {
+  code: 'plot-balances',
+  personalData: false,
+  filters: [
+    { key: 'asOf', type: 'DATE', params: ['asOf'], required: true, defaults: [] },
+    { key: 'statuses', type: 'STATUSES', params: ['statuses'], required: false, defaults: [] },
+    { key: 'minDebt', type: 'AMOUNT', params: ['minDebt'], required: false, defaults: [] },
+  ],
+};
+
 function ok(data: unknown) {
   return { data, error: null, isPending: false, isError: false, refetch: vi.fn() };
 }
@@ -173,9 +183,80 @@ describe('ReportPage', () => {
     );
   });
 
+  it('shows the plot status as its text, the per-type debt columns by charge type name, and the new notes', () => {
+    reports = [balancesInfo];
+    report = ok(
+      preview({
+        code: 'plot-balances',
+        headerNotes: [
+          { code: 'PAST_DATE_STATUS', params: {} },
+          { code: 'STATUS_ALL_CHARGE_TYPES', params: {} },
+          { code: 'OLDEST_UNPAID_IS_OLDEST_CHARGE', params: {} },
+        ],
+        sheets: [
+          sheet({
+            key: 'balances',
+            columns: [
+              { key: 'status', type: 'CODE' },
+              { key: 'debt.ct-1', type: 'MONEY', chargeTypeId: 'ct-1' },
+            ],
+            rows: [{ kind: 'DETAIL', level: 0, cells: [{ value: 'RED' }, { value: '10.00' }] }],
+            totals: [],
+          }),
+        ],
+      }),
+    );
+    renderReport('/reports/plot-balances');
+    const table = screen.getByRole('table');
+    expect(within(table).getByRole('columnheader', { name: 'Electricity' })).toBeInTheDocument();
+    expect(within(table).getByText('Debt above threshold')).toBeInTheDocument();
+    expect(within(table).queryByText('RED')).not.toBeInTheDocument();
+    expect(screen.getByText(/worked out as of the chosen day/)).toBeInTheDocument();
+    expect(screen.getByText(/counts every charge type/)).toBeInTheDocument();
+    expect(screen.getByText(/oldest charge that still has a debt/)).toBeInTheDocument();
+  });
+
+  it('sends asOf, statuses and minDebt as the query parameters', () => {
+    reports = [balancesInfo];
+    renderReport('/reports/plot-balances?asOf=2026-03-31&statuses=RED&statuses=YELLOW&minDebt=100.00');
+    expect(getReportHook.mock.calls[0]?.[1]).toEqual({
+      asOf: '2026-03-31',
+      statuses: ['RED', 'YELLOW'],
+      minDebt: '100.00',
+    });
+    expect(screen.getByLabelText('As of')).toHaveValue('2026-03-31');
+    expect(screen.getByRole('checkbox', { name: 'Debt above threshold' })).toBeChecked();
+    expect(screen.getByLabelText('Debt from')).toHaveValue('100.00');
+  });
+
+  it('keeps line breaks of a multi-owner text cell', () => {
+    reports = [balancesInfo];
+    report = ok(
+      preview({
+        code: 'plot-balances',
+        sheets: [
+          sheet({
+            key: 'balances',
+            columns: [{ key: 'owners', type: 'TEXT' }],
+            rows: [{ kind: 'DETAIL', level: 0, cells: [{ value: 'A. One\nB. Two' }] }],
+            totals: [],
+          }),
+        ],
+      }),
+    );
+    renderReport('/reports/plot-balances');
+    expect(screen.getByText(/A\. One/).closest('td')).toHaveClass('whitespace-pre-line');
+  });
+
   it('renders the no-access page for a code the list does not contain', () => {
     reports = [];
     renderReport();
+    expect(screen.getByRole('heading', { name: "You don't have access to this page" })).toBeInTheDocument();
+  });
+
+  it('renders the no-access page for /reports/debtors when the list leaves debtors out', () => {
+    reports = [chargesByMonthInfo];
+    renderReport('/reports/debtors');
     expect(screen.getByRole('heading', { name: "You don't have access to this page" })).toBeInTheDocument();
   });
 });

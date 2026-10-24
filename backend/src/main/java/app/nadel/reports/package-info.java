@@ -7,9 +7,11 @@
  * The module has no public API; everything is internal: the endpoints, the framework ({@code ReportCatalog},
  * {@code ReportDefinition}, {@code ReportFilters}, {@code ReportRunner}, {@code XlsxReportWriter},
  * {@code ReportLanguage}, {@code ReportTexts}) and one definition per report. Depends on {@code ledger}
- * ({@code LedgerReadModel}), {@code plots} ({@code PlotCatalog}), {@code tariffs} ({@code ChargeTypeCatalog}),
- * {@code tenancy} ({@code TenantDirectory}), {@code identity} ({@code CurrentUser}, {@code Permission}),
- * {@code audit}, {@code money} and {@code problem}; no module depends on it.
+ * ({@code LedgerReadModel}), {@code plots} ({@code PlotCatalog}, {@code PlotOwners}, {@code PlotStatuses}),
+ * {@code members} ({@code MemberDirectory}, the debtors' contacts only), {@code settings} ({@code CooperativeSettings},
+ * the red threshold), {@code tariffs} ({@code ChargeTypeCatalog}), {@code tenancy} ({@code TenantDirectory}),
+ * {@code identity} ({@code CurrentUser}, {@code Permission}), {@code audit}, {@code money} and {@code problem}; no
+ * module depends on it.
  */
 @org.springframework.modulith.ApplicationModule(displayName = "Reports")
 package app.nadel.reports;

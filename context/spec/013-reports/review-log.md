@@ -15,3 +15,8 @@ Backend `./mvnw verify` on 6c121fb (detached worktree): green, exit 0, no failin
 - Round 1: PASS. Backend slice tests 341 run, 0 failures on the reviewer side. No weakening versus the deleted ZipGuard.
 - Minor notes (not fixed): `UnsafeWorkbookException.java:12` message carries the reason name, so callers must keep mapping by `reason()`; `WorkbookGuard.java:75` rejects non-positive limits, which ZipGuard did not (harmless).
 
+### Slice 3 — Reports section and Charges by month (c69e9b5)
+- Round 1: PASS. Backend slice tests 530 run, 0 failures on the reviewer side; web code read only.
+- Reviewer accepted the minimal change to the guard test in `MembersAccessAcceptanceTests` (`land-tax` stripped before matching "tax").
+- Minor notes (not fixed): `ReportRunner.java:~93` writes an empty cooperative name if the tenant is missing; `LedgerReportQueries.java:~47` `group by 2` on a null-cast column is obscure; `ReportRunner.file()` ordering note only.
+

@@ -24,15 +24,16 @@ that needs a permission the caller lacks is 403 `PERMISSION_DENIED` (`ReportCata
 `/reports/{code}.xlsx` wins over `/reports/{code}`: its pattern is the more specific one
 (`ChargesByMonthReportTests.theXlsxPathWinsOverTheCodePath`).
 
-Done so far: `charges-by-month`. The other codes are 404 until their definitions arrive.
+Done so far: `charges-by-month`, `plot-balances` and `debtors`. The other codes are 404 until their definitions
+arrive. `GET /reports` runs in a read-only transaction: the debtors' defaults are settings of the cooperative.
 
 ## Framework (`internal`)
 
 | Type | Role |
 |---|---|
-| `ReportDefinition` | One bean per report: `code`, `requiredPermissions` (default `REPORTS_VIEW`; debtors adds `MEMBERS_VIEW`), `personalData`, `filters` (the period first), `load(filters, context)` returning a `ReportResult`, `filenameRange` (default: the period of the filters) |
+| `ReportDefinition` | One bean per report: `code`, `requiredPermissions` (default `REPORTS_VIEW`; debtors adds `MEMBERS_VIEW`), `personalData`, `filters` (the period first), `load(filters, context)` returning a `ReportResult`, `filenameRange(filters, context)` (default: the period of the filters; a report for one day gives that day twice) |
 | `ReportCatalog` | The definitions in the order of `ReportCode`; `available`/`infos` filter by the caller's permissions, `require` is 404 or 403 |
-| `ReportFilterDefinition` | One filter: key, type, query parameters, required, basis, defaults on a day, `apply` (read the parameters into `ReportFilters`, adding field errors) and `describe` (the header block's text). Implemented: `MonthRangeFilter` (`period`, `fromMonth`/`toMonth`, default the previous month), `ChargeTypesFilter` (`chargeTypes`, default all) and `StreetFilter` (`street`, default all); later reports add theirs |
+| `ReportFilterDefinition` | One filter: key, type, query parameters, required, basis, defaults on a day, `apply` (read the parameters into `ReportFilters`, adding field errors) and `describe` (the header block's text). Implemented: `MonthRangeFilter` (`period`, `fromMonth`/`toMonth`, default the previous month), `ChargeTypesFilter` (`chargeTypes`, default all), `StreetFilter` (`street`, default all), `AsOfFilter` (`asOf`, `DATE`, required, default today; a day after today is `INVALID`), `StatusesFilter` (`statuses`, `STATUS`, default all), `MinDebtFilter` (`minDebt`, `MONEY`) and `OlderThanDaysFilter` (`olderThanDays`, `INT`), both required with a default the definition gives (the debtors: the cooperative's red amount and red days, read when the list or the report is made); later reports add theirs. In the file a filter is named by `reports.filters.<key>` (period, charge types, street) or `reports.filters.params.<param>`, the web form's labels |
 | `ReportFilters` | The typed filter values of one run and the values as the query string carries them (echoed in the preview, written to the audit entry); `parse` throws 400 `REPORT_FILTER_INVALID` with every field error: `REQUIRED` (a required filter without a default), `INVALID` (`toMonth` before `fromMonth`), `NOT_FOUND` (`chargeTypeIds[i]` not a charge type of the cooperative). Malformed values never get here: the contract answers 400 `VALIDATION_FAILED` |
 | `ReportResult` | Sheets (`key`, typed `Column`s, `Row`s of kind `DETAIL`/`SUBTOTAL` with a tree level, `Total`s) and header `Note`s (code + params). A `Cell` holds a typed value (`Money`, `BigDecimal`, `LocalDate`, `YearMonth`, `UUID` of a charge type, codes and text) or nothing, or a reason when the value is not known (never 0) |
 | `ReportRunner` | `preview` and `file`, each one plain `@Transactional` (not read-only: the outbox inserts the audit publication). Order: caller and permission, filters, `load`, the row cap, the preview or the workbook, the audit event **last**, so a refused run or a failure while writing leaves no entry |
@@ -73,8 +74,12 @@ these are the ADR 0012 exception to the English-only rule (Ukrainian only in the
 the same text in the web catalogs (`packages/shared/src/i18n/uk.ts`, `en.ts`), so screen and file say the same:
 `reports.<code>.title`, `reports.<code>.sheets.<sheetKey>`, `reports.<code>.columns.<columnKey>` (the contract's
 column keys), `reports.notes.<ReportNoteCode>`, `reports.filters.*`, `reports.file.*`, `reports.rows.SUBTOTAL`,
-`reports.totals.<key>`, `reports.reasons.<ReportCellReason>`, and the shared `billing.status.*` and
-`chargeTypes.defaultNames.*`. `ReportTextsTests` checks that both bundles have the same keys and every key a
+`reports.totals.<key>`, `reports.reasons.<ReportCellReason>`, the filter labels and options
+(`reports.filters.params.*`, `reports.filters.options.statuses.*`, which also name the plot balances' status codes),
+and the shared `billing.status.*` and `chargeTypes.defaultNames.*`. A column per charge type (`debt.<chargeTypeId>`,
+`chargeTypeId` set) has no key of its own: its header is the charge type's name, in the file
+`chargeTypes.defaultNames.<CODE>` for a seeded type that was not renamed and the stored name otherwise (the runner's
+`chargeTypeNames`), on the web `chargeTypeName`. `ReportTextsTests` checks that both bundles have the same keys and every key a
 definition asks for; the web side checks the texts against its catalogs.
 
 ### Row cap
@@ -129,8 +134,65 @@ defaults, the list, the workbook in both languages, route precedence, filter err
 `ReportRunnerTests` (preview of 200 of 250 rows, file with all, no audit on a write failure, the cap or bad filters),
 `XlsxReportWriterTests`, `ReportLanguageTests`, `ReportTextsTests`.
 
+## Debt per charge type (plot balances and debtors)
+
+`DebtColumns`: one `MONEY` column per charge type in the configured order, key `debt.<chargeTypeId>` with
+`chargeTypeId` set, headed by the charge type's name (see Bundles). With a charge type filter the columns are the chosen
+types; without one every type that is not archived, plus an archived type some listed plot still has a counted charge
+of. A plot without a counted charge of a type shows `0.00`. The debts are `ledger.LedgerReadModel.debtsAsOf` (the
+rule of the plot account and the status cache: charges dated on or before the day, reversals negative, adjustments
+with their sign; the oldest unpaid date and the days overdue on that day). The totals line `all` sums every money column
+of the rows listed (`Money.plus`, no rounding of its own); other columns are empty. Both reports add the header note
+`OLDEST_UNPAID_IS_OLDEST_CHARGE` (until payments exist the oldest unpaid charge is the oldest charge with a debt) and
+read the plots from `plots.PlotCatalog.findActive(street)`: active plots without common land, natural order.
+
+## Report: plot balances (`plot-balances`, functional spec 2.4)
+
+Filters: as of (`asOf`, default today in Kyiv, not after today), charge types, street, statuses (`RED`, `YELLOW`,
+`GREEN`, `GREY`). Needs `REPORTS_VIEW` only and holds no personal data. Sheet `main`, one row per active plot:
+`number`, `street`, `owners` (the **number** of current owners, `plots.PlotOwners.ownerCounts`; never a name), the debt
+columns, `total`, `oldestUnpaid`, `daysOverdue`, `status` (`CODE`, in the file `reports.filters.options.statuses.*`).
+
+- The status always counts every charge type. As of today it is the status on the map (`plots.PlotStatuses.current`,
+  the `plot_status` cache, the current thresholds). For a past day it is `PlotStatuses.classify` of every type's debt
+  on that day with today's thresholds (and today's owners and kind); the header note `PAST_DATE_STATUS` says so.
+- With a charge type filter that leaves out some type the debts and dates count only the chosen types, the status still
+  every type, and the header note `STATUS_ALL_CHARGE_TYPES` says so.
+- The status filter applies after the status is worked out; the totals are the sums of the rows it keeps.
+- File name `plot-balances_<asOf>_<asOf>.xlsx`.
+
+## Report: debtors (`debtors`, functional spec 2.5)
+
+Needs `REPORTS_VIEW` **and** `MEMBERS_VIEW` (`requiredPermissions`): without the second it is not in `GET /reports`
+(so the web shows no card) and both its endpoints are 403 `PERMISSION_DENIED`; `load` also carries
+`@PreAuthorize("hasAuthority('PERM_REPORTS_VIEW') and hasAuthority('PERM_MEMBERS_VIEW')")` as defence in depth.
+`personalData` is true: its `ReportInfo` and audit entries say `personalData=true`, and the entry holds the filters
+and the row count only, never a name, phone or e-mail. Nothing logs them.
+
+Filters: `minDebt` (default the cooperative's red amount) and `olderThanDays` (default its red days), charge types,
+street; the day is today in Kyiv. A plot matches by the red rule of the map (money rules 9, `PlotStatusPolicy`) with the
+filter's thresholds: no debt (zero or less) never matches; otherwise the debt is **above** `minDebt` **or** its oldest
+unpaid charge is **more than** `olderThanDays` days old. Debt and age count only the chosen charge types. A matching
+plot without a current owner is listed with empty owner cells (its debt is still owed), so with the defaults and every
+type the report lists the red plots plus the ownerless plots that would be red.
+
+Sheet `main`, one row per matching plot: `number`, `street`, `owners` (the full names "Last First Middle" of the
+current owners from `members.MemberDirectory.contacts`, the earliest ownership first, separated by `; `), `phones` (per
+owner its phones joined by `, `, the owners in the same order separated by `; `; an owner without a phone is left
+out), `emails` (the owners' e-mail addresses in the same order separated by `; `; an owner without one is left out),
+the debt columns, `total`, `oldestUnpaid`, `daysOverdue`. File name `debtors_<today>_<today>.xlsx`.
+
+Tests: `PlotBalancesReportTests` and `DebtorsReportTests` on the worked balances of
+`ReportsTestSupport.bookTheBalances` (five active plots, common land and an archived plot left out, two current owners
+and an ended one on plot 1, dates counted back from today): debts per type, totals, dates, days and every status; the
+map's status today; a past day without the later charges and with today's thresholds; status, street and charge type
+filters and their notes; no name in the plot balances preview or file; the debtors' OR rule, defaults from the
+settings, both owners with contacts, a lower amount listing more plots; 403 and no card for a custom role with
+`REPORTS_VIEW` but not `MEMBERS_VIEW` (allowed with both), the definition's own refusal; the audit entries.
+
 ## Depends on
 
-`ledger` (`LedgerReadModel`), `plots` (`PlotCatalog`), `tariffs` (`ChargeTypeCatalog`), `tenancy`
+`ledger` (`LedgerReadModel`), `plots` (`PlotCatalog`, `PlotOwners`, `PlotStatuses`), `members` (`MemberDirectory`,
+debtors only), `settings` (`CooperativeSettings`: red amount and days), `tariffs` (`ChargeTypeCatalog`), `tenancy`
 (`TenantDirectory`), `identity` (`CurrentUser`, `AccessProfile`, `Permission`), `audit`, `money` and `problem`. No
 module depends on `reports`.

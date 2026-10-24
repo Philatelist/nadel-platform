@@ -23,7 +23,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * The read facade other modules use for plot facts: facts with the street, many at once, by number, the natural and the
- * street order, the shared lock, the chargeable count, tenant isolation.
+ * street order, the shared lock, the chargeable count, the active plots of a street, tenant isolation.
  */
 class PlotCatalogTests extends IntegrationTest {
 
@@ -205,6 +205,27 @@ class PlotCatalogTests extends IntegrationTest {
                 road);
         assertThat(as(DEMO_TENANT, () -> catalog.idsOnStreet("   "))).isEmpty();
         assertThat(as(DEMO_TENANT, () -> catalog.idsOnStreet("Невідома-PC"))).isEmpty();
+    }
+
+    @Test
+    void findActiveListsActivePlotsWithoutCommonLandInNaturalOrderOptionallyOfOneStreet() {
+        UUID ten = plot(DEMO_TENANT, "PA-10", "PLOT", "600.00", false, "Липова-PA");
+        UUID nine = plot(DEMO_TENANT, "PA-9", "PLOT", "500.00", false, "  липова-pa ");
+        plot(DEMO_TENANT, "PA-8", "PLOT", "600.00", true, "Липова-PA");
+        plot(DEMO_TENANT, "PA-7", "COMMON", "100.00", false, "Липова-PA");
+        UUID elsewhere = plot(DEMO_TENANT, "PA-6", "PLOT", "600.00", false, "Кленова-PA");
+        plot(OTHER_TENANT, "PA-5", "PLOT", "600.00", false, "Липова-PA");
+
+        List<PlotFacts> onStreet = as(DEMO_TENANT, () -> catalog.findActive(" ЛИПОВА-pa "));
+        List<PlotFacts> everyStreet = as(DEMO_TENANT, () -> catalog.findActive(null));
+
+        assertThat(onStreet).extracting(PlotFacts::id).containsExactly(nine, ten);
+        assertThat(onStreet.getFirst()).isEqualTo(new PlotFacts(nine, "PA-9", "  липова-pa ", false, false,
+                new BigDecimal("500.00")));
+        assertThat(everyStreet).isEqualTo(as(DEMO_TENANT, catalog::findChargeable));
+        assertThat(everyStreet).extracting(PlotFacts::id).contains(nine, ten, elsewhere);
+        assertThat(as(DEMO_TENANT, () -> catalog.findActive("   "))).isEqualTo(everyStreet);
+        assertThat(as(DEMO_TENANT, () -> catalog.findActive("Невідома-PA"))).isEmpty();
     }
 
     private <T> T as(UUID tenant, Supplier<T> work) {

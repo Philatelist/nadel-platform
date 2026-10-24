@@ -18,7 +18,18 @@ import { UserContent } from '../UserContent';
 const NUMERIC_TYPES: ReadonlySet<string> = new Set(['MONEY', 'QUANTITY', 'PERCENT', 'INTEGER']);
 const NAMING_TYPES: ReadonlySet<string> = new Set(['TEXT', 'CODE', 'CHARGE_TYPE']);
 
+/** The catalog texts of a CODE column, by report code and column key; a report without an entry shows the billing status texts for `status`. */
+function codeLabels(t: Messages, report: string, key: string): Readonly<Record<string, string>> | undefined {
+  const lookup: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+    'plot-balances/status': t.reports.filters.options.statuses,
+    'debtors/status': t.reports.filters.options.statuses,
+    '*/status': t.billing.status,
+  };
+  return lookup[`${report}/${key}`] ?? lookup[`*/${key}`];
+}
+
 interface CellContext {
+  report: string;
   t: Messages;
   locale: string;
   chargeTypes: readonly ChargeTypeRef[];
@@ -28,7 +39,7 @@ interface CellContext {
 function formatValue(
   column: ReportColumn,
   value: string,
-  { t, locale, chargeTypes }: CellContext,
+  { report, t, locale, chargeTypes }: CellContext,
 ): ReactNode {
   try {
     switch (column.type) {
@@ -49,10 +60,7 @@ function formatValue(
         return type ? <ChargeTypeName type={type} /> : value;
       }
       case 'CODE': {
-        const labels: Readonly<Record<string, Readonly<Record<string, string>>>> = {
-          status: t.billing.status,
-        };
-        return labels[column.key]?.[value] ?? value;
+        return codeLabels(t, report, column.key)?.[value] ?? value;
       }
       case 'TEXT':
         return <UserContent>{value}</UserContent>;
@@ -95,7 +103,7 @@ function labelIndex(columns: readonly ReportColumn[], cells: readonly ReportCell
 }
 
 function cellClass(column: ReportColumn): string {
-  return `px-3 py-2 ${NUMERIC_TYPES.has(column.type) ? 'text-right font-mono tabular-nums' : 'text-left'}`;
+  return `px-3 py-2 ${NUMERIC_TYPES.has(column.type) ? 'text-right font-mono tabular-nums' : 'text-left whitespace-pre-line'}`;
 }
 
 function columnHeader(
@@ -115,7 +123,7 @@ function SheetTable({ code, sheet, preview }: { code: string; sheet: ReportSheet
   const t = useT();
   const { locale } = useLocale();
   const texts = reportTexts(t, code);
-  const context: CellContext = { t, locale, chargeTypes: preview.chargeTypes };
+  const context: CellContext = { report: code, t, locale, chargeTypes: preview.chargeTypes };
   const heading = texts?.sheets[sheet.key] ?? sheet.key;
   const totals: Readonly<Record<string, string>> = t.reports.totals;
   const subtotal = t.reports.rows.SUBTOTAL;

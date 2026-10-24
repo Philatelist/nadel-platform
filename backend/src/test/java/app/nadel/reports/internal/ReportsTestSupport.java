@@ -7,6 +7,9 @@ import app.nadel.IntegrationTest;
 import app.nadel.TestTokens;
 import java.math.BigDecimal;
 import java.time.Duration;
+import java.time.LocalDate;
+import java.time.YearMonth;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -45,6 +48,7 @@ import tools.jackson.databind.json.JsonMapper;
 abstract class ReportsTestSupport extends IntegrationTest {
 
     static final String COOPERATIVE = "СТ «Звіти»";
+    static final ZoneId KYIV = ZoneId.of("Europe/Kyiv");
 
     @Autowired
     MockMvc mvc;
@@ -60,6 +64,12 @@ abstract class ReportsTestSupport extends IntegrationTest {
     UUID p2;
     UUID membership;
     UUID electricity;
+    LocalDate today;
+    UUID b1;
+    UUID b2;
+    UUID b3;
+    UUID b10;
+    UUID b11;
 
     @BeforeAll
     static void createOwnerRole() {
@@ -101,11 +111,118 @@ abstract class ReportsTestSupport extends IntegrationTest {
             sql.update("delete from recalculation where tenant_id = ?", id);
             sql.update("delete from billing_month where tenant_id = ?", id);
         });
-        for (String table : List.of("audit_entry", "plot_status", "plot", "member_role", "role_permission", "role",
+        for (String table : List.of("audit_entry", "ownership", "plot_status", "plot", "member_role", "role_permission", "role",
                 "member", "charge_type", "cooperative_settings")) {
             ownerJdbc().update("delete from " + table + " where tenant_id = ?", id);
         }
         ownerJdbc().update("delete from tenant where id = ?", id);
+    }
+
+    /**
+     * The worked balances of plot balances and debtors, every day counted back from today in Kyiv ({@code T}):
+     * <pre>
+     * plot  street  current owners                       charges (debt date)                    today: debt, oldest, status
+     * 1     Лісова  Шевченко Тарас Григорович (2 phones,  membership 600.00 (T-120),             652.50, T-120, 120 days, RED
+     *               e-mail), Коваль Марія (1 phone);      electricity 52.50 (T-30)               (older than 90 days)
+     *               Колишній Петро owned it until 2019
+     * 2     Садова  Бондар Олена (phone, e-mail)          membership 1500.00 (T-10)              1500.00, T-10, 10 days, RED
+     * 3     Садова  Мельник Іван (phone)                  membership 300.00 (T-20)               300.00, T-20, 20 days, YELLOW
+     * 10    Лісова  Ткач Ганна (e-mail)                   membership 200.00 (T-200), reversed    0.00, none, GREEN
+     * 11    Лісова  none                                  membership 100.00 (T-5)                100.00, T-5, 5 days, GREY
+     * Д-1   Лісова  common land                           membership 999.00 (T-100)              not listed
+     * 4     Лісова  archived                              membership 5000.00 (T-100)             not listed
+     * </pre>
+     * The {@code plot_status} cache holds today's debts and oldest dates, as the ledger would have rebuilt it. The
+     * thresholds are the defaults, 1000.00 and 90 days.
+     */
+    void bookTheBalances() {
+        today = LocalDate.now(KYIV);
+        b1 = plot("1", "Лісова");
+        b2 = plot("2", "Садова");
+        b3 = plot("3", "Садова");
+        b10 = plot("10", "Лісова");
+        b11 = plot("11", "Лісова");
+        UUID common = plot("Д-1", "Лісова");
+        ownerJdbc().update("update plot set kind = 'COMMON' where id = ?", common);
+        UUID archived = plot("4", "Лісова");
+        ownerJdbc().update("update plot set archived_at = now() where id = ?", archived);
+        membership = typeId("MEMBERSHIP");
+        electricity = typeId("ELECTRICITY");
+
+        owner(b1, "Шевченко", "Тарас", "Григорович", "{+380501112233,+380671112233}", "taras@reports.test",
+                "2020-01-01", null);
+        owner(b1, "Коваль", "Марія", null, "{+380631112233}", null, "2021-05-01", null);
+        owner(b1, "Колишній", "Петро", null, "{+380991112233}", "former@reports.test", "2015-01-01", "2019-12-31");
+        owner(b2, "Бондар", "Олена", null, "{+380441112233}", "olena@reports.test", "2019-01-01", null);
+        owner(b3, "Мельник", "Іван", null, "{+380931112233}", null, "2019-01-01", null);
+        owner(b10, "Ткач", "Ганна", null, "{}", "hanna@reports.test", "2019-01-01", null);
+
+        dayCharge(b1, membership, "600.00", 120);
+        dayCharge(b1, electricity, "52.50", 30);
+        dayCharge(b2, membership, "1500.00", 10);
+        dayCharge(b3, membership, "300.00", 20);
+        reversal(dayCharge(b10, membership, "200.00", 200));
+        dayCharge(b11, membership, "100.00", 5);
+        dayCharge(common, membership, "999.00", 100);
+        dayCharge(archived, membership, "5000.00", 100);
+
+        cacheDebt(b1, "652.50", today.minusDays(120));
+        cacheDebt(b2, "1500.00", today.minusDays(10));
+        cacheDebt(b3, "300.00", today.minusDays(20));
+        cacheDebt(b10, "0.00", null);
+        cacheDebt(b11, "100.00", today.minusDays(5));
+        cacheDebt(common, "999.00", today.minusDays(100));
+        cacheDebt(archived, "5000.00", today.minusDays(100));
+    }
+
+    /** A one-day charge dated {@code daysAgo} days before today, booked in the month of that day. */
+    UUID dayCharge(UUID plot, UUID type, String amount, int daysAgo) {
+        String day = today.minusDays(daysAgo).toString();
+        return charge(plot, type, "REGULAR", "TARIFF", amount, day, day, YearMonth.from(today.minusDays(daysAgo))
+                .toString());
+    }
+
+    /** A member who owns the whole plot from {@code from} to {@code to} (null: still owns it). */
+    UUID owner(UUID plot, String lastName, String firstName, String middleName, String phones, String email,
+            String from, String to) {
+        UUID id = UUID.randomUUID();
+        ownerJdbc().update("insert into member (id, tenant_id, last_name, first_name, middle_name, phones, email) "
+                + "values (?, ?, ?, ?, ?, cast(? as text[]), ?)", id, tenant, lastName, firstName, middleName, phones,
+                email);
+        ownerJdbc().update("insert into ownership (tenant_id, plot_id, member_id, share_numerator, "
+                + "share_denominator, valid_from, valid_to) values (?, ?, ?, 1, 1, ?::date, ?::date)", tenant, plot,
+                id, from, to);
+        return id;
+    }
+
+    /** The debt and oldest unpaid date of the plot in the {@code plot_status} cache. */
+    void cacheDebt(UUID plot, String debt, LocalDate oldest) {
+        ownerJdbc().update("update plot_status set debt = ?, oldest_debt_date = ? where plot_id = ?",
+                new BigDecimal(debt), oldest, plot);
+    }
+
+    /** The red threshold of the cooperative. */
+    void thresholds(String redAmount, int redDays) {
+        ownerJdbc().update("insert into cooperative_settings (tenant_id, red_amount, red_days) values (?, ?, ?) "
+                + "on conflict (tenant_id) do update set red_amount = excluded.red_amount, "
+                + "red_days = excluded.red_days", tenant, new BigDecimal(redAmount), redDays);
+    }
+
+    /** A member with a custom role of only these permissions; returns a token. */
+    String personWithPermissions(String roleName, String... permissions) {
+        UUID role = UUID.randomUUID();
+        ownerJdbc().update("insert into role (id, tenant_id, name) values (?, ?, ?)", role, tenant, roleName);
+        for (String permission : permissions) {
+            ownerJdbc().update("insert into role_permission (tenant_id, role_id, permission) values (?, ?, ?)",
+                    tenant, role, permission);
+        }
+        UUID id = UUID.randomUUID();
+        String email = "custom-" + id + "@reports.test";
+        ownerJdbc().update("insert into member (id, tenant_id, last_name, first_name, email) "
+                + "values (?, ?, 'Звітний', ?, ?)", id, tenant, roleName, email);
+        ownerJdbc().update("insert into member_role (tenant_id, member_id, role_id) values (?, ?, ?)", tenant, id,
+                role);
+        return TestTokens.bearer(tenant, "sub-" + email, email);
     }
 
     /** Books the worked ledger of the class comment. */

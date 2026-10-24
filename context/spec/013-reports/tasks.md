@@ -22,12 +22,12 @@ Rules for every slice: contract first (`api/openapi.yaml`, then `make gen`), Fly
   - [x] Tests: reconciliation of charges-by-month with billing months for every month on a worked fixture (reversal, later-month adjustment), 403/401/operator checks, `.xlsx` route precedence, audit entry, cap `REPORT_TOO_LARGE`, language of headers. **[Agent: spring-backend]**
   - [x] Verify: `cd backend && ./mvnw test -Dtest='app.nadel.reports.**,app.nadel.ledger.**,app.nadel.ModularityTests'` and `pnpm -r typecheck && pnpm -r lint && pnpm --filter web exec vitest run src/pages/ReportsPage.test.tsx src/pages/ReportPage.test.tsx` and `pnpm --filter shared test`; delete temporary files. **[Agent: spring-backend]**
 
-- [ ] **Slice 4: Plot balances and Debtors**
-  - [ ] Facades: `PlotCatalog.findActive`, `PlotOwners`, `PlotStatuses` and `PlotStatus`, `LedgerReadModel.debtsAsOf`, `MemberDirectory.contacts`, settings thresholds. **[Agent: spring-backend]**
-  - [ ] `plot-balances` and `debtors` definitions (OR thresholds, past-date status note, extra `MEMBERS_VIEW` with 403, card hidden when not allowed); header notes; i18n. **[Agent: spring-backend]**
-  - [ ] Web: Debtors card hidden and direct URL shows no access; unknown and note rendering. **[Agent: react-frontend]**
-  - [ ] Tests on fixed fixtures with worked numbers; Debtors without `MEMBERS_VIEW` is 403; two owners; no names in plot balances. **[Agent: spring-backend]**
-  - [ ] Verify: `cd backend && ./mvnw test -Dtest='app.nadel.reports.**,app.nadel.plots.**,app.nadel.members.**,app.nadel.ledger.**,app.nadel.ModularityTests'` and `pnpm --filter web exec vitest run src/pages/ReportsPage.test.tsx src/pages/ReportPage.test.tsx`; delete temporary files. **[Agent: spring-backend]**
+- [x] **Slice 4: Plot balances and Debtors**
+  - [x] Facades: `PlotCatalog.findActive`, `PlotOwners`, `PlotStatuses` and `PlotStatus`, `LedgerReadModel.debtsAsOf`, `MemberDirectory.contacts`, settings thresholds. **[Agent: spring-backend]**
+  - [x] `plot-balances` and `debtors` definitions (OR thresholds, past-date status note, extra `MEMBERS_VIEW` with 403, card hidden when not allowed); header notes; i18n. **[Agent: spring-backend]**
+  - [x] Web: Debtors card hidden and direct URL shows no access; unknown and note rendering. **[Agent: react-frontend]**
+  - [x] Tests on fixed fixtures with worked numbers; Debtors without `MEMBERS_VIEW` is 403; two owners; no names in plot balances. **[Agent: spring-backend]**
+  - [x] Verify: `cd backend && ./mvnw test -Dtest='app.nadel.reports.**,app.nadel.plots.**,app.nadel.members.**,app.nadel.ledger.**,app.nadel.ModularityTests'` and `pnpm --filter web exec vitest run src/pages/ReportsPage.test.tsx src/pages/ReportPage.test.tsx`; delete temporary files. **[Agent: spring-backend]**
 
 - [ ] **Slice 5: Corrections and Land tax**
   - [ ] `LedgerReadModel.corrections` and `chargedInYear`; `ExpectedAmounts.yearByVersion` in tariffs. **[Agent: spring-backend]**

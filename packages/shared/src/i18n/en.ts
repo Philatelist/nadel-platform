@@ -1689,6 +1689,10 @@ export const en = {
     notes: {
       SERVICE_PERIOD_SHEET:
         'The sheet “By service period” groups the same charges by the month of the service, so an adjustment booked later shows under the month it is for.',
+      PAST_DATE_STATUS: 'The status is worked out as of the chosen day with today’s thresholds.',
+      STATUS_ALL_CHARGE_TYPES: 'The status counts every charge type, not only the chosen ones.',
+      OLDEST_UNPAID_IS_OLDEST_CHARGE:
+        'Until payments are recorded, the oldest unpaid charge is the oldest charge that still has a debt.',
     },
     'charges-by-month': {
       title: 'Charges by month',
@@ -1708,6 +1712,41 @@ export const en = {
         reversals: 'Reversals',
         adjustments: 'Adjustments',
         effective: 'Effective total',
+      },
+    },
+    'plot-balances': {
+      title: 'Plot balances',
+      description:
+        'The debt of every plot on a day, by charge type, with its status colour and without owner names.',
+      sheets: {
+        main: 'Balances',
+      },
+      columns: {
+        number: 'Plot',
+        street: 'Street',
+        owners: 'Owners',
+        total: 'Total debt',
+        oldestUnpaid: 'Oldest unpaid charge',
+        daysOverdue: 'Days overdue',
+        status: 'Status',
+      },
+    },
+    debtors: {
+      title: 'Debtors',
+      description:
+        'Plots with a debt above an amount or older than a number of days, with the owners’ names and contacts.',
+      sheets: {
+        main: 'Debtors',
+      },
+      columns: {
+        number: 'Plot',
+        street: 'Street',
+        owners: 'Owners',
+        phones: 'Phones',
+        emails: 'E-mail',
+        total: 'Total debt',
+        oldestUnpaid: 'Oldest unpaid charge',
+        daysOverdue: 'Days overdue',
       },
     },
   },

@@ -46,4 +46,12 @@ describe('ReportsPage', () => {
     expect(screen.queryByRole('link')).not.toBeInTheDocument();
     expect(screen.getByText('No reports are available.')).toBeInTheDocument();
   });
+
+  it('shows no Debtors card when the API leaves it out, and one when it lists it', () => {
+    renderWithApp(<ReportsPage />);
+    expect(screen.queryByRole('link', { name: 'Debtors' })).not.toBeInTheDocument();
+    reports = [chargesByMonthInfo, { ...chargesByMonthInfo, code: 'debtors', personalData: true }];
+    renderWithApp(<ReportsPage />);
+    expect(screen.getByRole('link', { name: 'Debtors' })).toHaveAttribute('href', '/reports/debtors');
+  });
 });

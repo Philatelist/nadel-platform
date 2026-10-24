@@ -4,13 +4,17 @@ import app.nadel.ledger.LedgerReadModel;
 import app.nadel.ledger.MonthGrouping;
 import app.nadel.ledger.MonthStatus;
 import app.nadel.ledger.MonthTypeTotals;
+import app.nadel.ledger.PlotDebts;
 import app.nadel.money.Money;
 import jakarta.persistence.EntityManager;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.YearMonth;
+import java.time.temporal.ChronoUnit;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
@@ -28,6 +32,11 @@ import org.springframework.transaction.annotation.Transactional;
  * ({@code ChargeRepository.totalsPerMonthAndType}: every row booked in the month, of every kind, {@code SUM(amount)}),
  * so the effective total of a month and type is the screen's figure cent for cent; the split by kind uses
  * {@code FILTER} clauses over the same rows. The service month grouping takes the month of {@code service_from}.
+ * <p>
+ * {@link #debtsAsOf}: {@code DebtCalculator}'s rule in SQL over the charges dated on or before the day, one row per plot
+ * and charge type (the signed sum and the oldest unpaid debt date of the type); the plot's total is the sum of its types
+ * and its oldest date the earliest of theirs, which is {@code DebtCalculator}'s answer because a reversal and an
+ * adjustment always share the plot and charge type of the charge they correct. Plots go 500 per {@code IN} list.
  */
 @Component
 class LedgerReportQueries implements LedgerReadModel {
@@ -62,6 +71,46 @@ class LedgerReportQueries implements LedgerReadModel {
     private static final String BY_SERVICE_MONTH = MONTH_TOTALS.formatted("c.service_from",
             "cast(null as text)", "", "c.service_from");
 
+    /** Values per {@code IN} list. */
+    private static final int CHUNK = 500;
+
+    /**
+     * Per plot and charge type: the signed sum of the counted charges, and the oldest debt date among the counted charges
+     * that are neither a reversal nor an adjustment, are not reversed by a counted reversal, and whose amount plus their
+     * counted adjustments is above zero ({@code DebtCalculator.of} over the same lines).
+     */
+    private static final String DEBTS_AS_OF = """
+            with lines as (
+                select c.id, c.plot_id, c.charge_type_id, c.amount, c.accrued_on, c.reverses_charge_id,
+                       c.adjusts_charge_id
+                from charge c
+                where c.plot_id in (:plotIds)
+                  and c.accrued_on <= :asOf
+                  and (:allTypes = true or c.charge_type_id in (:typeIds))
+            ),
+            adjusted as (
+                select a.adjusts_charge_id as id, sum(a.amount) as amount
+                from lines a
+                where a.adjusts_charge_id is not null
+                group by a.adjusts_charge_id
+            ),
+            unpaid as (
+                select l.plot_id, l.charge_type_id, min(l.accrued_on) as oldest
+                from lines l
+                left join adjusted a on a.id = l.id
+                where l.reverses_charge_id is null
+                  and l.adjusts_charge_id is null
+                  and not exists (select 1 from lines r where r.reverses_charge_id = l.id)
+                  and l.amount + coalesce(a.amount, 0) > 0
+                group by l.plot_id, l.charge_type_id
+            )
+            select t.plot_id, t.charge_type_id, sum(t.amount) as debt, u.oldest
+            from lines t
+            left join unpaid u on u.plot_id = t.plot_id and u.charge_type_id = t.charge_type_id
+            group by t.plot_id, t.charge_type_id, u.oldest
+            order by t.plot_id, t.charge_type_id
+            """;
+
     private final EntityManager entityManager;
 
     LedgerReportQueries(EntityManager entityManager) {
@@ -94,6 +143,59 @@ class LedgerReportQueries implements LedgerReadModel {
                 .setParameter("plotIds", plotIds == null ? NONE : List.copyOf(plotIds))
                 .getResultList();
         return rows.stream().map(row -> totals((Object[]) row)).toList();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Map<UUID, PlotDebts> debtsAsOf(LocalDate asOf, Set<UUID> chargeTypeIds, Collection<UUID> plotIds) {
+        Objects.requireNonNull(asOf, "asOf");
+        Objects.requireNonNull(chargeTypeIds, "chargeTypeIds");
+        List<UUID> ids = plotIds.stream().distinct().toList();
+        Map<UUID, Accumulator> byPlot = new LinkedHashMap<>();
+        ids.forEach(id -> byPlot.put(id, new Accumulator()));
+        for (int from = 0; from < ids.size(); from += CHUNK) {
+            List<?> rows = entityManager.createNativeQuery(DEBTS_AS_OF)
+                    .setParameter("plotIds", ids.subList(from, Math.min(ids.size(), from + CHUNK)))
+                    .setParameter("asOf", asOf)
+                    .setParameter("allTypes", chargeTypeIds.isEmpty())
+                    .setParameter("typeIds", orNone(chargeTypeIds))
+                    .getResultList();
+            for (Object row : rows) {
+                Object[] values = (Object[]) row;
+                byPlot.get((UUID) values[0]).add((UUID) values[1], money(values[2]), date(values[3]));
+            }
+        }
+        Map<UUID, PlotDebts> debts = new LinkedHashMap<>();
+        byPlot.forEach((plotId, sum) -> debts.put(plotId, sum.debts(plotId, asOf)));
+        return debts;
+    }
+
+    /** The types of one plot as they come from the query, folded into its debts. */
+    private static final class Accumulator {
+
+        private final Map<UUID, Money> byType = new LinkedHashMap<>();
+        private Money total = Money.ZERO;
+        private @Nullable LocalDate oldest;
+
+        void add(UUID chargeTypeId, Money debt, @Nullable LocalDate oldestOfType) {
+            byType.put(chargeTypeId, debt);
+            total = total.plus(debt);
+            if (oldestOfType != null && (oldest == null || oldestOfType.isBefore(oldest))) {
+                oldest = oldestOfType;
+            }
+        }
+
+        PlotDebts debts(UUID plotId, LocalDate asOf) {
+            Integer days = oldest == null ? null : Math.toIntExact(ChronoUnit.DAYS.between(oldest, asOf));
+            return new PlotDebts(plotId, byType, total, oldest, days);
+        }
+    }
+
+    private static @Nullable LocalDate date(@Nullable Object value) {
+        if (value == null) {
+            return null;
+        }
+        return value instanceof java.sql.Date sql ? sql.toLocalDate() : (LocalDate) value;
     }
 
     private static Collection<UUID> orNone(Set<UUID> ids) {

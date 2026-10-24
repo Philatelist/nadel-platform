@@ -11,7 +11,12 @@ member tables. `find(ids)` returns the names and the archived flag of the given 
 archived included, literal match, at most 200 ids); `lockActive(ids)` pins members for the caller's transaction with a
 shared row lock (`FOR SHARE`, in id order, transaction mandatory) and returns those that exist, archived ones included so
 the caller can refuse them (used by the change of owner, so a member cannot be archived while the change commits).
-`MemberRef.shortName()` is "Last First" without the patronymic. The
+`MemberRef.shortName()` is "Last First" without the patronymic. `contacts(ids)` returns `MemberContacts` (names,
+`fullName()` "Last First Middle", `shortName()`, the phones as stored, the e-mail, the archived flag) of the given
+members, archived ones included, unknown ids and other cooperatives' members absent (RLS); it runs in the caller's
+transaction (`MANDATORY`, 500 ids per `IN` list). It is the **only** way another module reads member contacts: feature
+013 (the debtors report, which also requires `MEMBERS_VIEW`) reads owners' names and contacts through it, and feature
+014 will encrypt them inside this module without changing the method. Nothing logs the values. The
 implementation is `JpaMemberDirectory` (internal); `plots` uses it for owners (feature 007). Feature 005 (import) will
 add more lookups here.
 

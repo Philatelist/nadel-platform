@@ -1,13 +1,18 @@
 package app.nadel.reports.internal;
 
+import app.nadel.money.Money;
+import app.nadel.plots.PlotStatus;
 import app.nadel.problem.ApiProblemException;
 import app.nadel.problem.FieldProblem;
 import app.nadel.problem.ProblemCodes;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import nadel.contract.model.ReportFilterParam;
 import nadel.contract.model.ReportFilterValue;
@@ -30,6 +35,10 @@ final class ReportFilters {
     private @Nullable YearMonth toMonth;
     private List<UUID> chargeTypeIds = List.of();
     private @Nullable String street;
+    private @Nullable LocalDate asOf;
+    private Set<PlotStatus> statuses = Set.of();
+    private @Nullable Money minDebt;
+    private @Nullable Integer olderThanDays;
     private final List<ReportFilterValue> values = new ArrayList<>();
 
     ReportFilters() {
@@ -73,6 +82,27 @@ final class ReportFilters {
         values.add(new ReportFilterValue(ReportFilterParam.STREET, street));
     }
 
+    void asOf(LocalDate asOf) {
+        this.asOf = Objects.requireNonNull(asOf, "asOf");
+        values.add(new ReportFilterValue(ReportFilterParam.AS_OF, asOf.toString()));
+    }
+
+    void statuses(List<PlotStatus> statuses) {
+        Set<PlotStatus> chosen = new LinkedHashSet<>(statuses);
+        this.statuses = Collections.unmodifiableSet(chosen);
+        chosen.forEach(status -> values.add(new ReportFilterValue(ReportFilterParam.STATUSES, status.name())));
+    }
+
+    void minDebt(Money minDebt) {
+        this.minDebt = Objects.requireNonNull(minDebt, "minDebt");
+        values.add(new ReportFilterValue(ReportFilterParam.MIN_DEBT, minDebt.toString()));
+    }
+
+    void olderThanDays(int days) {
+        this.olderThanDays = days;
+        values.add(new ReportFilterValue(ReportFilterParam.OLDER_THAN_DAYS, Integer.toString(days)));
+    }
+
     // ---- read by the report definitions
 
     /** The first billing month; only for a report with a month range. */
@@ -93,6 +123,26 @@ final class ReportFilters {
     /** The chosen street without surrounding spaces; null when every street counts. */
     @Nullable String street() {
         return street;
+    }
+
+    /** The day the report is made for; only for a report with an as-of filter. */
+    LocalDate asOf() {
+        return required(asOf, "as-of");
+    }
+
+    /** The chosen status colours in the order given; empty means every status. */
+    Set<PlotStatus> statuses() {
+        return statuses;
+    }
+
+    /** A debt above this amount matches; only for a report with a minimum debt filter. */
+    Money minDebt() {
+        return required(minDebt, "minimum debt");
+    }
+
+    /** A debt older than this many days matches; only for a report with an age filter. */
+    int olderThanDays() {
+        return required(olderThanDays, "age");
     }
 
     /** The days the report covers: a month range runs from the first day of its first to the last of its last month. */
