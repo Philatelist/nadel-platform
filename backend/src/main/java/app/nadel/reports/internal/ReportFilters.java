@@ -1,6 +1,9 @@
 package app.nadel.reports.internal;
 
 import app.nadel.ledger.CorrectionKind;
+import app.nadel.meters.MeterKind;
+import app.nadel.meters.MeterResource;
+import app.nadel.meters.WaterSourceKind;
 import app.nadel.money.Money;
 import app.nadel.plots.PlotStatus;
 import app.nadel.problem.ApiProblemException;
@@ -44,6 +47,9 @@ final class ReportFilters {
     private @Nullable Integer olderThanDays;
     private @Nullable Integer year;
     private Set<CorrectionKind> correctionKinds = Set.of();
+    private @Nullable MeterResource resource;
+    private Set<MeterKind> meterKinds = Set.of();
+    private @Nullable WaterSourceKind waterSource;
     private final List<ReportFilterValue> values = new ArrayList<>();
 
     ReportFilters() {
@@ -126,6 +132,22 @@ final class ReportFilters {
         chosen.forEach(kind -> values.add(new ReportFilterValue(ReportFilterParam.CORRECTION_KINDS, kind.name())));
     }
 
+    void resource(MeterResource resource) {
+        this.resource = Objects.requireNonNull(resource, "resource");
+        values.add(new ReportFilterValue(ReportFilterParam.RESOURCE, resource.name()));
+    }
+
+    void meterKinds(List<MeterKind> kinds) {
+        Set<MeterKind> chosen = new LinkedHashSet<>(kinds);
+        this.meterKinds = Collections.unmodifiableSet(chosen);
+        chosen.forEach(kind -> values.add(new ReportFilterValue(ReportFilterParam.METER_KINDS, kind.name())));
+    }
+
+    void waterSource(WaterSourceKind source) {
+        this.waterSource = Objects.requireNonNull(source, "source");
+        values.add(new ReportFilterValue(ReportFilterParam.WATER_SOURCE, source.name()));
+    }
+
     // ---- read by the report definitions
 
     /** The first billing month; only for a report with a month range. */
@@ -186,6 +208,21 @@ final class ReportFilters {
     /** The chosen kinds of correction in the order given; empty means both. */
     Set<CorrectionKind> correctionKinds() {
         return correctionKinds;
+    }
+
+    /** The chosen resource; null when both count. */
+    @Nullable MeterResource resource() {
+        return resource;
+    }
+
+    /** The chosen meter kinds in the order given; empty means the filter's default was not applied (no filter). */
+    Set<MeterKind> meterKinds() {
+        return meterKinds;
+    }
+
+    /** The chosen kind of water source; null when every source counts. */
+    @Nullable WaterSourceKind waterSource() {
+        return waterSource;
     }
 
     /**

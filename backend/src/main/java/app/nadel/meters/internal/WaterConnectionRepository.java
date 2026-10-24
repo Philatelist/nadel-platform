@@ -34,6 +34,14 @@ interface WaterConnectionRepository extends JpaRepository<WaterConnectionRecord,
     List<WaterConnectionRecord> findOverlapping(@Param("plotIds") Collection<UUID> plotIds,
             @Param("from") LocalDate from, @Param("to") LocalDate to);
 
+    /**
+     * Every connection of the cooperative that has a connected day from {@code from} to {@code to}, both included (the
+     * water report, feature 013), by plot and start.
+     */
+    @Query("select c from WaterConnectionRecord c where c.validFrom <= :to "
+            + "and (c.validTo is null or c.validTo >= :from) order by c.plotId, c.validFrom")
+    List<WaterConnectionRecord> findAllOverlapping(@Param("from") LocalDate from, @Param("to") LocalDate to);
+
     /** The connections to the meter that have a connected day from {@code from} to {@code to}, both included. */
     @Query("select c from WaterConnectionRecord c where c.sourceMeterId = :source and c.validFrom <= :to "
             + "and (c.validTo is null or c.validTo >= :from) order by c.plotId, c.validFrom")

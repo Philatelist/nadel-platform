@@ -34,6 +34,7 @@ import java.time.YearMonth;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -78,7 +79,13 @@ import org.springframework.transaction.annotation.Transactional;
  * of the electricity type and of the common consumer charges whose service period overlaps the range, joined to the
  * charge it corrects for the source and the original service period; then the parts of the rows and of the states the
  * corrections start from, 500 charges per {@code IN} list, added exactly in Java ({@code Quantity}): one row per charge,
- * never per part, since a charge's parts are rounded once together.
+ * never per part, since a charge's parts are rounded once together. {@link #waterCharged} is the same query with the
+ * water predicate (consumption and fixed fee of the water type, and the common consumer shares whose calculation names
+ * the split {@code CONNECTED_PLOTS}: a well pump's), 500 plots per {@code IN} list, the chunks' rows merged in the
+ * query's order and cut to the limit.
+ * <p>
+ * {@link #openIntervalItems}: the {@code OPEN} items of kind {@code INTERVAL} of the queue per meter, 500 meters per
+ * {@code IN} list.
  * <p>
  * {@link #lossesRunsInRange} and {@link #commonConsumerRunsInRange}: the nodes or consumers of the runs overlapping the
  * range as stored, booked and reversed, with the distinct plots that have a regular charge of the run for the node (a
@@ -200,13 +207,14 @@ class LedgerReportQueries implements LedgerReadModel {
             """;
 
     /**
-     * Every row of an electricity charge whose service period overlaps the range: the {@code REGULAR} charge {@code o}
-     * of source consumption or losses of the electricity type, or of source common consumer, and the row {@code c}
-     * itself (the charge, a reversal or an adjustment of it). {@code before_id} is, for a correction, the state of the
-     * charge it starts from: the latest adjustment of the charge booked before it, else the charge itself (an
-     * adjustment's parts are the recalculated charge's, so its quantity is its parts minus that state's).
+     * Every row of a charge whose service period overlaps the range: the {@code REGULAR} charge {@code o} that the
+     * predicate ({@code %s}, over {@code o}) selects, and the row {@code c} itself (the charge, a reversal or an
+     * adjustment of it). {@code before_id} is, for a correction, the state of the charge it starts from: the latest
+     * adjustment of the charge booked before it, else the charge itself (an adjustment's parts are the recalculated
+     * charge's, so its quantity is its parts minus that state's). The consumer of a common consumer share is the one its
+     * calculation names; the booking times come along for the merge of several plot chunks.
      */
-    private static final String ELECTRICITY_CHARGED = """
+    private static final String CHARGED = """
             select c.id, c.kind, o.source, c.plot_id, c.charge_type_id,
                    to_char(cast(bm.month as timestamp), 'YYYY-MM') as month, o.service_from, o.service_to,
                    c.accrued_on, case when c.kind = 'REGULAR' then null else o.id end as original_id, o.run_id,
@@ -217,19 +225,61 @@ class LedgerReportQueries implements LedgerReadModel {
                                          and (a.created_at, a.id) < (c.created_at, c.id)
                                        order by a.created_at desc, a.id desc
                                        limit 1), o.id)
-                   end as before_id
+                   end as before_id,
+                   case when o.source = 'COMMON_CONSUMER'
+                        then cast(o.calculation ->> 'consumerMeterId' as uuid) end as consumer_id,
+                   o.created_at as original_at, c.created_at as row_at, o.id as charge_id
             from charge c
             join charge o on o.id = coalesce(c.reverses_charge_id, c.adjusts_charge_id, c.id)
             join billing_month bm on bm.id = c.billing_month_id
             where c.kind in ('REGULAR', 'REVERSAL', 'ADJUSTMENT')
               and o.kind = 'REGULAR'
-              and ((o.source in ('CONSUMPTION', 'LOSSES') and o.charge_type_id = :electricity)
-                   or o.source = 'COMMON_CONSUMER')
+              and (%s)
               and o.service_from <= :to
               and o.service_to >= :from
             order by o.service_from, o.service_to, o.plot_id, o.source, o.created_at, o.id, c.created_at, c.id
             limit :limit
             """;
+
+    /**
+     * The electricity rows: consumption and losses of the electricity type, and every common consumer share (whatever
+     * its consumer).
+     */
+    private static final String ELECTRICITY_CHARGED = CHARGED.formatted(
+            "(o.source in ('CONSUMPTION', 'LOSSES') and o.charge_type_id = :type) or o.source = 'COMMON_CONSUMER'");
+
+    /**
+     * The water rows of the plots: consumption and the fixed fee of the water type, and the common consumer shares split
+     * among the plots connected to the consumer as their water source (a well pump).
+     */
+    private static final String WATER_CHARGED = CHARGED.formatted("""
+            o.plot_id in (:plotIds)
+                   and ((o.source in ('CONSUMPTION', 'TARIFF') and o.charge_type_id = :type)
+                        or (o.source = 'COMMON_CONSUMER' and o.calculation ->> 'split' = 'CONNECTED_PLOTS'))""");
+
+    /** The open reading interval items of the queue per meter. */
+    private static final String OPEN_INTERVAL_ITEMS = """
+            select i.meter_id, count(*) as items
+            from not_charged_item i
+            where i.kind = 'INTERVAL'
+              and i.status = 'OPEN'
+              and i.meter_id in (:meterIds)
+            group by i.meter_id
+            """;
+
+    /**
+     * The order of the charged rows, as the query sorts them: service period, plot, source, the charge's booking time
+     * and id, the row's booking time and id ({@code uuid} compares as unsigned bytes in PostgreSQL).
+     */
+    private static final Comparator<Object[]> CHARGED_ORDER = Comparator
+            .comparing((Object[] v) -> Objects.requireNonNull(date(v[6])))
+            .thenComparing(v -> Objects.requireNonNull(date(v[7])))
+            .thenComparing(v -> (UUID) v[3], LedgerReportQueries::compareUuids)
+            .thenComparing(v -> (String) v[2])
+            .thenComparing(v -> (Instant) v[15])
+            .thenComparing(v -> (UUID) v[17], LedgerReportQueries::compareUuids)
+            .thenComparing(v -> (Instant) v[16])
+            .thenComparing(v -> (UUID) v[0], LedgerReportQueries::compareUuids);
 
     /** The parts of the charges, in a stable order (a part has no position of its own). */
     private static final String PARTS = """
@@ -282,6 +332,9 @@ class LedgerReportQueries implements LedgerReadModel {
 
     /** The code of the seeded electricity charge type. */
     private static final String ELECTRICITY = "ELECTRICITY";
+
+    /** The code of the seeded water charge type. */
+    private static final String WATER = "WATER";
 
     private final EntityManager entityManager;
     private final ChargeTypeCatalog chargeTypes;
@@ -405,15 +458,68 @@ class LedgerReportQueries implements LedgerReadModel {
         if (limit < 1) {
             throw new IllegalArgumentException("limit is below 1");
         }
-        List<?> rows = entityManager.createNativeQuery(ELECTRICITY_CHARGED)
-                .setParameter("electricity", typeId(ELECTRICITY).orElse(NONE.getFirst()))
+        List<Object[]> rows = new ArrayList<>();
+        for (Object row : entityManager.createNativeQuery(ELECTRICITY_CHARGED)
+                .setParameter("type", typeId(ELECTRICITY).orElse(NONE.getFirst()))
                 .setParameter("from", from)
                 .setParameter("to", to)
                 .setParameter("limit", limit)
-                .getResultList();
+                .getResultList()) {
+            rows.add((Object[]) row);
+        }
+        return chargedRows(rows);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public List<ChargedRow> waterCharged(LocalDate from, LocalDate to, Collection<UUID> plotIds, int limit) {
+        requireRange(from, to);
+        Objects.requireNonNull(plotIds, "plotIds");
+        if (limit < 1) {
+            throw new IllegalArgumentException("limit is below 1");
+        }
+        List<UUID> ids = plotIds.stream().distinct().toList();
+        UUID water = typeId(WATER).orElse(NONE.getFirst());
+        List<Object[]> rows = new ArrayList<>();
+        for (int start = 0; start < ids.size(); start += CHUNK) {
+            for (Object row : entityManager.createNativeQuery(WATER_CHARGED)
+                    .setParameter("plotIds", ids.subList(start, Math.min(ids.size(), start + CHUNK)))
+                    .setParameter("type", water)
+                    .setParameter("from", from)
+                    .setParameter("to", to)
+                    .setParameter("limit", limit)
+                    .getResultList()) {
+                rows.add((Object[]) row);
+            }
+        }
+        // each chunk holds its first rows in this order, so the first rows of all are among them
+        rows.sort(CHARGED_ORDER);
+        return chargedRows(rows.size() > limit ? rows.subList(0, limit) : rows);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Map<UUID, Integer> openIntervalItems(Collection<UUID> meterIds) {
+        Objects.requireNonNull(meterIds, "meterIds");
+        List<UUID> ids = meterIds.stream().distinct().toList();
+        Map<UUID, Integer> items = new LinkedHashMap<>();
+        ids.forEach(id -> items.put(id, 0));
+        for (int start = 0; start < ids.size(); start += CHUNK) {
+            List<?> rows = entityManager.createNativeQuery(OPEN_INTERVAL_ITEMS)
+                    .setParameter("meterIds", ids.subList(start, Math.min(ids.size(), start + CHUNK)))
+                    .getResultList();
+            for (Object row : rows) {
+                Object[] values = (Object[]) row;
+                items.put((UUID) values[0], Math.toIntExact(((Number) values[1]).longValue()));
+            }
+        }
+        return items;
+    }
+
+    /** The rows of {@link #electricityCharged} or {@link #waterCharged} with their parts (one more query). */
+    private List<ChargedRow> chargedRows(List<Object[]> rows) {
         Set<UUID> priced = new LinkedHashSet<>();
-        for (Object row : rows) {
-            Object[] values = (Object[]) row;
+        for (Object[] values : rows) {
             if (!ChargedRowKind.REVERSAL.name().equals(values[1])) {
                 priced.add((UUID) values[0]);
             }
@@ -422,7 +528,7 @@ class LedgerReportQueries implements LedgerReadModel {
             }
         }
         Map<UUID, List<ChargedPart>> parts = parts(List.copyOf(priced));
-        return rows.stream().map(row -> chargedRow((Object[]) row, parts)).toList();
+        return rows.stream().map(row -> chargedRow(row, parts)).toList();
     }
 
     @Override
@@ -482,9 +588,10 @@ class LedgerReportQueries implements LedgerReadModel {
     }
 
     /**
-     * A row of {@link #electricityCharged}: a regular charge and an adjustment with their own parts, a reversal with
-     * the parts of the state it cancels negated; the quantity is the row's parts minus those of the state a correction
-     * starts from (for a reversal its negated parts already are that difference).
+     * A row of {@link #electricityCharged} or {@link #waterCharged}: a regular charge and an adjustment with their own
+     * parts, a reversal with the parts of the state it cancels negated; the quantity is the row's parts minus those of
+     * the state a correction starts from (for a reversal its negated parts already are that difference), none for a
+     * tariff charge (its parts count plots or sotkas, not a consumption).
      */
     private static ChargedRow chargedRow(Object[] v, Map<UUID, List<ChargedPart>> parts) {
         ChargedRowKind kind = ChargedRowKind.valueOf((String) v[1]);
@@ -501,10 +608,11 @@ class LedgerReportQueries implements LedgerReadModel {
             own = parts.getOrDefault((UUID) v[0], List.of());
             quantity = before == null ? sum(own) : sum(own).minus(sum(parts.getOrDefault(before, List.of())));
         }
-        return new ChargedRow((UUID) v[0], kind, ChargedSource.valueOf((String) v[2]), (UUID) v[3], (UUID) v[4],
-                YearMonth.parse((String) v[5]), Objects.requireNonNull(date(v[6])),
-                Objects.requireNonNull(date(v[7])), Objects.requireNonNull(date(v[8])), (UUID) v[9], (UUID) v[10],
-                (UUID) v[11], quantity, own, money(v[12]));
+        ChargedSource source = ChargedSource.valueOf((String) v[2]);
+        return new ChargedRow((UUID) v[0], kind, source, (UUID) v[3], (UUID) v[4], YearMonth.parse((String) v[5]),
+                Objects.requireNonNull(date(v[6])), Objects.requireNonNull(date(v[7])),
+                Objects.requireNonNull(date(v[8])), (UUID) v[9], (UUID) v[10], (UUID) v[11], (UUID) v[14],
+                source == ChargedSource.TARIFF ? null : quantity, own, money(v[12]));
     }
 
     private static Quantity sum(List<ChargedPart> parts) {
@@ -577,6 +685,12 @@ class LedgerReportQueries implements LedgerReadModel {
             return null;
         }
         return value instanceof java.sql.Date sql ? sql.toLocalDate() : (LocalDate) value;
+    }
+
+    /** The order of {@code uuid} in PostgreSQL: the 16 bytes compared unsigned, most significant first. */
+    private static int compareUuids(UUID a, UUID b) {
+        int high = Long.compareUnsigned(a.getMostSignificantBits(), b.getMostSignificantBits());
+        return high != 0 ? high : Long.compareUnsigned(a.getLeastSignificantBits(), b.getLeastSignificantBits());
     }
 
     private static Collection<UUID> orNone(Set<UUID> ids) {

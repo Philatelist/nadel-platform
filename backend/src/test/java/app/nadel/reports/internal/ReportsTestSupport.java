@@ -121,6 +121,7 @@ abstract class ReportsTestSupport extends IntegrationTest {
         });
         // a replacement points at the meter it replaced
         ownerJdbc().update("delete from meter_reading where tenant_id = ?", id);
+        ownerJdbc().update("delete from plot_water_connection where tenant_id = ?", id);
         ownerJdbc().update("delete from meter_parent where tenant_id = ?", id);
         ownerJdbc().update("delete from meter where tenant_id = ? and replaces_meter_id is not null", id);
         for (String table : List.of("common_consumer_user", "common_consumer_billing", "meter", "audit_entry",
@@ -463,6 +464,34 @@ abstract class ReportsTestSupport extends IntegrationTest {
                 + "'REGULAR', 'LOSSES', ?, ?::date, ?::date, ?::date, ?, ?)", id, tenant, plot, type,
                 monthRow(bookedIn), new BigDecimal(amount), from, to, from, "TEST:" + id, run);
         return id;
+    }
+
+    // ---- meters and water connections (water, missing readings)
+
+    /**
+     * A meter installed on {@code installedOn} with the initial value, serial {@code serial}; a plot meter names its
+     * plot, the other kinds a name.
+     */
+    UUID meter(String kind, String resource, UUID plot, String name, String serial, String installedOn,
+            String initial) {
+        UUID id = UUID.randomUUID();
+        ownerJdbc().update("insert into meter (id, tenant_id, kind, resource, serial, name, plot_id, installed_on, "
+                + "initial_value) values (?, ?, ?, ?, ?, ?, ?, ?::date, ?)", id, tenant, kind, resource, serial, name,
+                plot, installedOn, new BigDecimal(initial));
+        return id;
+    }
+
+    /** A reading of the meter on the day, {@code APPROVED} (entered) or {@code PENDING} (a member's). */
+    void reading(UUID meter, String on, String value, String status) {
+        ownerJdbc().update("insert into meter_reading (tenant_id, meter_id, taken_on, value, source, status) "
+                + "values (?, ?, ?::date, ?, ?, ?)", tenant, meter, on, new BigDecimal(value),
+                "PENDING".equals(status) ? "MEMBER" : "ENTERED", status);
+    }
+
+    /** The plot's water connection to the well's meter (null: the cooperative's supply) from a day until a day. */
+    void connectWater(UUID plot, UUID source, String from, String until) {
+        ownerJdbc().update("insert into plot_water_connection (tenant_id, plot_id, source_meter_id, valid_from, "
+                + "valid_to) values (?, ?, ?, ?::date, ?::date)", tenant, plot, source, from, until);
     }
 
     /** A member of the cooperative with one base role; returns a token. */

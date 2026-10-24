@@ -1,9 +1,13 @@
+import type { ReportCode } from '@nadel/api-client';
 import { screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { queryResult } from '../test/meterFixtures';
 import { chargesByMonthInfo } from '../test/reportFixtures';
 import { renderWithApp } from '../test/render';
 import { ReportsPage } from './ReportsPage';
+
+// A code the generated type does not know, so the catalog certainly has no title for it.
+const unknownReportCode = 'not-a-report' as ReportCode;
 
 let reports: unknown[] = [];
 
@@ -35,13 +39,13 @@ describe('ReportsPage', () => {
   });
 
   it('leaves out a report the catalog has no title for and keeps the others', () => {
-    reports = [{ ...chargesByMonthInfo, code: 'water' }, chargesByMonthInfo];
+    reports = [{ ...chargesByMonthInfo, code: unknownReportCode }, chargesByMonthInfo];
     renderWithApp(<ReportsPage />);
     expect(screen.getAllByRole('listitem')).toHaveLength(1);
   });
 
   it('shows nothing for a report code the catalog has no title for', () => {
-    reports = [{ ...chargesByMonthInfo, code: 'water' }];
+    reports = [{ ...chargesByMonthInfo, code: unknownReportCode }];
     renderWithApp(<ReportsPage />);
     expect(screen.queryByRole('link')).not.toBeInTheDocument();
     expect(screen.getByText('No reports are available.')).toBeInTheDocument();

@@ -1611,6 +1611,7 @@ export const en = {
     yes: 'Yes',
     no: 'No',
     filtersLabel: 'Report filters',
+    notChargedLink: 'Open “Not charged”',
     basis: {
       BILLING_MONTHS: 'The period is counted in billing months.',
       SERVICE_DAYS: 'The period is counted in service days.',
@@ -1668,7 +1669,7 @@ export const en = {
         },
         waterSource: {
           COOPERATIVE_SUPPLY: 'Cooperative supply',
-          METER: 'Meter',
+          METER: 'Well',
         },
         correctionKinds: {
           REVERSAL: 'Reversal',
@@ -1703,6 +1704,8 @@ export const en = {
         'Losses are now charged as a fixed {percent} % of each interval. A charge or a run booked under another mode shows what it booked.',
       LOSSES_PROPORTIONAL:
         'Losses are now charged proportionally, by losses runs per node. A charge or a run booked under another mode shows what it booked.',
+      OPEN_NOT_CHARGED:
+        'Open “not charged” items of the listed meters: {count}. They wait in the “Not charged” list.',
     },
     'charges-by-month': {
       title: 'Charges by month',
@@ -1831,6 +1834,53 @@ export const en = {
         EQUAL_PER_PLOT: 'Equally per plot',
         SERVICE_USERS: 'Among service users',
         NOT_CHARGED: 'Not charged',
+      },
+    },
+    water: {
+      title: 'Water',
+      description:
+        'Water use and water charges of the plots connected in a range of days, by plot and by source, with a summary per source.',
+      sheets: {
+        main: 'Water by plot',
+        summary: 'By source',
+      },
+      columns: {
+        number: 'Plot',
+        street: 'Street',
+        source: 'Source',
+        sourceName: 'Well',
+        connectedDays: 'Connected days',
+        serial: 'Water meter',
+        cubicMetres: 'm³',
+        lastReading: 'Last reading (when unknown)',
+        consumption: 'By meter',
+        fixedFee: 'Fixed fee',
+        pumpShare: 'Well pump share',
+        corrections: 'Of which reversals and adjustments',
+        total: 'Total charged',
+        plots: 'Plots',
+        plotDays: 'Connected plot-days',
+        amount: 'Charged',
+      },
+    },
+    'missing-readings': {
+      title: 'Missing readings',
+      description:
+        'Meters without an approved reading in a range of days, with their last reading and whether a reading waits for approval.',
+      sheets: {
+        main: 'Missing readings',
+      },
+      columns: {
+        resource: 'Resource',
+        kind: 'Kind',
+        name: 'Plot or meter',
+        street: 'Street',
+        serial: 'Serial number',
+        lastReadingOn: 'Last reading',
+        lastReadingValue: 'Last value',
+        initialValue: 'Initial value of the installation',
+        daysSince: 'Days since',
+        pending: 'Reading waiting for approval',
       },
     },
     'land-tax': {

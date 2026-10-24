@@ -24,8 +24,8 @@ that needs a permission the caller lacks is 403 `PERMISSION_DENIED` (`ReportCata
 `/reports/{code}.xlsx` wins over `/reports/{code}`: its pattern is the more specific one
 (`ChargesByMonthReportTests.theXlsxPathWinsOverTheCodePath`).
 
-Done so far: `charges-by-month`, `plot-balances`, `debtors`, `electricity-tree`, `land-tax` and `corrections`. The other codes are 404
-until their definitions arrive. `GET /reports` runs in a read-only transaction: the debtors' defaults are settings of
+Every code of `ReportCode` has its definition: `charges-by-month`, `plot-balances`, `debtors`, `electricity-tree`,
+`water`, `missing-readings`, `land-tax` and `corrections`. `GET /reports` runs in a read-only transaction: the debtors' defaults are settings of
 the cooperative.
 
 ## Framework (`internal`)
@@ -34,7 +34,7 @@ the cooperative.
 |---|---|
 | `ReportDefinition` | One bean per report: `code`, `requiredPermissions` (default `REPORTS_VIEW`; debtors adds `MEMBERS_VIEW`), `personalData`, `filters` (the period first), `load(filters, context)` returning a `ReportResult`, `filenameRange(filters, context)` (default: the period of the filters; a report for one day gives that day twice) |
 | `ReportCatalog` | The definitions in the order of `ReportCode`; `available`/`infos` filter by the caller's permissions, `require` is 404 or 403 |
-| `ReportFilterDefinition` | One filter: key, type, query parameters, required, basis, defaults on a day, `apply` (read the parameters into `ReportFilters`, adding field errors) and `describe` (the header block's text). Implemented: `MonthRangeFilter` (`period`, `fromMonth`/`toMonth`, default the previous month), `DateRangeFilter` (`period`, `DATE_RANGE`, `from`/`to`, default the first and last day of the previous month in Kyiv), `ChargeTypesFilter` (`chargeTypes`, default all), `StreetFilter` (`street`, default all), `AsOfFilter` (`asOf`, `DATE`, required, default today; a day after today is `INVALID`), `StatusesFilter` (`statuses`, `STATUS`, default all), `MinDebtFilter` (`minDebt`, `MONEY`) and `OlderThanDaysFilter` (`olderThanDays`, `INT`), both required with a default the definition gives (the debtors: the cooperative's red amount and red days, read when the list or the report is made), `YearFilter` (`year`, `YEAR`, required, default the current year in Kyiv; a year after it is `INVALID`) and `CorrectionKindsFilter` (`correctionKinds`, `CORRECTION_KIND`, default both); later reports add theirs. In the file a filter is named by `reports.filters.<key>` (period, charge types, street) or `reports.filters.params.<param>`, the web form's labels |
+| `ReportFilterDefinition` | One filter: key, type, query parameters, required, basis, defaults on a day, `apply` (read the parameters into `ReportFilters`, adding field errors) and `describe` (the header block's text). Implemented: `MonthRangeFilter` (`period`, `fromMonth`/`toMonth`, default the previous month), `DateRangeFilter` (`period`, `DATE_RANGE`, `from`/`to`, default the first and last day of the previous month in Kyiv), `ChargeTypesFilter` (`chargeTypes`, default all), `StreetFilter` (`street`, default all), `AsOfFilter` (`asOf`, `DATE`, required, default today; a day after today is `INVALID`), `StatusesFilter` (`statuses`, `STATUS`, default all), `MinDebtFilter` (`minDebt`, `MONEY`) and `OlderThanDaysFilter` (`olderThanDays`, `INT`), both required with a default the definition gives (the debtors: the cooperative's red amount and red days, read when the list or the report is made), `YearFilter` (`year`, `YEAR`, required, default the current year in Kyiv; a year after it is `INVALID`), `CorrectionKindsFilter` (`correctionKinds`, `CORRECTION_KIND`, default both), `WaterSourceFilter` (`waterSource`, `WATER_SOURCE`, default every source), `ResourceFilter` (`resource`, `RESOURCE`, default both) and `MeterKindsFilter` (`meterKinds`, `METER_KIND`, several, default `PLOT`, listed as the filter's defaults). In the file a filter is named by `reports.filters.<key>` (period, charge types, street) or `reports.filters.params.<param>`, the web form's labels |
 | `ReportFilters` | The typed filter values of one run and the values as the query string carries them (echoed in the preview, written to the audit entry); `parse` throws 400 `REPORT_FILTER_INVALID` with every field error: `REQUIRED` (a required filter without a default), `INVALID` (`toMonth` before `fromMonth`, `to` before `from` or a range of days of more than one year, `asOf` after today, `year` after the current year), `NOT_FOUND` (`chargeTypeIds[i]` not a charge type of the cooperative). Malformed values never get here: the contract answers 400 `VALIDATION_FAILED` |
 | `ReportResult` | Sheets (`key`, typed `Column`s, `Row`s of kind `DETAIL`/`SUBTOTAL` with a tree level, `Total`s) and header `Note`s (code + params). A `Cell` holds a typed value (`Money`, `BigDecimal`, `LocalDate`, `YearMonth`, `UUID` of a charge type, codes and text) or nothing, or a reason when the value is not known (never 0) |
 | `ReportRunner` | `preview` and `file`, each one plain `@Transactional` (not read-only: the outbox inserts the audit publication). Order: caller and permission, filters, `load`, the row cap, the preview or the workbook, the audit event **last**, so a refused run or a failure while writing leaves no entry |
@@ -78,7 +78,9 @@ column keys), `reports.notes.<ReportNoteCode>`, `reports.filters.*`, `reports.fi
 `reports.totals.<key>`, `reports.reasons.<ReportCellReason>`, the filter labels and options
 (`reports.filters.params.*`, `reports.filters.options.statuses.*`, which also name the plot balances' status codes,
 `reports.filters.options.correctionKinds.*`, which also name the corrections' kinds,
-`reports.filters.options.meterKinds.*`, which also name the electricity tree's node kinds), the corrections' sources
+`reports.filters.options.meterKinds.*`, which also name the electricity tree's node kinds and the missing readings'
+kinds, `reports.filters.options.resource.*`, which also name the missing readings' resources,
+`reports.filters.options.waterSource.*`, which also name the water report's sources), the corrections' sources
 (`reports.corrections.sources.*`), the electricity report's codes (`reports.electricity-tree.valueKinds.*`,
 `.sources.*`, `.rowKinds.*`, `.runStatuses.*`, `.outcomes.*`, `.splits.*`), and the shared `billing.status.*`, `chargeTypes.defaultNames.*` and
 `recalculation.causeKind.*` (the corrections' recalculation causes). On the web `ReportPreviewTable.codeLabels` maps a
@@ -298,6 +300,73 @@ and an unknown quarter, its ledger with fixed-percentage losses, a mixed-rate ch
 common consumer run; the proportional runs booked, reversed and booked again through the API; the reconciliation with
 the plot accounts, preview and file number for number, defaults and filter errors, the cap, the audit entries, 403 for
 a member and the electrician), `ReportFiltersTests` (the range of days), `ReportTextsTests`.
+
+## Report: water (`water`, functional spec 2.7)
+
+Filters: service days (`period`, `DATE_RANGE`, basis `SERVICE_DAYS`, default the previous calendar month, at most a
+year, as the electricity report), the kind of water source (`waterSource`: `METER`, every well, shown as "Well", or
+`COOPERATIVE_SUPPLY`; default all) and the street (`PlotCatalog.idsOnStreet`). Needs `REPORTS_VIEW` only, no personal
+data. Reads `meters.MeterReports.waterUse` (always for every source) and `ledger.LedgerReadModel.waterCharged` for the
+plots of its rows, with the row cap plus one as the limit; the plot numbers' natural order from
+`PlotCatalog.inNaturalOrder`. Every m³ is `Quantity.toDecimal` (three decimals); nothing is rounded here.
+
+- Sheet `main` ("Вода за ділянками"): one row per plot and source it was connected to on at least one day of the range
+  (a plot that changed source has two rows; archived plots and common land too when connected), plots in natural
+  order, a plot's rows by their first connected day. Plots not connected on any day are not listed, whatever was
+  charged to them (money rules 11). Columns: `number`, `street`, `source` (`CODE`), `sourceName` (the well's meter
+  name), `connectedDays`, `serial` (the plot's water meter shown), `cubicMetres` (the range consumption of 010 on the
+  connected days only; empty with `NO_READING` when a value is not known, with `lastReading` the day after which a
+  reading is missing; empty without a reason when the plot has no water meter), then the water charges whose service
+  period overlaps the range, each the net of its regular charges, reversals and adjustments: `consumption` (by meter),
+  `fixedFee` (the month run's tariff charge, `ChargedSource.TARIFF`), `pumpShare` (a well pump's `COMMON_CONSUMER`
+  share), `corrections` ("of which reversals and adjustments", every kind) and `total` (the three kinds).
+- Attribution of a charge to a row of its plot: a pump share to the row of the well its calculation names; any other
+  charge to the row whose connected days overlap the charge's days within the range most (the first row on a tie or
+  without any overlap). It is made over every source before the source filter applies, so a plot listed for one
+  source never shows the charges of its other one.
+- Sheet `summary` ("За джерелами"), chosen over subtotal rows so the main sheet stays one row per plot and source:
+  per source (the cooperative's supply first, then the wells by name) `source`, `sourceName`, `plots` (distinct),
+  `plotDays` (connected days of its rows), `cubicMetres` and `amount`.
+- Totals `all` on both sheets: the sums of the rows listed (`Money.plus`, the displayed m³); the m³ total is empty with
+  `DERIVED_FROM_UNKNOWN` when a listed value is not known and empty when nothing was measured; the plot count has no
+  total (a plot that changed source counts under both sources).
+- Row cap: the sheets as every report, and the water ledger rows read: a range with more than the cap of them is 422
+  `REPORT_TOO_LARGE` too, because amounts summed from a cut list would be wrong.
+- **A well pump's share is counted twice across reports.** It is electricity priced at the common consumers tariff, so
+  `electricity-tree` lists it in its `COMMON_CONSUMER` section and `water` in `pumpShare`. The board must not add the
+  two reports' totals together.
+- File name `water_<from>_<to>.xlsx`.
+
+## Report: missing readings (`missing-readings`, functional spec 2.8)
+
+Filters: reading dates (`period`, `DATE_RANGE`, basis `READING_DATES`, default the previous calendar month, at most a
+year), resource (`resource`, default both), meter kinds (`meterKinds`, default `PLOT`; substations, quarter meters and
+common consumers optional) and the street (only the plot meters of its plots: the named meters have no plot). Needs
+`REPORTS_VIEW` only. Reads `meters.MeterReports.missingReadings` (the row cap plus one as the limit), in the order of the
+meter register (plot meters in street order, then the other kinds by kind and name), and
+`ledger.LedgerReadModel.openIntervalItems` for the listed meters.
+
+- Sheet `main`, one row per meter that worked through the range and has no approved reading dated in it: `resource`
+  and `kind` (`CODE`), `name` (a plot meter's plot number, another meter's name), `street`, `serial`, `lastReadingOn`
+  and `lastReadingValue` (its last point before the range, three decimals), `initialValue` (true when that point is the
+  installation's initial value, not a reading), `daysSince` (to the last day of the range) and `pending` (a member's
+  reading dated in the range waits for approval; pending, rejected and superseded readings never count). No totals.
+- Not listed: a water meter of a plot not connected to water on any day of the range; a meter installed after the
+  range or removed before it. **Known interpretation:** a meter installed or removed *within* the range is not listed
+  either, because its initial or final value is a point of the range (money rules 6.4, as the register's
+  `noReadingSince` filter counts it). The spec names only "after" and "before"; a meter replaced mid-month is
+  therefore never listed for that month.
+- Header note `OPEN_NOT_CHARGED` (param `count`): the open "not charged" items of kind `INTERVAL` of the listed meters,
+  only when there are any. The web shows it with a link to the queue (`/charges/not-charged`); the file shows the
+  sentence. The report does not replace the queue.
+- File name `missing-readings_<from>_<to>.xlsx`.
+
+Tests: `WaterReportTests` (part-month connection, a plot that changed source, an unconnected plot that was charged,
+well and street filters, net charges with an adjustment and a reversal, unknown and unmeasured m³, the summary, the file
+number for number, defaults, the cap over the ledger rows, audit, 403 for a member and the electrician),
+`MissingReadingsReportTests` (read, unconnected, after, before and within-range meters left out, the pending mark, the
+default kinds and the named meters, resource and street, the note count, the file, the cap, audit, 403),
+`ReportTextsTests`; on the web `ReportPage.test.tsx` (code texts and the queue link).
 
 ## Depends on
 

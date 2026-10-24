@@ -15,7 +15,8 @@
  * (aggregates in the caller's transaction, no personal data: month totals, {@link app.nadel.ledger.PlotDebts} as
  * of a day, the {@link app.nadel.ledger.CorrectionRow} of every reversal and adjustment of the billing months, the
  * effective amount charged per plot for a year, the {@link app.nadel.ledger.ChargedRow} of every electricity charge,
- * reversal and adjustment of a range of days, and the booked losses and common consumer runs of a range as
+ * reversal and adjustment of a range of days and of every water charge of the plots asked, the open reading interval
+ * items of the "not charged" queue per meter, and the booked losses and common consumer runs of a range as
  * {@link app.nadel.ledger.LossesRunNodeRow} and {@link app.nadel.ledger.CommonConsumerRunLineRow}). Everything else is
  * internal: the entities, the pure
  * rules {@code BillingCalendar} (which month a charge is booked in) and {@code DebtCalculator} (debt per charge

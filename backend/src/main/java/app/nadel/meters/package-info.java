@@ -17,7 +17,9 @@
  * {@link app.nadel.meters.PlotMeterPointsChanged} (the points of a plot meter changed; the ledger charges the intervals),
  * the read API {@link app.nadel.meters.WaterConnections} (the days plots are connected to water, for the ledger),
  * the read facade of the reports {@link app.nadel.meters.MeterReports} (the tree of {@code GET /meter-tree} with the
- * children's sum, the losses and the plots fed, as {@link app.nadel.meters.MeterTreeReport} rows; feature 013)
+ * children's sum, the losses and the plots fed, as {@link app.nadel.meters.MeterTreeReport} rows, the water use per
+ * plot and source as {@link app.nadel.meters.WaterUseRow} and the meters without a reading in a range as
+ * {@link app.nadel.meters.MissingReadingRow}; feature 013)
  * and the import facades {@link app.nadel.meters.MeterImport} with its
  * records (the Meters sheet of the Excel import) and {@link app.nadel.meters.WaterConnectionImport} (the water column of
  * the Plots sheet). The meter register (entity, commands, queries, the endpoints of tag

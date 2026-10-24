@@ -14,7 +14,7 @@ import type { ReportRow } from './reportRow';
 import type { ReportTotal } from './reportTotal';
 
 /**
- * One sheet of a report; the file has one worksheet per sheet. `charges-by-month` has `byBillingMonth` and `byServicePeriod`, `electricity-tree` has `consumption` and `charged`; a report with one sheet calls it `main`
+ * One sheet of a report; the file has one worksheet per sheet. `charges-by-month` has `byBillingMonth` and `byServicePeriod`, `electricity-tree` has `consumption` and `charged`, `water` has `main` (per plot and source) and `summary` (per source); a report with one sheet calls it `main`
  */
 export interface ReportSheet {
   /** @pattern ^[a-z][A-Za-z]*$ */

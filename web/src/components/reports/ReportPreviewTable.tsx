@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { Link } from 'react-router';
 import type { ChargeTypeRef, ReportCell, ReportColumn, ReportPreview, ReportSheet } from '@nadel/api-client';
 import {
   format,
@@ -35,6 +36,9 @@ function codeLabels(t: Messages, report: string, key: string): Readonly<Record<s
     'electricity-tree/runStatus': t.reports['electricity-tree'].runStatuses,
     'electricity-tree/outcome': t.reports['electricity-tree'].outcomes,
     'electricity-tree/split': t.reports['electricity-tree'].splits,
+    'water/source': t.reports.filters.options.waterSource,
+    'missing-readings/resource': t.reports.filters.options.resource,
+    'missing-readings/kind': t.reports.filters.options.meterKinds,
     '*/status': t.billing.status,
   };
   return lookup[`${report}/${key}`] ?? lookup[`*/${key}`];
@@ -239,8 +243,19 @@ export function ReportPreviewTable({ preview }: { preview: ReportPreview }) {
         <ul className="flex flex-col gap-1 text-sm text-ink-muted">
           {preview.headerNotes.map((note, index) => {
             const text = notes[note.code];
-            return text === undefined ? null : (
-              <li key={`${note.code}-${index}`}>{format(text, note.params)}</li>
+            if (text === undefined) return null;
+            return (
+              <li key={`${note.code}-${index}`}>
+                {format(text, note.params)}
+                {note.code === 'OPEN_NOT_CHARGED' && (
+                  <>
+                    {' '}
+                    <Link to="/charges/not-charged" className="text-accent underline">
+                      {t.reports.notChargedLink}
+                    </Link>
+                  </>
+                )}
+              </li>
             );
           })}
         </ul>

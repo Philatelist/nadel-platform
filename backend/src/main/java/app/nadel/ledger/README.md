@@ -48,7 +48,7 @@ cooperative that is not reversed, and a reversal never target an adjustment or a
 |---|---|
 | `ChargesBooked(tenantId, plotIds)` | Published inside the transaction of every booking or reversal (a reversal, an opening balance, the month run, a retry and the charges of readings, at most 500 plots per event; every later booking path must publish it too). `PlotStatusRefresher` recomputes the debt of those plots from the committed ledger. Ids only, no personal data; the set is never empty |
 | `OpeningBalanceImport` (with `Row`, `Item`, `Plan`, `Problem`, `Action`) | The "Opening balances" sheet of the Excel import (slice 8), `plan`/`lock`/`apply` like `meters.MeterImport`; implemented by `internal.OpeningBalanceImportService`, see Opening balances from the import |
-| `LedgerReadModel` (with `MonthTypeTotals`, `MonthGrouping`, `MonthStatus`, `PlotDebts`, `CorrectionRow`, `CorrectionKind`, `CorrectionSource`, `CorrectionCause`, `ChargedRow`, `ChargedRowKind`, `ChargedSource`, `ChargedPart`, `LossesRunNodeRow`, `LossesRunNodeOutcome`, `CommonConsumerRunLineRow`, `CommonConsumerRunLineOutcome`, `RunStatus`) | The read facade of the reports (feature 013), implemented by `internal.LedgerReportQueries`; see The read model of the reports |
+| `LedgerReadModel` (with `MonthTypeTotals`, `MonthGrouping`, `MonthStatus`, `PlotDebts`, `CorrectionRow`, `CorrectionKind`, `CorrectionSource`, `CorrectionCause`, `ChargedRow`, `ChargedRowKind`, `ChargedSource` (with `TARIFF` for the water rows), `ChargedPart`, `LossesRunNodeRow`, `LossesRunNodeOutcome`, `CommonConsumerRunLineRow`, `CommonConsumerRunLineOutcome`, `RunStatus`) | The read facade of the reports (feature 013), implemented by `internal.LedgerReportQueries`; see The read model of the reports |
 
 Everything else is in `internal`.
 
@@ -373,8 +373,8 @@ Methods:
   row (`REGULAR`, `REVERSAL`, `ADJUSTMENT`; never an opening) of the `REGULAR` charges of source `CONSUMPTION` or
   `LOSSES` of the type `ELECTRICITY` (resolved by code through `tariffs.ChargeTypeCatalog`) and of source
   `COMMON_CONSUMER` (type `COMMON_CONSUMERS`) whose service period overlaps the days `from`..`to`, each correction its
-  own row with the original charge's service period, source (`ChargedSource`), meter and run, whatever month it was
-  booked in. Water, tariff charges and opening balances are left out. **One row per charge, never per part**: a
+  own row with the original charge's service period, source (`ChargedSource`), meter, run and, for a common consumer
+  share, the consumer its calculation names (`consumerMeterId`), whatever month it was booked in. Water, tariff charges and opening balances are left out. **One row per charge, never per part**: a
   charge's parts are added exactly and rounded once (money rules 6.5), so an amount per part would round twice; the row
   carries its `parts` (`ChargedPart`: tariff version, days, exact quantity, rate, losses node) and `rate()` is the
   price per kWh when they share one, `null` when the rate changed within the charge's days. `quantity` is the exact
@@ -389,6 +389,26 @@ Methods:
   with fixed-percentage losses, two later-month adjustments of the same charge, a charge with two rates reversed by
   hand, a common consumer share, charges outside the range and of other types, reconciliation with the plot account,
   the limit, another cooperative, invalid arguments, the caller's transaction).
+- `waterCharged(from, to, plotIds, limit)` (water report, 013 §3.5): the same `ChargedRow`s and query as
+  `electricityCharged` (one SQL template, `CHARGED`, with a predicate per report) for the plots asked (500 per `IN`
+  list; the chunks' rows are merged in the query's order, `uuid` compared as unsigned bytes like PostgreSQL, and cut
+  to `limit`): the `REGULAR` charges of source `CONSUMPTION` (m³) and `TARIFF` (the fixed water fee) of the type
+  `WATER` (by code through `tariffs.ChargeTypeCatalog`), and **a well pump's share**: the `COMMON_CONSUMER` charges
+  (type `COMMON_CONSUMERS`) whose `calculation ->> 'split'` is `CONNECTED_PLOTS`. That split shares a consumer among the
+  plots connected to it as their water source (money rules 6.7, 11), and it is the only link between a common consumer
+  and water the ledger stores (the connections are the meters module's table); a consumer split another way (street
+  lighting, `EQUAL_PER_PLOT`) is not water. Every reversal and adjustment is its own row with the original service
+  period. A pump share is also a row of `electricityCharged`; a report showing both counts it in each. `quantity` is
+  m³ for consumption, kWh for a pump share and **null for a `TARIFF` row** (a fixed fee measures nothing; its parts
+  count plots or sotkas). An empty `plotIds` gives no rows. Test: `LedgerWaterChargedTests` (consumption with a
+  later-month adjustment, a fixed fee reversed by hand, a well pump share and a lighting share, a charge outside the
+  range, other types and plots, the sum per plot, the limit over three chunks of plots, another cooperative, invalid
+  arguments, the caller's transaction).
+- `openIntervalItems(meterIds)` (missing readings, 013 §3.6): per distinct meter asked (in order of first appearance;
+  `0` without items or for an unknown id) the number of `not_charged_item` rows of kind `INTERVAL` and status `OPEN`
+  (the items `GET /not-charged` lists) whose `meter_id` it is, 500 meters per query. Test:
+  `LedgerOpenIntervalItemsTests` (open, resolved and other-kind items, another cooperative, the caller's
+  transaction).
 - `lossesRunsInRange(from, to)` and `commonConsumerRunsInRange(from, to)` (money rules 6.6, 6.7): the nodes of every
   losses run (`LossesRunNodeRow`) and the consumers of every common consumer run (`CommonConsumerRunLineRow`) whose
   range overlaps `from`..`to`, as booked (`losses_run_node`, `common_consumer_run_line`: outcome, consumption, children,

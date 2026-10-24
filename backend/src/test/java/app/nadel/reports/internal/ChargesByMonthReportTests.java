@@ -337,7 +337,7 @@ class ChargesByMonthReportTests extends ReportsTestSupport {
     }
 
     @Test
-    void malformedParametersUnknownCodesAndReportsNotYetDefinedAreRefused() throws Exception {
+    void malformedParametersAndUnknownCodesAreRefused() throws Exception {
         send(treasurer, get(REPORT + "?fromMonth=2025-13"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
@@ -347,11 +347,7 @@ class ChargesByMonthReportTests extends ReportsTestSupport {
         send(treasurer, get("/api/v1/reports/nonsense"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("MALFORMED_REQUEST"));
-        send(treasurer, get("/api/v1/reports/water"))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.code").value("NOT_FOUND"));
-        send(treasurer, get("/api/v1/reports/water.xlsx"))
-                .andExpect(status().isNotFound());
+        // every code of the contract has its definition now: a code without one (404) is ReportCatalogTests' case
         awaitOutbox();
         assertThat(reportEntries()).isEmpty();
     }

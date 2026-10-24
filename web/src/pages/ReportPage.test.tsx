@@ -386,6 +386,90 @@ describe('ReportPage', () => {
     expect(screen.getByText(/charged as a fixed 5.00 % of each interval/)).toBeInTheDocument();
   });
 
+  it('shows the water sources as texts on both sheets of the water report', () => {
+    reports = [{ ...electricityTreeInfo, code: 'water' }];
+    const sourceSheet = (key: string) =>
+      sheet({
+        key,
+        columns: [
+          { key: 'source', type: 'CODE' },
+          { key: 'sourceName', type: 'TEXT' },
+          { key: 'cubicMetres', type: 'QUANTITY' },
+        ],
+        rows: [
+          {
+            kind: 'DETAIL',
+            level: 0,
+            cells: [{ value: 'COOPERATIVE_SUPPLY' }, {}, { reason: 'NO_READING' }],
+          },
+          { kind: 'DETAIL', level: 0, cells: [{ value: 'METER' }, { value: 'Свердловина 1' }, {}] },
+        ],
+        totals: [],
+      });
+    report = ok(preview({ code: 'water', sheets: [sourceSheet('main'), sourceSheet('summary')] }));
+    renderReport('/reports/water');
+    for (const name of ['Water by plot', 'By source']) {
+      const table = screen.getByRole('table', { name });
+      expect(within(table).getByRole('cell', { name: 'Cooperative supply' })).toBeInTheDocument();
+      expect(within(table).getByRole('cell', { name: 'Well' })).toBeInTheDocument();
+      expect(within(table).queryByText('METER')).not.toBeInTheDocument();
+      expect(within(table).getByTitle('No reading, so the value is not known')).toBeInTheDocument();
+    }
+  });
+
+  it('shows the missing readings codes as texts and links the open "not charged" note to the queue', () => {
+    reports = [{ ...electricityTreeInfo, code: 'missing-readings' }];
+    report = ok(
+      preview({
+        code: 'missing-readings',
+        headerNotes: [{ code: 'OPEN_NOT_CHARGED', params: { count: '3' } }],
+        sheets: [
+          sheet({
+            key: 'main',
+            columns: [
+              { key: 'resource', type: 'CODE' },
+              { key: 'kind', type: 'CODE' },
+              { key: 'name', type: 'TEXT' },
+              { key: 'pending', type: 'BOOLEAN' },
+            ],
+            rows: [
+              {
+                kind: 'DETAIL',
+                level: 0,
+                cells: [{ value: 'WATER' }, { value: 'PLOT' }, { value: '12а' }, { value: 'true' }],
+              },
+              {
+                kind: 'DETAIL',
+                level: 0,
+                cells: [
+                  { value: 'ELECTRICITY' },
+                  { value: 'QUARTER' },
+                  { value: 'Квартал А' },
+                  { value: 'false' },
+                ],
+              },
+            ],
+            totals: [],
+          }),
+        ],
+      }),
+    );
+    renderReport('/reports/missing-readings');
+    const table = screen.getByRole('table', { name: 'Missing readings' });
+    expect(
+      within(within(table).getAllByRole('row')[1]!)
+        .getAllByRole('cell')
+        .map((cell) => cell.textContent),
+    ).toEqual(['Water', 'Plot', '12а', 'Yes']);
+    expect(within(table).getByText('Quarter')).toBeInTheDocument();
+    expect(within(table).queryByText('ELECTRICITY')).not.toBeInTheDocument();
+    expect(screen.getByText(/Open “not charged” items of the listed meters: 3\./)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open “Not charged”' })).toHaveAttribute(
+      'href',
+      '/charges/not-charged',
+    );
+  });
+
   it('renders the no-access page for a code the list does not contain', () => {
     reports = [];
     renderReport();

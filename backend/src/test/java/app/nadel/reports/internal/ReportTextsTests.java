@@ -21,8 +21,12 @@ import app.nadel.ledger.RunStatus;
 import app.nadel.members.MemberDirectory;
 import app.nadel.meters.MeterKind;
 import app.nadel.meters.MeterReports;
+import app.nadel.meters.MeterResource;
 import app.nadel.meters.MeterTreeReport;
+import app.nadel.meters.MeterValue;
 import app.nadel.meters.MeterValueKind;
+import app.nadel.meters.MissingReadingRow;
+import app.nadel.meters.WaterSourceKind;
 import app.nadel.money.Money;
 import app.nadel.money.Rate;
 import app.nadel.plots.PlotCatalog;
@@ -135,6 +139,16 @@ class ReportTextsTests {
         for (CorrectionCause cause : CorrectionCause.values()) {
             keys.add("recalculation.causeKind." + cause.name());
         }
+        // the water and missing readings reports' filters and code columns
+        for (String param : List.of("resource", "meterKinds", "waterSource")) {
+            keys.add("reports.filters.params." + param);
+        }
+        for (MeterResource resource : MeterResource.values()) {
+            keys.add("reports.filters.options.resource." + resource.name());
+        }
+        for (WaterSourceKind source : WaterSourceKind.values()) {
+            keys.add(WaterReport.SOURCES + "." + source.name());
+        }
         // the electricity report's code columns and per-source totals (a run on empty facades has no totals)
         String electricity = "reports.electricity-tree.";
         for (MeterKind kind : MeterKind.values()) {
@@ -144,8 +158,11 @@ class ReportTextsTests {
             keys.add(electricity + "valueKinds." + kind.name());
         }
         for (ChargedSource source : ChargedSource.values()) {
-            keys.add(electricity + "sources." + source.name());
-            keys.add("reports.totals." + source.name());
+            // a tariff charge is a water row only: the electricity sheet never shows that source or its total
+            if (source != ChargedSource.TARIFF) {
+                keys.add(electricity + "sources." + source.name());
+                keys.add("reports.totals." + source.name());
+            }
         }
         for (ChargedRowKind kind : ChargedRowKind.values()) {
             keys.add(electricity + "rowKinds." + kind.name());
@@ -214,6 +231,14 @@ class ReportTextsTests {
         ReportDefinition landTax = landTaxWithAMismatch();
         ReportDefinition corrections = new CorrectionsReport(mock(LedgerReadModel.class), mock(PlotCatalog.class),
                 mock(MemberDirectory.class));
+        ReportDefinition water = new WaterReport(mock(MeterReports.class), mock(LedgerReadModel.class),
+                mock(PlotCatalog.class));
+        RawFilters wellsOnAStreet = new RawFilters(null, null, null, null, null, null, null, "Лісова", null, null,
+                null, null, null, nadel.contract.model.WaterSourceKind.METER, null);
+        ReportDefinition missingReadings = missingReadingsWithAnOpenItem();
+        RawFilters waterMeters = new RawFilters(null, null, null, null, null, null, null, null, null, null, null,
+                nadel.contract.model.MeterResource.WATER, List.of(nadel.contract.model.MeterKind.PLOT,
+                        nadel.contract.model.MeterKind.QUARTER), null, null);
         ReportDefinition fixedLosses = electricityTree(LossesMode.FIXED_PERCENT);
         ReportDefinition proportionalLosses = electricityTree(LossesMode.PROPORTIONAL);
         return List.of(new Run(fixedLosses, ReportFilters.parse(fixedLosses.filters(), RawFilters.NONE, CONTEXT)),
@@ -223,7 +248,24 @@ class ReportTextsTests {
                 new Run(plotBalances, ReportFilters.parse(plotBalances.filters(), pastWithOneType, CONTEXT)),
                 new Run(debtors, ReportFilters.parse(debtors.filters(), pastWithOneType, CONTEXT)),
                 new Run(landTax, ReportFilters.parse(landTax.filters(), RawFilters.NONE, CONTEXT)),
-                new Run(corrections, ReportFilters.parse(corrections.filters(), RawFilters.NONE, CONTEXT)));
+                new Run(corrections, ReportFilters.parse(corrections.filters(), RawFilters.NONE, CONTEXT)),
+                new Run(water, ReportFilters.parse(water.filters(), wellsOnAStreet, CONTEXT)),
+                new Run(water, ReportFilters.parse(water.filters(), RawFilters.NONE, CONTEXT)),
+                new Run(missingReadings, ReportFilters.parse(missingReadings.filters(), waterMeters, CONTEXT)),
+                new Run(missingReadings, ReportFilters.parse(missingReadings.filters(), RawFilters.NONE, CONTEXT)));
+    }
+
+    /** One plot meter without a reading that has an open "not charged" item, so the report says its note. */
+    private static ReportDefinition missingReadingsWithAnOpenItem() {
+        UUID meter = UUID.randomUUID();
+        MeterReports meters = mock(MeterReports.class);
+        when(meters.missingReadings(any(), any(), any(), any(), any(), anyInt())).thenReturn(List.of(
+                new MissingReadingRow(meter, MeterResource.WATER, MeterKind.PLOT, UUID.randomUUID(), "1", "Лісова",
+                        null, "W-1", TODAY.minusYears(1), TODAY.minusMonths(3), MeterValue.parse("12.5"), false, 60,
+                        true)));
+        LedgerReadModel ledger = mock(LedgerReadModel.class);
+        when(ledger.openIntervalItems(any())).thenReturn(Map.of(meter, 2));
+        return new MissingReadingsReport(meters, ledger, mock(PlotCatalog.class));
     }
 
     private static ReportDefinition electricityTree(LossesMode mode) {

@@ -86,6 +86,10 @@ class ElectricityTreeReport implements ReportDefinition {
     static final String CHARGED = "charged";
     static final String RUN = "RUN";
 
+    /** The sources of the electricity rows, in the order of the sheet's sections ({@code TARIFF} is water only). */
+    private static final List<ChargedSource> SOURCES = List.of(ChargedSource.CONSUMPTION, ChargedSource.LOSSES,
+            ChargedSource.COMMON_CONSUMER);
+
     private static final List<ReportFilterDefinition> FILTERS = List.of(
             new DateRangeFilter(ReportPeriodBasis.SERVICE_DAYS));
 
@@ -256,9 +260,9 @@ class ElectricityTreeReport implements ReportDefinition {
                 commonRunRows.computeIfAbsent(line.runId(), run -> new ArrayList<>()).add(runRow(line));
             }
             List<Row> sheetRows = new ArrayList<>();
-            for (ChargedSource source : ChargedSource.values()) {
+            for (ChargedSource source : SOURCES) {
                 Map<UUID, List<Row>> runs = switch (source) {
-                    case CONSUMPTION -> Map.of();
+                    case CONSUMPTION, TARIFF -> Map.of();
                     case LOSSES -> lossesRunRows;
                     case COMMON_CONSUMER -> commonRunRows;
                 };
@@ -267,7 +271,7 @@ class ElectricityTreeReport implements ReportDefinition {
             List<Total> totals = new ArrayList<>();
             if (!sheetRows.isEmpty()) {
                 Money all = Money.ZERO;
-                for (ChargedSource source : ChargedSource.values()) {
+                for (ChargedSource source : SOURCES) {
                     Sum sum = sums.getOrDefault(source, new Sum());
                     Cell[] cells = empty();
                     cells[AT.get("kwh")] = Cell.of(sum.kwh);

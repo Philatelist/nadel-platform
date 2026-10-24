@@ -41,10 +41,10 @@ Rules for every slice: contract first (`api/openapi.yaml`, then `make gen`), Fly
   - [x] Tests on a worked fixture: proportional losses run, common consumer run, meter replacement, unknown value; charged amounts equal the ledger's electricity charges in the range. **[Agent: spring-backend]**
   - [x] Verify: `cd backend && ./mvnw test -Dtest='app.nadel.reports.**,app.nadel.meters.**,app.nadel.ledger.**,app.nadel.ModularityTests'`; delete temporary files. **[Agent: spring-backend]**
 
-- [ ] **Slice 7: Water and Missing readings**
-  - [ ] `MeterReports.waterUse` and `missingReadings`, `LedgerReadModel.waterCharged` and `openIntervalItems`. **[Agent: spring-backend]**
-  - [ ] `water` and `missing-readings` definitions (connected days only, unconnected plots and out-of-range meters excluded, waiting-for-approval mark, queue link); i18n and web link. **[Agent: spring-backend]**
-  - [ ] Tests: part-month connection, source filter, meter with only a pending reading, water meter of an unconnected plot. **[Agent: spring-backend]**
+- [x] **Slice 7: Water and Missing readings**
+  - [x] `MeterReports.waterUse` and `missingReadings`, `LedgerReadModel.waterCharged` and `openIntervalItems`. **[Agent: spring-backend]**
+  - [x] `water` and `missing-readings` definitions (connected days only, unconnected plots and out-of-range meters excluded, waiting-for-approval mark, queue link); i18n and web link. **[Agent: spring-backend]**
+  - [x] Tests: part-month connection, source filter, meter with only a pending reading, water meter of an unconnected plot. **[Agent: spring-backend]**
   - [x] Verify: `cd backend && ./mvnw test -Dtest='app.nadel.reports.**,app.nadel.meters.**,app.nadel.ledger.**,app.nadel.ModularityTests'`; delete temporary files. **[Agent: spring-backend]**
 
 - [ ] **Slice 8: Report templates: storage, tax slot, upload, versions, archive**

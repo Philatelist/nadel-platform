@@ -28,3 +28,8 @@ Backend `./mvnw verify` on 6c121fb (detached worktree): green, exit 0, no failin
 - Round 1: PASS. Backend slice tests 861 run, 0 failures on the reviewer side; web diff read only.
 - Minor notes (not fixed): `YearFilter` rejects a year after the current one (not stated in the spec; a treasurer preparing next year's tax gets 400); the corrections query relies on `reversed_at = created_at` coming from one `Instant` in the run reversal code (documented, no code comment in `LossesRuns`/`CommonConsumerRuns`); `LandTaxReport` has no query-level row limit (plots are bounded, runner enforces the cap).
 
+### Slice 6 — Electricity by meter tree (5943a23)
+- Round 1: PASS. Backend slice tests 941 run, 0 failures on the reviewer side; web code read only (no node_modules in the worktree).
+- Reviewer judgements: TreeQueries refactor is a pure extraction (no endpoint drift); losses percent rounding mirrors `LossesRunViews.pct` (not a second rule); row cap per sheet acceptable, spec wording "each report is capped" should be clarified.
+- Minor notes (not fixed): `TreeFigures.percent` duplicates `LossesRunViews.pct` (add "keep in step" comments); a blank losses percent for consumption <= 0 has no reason code; tree sheet and run queries are not bounded by `rowLimit`; no test for a reversal of an already adjusted charge (cannot occur in the current ledger).
+

@@ -16,8 +16,8 @@ import org.jspecify.annotations.Nullable;
  * tenant-aware transaction manager has bound to the cooperative, so the rows of other cooperatives are invisible (RLS).
  * The answers carry ids, codes and {@code Money} only, never personal data; the caller orders and names the charge
  * types and plots through their own modules. Aggregates are bounded by their filters (months times charge types, or the
- * plots asked for), so no row limit applies to them; {@link #corrections} and {@link #electricityCharged}, lists of
- * single rows, take a limit; the runs of a range are bounded by the runs times the nodes or consumers of the tree.
+ * plots or meters asked for), so no row limit applies to them; {@link #corrections}, {@link #electricityCharged} and
+ * {@link #waterCharged}, lists of single rows, take a limit; the runs of a range are bounded by the runs times the nodes or consumers of the tree.
  */
 public interface LedgerReadModel {
 
@@ -129,6 +129,44 @@ public interface LedgerReadModel {
      * @throws IllegalArgumentException when {@code to} is before {@code from} or {@code limit} is below 1
      */
     List<ChargedRow> electricityCharged(LocalDate from, LocalDate to, int limit);
+
+    /**
+     * The water charges of plots whose service period overlaps a range of days (the water report, feature 013 §3.5),
+     * one {@link ChargedRow} per ledger row, as {@link #electricityCharged} lists the electricity ones: the charges of
+     * source {@code CONSUMPTION} (by meter, m³) and {@code TARIFF} (the fixed water fee) of the charge type
+     * {@code WATER} (resolved by code through {@code tariffs.ChargeTypeCatalog}), and a well pump's share: the
+     * {@code COMMON_CONSUMER} charges (their type is the common consumers one) whose calculation names the split
+     * {@code CONNECTED_PLOTS}, the split that shares a consumer among the plots connected to it as their water source
+     * (money rules 6.7, 11; the ledger stores no other link between a common consumer and water). Every reversal and
+     * adjustment of those charges is its own row with the service period of the charge it corrects, whatever month it
+     * was booked in. Opening balances and other types are never listed. A well pump's share is also a row of
+     * {@link #electricityCharged} (it is electricity priced at the common consumers tariff); a report that shows both
+     * counts it in each.
+     * <p>
+     * The amounts of the rows of a plot add up to its effective water charges and well pump shares of the range (money
+     * rules 5.4). {@link ChargedRow#quantity} is m³ for a consumption row, kWh for a pump share and null for a fixed fee.
+     * Rows come ordered by the charge's service period, plot, source, booking time and id, each regular charge followed
+     * by its corrections in booking order. At most {@code limit} rows are returned: a caller with a row cap passes the
+     * cap plus one.
+     *
+     * @param from    the first day of the range
+     * @param to      the last day of the range; not before {@code from}
+     * @param plotIds the plots (the plots of the water report's rows); an empty collection gives no rows. Asked 500
+     *                per query
+     * @param limit   the most rows returned; at least 1
+     * @throws IllegalArgumentException when {@code to} is before {@code from} or {@code limit} is below 1
+     */
+    List<ChargedRow> waterCharged(LocalDate from, LocalDate to, Collection<UUID> plotIds, int limit);
+
+    /**
+     * The number of open "not charged" items of kind {@code INTERVAL} (a reading interval of a plot meter that could not
+     * be charged, money rules 3.3) per meter: the items of the queue's list ({@code GET /not-charged}, status
+     * {@code OPEN}) whose meter is one of {@code meterIds} (the missing readings report, feature 013 §3.6).
+     *
+     * @param meterIds the meters; every distinct id is a key of the result, in the order of first appearance ({@code 0}
+     *                 for a meter without such items or unknown in the cooperative). Asked 500 per query
+     */
+    Map<UUID, Integer> openIntervalItems(Collection<UUID> meterIds);
 
     /**
      * The nodes of every proportional losses run whose range overlaps a range of days (money rules 6.6), booked or

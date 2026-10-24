@@ -51,7 +51,7 @@ within the working period; that a `REJECTED` or `APPROVED` row carries `decided_
 | `MeterCatalog` | Read API for other modules (`internal.JpaMeterCatalog`): `plotIdsWithActiveMeter(resource)` (plots with an active plot meter of the resource now) and `hasMeterBetween(plot, resource, from, to)` (a plot meter of the resource worked on a day of the range, both ends included). The tariffs module uses it for `NO_METER` and the plot counts of meter-based tariffs. `find(meterId)` (kind, resource, name, active; removed meters too) and `chainOf(meterId)` (the ids of its chain of replacements, oldest first): the ledger's settings of a common consumer, which belong to the consumer's whole chain (011 slice 7). `plotMeterIds(plots, resources)` (the plot meters of the plots, active and removed, in id order): the intervals a recalculation charges (012) |
 | `MeterNetwork` | Read API for the ledger (`internal.JpaMeterNetwork`, feature 011): `lockSharedPoints(meterId)` locks the meter `FOR SHARE` (a reading write holds it `FOR UPDATE`) and returns its points with stable keys (`INSTALL:{meter}`, the reading id, `REMOVAL:{meter}`; a reading on a boundary date takes its place), in the caller's transaction; `staleMeters(asOf, days)` lists the plot meters that worked on `asOf` (installed on or before it, not removed on or before it) whose last point on or before `asOf` (the latest approved reading, else the installation) is dated before `asOf - days`, as `StaleMeter(meterId, plotId, resource, lastReadingOn)`; the rule of the round's `noReadingSince` filter, as of a date. The closing check list of a billing month asks it with 60 days; `network(from, to)` (and `lockSharedNetwork`, every electricity meter `FOR SHARE` in id order first) gives the electricity tree for the losses runs: every chain that worked in the range with its meters' histories (all approved readings) and its places in the tree by days (`Placement(parentKey, from, to)`, through the day of the final removal, `null` parent for the days without one), built by `TreeQueries.network` like the tree screen. Tests: `MeterNetworkTests`, the ledger's `LossesRunsTests` |
 | `WaterConnections` | Read API for the ledger (`internal.JpaWaterConnections`, feature 011): `connectedDays(plotIds, from, to)` gives, per plot, the days it was connected to any water source in the range (clipped, oldest first; a plot without such a day is absent), `connectedToSource(sourceMeterId, from, to)` the same for one source (null = the cooperative's water supply), for the common consumer split of a well pump. In the caller's transaction |
-| `MeterReports` (with `MeterTreeReport`, `MeterTreeReportRow`, `MeterTreeReportSlice`, `MeterTreeValue`, `MeterValueKind`, `MeterTreeQuantity`, `MeterTreeLosses`, `MeterTreeUnknownReason`) | Read facade of the reports (feature 013, `internal.JpaMeterReports`): `tree(from, to)`, the tree of `GET /meter-tree` with the children's sum, the losses and the plots fed. See The tree for the reports |
+| `MeterReports` (with `MeterTreeReport`, `MeterTreeReportRow`, `MeterTreeReportSlice`, `MeterTreeValue`, `MeterValueKind`, `MeterTreeQuantity`, `MeterTreeLosses`, `MeterTreeUnknownReason`, `WaterUseRow`, `WaterSourceKind`, `MissingReadingRow`) | Read facade of the reports (feature 013, `internal.JpaMeterReports`): `tree(from, to)`, the tree of `GET /meter-tree` with the children's sum, the losses and the plots fed; `waterUse(from, to, source)`, the connected days and m³ per plot and water source; `missingReadings(from, to, resources, kinds, plotIds, limit)`, the meters without a reading in a range. See The tree for the reports and Water use and missing readings for the reports |
 | `MeterImport` | Facade of the Excel import's Meters sheet (`internal.MeterImportService`): `plan`, `lock`, `apply`, with `MeterImportRow`, `MeterImportPlan`, `MeterImportItem`, `MeterImportAction` (`NEW`, `UNCHANGED`) and `MeterImportProblem`. See The Excel sheet |
 | `WaterConnectionImport` | Facade of the water column of the Excel import's Plots sheet (`internal.WaterConnectionImportService`, feature 011 slice 8): `plan`, `lock`, `apply`, with the nested `Row`, `Item`, `Plan` and `Action` (`NEW`, `UNCHANGED`). See Water connections |
 
@@ -358,6 +358,46 @@ unknown with the node's reason first, else the children's. The derived figures a
 interpolated values, a plot meter replaced in the range, a quarter meter without a reading after the range, the
 fully known tree, the endpoint's payload for three ranges, another cooperative, invalid range, the caller's
 transaction).
+
+### Water use and missing readings for the reports (feature 013)
+
+Both run in the **caller's transaction** (`Propagation.MANDATORY`, RLS-bound) like `tree`; `to` before `from` (and a
+`limit` below 1) is an `IllegalArgumentException`.
+
+- `waterUse(from, to, source)` (`internal.WaterUseQueries`; the water report, 013 §3.5): one `WaterUseRow` per plot
+  and water source (`WaterSourceKind` `COOPERATIVE_SUPPLY` or `METER`, a well, with its meter id and name) it was
+  connected to on at least one day of the range (`plot_water_connection`, `findAllOverlapping`); a plot that changed
+  source has a row per source, a plot never connected in the range none (money rules 11). `source` keeps only one kind
+  (null: both). Each row has the clipped `periods`, `connectedDays` (both ends counted) and the m³ of those days: the
+  range consumption of 010 restricted to the connected days, by `ConsumptionCalculator.splitByParent` with the plot's
+  connections as the periods, so each connection is a tree slice (`max(from, valid_from)` to `min(to, valid_to + 1
+  day)`, money rules 6.4): connected for the whole range is exactly the range consumption, and the slices of a change
+  of source add up to it. The meters are the plot's water meters that worked on a day of a slice, each clipped to its
+  own working days (a replacement adds up); `meterId`/`meterSerial` show the one installed last. No such meter: no
+  m³ and no reason (nothing measured, an empty cell). A value not known at an end of a slice: `cubicMetres` null with
+  `MeterTreeUnknownReason.VALUE_UNKNOWN` and `lastReadingOn`, never zero; `calculated` when a value was interpolated.
+  Rows in the street order of the plots, a plot's sources by their first connected day. Archived plots and common
+  land are listed when they have such a connection (the caller decides). Queries: the connections, the water meters,
+  their approved readings, the wells' names and the plots (bulk, 500 ids per `IN` list).
+- `missingReadings(from, to, resources, kinds, plotIds, limit)` (`internal.MissingReadingQueries`; the missing
+  readings report, 013 §3.6): one `MissingReadingRow` per meter of the resources and kinds (empty: all) that worked
+  through the whole range (installed before `from`, not removed on or before `to`) and has no approved reading dated
+  `from`..`to`. **An installation or removal in the range counts as a point** (its initial or final value), as the
+  register's `noReadingSince` filter and `MeterNetwork.staleMeters` count it, so such a meter is not listed. A water
+  meter is listed only when its plot was connected to water on a day of the range (money rules 11). Each row: resource,
+  kind, plot (id, number, street) or name, serial, installation, the last point before the range (the latest approved
+  reading, else the initial value with `lastReadingInitial`), the days from it to `to`, and `pendingApprovalInRange`
+  (a `PENDING` reading dated in the range; pending, rejected and superseded readings never count as a reading).
+  `plotIds` (a street resolved by the caller) keeps the plot meters of those plots only, 500 per query; null means
+  every meter. One native query (lateral latest reading, `exists` for pending, approved and the connection), then the
+  meters and plots in bulk; rows in the order of the register (plot meters in street order, electricity before water;
+  then the other kinds in enum order and by name, Ukrainian collation), at most `limit`.
+- Test: `MeterReportsWaterAndMissingTests` (a whole-range connection, a connection from mid-range with interpolated
+  m³, a change of source whose slices add up, a plot connected only before the range, the source filter, a meter
+  without a reading after the range, a plot without a water meter; a meter read in the range, a pending reading, a
+  water meter of a plot not connected, meters installed after, in and removed before the range, the initial value as
+  the last point, kinds, resources, plots and the limit; another cooperative, invalid arguments, the caller's
+  transaction).
 
 ### Audit of a move
 
