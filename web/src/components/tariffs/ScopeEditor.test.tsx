@@ -7,7 +7,7 @@ import { renderWithApp } from '../../test/render';
 import { ScopeEditor } from './ScopeEditor';
 
 const mutate = vi.fn();
-let options: { mutation: { onError: (e: unknown) => void } };
+let options: { mutation: { onError: (e: unknown) => void; onSuccess: () => unknown } };
 let permissions: Permission[];
 let tariff: Tariff;
 

@@ -1,7 +1,7 @@
 # Pipeline log — 012 Retroactive recalculation
 
 - Status: running
-- Phase: 3 (implement), Slice 1
+- Phase: 4 (verify and full suite)
 - Branch: 012-retroactive-recalculation · Base: main @ 2e51e81
 - Requirement: document docs/features/012-retroactive-recalculation.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
@@ -69,3 +69,7 @@
 - Follow-ups for the owner (Slice 8 docs): `context/product/product-definition.md` still says automatic recalculation with notifications (suggest `/awos:product`); ADR 0007 still lists "retroactive recalculation of large ranges" as JobRunr work while 012 runs synchronously (capped at 24 months) — ADR note for the owner.
 - Slice 8: 6a3618e — verify green (DemoLedgerDataTests+Modularity 11, web 636; e2e recalculation 4/4 twice, @smoke 14/14 by the builder) — includes a Slice 7 web gap fix (meter card hid Correct/Delete for charged readings) — review PASS (r2, fix 1de90c8)
 - All slice reviews PASS (Slices 1–8). Slice 9 (Feature Testing & Regression, testing-expert) started.
+- Slice 9: bda3052 — RecalculationAcceptanceTests 5/5, web 38/38; acceptance-coverage.md written — review PASS (r1)
+- Phase 3 end: all 9 slices committed, every slice review PASS. Phase 4 started.
+- AUTO: (Phase 4) functional-spec §2.2 stale-preview criterion amended (change log 2026-10-24): staleness = the plan changed; a reading outside the plan does not make a preview stale.
+- Phase 4 full suite (`make -k check` at bda3052 in a separate worktree): contract (gen) OK, format OK, lint OK, backend `./mvnw verify` 2,281 tests 0 failures, coverage checks met (baseline main: 2,144); **web typecheck red**: `ScopeEditor.test.tsx(186,203)` TS2339 `onSuccess` on the captured mock options (Slice 9 test). Not a baseline failure → regression fix (test-only) sent to testing-expert.
