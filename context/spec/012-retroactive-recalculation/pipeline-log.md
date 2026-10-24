@@ -5,7 +5,7 @@
 - Branch: 012-retroactive-recalculation · Base: main @ 2e51e81
 - Requirement: document docs/features/012-retroactive-recalculation.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
-- Publish: pr+checks · PR: — · Checks: —
+- Publish: pr+checks · PR: https://github.com/Philatelist/nadel-platform/pull/45 · Checks: red: Security (pnpm audit GHSA-mrhx-c7xc-m3w5)
 - Review run: on (not started yet)
 
 ## Project facts (Phase 0)
@@ -92,3 +92,9 @@
 - **Decided automatically:** see every `AUTO:` line above (cause-driven block on POST /recalculations; rolled-back preview; soft delete of used versions; interval identity; per-cooperative lock; 24-month cap; electrician 409/403; approvals without a recalculation step; reading empty plan applies queue updates; spec wording amendments).
 - **Known limitations (documented in money-rules and READMEs):** current losses mode applied to past intervals (PROPORTIONAL→FIXED switch can double losses if recalculated — check the preview); inactive charge type left out of a tariff cause; a chosen plot pulls in its whole run; approvals have no recalculation step; a hand-reversed plot is left out of a rebooked run; recalculation runs synchronously (ADR 0007 still names JobRunr for large ranges).
 - **Follow-ups for the owner:** `/awos:product` (product definition still says automatic recalculation with notifications); ADR 0007 note on synchronous recalculation; local Postgres container collation refresh (`ALTER DATABASE template1 REFRESH COLLATION VERSION` or recreate the volume) so `make e2e` works again; minor review notes.
+
+## Phase 5 — PR #45
+
+- Pushed `012-retroactive-recalculation`; PR https://github.com/Philatelist/nadel-platform/pull/45 (label `full-e2e`). Run 40053784819: Backend pass, Clients pass, End-to-end (full) pass, SAST pass, **Security fail**.
+- Security: `pnpm audit --prod --audit-level high` → GHSA-mrhx-c7xc-m3w5 (zod < 4.6.6, memory exhaustion validating oversized constrained collections), path `mobile > expo > @expo/cli > zod` 3.25.76. Not introduced by this branch (no dependency changes); main is affected the same way. No patched 3.x; the fix is zod ≥ 4.6.6 (major). A real fix needs an override across a major version of Expo's CLI dependency or an accepted advisory (ignore lists) — the pipeline may not add advisories to ignore lists on its own → stop point 2 (`notGreen: ask`).
+- Owner's answer (stop point 2): accept the advisory in a separate commit `chore(security): accept GHSA-mrhx-c7xc-m3w5 (zod 3.x via Expo CLI)`, reason including "revisit when Expo moves @expo/cli to zod 4 or a patched 3.x appears", and list it as a check for the mobile phase (PR follow-ups). Done: pnpm-workspace.yaml `auditConfig.ignoreGhsas` and osv-scanner.toml; local `pnpm audit --prod --audit-level high` exit 0.
