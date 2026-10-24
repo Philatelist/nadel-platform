@@ -53,6 +53,9 @@ import org.springframework.transaction.annotation.Transactional;
  * starts, neighbouring periods under the same parent joined, and the days without a parent put under {@link #ROOT}. A
  * node is listed under each parent it had in the range, with the slices it spent there; its children are found within
  * those slices only, so a quarter moved between substations shows under each the plots it fed then.
+ * <p>
+ * {@link #nodes} is the one calculation: the endpoint maps it to the API model ({@link #tree}) and the reports facade
+ * ({@link JpaMeterReports}) to public records with the derived figures, so the two never drift.
  */
 @Service
 class TreeQueries {
@@ -78,13 +81,22 @@ class TreeQueries {
         this.plots = plots;
     }
 
-    /** The tree from {@code from} to {@code to}; 400 when {@code to} is before {@code from}. */
+    /** The tree from {@code from} to {@code to} for the endpoint; 400 when {@code to} is before {@code from}. */
     @Transactional(readOnly = true)
     MeterTree tree(LocalDate from, LocalDate to) {
         if (to.isBefore(from)) {
             throw new ApiProblemException(HttpStatus.BAD_REQUEST, ProblemCodes.VALIDATION_FAILED,
                     "The request is not valid.", List.of(new FieldProblem("to", ProblemCodes.INVALID)));
         }
+        return new MeterTree(from, to, nodes(from, to).stream().map(TreeQueries::dto).toList());
+    }
+
+    /**
+     * The roots of the tree from {@code from} to {@code to} (not before {@code from}), in the order of the tree, with
+     * their children: the one calculation behind both the endpoint ({@link #tree}) and the reports
+     * ({@link JpaMeterReports}), so the two cannot drift. Runs in the caller's transaction.
+     */
+    List<TreeNode> nodes(LocalDate from, LocalDate to) {
         List<MeterRecord> electricity = meters.findByResource(MeterResource.ELECTRICITY);
         Map<UUID, List<Chain>> under = new HashMap<>();
         for (Chain chain : chainsOf(electricity, false)) {
@@ -101,7 +113,85 @@ class TreeQueries {
             streetOrder.put(ordered.get(i), i);
         }
         Builder builder = new Builder(under, plotFacts, streetOrder, to);
-        return new MeterTree(from, to, builder.nodesUnder(ROOT, List.of(new Window(from, to)), 0, Set.of()));
+        return builder.nodesUnder(ROOT, List.of(new Window(from, to)), 0, Set.of());
+    }
+
+    /**
+     * A node of the tree as calculated: the meter it shows (the latest of its chain installed by the end of the range)
+     * with its plot, the meters of its chain, its slices under this parent, its consumption over them and its children.
+     */
+    record TreeNode(MeterRecord shown, @Nullable PlotFacts plot, List<UUID> meterIds, List<TreeSlice> slices,
+            RangeConsumption total, List<TreeNode> children) {
+    }
+
+    /** A slice of a node: its days under the parent, the values at both ends and the consumption between them. */
+    record TreeSlice(LocalDate from, LocalDate to, NodeValue start, NodeValue end, RangeConsumption consumption) {
+    }
+
+    /** The value of a node on a day, with the meter of its chain it was read off. */
+    record NodeValue(UUID meterId, ValueAt value) {
+    }
+
+    // ---- the API model of the endpoint
+
+    private static MeterTreeNode dto(TreeNode node) {
+        return new MeterTreeNode(meter(node.shown(), node.plot()), node.meterIds(),
+                node.slices().stream().map(TreeQueries::slice).toList(), consumption(node.total()),
+                node.children().stream().map(TreeQueries::dto).toList());
+    }
+
+    private static MeterTreeMeter meter(MeterRecord meter, @Nullable PlotFacts plot) {
+        MeterTreeMeter dto = new MeterTreeMeter(meter.getId(),
+                nadel.contract.model.MeterKind.fromValue(meter.getKind().name()), meter.getSerial(),
+                meter.getInstalledOn(), meter.isActive());
+        dto.setName(meter.getName());
+        if (plot != null) {
+            MeterPlot ref = new MeterPlot(plot.id(), plot.number());
+            ref.setStreet(plot.street());
+            dto.setPlot(ref);
+        }
+        dto.setRemovedOn(meter.getRemovedOn());
+        return dto;
+    }
+
+    private static MeterTreeSlice slice(TreeSlice slice) {
+        return new MeterTreeSlice(slice.from(), slice.to(), valueAt(slice.start()), valueAt(slice.end()),
+                consumption(slice.consumption()));
+    }
+
+    private static MeterValueAt valueAt(NodeValue value) {
+        return switch (value.value()) {
+            case ValueAt.Real real -> {
+                MeterValueAt dto = new MeterValueAt(MeterValueAtKind.REAL, value.meterId());
+                dto.setValue(real.value().toString());
+                yield dto;
+            }
+            case ValueAt.Calculated calculated -> {
+                MeterValueAt dto = new MeterValueAt(MeterValueAtKind.CALCULATED, value.meterId());
+                dto.setValue(calculated.value().toMeterValue().toString());
+                yield dto;
+            }
+            case ValueAt.Unknown unknown -> {
+                MeterValueAt dto = new MeterValueAt(MeterValueAtKind.UNKNOWN, value.meterId());
+                dto.setLastReadingOn(unknown.lastReadingOn());
+                yield dto;
+            }
+        };
+    }
+
+    private static MeterRangeConsumption consumption(RangeConsumption range) {
+        return switch (range) {
+            case RangeConsumption.Known known -> {
+                MeterRangeConsumption dto = new MeterRangeConsumption(true, known.calculated());
+                dto.setConsumption(known.consumption().toMeterValue().toString());
+                yield dto;
+            }
+            case RangeConsumption.Unknown unknown -> {
+                MeterRangeConsumption dto = new MeterRangeConsumption(false, false);
+                dto.setLastReadingOn(unknown.lastReadingOn());
+                yield dto;
+            }
+        };
     }
 
     /**
@@ -258,7 +348,7 @@ class TreeQueries {
         }
     }
 
-    /** Builds the nodes, recursively, and maps them to the API model. */
+    /** Builds the nodes, recursively. */
     private static final class Builder {
 
         private final Map<UUID, List<Chain>> under;
@@ -276,7 +366,7 @@ class TreeQueries {
         }
 
         /** The nodes under {@code parent} within the windows, in the order of the tree. */
-        List<MeterTreeNode> nodesUnder(UUID parent, List<Window> windows, int depth, Set<UUID> path) {
+        List<TreeNode> nodesUnder(UUID parent, List<Window> windows, int depth, Set<UUID> path) {
             List<Placed> placed = new ArrayList<>();
             for (Chain chain : under.getOrDefault(parent, List.of())) {
                 if (path.contains(chain.key())) {
@@ -299,17 +389,18 @@ class TreeQueries {
                     .thenComparing(node -> node.shown().getPlotId() == null ? 0
                             : streetOrder.getOrDefault(node.shown().getPlotId(), Integer.MAX_VALUE))
                     .thenComparing(node -> node.shown().getId()));
-            List<MeterTreeNode> nodes = new ArrayList<>(placed.size());
+            List<TreeNode> nodes = new ArrayList<>(placed.size());
             for (Placed node : placed) {
                 Set<UUID> deeper = new HashSet<>(path);
                 deeper.add(node.chain().key());
-                List<MeterTreeNode> children = depth + 1 >= MAX_DEPTH ? List.of()
+                List<TreeNode> children = depth + 1 >= MAX_DEPTH ? List.of()
                         : nodesUnder(node.chain().key(), node.slices().stream()
                                 .map(slice -> new Window(slice.from(), slice.to())).toList(), depth + 1, deeper);
-                nodes.add(new MeterTreeNode(meter(node.shown()),
+                MeterRecord shown = node.shown();
+                nodes.add(new TreeNode(shown, shown.getPlotId() == null ? null : plotFacts.get(shown.getPlotId()),
                         node.chain().meters().stream().map(MeterRecord::getId).toList(),
                         node.slices().stream().map(slice -> slice(node.chain(), slice)).toList(),
-                        consumption(total(node.slices())), children));
+                        total(node.slices()), children));
             }
             return nodes;
         }
@@ -325,24 +416,9 @@ class TreeQueries {
             return shown;
         }
 
-        private MeterTreeMeter meter(MeterRecord meter) {
-            MeterTreeMeter dto = new MeterTreeMeter(meter.getId(),
-                    nadel.contract.model.MeterKind.fromValue(meter.getKind().name()), meter.getSerial(),
-                    meter.getInstalledOn(), meter.isActive());
-            dto.setName(meter.getName());
-            PlotFacts plot = meter.getPlotId() == null ? null : plotFacts.get(meter.getPlotId());
-            if (plot != null) {
-                MeterPlot ref = new MeterPlot(plot.id(), plot.number());
-                ref.setStreet(plot.street());
-                dto.setPlot(ref);
-            }
-            dto.setRemovedOn(meter.getRemovedOn());
-            return dto;
-        }
-
-        private static MeterTreeSlice slice(Chain chain, Slice slice) {
-            return new MeterTreeSlice(slice.from(), slice.to(), valueAt(chain, slice.from(), true),
-                    valueAt(chain, slice.to(), false), consumption(slice.consumption()));
+        private static TreeSlice slice(Chain chain, Slice slice) {
+            return new TreeSlice(slice.from(), slice.to(), valueAt(chain, slice.from(), true),
+                    valueAt(chain, slice.to(), false), slice.consumption());
         }
 
         /**
@@ -350,27 +426,10 @@ class TreeQueries {
          * a slice takes the new meter (its initial reading, the counting goes on from there) and the end of a slice
          * the old one (its final reading).
          */
-        private static MeterValueAt valueAt(Chain chain, LocalDate date, boolean start) {
+        private static NodeValue valueAt(Chain chain, LocalDate date, boolean start) {
             int index = memberOn(chain.meters(), date, start);
-            MeterRecord meter = chain.meters().get(index);
-            ValueAt value = ConsumptionCalculator.valueAt(chain.histories().get(index), date);
-            return switch (value) {
-                case ValueAt.Real real -> {
-                    MeterValueAt dto = new MeterValueAt(MeterValueAtKind.REAL, meter.getId());
-                    dto.setValue(real.value().toString());
-                    yield dto;
-                }
-                case ValueAt.Calculated calculated -> {
-                    MeterValueAt dto = new MeterValueAt(MeterValueAtKind.CALCULATED, meter.getId());
-                    dto.setValue(calculated.value().toMeterValue().toString());
-                    yield dto;
-                }
-                case ValueAt.Unknown unknown -> {
-                    MeterValueAt dto = new MeterValueAt(MeterValueAtKind.UNKNOWN, meter.getId());
-                    dto.setLastReadingOn(unknown.lastReadingOn());
-                    yield dto;
-                }
-            };
+            return new NodeValue(chain.meters().get(index).getId(),
+                    ConsumptionCalculator.valueAt(chain.histories().get(index), date));
         }
 
         /** The index of the meter of the chain that works on {@code date}, from that day on or up to it. */
@@ -416,21 +475,6 @@ class TreeQueries {
                 }
             }
             return unknown ? new RangeConsumption.Unknown(lastReadingOn) : new RangeConsumption.Known(sum, calculated);
-        }
-
-        private static MeterRangeConsumption consumption(RangeConsumption range) {
-            return switch (range) {
-                case RangeConsumption.Known known -> {
-                    MeterRangeConsumption dto = new MeterRangeConsumption(true, known.calculated());
-                    dto.setConsumption(known.consumption().toMeterValue().toString());
-                    yield dto;
-                }
-                case RangeConsumption.Unknown unknown -> {
-                    MeterRangeConsumption dto = new MeterRangeConsumption(false, false);
-                    dto.setLastReadingOn(unknown.lastReadingOn());
-                    yield dto;
-                }
-            };
         }
     }
 

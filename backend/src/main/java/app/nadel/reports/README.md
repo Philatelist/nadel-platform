@@ -24,7 +24,7 @@ that needs a permission the caller lacks is 403 `PERMISSION_DENIED` (`ReportCata
 `/reports/{code}.xlsx` wins over `/reports/{code}`: its pattern is the more specific one
 (`ChargesByMonthReportTests.theXlsxPathWinsOverTheCodePath`).
 
-Done so far: `charges-by-month`, `plot-balances`, `debtors`, `land-tax` and `corrections`. The other codes are 404
+Done so far: `charges-by-month`, `plot-balances`, `debtors`, `electricity-tree`, `land-tax` and `corrections`. The other codes are 404
 until their definitions arrive. `GET /reports` runs in a read-only transaction: the debtors' defaults are settings of
 the cooperative.
 
@@ -34,8 +34,8 @@ the cooperative.
 |---|---|
 | `ReportDefinition` | One bean per report: `code`, `requiredPermissions` (default `REPORTS_VIEW`; debtors adds `MEMBERS_VIEW`), `personalData`, `filters` (the period first), `load(filters, context)` returning a `ReportResult`, `filenameRange(filters, context)` (default: the period of the filters; a report for one day gives that day twice) |
 | `ReportCatalog` | The definitions in the order of `ReportCode`; `available`/`infos` filter by the caller's permissions, `require` is 404 or 403 |
-| `ReportFilterDefinition` | One filter: key, type, query parameters, required, basis, defaults on a day, `apply` (read the parameters into `ReportFilters`, adding field errors) and `describe` (the header block's text). Implemented: `MonthRangeFilter` (`period`, `fromMonth`/`toMonth`, default the previous month), `ChargeTypesFilter` (`chargeTypes`, default all), `StreetFilter` (`street`, default all), `AsOfFilter` (`asOf`, `DATE`, required, default today; a day after today is `INVALID`), `StatusesFilter` (`statuses`, `STATUS`, default all), `MinDebtFilter` (`minDebt`, `MONEY`) and `OlderThanDaysFilter` (`olderThanDays`, `INT`), both required with a default the definition gives (the debtors: the cooperative's red amount and red days, read when the list or the report is made), `YearFilter` (`year`, `YEAR`, required, default the current year in Kyiv; a year after it is `INVALID`) and `CorrectionKindsFilter` (`correctionKinds`, `CORRECTION_KIND`, default both); later reports add theirs. In the file a filter is named by `reports.filters.<key>` (period, charge types, street) or `reports.filters.params.<param>`, the web form's labels |
-| `ReportFilters` | The typed filter values of one run and the values as the query string carries them (echoed in the preview, written to the audit entry); `parse` throws 400 `REPORT_FILTER_INVALID` with every field error: `REQUIRED` (a required filter without a default), `INVALID` (`toMonth` before `fromMonth`, `asOf` after today, `year` after the current year), `NOT_FOUND` (`chargeTypeIds[i]` not a charge type of the cooperative). Malformed values never get here: the contract answers 400 `VALIDATION_FAILED` |
+| `ReportFilterDefinition` | One filter: key, type, query parameters, required, basis, defaults on a day, `apply` (read the parameters into `ReportFilters`, adding field errors) and `describe` (the header block's text). Implemented: `MonthRangeFilter` (`period`, `fromMonth`/`toMonth`, default the previous month), `DateRangeFilter` (`period`, `DATE_RANGE`, `from`/`to`, default the first and last day of the previous month in Kyiv), `ChargeTypesFilter` (`chargeTypes`, default all), `StreetFilter` (`street`, default all), `AsOfFilter` (`asOf`, `DATE`, required, default today; a day after today is `INVALID`), `StatusesFilter` (`statuses`, `STATUS`, default all), `MinDebtFilter` (`minDebt`, `MONEY`) and `OlderThanDaysFilter` (`olderThanDays`, `INT`), both required with a default the definition gives (the debtors: the cooperative's red amount and red days, read when the list or the report is made), `YearFilter` (`year`, `YEAR`, required, default the current year in Kyiv; a year after it is `INVALID`) and `CorrectionKindsFilter` (`correctionKinds`, `CORRECTION_KIND`, default both); later reports add theirs. In the file a filter is named by `reports.filters.<key>` (period, charge types, street) or `reports.filters.params.<param>`, the web form's labels |
+| `ReportFilters` | The typed filter values of one run and the values as the query string carries them (echoed in the preview, written to the audit entry); `parse` throws 400 `REPORT_FILTER_INVALID` with every field error: `REQUIRED` (a required filter without a default), `INVALID` (`toMonth` before `fromMonth`, `to` before `from` or a range of days of more than one year, `asOf` after today, `year` after the current year), `NOT_FOUND` (`chargeTypeIds[i]` not a charge type of the cooperative). Malformed values never get here: the contract answers 400 `VALIDATION_FAILED` |
 | `ReportResult` | Sheets (`key`, typed `Column`s, `Row`s of kind `DETAIL`/`SUBTOTAL` with a tree level, `Total`s) and header `Note`s (code + params). A `Cell` holds a typed value (`Money`, `BigDecimal`, `LocalDate`, `YearMonth`, `UUID` of a charge type, codes and text) or nothing, or a reason when the value is not known (never 0) |
 | `ReportRunner` | `preview` and `file`, each one plain `@Transactional` (not read-only: the outbox inserts the audit publication). Order: caller and permission, filters, `load`, the row cap, the preview or the workbook, the audit event **last**, so a refused run or a failure while writing leaves no entry |
 | `ReportLimits` | The row cap, 20 000 per sheet (property `nadel.reports.row-cap`), and the 200 preview rows |
@@ -77,8 +77,10 @@ the same text in the web catalogs (`packages/shared/src/i18n/uk.ts`, `en.ts`), s
 column keys), `reports.notes.<ReportNoteCode>`, `reports.filters.*`, `reports.file.*`, `reports.rows.SUBTOTAL`,
 `reports.totals.<key>`, `reports.reasons.<ReportCellReason>`, the filter labels and options
 (`reports.filters.params.*`, `reports.filters.options.statuses.*`, which also name the plot balances' status codes,
-`reports.filters.options.correctionKinds.*`, which also name the corrections' kinds), the corrections' sources
-(`reports.corrections.sources.*`), and the shared `billing.status.*`, `chargeTypes.defaultNames.*` and
+`reports.filters.options.correctionKinds.*`, which also name the corrections' kinds,
+`reports.filters.options.meterKinds.*`, which also name the electricity tree's node kinds), the corrections' sources
+(`reports.corrections.sources.*`), the electricity report's codes (`reports.electricity-tree.valueKinds.*`,
+`.sources.*`, `.rowKinds.*`, `.runStatuses.*`, `.outcomes.*`, `.splits.*`), and the shared `billing.status.*`, `chargeTypes.defaultNames.*` and
 `recalculation.causeKind.*` (the corrections' recalculation causes). On the web `ReportPreviewTable.codeLabels` maps a
 `CODE` column (`<report>/<column key>`) to the same catalog. A column per charge type (`debt.<chargeTypeId>`,
 `chargeTypeId` set) has no key of its own: its header is the charge type's name, in the file
@@ -240,9 +242,66 @@ and no totals line; the screen says there is nothing to show, the file has the h
 Tests: `LandTaxReportTests` and `CorrectionsReportTests` (worked fixtures in a cooperative of their own, preview and
 file, filters, permission, audit), `ReportFiltersTests` (year and kinds), `ReportTextsTests`.
 
+## Report: electricity by meter tree (`electricity-tree`, functional spec 2.6)
+
+Filter: service days (`period`, `DATE_RANGE`, `from`/`to`, basis `SERVICE_DAYS`, default the previous calendar month
+in Kyiv; `to` before `from` or more than one year after it, `to` on or after the same day a year later, is `INVALID`
+on `to`: a year is the longest period a board reports on and it bounds the tree's work). Needs `REPORTS_VIEW` only, no
+personal data. Two sheets, made from `meters.MeterReports.tree` (the calculation of `GET /meter-tree`) and
+`ledger.LedgerReadModel.electricityCharged` (the row cap plus one as its limit), `lossesRunsInRange` and
+`commonConsumerRunsInRange`; plot numbers and their natural order from `PlotCatalog.findAll` and `inNaturalOrder` (one
+call each: the distinct plots of the rows). Every kWh is written with three decimals by `meters.Quantity.toDecimal`
+(the one display rounding of a quantity, with the sign, so negative losses and reversed kWh show as such; ADR 0014);
+the report rounds nothing.
+
+- Sheet `consumption` ("Споживання"): one row per node under each parent it had in the range, in the order of the
+  tree, `level` its depth (the indent of the first column on screen and in the file): `name` (the meter's name, a plot
+  meter's plot number), `nodeKind` (`PLOT`, `SUBSTATION`, `QUARTER`, `COMMON_CONSUMER`), `serial` (the meter shown: the
+  newest of a replaced chain), `start` and `end` (the value on the first day of the node's first slice and on the last
+  day of its last slice; after a replacement the start is read off the old meter and the end off the new one) each with
+  `startKind`/`endKind` (`REAL`, `CALCULATED`, `UNKNOWN`) and `startLastReading`/`endLastReading` (the day of the last
+  reading, only when unknown), `consumption`, `children` (the sum of the children's consumption), `losses` (kWh, may be
+  negative) and `lossesPercent` (of the node's consumption, two decimals as the meters module gives it; empty when the
+  consumption is not above zero), the last three only for substations and quarter meters, and `plotsFed` (the distinct
+  plots of the plot meters in its subtree). A value not known is empty with `NO_READING`; every figure worked out from
+  one is empty with `DERIVED_FROM_UNKNOWN`, never 0. No totals: the levels of a tree do not add up. A node that left a
+  parent and came back within the range has several slices there: its row shows the first start and the last end, and
+  its consumption counts only its days under that parent. The number of members fed is not shown: the meters module
+  knows plots, not owners (spec 2.6 asks for plots fed).
+- Sheet `charged` ("Нараховано"): the electricity ledger rows whose service period overlaps the range, in the sections
+  `CONSUMPTION`, `LOSSES`, `COMMON_CONSUMER`, each closed by a `SUBTOTAL` row (`kwh`, `amount`). In a section every
+  regular charge is followed by its reversals and adjustments, each its own row (`rowKind` `REGULAR`, `REVERSAL`,
+  `ADJUSTMENT`) with the **original** charge's service period and its own billing month; groups in the natural order of
+  the plot number, then by service period. Columns: `source`, `rowKind`, `number` (the plot), `serviceFrom`,
+  `serviceTo`, `month`, `kwh` (signed: a reversal negative, an adjustment the change it makes), `rate` (the price per
+  kWh when every tariff part of the row has the same rate; empty with `SEVERAL_RATES` when the rate changed within the
+  days, the amount being exact; empty when the row has no parts), `amount`. Losses without a run (the fixed
+  percentage of an interval) come first; then, per losses run of the range (`lossesRunsInRange`, booked or reversed, as
+  booked), one `RUN` row per node (`number` the node's name as the run showed it, `serviceFrom`/`serviceTo` the run's
+  days, `month`, `runStatus`, `outcome`, `consumption`, `children`, `losses`, `lossesPercent`, `runAmount` (what the run
+  booked for the node), `plots` (plots charged)) followed by the run's charges; the same for the common consumer runs
+  (`split`, `consumption`, `runAmount`, `plots` (plots that shared it), `plotDays`). A reversed run is listed with
+  `REVERSED`, its charges and their reversals, which add up to zero. The figures of a `RUN` row stay out of `kwh` and
+  `amount` (a node's `runAmount` prices its share on its own, so it need not add up to the plots' charges): those two
+  columns hold only ledger rows, and the sum of `amount` over the sheet is the electricity and common consumer charges
+  of the range on the plot accounts. Whatever mode a charge or run was booked under, it shows what it booked.
+- Totals of `charged`: `CONSUMPTION` (kWh used by plots and their amount), `LOSSES` (kWh of losses charged),
+  `COMMON_CONSUMER` (kWh of common consumers charged), each with `kwh` and `amount`, and `all` (the amount); sums of the
+  rows as listed (the displayed kWh, `Money.plus`). No rows: no totals.
+- Header note: `LOSSES_FIXED_PERCENT` (param `percent`, two decimals) or `LOSSES_PROPORTIONAL`, the cooperative's mode
+  now (`CooperativeSettings`).
+- The row cap counts each sheet, as for every report (the contract's rule): the charged sheet's rows include the `RUN`
+  and `SUBTOTAL` rows. File name `electricity-tree_<from>_<to>.xlsx`.
+
+Tests: `ElectricityTreeReportTests` (the worked tree of `meters.internal.MeterReportsTests` with a meter replacement
+and an unknown quarter, its ledger with fixed-percentage losses, a mixed-rate charge reversed, a later adjustment and a
+common consumer run; the proportional runs booked, reversed and booked again through the API; the reconciliation with
+the plot accounts, preview and file number for number, defaults and filter errors, the cap, the audit entries, 403 for
+a member and the electrician), `ReportFiltersTests` (the range of days), `ReportTextsTests`.
+
 ## Depends on
 
-`ledger` (`LedgerReadModel`), `plots` (`PlotCatalog`, `PlotOwners`, `PlotStatuses`), `members` (`MemberDirectory`:
-debtors' contacts, names of who booked a correction), `settings` (`CooperativeSettings`: red amount and days),
+`ledger` (`LedgerReadModel`), `meters` (`MeterReports`, `Quantity`), `plots` (`PlotCatalog`, `PlotOwners`, `PlotStatuses`), `members` (`MemberDirectory`:
+debtors' contacts, names of who booked a correction), `settings` (`CooperativeSettings`: red amount and days, losses mode and percent),
 `tariffs` (`ChargeTypeCatalog`, `ExpectedAmounts`), `tenancy` (`TenantDirectory`), `identity` (`CurrentUser`,
 `AccessProfile`, `Permission`), `audit`, `money` and `problem`. No module depends on `reports`.

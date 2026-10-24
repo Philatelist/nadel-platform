@@ -24,3 +24,7 @@ Backend `./mvnw verify` on 6c121fb (detached worktree): green, exit 0, no failin
 - Round 1: PASS. Backend slice tests 1216 run, 0 failures on the reviewer side; web code read only (node_modules missing in the worktree).
 - Minor notes (not fixed): `LedgerReportQueries.debtsAsOf` does not null-guard `byPlot.get(...)`; `DebtorsReport.load` uses `debts.get` while `PlotBalancesReport` uses `getOrDefault` (inconsistent, both safe today).
 
+### Slice 5 — Corrections and Land tax (e0b1a38)
+- Round 1: PASS. Backend slice tests 861 run, 0 failures on the reviewer side; web diff read only.
+- Minor notes (not fixed): `YearFilter` rejects a year after the current one (not stated in the spec; a treasurer preparing next year's tax gets 400); the corrections query relies on `reversed_at = created_at` coming from one `Instant` in the run reversal code (documented, no code comment in `LossesRuns`/`CommonConsumerRuns`); `LandTaxReport` has no query-level row limit (plots are bounded, runner enforces the cap).
+

@@ -159,14 +159,14 @@ class CorrectionsReportTests extends ReportsTestSupport {
         assertThat(filters(preview)).containsExactly("fromMonth=" + previous, "toMonth=" + previous);
         assertThat(preview.get("sheets").get(0).get("rowCount").asInt()).isZero();
         send(treasurer, get("/api/v1/reports"))
-                .andExpect(jsonPath("$[4].code").value("corrections"))
-                .andExpect(jsonPath("$[4].personalData").value(false))
-                .andExpect(jsonPath("$[4].filters[0].key").value("period"))
-                .andExpect(jsonPath("$[4].filters[0].basis").value("BILLING_MONTHS"))
-                .andExpect(jsonPath("$[4].filters[1].key").value("chargeTypes"))
-                .andExpect(jsonPath("$[4].filters[2].key").value("correctionKinds"))
-                .andExpect(jsonPath("$[4].filters[2].type").value("CORRECTION_KIND"))
-                .andExpect(jsonPath("$[4].filters[2].defaults").isEmpty());
+                .andExpect(jsonPath("$[5].code").value("corrections"))
+                .andExpect(jsonPath("$[5].personalData").value(false))
+                .andExpect(jsonPath("$[5].filters[0].key").value("period"))
+                .andExpect(jsonPath("$[5].filters[0].basis").value("BILLING_MONTHS"))
+                .andExpect(jsonPath("$[5].filters[1].key").value("chargeTypes"))
+                .andExpect(jsonPath("$[5].filters[2].key").value("correctionKinds"))
+                .andExpect(jsonPath("$[5].filters[2].type").value("CORRECTION_KIND"))
+                .andExpect(jsonPath("$[5].filters[2].defaults").isEmpty());
     }
 
     @Test

@@ -1681,10 +1681,14 @@ export const en = {
     },
     totals: {
       all: 'Total',
+      CONSUMPTION: 'Consumption of plots',
+      LOSSES: 'Losses charged',
+      COMMON_CONSUMER: 'Common consumers charged',
     },
     reasons: {
       NO_READING: 'No reading, so the value is not known',
       DERIVED_FROM_UNKNOWN: 'Worked out from a value that is not known',
+      SEVERAL_RATES: 'Priced at more than one rate; the amount is exact',
     },
     notes: {
       SERVICE_PERIOD_SHEET:
@@ -1695,6 +1699,10 @@ export const en = {
         'Until payments are recorded, the oldest unpaid charge is the oldest charge that still has a debt.',
       RECALCULATION_SUGGESTED:
         'Plots charged another amount than expected: {count}. A recalculation may be due; the report books nothing.',
+      LOSSES_FIXED_PERCENT:
+        'Losses are now charged as a fixed {percent} % of each interval. A charge or a run booked under another mode shows what it booked.',
+      LOSSES_PROPORTIONAL:
+        'Losses are now charged proportionally, by losses runs per node. A charge or a run booked under another mode shows what it booked.',
     },
     'charges-by-month': {
       title: 'Charges by month',
@@ -1749,6 +1757,80 @@ export const en = {
         total: 'Total debt',
         oldestUnpaid: 'Oldest unpaid charge',
         daysOverdue: 'Days overdue',
+      },
+    },
+    'electricity-tree': {
+      title: 'Electricity by meter tree',
+      description:
+        'Electricity from the substation down to the plots: meter values, consumption and losses over a range of days, and what was charged for it.',
+      sheets: {
+        consumption: 'Consumption',
+        charged: 'Charged',
+      },
+      columns: {
+        name: 'Name or plot',
+        nodeKind: 'Kind',
+        serial: 'Serial number',
+        start: 'Start value',
+        startKind: 'Start value type',
+        startLastReading: 'Last reading (start)',
+        end: 'End value',
+        endKind: 'End value type',
+        endLastReading: 'Last reading (end)',
+        consumption: 'Consumption, kWh',
+        children: 'Children, kWh',
+        losses: 'Losses, kWh',
+        lossesPercent: 'Losses, %',
+        plotsFed: 'Plots fed',
+        source: 'Source',
+        rowKind: 'Row',
+        number: 'Plot or node',
+        serviceFrom: 'Service from',
+        serviceTo: 'Service to',
+        month: 'Billing month',
+        kwh: 'kWh',
+        rate: 'Price per kWh',
+        amount: 'Amount',
+        runStatus: 'Run status',
+        outcome: 'Outcome',
+        split: 'Split',
+        runAmount: 'Booked by the run',
+        plots: 'Plots',
+        plotDays: 'Plot-days',
+      },
+      valueKinds: {
+        REAL: 'Real',
+        CALCULATED: 'Calculated',
+        UNKNOWN: 'Unknown',
+      },
+      sources: {
+        CONSUMPTION: 'Consumption',
+        LOSSES: 'Losses',
+        COMMON_CONSUMER: 'Common consumers',
+      },
+      rowKinds: {
+        REGULAR: 'Charge',
+        REVERSAL: 'Reversal',
+        ADJUSTMENT: 'Adjustment',
+        RUN: 'Run',
+      },
+      runStatuses: {
+        BOOKED: 'Booked',
+        REVERSED: 'Reversed',
+      },
+      outcomes: {
+        CHARGED: 'Charged',
+        NEGATIVE: 'Negative losses',
+        UNKNOWN: 'Unknown value',
+        SKIPPED_ABOVE: 'Skipped',
+        NOT_CHARGED: 'Not charged',
+        NO_PLOTS: 'No plots',
+      },
+      splits: {
+        CONNECTED_PLOTS: 'Among connected plots',
+        EQUAL_PER_PLOT: 'Equally per plot',
+        SERVICE_USERS: 'Among service users',
+        NOT_CHARGED: 'Not charged',
       },
     },
     'land-tax': {

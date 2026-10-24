@@ -41,4 +41,6 @@ Out: official tax form, PDF, payment reports, scheduled reports, operator-shared
 - Slice 4: the 'Tests' task was delivered inside the definitions task (PlotBalancesReportTests, DebtorsReportTests, LedgerDebtsAsOfTests, PlotReportFacadesTests, MemberContactsTests); marked done on that evidence.
 - Slice 4 · ac306f8 · slice verify green (backend reports+plots+members+ledger+Modularity, typecheck, lint, vitest 22, shared 130) · review: PASS round 1
 - Slice 5: new column type DECIMAL added to the contract (rates and sotkas have 4 decimals; QUANTITY is 3). Reason column shown on every correction row, not only recalculations. 'Tests' task delivered inside the definitions/facade tasks.
-- Slice 5 · (hash below) · slice verify green (backend reports+tariffs+ledger+Modularity, typecheck, lint, vitest 22, shared 130) · review: running (round 1)
+- Slice 5 · e0b1a38 · slice verify green (backend reports+tariffs+ledger+Modularity, typecheck, lint, vitest 22, shared 130) · review: PASS round 1
+- Slice 6: contract notes LOSSES_FIXED_PERCENT / LOSSES_PROPORTIONAL replace LOSSES_MODE; new cell reason SEVERAL_RATES; Quantity.toDecimal() added (signed display, same rounding); row cap stays per sheet; members fed omitted (plots fed only). 'Tests' task delivered inside the definition task. Open point for review: TreeFigures losses percent uses its own RoundingMode in meters (ADR 0014 / one-rounding rule).
+- Slice 6 · (hash below) · slice verify green (backend reports+meters+ledger+Modularity, typecheck, lint, vitest 23, shared 130) · review: running (round 1)

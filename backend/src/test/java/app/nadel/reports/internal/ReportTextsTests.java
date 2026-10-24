@@ -8,12 +8,21 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import app.nadel.ledger.ChargedRowKind;
+import app.nadel.ledger.ChargedSource;
+import app.nadel.ledger.CommonConsumerRunLineOutcome;
 import app.nadel.ledger.CorrectionCause;
 import app.nadel.ledger.CorrectionKind;
 import app.nadel.ledger.CorrectionSource;
 import app.nadel.ledger.LedgerReadModel;
+import app.nadel.ledger.LossesRunNodeOutcome;
 import app.nadel.ledger.MonthStatus;
+import app.nadel.ledger.RunStatus;
 import app.nadel.members.MemberDirectory;
+import app.nadel.meters.MeterKind;
+import app.nadel.meters.MeterReports;
+import app.nadel.meters.MeterTreeReport;
+import app.nadel.meters.MeterValueKind;
 import app.nadel.money.Money;
 import app.nadel.money.Rate;
 import app.nadel.plots.PlotCatalog;
@@ -22,7 +31,9 @@ import app.nadel.plots.PlotOwners;
 import app.nadel.plots.PlotStatuses;
 import app.nadel.reports.internal.ReportResult.Column;
 import app.nadel.reports.internal.ReportResult.Sheet;
+import app.nadel.settings.CommonConsumerSplit;
 import app.nadel.settings.CooperativeSettings;
+import app.nadel.settings.LossesMode;
 import app.nadel.tariffs.Basis;
 import app.nadel.tariffs.ChargeTypeCatalog.ChargeTypeFacts;
 import app.nadel.tariffs.ExpectedAmounts;
@@ -124,6 +135,34 @@ class ReportTextsTests {
         for (CorrectionCause cause : CorrectionCause.values()) {
             keys.add("recalculation.causeKind." + cause.name());
         }
+        // the electricity report's code columns and per-source totals (a run on empty facades has no totals)
+        String electricity = "reports.electricity-tree.";
+        for (MeterKind kind : MeterKind.values()) {
+            keys.add("reports.filters.options.meterKinds." + kind.name());
+        }
+        for (MeterValueKind kind : MeterValueKind.values()) {
+            keys.add(electricity + "valueKinds." + kind.name());
+        }
+        for (ChargedSource source : ChargedSource.values()) {
+            keys.add(electricity + "sources." + source.name());
+            keys.add("reports.totals." + source.name());
+        }
+        for (ChargedRowKind kind : ChargedRowKind.values()) {
+            keys.add(electricity + "rowKinds." + kind.name());
+        }
+        keys.add(electricity + "rowKinds." + ElectricityTreeReport.RUN);
+        for (RunStatus status : RunStatus.values()) {
+            keys.add(electricity + "runStatuses." + status.name());
+        }
+        for (LossesRunNodeOutcome outcome : LossesRunNodeOutcome.values()) {
+            keys.add(electricity + "outcomes." + outcome.name());
+        }
+        for (CommonConsumerRunLineOutcome outcome : CommonConsumerRunLineOutcome.values()) {
+            keys.add(electricity + "outcomes." + outcome.name());
+        }
+        for (CommonConsumerSplit split : CommonConsumerSplit.values()) {
+            keys.add(electricity + "splits." + split.name());
+        }
         for (Run run : runs()) {
             ReportResult result = run.definition().load(run.filters(), CONTEXT);
             String code = run.definition().code().getValue();
@@ -157,7 +196,7 @@ class ReportTextsTests {
     /**
      * Every definition on facades that return nothing, with filters that make it say all its notes: plot balances for
      * a past day with one of two charge types and every status chosen; land tax with one plot charged nothing of its
-     * expected 210.00.
+     * expected 210.00; the electricity tree once in each losses mode.
      */
     private static List<Run> runs() {
         ReportDefinition chargesByMonth = new ChargesByMonthReport(mock(LedgerReadModel.class),
@@ -175,11 +214,26 @@ class ReportTextsTests {
         ReportDefinition landTax = landTaxWithAMismatch();
         ReportDefinition corrections = new CorrectionsReport(mock(LedgerReadModel.class), mock(PlotCatalog.class),
                 mock(MemberDirectory.class));
-        return List.of(new Run(chargesByMonth, ReportFilters.parse(chargesByMonth.filters(), RawFilters.NONE, CONTEXT)),
+        ReportDefinition fixedLosses = electricityTree(LossesMode.FIXED_PERCENT);
+        ReportDefinition proportionalLosses = electricityTree(LossesMode.PROPORTIONAL);
+        return List.of(new Run(fixedLosses, ReportFilters.parse(fixedLosses.filters(), RawFilters.NONE, CONTEXT)),
+                new Run(proportionalLosses, ReportFilters.parse(proportionalLosses.filters(), RawFilters.NONE,
+                        CONTEXT)),
+                new Run(chargesByMonth, ReportFilters.parse(chargesByMonth.filters(), RawFilters.NONE, CONTEXT)),
                 new Run(plotBalances, ReportFilters.parse(plotBalances.filters(), pastWithOneType, CONTEXT)),
                 new Run(debtors, ReportFilters.parse(debtors.filters(), pastWithOneType, CONTEXT)),
                 new Run(landTax, ReportFilters.parse(landTax.filters(), RawFilters.NONE, CONTEXT)),
                 new Run(corrections, ReportFilters.parse(corrections.filters(), RawFilters.NONE, CONTEXT)));
+    }
+
+    private static ReportDefinition electricityTree(LossesMode mode) {
+        MeterReports meters = mock(MeterReports.class);
+        when(meters.tree(any(), any())).thenAnswer(call -> new MeterTreeReport(call.getArgument(0),
+                call.getArgument(1), List.of()));
+        CooperativeSettings settings = mock(CooperativeSettings.class);
+        when(settings.lossesMode()).thenReturn(mode);
+        when(settings.lossesPercent()).thenReturn(new BigDecimal("5.00"));
+        return new ElectricityTreeReport(meters, mock(LedgerReadModel.class), mock(PlotCatalog.class), settings);
     }
 
     private static ReportDefinition landTaxWithAMismatch() {

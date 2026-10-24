@@ -208,9 +208,9 @@ export const getGetReportUrl = (code: 'charges-by-month' | 'plot-balances' | 'de
  * A malformed parameter (a wrong format, a number out of range) is 400 `VALIDATION_FAILED`, an unknown enum
  * value 400 `MALFORMED_REQUEST`. Filters that do not fit the report are 400 `REPORT_FILTER_INVALID` with
  * `errors[{field, code}]`, where `field` is the parameter: `REQUIRED` (a required filter without a default is
- * missing), `INVALID` (`toMonth` before `fromMonth`, `to` before `from`), `NOT_FOUND` (`chargeTypeIds[i]` is not a
- * charge type of the cooperative). A sheet of more than 20 000 rows is 422 `REPORT_TOO_LARGE`: nothing is
- * returned and nothing is written to the audit log.
+ * missing), `INVALID` (`toMonth` before `fromMonth`, `to` before `from`, a range of days longer than one year on
+ * `to`), `NOT_FOUND` (`chargeTypeIds[i]` is not a charge type of the cooperative). A sheet of more than 20 000 rows
+ * is 422 `REPORT_TOO_LARGE`: nothing is returned and nothing is written to the audit log.
  *
  * A cell holds a string formatted by its column type (see `ReportColumnType`): money with two decimals
  * (`"1250.50"`), kWh and m³ with three (`"152.400"`), ISO dates, `YYYY-MM` months and codes. A value that is not

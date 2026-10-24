@@ -16,7 +16,8 @@ import org.jspecify.annotations.Nullable;
  * tenant-aware transaction manager has bound to the cooperative, so the rows of other cooperatives are invisible (RLS).
  * The answers carry ids, codes and {@code Money} only, never personal data; the caller orders and names the charge
  * types and plots through their own modules. Aggregates are bounded by their filters (months times charge types, or the
- * plots asked for), so no row limit applies to them; {@link #corrections}, a list of single rows, takes a limit.
+ * plots asked for), so no row limit applies to them; {@link #corrections} and {@link #electricityCharged}, lists of
+ * single rows, take a limit; the runs of a range are bounded by the runs times the nodes or consumers of the tree.
  */
 public interface LedgerReadModel {
 
@@ -106,4 +107,51 @@ public interface LedgerReadModel {
      *                       query
      */
     Map<UUID, Money> chargedInYear(String chargeTypeCode, int year, Collection<UUID> plotIds);
+
+    /**
+     * The electricity charges whose service period overlaps a range of days (the "Charged" sheet of the electricity
+     * report, feature 013 §3.4), one {@link ChargedRow} per ledger row: the charges of source {@code CONSUMPTION} and
+     * {@code LOSSES} of the charge type {@code ELECTRICITY} (resolved by code through {@code tariffs.ChargeTypeCatalog})
+     * and of source {@code COMMON_CONSUMER} (their type is the common consumers one), and every reversal and adjustment
+     * of those charges, each its own row with the service period of the charge it corrects, whatever month it was
+     * booked in. Water charges, tariff charges and opening balances are never listed. A run's charges are listed like
+     * any other: a reversed run comes with its charges and their reversals, which add up to zero.
+     * <p>
+     * The amounts of the rows of a plot add up to the effective electricity charges of the range on its account (money
+     * rules 5.4), and their {@link ChargedRow#quantity quantities} to the effective kWh. Rows come ordered by the
+     * charge's service period, plot, source, booking time and id, each regular charge followed by its corrections in
+     * booking order. At most
+     * {@code limit} rows are returned: a caller with a row cap passes the cap plus one.
+     *
+     * @param from  the first day of the range
+     * @param to    the last day of the range; not before {@code from}
+     * @param limit the most rows returned; at least 1
+     * @throws IllegalArgumentException when {@code to} is before {@code from} or {@code limit} is below 1
+     */
+    List<ChargedRow> electricityCharged(LocalDate from, LocalDate to, int limit);
+
+    /**
+     * The nodes of every proportional losses run whose range overlaps a range of days (money rules 6.6), booked or
+     * reversed, as they were booked: one {@link LossesRunNodeRow} per node of a run. A reversed run is listed with
+     * {@link RunStatus#REVERSED}, consistently with {@link #electricityCharged}, which lists its charges together with
+     * their reversals; the caller shows or leaves it out. Rows come ordered by the run's range, booking time and id,
+     * then by the node's position. Bounded by the runs of the range times the nodes of the tree, so no limit applies.
+     *
+     * @param from the first day of the range
+     * @param to   the last day of the range; not before {@code from}
+     * @throws IllegalArgumentException when {@code to} is before {@code from}
+     */
+    List<LossesRunNodeRow> lossesRunsInRange(LocalDate from, LocalDate to);
+
+    /**
+     * The consumers of every common consumers run whose range overlaps a range of days (money rules 6.7), booked or
+     * reversed, as they were booked: one {@link CommonConsumerRunLineRow} per consumer of a run. Reversed runs are
+     * listed with {@link RunStatus#REVERSED}, as by {@link #lossesRunsInRange}. Rows come ordered by the run's range,
+     * booking time and id, then by the consumer's position. No limit applies.
+     *
+     * @param from the first day of the range
+     * @param to   the last day of the range; not before {@code from}
+     * @throws IllegalArgumentException when {@code to} is before {@code from}
+     */
+    List<CommonConsumerRunLineRow> commonConsumerRunsInRange(LocalDate from, LocalDate to);
 }

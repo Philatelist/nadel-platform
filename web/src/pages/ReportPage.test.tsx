@@ -41,6 +41,24 @@ const balancesInfo = {
   ],
 };
 
+const electricityTreeInfo = {
+  code: 'electricity-tree',
+  personalData: false,
+  filters: [
+    {
+      key: 'period',
+      type: 'DATE_RANGE',
+      params: ['from', 'to'],
+      required: true,
+      defaults: [
+        { param: 'from', value: '2026-09-01' },
+        { param: 'to', value: '2026-09-30' },
+      ],
+      basis: 'SERVICE_DAYS',
+    },
+  ],
+};
+
 function ok(data: unknown) {
   return { data, error: null, isPending: false, isError: false, refetch: vi.fn() };
 }
@@ -246,6 +264,126 @@ describe('ReportPage', () => {
     );
     renderReport('/reports/plot-balances');
     expect(screen.getByText(/A\. One/).closest('td')).toHaveClass('whitespace-pre-line');
+  });
+
+  it('shows the codes of the electricity report as texts, indents the tree and names the totals per source', () => {
+    reports = [electricityTreeInfo];
+    report = ok(
+      preview({
+        code: 'electricity-tree',
+        headerNotes: [{ code: 'LOSSES_FIXED_PERCENT', params: { percent: '5.00' } }],
+        sheets: [
+          sheet({
+            key: 'consumption',
+            columns: [
+              { key: 'name', type: 'TEXT' },
+              { key: 'nodeKind', type: 'CODE' },
+              { key: 'startKind', type: 'CODE' },
+              { key: 'consumption', type: 'QUANTITY' },
+            ],
+            rows: [
+              {
+                kind: 'DETAIL',
+                level: 0,
+                cells: [{ value: 'ТП-1' }, { value: 'SUBSTATION' }, { value: 'REAL' }, { value: '2300.000' }],
+              },
+              {
+                kind: 'DETAIL',
+                level: 1,
+                cells: [
+                  { value: 'Квартал Б' },
+                  { value: 'QUARTER' },
+                  { value: 'UNKNOWN' },
+                  { reason: 'DERIVED_FROM_UNKNOWN' },
+                ],
+              },
+            ],
+            totals: [],
+          }),
+          sheet({
+            key: 'charged',
+            columns: [
+              { key: 'source', type: 'CODE' },
+              { key: 'rowKind', type: 'CODE' },
+              { key: 'runStatus', type: 'CODE' },
+              { key: 'outcome', type: 'CODE' },
+              { key: 'split', type: 'CODE' },
+              { key: 'rate', type: 'DECIMAL' },
+              { key: 'amount', type: 'MONEY' },
+            ],
+            rows: [
+              {
+                kind: 'DETAIL',
+                level: 0,
+                cells: [
+                  { value: 'COMMON_CONSUMER' },
+                  { value: 'RUN' },
+                  { value: 'REVERSED' },
+                  { value: 'NOT_CHARGED' },
+                  { value: 'EQUAL_PER_PLOT' },
+                  {},
+                  {},
+                ],
+              },
+              {
+                kind: 'DETAIL',
+                level: 0,
+                cells: [
+                  { value: 'LOSSES' },
+                  { value: 'ADJUSTMENT' },
+                  {},
+                  { value: 'SKIPPED_ABOVE' },
+                  {},
+                  { reason: 'SEVERAL_RATES' },
+                  { value: '-17.28' },
+                ],
+              },
+            ],
+            totals: [{ key: 'CONSUMPTION', cells: [{}, {}, {}, {}, {}, {}, { value: '280.80' }] }],
+          }),
+        ],
+      }),
+    );
+    renderReport('/reports/electricity-tree');
+    const tree = screen.getByRole('table', { name: 'Consumption' });
+    const rows = within(tree).getAllByRole('row');
+    expect(
+      within(rows[1]!)
+        .getAllByRole('cell')
+        .map((cell) => cell.textContent),
+    ).toEqual(['ТП-1', 'Substation', 'Real', '2,300']);
+    const quarter = within(rows[2]!).getAllByRole('cell');
+    expect(quarter.map((cell) => cell.textContent)).toEqual(['Квартал Б', 'Quarter', 'Unknown', '—']);
+    expect(quarter[0]?.style.paddingLeft).toBe('2rem');
+    expect(within(tree).getByTitle('Worked out from a value that is not known')).toBeInTheDocument();
+    const charged = screen.getByRole('table', { name: 'Charged' });
+    for (const text of [
+      'Common consumers',
+      'Run',
+      'Reversed',
+      'Not charged',
+      'Equally per plot',
+      'Losses',
+      'Adjustment',
+      'Skipped',
+      'Consumption of plots',
+    ]) {
+      expect(within(charged).getByText(text)).toBeInTheDocument();
+    }
+    for (const code of [
+      'COMMON_CONSUMER',
+      'RUN',
+      'REVERSED',
+      'EQUAL_PER_PLOT',
+      'ADJUSTMENT',
+      'SKIPPED_ABOVE',
+    ]) {
+      expect(within(charged).queryByText(code)).not.toBeInTheDocument();
+    }
+    expect(
+      within(charged).getByTitle('Priced at more than one rate; the amount is exact'),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/charged as a fixed 5.00 % of each interval/)).toBeInTheDocument();
   });
 
   it('renders the no-access page for a code the list does not contain', () => {

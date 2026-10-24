@@ -97,14 +97,22 @@ public final class Quantity implements Comparable<Quantity> {
     }
 
     /**
-     * The value for display: rounded HALF_UP to three decimals. This is the one place in the module that rounds; it
-     * is for showing a calculated value, never for calculating with it.
+     * The value for display with its sign: rounded HALF_UP to three decimals (scale 3). This is the one place in the
+     * module that rounds a quantity; it is for showing a value, never for calculating with it. A difference such as
+     * the losses of a node or the kWh of a reversal can be negative, which {@link #toMeterValue()} refuses; a report
+     * shows it with this form (feature 013).
+     */
+    public BigDecimal toDecimal() {
+        return new BigDecimal(numerator).divide(new BigDecimal(denominator), MeterValue.SCALE, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * The value for display as a meter value: {@link #toDecimal()}, which must not be negative.
      *
      * @throws IllegalStateException when the quantity is negative (only a difference can be, and no reading is)
      */
     public MeterValue toMeterValue() {
-        BigDecimal rounded = new BigDecimal(numerator).divide(new BigDecimal(denominator), MeterValue.SCALE,
-                RoundingMode.HALF_UP);
+        BigDecimal rounded = toDecimal();
         if (rounded.signum() < 0) {
             throw new IllegalStateException("A negative quantity is not a meter value");
         }

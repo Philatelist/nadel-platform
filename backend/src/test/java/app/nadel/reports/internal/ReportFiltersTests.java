@@ -14,6 +14,7 @@ import java.util.Map;
 import java.util.UUID;
 import nadel.contract.model.ReportCorrectionKind;
 import nadel.contract.model.ReportFilter;
+import nadel.contract.model.ReportFilterType;
 import nadel.contract.model.ReportFilterValue;
 import nadel.contract.model.ReportPeriodBasis;
 import org.junit.jupiter.api.Test;
@@ -166,6 +167,46 @@ class ReportFiltersTests {
         assertThat(values(reversals)).containsExactly("correctionKinds=REVERSAL", "correctionKinds=ADJUSTMENT");
         assertThat(kinds.getFirst().describe(reversals, ReportTexts.of(ReportLanguage.UK), id -> ""))
                 .isEqualTo("Види виправлень: Сторно, Коригування");
+    }
+
+    @Test
+    void aRangeOfDaysIsThePreviousMonthByDefaultAndAtMostOneYearLong() {
+        List<ReportFilterDefinition> days = List.of(new DateRangeFilter(ReportPeriodBasis.SERVICE_DAYS));
+
+        ReportFilters previous = ReportFilters.parse(days, RawFilters.NONE, CONTEXT);
+        assertThat(previous.from()).isEqualTo(LocalDate.of(2026, 9, 1));
+        assertThat(previous.to()).isEqualTo(LocalDate.of(2026, 9, 30));
+        assertThat(previous.period()).isEqualTo(new ReportFilters.Period(LocalDate.of(2026, 9, 1),
+                LocalDate.of(2026, 9, 30)));
+        assertThat(values(previous)).containsExactly("from=2026-09-01", "to=2026-09-30");
+        ReportFilter info = days.getFirst().info(TODAY);
+        assertThat(info.getType()).isEqualTo(ReportFilterType.DATE_RANGE);
+        assertThat(info.getBasis()).isEqualTo(ReportPeriodBasis.SERVICE_DAYS);
+        assertThat(info.getDefaults()).extracting(ReportFilterValue::getValue).containsExactly("2026-09-01",
+                "2026-09-30");
+        assertThat(days.getFirst().describe(previous, ReportTexts.of(ReportLanguage.UK), id -> ""))
+                .isEqualTo("Дні послуг: 01.09.2026 – 30.09.2026");
+
+        // one day, a whole year and a range given on one side only are fine
+        assertThat(ReportFilters.parse(days, days("2025-10-15", "2025-10-15"), CONTEXT).period())
+                .isEqualTo(new ReportFilters.Period(LocalDate.of(2025, 10, 15), LocalDate.of(2025, 10, 15)));
+        assertThat(ReportFilters.parse(days, days("2025-01-01", "2025-12-31"), CONTEXT).to())
+                .isEqualTo(LocalDate.of(2025, 12, 31));
+        assertThat(ReportFilters.parse(days, days("2026-09-15", null), CONTEXT).to())
+                .isEqualTo(LocalDate.of(2026, 9, 30));
+        // backwards or longer than a year
+        assertThat(problems(days("2025-10-31", "2025-10-01"), days)).containsExactly(new FieldProblem("to",
+                "INVALID"));
+        assertThat(problems(days("2025-01-01", "2026-01-01"), days)).containsExactly(new FieldProblem("to",
+                "INVALID"));
+        assertThatThrownBy(ReportFilters.parse(CHARGES_BY_MONTH, RawFilters.NONE, CONTEXT)::from)
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    private static RawFilters days(String from, String to) {
+        return new RawFilters(null, null, from == null ? null : LocalDate.parse(from),
+                to == null ? null : LocalDate.parse(to), null, null, null, null, null, null, null, null, null, null,
+                null);
     }
 
     private static RawFilters year(int year) {

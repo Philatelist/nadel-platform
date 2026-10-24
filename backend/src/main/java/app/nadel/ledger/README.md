@@ -48,7 +48,7 @@ cooperative that is not reversed, and a reversal never target an adjustment or a
 |---|---|
 | `ChargesBooked(tenantId, plotIds)` | Published inside the transaction of every booking or reversal (a reversal, an opening balance, the month run, a retry and the charges of readings, at most 500 plots per event; every later booking path must publish it too). `PlotStatusRefresher` recomputes the debt of those plots from the committed ledger. Ids only, no personal data; the set is never empty |
 | `OpeningBalanceImport` (with `Row`, `Item`, `Plan`, `Problem`, `Action`) | The "Opening balances" sheet of the Excel import (slice 8), `plan`/`lock`/`apply` like `meters.MeterImport`; implemented by `internal.OpeningBalanceImportService`, see Opening balances from the import |
-| `LedgerReadModel` (with `MonthTypeTotals`, `MonthGrouping`, `MonthStatus`, `PlotDebts`, `CorrectionRow`, `CorrectionKind`, `CorrectionSource`, `CorrectionCause`) | The read facade of the reports (feature 013), implemented by `internal.LedgerReportQueries`; see The read model of the reports |
+| `LedgerReadModel` (with `MonthTypeTotals`, `MonthGrouping`, `MonthStatus`, `PlotDebts`, `CorrectionRow`, `CorrectionKind`, `CorrectionSource`, `CorrectionCause`, `ChargedRow`, `ChargedRowKind`, `ChargedSource`, `ChargedPart`, `LossesRunNodeRow`, `LossesRunNodeOutcome`, `CommonConsumerRunLineRow`, `CommonConsumerRunLineOutcome`, `RunStatus`) | The read facade of the reports (feature 013), implemented by `internal.LedgerReportQueries`; see The read model of the reports |
 
 Everything else is in `internal`.
 
@@ -307,7 +307,8 @@ reading the ledger tables. Rules for every method:
   personal data**, no names. The caller orders and names charge types (`tariffs.ChargeTypeCatalog`) and plots
   (`plots.PlotCatalog`).
 - Aggregates are bounded by their filters (months x charge types, or the plots asked for), so no row limit applies to
-  them; `corrections`, a list of single rows, takes a `limit` (the caller passes its cap plus one).
+  them; `corrections` and `electricityCharged`, lists of single rows, take a `limit` (the caller passes its cap plus
+  one); the runs of a range are bounded by the runs times the nodes or consumers of the tree.
 
 Methods:
 
@@ -368,6 +369,38 @@ Methods:
   (`charge_plot_type_idx`). Test: `LedgerChargedInYearTests` (the year boundary, a late-booked December charge, an
   adjustment and a reversal, an opening balance, another type and an unknown code, another cooperative, the caller's
   transaction).
+- `electricityCharged(from, to, limit)` (electricity report, "Charged" sheet, 013 §3.4): one `ChargedRow` per ledger
+  row (`REGULAR`, `REVERSAL`, `ADJUSTMENT`; never an opening) of the `REGULAR` charges of source `CONSUMPTION` or
+  `LOSSES` of the type `ELECTRICITY` (resolved by code through `tariffs.ChargeTypeCatalog`) and of source
+  `COMMON_CONSUMER` (type `COMMON_CONSUMERS`) whose service period overlaps the days `from`..`to`, each correction its
+  own row with the original charge's service period, source (`ChargedSource`), meter and run, whatever month it was
+  booked in. Water, tariff charges and opening balances are left out. **One row per charge, never per part**: a
+  charge's parts are added exactly and rounded once (money rules 6.5), so an amount per part would round twice; the row
+  carries its `parts` (`ChargedPart`: tariff version, days, exact quantity, rate, losses node) and `rate()` is the
+  price per kWh when they share one, `null` when the rate changed within the charge's days. `quantity` is the exact
+  kWh the row adds: a regular charge its parts' sum; a reversal minus the parts of the state it cancels (its `parts`
+  are those, negated); an adjustment its own parts (the charge as recalculated, written by the recalculation) minus
+  those of the state before it (the previous adjustment of the charge, else the charge), so a charge's rows add up to
+  its effective kWh as to its effective amount. Runs are listed like any charge: a reversed run brings its charges and
+  their reversals (they add up to zero). Rows by service period, plot, source, booking time and id, each charge
+  followed by its corrections in booking order; at most `limit` (>= 1) rows; `to` before `from` or `limit` below 1 is
+  an `IllegalArgumentException`. Two queries: the rows (correlated lookup of the previous adjustment,
+  `charge_adjusts_idx`), then the parts, 500 charges per `IN` list. Test: `LedgerElectricityChargedTests` (an interval
+  with fixed-percentage losses, two later-month adjustments of the same charge, a charge with two rates reversed by
+  hand, a common consumer share, charges outside the range and of other types, reconciliation with the plot account,
+  the limit, another cooperative, invalid arguments, the caller's transaction).
+- `lossesRunsInRange(from, to)` and `commonConsumerRunsInRange(from, to)` (money rules 6.6, 6.7): the nodes of every
+  losses run (`LossesRunNodeRow`) and the consumers of every common consumer run (`CommonConsumerRunLineRow`) whose
+  range overlaps `from`..`to`, as booked (`losses_run_node`, `common_consumer_run_line`: outcome, consumption, children,
+  losses and percent, or split, consumption and plot-days, amount; quantities exact from the stored three decimals),
+  with the run's range, status, reversal time, billing month and total, `plotsShared` (the shares stored with the
+  node or line) and `plotsCharged` (the distinct plots with a `REGULAR` charge of the run for the node, by a part's
+  `node_meter_id`, or for the consumer, by its calculation's `consumerMeterId`; a plot a recalculation added to a run
+  of a closed month included). **Reversed runs are included** with `RunStatus.REVERSED`, consistently with
+  `electricityCharged`, which lists their charges with their reversals; the caller shows or leaves them out. Rows by
+  the run's range, booking time and id, then position. Test: `LedgerElectricityRunsTests` (a proportional losses run
+  booked, reversed and booked again, a common consumer run, their charges in `electricityCharged`, another
+  cooperative, invalid ranges, the caller's transaction).
 
 ## Billing months (tag `billing`, slice 2)
 

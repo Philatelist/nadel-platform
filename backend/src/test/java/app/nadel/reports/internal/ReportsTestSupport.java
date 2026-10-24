@@ -105,16 +105,27 @@ abstract class ReportsTestSupport extends IntegrationTest {
         }
         UUID id = tenant;
         asLedgerOwner(sql -> {
+            sql.update("delete from meter_value_use where tenant_id = ?", id);
+            sql.update("delete from recalculation_line where tenant_id = ?", id);
+            sql.update("delete from charge_part where tenant_id = ?", id);
             sql.update("delete from charge where tenant_id = ? and adjusts_charge_id is not null", id);
             sql.update("delete from charge where tenant_id = ? and reverses_charge_id is not null", id);
             sql.update("delete from charge where tenant_id = ?", id);
             sql.update("delete from recalculation where tenant_id = ?", id);
+            sql.update("delete from losses_run_node where tenant_id = ?", id);
             sql.update("delete from losses_run where tenant_id = ?", id);
+            sql.update("delete from common_consumer_run_line where tenant_id = ?", id);
+            sql.update("delete from common_consumer_run where tenant_id = ?", id);
+            sql.update("delete from not_charged_item where tenant_id = ?", id);
             sql.update("delete from billing_month where tenant_id = ?", id);
         });
-        for (String table : List.of("audit_entry", "ownership", "plot_status", "tariff_scope_plot", "tariff_version",
-                "tariff", "plot", "member_role", "role_permission", "role", "member", "charge_type",
-                "cooperative_settings")) {
+        // a replacement points at the meter it replaced
+        ownerJdbc().update("delete from meter_reading where tenant_id = ?", id);
+        ownerJdbc().update("delete from meter_parent where tenant_id = ?", id);
+        ownerJdbc().update("delete from meter where tenant_id = ? and replaces_meter_id is not null", id);
+        for (String table : List.of("common_consumer_user", "common_consumer_billing", "meter", "audit_entry",
+                "ownership", "plot_status", "tariff_scope_plot", "tariff_version", "tariff", "plot", "member_role",
+                "role_permission", "role", "member", "charge_type", "cooperative_settings")) {
             ownerJdbc().update("delete from " + table + " where tenant_id = ?", id);
         }
         ownerJdbc().update("delete from tenant where id = ?", id);

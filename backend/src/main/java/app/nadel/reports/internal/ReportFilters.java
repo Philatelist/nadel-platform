@@ -34,6 +34,8 @@ final class ReportFilters {
 
     private @Nullable YearMonth fromMonth;
     private @Nullable YearMonth toMonth;
+    private @Nullable LocalDate from;
+    private @Nullable LocalDate to;
     private List<UUID> chargeTypeIds = List.of();
     private @Nullable String street;
     private @Nullable LocalDate asOf;
@@ -73,6 +75,13 @@ final class ReportFilters {
         this.toMonth = Objects.requireNonNull(to, "to");
         values.add(new ReportFilterValue(ReportFilterParam.FROM_MONTH, from.toString()));
         values.add(new ReportFilterValue(ReportFilterParam.TO_MONTH, to.toString()));
+    }
+
+    void days(LocalDate from, LocalDate to) {
+        this.from = Objects.requireNonNull(from, "from");
+        this.to = Objects.requireNonNull(to, "to");
+        values.add(new ReportFilterValue(ReportFilterParam.FROM, from.toString()));
+        values.add(new ReportFilterValue(ReportFilterParam.TO, to.toString()));
     }
 
     void chargeTypeIds(List<UUID> ids) {
@@ -129,6 +138,16 @@ final class ReportFilters {
         return required(toMonth, "month range");
     }
 
+    /** The first day of the range; only for a report with a range of days. */
+    LocalDate from() {
+        return required(from, "range of days");
+    }
+
+    /** The last day of the range; only for a report with a range of days. */
+    LocalDate to() {
+        return required(to, "range of days");
+    }
+
     /** The chosen charge types in the order given; empty means every type. */
     List<UUID> chargeTypeIds() {
         return chargeTypeIds;
@@ -169,8 +188,14 @@ final class ReportFilters {
         return correctionKinds;
     }
 
-    /** The days the report covers: a month range runs from the first day of its first to the last of its last month. */
+    /**
+     * The days the report covers: a range of days as given; a month range runs from the first day of its first to the
+     * last of its last month.
+     */
     Period period() {
+        if (from != null && to != null) {
+            return new Period(from, to);
+        }
         return new Period(fromMonth().atDay(1), toMonth().atEndOfMonth());
     }
 

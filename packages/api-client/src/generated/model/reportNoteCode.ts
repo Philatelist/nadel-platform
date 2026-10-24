@@ -11,7 +11,7 @@
  */
 
 /**
- * A sentence of the report header. `SERVICE_PERIOD_SHEET`: the second sheet groups the charges by the month of the service, so an adjustment booked later shows under the month it is for. `PAST_DATE_STATUS`: for a past day the status is worked out as of that day with today's thresholds. `STATUS_ALL_CHARGE_TYPES`: with a charge type filter, today's status still counts every charge type. `OLDEST_UNPAID_IS_OLDEST_CHARGE`: until payments exist, the oldest unpaid charge is the oldest charge with a debt. `LOSSES_MODE`: the cooperative's losses mode and percentage now (params `mode`, `percent`); a run booked under another mode shows what it booked. `RECALCULATION_SUGGESTED`: some rows differ from the expected amount and a recalculation may be due (param `count`). `OPEN_NOT_CHARGED`: open "not charged" items exist for the listed meters (param `count`).
+ * A sentence of the report header. `SERVICE_PERIOD_SHEET`: the second sheet groups the charges by the month of the service, so an adjustment booked later shows under the month it is for. `PAST_DATE_STATUS`: for a past day the status is worked out as of that day with today's thresholds. `STATUS_ALL_CHARGE_TYPES`: with a charge type filter, today's status still counts every charge type. `OLDEST_UNPAID_IS_OLDEST_CHARGE`: until payments exist, the oldest unpaid charge is the oldest charge with a debt. `LOSSES_FIXED_PERCENT`: the cooperative charges losses now as a fixed percentage of each interval (param `percent`, two decimals); `LOSSES_PROPORTIONAL`: it charges losses now by proportional runs; with either, a charge or a run booked under another mode shows what it booked. `RECALCULATION_SUGGESTED`: some rows differ from the expected amount and a recalculation may be due (param `count`). `OPEN_NOT_CHARGED`: open "not charged" items exist for the listed meters (param `count`).
  */
 export type ReportNoteCode = typeof ReportNoteCode[keyof typeof ReportNoteCode];
 
@@ -21,7 +21,8 @@ export const ReportNoteCode = {
   PAST_DATE_STATUS: 'PAST_DATE_STATUS',
   STATUS_ALL_CHARGE_TYPES: 'STATUS_ALL_CHARGE_TYPES',
   OLDEST_UNPAID_IS_OLDEST_CHARGE: 'OLDEST_UNPAID_IS_OLDEST_CHARGE',
-  LOSSES_MODE: 'LOSSES_MODE',
+  LOSSES_FIXED_PERCENT: 'LOSSES_FIXED_PERCENT',
+  LOSSES_PROPORTIONAL: 'LOSSES_PROPORTIONAL',
   RECALCULATION_SUGGESTED: 'RECALCULATION_SUGGESTED',
   OPEN_NOT_CHARGED: 'OPEN_NOT_CHARGED',
 } as const;

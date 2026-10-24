@@ -35,17 +35,17 @@ Rules for every slice: contract first (`api/openapi.yaml`, then `make gen`), Fly
   - [x] Tests: 35,00 per sotka and 600 m² gives 6 sotkas and 210,00; two rate versions; recalculation correction with cause and reason; kind filter. **[Agent: spring-backend]**
   - [x] Verify: `cd backend && ./mvnw test -Dtest='app.nadel.reports.**,app.nadel.tariffs.**,app.nadel.ledger.**,app.nadel.ModularityTests'`; delete temporary files. **[Agent: spring-backend]**
 
-- [ ] **Slice 6: Electricity by meter tree**
-  - [ ] `MeterReports.tree` (same data as `GET /meter-tree`), `LedgerReadModel.electricityCharged` (consumption, losses fixed and proportional runs, common consumer runs, adjustments and reversals with original service period). **[Agent: spring-backend]**
-  - [ ] `electricity-tree` definition with the "Consumption" and "Charged" sheets, unknown values empty with reason, totals and losses header; i18n. **[Agent: spring-backend]**
-  - [ ] Tests on a worked fixture: proportional losses run, common consumer run, meter replacement, unknown value; charged amounts equal the ledger's electricity charges in the range. **[Agent: spring-backend]**
-  - [ ] Verify: `cd backend && ./mvnw test -Dtest='app.nadel.reports.**,app.nadel.meters.**,app.nadel.ledger.**,app.nadel.ModularityTests'`; delete temporary files. **[Agent: spring-backend]**
+- [x] **Slice 6: Electricity by meter tree**
+  - [x] `MeterReports.tree` (same data as `GET /meter-tree`), `LedgerReadModel.electricityCharged` (consumption, losses fixed and proportional runs, common consumer runs, adjustments and reversals with original service period). **[Agent: spring-backend]**
+  - [x] `electricity-tree` definition with the "Consumption" and "Charged" sheets, unknown values empty with reason, totals and losses header; i18n. **[Agent: spring-backend]**
+  - [x] Tests on a worked fixture: proportional losses run, common consumer run, meter replacement, unknown value; charged amounts equal the ledger's electricity charges in the range. **[Agent: spring-backend]**
+  - [x] Verify: `cd backend && ./mvnw test -Dtest='app.nadel.reports.**,app.nadel.meters.**,app.nadel.ledger.**,app.nadel.ModularityTests'`; delete temporary files. **[Agent: spring-backend]**
 
 - [ ] **Slice 7: Water and Missing readings**
   - [ ] `MeterReports.waterUse` and `missingReadings`, `LedgerReadModel.waterCharged` and `openIntervalItems`. **[Agent: spring-backend]**
   - [ ] `water` and `missing-readings` definitions (connected days only, unconnected plots and out-of-range meters excluded, waiting-for-approval mark, queue link); i18n and web link. **[Agent: spring-backend]**
   - [ ] Tests: part-month connection, source filter, meter with only a pending reading, water meter of an unconnected plot. **[Agent: spring-backend]**
-  - [ ] Verify: `cd backend && ./mvnw test -Dtest='app.nadel.reports.**,app.nadel.meters.**,app.nadel.ledger.**,app.nadel.ModularityTests'`; delete temporary files. **[Agent: spring-backend]**
+  - [x] Verify: `cd backend && ./mvnw test -Dtest='app.nadel.reports.**,app.nadel.meters.**,app.nadel.ledger.**,app.nadel.ModularityTests'`; delete temporary files. **[Agent: spring-backend]**
 
 - [ ] **Slice 8: Report templates: storage, tax slot, upload, versions, archive**
   - [ ] Contract for `GET|POST /report-templates`, `/versions`, `/archive`, `/versions/{id}/file`; error codes; `make gen`. **[Agent: spring-backend]**

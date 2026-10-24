@@ -165,11 +165,11 @@ class LandTaxReportTests extends ReportsTestSupport {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
         send(treasurer, get("/api/v1/reports"))
-                .andExpect(jsonPath("$[3].code").value("land-tax"))
-                .andExpect(jsonPath("$[3].filters[0].key").value("year"))
-                .andExpect(jsonPath("$[3].filters[0].type").value("YEAR"))
-                .andExpect(jsonPath("$[3].filters[0].required").value(true))
-                .andExpect(jsonPath("$[3].filters[0].defaults[0].value").value(Integer.toString(current)));
+                .andExpect(jsonPath("$[4].code").value("land-tax"))
+                .andExpect(jsonPath("$[4].filters[0].key").value("year"))
+                .andExpect(jsonPath("$[4].filters[0].type").value("YEAR"))
+                .andExpect(jsonPath("$[4].filters[0].required").value(true))
+                .andExpect(jsonPath("$[4].filters[0].defaults[0].value").value(Integer.toString(current)));
     }
 
     @Test

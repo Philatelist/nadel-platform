@@ -11,7 +11,7 @@
  */
 
 /**
- * Why a cell has no value. `NO_READING`: there is no counted reading at or around the day, so the meter value is not known. `DERIVED_FROM_UNKNOWN`: the value is worked out from a value that is not known.
+ * Why a cell has no value. `NO_READING`: there is no counted reading at or around the day, so the meter value is not known. `DERIVED_FROM_UNKNOWN`: the value is worked out from a value that is not known. `SEVERAL_RATES`: the days of the charge were priced at more than one rate, so there is no single price per unit (the amount is exact).
  */
 export type ReportCellReason = typeof ReportCellReason[keyof typeof ReportCellReason];
 
@@ -19,4 +19,5 @@ export type ReportCellReason = typeof ReportCellReason[keyof typeof ReportCellRe
 export const ReportCellReason = {
   NO_READING: 'NO_READING',
   DERIVED_FROM_UNKNOWN: 'DERIVED_FROM_UNKNOWN',
+  SEVERAL_RATES: 'SEVERAL_RATES',
 } as const;

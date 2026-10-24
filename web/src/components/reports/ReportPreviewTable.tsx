@@ -27,6 +27,14 @@ function codeLabels(t: Messages, report: string, key: string): Readonly<Record<s
     'corrections/kind': t.reports.filters.options.correctionKinds,
     'corrections/source': t.reports.corrections.sources,
     'corrections/cause': t.recalculation.causeKind,
+    'electricity-tree/nodeKind': t.reports.filters.options.meterKinds,
+    'electricity-tree/startKind': t.reports['electricity-tree'].valueKinds,
+    'electricity-tree/endKind': t.reports['electricity-tree'].valueKinds,
+    'electricity-tree/source': t.reports['electricity-tree'].sources,
+    'electricity-tree/rowKind': t.reports['electricity-tree'].rowKinds,
+    'electricity-tree/runStatus': t.reports['electricity-tree'].runStatuses,
+    'electricity-tree/outcome': t.reports['electricity-tree'].outcomes,
+    'electricity-tree/split': t.reports['electricity-tree'].splits,
     '*/status': t.billing.status,
   };
   return lookup[`${report}/${key}`] ?? lookup[`*/${key}`];

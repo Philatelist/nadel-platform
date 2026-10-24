@@ -15,7 +15,9 @@
  * (the plot meters not read for a while, the locked points of a meter, the electricity tree with the histories of its
  * meters over a range), the event
  * {@link app.nadel.meters.PlotMeterPointsChanged} (the points of a plot meter changed; the ledger charges the intervals),
- * the read API {@link app.nadel.meters.WaterConnections} (the days plots are connected to water, for the ledger)
+ * the read API {@link app.nadel.meters.WaterConnections} (the days plots are connected to water, for the ledger),
+ * the read facade of the reports {@link app.nadel.meters.MeterReports} (the tree of {@code GET /meter-tree} with the
+ * children's sum, the losses and the plots fed, as {@link app.nadel.meters.MeterTreeReport} rows; feature 013)
  * and the import facades {@link app.nadel.meters.MeterImport} with its
  * records (the Meters sheet of the Excel import) and {@link app.nadel.meters.WaterConnectionImport} (the water column of
  * the Plots sheet). The meter register (entity, commands, queries, the endpoints of tag
@@ -24,7 +26,7 @@
  * {@code readings}), replacement with the tree periods it moves, range consumption over a chain of meters and the water
  * connections (entity, commands, queries and the endpoints of tag {@code water}) are internal. It depends on {@code identity}, {@code audit}, {@code problem} and {@code plots} (the public
  * {@code PlotCatalog} and the import records {@code PlotImportRow}, {@code PlotImportPlan}). {@code tariffs},
- * {@code imports} and {@code ledger} depend on it, never the other way round.
+ * {@code imports}, {@code ledger} and {@code reports} depend on it, never the other way round.
  */
 @org.springframework.modulith.ApplicationModule(displayName = "Meters and readings")
 package app.nadel.meters;
