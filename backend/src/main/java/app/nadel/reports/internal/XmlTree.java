@@ -15,7 +15,8 @@ import org.jspecify.annotations.Nullable;
 /**
  * The small pieces of XML the template filler holds in memory (ADR 0015): one element with its subtree (a row of a
  * sheet, the merged ranges), read from the StAX events of {@link TemplateXml} and written with the JDK's StAX writer,
- * namespaces, prefixes and the order of attributes as read. Everything else of a part streams from reader to writer
+ * namespaces, prefixes and the order of attributes as read; every text and attribute value passes
+ * {@link XmlText#clean}. Everything else of a part streams from reader to writer
  * ({@link #start}, {@link #copy}). Building and writing use an explicit stack, never recursion, so a deeply nested or
  * hostile subtree cannot exhaust the stack.
  */
@@ -185,7 +186,7 @@ final class XmlTree {
                 startElement(writer, element);
                 stack.push(element.children.iterator());
             } else {
-                writer.writeCharacters((String) child);
+                writer.writeCharacters(XmlText.clean((String) child));
             }
         }
     }
@@ -287,7 +288,8 @@ final class XmlTree {
 
         private void flush() throws XMLStreamException {
             if (!pending.isEmpty()) {
-                out.writeCharacters(open.isEmpty() ? pending.toString() : text(open.peek(), pending.toString()));
+                String text = open.isEmpty() ? pending.toString() : text(open.peek(), pending.toString());
+                out.writeCharacters(XmlText.clean(text));
                 pending.setLength(0);
             }
         }
@@ -304,9 +306,9 @@ final class XmlTree {
         }
         for (String[] attribute : node.attributes) {
             if (attribute[1].isEmpty()) {
-                writer.writeAttribute(attribute[2], attribute[3]);
+                writer.writeAttribute(attribute[2], XmlText.clean(attribute[3]));
             } else {
-                writer.writeAttribute(attribute[0], attribute[1], attribute[2], attribute[3]);
+                writer.writeAttribute(attribute[0], attribute[1], attribute[2], XmlText.clean(attribute[3]));
             }
         }
     }

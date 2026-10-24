@@ -26,6 +26,9 @@ import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.IntStream;
+import javax.xml.stream.XMLInputFactory;
+import javax.xml.stream.XMLStreamException;
+import javax.xml.stream.XMLStreamReader;
 import nadel.contract.model.ReportTemplateFieldType;
 import nadel.contract.model.ReportTemplateValueReason;
 import nadel.contract.model.ReportTemplateWarning;
@@ -552,6 +555,69 @@ class TemplateFillerTests {
                 UK, 20_000);
         assertThat(part(typed, TemplateFiles.CONTENT_TYPES)).containsOnlyOnce("<Override PartName=\"/docProps/core.xml\" "
                 + "ContentType=\"application/vnd.openxmlformats-package.core-properties+xml\">");
+    }
+
+    // ---- characters XML forbids
+
+    /** Vertical tab, NUL, U+FFFE, U+FFFF, a lone high and a lone low surrogate, and a valid pair (U+1F33B). */
+    private static final String DIRTY = "a\u000Bb\u0000c\uFFFEd\uFFFFe\uD800f\uDC00g\uD83C\uDF3Bh";
+    private static final String CLEANED = "a b c d e f g\uD83C\uDF3Bh";
+
+    @Test
+    void charactersXmlForbidsInValuesAndTheTemplateNameBecomeSpacesAndTheFileStillOpens() {
+        byte[] template = TemplateFiles.workbook(sheet -> {
+            sheet.value(0, 0, "${cooperative.name}");
+            sheet.value(0, 1, "Адреса: ${cooperative.address}, банк ${cooperative.bankName}");
+            sheet.value(0, 2, "${cooperative.officialName}");
+            sheet.value(0, 3, "${generatedBy}");
+            sheet.value(0, 4, "${nonsense}"); // a warning, so the file gets the warnings sheet too
+            sheet.value(1, 0, "${rows.plots.number}");
+            sheet.value(1, 1, "вул. ${rows.plots.street}");
+        });
+        Map<String, TemplateValue> plot = new LinkedHashMap<>();
+        plot.put("rows.plots.number", text(DIRTY));
+        plot.put("rows.plots.street", text(DIRTY));
+        Values values = new Values().rows(TemplateRowSet.PLOTS, List.of(plot))
+                .single("cooperative.name", text(DIRTY))
+                .single("cooperative.address", text(DIRTY))
+                .single("cooperative.bankName", text(DIRTY))
+                .single("cooperative.officialName", text(DIRTY))
+                .single("generatedBy", text(DIRTY));
+
+        TemplateFiller.Filled filled = filler.fill(template, "Шаблон " + DIRTY, 1, values, UK, 20_000);
+
+        // every XML part of the file is well-formed XML 1.0
+        TemplateFiles.parts(filled.content()).forEach((name, content) -> {
+            if (name.endsWith(".xml") || name.endsWith(".rels")) {
+                assertWellFormed(name, content);
+            }
+        });
+        assertThat(part(filled, "docProps/core.xml")).contains(">Шаблон " + CLEANED + "</dc:title>");
+        assertThat(codes(filled.warnings())).containsExactly("UNKNOWN_PLACEHOLDER Statement E1 nonsense null");
+        try (ReadableWorkbook workbook = open(filled)) {
+            List<Row> rows = workbook.getFirstSheet().read();
+            assertThat(rows.get(0).getCellAsString(0)).contains(CLEANED);
+            assertThat(rows.get(0).getCellAsString(1)).contains("Адреса: " + CLEANED + ", банк " + CLEANED);
+            assertThat(rows.get(0).getCellAsString(2)).contains(CLEANED);
+            assertThat(rows.get(0).getCellAsString(3)).contains(CLEANED);
+            assertThat(rows.get(1).getCellAsString(0)).contains(CLEANED);
+            assertThat(rows.get(1).getCellAsString(1)).contains("вул. " + CLEANED);
+            assertThat(workbook.getSheets().toList().get(1).read().get(1).getCellAsString(2)).contains("nonsense");
+        } catch (IOException e) {
+            throw new AssertionError(e);
+        }
+    }
+
+    private static void assertWellFormed(String name, byte[] content) {
+        try {
+            XMLStreamReader reader = XMLInputFactory.newFactory().createXMLStreamReader(
+                    new ByteArrayInputStream(content));
+            while (reader.hasNext()) {
+                reader.next();
+            }
+        } catch (XMLStreamException e) {
+            throw new AssertionError(name + " is not well-formed XML: " + e.getMessage(), e);
+        }
     }
 
     // ---- refusals and limits

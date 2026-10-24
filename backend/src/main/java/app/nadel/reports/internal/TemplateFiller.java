@@ -528,7 +528,7 @@ final class TemplateFiller {
         private static void properties(XMLStreamWriter writer, String title, int version) throws XMLStreamException {
             writer.writeStartElement("dc", "title", DC);
             writer.writeNamespace("dc", DC);
-            writer.writeCharacters(title);
+            writer.writeCharacters(XmlText.clean(title));
             writer.writeEndElement();
             writer.writeStartElement("cp", "version", CP);
             writer.writeNamespace("cp", CP);
@@ -595,7 +595,7 @@ final class TemplateFiller {
                     writer.writeStartElement("is");
                     writer.writeStartElement("t");
                     writer.writeAttribute("xml", XmlTree.XML, "space", "preserve");
-                    writer.writeCharacters(text);
+                    writer.writeCharacters(XmlText.clean(text));
                     writer.writeEndElement();
                     writer.writeEndElement();
                     writer.writeEndElement();
