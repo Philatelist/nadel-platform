@@ -97,7 +97,7 @@ the owning module (`INVALID`). Yes and no (`так`/`ні`, `yes`/`no`, `true`/`
    unpacked. Unpacked sizes are counted from the bytes decompression really produces, never from the sizes the archive
    declares (a zip bomb declares what it likes). The archive is read with commons-compress, which the spreadsheet
    library brings along; the JDK's `ZipInputStream` cannot read files written with data descriptors (as fastexcel does).
-3. `WorkbookReader` (the only user of the spreadsheet library) streams the rows; `PlotsSheet`, `MembersSheet` and
+3. `WorkbookReader` (the only reader of uploaded workbooks in the import; `reports` writes files with the same library) streams the rows; `PlotsSheet`, `MembersSheet` and
    `OwnershipSheet` find the columns with `HeaderMatcher`, read every cell with `Cells` and stop with 400
    `IMPORT_LIMIT_EXCEEDED` at the 2,001st plot row, the 3,001st member row or the 6,001st ownership row. The workbook's
    date system (1900 or 1904) comes from `WorkbookReader.date1904()` and is used for the Excel dates of `valid_from`,

@@ -68,7 +68,7 @@ Rules for every slice: contract first (`api/openapi.yaml`, then `make gen`), Fly
   - [x] Verify: `cd backend && ./mvnw test -Dtest='app.nadel.reports.**'` and `pnpm --filter web exec vitest run src/pages/ChargesMonthPage.test.tsx`; delete temporary files. **[Agent: spring-backend]**
 
 - [ ] **Slice 11: Documentation, guides and e2e specs**
-  - [ ] `money-rules.md` section 12, glossary entries, ADR 0009 permission list, `context/product/architecture.md` if it lists modules, `reports/README.md` final. **[Agent: general-purpose]**
+  - [x] `money-rules.md` section 12, glossary entries, ADR 0009 permission list, `context/product/architecture.md` if it lists modules, `reports/README.md` final. **[Agent: general-purpose]**
   - [ ] Guides in uk and en: board guide chapter 21 to "works", owner manual screens, permissions matrix and template security; new screens in `docs/guide/scripts/capture-screens.mjs` (`reports`, `report-electricity`, `report-templates`); rebuild PDFs with `make guide-shots` and `make guide`. **[Agent: general-purpose]**
   - [ ] Playwright specs `reports.spec.ts` (`@smoke` electricity download), `report-templates.spec.ts` (generate demo land tax statement), `reports-acceptance.spec.ts` (custom role without `MEMBERS_VIEW`, Treasurer, member and electrician); add the new screens to `language-purity.spec.ts`. **[Agent: react-frontend]**
   - [ ] Verify: `pnpm --filter web exec playwright test reports report-templates language-purity` and `pnpm --filter web exec playwright test --grep @smoke` (infra and backend jar started by the e2e setup; stop them by recorded PID afterwards); delete screenshots and temporary files. **[Agent: react-frontend]**

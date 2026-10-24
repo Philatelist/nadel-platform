@@ -1,8 +1,8 @@
 # Pipeline log — feature 013 reports
 
-- Status: running
-- Phase: 1 done, entering 2
-- Branch: 013-reports (planned) · Base: origin/docs/feature-013-reports @ 6c121fb (user's choice; main d8d7092 is its ancestor)
+- Status: stopped: by the user ("stop and save the session") during Phase 3, Slice 11
+- Phase: 3, Slice 11 in progress (tasks 1 docs done; task 3 e2e specs written, NOT run; task 2 guides not started)
+- Branch: 013-reports · Base: origin/docs/feature-013-reports @ 6c121fb (user's choice; main d8d7092 is its ancestor)
 - Requirement: document docs/features/013-reports.md as on origin/docs/feature-013-reports
 - Autonomy: minimal (.claude/feature-pipeline.yml)
 - Publish: pr+checks · PR: — · Checks: —
@@ -57,4 +57,13 @@ Out: official tax form, PDF, payment reports, scheduled reports, operator-shared
 - Slice 10 demo: template and requisites are loaded only when the Flyway placeholder demoledger=on (dev profile); integration tests keep it off (existing tests assume no template in the demo cooperative); DemoReportTemplatesTests runs the script itself. Demo tenant edrpou set to 12345678 only WHERE NULL.
 - Slice 10 links: the plot link sits on the plot card next to PlotAccountPanel (the 'plot account' of the spec) and only for non-common plots; the month link shows for closed months too.
 - Slice 10 performance: all 8 reports < 350 ms preview on 300 plots x 12 months (14.6k charges); no index/V21 needed (charge_adjusts_idx exists since V19); statements per preview 18 (bound 40). Missing-readings worst case = all meter kinds.
-- Slice 10 · (hash below) · slice verify green (backend reports+Modularity, typecheck, lint, vitest 35, shared 130) · review: running (round 1)
+- Slice 10 · e7a811a · slice verify green (backend reports+Modularity, typecheck, lint, vitest 35, shared 130) · review: PASS round 1
+- AUTO/USER: ports 8080/5173 were held by another session's old feature-012 stack (vite pid 89673, java pid 89864, no pids file). Asked the user; answer: stop them myself. Stopped both by PID.
+
+## STOPPED by the user — resume notes (saved state)
+- Stopped at the user's request while the e2e agent was about to run the narrow Playwright specs. The agent was stopped; no process of this run is left (ports 8080/5173 free, no review worktrees of this run; the `run-012` worktree belongs to another session and was not touched).
+- Commits on `013-reports` (all slices 1-10 PASS in review): slice 1 c4057b0, 2 4562a10, 3 c69e9b5, 4 ac306f8, 5 e0b1a38, 6 5943a23, 7 ac01355, 8 0af4b79 (+fix 65a96af), 9 15674cb (+fix 8f78b3e), 10 e7a811a. Base: spec commit 3eedb2f on 6c121fb.
+- Slice 11 state (see tasks.md): [x] task 1 docs (money-rules section 12, glossary, architecture.md, imports README) — committed together with these notes. [ ] task 2 guides uk+en, `docs/guide/scripts/capture-screens.mjs` (reports, report-electricity, report-templates), PDFs (`make guide-shots`, `make guide`; needs the app running) — NOT started. [ ] task 3 Playwright specs — files written but NEVER RUN and left UNCOMMITTED in the working tree: web/e2e/reports.spec.ts, report-templates.spec.ts, reports-acceptance.spec.ts, support/reportFile.ts, and the edit of language-purity.spec.ts. Untested risks: inline-string xlsx from support/xlsx.ts may be refused as a template; locators inferred from markup; /members/{id}/roles and DELETE /roles/{id} behaviour assumed. [ ] Verify task.
+- Next steps on `/feature-pipeline resume`: (1) check ports 8080/5173 are free; run the e2e agent (react-frontend) for the narrow specs (`pnpm --filter web exec playwright test reports report-templates reports-acceptance language-purity` then `--grep @smoke`; stack as in `make e2e`, JDK 25), fix test-side problems, commit as `013: Slice 11 ...`; (2) guides task; (3) Slice 12 Feature Testing & Regression (testing-expert); (4) Slice 11 and 12 reviews; (5) Phase 4: awos:verify, full `make check`, `make e2e`, compare with the baseline (backend baseline green at 6c121fb; client/e2e baseline not run), final report; (6) Phase 5 publish (pr+checks) and Phase 6 review run.
+- Known open points for the final report / owner: see review-log.md minor notes. Highlights: missing-readings does not list a meter installed/removed INSIDE the range (spec only excludes installed after / removed before) — owner to confirm; Land tax rejects a future year (not in spec); row cap is per sheet (spec says per report); well pump share appears in both electricity-tree and water reports; filler engine is 1912 lines vs the ADR 2000-line POI trigger (record a decision); the tax-word guard test (MembersAccessAcceptanceTests) was relaxed twice with exact exceptions; DECIMAL column type, new problem codes TEMPLATE_SLOT_TAKEN / TEMPLATE_VERSION_CONFLICT and the `report-templates` tag were added beyond the spec; no filled template has been opened in real Excel/LibreOffice; the tax card shows no message when a 409 TEMPLATE_NAME_TAKEN occurs; demo template/requisites load only in the dev profile (demoledger=on).
+- AUTO/USER decisions: spec source = reconciled spec on origin/docs/feature-013-reports (user answer); stop old 012 stack on ports 8080/5173 (user answer).

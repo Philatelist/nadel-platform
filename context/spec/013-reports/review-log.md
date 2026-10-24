@@ -56,3 +56,8 @@ Backend `./mvnw verify` on 6c121fb (detached worktree): green, exit 0, no failin
 - Fix commit 8f78b3e (`fix(reports): 013 slice 9 review fixes (round 1)`): `XmlText.clean` (forbidden XML 1.0 characters become a space, valid surrogate pairs kept) applied at the single write sink (`XmlTree.write`, `Copy.flush`, both attribute writes, dc:title, warnings cells). RED shown by the builder: with the fix reverted the new test fails with "Illegal XML character ((CTRL-CHAR, code 11))" in sheet1.xml and in docProps/core.xml.
 - Round 2: PASS. 404 tests, 0 failures on the reviewer side. M1 resolved. The reviewer decompiled fastexcel 0.20.2 `XmlEscapeHelper`: it keeps only XML 1.0 Char code points, so the built-in report writer has no such exposure. Minor (not fixed): no test feeds a dirty value into an attribute (one line of production code).
 
+### Slice 10 — Demo template, cross-links and performance (e7a811a)
+- Round 1: PASS. Backend reports tests 408 run, 0 failures on the reviewer side; web code read only (no node_modules in the worktree).
+- Reviewer confirmed: demo SQL is gated by the `${demoledger}` placeholder (dev only; tests override it to off), `app.ledger_maintenance` is transaction-local, inserts idempotent, IBAN checksum valid, EDRPOU fake and set only WHERE NULL.
+- Minor notes (not fixed): the header comment of `R__demo_report_templates.sql` says it "sorts before" `R__demo_data.sql`; it sorts after and depends on that order (comment wrong); the plot report link is a bare `Link` between panels (cosmetic).
+
