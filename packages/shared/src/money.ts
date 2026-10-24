@@ -33,6 +33,12 @@ export function formatMoney(value: MoneyString, locale: string): string {
   return `${sign}${int.replace(/\B(?=(\d{3})+(?!\d))/g, NBSP)},${frac}${NBSP}₴`;
 }
 
+/** Like `formatMoney`, but a positive amount gets a leading "+" (display only; zero and negative are unchanged). */
+export function formatSignedMoney(value: MoneyString, locale: string): string {
+  const text = formatMoney(value, locale);
+  return !value.startsWith('-') && !isZeroMoney(value) ? `+${text}` : text;
+}
+
 export function isZeroMoney(value: MoneyString): boolean {
   return /^-?0+\.00$/.test(value);
 }

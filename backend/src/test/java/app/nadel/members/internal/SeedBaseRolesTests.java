@@ -42,7 +42,7 @@ class SeedBaseRolesTests extends IntegrationTest {
                 "AUDIT_VIEW", "PLOTS_VIEW", "PLOTS_EDIT", "OWNERSHIP_EDIT", "IMPORT_RUN",
                 "SETTINGS_MANAGE", "TARIFFS_VIEW", "TARIFFS_MANAGE", "METERS_VIEW", "METERS_MANAGE",
                 "READINGS_ENTER", "READINGS_APPROVE", "CHARGES_VIEW", "CHARGES_RUN", "CHARGES_REVERSE",
-                "PERIODS_CLOSE");
+                "PERIODS_CLOSE", "RECALCULATION_RUN");
         assertThat(matrix.get("TREASURER")).containsExactlyInAnyOrder("MEMBERS_VIEW", "PLOTS_VIEW", "AUDIT_VIEW",
                 "TARIFFS_VIEW", "METERS_VIEW", "CHARGES_VIEW");
         assertThat(matrix.get("MEMBER")).isEmpty();

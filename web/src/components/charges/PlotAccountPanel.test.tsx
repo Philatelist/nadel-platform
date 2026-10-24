@@ -4,7 +4,7 @@ import type { Charge, Permission, PlotAccount } from '@nadel/api-client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { queryResult, withQueries } from '../../test/meterFixtures';
 import { renderWithApp } from '../../test/render';
-import { charge } from './fixtures';
+import { adjustment, charge } from './fixtures';
 import { PlotAccountPanel } from './PlotAccountPanel';
 
 const useGetPlotAccount = vi.fn();
@@ -115,6 +115,16 @@ describe('PlotAccountPanel', () => {
     expect(screen.getByText('Check the dates')).toBeInTheDocument();
   });
 
+  it('opens the detail of the charge named by ?charge= once the account is loaded', () => {
+    renderWithApp(withQueries(<PlotAccountPanel plotId="p7" />), { route: '/?charge=c1' });
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('does nothing when ?charge= names a charge that is not in the list', () => {
+    renderWithApp(withQueries(<PlotAccountPanel plotId="p7" />), { route: '/?charge=missing' });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
   it('shows the calculation line and the reason as user content in the detail dialog', async () => {
     permissions = ['CHARGES_VIEW', 'CHARGES_REVERSE'];
     useGetPlotAccount.mockReturnValue(queryResult(account([reversal])));
@@ -135,5 +145,99 @@ describe('PlotAccountPanel', () => {
     render();
     await userEvent.click(screen.getByRole('button', { name: 'Details' }));
     expect(screen.getByText(/made by an adjustment/)).toBeInTheDocument();
+  });
+
+  describe('adjustments', () => {
+    const original: Charge = { ...charge, adjustedBy: ['a1'] };
+    beforeEach(() => {
+      permissions = ['CHARGES_VIEW', 'CHARGES_REVERSE'];
+      useGetPlotAccount.mockReturnValue(queryResult(account([adjustment, original])));
+    });
+
+    it('shows the month of the original, the amount and the reason as user content', () => {
+      render();
+      const row = within(screen.getByRole('list', { name: 'Plot charges' })).getAllByRole('listitem')[0];
+      expect(row).toHaveTextContent('Adjustment for Sep 2026: −₴5.00 — Rate corrected');
+      expect(within(row as HTMLElement).getByText('Rate corrected')).toHaveAttribute('data-user-content');
+    });
+
+    it('links to the recalculation and opens the original charge', async () => {
+      render();
+      const row = within(screen.getByRole('list', { name: 'Plot charges' })).getAllByRole(
+        'listitem',
+      )[0] as HTMLElement;
+      expect(within(row).getByRole('link', { name: 'Recalculation' })).toHaveAttribute(
+        'href',
+        '/charges/recalculations/r1',
+      );
+      await userEvent.click(within(row).getByRole('button', { name: 'Original charge' }));
+      const dialog = screen.getByRole('dialog');
+      expect(dialog).toHaveTextContent('Electricity');
+      expect(
+        within(dialog).getByRole('button', { name: 'Adjustment for Sep 2026: −₴5.00' }),
+      ).toBeInTheDocument();
+    });
+
+    it('offers no reversal for an adjustment and shows no recalculation link without its id', () => {
+      useGetPlotAccount.mockReturnValue(
+        queryResult(account([{ ...adjustment, recalculationId: undefined }])),
+      );
+      render();
+      expect(screen.queryByRole('button', { name: 'Reverse' })).toBeNull();
+      expect(screen.queryByRole('link', { name: 'Recalculation' })).toBeNull();
+    });
+
+    it('does not paint a negative adjustment as an error', () => {
+      render();
+      const row = within(screen.getByRole('list', { name: 'Plot charges' })).getAllByRole(
+        'listitem',
+      )[0] as HTMLElement;
+      const amounts = within(row).getAllByText('−₴5.00');
+      expect(amounts.some((el) => el.className.includes('text-danger'))).toBe(false);
+    });
+
+    it('detail lists the adjustments of a charge, and an adjustment never claims a closed month', async () => {
+      useGetPlotAccount.mockReturnValue(
+        queryResult(
+          account([
+            { ...adjustment, billingMonthClosed: true },
+            { ...original, billingMonthClosed: true, reversible: false },
+          ]),
+        ),
+      );
+      render();
+      const [adjustmentDetails, originalDetails] = screen.getAllByRole('button', { name: 'Details' });
+      await userEvent.click(adjustmentDetails as HTMLElement);
+      expect(screen.queryByText(/made by an adjustment/)).toBeNull();
+      expect(screen.getByRole('link', { name: 'Open' })).toHaveAttribute(
+        'href',
+        '/charges/recalculations/r1',
+      );
+      await userEvent.click(screen.getByRole('button', { name: 'Close' }));
+      await userEvent.click(originalDetails as HTMLElement);
+      const dialog = screen.getByRole('dialog');
+      expect(within(dialog).getByText('Adjustments of this charge')).toBeInTheDocument();
+      expect(
+        within(dialog).getByRole('button', { name: 'Adjustment for Sep 2026: −₴5.00' }),
+      ).toBeInTheDocument();
+    });
+
+    it('keeps the "adjustments only" filter in the URL and hides other entries', async () => {
+      render();
+      const rows = () => within(screen.getByRole('list', { name: 'Plot charges' })).getAllByRole('listitem');
+      expect(rows()).toHaveLength(2);
+      await userEvent.click(screen.getByLabelText('Adjustments only'));
+      expect(
+        within(screen.getByRole('list', { name: 'Plot charges' })).getAllByRole('listitem'),
+      ).toHaveLength(1);
+    });
+
+    it('starts filtered when the URL says so', () => {
+      renderWithApp(withQueries(<PlotAccountPanel plotId="p7" />), { route: '/?adjustments=1' });
+      expect(screen.getByLabelText('Adjustments only')).toBeChecked();
+      expect(
+        within(screen.getByRole('list', { name: 'Plot charges' })).getAllByRole('listitem'),
+      ).toHaveLength(1);
+    });
   });
 });

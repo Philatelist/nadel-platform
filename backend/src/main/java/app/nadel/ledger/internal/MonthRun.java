@@ -32,6 +32,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -42,7 +43,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.UUID;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import nadel.contract.model.ChargeTypeTotal;
 import nadel.contract.model.MonthRunResult;
@@ -67,8 +70,8 @@ import org.springframework.transaction.annotation.Transactional;
  * the conflicts of the month itself.
  * <p>
  * The rules, in order: a month after the current one in Europe/Kyiv is 409 {@code PERIOD_IN_FUTURE}; the booking takes
- * the month's advisory lock, the queue lock, every charge type and every tariff {@code FOR SHARE} and then the month
- * {@code FOR SHARE} ({@link TariffChargeWriter}); a closed month (or one that counts as closed) is 409
+ * the cooperative's charging lock ({@link ChargingLock}), the month's advisory lock, the queue lock, every charge type
+ * and every tariff {@code FOR SHARE} and then the month {@code FOR SHARE} ({@link TariffChargeWriter}); a closed month (or one that counts as closed) is 409
  * {@code PERIOD_CLOSED}; a {@code digest} that differs from the one of what the run would create now is 409
  * {@code PREVIEW_OUTDATED} and nothing is written. The digest is a SHA-256 over the planned new charges, the retried
  * ones included (source key, amount, service period), so a preview followed by an unchanged booking always matches.
@@ -88,7 +91,7 @@ class MonthRun {
     private final ChargeTypeCatalog chargeTypes;
     private final PlotCatalog plots;
     private final BillingMonths billingMonths;
-    private final ChargeRepository charges;
+    private final ChargeKeys chargeKeys;
     private final NotChargedItemRepository items;
     private final NotChargedViews itemViews;
     private final TariffChargeWriter writer;
@@ -96,17 +99,18 @@ class MonthRun {
     private final LedgerAuditPublisher audit;
     private final IntervalCharging intervals;
     private final WaterDays waterDays;
+    private final ChargingLock chargingLock;
     private final Clock clock;
 
     MonthRun(TariffBook book, ChargeTypeCatalog chargeTypes, PlotCatalog plots, BillingMonths billingMonths,
-            ChargeRepository charges, NotChargedItemRepository items, NotChargedViews itemViews,
+            ChargeKeys chargeKeys, NotChargedItemRepository items, NotChargedViews itemViews,
             TariffChargeWriter writer, NotChargedRetries retries, LedgerAuditPublisher audit,
-            IntervalCharging intervals, WaterDays waterDays, Clock clock) {
+            IntervalCharging intervals, WaterDays waterDays, ChargingLock chargingLock, Clock clock) {
         this.book = book;
         this.chargeTypes = chargeTypes;
         this.plots = plots;
         this.billingMonths = billingMonths;
-        this.charges = charges;
+        this.chargeKeys = chargeKeys;
         this.items = items;
         this.itemViews = itemViews;
         this.writer = writer;
@@ -114,6 +118,7 @@ class MonthRun {
         this.audit = audit;
         this.intervals = intervals;
         this.waterDays = waterDays;
+        this.chargingLock = chargingLock;
         this.clock = clock;
     }
 
@@ -168,6 +173,7 @@ class MonthRun {
             return result(month, true, plan, 0, snapshot);
         }
 
+        chargingLock.lock(tenantId);
         writer.lockMonth(tenantId, month);
         // the open reading intervals of every month first: they lock their meters before the tariffs (lock order)
         intervals.retryAll(tenantId, actor.memberId(), clock.instant());
@@ -211,7 +217,7 @@ class MonthRun {
         List<NotChargedItemRecord> otherMonths = items.findByKindAndStatus(Kind.TARIFF_MONTH, Status.OPEN).stream()
                 .filter(item -> !first.equals(Objects.requireNonNull(item.getMonth()).atDay(1)))
                 .sorted(Comparator.comparing(NotChargedItemRecord::getItemKey)).toList();
-        // first: the source keys the run may use, to ask the ledger once which exist (reversed ones included)
+        // first: the source keys the run may use, to ask the ledger once which count as charged (ChargeKeys)
         Set<String> keys = new HashSet<>();
         for (PlotFacts plot : chargeable) {
             for (ChargeTypeEntry type : types) {
@@ -226,20 +232,61 @@ class MonthRun {
         List<PlannedCharge> planned = new ArrayList<>();
         List<ConflictCase> conflicts = new ArrayList<>();
         Map<String, Outcome> outcomes = new HashMap<>();
-        for (PlotFacts plot : chargeable) {
-            for (ChargeTypeEntry type : types) {
-                Outcome outcome = TariffMonthPlanning.plan(snapshot, type.id(), facts(plot), month,
-                        applicable.of(type.id(), plot.id(), month), existing::contains);
-                outcomes.put(NotChargedItemRecord.tariffMonthKey(plot.id(), type.id(), month), outcome);
-                if (outcome instanceof NewCharge newCharge) {
-                    planned.add(newCharge.charge());
-                } else if (outcome instanceof Conflicting conflicting) {
-                    conflicts.add(new ConflictCase(plot.id(), type.id(), conflicting.tariffs()));
-                }
+        for (PlotTypeOutcome result : outcomes(snapshot, chargeable, types, month, applicable, existing::contains)) {
+            outcomes.put(NotChargedItemRecord.tariffMonthKey(result.plotId(), result.chargeTypeId(), month),
+                    result.outcome());
+            if (result.outcome() instanceof NewCharge newCharge) {
+                planned.add(newCharge.charge());
+            } else if (result.outcome() instanceof Conflicting conflicting) {
+                conflicts.add(new ConflictCase(result.plotId(), result.chargeTypeId(), conflicting.tariffs()));
             }
         }
         return new Plan(planned, conflicts, outcomes,
                 NotChargedRetries.plan(snapshot, otherMonths, chargeableById, applicable, existing::contains));
+    }
+
+    /** What {@link TariffMonthPlanning} says for one plot and one charge type in a month. */
+    record PlotTypeOutcome(UUID plotId, UUID chargeTypeId, Outcome outcome) {
+    }
+
+    /**
+     * The plan loop of the run for one month: every plot times every charge type, in that order, planned with
+     * {@link TariffMonthPlanning} over the applicable days. The run plans with the ledger's source keys; a
+     * recalculation ({@link #expected}) with a predicate that ignores them.
+     */
+    static List<PlotTypeOutcome> outcomes(Snapshot snapshot, List<PlotFacts> plots, List<ChargeTypeEntry> types,
+            YearMonth month, ApplicableDays applicable, Predicate<String> charged) {
+        List<PlotTypeOutcome> results = new ArrayList<>();
+        for (PlotFacts plot : plots) {
+            for (ChargeTypeEntry type : types) {
+                results.add(new PlotTypeOutcome(plot.id(), type.id(), TariffMonthPlanning.plan(snapshot, type.id(),
+                        facts(plot), month, applicable.of(type.id(), plot.id(), month), charged)));
+            }
+        }
+        return results;
+    }
+
+    /**
+     * The tariff charges the run would book today for the plots, charge types and months, whatever the ledger holds
+     * (feature 012): the same plan loop and applicable days ({@link WaterDays}) as the run, planned with
+     * {@code key -> false}, as {@link ExpectedCharges} of the recalculation planner. Reads inside the caller's
+     * transaction.
+     *
+     * @param plots the plots (the caller passes chargeable ones)
+     * @param types the charge types (the caller passes charging ones)
+     */
+    List<ExpectedCharges.Expected> expected(Snapshot snapshot, List<PlotFacts> plots, List<ChargeTypeEntry> types,
+            Collection<YearMonth> months) {
+        ApplicableDays applicable = waterDays.forMonths(snapshot, plots.stream().map(PlotFacts::id).toList(),
+                months);
+        List<ExpectedCharges.Expected> expected = new ArrayList<>();
+        for (YearMonth month : new TreeSet<>(months)) {
+            for (PlotTypeOutcome result : outcomes(snapshot, plots, types, month, applicable, key -> false)) {
+                expected.addAll(ExpectedCharges.ofTariffMonth(result.outcome(), result.plotId(),
+                        result.chargeTypeId(), month));
+            }
+        }
+        return expected;
     }
 
     /** The charge types the run charges: active, not archived, with at least one tariff; in list order. */
@@ -252,13 +299,9 @@ class MonthRun {
         return new TariffResolver.PlotFacts(plot.id(), plot.commonLand(), plot.archived(), plot.areaM2());
     }
 
+    /** The keys that count as charged ({@link ChargeKeys}: a charge stands or was reversed by hand). */
     private Set<String> existingKeys(Set<String> keys) {
-        List<String> all = new ArrayList<>(keys);
-        Set<String> existing = new HashSet<>();
-        for (int from = 0; from < all.size(); from += 500) {
-            existing.addAll(charges.existingSourceKeys(all.subList(from, Math.min(all.size(), from + 500))));
-        }
-        return existing;
+        return chargeKeys.charged(keys);
     }
 
     /** Opens an item per conflict, or brings the open one up to date with the tariffs of this run. */

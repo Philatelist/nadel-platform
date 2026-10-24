@@ -10,7 +10,7 @@ Tables (all under RLS `tenant_isolation`, an index on `tenant_id`, composite for
 |---|---|
 | `charge_type` | What is charged for: the five seeded types (`code` MEMBERSHIP, ELECTRICITY, LAND_TAX, WATER, COMMON_CONSUMERS since V13) and custom ones |
 | `tariff` | A tariff of one charge type, with its `scope_kind` (`ALL_PLOTS` or `SELECTED_PLOTS`; new tariffs are `ALL_PLOTS`) |
-| `tariff_version` | Rates by date (`valid_from`, basis, frequency, `rate numeric(14,4)`, due date, note); a new rate is a new version, a mistake is corrected or deleted until a charge uses the version |
+| `tariff_version` | Rates by date (`valid_from`, basis, frequency, `rate numeric(14,4)`, due date, note); a new rate is a new version, a mistake is corrected or deleted until a charge uses the version; `deleted_at` (V19) marks a used version deleted softly by a recalculation (feature 012), and the unique start date applies only to versions that are not deleted |
 | `tariff_scope_plot` | Selected plots (`SELECTED`), or exclusions with a reason (`EXCLUDED`); written by `PUT /tariffs/{id}/scope`; cascades when a plot is deleted |
 
 All four tables exist in V10 (one migration, one isolation test). `nadel_app` has no `DELETE`/`TRUNCATE` on `charge_type` and `tariff`.
@@ -24,7 +24,8 @@ The module root exports `ChargeCalculator` (pure, no Spring, no database), `Vers
 `Basis`, `Frequency`, `ExpectedCharge` (`Amount` or `ByReadings` with the meter basis), `DaySet` (pure: sorted disjoint
 closed date ranges, `ALL`, `NONE`, `of`, `count`, `intersect`, `contains`, `first`, `last`), `TariffResolver` (pure),
 the port `TariffVersionUsage`, the read API `ChargeTypeCatalog` (`find`, `findAndLockShared`, `all`: `ChargeTypeFacts` with code, stored name, `nameCustomized`, active, archived, position and the audit token `auditName()`; `findByNames`: the types a typed name stands for, by the stored name and, while a seeded type is not renamed, its default names of `DefaultChargeTypeNames` in both languages, ignoring case and extra spaces, for the ledger's opening balances import; implemented by `JpaChargeTypeCatalog`) and the read API `TariffBook`
-(implemented by `JpaTariffBook`); everything else is in `internal`. Feature 011 (the ledger) calls the same
+(implemented by `JpaTariffBook`), and the facade `TariffVersionChanges` (feature 012, see Correcting a used version);
+everything else is in `internal`. Feature 011 (the ledger) calls the same
 `ChargeCalculator`, so the preview and the real charge never diverge.
 
 Permissions (ADR 0009, defined in `identity.Permission`, seeded for the Chairman by `seed_base_roles`; the Treasurer gets
@@ -141,13 +142,46 @@ be corrected or deleted until a charge uses it; after that a correction goes thr
   version, archive the charge type instead); then the write. A `validFrom` that another version of the tariff has is 409
   `TARIFF_VERSION_DATE_TAKEN` (`errors[{field: validFrom}]`, from the unique index as on create).
 - **A request that changes nothing** (`rate` `50` against a stored `50.0000` is no change) writes nothing and no audit entry.
-  It still goes through the use check, so a version in use answers 409 for it too.
+- **A correction of the note alone** (or of nothing) skips the use check (feature 012 §2.4): it changes no amount, so a
+  version in use answers 200 for it. Any other field of a used version is 409 `TARIFF_VERSION_IN_USE`.
 - **End dates.** `validTo` is derived from the ordering of the versions on every read and never stored, so correcting a
   date or deleting a version re-derives the neighbours' `validTo` with no further write; `GET /tariffs/{id}` and
   `GET /plots/{id}/tariffs` show the result at once.
 - **Entity.** `TariffVersionRecord` is no longer `@Immutable`; `correct(terms, note)` replaces the terms and keeps the
   owner, the tariff and the creation time. V11 grants `UPDATE` and `DELETE` to `nadel_app`; the use check, not the grant,
   protects a version a charge was produced from.
+- **Soft-deleted versions** (V19, feature 012). A used version cannot be removed physically (`charge_part` points at it
+  and is append-only), so a recalculation deletes it by setting `deleted_at` (`TariffVersionChanges.delete`).
+  `@SQLRestriction("deleted_at is null")` on `TariffVersionRecord` leaves such rows out of every read: the tariff card and its derived end dates, the
+  `TariffBook` snapshot (so the resolver and the ledger never charge from them), the expected amounts of a plot, the
+  version count of `TARIFF_LAST_VERSION`, and `PUT`/`DELETE` of the version (404, also checked by `isDeleted` after a
+  load by id). Its start date is free for a new version. Test: `TariffVersionCorrectionTests`.
+
+### Correcting a used version: `TariffVersionChanges` (feature 012)
+
+A version that charges used is added before them, corrected or deleted together with a recalculation: the ledger's
+`POST /recalculations` (causes `TARIFF_VERSION_ADD`, `_UPDATE`, `_DELETE`) calls the public facade
+`TariffVersionChanges` (`add(tariffId, TariffVersionCreate, actor)`, `update(versionId, …)`, `delete(versionId, actor)`,
+implemented by `TariffVersionChangeService` over `TariffCommands`) inside its own transaction
+(`Propagation.MANDATORY`; a preview rolls the change back). Same locks and validation as the endpoints (the tariff
+`FOR UPDATE`, its charge type `FOR SHARE`, field problems, `TARIFF_VERSION_DATE_TAKEN`, `TARIFF_LAST_VERSION`), but no
+use check, and a delete is soft (`deleted_at`). Each returns a `Change`: the tariff, its charge type, the version, the
+terms and note after the change, the days the old and new validity of the version span (`from`, `to`; `to` null when
+either runs on without end) and the audit entry of the change (`TARIFF_VERSION_ADDED`/`UPDATED`/`DELETED`, the values
+above), **not published**: the ledger publishes it with the recalculation's entry (adding `recalculationId`), or alone
+when the change alters no amount. The endpoints themselves keep refusing a used version (409), except for a
+correction of its note alone.
+
+- **Scope** (the ledger's, money rules 5.3): the tariff's charge type, the chargeable plots the tariff covers after the
+  change, the billing months the old and new validity touch, and the interval charges and runs of that type that close
+  from the first of those months on.
+- **An inactive charge type is left out.** A charge type that is inactive (water before it is switched on) charges
+  nothing, so a version change of one of its tariffs gives an empty plan and is saved without a recalculation, even
+  when the version was used. After the type is made active again, the board runs a manual recalculation
+  ("Нарахування → Перерахунок") for the months concerned.
+- **The web** previews first: a new version starting before the next month goes through `TARIFF_VERSION_ADD` (an empty
+  plan is saved by `POST /tariffs/{id}/versions`), and an edit or delete of a used version moves the dialog to the
+  recalculation step for holders of `RECALCULATION_RUN`; others see the 409 message.
 
 ### The port `TariffVersionUsage`
 
@@ -247,7 +281,8 @@ stands in (`TariffVersionCorrectionTests`).
   1200.0000 due 2026-12-01, all from 2026-01-01 for the demo cooperative (block `demo tariffs`). The block `demo ledger`
   (feature 011, dev profile only) adds the "Спільні споживачі за лічильником" tariff of the common consumers type (4.3200
   per kWh from 2026-01-01) and books the month runs, so in the dev demo the membership, land tax and electricity
-  versions are in use (`TARIFF_VERSION_IN_USE` on a correction).
+  versions are in use (`TARIFF_VERSION_IN_USE` on a correction; the chairman corrects them with the recalculation
+  step).
 
 ## Audit
 
@@ -258,7 +293,10 @@ when set). `TARIFF_VERSION_UPDATED` lists the changed fields only, each as old t
 `frequency`, `rate`, `dueDate`, `note` (a field that was or becomes unset has no old or no new value; a request that
 changes nothing writes no entry). `TARIFF_VERSION_DELETED` lists the old values (new is empty) of `validFrom`, `basis`,
 `frequency`, `rate` and, when set, `dueDate` and `note`. The version is identified by the values (the entry is about the
-tariff). The note text is part of the audit entry (like plot notes) but is never written to the application log.
+tariff). The note text is part of the audit entry (like plot notes) but is never written to the application log. A
+version change booked together with a recalculation (feature 012) is published by the ledger with the field
+`recalculationId` (new value: the recalculation's id) added, in one `AuditBatch` before the recalculation's
+`RECALCULATION_BOOKED`; a change whose plan is empty is published alone, without the field.
 
 A change of scope writes (entity type `TARIFF`, label = the tariff name), in this order:
 `TARIFF_SCOPE_CHANGED` when the kind or the selected plots changed, with `scope` (old to new kind, only when it
@@ -294,5 +332,5 @@ narrow exception to "everything in the repository is English", of the same kind 
 `plots` (the public `PlotCatalog` only: `find`, `findAll`, `inNaturalOrder`, `countChargeable`, `findChargeable`) and `meters` (the public
 `MeterCatalog` only: `plotIdsWithActiveMeter`, `hasMeterBetween`; `meters` never depends on `tariffs`). The module root exports
 `Basis`, `Frequency`, `VersionTerms`, `ExpectedCharge`, `ChargeCalculator`, `DaySet`, `TariffBook`, `TariffResolver`,
-`TariffVersionUsage` and `ChargeTypeCatalog`. The ledger (feature 011) depends on this module and implements
+`TariffVersionUsage`, `ChargeTypeCatalog` and `TariffVersionChanges`. The ledger (feature 011) depends on this module and implements
 `TariffVersionUsage`.

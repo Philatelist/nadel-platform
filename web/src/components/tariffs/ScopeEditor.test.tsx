@@ -7,7 +7,7 @@ import { renderWithApp } from '../../test/render';
 import { ScopeEditor } from './ScopeEditor';
 
 const mutate = vi.fn();
-let options: { mutation: { onError: (e: unknown) => void } };
+let options: { mutation: { onError: (e: unknown) => void; onSuccess: () => unknown } };
 let permissions: Permission[];
 let tariff: Tariff;
 
@@ -171,5 +171,38 @@ describe('ScopeEditor', () => {
     await user.click(screen.getByRole('button', { name: 'Change' }));
     act(() => options.mutation.onError(new ApiError(409, { code: 'CHARGE_TYPE_ARCHIVED' })));
     expect(await screen.findByText('This charge type is archived.')).toBeInTheDocument();
+  });
+
+  // @spec: 012-retroactive-recalculation (acceptance 2.6: the hint after a tariff's plots or exclusions change)
+  // @regression
+  it('reminds a holder of RECALCULATION_RUN that past charges are unchanged after the scope is saved', async () => {
+    permissions = ['TARIFFS_VIEW', 'TARIFFS_MANAGE', 'RECALCULATION_RUN'];
+    const user = userEvent.setup();
+    renderEditor();
+    expect(screen.queryByRole('link', { name: 'Recalculation' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Change' }));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await act(async () => {
+      await options.mutation.onSuccess();
+    });
+    expect(screen.getByText(/Past charges have not changed/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Recalculation' })).toHaveAttribute(
+      'href',
+      '/charges/recalculations/new',
+    );
+  });
+
+  // @spec: 012-retroactive-recalculation
+  // @regression
+  it('shows no recalculation hint after the scope is saved without RECALCULATION_RUN', async () => {
+    const user = userEvent.setup();
+    renderEditor();
+    await user.click(screen.getByRole('button', { name: 'Change' }));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await act(async () => {
+      await options.mutation.onSuccess();
+    });
+    expect(screen.getByRole('button', { name: 'Change' })).toBeInTheDocument();
+    expect(screen.queryByText(/Past charges have not changed/)).not.toBeInTheDocument();
   });
 });

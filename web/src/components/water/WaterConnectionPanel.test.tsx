@@ -193,4 +193,26 @@ describe('WaterConnectionPanel', () => {
     const { container } = renderPanel();
     expect(container).toBeEmptyDOMElement();
   });
+
+  // @spec: 012-retroactive-recalculation (acceptance 2.6: the hint on the water connection of a plot)
+  // @regression
+  it('reminds a holder of RECALCULATION_RUN that past charges are unchanged', () => {
+    permissions = ['PLOTS_VIEW', 'METERS_MANAGE', 'RECALCULATION_RUN'];
+    renderPanel();
+    expect(screen.getByText(/Past charges have not changed/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Recalculation' })).toHaveAttribute(
+      'href',
+      '/charges/recalculations/new',
+    );
+  });
+
+  // @spec: 012-retroactive-recalculation
+  // @regression
+  it('shows no recalculation hint without RECALCULATION_RUN or for an archived plot', () => {
+    renderPanel();
+    expect(screen.queryByText(/Past charges have not changed/)).not.toBeInTheDocument();
+    permissions = ['PLOTS_VIEW', 'METERS_MANAGE', 'RECALCULATION_RUN'];
+    renderPanel(true);
+    expect(screen.queryAllByText(/Past charges have not changed/)).toHaveLength(0);
+  });
 });

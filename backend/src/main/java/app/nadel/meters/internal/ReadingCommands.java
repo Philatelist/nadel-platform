@@ -1,5 +1,6 @@
 package app.nadel.meters.internal;
 
+import app.nadel.audit.AuditEvent;
 import app.nadel.audit.FieldChange;
 import app.nadel.identity.AccessProfile;
 import app.nadel.identity.Permission;
@@ -60,6 +61,11 @@ import org.springframework.transaction.support.TransactionTemplate;
  * uses the readings around the date ({@code READING_IN_USE}), and every change of a counted reading of a plot meter
  * publishes {@link PlotMeterPointsChanged} in its transaction (the ledger charges the intervals around it).
  * <p>
+ * An entry, a correction and a deletion booked with a recalculation (feature 012, {@code ReadingChanges}) run the same
+ * code with {@code recalculation} set: the same locks, rules and writes, but no use check, no
+ * {@link PlotMeterPointsChanged} (the recalculation charges the intervals itself) and the audit entry returned instead
+ * of published ({@link Applied}).
+ * <p>
  * A member's reading waits for approval ({@code PENDING}): it never counts and never supersedes a counted reading; a
  * second pending reading of the same meter and date supersedes the first. Approval checks it again against the counted
  * readings as they are then and supersedes a counted reading of the same date as an entry does.
@@ -96,8 +102,28 @@ class ReadingCommands {
     }
 
     /** A saved reading: the new row, the interval it closes, the rows it superseded and its warnings. */
-    private record Saved(MeterReadingRecord reading, @Nullable Interval interval, List<UUID> superseded,
+    record Saved(MeterReadingRecord reading, @Nullable Interval interval, List<UUID> superseded,
             List<Warning> warnings) {
+    }
+
+    /**
+     * A change applied by {@link #enterOne}, {@link #correctLocked} or {@link #deleteLocked}.
+     *
+     * @param saved   what the endpoint answers; null for a deletion
+     * @param before  the counted reading the change replaced, corrected or deleted; null for a new date
+     * @param after   the counted reading after the change; null for a deletion
+     * @param from    the first day the change reaches: the day after the previous point (or the changed date when
+     *                there is none), the earliest of the old and new date of a correction
+     * @param to      the last day it reaches: the day before the next point (or the changed date), the latest of the
+     *                old and new date of a correction; {@code from} to {@code to} is the span the {@link ReadingUsage}
+     *                ports are asked about
+     * @param through the date of the last point whose interval the change alters: the next point after the latest
+     *                changed date, or that date when there is none
+     * @param audit   the audit entry of the change, published unless the change is booked with a recalculation; null
+     *                when nothing changed
+     */
+    record Applied(@Nullable Saved saved, MeterRecord meter, @Nullable Reading before, @Nullable Reading after,
+            LocalDate from, LocalDate to, LocalDate through, @Nullable AuditEvent audit) {
     }
 
     /**
@@ -111,8 +137,9 @@ class ReadingCommands {
             ReadingEntry row = rows.get(index);
             ReadingRowResult result;
             try {
-                Saved saved = Objects.requireNonNull(rowTransaction.execute(
-                        status -> enterOne(row.getMeterId(), row.getTakenOn(), row.getValue(), actor)));
+                Saved saved = Objects.requireNonNull(Objects.requireNonNull(rowTransaction.execute(
+                        status -> enterOne(row.getMeterId(), row.getTakenOn(), row.getValue(), actor, false)))
+                        .saved());
                 result = new ReadingRowResult(index, row.getMeterId(), ReadingRowOutcome.SAVED, saved.superseded(),
                         ReadingDtoMapper.toDto(saved.warnings()));
                 result.setReading(ReadingDtoMapper.toDto(saved.reading(), saved.interval(), true));
@@ -133,7 +160,17 @@ class ReadingCommands {
      */
     @Transactional
     ReadingSaved correct(UUID readingId, ReadingCorrection input, AccessProfile actor) {
-        MeterValue value = parse(input.getValue());
+        return saved(Objects.requireNonNull(
+                correctLocked(readingId, input.getTakenOn(), input.getValue(), actor, false).saved()));
+    }
+
+    /**
+     * {@link #correct} in the caller's transaction; for a recalculation without the use check, the point events and
+     * the publication of the audit entry. The audit entry lists only the fields that changed.
+     */
+    Applied correctLocked(UUID readingId, LocalDate newDate, String text, AccessProfile actor,
+            boolean recalculation) {
+        MeterValue value = parse(text);
         MeterRecord meter = lockMeterOf(readingId);
         MeterReadingRecord reading = readings.findById(readingId).orElseThrow(ApiProblemException::notFound);
         if (!reading.isApproved()) {
@@ -141,23 +178,28 @@ class ReadingCommands {
         }
         MeterSpan span = MeterSpan.of(meter);
         LocalDate oldDate = reading.getTakenOn();
-        LocalDate newDate = input.getTakenOn();
+        Reading before = reading.toReading();
         List<MeterReadingRecord> others = approved(meter).stream()
                 .filter(other -> !other.getId().equals(readingId)).toList();
+        Neighbours oldNeighbours = ReadingValidator.neighbours(span, readingsOf(others), oldDate);
         if (newDate.equals(oldDate) && value.equals(reading.getValue())) {
             Interval interval = ReadingValidator.intervalEndingAt(span, readingsOf(others), oldDate, value)
                     .orElse(null);
-            return saved(new Saved(reading, interval, List.of(), List.of()));
+            return new Applied(new Saved(reading, interval, List.of(), List.of()), meter, before, before,
+                    oldNeighbours.spanFrom(oldDate), oldNeighbours.spanTo(oldDate), through(oldNeighbours, oldDate),
+                    null);
         }
         MeterReadingRecord sameDate = onDate(others, newDate);
         List<Reading> counted = readingsOf(others.stream().filter(other -> other != sameDate).toList());
         ReadingValidator.check(span, counted, LocalDate.now(clock), newDate, value).ifPresent(violation -> {
             throw ReadingProblem.of(violation);
         });
-        Neighbours oldNeighbours = ReadingValidator.neighbours(span, readingsOf(others), oldDate);
         Neighbours newNeighbours = ReadingValidator.neighbours(span, counted, newDate);
-        ensureNotUsed(meter, earlier(oldNeighbours.spanFrom(oldDate), newNeighbours.spanFrom(newDate)),
-                later(oldNeighbours.spanTo(oldDate), newNeighbours.spanTo(newDate)));
+        LocalDate from = earlier(oldNeighbours.spanFrom(oldDate), newNeighbours.spanFrom(newDate));
+        LocalDate to = later(oldNeighbours.spanTo(oldDate), newNeighbours.spanTo(newDate));
+        if (!recalculation) {
+            ensureNotUsed(meter, from, to);
+        }
 
         List<MeterReadingRecord> replaced = sameDate == null ? List.of(reading) : List.of(reading, sameDate);
         MeterReadingRecord created = MeterReadingRecord.entered(meter.getTenantId(), meter.getId(), newDate, value,
@@ -167,38 +209,59 @@ class ReadingCommands {
         if (!newDate.equals(oldDate)) {
             changes.add(new FieldChange("takenOn", oldDate.toString(), newDate.toString()));
         }
-        if (!value.equals(reading.getValue())) {
-            changes.add(new FieldChange("value", reading.getValue().toString(), value.toString()));
+        if (!value.equals(before.value())) {
+            changes.add(new FieldChange("value", before.value().toString(), value.toString()));
         }
-        audit.publishReading(actor, "READING_CORRECTED", meter, changes);
-        pointEvents.changed(meter, newDate, Cause.READING_CORRECTED);
-        if (!oldDate.equals(newDate)) {
-            pointEvents.changed(meter, oldDate, Cause.READING_CORRECTED);
+        AuditEvent event = audit.readingEvent(actor, "READING_CORRECTED", meter, changes);
+        if (!recalculation) {
+            audit.publish(event);
+            pointEvents.changed(meter, newDate, Cause.READING_CORRECTED);
+            if (!oldDate.equals(newDate)) {
+                pointEvents.changed(meter, oldDate, Cause.READING_CORRECTED);
+            }
         }
-        return saved(new Saved(created, ReadingValidator.intervalEndingAt(span, counted, newDate, value).orElse(null),
+        Saved saved = new Saved(created, ReadingValidator.intervalEndingAt(span, counted, newDate, value).orElse(null),
                 replaced.stream().map(MeterReadingRecord::getId).toList(),
-                ReadingValidator.warnings(span, counted, newDate, value)));
+                ReadingValidator.warnings(span, counted, newDate, value));
+        return new Applied(saved, meter, before, new Reading(newDate, value), from, to,
+                later(through(oldNeighbours, oldDate), through(newNeighbours, newDate)), event);
     }
 
     /** Deletes a counted reading; the intervals around it join. A reading it had replaced stays superseded. */
     @Transactional
     void delete(UUID readingId, AccessProfile actor) {
+        deleteLocked(readingId, actor, false);
+    }
+
+    /**
+     * {@link #delete} in the caller's transaction; for a recalculation without the use check, the point event and the
+     * publication of the audit entry.
+     */
+    Applied deleteLocked(UUID readingId, AccessProfile actor, boolean recalculation) {
         MeterRecord meter = lockMeterOf(readingId);
         MeterReadingRecord reading = readings.findById(readingId).orElseThrow(ApiProblemException::notFound);
         if (!reading.isApproved()) {
             throw ReadingProblem.statusInvalid();
         }
         LocalDate date = reading.getTakenOn();
+        Reading before = reading.toReading();
         List<Reading> others = readingsOf(approved(meter).stream()
                 .filter(other -> !other.getId().equals(readingId)).toList());
         Neighbours neighbours = ReadingValidator.neighbours(MeterSpan.of(meter), others, date);
-        ensureNotUsed(meter, neighbours.spanFrom(date), neighbours.spanTo(date));
+        if (!recalculation) {
+            ensureNotUsed(meter, neighbours.spanFrom(date), neighbours.spanTo(date));
+        }
         readings.delete(reading);
         entityManager.flush();
-        audit.publishReading(actor, "READING_DELETED", meter, List.of(
+        AuditEvent event = audit.readingEvent(actor, "READING_DELETED", meter, List.of(
                 new FieldChange("takenOn", date.toString(), null),
-                new FieldChange("value", reading.getValue().toString(), null)));
-        pointEvents.changed(meter, date, Cause.READING_DELETED);
+                new FieldChange("value", before.value().toString(), null)));
+        if (!recalculation) {
+            audit.publish(event);
+            pointEvents.changed(meter, date, Cause.READING_DELETED);
+        }
+        return new Applied(null, meter, before, null, neighbours.spanFrom(date), neighbours.spanTo(date),
+                through(neighbours, date), event);
     }
 
     // ---- the member flow
@@ -325,8 +388,12 @@ class ReadingCommands {
 
     // ---- one row
 
-    /** Enters one reading; runs in the row's transaction. */
-    private Saved enterOne(UUID meterId, @Nullable LocalDate takenOn, String text, AccessProfile actor) {
+    /**
+     * Enters one reading in the caller's transaction (a row of a batch: the row's); for a recalculation without the use
+     * check, the point event and the publication of the audit entry.
+     */
+    Applied enterOne(UUID meterId, @Nullable LocalDate takenOn, String text, AccessProfile actor,
+            boolean recalculation) {
         MeterValue value = parse(text);
         MeterRecord meter = meters.findByIdForUpdate(meterId).orElseThrow(() -> new ApiProblemException(
                 HttpStatus.NOT_FOUND, ProblemCodes.NOT_FOUND, "The meter was not found.",
@@ -336,34 +403,42 @@ class ReadingCommands {
         List<MeterReadingRecord> approved = approved(meter);
         MeterReadingRecord sameDate = onDate(approved, date);
         List<Reading> counted = readingsOf(approved.stream().filter(other -> other != sameDate).toList());
+        Neighbours neighbours = ReadingValidator.neighbours(span, counted, date);
         if (sameDate != null && sameDate.getValue().equals(value)) {
             // the same reading again (a second tap on "save"): nothing changes and nothing is audited
-            return new Saved(sameDate, ReadingValidator.intervalEndingAt(span, counted, date, value).orElse(null),
-                    List.of(), ReadingValidator.warnings(span, counted, date, value));
+            Reading same = sameDate.toReading();
+            return new Applied(new Saved(sameDate,
+                    ReadingValidator.intervalEndingAt(span, counted, date, value).orElse(null), List.of(),
+                    ReadingValidator.warnings(span, counted, date, value)), meter, same, same,
+                    neighbours.spanFrom(date), neighbours.spanTo(date), through(neighbours, date), null);
         }
         ReadingValidator.check(span, counted, LocalDate.now(clock), date, value).ifPresent(violation -> {
             throw ReadingProblem.of(violation);
         });
-        Neighbours neighbours = ReadingValidator.neighbours(span, counted, date);
-        ensureNotUsed(meter, neighbours.spanFrom(date), neighbours.spanTo(date));
+        if (!recalculation) {
+            ensureNotUsed(meter, neighbours.spanFrom(date), neighbours.spanTo(date));
+        }
 
         List<MeterReadingRecord> replaced = sameDate == null ? List.of() : List.of(sameDate);
         MeterReadingRecord created = MeterReadingRecord.entered(meter.getTenantId(), meter.getId(), date, value,
                 actor.memberId(), clock.instant());
         replace(replaced, created);
-        if (sameDate == null) {
-            audit.publishReading(actor, "READING_ENTERED", meter, List.of(
-                    new FieldChange("takenOn", null, date.toString()),
-                    new FieldChange("value", null, value.toString())));
-        } else {
-            audit.publishReading(actor, "READING_REPLACED", meter, List.of(
-                    new FieldChange("takenOn", date.toString(), date.toString()),
-                    new FieldChange("value", sameDate.getValue().toString(), value.toString())));
+        AuditEvent event = sameDate == null
+                ? audit.readingEvent(actor, "READING_ENTERED", meter, List.of(
+                        new FieldChange("takenOn", null, date.toString()),
+                        new FieldChange("value", null, value.toString())))
+                : audit.readingEvent(actor, "READING_REPLACED", meter, List.of(
+                        new FieldChange("takenOn", date.toString(), date.toString()),
+                        new FieldChange("value", sameDate.getValue().toString(), value.toString())));
+        if (!recalculation) {
+            audit.publish(event);
+            pointEvents.changed(meter, date, Cause.READING_ENTERED);
         }
-        pointEvents.changed(meter, date, Cause.READING_ENTERED);
-        return new Saved(created, ReadingValidator.intervalEndingAt(span, counted, date, value).orElse(null),
+        Saved saved = new Saved(created, ReadingValidator.intervalEndingAt(span, counted, date, value).orElse(null),
                 replaced.stream().map(MeterReadingRecord::getId).toList(),
                 ReadingValidator.warnings(span, counted, date, value));
+        return new Applied(saved, meter, sameDate == null ? null : sameDate.toReading(), new Reading(date, value),
+                neighbours.spanFrom(date), neighbours.spanTo(date), through(neighbours, date), event);
     }
 
     // ---- helpers
@@ -413,6 +488,12 @@ class ReadingCommands {
 
     private static List<Reading> readingsOf(List<MeterReadingRecord> records) {
         return records.stream().map(MeterReadingRecord::toReading).toList();
+    }
+
+    /** The date of the next point after {@code date}, or {@code date} when there is none. */
+    private static LocalDate through(Neighbours neighbours, LocalDate date) {
+        Reading next = neighbours.next();
+        return next == null ? date : next.takenOn();
     }
 
     private static LocalDate earlier(LocalDate a, LocalDate b) {

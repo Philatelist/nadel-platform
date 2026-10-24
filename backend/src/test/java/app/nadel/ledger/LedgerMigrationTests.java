@@ -57,7 +57,9 @@ class LedgerMigrationTests {
             flyway(postgres, null).migrate();
 
             for (UUID tenant : List.of(first, second)) {
-                assertThat(permissions(sql, tenant, "CHAIRMAN")).hasSize(19).containsAll(LEDGER_PERMISSIONS);
+                // V13 adds the four ledger permissions, V19 RECALCULATION_RUN
+                assertThat(permissions(sql, tenant, "CHAIRMAN")).hasSize(20).containsAll(LEDGER_PERMISSIONS)
+                        .contains("RECALCULATION_RUN");
                 assertThat(permissions(sql, tenant, "MEMBER")).isEmpty();
                 assertThat(sql.queryForList("select code from charge_type where tenant_id = ? and code is not null order by position",
                         String.class, tenant)).containsExactly("MEMBERSHIP", "ELECTRICITY", "LAND_TAX", "WATER",
@@ -85,7 +87,7 @@ class LedgerMigrationTests {
             UUID fresh = UUID.randomUUID();
             sql.update("insert into tenant (id, name) values (?, 'New Cooperative')", fresh);
             sql.queryForList("select seed_base_roles(?)", fresh);
-            assertThat(permissions(sql, fresh, "CHAIRMAN")).hasSize(19);
+            assertThat(permissions(sql, fresh, "CHAIRMAN")).hasSize(20);
             assertThat(permissions(sql, fresh, "TREASURER")).containsExactlyInAnyOrder("MEMBERS_VIEW", "PLOTS_VIEW",
                     "AUDIT_VIEW", "TARIFFS_VIEW", "METERS_VIEW", "CHARGES_VIEW");
             assertThat(sql.queryForObject("select count(*) from charge_type where tenant_id = ?", Integer.class, fresh))

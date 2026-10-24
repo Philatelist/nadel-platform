@@ -2,9 +2,11 @@ import {
   getGetPlotAccountQueryKey,
   getGetPlotMapQueryKey,
   getGetPlotQueryKey,
+  getListCommonConsumerRunsQueryKey,
   getListLossesRunsQueryKey,
   getListNotChargedQueryKey,
   getListPlotsQueryKey,
+  getListRecalculationsQueryKey,
 } from '@nadel/api-client';
 import type { QueryClient } from '@tanstack/react-query';
 import { invalidateAfterClose } from './billingMonth';
@@ -57,4 +59,22 @@ export async function invalidateAfterReading(queryClient: QueryClient): Promise<
     ]);
   setTimeout(() => void refresh(), READING_CHARGE_DELAY_MS);
   await refresh();
+}
+
+/**
+ * After a recalculation is booked: its list, every plot query (accounts, cards, list, map), every billing month with
+ * its check list, the queue and the run lists.
+ */
+export async function invalidateAfterRecalculation(queryClient: QueryClient): Promise<void> {
+  const startsWith = (prefix: string) => (query: { queryKey: readonly unknown[] }) =>
+    typeof query.queryKey[0] === 'string' && query.queryKey[0].startsWith(prefix);
+  await Promise.all([
+    queryClient.invalidateQueries({ queryKey: getListRecalculationsQueryKey() }),
+    queryClient.invalidateQueries({ predicate: startsWith('/api/v1/plots') }),
+    queryClient.invalidateQueries({ predicate: startsWith('/api/v1/billing-months') }),
+    queryClient.invalidateQueries({ queryKey: getListNotChargedQueryKey() }),
+    queryClient.invalidateQueries({ queryKey: getListLossesRunsQueryKey() }),
+    queryClient.invalidateQueries({ queryKey: getListCommonConsumerRunsQueryKey() }),
+    queryClient.invalidateQueries({ queryKey: getGetPlotMapQueryKey() }),
+  ]);
 }

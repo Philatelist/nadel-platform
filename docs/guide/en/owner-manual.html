@@ -914,6 +914,13 @@ END $$;</pre>
             <td>—</td>
             <td>—</td>
           </tr>
+          <tr>
+            <td>Recalculate charges</td>
+            <td>yes</td>
+            <td>—</td>
+            <td>—</td>
+            <td>—</td>
+          </tr>
         </tbody>
       </table>
 
@@ -946,6 +953,45 @@ END $$;</pre>
             <td>Not charged → Retry</td>
             <td>Retries one item</td>
             <td>Run charges</td>
+          </tr>
+          <tr>
+            <td>Charges → Recalculations</td>
+            <td>
+              The log of booked recalculations; "Open" shows the lines, the amounts and the reversals and
+              adjustments created
+            </td>
+            <td>View charges</td>
+          </tr>
+          <tr>
+            <td>Recalculations → New recalculation → From month, To month, types, plots, Preview</td>
+            <td>Shows what would change; nothing is written</td>
+            <td>Recalculate charges</td>
+          </tr>
+          <tr>
+            <td>Preview → Reason → Book the recalculation</td>
+            <td>Books exactly this preview; the reason is required</td>
+            <td>Recalculate charges</td>
+          </tr>
+          <tr>
+            <td>Tariff card → Edit / Delete a used version</td>
+            <td>A preview step with a reason; the change and the recalculation are saved together</td>
+            <td>Manage tariffs and Recalculate charges</td>
+          </tr>
+          <tr>
+            <td>Meter card → Correct / Delete a charged reading</td>
+            <td>
+              A preview step with a reason; without the permission: "The reading has already been charged —
+              ask the chairman"
+            </td>
+            <td>Enter readings and Recalculate charges</td>
+          </tr>
+          <tr>
+            <td>Plot account → Adjustments only</td>
+            <td>
+              Filter of the adjustments of closed months, with links to the original charge and the
+              recalculation
+            </td>
+            <td>View charges (or own plot)</td>
           </tr>
           <tr>
             <td>Losses / Common consumers → From, To, Preview, Book</td>
@@ -1151,8 +1197,9 @@ END $$;</pre>
         <li>
           Charges: "View charges" opens the Charges screens and every plot account (the treasurer has it,
           read-only); "Run charges" runs months, losses and common consumers, retries "Not charged" and enters
-          opening balances; "Reverse charges" reverses a charge or a run; "Close periods" closes a month. A
-          member without "View charges" sees only their own accounts.
+          opening balances; "Reverse charges" reverses a charge or a run; "Close periods" closes a month;
+          "Recalculate charges" (the chairman only) recalculates past charges and books corrections of used
+          tariff versions and readings. A member without "View charges" sees only their own accounts.
         </li>
       </ul>
     </section>

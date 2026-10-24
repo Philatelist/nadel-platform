@@ -8,7 +8,9 @@
  * {@link app.nadel.meters.MeterValue} (a reading, three decimals, never rounded) and {@link app.nadel.meters.Quantity}
  * (an exact fraction, rounded once for display), the calculation {@link app.nadel.meters.ConsumptionCalculator} with its
  * records, the port {@link app.nadel.meters.ReadingUsage} that the ledger implements so that readings a charge uses
- * are no longer corrected or deleted (ADR 0014), the read API {@link app.nadel.meters.MeterCatalog} (which plots have a
+ * are no longer corrected or deleted (ADR 0014), the facade {@link app.nadel.meters.ReadingChanges} through which the
+ * ledger's recalculation enters, corrects or deletes such a reading together with the recalculation (feature 012), the
+ * read API {@link app.nadel.meters.MeterCatalog} (which plots have a
  * meter of a resource; the tariffs module asks it), the read API {@link app.nadel.meters.MeterNetwork} for the ledger
  * (the plot meters not read for a while, the locked points of a meter, the electricity tree with the histories of its
  * meters over a range), the event

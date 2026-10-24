@@ -20,9 +20,9 @@ prepayment           = Σ payments − Σ allocations
 ```
 
 Until payments exist (phase 3) there are no allocations: the debt per charge type is the sum of the plot's charges of
-that type, reversals counting negative, and the plot's debt is the sum over its charge types (feature 011,
-`DebtCalculator`). Example: membership 25.00 and land tax 17.50 → debts 25.00 and 17.50, total 42.50; after the
-reversal of the 25.00 the membership debt is 0.00 and the total 17.50.
+that type, reversals counting negative and adjustments with their sign (feature 012, 5.4), and the plot's debt is the
+sum over its charge types (feature 011, `DebtCalculator`). Example: membership 25.00 and land tax 17.50 → debts 25.00
+and 17.50, total 42.50; after the reversal of the 25.00 the membership debt is 0.00 and the total 17.50.
 
 ## 3. Ledger
 
@@ -30,24 +30,28 @@ reversal of the 25.00 the membership debt is 0.00 and the total 17.50.
   the database (feature 011, ADR 0006): the application role has no `UPDATE`, `DELETE` or `TRUNCATE`, and a trigger
   refuses them to every role; the only way past it is the owner role with the transaction setting
   `app.ledger_maintenance = 'on'`, used by demo data and test helpers, never by the application.
-- **Kinds.** `REGULAR` (an accrual), `REVERSAL` and `OPENING` (an opening balance, 3.2). A wrong charge is cancelled by a
-  `REVERSAL`: the same plot, charge type, service period and debt date, the opposite amount, the original named and a
-  mandatory reason. A charge is reversed at most once and a reversal is never reversed. A charge booked in a closed
-  month is not reversed by hand: its correction is an adjustment in the open month (feature 012, section 5). A whole
-  losses or common consumers run is reversed in one step (6.6, 6.7) while its month is open.
+- **Kinds.** `REGULAR` (an accrual), `REVERSAL`, `OPENING` (an opening balance, 3.2) and `ADJUSTMENT` (a correction of
+  a charge of a closed month booked by a recalculation, 5.4). A wrong charge is cancelled by a `REVERSAL`: the same
+  plot, charge type, service period and debt date, the opposite amount, the original named and a mandatory reason. A
+  charge is reversed at most once, and a reversal or an adjustment is never reversed. A charge booked in a closed month
+  is not reversed by hand: its correction is an adjustment in the earliest open month, booked by a recalculation
+  (section 5). A whole losses or common consumers run is reversed in one step (6.6, 6.7) while its month is open.
 - **Sources.** `TARIFF` (the month run, 4.1), `CONSUMPTION` (an interval of a plot meter, 6.5), `LOSSES` (the
   fixed-percentage losses of an interval, 6.5, or a proportional losses run, 6.6), `COMMON_CONSUMER` (a common
-  consumers run, 6.7), `OPENING` (3.2), `MANUAL_REVERSAL` (a reversal by hand or of a run).
+  consumers run, 6.7), `OPENING` (3.2), `MANUAL_REVERSAL` (a reversal by hand or of a run), `RECALCULATION` (an
+  adjustment, or a reversal booked by a recalculation, section 5).
 - Every entry stores its amount, its **service period** (the days it pays for), its **debt date** (`accrued_on`, the day
   the debt counts from for the plot status, section 9), the billing month it is booked in, its author (none for the
   charge of a reading, which follows the approval of the reading), its timestamp, the reason of a manual operation and
   how it was calculated (codes and numbers only: tariff versions, sotkas or kWh, rates, days, readings, the node or
   consumer of a run). Debt dates: the first day of the billing month for a month-run charge (a one-time fee: its due
   date), the reading date for a charge of a reading, the last day of the range for a run, the given date for an opening
-  balance.
+  balance, the debt date of the original charge for an adjustment.
 - One charge per source and case (a source key: a tariff, plot and month; the two points of an interval; a run and a
-  plot), so a rerun, a redelivered event or a retry never charges twice, and a reversed charge is not re-created by a
-  rerun or a retry (its correction belongs to feature 012).
+  plot), so a rerun, a redelivered event or a retry never charges twice, and a charge reversed by hand is not
+  re-created by a rerun, a retry or a recalculation (5.1). A charge a recalculation set aside because the case can no
+  longer be charged (reversed, or adjusted to 0.00 in a closed month; the case is queued) is charged again by a rerun
+  or a retry once it can be, once, under a revision key (5.5).
 
 ### 3.1 Billing months and closing
 
@@ -83,14 +87,14 @@ reversal of the 25.00 the membership debt is 0.00 and the total 17.50.
 - **Retries.** "Повторити" retries one item. A booked month run also retries every open month item and every open
   reading interval of the cooperative, whatever its month. A losses node or a common consumer item is retried by
   "Повторити" (a run of that node or consumer alone over the item's days) and settled by a later run that charges its
-  days (an item a run covers only partly is narrowed to the days left). An item disappears (`RESOLVED`) when a retry or
-  a run charges it, or the charge exists already; it becomes `OBSOLETE` when nothing is left to charge; otherwise it
-  stays open with the reason of the latest attempt. A charge of a retry whose month was closed meanwhile is booked in
-  the earliest open month with its own service period. Items never block a month from closing.
+  days (an item a run covers only partly is narrowed to the days left). An item disappears (`RESOLVED`) when a retry, a
+  run or a recalculation (5.6) charges it, or the charge exists already; it becomes `OBSOLETE` when nothing is left to
+  charge; otherwise it stays open with the reason of the latest attempt. A charge of a retry whose month was closed
+  meanwhile is booked in the earliest open month with its own service period. Items never block a month from closing.
 
 ## 4. Tariffs
 
-- A tariff belongs to a charge type (membership fee, electricity, land tax, water, or a custom special-purpose fee). A charge type may have several tariffs. A tariff has versions, each with `valid_from` (effective date). A version applies until the day before the next version's `valid_from`, or without end; the end date is derived, never stored. A change of rate is normally a new version, and two versions of a tariff never start on the same date. A version can be corrected or deleted until a charge uses it; after that a correction goes through recalculation (feature 012). The only version of a tariff is never deleted.
+- A tariff belongs to a charge type (membership fee, electricity, land tax, water, or a custom special-purpose fee). A charge type may have several tariffs. A tariff has versions, each with `valid_from` (effective date). A version applies until the day before the next version's `valid_from`, or without end; the end date is derived, never stored. A change of rate is normally a new version, and two versions of a tariff never start on the same date. A version can be corrected or deleted until a charge uses it; after that a correction goes through recalculation (section 5). The only version of a tariff is never deleted.
 - Calculation basis: `PER_PLOT`, `PER_AREA_SOTKA` (the rate per sotka, area in m² ÷ 100), `PER_KWH`, `PER_M3` (water, per cubic metre of a meter reading), `FIXED_ONE_TIME` (one-off special-purpose fee with a due date).
 - Frequency: `MONTHLY`, `QUARTERLY`, `YEARLY`, `ONE_OFF`. `ONE_OFF` goes with `FIXED_ONE_TIME` and only with it, and a one-off version has a due date.
 - Rate: a `Rate` with up to 4 decimals, never rounded on its own (section 1).
@@ -118,7 +122,8 @@ PER_KWH/PER_M3 not calculated here: needs readings (features 010–011); the plo
   the days the tariff may charge the plot (every day, or for water the days the plot is connected): each recurring
   version counts for its valid **and** applicable days over `D`, a one-time fee only when its due date is applicable;
   one rounding as above. It stores the parts (version, days, sotkas or one plot, rate). An amount of `0.00` creates no
-  charge. One charge per plot, tariff and month: a rerun never charges twice and never re-creates a reversed charge.
+  charge. One charge per plot, tariff and month: a rerun never charges twice and never re-creates a charge reversed by
+  hand.
 - **Conflicting tariffs.** When two tariffs of the same charge type apply to one plot (its scope, not excluded) on the
   same day, neither is charged for that plot; the month run puts the case in the "not charged" queue naming both
   tariffs, and the tariffs page warns. Versions never end, so two such tariffs conflict from the later first version on.
@@ -156,19 +161,203 @@ Worked examples (each is a unit test of `ChargeCalculator`):
 
 ## 5. Retroactive recalculation
 
-A new tariff version or a corrected meter reading dated in the past:
+Feature 012 (module `ledger`: `RecalculationPlanner`, pure, and `RecalculationService`). When a tariff rate, a reading or
+other data turns out to be wrong after charges were made, a recalculation corrects the past without ever changing a
+booked charge: the app works out what every affected charge should be with the data as it is now, shows the
+differences in a preview, and books them only when the chairman confirms with a reason. A recalculation is never
+automatic.
 
-1. Find all affected charges.
-2. If the period is open: reverse the old charge and create a new one.
-3. If the period is closed: nothing changes in the closed period; the current open period gets an `ADJUSTMENT` charge for the difference, referencing the original period.
-4. Members whose amount changed receive a notification.
+### 5.1 The rule: expected against effective
 
-This arrives with feature 012. Until then (feature 011) a tariff version or a reading used by a charge that is not
-reversed can no longer be corrected or deleted (409 `TARIFF_VERSION_IN_USE`, `READING_IN_USE`; free again after the
-reversal of those charges), and a change that does not touch a used version or reading never changes existing charges:
-a new back-dated tariff version, a change of a tariff's scope, a water connection entered after a reading was charged.
-In an open month the board corrects such a charge by hand: a reversal with a reason, then the case is charged again
-(a new reading has a new interval; a month run never re-creates a reversed charge).
+- **Expected.** The charges 011 would book today with the current data, calculated by the 011 planners themselves (the
+  month run of 4.1, the reading intervals with fixed-percentage losses of 6.5, the proportional losses runs of 6.6, the
+  common consumers runs of 6.7) with every existing charge ignored. There is no second calculator. Each expected charge
+  is rounded once, to kopecks, exactly as 011 rounds it.
+- **Effective amount.** The booked charge plus all its adjustments (5.4). A reversed charge and its reversal add up to
+  `0.00`, so a reversed charge is never compared again. The difference `expected − effective` is the difference of two
+  rounded amounts: it is exact and never rounded again.
+- **Identity.** A booked charge corresponds to an expected one when it charges the same thing:
+
+| Charge | Identity |
+|---|---|
+| A recurring or one-time tariff fee (month run) | the tariff, the plot and the month of its source key (a `#r…` revision suffix ignored, 5.5) |
+| An interval of a plot meter (consumption or fixed-percentage losses; electricity or water) | the source, the meter and the dates of the interval's two points. Not the reading ids: a corrected reading is a new reading with a new id, but the interval stays the same while its dates stay |
+| A plot's line of a proportional losses run | the run and the plot |
+| A plot's line of a common consumers run | the run, the consumer and the plot |
+
+- Only a `REGULAR` charge has an identity. Its reversals and adjustments belong to its chain; **opening balances are
+  never recalculated**.
+- **What is booked for each identity:**
+
+| Case | Month of the booked charge | What is booked |
+|---|---|---|
+| The amount differs | open | a `REVERSAL` of the booked charge (source `RECALCULATION`, the reason, in the booked charge's month) and a new `REGULAR` charge with the expected amount and calculation, booked in the month 011 books it in |
+| The amount differs | closed | an `ADJUSTMENT` for `expected − effective` in the earliest open month, linked to the original charge, with its service period and debt date |
+| The charge should no longer exist (its interval is gone, the tariff no longer applies, the expected amount is `0.00`, or it cannot be charged any more and is queued, 5.6) | open | a `REVERSAL` |
+| The charge should no longer exist | closed | an `ADJUSTMENT` for `−effective` |
+| An expected charge has no booked counterpart (a back-dated version now covers the days, an interval changed its points) | — | a new `REGULAR` charge, booked like any 011 charge: in its own month if open, else in the earliest open month with its own service period |
+| Expected equals effective | — | nothing |
+
+- **An interval whose points changed** (a reading deleted or entered inside it, or a reading moved to another date) is a
+  different identity: the old interval's charges are reversed (open month) or cancelled by an adjustment `−effective`
+  (closed month), and the new intervals are charged as new charges. The total can stay the same. A correction of a
+  reading's value on the same date keeps both intervals around it: they are the same identities with new amounts.
+- **A charge that now belongs to another plot or charge type** (a meter moved) is a charge that should no longer exist,
+  and the expected one is a new charge.
+- **Hand reversals stay.** A charge reversed by hand (`MANUAL_REVERSAL`) and not booked again is frozen: the
+  recalculation leaves its chain alone. Reversals made by a recalculation have the source `RECALCULATION`, so the two
+  are always told apart.
+- **Closed months never change.** A closed month keeps its charges and totals; its corrections appear only as
+  adjustments in an open month. A charge that adjustments brought to `0.00` stays in its closed month.
+- **Effective never below zero in this phase.** Without payments (phase 3) the expected amount is never negative, so a
+  recalculation brings an effective amount down to `0.00` at most. **Rule recorded for phase 3:** a correction that
+  lowers a debt already paid makes a prepayment of that plot (section 7), never a negative debt.
+
+### 5.2 Losses and common consumers runs
+
+- A run follows its own billing month (the month of its range end, or the earliest open month after it, 6.6), not the
+  month a single charge of it is booked in.
+- **Open month:** when any line of the run differs, every live charge of the run is reversed (source `RECALCULATION`,
+  the run marked reversed) and the run is booked again as a new run for the same range and the same nodes or consumers,
+  with the new numbers; the lines whose amount stays are reversed and booked again too. When nothing is left to charge,
+  the run is only reversed.
+- **Closed month:** the identity rules of 5.1 per plot line: an adjustment for the difference of each plot's share, and
+  a plot new to the run gets a new charge of the original run in the earliest open month.
+
+### 5.3 What starts a recalculation, and its scope
+
+| Cause | Where | Scope |
+|---|---|---|
+| A tariff version added with a start in the past, or a used version corrected or deleted | the tariff card | the tariff's charge type; the chargeable plots the tariff covers; the billing months the old and new validity of the version touch (from the cooperative's first billing month to the current month); the interval charges and runs of that charge type that close from the first of those months on |
+| A used reading corrected or deleted, or a reading entered inside a charged interval | the meter card, the reading round | the meter's intervals around the old and the new date (from the previous to the next point); the booked runs that read the meter on a day the change reaches (for electricity also the common consumers runs); no tariff fee |
+| Anything else that changes past amounts: plot area, tariff scope or exclusions, water connection dates, the meter tree, a charge type made active again | "Нарахування → Перерахунок" (manual) | months from–to (never after the current month, at most 24 months), charge types (all active ones or the chosen), plots (all chargeable ones or the chosen); the booked runs whose range ends in the months |
+
+- **A cause-driven change and its recalculation are one booking.** The version or reading changes only together with
+  the recalculation; if the booking is refused, the change is not saved either. A change whose plan has no lines (it
+  alters no amount) is saved alone, without a reason and without a recalculation record. Editing only the note of a
+  used version is saved directly. A used version is deleted softly, so the charges priced by it stay explainable.
+- **The other changes recalculate nothing by themselves.** The screen where they are made shows "Минулі нарахування не
+  змінено. За потреби — Нарахування → Перерахунок." / "Past charges have not changed. If needed — Charges →
+  Recalculation."
+- **An inactive charge type is left out of a tariff version cause:** it charges nothing, so a rate edit of a tariff of
+  an inactive type is saved without recalculating; after the type is made active again, the board runs a manual
+  recalculation.
+- **A chosen plot pulls its whole run in.** A run is recalculated as a whole, so a manual recalculation of one plot that
+  has a charge of a run includes that run with all its plots.
+- **Approvals have no recalculation step.** Approving a member's pending reading that falls inside a charged interval
+  stays refused (409 `READING_IN_USE`); the board enters the reading on the meter card instead, which opens the
+  recalculation step.
+- **Data without a dated history is applied to the past as it is today:** the plot area, tariff scopes and exclusions,
+  the active and archived flags, the losses mode and the fixed losses percentage. Archived plots, common land and
+  inactive charge types are left out. **Known limitation:** after the losses mode was switched from `PROPORTIONAL` to
+  `FIXED_PERCENT`, a recalculation of electricity over a period that also has proportional losses runs adds
+  fixed-percentage losses to the past intervals while the runs stay (or are booked again): the losses would be charged
+  twice. Switched the other way, it removes the fixed losses of the past intervals. The board must not recalculate
+  electricity over such a period without checking the preview (choose the months and charge types so that it is left
+  out).
+
+### 5.4 Adjustments
+
+- An **adjustment** is a charge of kind `ADJUSTMENT`, source `RECALCULATION`: positive or negative, never `0.00`. It
+  points at the `REGULAR` charge it corrects (never a reversal, an adjustment, an opening balance or a reversed charge),
+  keeps that charge's plot, charge type, tariff or meter, **service period** and **debt date** (`accrued_on`, so the
+  debt age stays honest), is booked in the earliest open month, and carries the reason and its recalculation. Its parts
+  are those of the expected charge (the tariff versions and, for an interval, its two points), so those versions and
+  readings count as used (6.5).
+- One adjustment per original charge and recalculation. An adjustment is never reversed by hand (409
+  `ADJUSTMENT_NOT_REVERSIBLE`); a later recalculation adjusts the same original charge again.
+- **Debt.** The debt per charge type includes adjustments with their sign (section 2). The oldest unpaid charge of a
+  plot (section 9) is the oldest debt date among its charges that are neither a reversal nor an adjustment, were not
+  reversed, and whose effective amount is above `0.00`: an adjustment carries the debt age of its charge and never
+  counts on its own.
+- The plot account shows it as "Коригування за <місяць оригіналу>: −5,00 ₴ — <причина>" / "Adjustment for <original
+  month>: −5,00 ₴ — <reason>", with links to the original charge and to the recalculation (the link to the
+  recalculation only for those who may view charges). A member sees the adjustments of their own plots.
+
+### 5.5 Keys of the new charges
+
+- A new charge of a recalculation gets the 011 source key when it is free; when a charge already has it (the reversed
+  original), it gets the **revision key** `base#r{recalculationId}`, so the 011 uniqueness of keys holds. An identity
+  ignores the suffix. An adjustment has the key `ADJUSTMENT:{recalculationId}:{originalChargeId}`.
+- **How the 011 paths treat such keys** (the month run, "Повторити" and the charging of readings, `ChargeKeys`): a key
+  counts as charged while a charge with it, or with one of its `#r…` keys, stands or was reversed by hand, so nothing
+  is booked twice and a hand reversal is never undone. A key whose every charge a recalculation set aside (reversed in
+  an open month, or adjusted to `0.00` in a closed month, because the case cannot be charged now and is queued) does
+  not count: once the case can be charged, 011 charges it again, once, under `base#r{recalculationId}`, in its own month
+  if open, else in the earliest open month with its own service period.
+- **The interval check.** The key of an interval also counts as charged while a charge of the same interval (the same
+  meter, source and point dates) stands under another key. A reading corrected by a recalculation that adjusted the
+  interval, or left its amount unchanged, keeps the charge under the old reading's key while the corrected reading has
+  a new one; a reading event delivered again for it books no duplicate. A change booked with a recalculation publishes
+  no reading event of its own: the recalculation charges the intervals itself.
+
+### 5.6 The "not charged" queue
+
+- An open item of the scope that the recalculation now charges is resolved; a case found that cannot be charged (for
+  example no tariff for some days) is opened or refreshed with its reason as in 3.3, and a booked charge of that case is
+  treated as one that should no longer exist; an item whose case is gone becomes obsolete.
+- A plan without lines changes no queue item (the month run, "Повторити" and the charging of readings keep them up to
+  date), except for a reading change saved alone: no reading event follows it, so it applies its queue outcomes.
+
+### 5.7 Preview, booking and records
+
+- **The preview books nothing.** It lists the lines grouped by plot and month: charge type, booked amount, adjustments
+  so far, expected amount, difference, action ("Сторно і нове нарахування", "Коригування", "Нове нарахування",
+  "Сторно") with the month it goes to, and why the amount changed (tariff version, reading, area, water connection,
+  tariff plots, meter tree, run, not charged); the totals per charge type and overall, the number of plots and the
+  scope. A cause-driven preview applies the change and rolls it back.
+- **"Змін немає" / "No changes".** A preview without lines offers no booking. Running the same recalculation again
+  books nothing: a recalculation is idempotent.
+- **Booking** needs a reason (1 to 500 characters), stored on the recalculation and on every reversal and adjustment it
+  books. The whole plan is booked in one transaction, or nothing. A booking whose plan no longer matches the preview's
+  digest (a reading, a run or another recalculation in between) is refused: "Нарахування змінилися після перегляду.
+  Перегляньте знову перед проведенням." (409 `PREVIEW_OUTDATED`).
+- **One at a time.** Every path that books or reverses charges of a cooperative (the month run, "Повторити", the
+  charging of readings, losses and common consumers runs and their reversals, a reversal by hand, a recalculation and
+  its preview) first takes the cooperative's charging lock, so a recalculation reads and books with no other charging in
+  between, and a second one waits until the first finishes. A recalculation runs synchronously; the manual range is
+  capped at 24 months.
+- **Record.** Every booked recalculation is kept: cause (manual, tariff version or reading), scope, reason, author,
+  time, total, and its lines (the original charge, booked, adjustments so far, expected, difference, action, the
+  charges it created). It is never undone as a whole: a mistake is corrected by another recalculation after the data is
+  fixed.
+- **Permissions.** Previewing and booking need `RECALCULATION_RUN` (Chairman); a used tariff version also needs
+  `TARIFFS_MANAGE`, a used reading `READINGS_ENTER`. Reading the recalculations needs `CHARGES_VIEW`. The demo
+  electrician, who may enter readings but not recalculate, sees "Показ уже нараховано — зверніться до голови" and the
+  reading stays unchanged.
+- **Out of scope:** notifying members about corrections (phase 8), recalculating opening balances, reopening closed
+  months, a dated history of plot area or tariff scopes.
+
+### 5.8 Worked examples
+
+Each row is a unit test of the planner (`RecalculationPlannerTests`); the booking tests repeat the key ones end to end.
+Membership 50.0000 UAH per sotka per year unless stated, plot 600 m² (25.00 a month), electricity 4.3200 UAH per kWh;
+September closed and October open unless stated.
+
+| Case | Input | Expected plan |
+|---|---|---|
+| Wrong rate corrected | version 60.0000 from 01.09 should have been 50.0000; Sept 30.00 and Oct 30.00 booked | Sept: adjustment −5.00 in Oct; Oct: reversal −30.00 and new 25.00; total after booking 50.00 |
+| Back-dated version, open month only | new version 60.0000 from 01.10 entered on 20.10 | Oct: reversal −25.00 and new 30.00; Sept unchanged |
+| Back-dated version into a closed month | new version 60.0000 from 16.09 (30-day September) | Sept: expected 12.50 + 15.00 = 27.50, adjustment +2.50 in Oct; Oct: reversal −25.00 and new 30.00 |
+| Version deleted, the tariff no longer applies in October | the only October version deleted, the tariff now starts in November | Oct: reversal −25.00; Sept unchanged |
+| Reading corrected, both intervals open | 05.10: 8 205 → 8 215; intervals 8 140 → 8 205 and 8 205 → 8 270 (65 kWh, 280.80 each), October and November open | first: reversal and new 75 kWh = 324.00; second: reversal and new 55 kWh = 237.60 |
+| Reading corrected, first interval in a closed month | readings 03.08 8 140, 05.09 8 205 → 8 215, 05.10 8 270; the first interval booked in closed September | first: adjustment +43.20 in the earliest open month; second: reversal −280.80 and new 237.60 |
+| Reading deleted, intervals merge | readings 03.09 8 140, 05.10 8 205, 05.11 8 270, both intervals charged in open months; 05.10 deleted | both interval charges reversed; one new charge 03.09 → 05.11, 130 kWh = 561.60; total unchanged |
+| Reading deleted, one interval in a closed month | readings 03.08 8 140, 05.09 8 205, 05.10 8 270; the first interval booked in closed September; 05.09 deleted | first: adjustment −280.80; second: reversal −280.80; new 561.60 in the earliest open month |
+| Back-dated version charges a queued interval | interval 20.09 – 05.10 queued "Немає тарифу на всі дні"; an electricity version from 01.09 added | a new charge for the interval; the queue item resolved |
+| Fixed-percentage losses follow the interval | 5 %, an interval corrected from 65 to 75 kWh in an open month | consumption: reversal and new 324.00; losses: reversal of 14.04 and new 3.75 kWh = 16.20 |
+| Proportional losses run, open month | a reading of quarter A's meter corrected after the October run | the run reversed as a whole and booked again with the new numbers |
+| Proportional losses run, closed month | the same, the run booked in closed September | each plot of the run gets an adjustment for the difference of its share |
+| Manual: area corrected | plot area 600 → 700 m² corrected in November, recalculated for September–October | Sept: adjustment +4.17 (29.17 − 25.00); Oct: reversal −25.00 and new 29.17 |
+| Already adjusted charge corrected again | Sept 30.00 adjusted by −5.00 earlier, the rate now 40.0000 | effective 25.00, expected 20.00 → adjustment −5.00 |
+| Run twice | the same recalculation previewed again after booking | "Змін немає", nothing to book |
+| Stale preview | a reading entered between the preview and the booking | 409 `PREVIEW_OUTDATED`, nothing booked |
+| Correction that changes nothing | the note of a used version edited | saved, no recalculation |
+| Electrician corrects a charged reading | without `RECALCULATION_RUN` | the reading endpoint answers 409 `READING_IN_USE` and `/recalculations` 403; the round shows "Показ уже нараховано — зверніться до голови" |
+
+The requirement (`docs/features/012-retroactive-recalculation.md` §3) states the two "first interval in a closed
+month" rows with the readings 03.09, 05.10 and 05.11; with those dates the first interval closes in October, so the
+rows above (and the tests) use the readings one month earlier, 03.08, 05.09 and 05.10. The amounts are unchanged.
 
 ## 6. Electricity
 
@@ -324,9 +513,11 @@ Feature 010 (`ConsumptionCalculator`, pure and tested without a database).
 - **Water** (per m³) works the same way once the "Вода" charge type is active and has a per-m³ tariff, and only for the
   days the plot is connected to water (section 11): the m³ of the days not connected are dropped with their share, and
   an interval without a connected day charges and queues nothing.
-- **In use.** A reading is in use while a charge or a run that is not reversed read the meter on a day it reaches: a
-  correction or deletion of a charged reading, or a new reading inside a charged interval, is refused; a new reading
-  after a charged interval is accepted; after the reversal of the charge (or the run) the reading may change again.
+- **In use.** A reading is in use while a charge or a run that is not reversed read the meter on a day it reaches (an
+  adjustment reads the two points of its interval too): a correction or deletion of a charged reading, or a new reading
+  inside a charged interval, is refused on its own; a new reading after a charged interval is accepted; after the
+  reversal of the charge (or the run) the reading may change again. Since feature 012 such a change is made together
+  with a recalculation (5.3).
 
 ### 6.6 Proportional losses runs (feature 011)
 
@@ -415,12 +606,14 @@ GREY   common land, or a plot without an owner
 
 Visibility: A member always sees full details (status, amounts, owners) of the plots they own. Whether a member also sees the status color of other plots is a cooperative setting chosen by the chairman: `OWN_ONLY` (default; other plots show number, street and kind with a neutral color) or `ALL_PLOTS` (the status color of every plot, still without amounts, owners or personal data). Showing every plot's color should follow a general meeting decision; changing the setting is audited. Admins see what their permissions allow. This is enforced by the API, not only hidden in the UI.
 
-After every charge and reversal (later also every allocation and recalculation) the debt of the plot and the date of
-its oldest unpaid charge are rebuilt from the ledger and cached in `plot_status` (the cache can be rebuilt from the
-ledger at any time). Until payments exist, the debt is the sum of the charges and the oldest unpaid charge is the oldest
-`accrued_on` among the positive charges that were not reversed. The colour itself is derived whenever it is read, from
-the cached debt and date, the current thresholds and today, so a change of the thresholds and the passing of days apply
-at once without rewriting the cache. "Debt age > red_days" means today minus that date is more than `red_days` days.
+After every charge, reversal and recalculation (later also every allocation) the debt of the plot and the date of its
+oldest unpaid charge are rebuilt from the ledger and cached in `plot_status` (the cache can be rebuilt from the ledger
+at any time). Until payments exist, the debt is the sum of the charges, adjustments included, and the oldest unpaid
+charge is the oldest `accrued_on` among the charges that are neither a reversal nor an adjustment, were not reversed,
+and whose effective amount (the charge plus its adjustments, 5.4) is above 0.00. The colour itself is derived whenever
+it is read, from the cached debt and date, the current thresholds and today, so a change of the thresholds and the
+passing of days apply at once without rewriting the cache. "Debt age > red_days" means today minus that date is more
+than `red_days` days.
 
 ## 10. Land tax
 
@@ -443,7 +636,8 @@ never overlap. Common land and archived plots are never connected.
   the m³ of its connected days (6.5).
 - **The well pump.** A common consumer split `CONNECTED_PLOTS` (6.7) is shared among the plots connected to that well by
   their connected days.
-- A connection entered after a reading was charged does not change that charge (section 5).
+- A connection entered after a reading was charged does not change that charge; a manual recalculation of water does
+  (5.3).
 - Connections are entered on the plot card, in bulk on the water source's page in the settings and by the optional
   "Вода" / "Water" column of the Plots import sheet (yes: the cooperative's only source; a source name: that well; no or
   empty: unchanged); connecting and disconnecting are audited.

@@ -47,7 +47,8 @@ within the working period; that a `REJECTED` or `APPROVED` row carries `decided_
 | `ConsumptionCalculator` | Pure and static (no Spring, no database, no clock); see below |
 | `ReadingUsage` | Port: `isUsed(tenantId, meterId, from, to)`; the ledger implements it (`LedgerReadingUsage`, feature 011: a charge that is not reversed read the meter on a day of the span). Every bean is asked; the readings are used when any says so |
 | `PlotMeterPointsChanged` | Event (feature 011): the points of a plot meter changed on a date (`cause` `READING_ENTERED`, `READING_APPROVED`, `READING_CORRECTED`, `READING_DELETED`, `METER_REMOVED`, `METER_REPLACED`), published by `internal.MeterPointEvents` in the transaction of the change, for `PLOT` meters only; a correction that moves a reading publishes one per date. Ids, codes and a date only. The ledger charges the intervals around the date |
-| `MeterCatalog` | Read API for other modules (`internal.JpaMeterCatalog`): `plotIdsWithActiveMeter(resource)` (plots with an active plot meter of the resource now) and `hasMeterBetween(plot, resource, from, to)` (a plot meter of the resource worked on a day of the range, both ends included). The tariffs module uses it for `NO_METER` and the plot counts of meter-based tariffs. `find(meterId)` (kind, resource, name, active; removed meters too) and `chainOf(meterId)` (the ids of its chain of replacements, oldest first): the ledger's settings of a common consumer, which belong to the consumer's whole chain (011 slice 7) |
+| `ReadingChanges` | Facade for the ledger's recalculation (feature 012 §2.5, `internal.ReadingChangeService` over `ReadingCommands`): `enter(meterId, takenOn, value, actor)`, `correct(readingId, takenOn, value, actor)`, `delete(readingId, actor)` in the caller's transaction (`Propagation.MANDATORY`; a preview rolls the change back). The same locks, rules and supersede writes as the reading endpoints, but no use check and no `PlotMeterPointsChanged` (the recalculation charges the intervals itself, so the listener cannot book them twice). Returns a `Change`: the meter (kind, resource, plot), the reading after the change, the readings before and after (date and value), the days the change reaches (`from`, `to`: the span the use check asks about) and the last point whose interval it alters (`through`), and the audit entry (`READING_ENTERED`/`REPLACED`/`CORRECTED` with the changed fields only/`DELETED`), **not published**: the ledger publishes it with the recalculation's entry |
+| `MeterCatalog` | Read API for other modules (`internal.JpaMeterCatalog`): `plotIdsWithActiveMeter(resource)` (plots with an active plot meter of the resource now) and `hasMeterBetween(plot, resource, from, to)` (a plot meter of the resource worked on a day of the range, both ends included). The tariffs module uses it for `NO_METER` and the plot counts of meter-based tariffs. `find(meterId)` (kind, resource, name, active; removed meters too) and `chainOf(meterId)` (the ids of its chain of replacements, oldest first): the ledger's settings of a common consumer, which belong to the consumer's whole chain (011 slice 7). `plotMeterIds(plots, resources)` (the plot meters of the plots, active and removed, in id order): the intervals a recalculation charges (012) |
 | `MeterNetwork` | Read API for the ledger (`internal.JpaMeterNetwork`, feature 011): `lockSharedPoints(meterId)` locks the meter `FOR SHARE` (a reading write holds it `FOR UPDATE`) and returns its points with stable keys (`INSTALL:{meter}`, the reading id, `REMOVAL:{meter}`; a reading on a boundary date takes its place), in the caller's transaction; `staleMeters(asOf, days)` lists the plot meters that worked on `asOf` (installed on or before it, not removed on or before it) whose last point on or before `asOf` (the latest approved reading, else the installation) is dated before `asOf - days`, as `StaleMeter(meterId, plotId, resource, lastReadingOn)`; the rule of the round's `noReadingSince` filter, as of a date. The closing check list of a billing month asks it with 60 days; `network(from, to)` (and `lockSharedNetwork`, every electricity meter `FOR SHARE` in id order first) gives the electricity tree for the losses runs: every chain that worked in the range with its meters' histories (all approved readings) and its places in the tree by days (`Placement(parentKey, from, to)`, through the day of the final removal, `null` parent for the days without one), built by `TreeQueries.network` like the tree screen. Tests: `MeterNetworkTests`, the ledger's `LossesRunsTests` |
 | `WaterConnections` | Read API for the ledger (`internal.JpaWaterConnections`, feature 011): `connectedDays(plotIds, from, to)` gives, per plot, the days it was connected to any water source in the range (clipped, oldest first; a plot without such a day is absent), `connectedToSource(sourceMeterId, from, to)` the same for one source (null = the cooperative's water supply), for the common consumer split of a well pump. In the caller's transaction |
 | `MeterImport` | Facade of the Excel import's Meters sheet (`internal.MeterImportService`): `plan`, `lock`, `apply`, with `MeterImportRow`, `MeterImportPlan`, `MeterImportItem`, `MeterImportAction` (`NEW`, `UNCHANGED`) and `MeterImportProblem`. See The Excel sheet |
@@ -172,7 +173,9 @@ rules and the warning), `ReadingProblem`, `ReadingCommands`, `ReadingQueries`, `
   point (for a correction around both the old and the new date); any "yes" is 409 `READING_IN_USE` (a row error in a
   batch). The neighbouring points stay out, so a new reading after a charged interval is accepted while a change inside
   or at the end of a charged interval is not (feature 011). `changeable` in the history says when a reading can still
-  change.
+  change. A used reading is corrected, deleted or entered inside a charged interval only together with a
+  recalculation (feature 012: `POST /recalculations` with a `READING_*` cause, through `ReadingChanges`); the endpoints
+  keep answering 409.
 - **Charges.** Every saved change of a counted reading of a plot meter (entry, approval, correction, deletion) and a
   removal or replacement publish `PlotMeterPointsChanged`; the ledger charges the intervals asynchronously. A meter
   registration or import publishes nothing (an initial value closes no interval).
@@ -189,7 +192,10 @@ rules and the warning), `ReadingProblem`, `ReadingCommands`, `ReadingQueries`, `
 Entity type `METER_READING`, entity id = the meter (the log links to the meter card, as `OWNERSHIP` entries carry the
 plot), label = the meter's label. `READING_ENTERED` (`takenOn`, `value` new), `READING_REPLACED` (`takenOn` old and new
 the same date, `value` old and new), `READING_CORRECTED` (old and new `takenOn` and `value`, only those that changed), `READING_DELETED`
-(`takenOn`, `value` old). Values are ISO dates and readings with three decimals.
+(`takenOn`, `value` old). Values are ISO dates and readings with three decimals. A change booked together with a
+recalculation (feature 012, `ReadingChanges`) is published by the ledger with the field `recalculationId` (new value:
+the recalculation's id) added, in one `AuditBatch` before the recalculation's `RECALCULATION_BOOKED`; a change whose
+plan is empty is published alone, without the field.
 
 ## Replacement and range consumption (slice 4)
 
@@ -261,7 +267,10 @@ Internal: `ApprovalQueries`; the commands are in `ReadingCommands` (`submit`, `a
   against the counted readings as they are now (`READING_DATE_OUTSIDE_METER`, `READING_OUT_OF_ORDER`), asks the
   `ReadingUsage` ports about the span around its date (`READING_IN_USE`), then supersedes a counted reading of the same
   date (flushed out of `APPROVED` first, then linked) and sets `APPROVED` with `decided_by_member_id` and `decided_at`.
-  The source stays `MEMBER`. 200 with the interval it now closes and its warnings.
+  The source stays `MEMBER`. 200 with the interval it now closes and its warnings. Approval has no recalculation step
+  (feature 012): a pending reading that falls inside a charged interval stays 409 `READING_IN_USE`; the board enters
+  the reading on the meter card instead (a back-dated entry, which goes through the recalculation step) and rejects the
+  member's pending one.
 - **Rejection** needs a `reason` (trimmed, 1 to 500 characters; blank is 400 `REQUIRED`), takes only a `PENDING`
   reading, sets `REJECTED` with the reason and the decider. The member reads the reason in the meter's history
   (`rejectReason`). The reason is user content: it is stored and audited, never logged.
@@ -441,4 +450,6 @@ only from the 12th day before the readings' anchor; so the four water meters are
 and a meter of plot 25 installed on 15.12.2025 under quarter Б with one reading 5 days before the anchor (its interval
 starts before the first electricity tariff version and is the demo's "not charged" item). The template readings and
 the node readings of this block leave plot 25 out, so a re-run gives the same values whether or not that meter exists.
-In the dev demo the readings of the charged intervals and of the runs are in use (`READING_IN_USE` on a correction).
+In the dev demo the readings of the charged intervals and of the runs are in use (`READING_IN_USE` on a correction;
+the chairman corrects them with the recalculation step, the electrician sees "Показ уже нараховано — зверніться до
+голови").

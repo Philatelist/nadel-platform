@@ -110,7 +110,7 @@ class OpeningBalances {
         audit.publish(actor, LedgerAuditPublisher.Action.OPENING_BALANCE_ENTERED, plotId, plot.number(),
                 booked.auditChanges());
         events.publishEvent(new ChargesBooked(tenantId, Set.of(plotId)));
-        return views.view(booked.charge(), null, views.context(List.of(booked.charge()), actor));
+        return views.view(booked.charge(), views.context(List.of(booked.charge()), actor));
     }
 
     /**

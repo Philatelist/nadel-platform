@@ -1,6 +1,7 @@
 package app.nadel.meters;
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -45,4 +46,11 @@ public interface MeterCatalog {
      * still worked that day.
      */
     boolean hasMeterBetween(UUID plotId, MeterResource resource, LocalDate from, LocalDate to);
+
+    /**
+     * The plot meters of the plots that measure one of the resources, active and removed, in id order (a
+     * recalculation charges the intervals of every meter a plot has had, feature 012). No locks: the caller locks each
+     * meter through {@code MeterNetwork#lockSharedPoints}.
+     */
+    List<UUID> plotMeterIds(Collection<UUID> plotIds, Collection<MeterResource> resources);
 }

@@ -13,6 +13,7 @@ import { useLocale, useT } from '../../i18n';
 import { useCan } from '../../me';
 import { problemCode, problemMessage, type FieldErrors } from '../../problem';
 import { UserContent } from '../UserContent';
+import { RecalcHint } from '../recalculation/RecalcHint';
 import { Badge, Button, Notice, Panel, RadioGroup, TextArea } from '../ui';
 import { PlotPicker, type PickedPlot } from './PlotPicker';
 
@@ -137,7 +138,12 @@ export function ScopeEditor({ tariff }: { tariff: Tariff }) {
     <Panel title={s.title}>
       {!editing ? (
         <div className="flex flex-col gap-3">
-          {saved && <Notice tone="success">{s.saved}</Notice>}
+          {saved && (
+            <>
+              <Notice tone="success">{s.saved}</Notice>
+              <RecalcHint />
+            </>
+          )}
           <p className="font-medium">
             {tariff.scopeKind === 'ALL_PLOTS' ? s.all : s.selected}
             <span className="font-normal text-ink-muted"> · {count}</span>

@@ -151,7 +151,22 @@ class DemoLedgerDataTests extends IntegrationTest {
             return result;
         });
 
-        Map<String, Map<String, Object>> stored = charges("source = 'TARIFF'");
+        Map<String, Map<String, Object>> stored = charges("source = 'TARIFF' and c.recalculation_id is null");
+        // plot 2's membership was booked at 60 per sotka and is corrected by the demo recalculation (see
+        // theDemoRecalculationIsBookedLikeARealOne); the month run plans it at the current rate of 50
+        Map<String, Object> corrected = new HashMap<>();
+        for (Map<String, Object> row : owner.queryForList("select c.source_key, c.amount, to_char(b.month, 'YYYY-MM') "
+                + "as month from charge c join billing_month b on b.id = c.billing_month_id "
+                + "join plot p on p.id = c.plot_id where c.tenant_id = ? and p.number = '2' and c.source = 'TARIFF' "
+                + "and c.recalculation_id is null and c.charge_type_id = md5(? || ':CHARGE_TYPE:MEMBERSHIP')::uuid",
+                DEMO_TENANT, DEMO_TENANT.toString())) {
+            corrected.put((String) row.get("source_key"), row.get("amount"));
+            assertAmount(row, new BigDecimal("30.00"));
+            assertAmount(stored.remove((String) row.get("source_key")), new BigDecimal("30.00"));
+            assertThat(planned.remove((String) row.get("source_key")).amount().value())
+                    .isEqualByComparingTo("25.00");
+        }
+        assertThat(corrected).hasSize(2);
         assertThat(stored.keySet()).containsExactlyInAnyOrderElementsOf(planned.keySet());
         assertThat(planned).hasSizeGreaterThan(50);
         for (TariffMonthPlanning.PlannedCharge charge : planned.values()) {
@@ -511,6 +526,48 @@ class DemoLedgerDataTests extends IntegrationTest {
     }
 
     @Test
+    void theDemoRecalculationIsBookedLikeARealOne() throws Exception {
+        // exactly one recalculation: 60 -> 50 per sotka on plot 2 (600 m2), two lines
+        Map<String, Object> recalculation = owner.queryForMap("select id, cause, reason, total, line_count, plot_count "
+                + "from recalculation where tenant_id = ?", DEMO_TENANT);
+        assertThat(recalculation).containsEntry("cause", "MANUAL")
+                .containsEntry("reason", "Виправлено ставку членського внеску")
+                .containsEntry("line_count", 2).containsEntry("plot_count", 1);
+        assertThat((BigDecimal) recalculation.get("total")).isEqualByComparingTo("-10.00");
+        UUID id = (UUID) recalculation.get("id");
+        assertThat(owner.queryForObject("select count(*) from recalculation_line where recalculation_id = ?",
+                Integer.class, id)).isEqualTo(2);
+        // the lines point at the charges the recalculation booked
+        assertThat(owner.queryForObject("select count(*) from recalculation_line l where l.recalculation_id = ? "
+                + "and ((l.action = 'ADJUST' and l.adjustment_charge_id is not null) "
+                + "or (l.action = 'REVERSE_AND_RECHARGE' and l.reversal_charge_id is not null "
+                + "and l.new_charge_id is not null))", Integer.class, id)).isEqualTo(2);
+        assertThat(owner.queryForObject("select count(*) from charge where tenant_id = ? and recalculation_id = ?",
+                Integer.class, DEMO_TENANT, id)).isEqualTo(3);
+
+        // the adjustment is visible on the plot's account, and the membership is the two months at the corrected rate
+        JsonNode two = account("2");
+        List<JsonNode> adjustments = two.get("charges").valueStream()
+                .filter(c -> c.get("kind").asString().equals("ADJUSTMENT")).toList();
+        assertThat(adjustments).hasSize(1);
+        assertThat(adjustments.get(0).get("amount").asString()).isEqualTo("-5.00");
+        assertThat(adjustments.get(0).get("source").asString()).isEqualTo("RECALCULATION");
+        assertThat(adjustments.get(0).get("reason").asString()).isEqualTo("Виправлено ставку членського внеску");
+        assertThat(two.get("charges").valueStream().filter(c -> c.get("kind").asString().equals("REVERSAL"))
+                .map(c -> c.get("amount").asString())).containsExactly("-30.00");
+        // membership of both months at the corrected rate: 30 + 30 - 30 + 25 - 5 = 2 x 25
+        assertThat(owner.queryForObject("select sum(c.amount) from charge c join plot p on p.id = c.plot_id "
+                + "where c.tenant_id = ? and p.number = '2' and c.charge_type_id = md5(? || ':CHARGE_TYPE:MEMBERSHIP')"
+                + "::uuid", BigDecimal.class, DEMO_TENANT, DEMO_TENANT.toString())).isEqualByComparingTo("50.00");
+        assertThat(two.get("total").asString()).isEqualTo(owner.queryForObject("select s.debt::text from plot_status s "
+                + "join plot p on p.id = s.plot_id where p.tenant_id = ? and p.number = '2'", String.class,
+                DEMO_TENANT));
+        // no other plot carries an adjustment
+        assertThat(owner.queryForObject("select count(*) from charge where tenant_id = ? and kind = 'ADJUSTMENT'",
+                Integer.class, DEMO_TENANT)).isEqualTo(1);
+    }
+
+    @Test
     void runningTheBlockAgainChangesNothingAndClearRemovesIt() {
         String counts = "select (select count(*) from charge where tenant_id = ?) || '|' "
                 + "|| (select coalesce(sum(amount), 0) from charge where tenant_id = ?) || '|' "
@@ -519,16 +576,18 @@ class DemoLedgerDataTests extends IntegrationTest {
                 + "|| (select count(*) from not_charged_item where tenant_id = ?) || '|' "
                 + "|| (select count(*) from plot_water_connection where tenant_id = ?) || '|' "
                 + "|| (select count(*) from billing_month where tenant_id = ?) || '|' "
-                + "|| (select count(*) from meter_reading where tenant_id = ?)";
+                + "|| (select count(*) from meter_reading where tenant_id = ?) || '|' "
+                + "|| (select count(*) from recalculation where tenant_id = ?) || '|' "
+                + "|| (select count(*) from recalculation_line where tenant_id = ?)";
         Object[] tenant = {DEMO_TENANT, DEMO_TENANT, DEMO_TENANT, DEMO_TENANT, DEMO_TENANT, DEMO_TENANT, DEMO_TENANT,
-            DEMO_TENANT};
+            DEMO_TENANT, DEMO_TENANT, DEMO_TENANT};
         String before = owner.queryForObject(counts, String.class, tenant);
 
         DemoLedgerData.restore(owner);
         assertThat(owner.queryForObject(counts, String.class, tenant)).isEqualTo(before);
 
         DemoLedgerData.clear(owner);
-        assertThat(owner.queryForObject(counts, String.class, tenant)).isEqualTo("0|0|0|0|0|0|0|186");
+        assertThat(owner.queryForObject(counts, String.class, tenant)).isEqualTo("0|0|0|0|0|0|0|186|0|0");
         assertThat(owner.queryForObject("select count(*) from meter where tenant_id = ?", Integer.class,
                 DEMO_TENANT)).isEqualTo(38);
         assertThat(owner.queryForObject("select count(*) from plot_status s join plot p on p.id = s.plot_id "

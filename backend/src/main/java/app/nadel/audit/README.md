@@ -82,15 +82,17 @@ the root `CLAUDE.md`). A server never writes an English phrase into `entity_labe
 | Where | Value | Client |
 |---|---|---|
 | Role name, role description, `roles` of a member (`ROLE_*`, `MEMBER_ROLES_CHANGED`; `ROLE` label) | `base:<CODE>` (`CHAIRMAN`, `TREASURER`, `MEMBER`) while a base role keeps its standard name/description, otherwise the stored text. `roles` is such names joined by ", " | catalog name |
-| `CHARGE_TYPE` label, `name` old/new, and `chargeType` of `TARIFF_CREATED`, `CHARGE_REVERSED` and `OPENING_BALANCE_ENTERED` | `base:<CODE>` (`MEMBERSHIP`, `ELECTRICITY`, `LAND_TAX`, `WATER`, `COMMON_CONSUMERS`) while a seeded type was never renamed (`nameCustomized` false), otherwise the stored name | catalog default name |
+| `CHARGE_TYPE` label, `name` old/new, `chargeType` of `TARIFF_CREATED`, `CHARGE_REVERSED` and `OPENING_BALANCE_ENTERED`, and `chargeTypes` of `RECALCULATION_BOOKED` | `base:<CODE>` (`MEMBERSHIP`, `ELECTRICITY`, `LAND_TAX`, `WATER`, `COMMON_CONSUMERS`) while a seeded type was never renamed (`nameCustomized` false), otherwise the stored name | catalog default name |
 | `TARIFF` label | the tariff name (user content only; the charge type is not part of the label) | as is |
 | `METER` and `METER_READING` label | the name of a named meter, the serial number of a plot meter (user content); a `METER_READING` entry's entity id is the meter | as is |
 | Meter readings (`initialReading`, `finalReading`, `value` of a reading) | plain decimal with three decimals (`8205.000`) | format meter value |
 | `plot` of a meter | the plot number (user content) | as is |
 | `replacementMeter` of `METER_REPLACED` | the serial number of the new meter (user content) | as is |
 | `CHARGE` label (`CHARGE_REVERSED`, `OPENING_BALANCE_ENTERED`, `NOT_CHARGED_RETRIED`) | the plot number (user content); the entity id is the plot, whose account changed | as is |
-| Money amounts (`amount` of a reversal or an opening balance, `total` of a month run, `redAmount` of the settings) | plain decimal with two decimals (`-25.00`, `1500.00`) | format money |
-| `billingMonth` of a ledger entry, `month` of a not-charged retry | `YYYY-MM` | format month |
+| Money amounts (`amount` of a reversal or an opening balance, `total` of a month run or a recalculation, `redAmount` of the settings) | plain decimal with two decimals (`-25.00`, `1500.00`) | format money |
+| `RECALCULATION` label (`RECALCULATION_BOOKED`, feature 012) | its months `from/to` (`YYYY-MM/YYYY-MM`); the entity id is the `recalculation` row. Fields: `cause` (the cause type, `MANUAL`, `TARIFF_VERSION_ADD`/`_UPDATE`/`_DELETE`, `READING_ENTER`/`_CORRECT`/`_DELETE`), `from` and `to` (`YYYY-MM`), `chargeTypes` (charge type name tokens joined by ", ", only when chosen), `plots` (plot numbers in natural order, only when chosen), `reason` (user content), `count` (lines), `total` (the sum of the differences) | format month; catalog for the cause and the types |
+| `recalculationId` of a tariff version or reading entry (`TARIFF_VERSION_ADDED`/`UPDATED`/`DELETED`, `READING_ENTERED`/`REPLACED`/`CORRECTED`/`DELETED` booked together with a recalculation) | the id of the recalculation, new value only; the change's entry comes first in the same `AuditBatch`, then `RECALCULATION_BOOKED`. The charges a recalculation books are the ledger and are not repeated in the log | link to the recalculation |
+| `billingMonth` of a ledger entry, `month` of a not-charged retry, `from`/`to` of a recalculation | `YYYY-MM` | format month |
 | `BILLING_MONTH` label (`BILLING_MONTH_CLOSED`, field `status` `OPEN` -> `CLOSED`; `BILLING_MONTH_RUN`, fields `count` and `total`) | the month `YYYY-MM`; the entity id is the `billing_month` row | format month |
 | `SETTINGS` label | the code `settings` | catalog name |
 | `lossesPercent`, `redDays` of the settings, `count` of a month run | plain decimal (`5.00`), integer (`90`) | format number |
@@ -100,7 +102,7 @@ the root `CLAUDE.md`). A server never writes an English phrase into `entity_labe
 | `permissions` | permission codes sorted and joined by ", " | the difference: `+ name` per added, `− name` per removed permission |
 | Flags (`active`, `archived`, `hasBuilding`) | `true` / `false` | yes/no |
 | Numbers (`areaM2` `600.00`, `rate`, `position`, import counts) | plain decimal text | format number |
-| Member and plot labels, names, notes, reasons (also `reason` of `READING_REJECTED`, `CHARGE_REVERSED` and `OPENING_BALANCE_ENTERED`), import file name | user content | as is |
+| Member and plot labels, names, notes, reasons (also `reason` of `READING_REJECTED`, `CHARGE_REVERSED`, `OPENING_BALANCE_ENTERED` and `RECALCULATION_BOOKED`), import file name | user content | as is |
 
 A publisher lists only the fields whose value changed; a field with the same old and new value is not written. The one exception is `takenOn` of `READING_REPLACED`, which names the date of the replaced reading.
 

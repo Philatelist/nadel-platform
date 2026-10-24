@@ -250,4 +250,30 @@ describe('MeterTreePage', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('The date is before the meter’s latest change in the tree')).toBeInTheDocument();
   });
+
+  // @spec: 012-retroactive-recalculation (acceptance 2.6: the hint when the meter tree is changed)
+  // @regression
+  it('reminds a holder of RECALCULATION_RUN in the move dialog that past charges are unchanged', async () => {
+    permissions = ['METERS_VIEW', 'METERS_MANAGE', 'RECALCULATION_RUN'];
+    const user = userEvent.setup();
+    renderPage();
+    const plot = screen.getByText('7').closest('li') as HTMLElement;
+    await user.click(within(plot).getByRole('button', { name: 'Move' }));
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText(/Past charges have not changed/)).toBeInTheDocument();
+    expect(within(dialog).getByRole('link', { name: 'Recalculation' })).toHaveAttribute(
+      'href',
+      '/charges/recalculations/new',
+    );
+  });
+
+  // @spec: 012-retroactive-recalculation
+  // @regression
+  it('shows no recalculation hint in the move dialog without RECALCULATION_RUN', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    const plot = screen.getByText('7').closest('li') as HTMLElement;
+    await user.click(within(plot).getByRole('button', { name: 'Move' }));
+    expect(screen.queryByText(/Past charges have not changed/)).not.toBeInTheDocument();
+  });
 });

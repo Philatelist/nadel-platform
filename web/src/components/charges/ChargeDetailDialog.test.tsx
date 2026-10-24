@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { withQueries } from '../../test/meterFixtures';
 import { renderWithApp } from '../../test/render';
 import { ChargeDetailDialog } from './ChargeDetailDialog';
-import { charge } from './fixtures';
+import { adjustment, charge } from './fixtures';
 
 vi.mock('../../me', () => ({
   useCan: (p: Permission) => p === 'CHARGES_REVERSE',
@@ -128,5 +128,22 @@ describe('ChargeDetailDialog', () => {
       'href',
       '/charges/common?run=r7',
     );
+  });
+
+  it('describes the original charge on the row of an adjustment, not the adjustment itself', () => {
+    renderWithApp(
+      withQueries(
+        <ChargeDetailDialog
+          charge={adjustment}
+          charges={[charge, adjustment]}
+          onClose={vi.fn()}
+          onOpenCharge={vi.fn()}
+        />,
+      ),
+    );
+    const link = screen.getByRole('button', { name: /Sep 2026/ });
+    expect(link).toHaveTextContent('403.06');
+    expect(link).not.toHaveTextContent('5.00');
+    expect(link).not.toHaveTextContent('Adjustment of');
   });
 });

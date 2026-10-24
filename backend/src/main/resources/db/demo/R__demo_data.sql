@@ -694,6 +694,17 @@ DECLARE
     el_version   uuid;
     el_rate      numeric;
     cc_rate      numeric;
+    memb_version constant uuid := 'ffffffff-0000-0000-0001-000000000001';
+    memb_tariff  constant uuid := 'ffffffff-0000-0000-0000-000000000001';
+    rec_reason   constant text := 'Виправлено ставку членського внеску';
+    rec_id       uuid := md5('demo-recalculation:11111111-1111-1111-1111-111111111111')::uuid;
+    rec_at       timestamptz;
+    rec_plot     uuid;
+    rec_closed   uuid;
+    rec_open     uuid;
+    rec_reversal uuid := md5('demo-recalculation-reversal:11111111-1111-1111-1111-111111111111')::uuid;
+    rec_new      uuid := md5('demo-recalculation-new:11111111-1111-1111-1111-111111111111')::uuid;
+    rec_adjust   uuid := md5('demo-recalculation-adjustment:11111111-1111-1111-1111-111111111111')::uuid;
 BEGIN
     IF '${demoledger}' <> 'on' THEN
         RETURN;
@@ -703,8 +714,10 @@ BEGIN
     -- Remove the ledger of the demo cooperative (reversals before what they reverse).
     DELETE FROM meter_value_use WHERE tenant_id = demo;
     DELETE FROM charge_part WHERE tenant_id = demo;
-    DELETE FROM charge WHERE tenant_id = demo AND reverses_charge_id IS NOT NULL;
+    DELETE FROM recalculation_line WHERE tenant_id = demo;
+    DELETE FROM charge WHERE tenant_id = demo AND (reverses_charge_id IS NOT NULL OR adjusts_charge_id IS NOT NULL);
     DELETE FROM charge WHERE tenant_id = demo;
+    DELETE FROM recalculation WHERE tenant_id = demo;
     DELETE FROM losses_run_node WHERE tenant_id = demo;
     DELETE FROM losses_run WHERE tenant_id = demo;
     DELETE FROM common_consumer_run_line WHERE tenant_id = demo;
@@ -792,7 +805,9 @@ BEGIN
                 WHEN scale(trim_scale(x.units)) < 2 THEN round(x.units, 2)::text
                 ELSE trim_scale(x.units)::text END AS quantity
     FROM (
-        SELECT p.id AS plot_id, t.charge_type_id, t.id AS tariff_id, v.id AS version_id, v.basis, v.frequency, v.rate,
+        -- plot 2's membership was booked at 60 per sotka (the rate the recalculation below corrects to 50)
+        SELECT p.id AS plot_id, t.charge_type_id, t.id AS tariff_id, v.id AS version_id, v.basis, v.frequency,
+               CASE WHEN p.number = '2' AND t.id = memb_tariff THEN 60.0000 ELSE v.rate END AS rate,
                mo.month, mo.billing_month_id,
                CASE WHEN v.basis = 'PER_AREA_SOTKA' THEN p.area_m2 / 100 ELSE 1 END AS units,
                CASE v.frequency WHEN 'MONTHLY' THEN 12 WHEN 'QUARTERLY' THEN 4 ELSE 1 END AS factor,
@@ -1135,6 +1150,79 @@ BEGIN
     JOIN plot p ON p.id = c.plot_id AND p.number = '14'
     WHERE c.tenant_id = demo AND c.source = 'TARIFF' AND c.charge_type_id = membership
       AND c.billing_month_id = open_id;
+
+    -- One booked recalculation (spec 012), exactly as a manual one books it: the membership rate of plot 2 (600 m2) was
+    -- 60 per sotka when both months were run (30,00 a month) and is 50 now (25,00). The closed month's 30,00 is
+    -- adjusted by -5,00 booked in the open month, the open month's 30,00 is reversed and 25,00 charged again.
+    SELECT p.id INTO rec_plot FROM plot p WHERE p.tenant_id = demo AND p.number = '2' AND p.archived_at IS NULL;
+    SELECT c.id INTO rec_closed FROM charge c WHERE c.tenant_id = demo AND c.plot_id = rec_plot
+        AND c.charge_type_id = membership AND c.source = 'TARIFF' AND c.billing_month_id = closed_id;
+    SELECT c.id INTO rec_open FROM charge c WHERE c.tenant_id = demo AND c.plot_id = rec_plot
+        AND c.charge_type_id = membership AND c.source = 'TARIFF' AND c.billing_month_id = open_id;
+    rec_at := least(greatest(open_month + 4, anchor - 2) + time '12:00', now());
+
+    INSERT INTO recalculation (id, tenant_id, cause, cause_ref_id, scope, reason, total, line_count, plot_count, digest,
+                               created_by, created_at)
+    VALUES (rec_id, demo, 'MANUAL', NULL,
+            jsonb_build_object('causeType', 'MANUAL',
+                               'months', jsonb_build_array(to_char(closed_month, 'YYYY-MM'),
+                                                           to_char(open_month, 'YYYY-MM')),
+                               'chargeTypeIds', jsonb_build_array(membership),
+                               'plotIds', jsonb_build_array(rec_plot)),
+            rec_reason, -10.00, 2, 1, md5('demo-recalculation-digest:' || rec_id), chairman, rec_at);
+
+    -- the reversal of the open month's charge (in its month)
+    INSERT INTO charge (id, tenant_id, plot_id, charge_type_id, billing_month_id, kind, source, amount, service_from,
+                        service_to, accrued_on, calculation, reverses_charge_id, recalculation_id, reason, created_by,
+                        created_at)
+    SELECT rec_reversal, demo, c.plot_id, c.charge_type_id, c.billing_month_id, 'REVERSAL', 'RECALCULATION',
+           -c.amount, c.service_from, c.service_to, c.accrued_on,
+           jsonb_build_object('amount', (-c.amount)::text, 'parts', '[]'::jsonb, 'readings', '[]'::jsonb), c.id, rec_id,
+           rec_reason, chairman, rec_at
+    FROM charge c WHERE c.id = rec_open;
+
+    -- the new regular charge at the corrected rate (the base key is taken, so the key ends in #r)
+    INSERT INTO charge (id, tenant_id, plot_id, charge_type_id, billing_month_id, kind, source, amount, service_from,
+                        service_to, accrued_on, calculation, source_key, tariff_id, recalculation_id, created_by,
+                        created_at)
+    SELECT rec_new, demo, c.plot_id, c.charge_type_id, c.billing_month_id, 'REGULAR', 'TARIFF', 25.00, c.service_from,
+           c.service_to, c.accrued_on,
+           jsonb_build_object('amount', '25.00', 'readings', '[]'::jsonb, 'parts', jsonb_build_array(
+               jsonb_build_object('tariffVersionId', memb_version, 'basis', 'PER_AREA_SOTKA', 'frequency', 'YEARLY',
+                                  'quantity', '6.00', 'unit', 'SOTKA', 'rate', '50.0000',
+                                  'days', c.service_to - c.service_from + 1, 'from', c.service_from,
+                                  'to', c.service_to))),
+           c.source_key || '#r' || rec_id, c.tariff_id, rec_id, chairman, rec_at
+    FROM charge c WHERE c.id = rec_open;
+    INSERT INTO charge_part (tenant_id, charge_id, tariff_version_id, days, units_num, units_den, rate)
+    SELECT demo, rec_new, memb_version, c.service_to - c.service_from + 1, 6, 1, 50.0000
+    FROM charge c WHERE c.id = rec_open;
+
+    -- the adjustment of the closed month's charge, booked in the open month with the original's period and debt date
+    INSERT INTO charge (id, tenant_id, plot_id, charge_type_id, billing_month_id, kind, source, amount, service_from,
+                        service_to, accrued_on, calculation, source_key, tariff_id, adjusts_charge_id,
+                        recalculation_id, reason, created_by, created_at)
+    SELECT rec_adjust, demo, c.plot_id, c.charge_type_id, open_id, 'ADJUSTMENT', 'RECALCULATION', -5.00,
+           c.service_from, c.service_to, c.accrued_on,
+           jsonb_build_object('amount', '-5.00', 'parts', '[]'::jsonb, 'readings', '[]'::jsonb),
+           'ADJUSTMENT:' || rec_id || ':' || c.id, c.tariff_id, c.id, rec_id, rec_reason, chairman, rec_at
+    FROM charge c WHERE c.id = rec_closed;
+    INSERT INTO charge_part (tenant_id, charge_id, tariff_version_id, days, units_num, units_den, rate)
+    SELECT demo, rec_adjust, memb_version, c.service_to - c.service_from + 1, 6, 1, 50.0000
+    FROM charge c WHERE c.id = rec_closed;
+
+    INSERT INTO recalculation_line (tenant_id, recalculation_id, plot_id, charge_type_id, service_from, service_to,
+                                    original_charge_id, booked_amount, adjusted_so_far, expected_amount, difference,
+                                    action, reasons, reversal_charge_id, new_charge_id, adjustment_charge_id, position)
+    SELECT demo, rec_id, c.plot_id, c.charge_type_id, c.service_from, c.service_to, c.id, 30.00, 0.00, 25.00, -5.00,
+           'ADJUST', ARRAY['TARIFF_VERSION'], NULL, NULL, rec_adjust, 1
+    FROM charge c WHERE c.id = rec_closed;
+    INSERT INTO recalculation_line (tenant_id, recalculation_id, plot_id, charge_type_id, service_from, service_to,
+                                    original_charge_id, booked_amount, adjusted_so_far, expected_amount, difference,
+                                    action, reasons, reversal_charge_id, new_charge_id, adjustment_charge_id, position)
+    SELECT demo, rec_id, c.plot_id, c.charge_type_id, c.service_from, c.service_to, c.id, 30.00, 0.00, 25.00, -5.00,
+           'REVERSE_AND_RECHARGE', ARRAY['TARIFF_VERSION'], rec_reversal, rec_new, NULL, 2
+    FROM charge c WHERE c.id = rec_open;
 
     -- The plot status cache: the debt, the day its oldest unreversed charge counts from, and the colour as of today.
     UPDATE plot_status s

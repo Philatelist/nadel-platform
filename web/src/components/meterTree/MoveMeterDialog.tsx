@@ -12,6 +12,7 @@ import { meterLabel } from '../../meters';
 import { problemFieldErrors, problemMessage, type FieldErrors } from '../../problem';
 import { Modal } from '../Modal';
 import { formatUser } from '../UserContent';
+import { RecalcHint } from '../recalculation/RecalcHint';
 import { Button, Notice, Select, TextField } from '../ui';
 
 /** Moves a meter under another parent (or out of the tree) from a date; mount it only while it should be open. */
@@ -100,6 +101,7 @@ export function MoveMeterDialog({
           error={(submitted ? dateError : undefined) ?? serverErrors.effectiveFrom}
           onChange={(e) => edit(() => setEffectiveFrom(e.target.value))}
         />
+        <RecalcHint />
         <div className="flex justify-end gap-2">
           <Button variant="secondary" onClick={onClose}>
             {m.cancel}

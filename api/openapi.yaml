@@ -54,6 +54,10 @@ tags:
       common consumer is shared among plots
   - name: water
     description: Water connections of plots (with their history) and the water sources they are connected to
+  - name: recalculations
+    description: >-
+      Recalculations of past charges (corrections of open months by reversal and new charge, of closed months by an
+      adjustment in the earliest open month) and their history
 
 paths:
   /me:
@@ -1746,7 +1750,8 @@ paths:
       description: |
         Replaces the terms of a version (the same fields and rules as `POST /tariffs/{id}/versions`; `validFrom` may
         change too). A version can be corrected until a charge uses it: then 409 `TARIFF_VERSION_IN_USE` (a later
-        correction goes through recalculation, feature 012). The tariff and the version are 404 when unknown or of
+        correction goes through recalculation, `POST /recalculations` with `TARIFF_VERSION_UPDATE`), except for a
+        request that changes no term (only the note, or nothing), which changes no amount. The tariff and the version are 404 when unknown or of
         another cooperative, and also when the version belongs to another tariff. Two versions of one tariff cannot
         start on the same date (409 `TARIFF_VERSION_DATE_TAKEN`, `errors[{field: validFrom}]`). The charge type must
         not be archived (409 `CHARGE_TYPE_ARCHIVED`). Field codes of 400 `VALIDATION_FAILED` are those of the create
@@ -2780,10 +2785,12 @@ paths:
       description: |
         The ledger of one plot. `debts` lists every charge type the plot has a charge of, in the order of the charge
         types, with the sum of its charges (a reversal counts negative); `total` is their sum. Until payments exist
-        the debt is the sum of the charges. `charges` lists the charges newest first (by `accruedOn`, then by the
-        time they were booked); `from` and `to` (both optional, inclusive) limit the list by `accruedOn`, never the
-        debts. `from` after `to` is 400 `VALIDATION_FAILED` (`errors[{field: from, code: INVALID}]`). Every amount is
-        calculated by the server. No permission annotation: a caller with `CHARGES_VIEW` may ask for any plot of the
+        the debt is the sum of the charges, adjustments included. `charges` lists the charges newest first (by
+        `accruedOn`, then by the time they were booked); `from` and `to` (both optional, inclusive) limit the list by
+        `accruedOn`, and `kind` limits it to one kind (for example `ADJUSTMENT`), never the debts. `from` after `to` is
+        400 `VALIDATION_FAILED` (`errors[{field: from, code: INVALID}]`). An adjustment names the charge it adjusts
+        (`adjusts`), an adjusted charge its adjustments (`adjustedBy`); `recalculationId` is shown only to callers with
+        `CHARGES_VIEW`. Every amount is calculated by the server. No permission annotation: a caller with `CHARGES_VIEW` may ask for any plot of the
         cooperative, anyone else only for a plot they currently own. Any other plot, an unknown id and a plot of
         another cooperative are the same 404 `PLOT_NOT_FOUND`; the platform operator has no cooperative data: 403.
       parameters:
@@ -2807,6 +2814,12 @@ paths:
           schema:
             type: string
             format: date
+        - name: kind
+          in: query
+          required: false
+          description: Only charges of this kind
+          schema:
+            $ref: '#/components/schemas/ChargeKind'
       responses:
         '200':
           description: OK
@@ -2880,8 +2893,9 @@ paths:
         Cancels a charge by a new charge of kind `REVERSAL` and source `MANUAL_REVERSAL`: the same amount with the
         opposite sign, the same plot, charge type, service period and `accruedOn`, the reason, and `reverses` naming
         the original. It is booked in the billing month of the original, which must be open. Nothing is changed or
-        deleted (the ledger is append-only). Conflicts (409): the charge is a reversal (`REVERSAL_NOT_REVERSIBLE`), it
-        was reversed before (`CHARGE_ALREADY_REVERSED`), its billing month is closed (`CHARGE_IN_CLOSED_MONTH`; its
+        deleted (the ledger is append-only). Conflicts (409): the charge is a reversal (`REVERSAL_NOT_REVERSIBLE`), an
+        adjustment (`ADJUSTMENT_NOT_REVERSIBLE`; a later recalculation adjusts the original again), it was reversed
+        before (`CHARGE_ALREADY_REVERSED`), its billing month is closed (`CHARGE_IN_CLOSED_MONTH`; its
         correction is an adjustment). 400 `VALIDATION_FAILED` with `reason` `REQUIRED` (absent or blank) or
         `TOO_LONG`. An unknown charge, or one of another cooperative, is 404 `NOT_FOUND`. Requires `CHARGES_REVERSE`;
         written to the audit log (`CHARGE_REVERSED`, entity type `CHARGE` about the plot, with the reason).
@@ -3537,6 +3551,151 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /recalculations:
+    get:
+      tags: [recalculations]
+      operationId: listRecalculations
+      summary: The booked recalculations of the cooperative
+      description: |
+        A page of the booked recalculations, newest first (by booking time), each with its cause, reason, author, the
+        number of lines and plots and the total difference. A recalculation is never changed or undone; a mistake is
+        corrected by another recalculation. Requires `CHARGES_VIEW`; the platform operator has no permissions: 403.
+      parameters:
+        - name: page
+          in: query
+          required: false
+          description: Zero-based page index
+          schema:
+            type: integer
+            format: int32
+            minimum: 0
+            default: 0
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecalculationPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [recalculations]
+      operationId: runRecalculation
+      summary: Preview or book a recalculation
+      description: |
+        Recalculates past charges (money rules section 5): the charges the app would make today with the current data
+        (expected) are compared with the booked charges plus their adjustments (effective) per charge, and every
+        difference becomes a line. A charge in an open month is reversed (source `RECALCULATION`) and charged again;
+        a charge in a closed month gets an adjustment (kind `ADJUSTMENT`, source `RECALCULATION`) in the earliest open
+        month with the original's service period and `accruedOn`; a charge that should no longer exist is reversed or
+        cancelled by an adjustment; an expected charge without a booked one is a new charge. `cause.type` names what
+        is recalculated: `MANUAL` the months, charge types and plots of `cause.manual`; `TARIFF_VERSION_*` a version of
+        a tariff added, corrected or deleted together with the recalculation (`cause.tariffVersion`); `READING_*` a
+        reading entered, corrected or deleted together with the recalculation (`cause.reading`). With `preview=true`
+        nothing is written (a cause-driven change is applied and rolled back) and the answer has a `digest`; with
+        `preview=false` the change and the recalculation are booked together, or nothing is. A preview that finds
+        nothing to change answers with no lines ("No changes"). 400 `VALIDATION_FAILED`: `reason` `REQUIRED` or
+        `TOO_LONG` (over 500 characters) for a booking, `cause.manual` `REQUIRED` for `MANUAL`, `cause.manual.to`
+        `INVALID` (before `from`) or `DATE_IN_FUTURE` (after the current month), `cause.manual.chargeTypeIds[i]`
+        `NOT_FOUND` (unknown) or `INVALID` (inactive or archived), `cause.manual.plotIds[i]` `UNKNOWN_PLOT`,
+        `PLOT_ARCHIVED` or `PLOT_COMMON_LAND`. A tariff version cause needs `cause.tariffVersion` (`REQUIRED`), its
+        `versionId` for an update or a delete and its `version` for an add or an update (`REQUIRED`); the version is
+        checked as on the tariff endpoints, with the field codes under `cause.tariffVersion.version.` (for example
+        `cause.tariffVersion.version.frequency` `FREQUENCY_BASIS_MISMATCH`), but a version that charges used may be
+        changed here (a delete is soft); a version that is not one of `tariffId` is 404 `NOT_FOUND`. Its scope is the
+        tariff's charge type and plots and the billing months the old and new validity of the version touch (from the
+        first billing month of the cooperative to the current month at most), and the meter intervals and runs that
+        close from the first of them on. When such a plan has no lines, a booking saves the change alone without a
+        reason (`booked` false, `changeApplied` true, no record). A reading cause needs `cause.reading` (`REQUIRED`),
+        its `meterId` for an entry, its `readingId` for a correction or a deletion and its `reading` for an entry or a
+        correction (`REQUIRED`); the reading is checked as on the reading endpoints, with the field codes under
+        `cause.reading.` (`meterId`) and `cause.reading.reading.` (`takenOn`, `value`), but a reading that charges
+        used may be changed here. Its scope is the meter's intervals around the old and new date and the booked runs
+        that read the meter on a day the change reaches; a plan without lines saves the change alone as above.
+        Conflicts (409): the manual range
+        spans more than 24 months (`RECALCULATION_RANGE_TOO_LONG`), a manual recalculation finds nothing to change when
+        booked (`NOTHING_TO_RECALCULATE`), a booking is sent with the digest of a preview that no longer matches
+        (`PREVIEW_OUTDATED`), the change of a tariff version is refused (`TARIFF_VERSION_DATE_TAKEN`,
+        `TARIFF_LAST_VERSION`, `CHARGE_TYPE_ARCHIVED`). Requires `RECALCULATION_RUN`, and also `TARIFFS_MANAGE` for a
+        tariff version cause and `READINGS_ENTER` for a reading cause (403 `PERMISSION_DENIED`); a booking is written
+        to the audit log (`RECALCULATION_BOOKED`, entity type `RECALCULATION`, after the entry of the version or
+        reading change, which then carries `recalculationId`).
+      parameters:
+        - name: preview
+          in: query
+          required: true
+          description: '`true` shows what the recalculation would book without writing anything; `false` books it'
+          schema:
+            type: boolean
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecalculationRequest'
+      responses:
+        '200':
+          description: What the recalculation would book (preview) or booked (booking)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Recalculation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /recalculations/{id}:
+    get:
+      tags: [recalculations]
+      operationId: getRecalculation
+      summary: One booked recalculation with its lines
+      description: |
+        The recalculation as booked: its cause, scope, reason, author, totals per charge type and its lines in the
+        order they were booked, each with the original charge, the booked, adjusted, effective and expected amounts,
+        the difference, the action, the month it was booked in and the charges it created. An unknown recalculation,
+        or one of another cooperative, is 404 `NOT_FOUND`. Requires `CHARGES_VIEW`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Recalculation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
   /plots/{id}/water-connections:
     get:
       tags: [water]
@@ -3875,7 +4034,8 @@ components:
         with `errors[{field, code}]` naming the rule, see `setMeterParent`), or a meter that has meters under it in the
         tree is deleted, or removed while they still work under it (code `METER_HAS_CHILDREN`), or a plot that has
         charges is deleted (code `PLOT_HAS_CHARGES`), or a charge that was reversed before is reversed again (code
-        `CHARGE_ALREADY_REVERSED`), a reversal is reversed (code `REVERSAL_NOT_REVERSIBLE`), or a charge booked in a
+        `CHARGE_ALREADY_REVERSED`), a reversal is reversed (code `REVERSAL_NOT_REVERSIBLE`), an adjustment is reversed
+        (code `ADJUSTMENT_NOT_REVERSIBLE`), or a charge booked in a
         closed billing month is reversed (code `CHARGE_IN_CLOSED_MONTH`), or a billing month is closed while an
         earlier month is open (code `PERIOD_CLOSE_ORDER`), a closed month is closed again (code `PERIOD_CLOSED`) or a
         month after the current one is closed (code `PERIOD_IN_FUTURE`), or the month run is asked for a closed month
@@ -3891,7 +4051,8 @@ components:
         connection that has ended is ended again or a plot without a lasting connection to the source is disconnected
         from it (code `WATER_NOT_CONNECTED`), the water source is not an active common consumer meter (code
         `WATER_SOURCE_INVALID`), or a meter that plots are or were connected to as their water source is deleted (code
-        `WATER_SOURCE_IN_USE`)
+        `WATER_SOURCE_IN_USE`), or a manual recalculation spans more than 24 months (code
+        `RECALCULATION_RANGE_TOO_LONG`) or finds nothing to change (code `NOTHING_TO_RECALCULATE`)
       content:
         application/problem+json:
           schema:
@@ -3930,6 +4091,7 @@ components:
         - CHARGES_RUN
         - CHARGES_REVERSE
         - PERIODS_CLOSE
+        - RECALCULATION_RUN
 
     PlotStatusVisibility:
       type: string
@@ -4348,6 +4510,7 @@ components:
         - COMMON_CONSUMER_RUN_BOOKED
         - COMMON_CONSUMER_RUN_REVERSED
         - COMMON_CONSUMER_BILLING_CHANGED
+        - RECALCULATION_BOOKED
 
     AuditEntityType:
       type: string
@@ -4358,7 +4521,9 @@ components:
         as `YYYY-MM`. A `LOSSES_RUN` entry (a losses run booked or reversed) is about the run: its label is the range
         as `from/to` (ISO dates); so is a `COMMON_CONSUMER_RUN` entry (a common consumer run booked or reversed). A
         `NOT_CHARGED_RETRIED` entry of a losses node or common consumer item is a `METER` entry about the node or
-        consumer meter, and so is `COMMON_CONSUMER_BILLING_CHANGED` (about the consumer meter, label its name).
+        consumer meter, and so is `COMMON_CONSUMER_BILLING_CHANGED` (about the consumer meter, label its name). A
+        `RECALCULATION` entry (`RECALCULATION_BOOKED`) is about a booked recalculation: its label is its months as
+        `from/to` (`YYYY-MM`).
       enum:
         [
           MEMBER,
@@ -4375,6 +4540,7 @@ components:
           BILLING_MONTH,
           LOSSES_RUN,
           COMMON_CONSUMER_RUN,
+          RECALCULATION,
         ]
 
     AuditFieldChange:
@@ -6249,16 +6415,17 @@ components:
       type: string
       description: >-
         `REGULAR` an accrual; `REVERSAL` cancels one charge with the opposite amount (see `reverses`, `reason`);
-        `OPENING` an opening balance
-      enum: [REGULAR, REVERSAL, OPENING]
+        `OPENING` an opening balance; `ADJUSTMENT` corrects a charge of a closed month in the earliest open month,
+        positive or negative, with the original's service period and `accruedOn` (see `adjusts`, `reason`)
+      enum: [REGULAR, REVERSAL, OPENING, ADJUSTMENT]
 
     ChargeSource:
       type: string
       description: >-
         What produced the charge: `TARIFF` the month run of a tariff, `CONSUMPTION` a meter reading, `LOSSES` losses
         in the network, `COMMON_CONSUMER` a common consumer run, `OPENING` an opening balance, `MANUAL_REVERSAL` a
-        reversal made by hand
-      enum: [TARIFF, CONSUMPTION, LOSSES, COMMON_CONSUMER, OPENING, MANUAL_REVERSAL]
+        reversal made by hand, `RECALCULATION` an adjustment or a reversal booked by a recalculation
+      enum: [TARIFF, CONSUMPTION, LOSSES, COMMON_CONSUMER, OPENING, MANUAL_REVERSAL, RECALCULATION]
 
     ChargeTypeRef:
       type: object
@@ -6447,8 +6614,8 @@ components:
         reason:
           type: string
           description: >-
-            The reason of a reversal (always present), or the optional reason or document reference of an opening
-            balance (user content)
+            The reason of a reversal or an adjustment (always present), or the optional reason or document reference of
+            an opening balance (user content)
         reverses:
           type: string
           format: uuid
@@ -6457,11 +6624,25 @@ components:
           type: string
           format: uuid
           description: The reversal that cancelled this charge
+        adjusts:
+          $ref: '#/components/schemas/ChargeAdjustmentTarget'
+        adjustedBy:
+          type: array
+          description: The adjustments of this charge, oldest first; absent when it has none
+          items:
+            type: string
+            format: uuid
+        recalculationId:
+          type: string
+          format: uuid
+          description: >-
+            The recalculation that booked the charge (an adjustment, or a reversal or charge of a recalculation); only
+            for callers with `CHARGES_VIEW`
         reversible:
           type: boolean
           description: >-
-            True when the caller may reverse the charge now: the caller has `CHARGES_REVERSE`, the charge is not a
-            reversal, was not reversed and its billing month is open
+            True when the caller may reverse the charge now: the caller has `CHARGES_REVERSE`, the charge is neither a
+            reversal nor an adjustment, was not reversed and its billing month is open
         calculation:
           $ref: '#/components/schemas/ChargeCalculation'
         createdAt:
@@ -6473,9 +6654,28 @@ components:
             The current name of the member who booked the charge; only for callers with `CHARGES_VIEW`, absent for
             charges booked by the system or by a member who no longer exists
 
+    ChargeAdjustmentTarget:
+      type: object
+      description: The charge an adjustment corrects, with its billing month and service period
+      required: [chargeId, billingMonth, serviceFrom, serviceTo]
+      properties:
+        chargeId:
+          type: string
+          format: uuid
+        billingMonth:
+          type: string
+          pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+          description: The billing month the adjusted charge is booked in, `YYYY-MM`
+        serviceFrom:
+          type: string
+          format: date
+        serviceTo:
+          type: string
+          format: date
+
     ChargeTypeDebt:
       type: object
-      description: The debt of a plot for one charge type
+      description: The debt of a plot for one charge type (its charges, reversals and adjustments)
       required: [chargeTypeId, name, nameCustomized, debt]
       properties:
         chargeTypeId:
@@ -7697,3 +7897,365 @@ components:
           items:
             type: string
             format: uuid
+
+    RecalculationCauseType:
+      type: string
+      description: >-
+        What a recalculation is about: `MANUAL` chosen months, charge types and plots; `TARIFF_VERSION_ADD`,
+        `TARIFF_VERSION_UPDATE`, `TARIFF_VERSION_DELETE` a version of a tariff added, corrected or deleted;
+        `READING_ENTER`, `READING_CORRECT`, `READING_DELETE` a meter reading entered, corrected or deleted
+      enum:
+        - MANUAL
+        - TARIFF_VERSION_ADD
+        - TARIFF_VERSION_UPDATE
+        - TARIFF_VERSION_DELETE
+        - READING_ENTER
+        - READING_CORRECT
+        - READING_DELETE
+
+    RecalculationCauseKind:
+      type: string
+      description: >-
+        The kind of cause stored with a booked recalculation: `MANUAL`, `TARIFF_VERSION` (any `TARIFF_VERSION_*`
+        type) or `READING` (any `READING_*` type)
+      enum: [MANUAL, TARIFF_VERSION, READING]
+
+    RecalculationManualScope:
+      type: object
+      description: >-
+        The scope of a manual recalculation: the billing months `from` to `to` (both included, `YYYY-MM`, `to` not
+        after the current month, at most 24 months), the charge types (absent or empty: every active type) and the
+        plots (absent or empty: every chargeable plot)
+      required: [from, to]
+      properties:
+        from:
+          type: string
+          pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+        to:
+          type: string
+          pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+        chargeTypeIds:
+          type: array
+          maxItems: 100
+          items:
+            type: string
+            format: uuid
+        plotIds:
+          type: array
+          maxItems: 5000
+          items:
+            type: string
+            format: uuid
+
+    RecalculationTariffVersionChange:
+      type: object
+      description: >-
+        The change of a tariff version a recalculation books with it: the tariff, the version (for an update or a
+        delete) and its new terms (for an add or an update)
+      required: [tariffId]
+      properties:
+        tariffId:
+          type: string
+          format: uuid
+        versionId:
+          type: string
+          format: uuid
+        version:
+          $ref: '#/components/schemas/TariffVersionCreate'
+
+    RecalculationReadingChange:
+      type: object
+      description: >-
+        The change of a meter reading a recalculation books with it: the meter (for a new reading), the reading (for
+        a correction or a delete) and its date and value (for a new reading or a correction)
+      properties:
+        meterId:
+          type: string
+          format: uuid
+        readingId:
+          type: string
+          format: uuid
+        reading:
+          $ref: '#/components/schemas/ReadingCorrection'
+
+    RecalculationCause:
+      type: object
+      description: >-
+        What to recalculate. `type` says which of the other fields applies: `manual` for `MANUAL`, `tariffVersion` for
+        `TARIFF_VERSION_*`, `reading` for `READING_*`
+      required: [type]
+      properties:
+        type:
+          $ref: '#/components/schemas/RecalculationCauseType'
+        manual:
+          $ref: '#/components/schemas/RecalculationManualScope'
+        tariffVersion:
+          $ref: '#/components/schemas/RecalculationTariffVersionChange'
+        reading:
+          $ref: '#/components/schemas/RecalculationReadingChange'
+
+    RecalculationRequest:
+      type: object
+      description: >-
+        A recalculation to preview or book. `reason` is required to book (trimmed, at most 500 characters) and stored
+        on every reversal and adjustment the recalculation books; `digest` is the digest of the preview the booking
+        confirms
+      required: [cause]
+      properties:
+        cause:
+          $ref: '#/components/schemas/RecalculationCause'
+        reason:
+          type: string
+          maxLength: 500
+          description: User content
+        digest:
+          type: string
+          maxLength: 128
+
+    RecalculationScope:
+      type: object
+      description: >-
+        The scope a recalculation used, as ids and codes: the months (`YYYY-MM`), the charge types and plots, and the
+        tariff, version, meter or reading that caused it
+      required: [months, chargeTypeIds, plotIds]
+      properties:
+        months:
+          type: array
+          items:
+            type: string
+            pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+        chargeTypeIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        plotIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        tariffId:
+          type: string
+          format: uuid
+        tariffVersionId:
+          type: string
+          format: uuid
+        meterId:
+          type: string
+          format: uuid
+        readingId:
+          type: string
+          format: uuid
+
+    RecalculationAction:
+      type: string
+      description: >-
+        What a line books: `REVERSE_AND_RECHARGE` the charge (open month) is reversed and charged again with the
+        expected amount; `ADJUST` an adjustment of "expected - effective" in the earliest open month (closed month);
+        `NEW` a new charge where none was booked; `REVERSE` the charge (open month) is reversed because it should no
+        longer exist
+      enum: [REVERSE_AND_RECHARGE, ADJUST, NEW, REVERSE]
+
+    RecalculationChangeReason:
+      type: string
+      description: >-
+        Why the amount of a line changed: `TARIFF_VERSION` the tariff version or its rate, `READING` a meter reading,
+        `AREA` the plot area, `WATER_CONNECTION` the water connection days, `TARIFF_SCOPE` the plots of a tariff or its
+        exclusions, `METER_TREE` the meter tree, `RUN` the numbers of a losses or common consumer run, `NOT_CHARGED`
+        the expected charge cannot be calculated (it becomes a "not charged" item)
+      enum: [TARIFF_VERSION, READING, AREA, WATER_CONNECTION, TARIFF_SCOPE, METER_TREE, RUN, NOT_CHARGED]
+
+    RecalculationLine:
+      type: object
+      description: >-
+        One charge of a recalculation: what was booked, what is expected, the difference and the charges the line
+        created. `effective` is `booked` plus `adjustments`; `difference` is `expected` minus `effective`
+      required:
+        [
+          plotId,
+          plotNumber,
+          chargeType,
+          serviceFrom,
+          serviceTo,
+          booked,
+          adjustments,
+          effective,
+          expected,
+          difference,
+          action,
+          reasons,
+          createdChargeIds,
+        ]
+      properties:
+        plotId:
+          type: string
+          format: uuid
+        plotNumber:
+          type: string
+          description: User content, as the cooperative writes it
+        chargeType:
+          $ref: '#/components/schemas/ChargeTypeRef'
+        serviceFrom:
+          type: string
+          format: date
+        serviceTo:
+          type: string
+          format: date
+        originalChargeId:
+          type: string
+          format: uuid
+          description: The booked charge the line corrects; absent for a new charge
+        booked:
+          $ref: '#/components/schemas/Money'
+        adjustments:
+          $ref: '#/components/schemas/Money'
+        effective:
+          $ref: '#/components/schemas/Money'
+        expected:
+          $ref: '#/components/schemas/Money'
+        difference:
+          $ref: '#/components/schemas/Money'
+        action:
+          $ref: '#/components/schemas/RecalculationAction'
+        bookedIn:
+          type: string
+          pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+          description: The billing month the line's new charge, adjustment or reversal is (or would be) booked in
+        reasons:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecalculationChangeReason'
+        notChargedReason:
+          $ref: '#/components/schemas/NotChargedReason'
+        runId:
+          type: string
+          format: uuid
+          description: The losses or common consumer run of the original charge
+        reversalChargeId:
+          type: string
+          format: uuid
+        newChargeId:
+          type: string
+          format: uuid
+        adjustmentChargeId:
+          type: string
+          format: uuid
+        createdChargeIds:
+          type: array
+          description: The charges the line booked (reversal, new charge, adjustment, in that order); empty in a preview
+          items:
+            type: string
+            format: uuid
+
+    Recalculation:
+      type: object
+      description: >-
+        A recalculation: a preview (nothing booked, `id` absent) or a booked one with its lines. `totals` are the
+        differences per charge type, in the order of the charge types; `total` their sum; `plotCount` the number of
+        plots with a line
+      required:
+        [preview, booked, changeApplied, cause, scope, lines, totals, total, plotCount, notCharged, digest]
+      properties:
+        id:
+          type: string
+          format: uuid
+        preview:
+          type: boolean
+        booked:
+          type: boolean
+          description: True when the recalculation was booked (false in a preview and for an empty cause-driven plan)
+        changeApplied:
+          type: boolean
+          description: True when the cause-driven change (a version or a reading) was saved
+        cause:
+          $ref: '#/components/schemas/RecalculationCauseKind'
+        causeType:
+          $ref: '#/components/schemas/RecalculationCauseType'
+        scope:
+          $ref: '#/components/schemas/RecalculationScope'
+        reason:
+          type: string
+          description: User content; absent in a preview
+        lines:
+          type: array
+          description: Grouped by plot (natural order of the numbers), then by service period, then by charge type
+          items:
+            $ref: '#/components/schemas/RecalculationLine'
+        totals:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChargeTypeTotal'
+        total:
+          $ref: '#/components/schemas/Money'
+        plotCount:
+          type: integer
+          format: int32
+          minimum: 0
+        notCharged:
+          type: array
+          description: The "not charged" items the recalculation opens or keeps open; empty for a booked record
+          items:
+            $ref: '#/components/schemas/NotChargedItem'
+        digest:
+          type: string
+          description: Identifies what the recalculation would book; send it with the booking
+        createdAt:
+          type: string
+          format: date-time
+        createdByName:
+          type: string
+          description: The current name of the member who booked it; absent when that member no longer exists
+
+    RecalculationSummary:
+      type: object
+      description: A booked recalculation in the list
+      required: [id, cause, reason, total, lineCount, plotCount, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        cause:
+          $ref: '#/components/schemas/RecalculationCauseKind'
+        causeType:
+          $ref: '#/components/schemas/RecalculationCauseType'
+        reason:
+          type: string
+          description: User content
+        total:
+          $ref: '#/components/schemas/Money'
+        lineCount:
+          type: integer
+          format: int32
+          minimum: 0
+        plotCount:
+          type: integer
+          format: int32
+          minimum: 0
+        createdAt:
+          type: string
+          format: date-time
+        createdByName:
+          type: string
+          description: The current name of the member who booked it; absent when that member no longer exists
+
+    RecalculationPage:
+      type: object
+      required: [items, page, size, totalItems, totalPages]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecalculationSummary'
+        page:
+          type: integer
+          format: int32
+          description: Zero-based page index
+        size:
+          type: integer
+          format: int32
+        totalItems:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32

@@ -23,7 +23,8 @@ public enum Permission {
     CHARGES_VIEW,
     CHARGES_RUN,
     CHARGES_REVERSE,
-    PERIODS_CLOSE;
+    PERIODS_CLOSE,
+    RECALCULATION_RUN;
 
     public static final String AUTHORITY_PREFIX = "PERM_";
 

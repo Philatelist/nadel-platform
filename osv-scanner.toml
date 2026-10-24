@@ -12,3 +12,7 @@ reason = "braces via metro-file-map: build-time only, input is our own source tr
 [[IgnoredVulns]]
 id = "GHSA-w5hq-g745-h8pq"
 reason = "uuid via @expo/config-plugins (xcode project tooling): build-time only, buffer argument never used"
+
+[[IgnoredVulns]]
+id = "GHSA-mrhx-c7xc-m3w5"
+reason = "zod 3.x via @expo/cli: Expo CLI dev/build tooling only, never shipped in the app or the server; no patched 3.x yet; revisit when Expo moves @expo/cli to zod 4 or a patched 3.x appears"

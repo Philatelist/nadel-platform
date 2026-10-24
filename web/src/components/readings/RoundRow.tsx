@@ -4,6 +4,7 @@ import {
   useEnterReadings,
   type Meter,
   type ReadingRowResult,
+  type RecalculationCause,
 } from '@nadel/api-client';
 import { format, formatDay, formatMeterValue, parseMeterValue } from '@nadel/shared';
 import { useQueryClient } from '@tanstack/react-query';
@@ -11,6 +12,8 @@ import { useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
 import { useLocale, useT } from '../../i18n';
 import { resourceUnit } from '../../meters';
+import { useCan } from '../../me';
+import { kyivToday } from '../../kyivToday';
 import { problemMessage } from '../../problem';
 import { readingErrorMessage } from '../../readings';
 import { ResourceIcon } from '../meters/ResourceIcon';
@@ -18,6 +21,7 @@ import { invalidateAfterReading } from '../charges/chargeInvalidation';
 import { UserContent } from '../UserContent';
 import { Badge, Button, Notice, TextField } from '../ui';
 import { ReadingDateField } from './ReadingDateField';
+import { ReadingRecalculationDialog } from './ReadingRecalculationDialog';
 
 /**
  * One meter of the round as a row of its card: the value, the date of this reading (the round date unless changed here) and its
@@ -45,6 +49,9 @@ export function RoundRow({
   const [submitted, setSubmitted] = useState(false);
   const [result, setResult] = useState<ReadingRowResult>();
   const [failure, setFailure] = useState<string>();
+  const canRecalculate = useCan('RECALCULATION_RUN');
+  const [cause, setCause] = useState<RecalculationCause>();
+  const [booked, setBooked] = useState(false);
 
   const parsed = parseMeterValue(input, locale);
   const valueError = submitted && parsed === undefined ? t.meters.valueInvalid : undefined;
@@ -55,6 +62,17 @@ export function RoundRow({
       onSuccess: async (batch) => {
         const row = batch.rows[0];
         if (!row) return;
+        if (row.outcome === 'REJECTED' && row.error?.code === 'READING_IN_USE') {
+          if (canRecalculate && parsed !== undefined) {
+            setCause({
+              type: 'READING_ENTER',
+              reading: { meterId: meter.id, reading: { takenOn: takenOn ?? kyivToday(), value: parsed } },
+            });
+            return;
+          }
+          setResult(row);
+          return;
+        }
         setResult(row);
         if (row.outcome !== 'SAVED') return;
         await Promise.all([
@@ -69,6 +87,7 @@ export function RoundRow({
   });
 
   function edit(change: () => void) {
+    setBooked(false);
     setResult(undefined);
     setFailure(undefined);
     change();
@@ -131,9 +150,14 @@ export function RoundRow({
           </div>
         </div>
         {failure && <Notice tone="danger">{failure}</Notice>}
+        {booked && <Notice tone="success">{r.recalc.entered}</Notice>}
         {result?.outcome === 'REJECTED' && (
           <Notice tone="danger">
-            {result.error ? readingErrorMessage(t, locale, meter.resource, result.error) : t.problem.UNKNOWN}
+            {result.error?.code === 'READING_IN_USE'
+              ? r.usedNeedsChairman
+              : result.error
+                ? readingErrorMessage(t, locale, meter.resource, result.error)
+                : t.problem.UNKNOWN}
           </Notice>
         )}
         {saved && interval && (
@@ -154,6 +178,19 @@ export function RoundRow({
           </Notice>
         ))}
       </form>
+      {cause && (
+        <ReadingRecalculationDialog
+          meterId={meter.id}
+          cause={cause}
+          onDone={(recalculated) => {
+            setCause(undefined);
+            setBooked(recalculated);
+            setInput('');
+            onSaved(valueField.current);
+          }}
+          onClose={() => setCause(undefined)}
+        />
+      )}
     </div>
   );
 }

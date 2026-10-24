@@ -1,5 +1,6 @@
 package app.nadel.ledger.internal;
 
+import app.nadel.ledger.internal.ExpectedCharges.Expected;
 import app.nadel.ledger.internal.NotChargedItemRecord.Kind;
 import app.nadel.ledger.internal.NotChargedItemRecord.Status;
 import app.nadel.ledger.internal.ReadingChargePlanning.AlreadyCharged;
@@ -36,6 +37,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.UUID;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
@@ -62,6 +64,10 @@ import org.springframework.transaction.annotation.Transactional;
  * {@code INTERVAL:{meter}:{toKey}}; an item whose interval no longer exists (the readings around it changed) becomes
  * {@code OBSOLETE}. A water meter's interval is charged only for the days its plot is connected to water
  * ({@link WaterDays}); an interval without a connected day charges and queues nothing.
+ * <p>
+ * A recalculation (feature 012) uses the same planning: {@link #expected} returns what the listener would charge today
+ * for the intervals of a locked meter ({@link #lockPoints}) in a window, and {@link #bookRecalculated} and
+ * {@link #writePartsAndUse} write its new charges and the parts and points of its adjustments.
  */
 @Component
 class IntervalCharging {
@@ -71,20 +77,20 @@ class IntervalCharging {
     private final PlotCatalog plots;
     private final CooperativeSettings settings;
     private final BillingMonths billingMonths;
-    private final ChargeRepository charges;
+    private final ChargeKeys chargeKeys;
     private final NotChargedItemRepository items;
     private final WaterDays waterDays;
     private final EntityManager entityManager;
 
     IntervalCharging(MeterNetwork network, TariffChargeWriter writer, PlotCatalog plots,
-            CooperativeSettings settings, BillingMonths billingMonths, ChargeRepository charges,
+            CooperativeSettings settings, BillingMonths billingMonths, ChargeKeys chargeKeys,
             NotChargedItemRepository items, WaterDays waterDays, EntityManager entityManager) {
         this.network = network;
         this.writer = writer;
         this.plots = plots;
         this.settings = settings;
         this.billingMonths = billingMonths;
-        this.charges = charges;
+        this.chargeKeys = chargeKeys;
         this.items = items;
         this.waterDays = waterDays;
         this.entityManager = entityManager;
@@ -223,11 +229,14 @@ class IntervalCharging {
      */
     private Processed process(UUID tenantId, Context context, MeterInterval interval, @Nullable UUID actor,
             Instant now) {
-        MeterResource resource = context.meter().resource();
-        Outcome outcome = ReadingChargePlanning.plan(context.snapshot(), context.type().id(), context.plot(), resource,
-                interval, waterDays.forInterval(resource, context.plotId(), interval.firstDay(), interval.to().on()),
-                context.lossesPercent(),
-                key -> !charges.existingSourceKeys(List.of(key)).isEmpty());
+        // charged: a charge of the interval stands or was reversed by hand (not one a recalculation reversed), or a
+        // charge of the same interval stands under another key (a reading corrected by a recalculation, feature 012)
+        List<String> keys = List.of(interval.consumptionKey(), interval.lossesKey());
+        Set<String> charged = new HashSet<>(chargeKeys.charged(keys));
+        if (!charged.containsAll(keys)) {
+            charged.addAll(chargeKeys.standingOfInterval(interval));
+        }
+        Outcome outcome = plan(context, interval, charged::contains);
         String itemKey = NotChargedItemRecord.intervalKey(interval.meterId(), interval.to().key());
         Optional<NotChargedItemRecord> open = items.findOpen(itemKey);
         Processed processed;
@@ -261,7 +270,25 @@ class IntervalCharging {
         return processed;
     }
 
-    /** Writes the charges of an interval, their parts and the points they read, in the booking month. */
+    /**
+     * What {@link ReadingChargePlanning} decides for one interval of the meter: the tariffs of the snapshot, the days the
+     * plot may be charged ({@link WaterDays}) and the losses percentage of the context.
+     *
+     * @param charged whether the source key counts as charged ({@link ChargeKeys}; {@code key -> false} for a
+     *                recalculation)
+     */
+    private Outcome plan(Context context, MeterInterval interval, Predicate<String> charged) {
+        MeterResource resource = context.meter().resource();
+        return ReadingChargePlanning.plan(context.snapshot(), context.type().id(), context.plot(), resource, interval,
+                waterDays.forInterval(resource, context.plotId(), interval.firstDay(), interval.to().on()),
+                context.lossesPercent(), charged);
+    }
+
+    /**
+     * Writes the charges of an interval, their parts and the points they read, in the booking month; each under its
+     * base key, or {@code base#r{recalculation}} when a recalculation reversed the charge of the base key
+     * ({@link ChargeKeys#bookingKeys}).
+     */
     private void book(UUID tenantId, NewCharges planned, @Nullable UUID actor, Instant now) {
         List<PlannedReadingCharge> toBook = new ArrayList<>();
         toBook.add(planned.consumption());
@@ -269,37 +296,124 @@ class IntervalCharging {
             toBook.add(planned.losses());
         }
         BillingMonthRecord month = billingMonths.openForBooking(tenantId, planned.consumption().accruedOn());
-        List<ChargeRecord> written = new ArrayList<>();
+        Map<String, String> keys = chargeKeys.bookingKeys(toBook.stream().map(PlannedReadingCharge::sourceKey)
+                .toList());
         for (PlannedReadingCharge charge : toBook) {
-            ChargeRecord record = ChargeRecord.reading(tenantId, charge.plotId(), charge.chargeTypeId(), month.getId(),
-                    charge.source(), charge.tariff().id(), charge.interval().meterId(), charge.amount(),
-                    charge.serviceFrom(), charge.serviceTo(), charge.accruedOn(), charge.sourceKey(),
-                    charge.calculation(), actor, now);
-            entityManager.persist(record);
-            written.add(record);
+            write(tenantId, charge, month.getId(), keys.get(charge.sourceKey()), null, actor, now);
         }
-        entityManager.flush();
-        for (int i = 0; i < toBook.size(); i++) {
-            PlannedReadingCharge charge = toBook.get(i);
-            UUID chargeId = written.get(i).getId();
-            List<UUID> versionIds = charge.versionIds();
-            for (int p = 0; p < charge.parts().size(); p++) {
-                PricedPart part = charge.parts().get(p);
-                entityManager.persist(ChargePartRecord.of(tenantId, chargeId, versionIds.get(p), part.days(),
-                        new BigDecimal(part.quantity().numerator()), new BigDecimal(part.quantity().denominator()),
-                        part.terms().rate().value()));
-            }
-            for (Point point : List.of(charge.interval().from(), charge.interval().to())) {
-                entityManager.createNativeQuery("insert into meter_value_use (tenant_id, meter_id, used_on, charge_id) "
-                        + "values (:tenant, :meter, :usedOn, :charge)")
-                        .setParameter("tenant", tenantId)
-                        .setParameter("meter", charge.interval().meterId())
-                        .setParameter("usedOn", point.on())
-                        .setParameter("charge", chargeId)
-                        .executeUpdate();
+    }
+
+    // ---- feature 012: what a recalculation needs
+
+    /**
+     * The days a recalculation covers: the intervals whose closing reading lies in them, both ends included (the
+     * months of a manual recalculation, from the first day of the first one to the last day of the last one).
+     */
+    record Window(LocalDate from, LocalDate to) {
+
+        Window {
+            Objects.requireNonNull(from, "from");
+            Objects.requireNonNull(to, "to");
+            if (to.isBefore(from)) {
+                throw new IllegalArgumentException("A window does not end before it starts");
             }
         }
+
+        /** Whether the interval belongs to the window: the reading that closes it is dated in it. */
+        boolean contains(MeterInterval interval) {
+            return contains(interval.to().on());
+        }
+
+        /** Whether the day lies in the window. */
+        boolean contains(LocalDate on) {
+            return !on.isBefore(from) && !on.isAfter(to);
+        }
+    }
+
+    /**
+     * Locks the meter {@code FOR SHARE} with its points ({@link MeterNetwork#lockSharedPoints}), then its advisory lock,
+     * as the listener does: a recalculation locks the meters of its plots in id order, after the charging lock and
+     * before the queue lock. Empty for a meter that is gone or is not a plot meter.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    Optional<MeterPoints> lockPoints(UUID tenantId, UUID meterId) {
+        return lockMeter(tenantId, meterId);
+    }
+
+    /**
+     * What 011 would charge today for the intervals of the locked meter that lie in the window (feature 012): each
+     * interval planned exactly as the listener plans it ({@link ReadingChargePlanning}, the same tariffs, water days
+     * and losses percentage), with a "charged" predicate that ignores the ledger, as {@link ExpectedCharges#ofInterval}
+     * entries (a consumption charge and its fixed losses charge; both not charged when the interval fails; nothing for
+     * an interval with nothing to charge, an inactive charge type included). Empty for a meter that is not a plot
+     * meter, whose plot is gone, or whose charge type does not exist. Reads the plot and the water connections.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    List<Expected> expected(MeterPoints points, Snapshot snapshot, Window window) {
+        if (points.kind() != MeterKind.PLOT || points.plotId() == null) {
+            return List.of();
+        }
+        Optional<Context> context = context(points, snapshot);
+        if (context.isEmpty()) {
+            return List.of();
+        }
+        List<Expected> expected = new ArrayList<>();
+        for (MeterInterval interval : intervals(points)) {
+            if (window.contains(interval)) {
+                expected.addAll(ExpectedCharges.ofInterval(plan(context.get(), interval, key -> false), interval,
+                        context.get().plotId(), context.get().type().id()));
+            }
+        }
+        return expected;
+    }
+
+    /**
+     * Writes a charge of an interval that the recalculation {@code recalculationId} books (feature 012): the planned
+     * charge with {@code sourceKey} (its base key, or {@code base#r{recalculation}} when a charge has the base key),
+     * its parts and the two points it reads, in the billing month. Flushes.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    ChargeRecord bookRecalculated(UUID tenantId, PlannedReadingCharge charge, UUID billingMonthId, String sourceKey,
+            UUID recalculationId, @Nullable UUID createdBy, Instant now) {
+        return write(tenantId, charge, billingMonthId, sourceKey, recalculationId, createdBy, now);
+    }
+
+    /**
+     * Writes the parts of the planned charge and the two points it reads for {@code chargeId}: an adjustment of an
+     * interval charge by a recalculation (feature 012), whose parts are those of the expected charge. Flushes.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    void writePartsAndUse(UUID tenantId, UUID chargeId, PlannedReadingCharge charge) {
+        List<UUID> versionIds = charge.versionIds();
+        for (int p = 0; p < charge.parts().size(); p++) {
+            PricedPart part = charge.parts().get(p);
+            entityManager.persist(ChargePartRecord.of(tenantId, chargeId, versionIds.get(p), part.days(),
+                    new BigDecimal(part.quantity().numerator()), new BigDecimal(part.quantity().denominator()),
+                    part.terms().rate().value()));
+        }
+        for (Point point : List.of(charge.interval().from(), charge.interval().to())) {
+            entityManager.createNativeQuery("insert into meter_value_use (tenant_id, meter_id, used_on, charge_id) "
+                    + "values (:tenant, :meter, :usedOn, :charge)")
+                    .setParameter("tenant", tenantId)
+                    .setParameter("meter", charge.interval().meterId())
+                    .setParameter("usedOn", point.on())
+                    .setParameter("charge", chargeId)
+                    .executeUpdate();
+        }
         entityManager.flush();
+    }
+
+    /** Writes one charge of an interval with its parts and the points it reads. */
+    private ChargeRecord write(UUID tenantId, PlannedReadingCharge charge, UUID billingMonthId, String sourceKey,
+            @Nullable UUID recalculationId, @Nullable UUID createdBy, Instant now) {
+        ChargeRecord record = ChargeRecord.reading(tenantId, charge.plotId(), charge.chargeTypeId(), billingMonthId,
+                charge.source(), charge.tariff().id(), charge.interval().meterId(), charge.amount(),
+                charge.serviceFrom(), charge.serviceTo(), charge.accruedOn(), sourceKey, charge.calculation(),
+                recalculationId, createdBy, now);
+        entityManager.persist(record);
+        entityManager.flush();
+        writePartsAndUse(tenantId, record.getId(), charge);
+        return record;
     }
 
     /** Closes the open items of the meter whose interval (from point and to point) is not an interval any more. */

@@ -11,7 +11,7 @@
  */
 
 /**
- * Kind of the entity an audit entry is about. A `CHARGE` entry (a reversal, an opening balance, a retried "not charged" item) is about the plot whose account changed: its `entityId` is the plot id and its label the plot number. A `BILLING_MONTH` entry (a closing, a month run) is about a billing month: its label is the month as `YYYY-MM`. A `LOSSES_RUN` entry (a losses run booked or reversed) is about the run: its label is the range as `from/to` (ISO dates); so is a `COMMON_CONSUMER_RUN` entry (a common consumer run booked or reversed). A `NOT_CHARGED_RETRIED` entry of a losses node or common consumer item is a `METER` entry about the node or consumer meter, and so is `COMMON_CONSUMER_BILLING_CHANGED` (about the consumer meter, label its name).
+ * Kind of the entity an audit entry is about. A `CHARGE` entry (a reversal, an opening balance, a retried "not charged" item) is about the plot whose account changed: its `entityId` is the plot id and its label the plot number. A `BILLING_MONTH` entry (a closing, a month run) is about a billing month: its label is the month as `YYYY-MM`. A `LOSSES_RUN` entry (a losses run booked or reversed) is about the run: its label is the range as `from/to` (ISO dates); so is a `COMMON_CONSUMER_RUN` entry (a common consumer run booked or reversed). A `NOT_CHARGED_RETRIED` entry of a losses node or common consumer item is a `METER` entry about the node or consumer meter, and so is `COMMON_CONSUMER_BILLING_CHANGED` (about the consumer meter, label its name). A `RECALCULATION` entry (`RECALCULATION_BOOKED`) is about a booked recalculation: its label is its months as `from/to` (`YYYY-MM`).
  */
 export type AuditEntityType = typeof AuditEntityType[keyof typeof AuditEntityType];
 
@@ -31,4 +31,5 @@ export const AuditEntityType = {
   BILLING_MONTH: 'BILLING_MONTH',
   LOSSES_RUN: 'LOSSES_RUN',
   COMMON_CONSUMER_RUN: 'COMMON_CONSUMER_RUN',
+  RECALCULATION: 'RECALCULATION',
 } as const;

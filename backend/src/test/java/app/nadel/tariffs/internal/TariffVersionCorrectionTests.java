@@ -11,7 +11,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import app.nadel.TestTokens;
+import app.nadel.tariffs.TariffBook;
 import app.nadel.tariffs.TariffVersionUsage;
+import app.nadel.tenancy.TenantContext;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDate;
@@ -35,7 +37,8 @@ import tools.jackson.databind.JsonNode;
  * Correcting and deleting a tariff version ({@code PUT} and {@code DELETE /tariffs/{id}/versions/{versionId}}): what may
  * change, the re-derived end dates of the neighbours, the use check through the {@link TariffVersionUsage} port (here a
  * test bean next to the default one), the refusals, who may do it, other cooperatives, the audit entries and the
- * expected amounts that follow a corrected rate.
+ * expected amounts that follow a corrected rate. A version deleted softly (V19, feature 012) no longer exists for the
+ * application.
  */
 class TariffVersionCorrectionTests extends TariffScopeSupport {
 
@@ -55,6 +58,9 @@ class TariffVersionCorrectionTests extends TariffScopeSupport {
 
     @Autowired
     UsedVersions usedVersions;
+
+    @Autowired
+    TariffBook tariffBook;
 
     @AfterEach
     void forgetUsedVersions() {
@@ -136,13 +142,27 @@ class TariffVersionCorrectionTests extends TariffScopeSupport {
     }
 
     @Test
-    void anUnchangedRequestOnAVersionInUseIsRefusedLikeAnyOther() throws Exception {
+    void aVersionInUseKeepsItsTermsButItsNoteCanBeCorrected() throws Exception {
         UUID tariff = newTariff("For members");
         UUID version = versionId(tariff, "2026-01-01");
         usedVersions.used.add(version);
 
+        // a correction that changes no term changes no amount (feature 012 §2.4): no use check
         send(chairman(), put(path(tariff, version)), terms("2026-01-01", "PER_AREA_SOTKA", "YEARLY", "50", null, null))
-                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("TARIFF_VERSION_IN_USE"));
+                .andExpect(status().isOk());
+        send(chairman(), put(path(tariff, version)), terms("2026-01-01", "PER_AREA_SOTKA", "YEARLY", "50.0000", null,
+                "Decision of 12.04.2026")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.note").value("Decision of 12.04.2026"));
+        // a term together with the note is a correction of a used version
+        send(chairman(), put(path(tariff, version)), terms("2026-01-01", "PER_AREA_SOTKA", "YEARLY", "51", null,
+                "Another note")).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("TARIFF_VERSION_IN_USE"));
+
+        assertThat(storedRate(version)).isEqualByComparingTo("50");
+        assertThat(ownerJdbc().queryForObject("select note from tariff_version where id = ?", String.class, version))
+                .isEqualTo("Decision of 12.04.2026");
+        assertThat(changes(awaitEntries(tariff, "TARIFF_VERSION_UPDATED", 1).getFirst()))
+                .containsExactly(new Change("note", null, "Decision of 12.04.2026"));
     }
 
     @Test
@@ -259,6 +279,37 @@ class TariffVersionCorrectionTests extends TariffScopeSupport {
                 .andExpect(jsonPath("$.items[0].rate").value("60.0000"))
                 .andExpect(jsonPath("$.items[0].amount").value("30.00"))
                 .andExpect(jsonPath("$.total").value("30.00"));
+    }
+
+    @Test
+    void aSoftDeletedVersionIsIgnoredEverywhere() throws Exception {
+        UUID tariff = newTariff("For members"); // 50 per sotka yearly from 2026-01-01
+        UUID live = versionId(tariff, "2026-01-01");
+        UUID plot = newPlot("VC-2", "PLOT", false); // 600 m2
+        UUID deleted = UUID.randomUUID();
+        ownerJdbc().update("insert into tariff_version (id, tenant_id, tariff_id, valid_from, basis, frequency, rate, "
+                + "deleted_at) values (?, ?, ?, date '2026-06-01', 'PER_AREA_SOTKA', 'YEARLY', 99, now())", deleted,
+                DEMO_TENANT, tariff);
+
+        // the tariff card, the expected amounts and the snapshot the ledger charges from
+        send(chairman(), get(API + "/" + tariff), null).andExpect(status().isOk())
+                .andExpect(jsonPath("$.versions", hasSize(1)))
+                .andExpect(jsonPath("$.versions[0].id").value(live.toString()))
+                .andExpect(jsonPath("$.versions[0].validTo").doesNotExist());
+        send(chairman(), get("/api/v1/plots/" + plot + "/tariffs?month=2026-11"), null).andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].amount").value("25.00"));
+        TariffBook.Snapshot snapshot = TenantContext.runAs(DEMO_TENANT, tariffBook::snapshot);
+        assertThat(snapshot.tariff(tariff).orElseThrow().versions()).extracting(TariffBook.VersionRef::id)
+                .containsExactly(live);
+
+        // it cannot be corrected or deleted, it does not count as a version, and its start date is free again
+        send(chairman(), put(path(tariff, deleted)), terms("2026-06-01", "PER_AREA_SOTKA", "YEARLY", "60", null, null))
+                .andExpect(status().isNotFound());
+        send(chairman(), delete(path(tariff, deleted)), null).andExpect(status().isNotFound());
+        send(chairman(), delete(path(tariff, live)), null).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("TARIFF_LAST_VERSION"));
+        addVersion(tariff, "2026-06-01", "60");
+        assertThat(versionCount(tariff)).isEqualTo(3); // the soft-deleted row stays in the table
     }
 
     // ---- deleting

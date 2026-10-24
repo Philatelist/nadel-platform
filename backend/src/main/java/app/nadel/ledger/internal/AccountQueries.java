@@ -1,8 +1,8 @@
 package app.nadel.ledger.internal;
 
 import app.nadel.identity.AccessProfile;
+import app.nadel.ledger.internal.ChargeViews.Links;
 import app.nadel.ledger.internal.DebtCalculator.Debts;
-import app.nadel.ledger.internal.DebtCalculator.Line;
 import app.nadel.money.Money;
 import app.nadel.plots.PlotCatalog;
 import app.nadel.problem.ApiProblemException;
@@ -16,6 +16,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import nadel.contract.model.Charge;
 import nadel.contract.model.ChargeTypeCode;
 import nadel.contract.model.ChargeTypeDebt;
@@ -26,9 +28,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * The account of a plot ({@code GET /plots/{id}/account}, feature 011 §2.1): the debt per charge type from every charge
- * of the plot ({@link DebtCalculator}) and the charges, newest first, optionally limited by a date range on
- * {@code accruedOn} (the range never changes the debts). One read-only transaction; the plot's charges, the months and
+ * The account of a plot ({@code GET /plots/{id}/account}, feature 011 §2.1, feature 012 §2.3): the debt per charge type
+ * from every charge of the plot, adjustments included ({@link DebtCalculator}), and the charges, newest first,
+ * optionally limited by a date range on {@code accruedOn} and by a kind (neither ever changes the debts). Each charge
+ * carries its links within the plot's ledger: its reversal, its adjustments (oldest first) and, for an adjustment, the
+ * charge it corrects. One read-only transaction; the plot's charges, the months and
  * the charge types are loaded once each.
  * <p>
  * Who may ask: see {@link LedgerAccess}. A member sees amounts only for the plots they own now; every other plot is the
@@ -40,6 +44,8 @@ class AccountQueries {
     private static final Comparator<ChargeRecord> NEWEST_FIRST = Comparator
             .comparing(ChargeRecord::getAccruedOn).thenComparing(ChargeRecord::getCreatedAt)
             .thenComparing(ChargeRecord::getId).reversed();
+    private static final Comparator<ChargeRecord> BOOKED_FIRST = Comparator.comparing(ChargeRecord::getCreatedAt)
+            .thenComparing(ChargeRecord::getId);
 
     private final PlotCatalog plots;
     private final ChargeRepository charges;
@@ -58,7 +64,8 @@ class AccountQueries {
      *                             {@code PLOT_NOT_FOUND} when the plot is unknown or not the caller's to see
      */
     @Transactional(readOnly = true)
-    PlotAccount account(UUID plotId, @Nullable LocalDate from, @Nullable LocalDate to, AccessProfile viewer) {
+    PlotAccount account(UUID plotId, @Nullable LocalDate from, @Nullable LocalDate to, @Nullable ChargeKind kind,
+            AccessProfile viewer) {
         access.requireCooperativeData(viewer);
         if (from != null && to != null && from.isAfter(to)) {
             throw new ApiProblemException(HttpStatus.BAD_REQUEST, ProblemCodes.VALIDATION_FAILED,
@@ -68,18 +75,24 @@ class AccountQueries {
             throw LedgerAccess.plotNotFound();
         }
         List<ChargeRecord> all = charges.findByPlotId(plotId);
-        Debts debts = DebtCalculator.of(all.stream().map(c -> new Line(c.getId(), c.getChargeTypeId(), c.getAmount(),
-                c.getAccruedOn(), c.getReversesChargeId())).toList());
+        Debts debts = DebtCalculator.of(all.stream().map(DebtCalculator::line).toList());
+        Map<UUID, ChargeRecord> byId = all.stream().collect(Collectors.toMap(ChargeRecord::getId, Function.identity()));
         Map<UUID, UUID> reversedBy = new HashMap<>();
+        Map<UUID, List<UUID>> adjustedBy = new HashMap<>();
         all.stream().filter(c -> c.getReversesChargeId() != null)
                 .forEach(c -> reversedBy.put(c.getReversesChargeId(), c.getId()));
+        all.stream().filter(c -> c.getAdjustsChargeId() != null).sorted(BOOKED_FIRST)
+                .forEach(c -> adjustedBy.computeIfAbsent(c.getAdjustsChargeId(), id -> new ArrayList<>()).add(c.getId()));
 
         List<ChargeRecord> shown = all.stream()
                 .filter(c -> from == null || !c.getAccruedOn().isBefore(from))
                 .filter(c -> to == null || !c.getAccruedOn().isAfter(to))
+                .filter(c -> kind == null || c.getKind() == kind)
                 .sorted(NEWEST_FIRST).toList();
         ChargeViews.Context context = views.context(shown, viewer);
-        List<Charge> listed = shown.stream().map(c -> views.view(c, reversedBy.get(c.getId()), context)).toList();
+        List<Charge> listed = shown.stream().map(c -> views.view(c, new Links(reversedBy.get(c.getId()),
+                adjustedBy.getOrDefault(c.getId(), List.of()),
+                c.getAdjustsChargeId() == null ? null : byId.get(c.getAdjustsChargeId())), context)).toList();
         return new PlotAccount(plotId, debtsInTypeOrder(debts, context.types()), debts.total().toString(), listed);
     }
 

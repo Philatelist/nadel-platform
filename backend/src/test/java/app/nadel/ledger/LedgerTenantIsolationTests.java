@@ -276,7 +276,7 @@ class LedgerTenantIsolationTests extends LedgerTestSupport {
 
     @Test
     void kindAndSourceAreChecked() {
-        assertCheck("charge_kind_ck", sql -> charge(sql, UUID.randomUUID(), demo, "ADJUSTMENT", "TARIFF", d("10.00"), "KS1",
+        assertCheck("charge_kind_ck", sql -> charge(sql, UUID.randomUUID(), demo, "BONUS", "TARIFF", d("10.00"), "KS1",
                 null, null));
         assertCheck("charge_source_ck", sql -> charge(sql, UUID.randomUUID(), demo, "REGULAR", "MAGIC", d("10.00"), "KS2",
                 null, null));

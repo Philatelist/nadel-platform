@@ -48,6 +48,14 @@ interface BillingMonthRepository extends JpaRepository<BillingMonthRecord, UUID>
     @Query(value = "select status from billing_month where month = :month for update", nativeQuery = true)
     @Nullable String lockStatusForUpdate(@Param("month") LocalDate month);
 
+    /**
+     * Every month of the cooperative with a shared row lock ({@code FOR SHARE}) until the end of the transaction, in
+     * calendar order: a recalculation plans with the months' statuses, so no month may be closed until it has booked
+     * (a closing takes one month {@code FOR UPDATE} and waits). Returns the ids.
+     */
+    @Query(value = "select id from billing_month order by month for share", nativeQuery = true)
+    List<UUID> lockAllForShare();
+
     /** The month with a shared row lock ({@code FOR SHARE}); see {@link #lockStatusForShare}. */
     @Lock(LockModeType.PESSIMISTIC_READ)
     @Query("select m from BillingMonthRecord m where m.id = :id")

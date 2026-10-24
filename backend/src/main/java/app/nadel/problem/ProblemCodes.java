@@ -95,7 +95,9 @@ public final class ProblemCodes {
     public static final String CHARGE_ALREADY_REVERSED = "CHARGE_ALREADY_REVERSED";
     /** 409: the charge is a reversal, which cannot itself be reversed. */
     public static final String REVERSAL_NOT_REVERSIBLE = "REVERSAL_NOT_REVERSIBLE";
-    /** 409: the charge is booked in a closed billing month; its correction is an adjustment (feature 012). */
+    /** 409: the charge is an adjustment, which is never reversed; a later recalculation adjusts the original again. */
+    public static final String ADJUSTMENT_NOT_REVERSIBLE = "ADJUSTMENT_NOT_REVERSIBLE";
+    /** 409: the charge is booked in a closed billing month; its correction is an adjustment (a recalculation). */
     public static final String CHARGE_IN_CLOSED_MONTH = "CHARGE_IN_CLOSED_MONTH";
     /** 409: a billing month is closed while an earlier month is still open; months close in order. */
     public static final String PERIOD_CLOSE_ORDER = "PERIOD_CLOSE_ORDER";
@@ -121,6 +123,10 @@ public final class ProblemCodes {
     public static final String RUN_ALREADY_REVERSED = "RUN_ALREADY_REVERSED";
     /** 409: the charges of the run are booked in a closed billing month; their correction is an adjustment. */
     public static final String RUN_IN_CLOSED_MONTH = "RUN_IN_CLOSED_MONTH";
+    /** 409: a manual recalculation finds nothing to change (expected equals effective for every charge). */
+    public static final String NOTHING_TO_RECALCULATE = "NOTHING_TO_RECALCULATE";
+    /** 409: a manual recalculation spans more than 24 months. */
+    public static final String RECALCULATION_RANGE_TOO_LONG = "RECALCULATION_RANGE_TOO_LONG";
 
     /** 409: the plot is connected to water on one of the days of the new connection (or has a lasting one). */
     public static final String WATER_ALREADY_CONNECTED = "WATER_ALREADY_CONNECTED";
@@ -150,6 +156,8 @@ public final class ProblemCodes {
     public static final String AMOUNT_NOT_POSITIVE = "AMOUNT_NOT_POSITIVE";
     /** A date that must not be after today in the cooperative's time zone (an opening balance) is in the future. */
     public static final String DATE_IN_FUTURE = "DATE_IN_FUTURE";
+    /** A value the server does not handle (a recalculation cause type it does not know). */
+    public static final String UNSUPPORTED = "UNSUPPORTED";
     /** The same plot listed twice in one list of a request. */
     public static final String DUPLICATE = "DUPLICATE";
     public static final String MEMBER_NOT_FOUND = "MEMBER_NOT_FOUND";

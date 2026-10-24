@@ -107,7 +107,8 @@ class NotChargedRetries {
      * @param plots      the plots by id ({@link MonthRun}: the chargeable plots; a plot missing here, or archived or
      *                   common land, has nothing left to charge)
      * @param applicable the days the tariffs of a charge type may charge a plot in a month ({@link WaterDays})
-     * @param charged    whether a charge with the source key exists
+     * @param charged    whether the source key counts as charged ({@link ChargeKeys}: a charge stands or was
+     *                   reversed by hand)
      */
     static List<Attempt> plan(Snapshot snapshot, Collection<NotChargedItemRecord> open, Map<UUID, PlotFacts> plots,
             ApplicableDays applicable, Predicate<String> charged) {

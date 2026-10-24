@@ -4,6 +4,7 @@ import {
   getListMetersQueryKey,
   useCorrectReading,
   type Meter,
+  type RecalculationCause,
   type MeterReading,
 } from '@nadel/api-client';
 import { formatMeterValue, parseMeterValue } from '@nadel/shared';
@@ -12,13 +13,18 @@ import { useState, type FormEvent } from 'react';
 import { useLocale, useT } from '../../i18n';
 import { kyivToday } from '../../kyivToday';
 import { resourceUnit } from '../../meters';
-import { problemFieldErrors, problemMessage, type FieldErrors } from '../../problem';
+import { useCan } from '../../me';
+import { problemCode, problemFieldErrors, problemMessage, type FieldErrors } from '../../problem';
 import { invalidateAfterReading } from '../charges/chargeInvalidation';
 import { Modal } from '../Modal';
 import { Button, Notice, TextField } from '../ui';
 import { ReadingDateField } from './ReadingDateField';
+import { ReadingRecalculationDialog } from './ReadingRecalculationDialog';
 
-/** Corrects the date and value of a counted reading; mount it only while it should be open. */
+/**
+ * Corrects the date and value of a counted reading; mount it only while it should be open. A reading that charges use
+ * answers 409 `READING_IN_USE`: holders of RECALCULATION_RUN get step 2 (`READING_CORRECT`), everyone else a hint.
+ */
 export function CorrectReadingDialog({
   meter,
   reading,
@@ -27,7 +33,7 @@ export function CorrectReadingDialog({
 }: {
   meter: Meter;
   reading: MeterReading;
-  onSaved: () => void;
+  onSaved: (recalculated: boolean) => void;
   onClose: () => void;
 }) {
   const t = useT();
@@ -39,6 +45,8 @@ export function CorrectReadingDialog({
   const [submitted, setSubmitted] = useState(false);
   const [serverErrors, setServerErrors] = useState<FieldErrors>({});
   const [notice, setNotice] = useState<string>();
+  const canRecalculate = useCan('RECALCULATION_RUN');
+  const [cause, setCause] = useState<RecalculationCause>();
 
   const parsed = parseMeterValue(input, locale);
   const valueError = submitted && parsed === undefined ? m.valueInvalid : undefined;
@@ -52,9 +60,16 @@ export function CorrectReadingDialog({
           queryClient.invalidateQueries({ queryKey: getListMetersQueryKey() }),
           invalidateAfterReading(queryClient),
         ]);
-        onSaved();
+        onSaved(false);
       },
-      onError: (error: unknown) => {
+      onError: (error: unknown, variables) => {
+        if (problemCode(error) === 'READING_IN_USE') {
+          if (!canRecalculate) return setNotice(t.readings.usedNeedsChairman);
+          return setCause({
+            type: 'READING_CORRECT',
+            reading: { readingId: reading.id, reading: variables.data },
+          });
+        }
         const fields = problemFieldErrors(t, error);
         setServerErrors(fields);
         setNotice(Object.keys(fields).length > 0 ? undefined : problemMessage(t, error));
@@ -73,6 +88,17 @@ export function CorrectReadingDialog({
     setSubmitted(true);
     if (parsed === undefined) return;
     correct.mutate({ id: reading.id, data: { takenOn, value: parsed } });
+  }
+
+  if (cause) {
+    return (
+      <ReadingRecalculationDialog
+        meterId={meter.id}
+        cause={cause}
+        onDone={(recalculated) => onSaved(recalculated)}
+        onClose={onClose}
+      />
+    );
   }
 
   return (

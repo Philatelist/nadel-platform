@@ -11,6 +11,7 @@ const reject = vi.fn();
 let items: PendingReading[];
 let rejectOptions: { mutation?: { onError?: (e: unknown) => void } };
 
+vi.mock('../me', () => ({ useCan: () => true, useOptionalMe: () => null }));
 vi.mock('@nadel/api-client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@nadel/api-client')>()),
   useListReadings: () => queryResult(items),

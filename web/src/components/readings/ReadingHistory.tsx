@@ -6,6 +6,7 @@ import {
   useListMeterReadings,
   type Meter,
   type MeterReading,
+  type RecalculationCause,
   type ReadingStatus,
 } from '@nadel/api-client';
 import { format, formatDay, formatMeterValue } from '@nadel/shared';
@@ -13,13 +14,15 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useLocale, useT } from '../../i18n';
 import { resourceUnit } from '../../meters';
-import { problemMessage } from '../../problem';
+import { useCan } from '../../me';
+import { problemCode, problemMessage } from '../../problem';
 import { invalidateAfterReading } from '../charges/chargeInvalidation';
 import { ConfirmDialog } from '../ConfirmDialog';
 import { QueryBoundary } from '../QueryBoundary';
 import { formatUser } from '../UserContent';
 import { Badge, Button, DataTable, Notice, type BadgeTone, type Column } from '../ui';
 import { CorrectReadingDialog } from './CorrectReadingDialog';
+import { ReadingRecalculationDialog } from './ReadingRecalculationDialog';
 
 const STATUS_TONE: Readonly<Record<ReadingStatus, BadgeTone>> = {
   APPROVED: 'success',
@@ -38,6 +41,10 @@ export function ReadingHistory({ meter }: { meter: Meter }) {
   const unit = resourceUnit(t, meter.resource);
   const [dialog, setDialog] = useState<{ kind: 'correct' | 'delete'; reading: MeterReading }>();
   const [actionError, setActionError] = useState<string>();
+  const [success, setSuccess] = useState<string>();
+  const [deleteCause, setDeleteCause] = useState<RecalculationCause>();
+  const canRecalculate = useCan('RECALCULATION_RUN');
+  const canEnter = useCan('READINGS_ENTER');
 
   const remove = useDeleteReading({
     mutation: {
@@ -50,8 +57,12 @@ export function ReadingHistory({ meter }: { meter: Meter }) {
           invalidateAfterReading(queryClient),
         ]);
       },
-      onError: (error: unknown) => {
+      onError: (error: unknown, variables) => {
         setDialog(undefined);
+        if (problemCode(error) === 'READING_IN_USE') {
+          if (!canRecalculate) return setActionError(t.readings.usedNeedsChairman);
+          return setDeleteCause({ type: 'READING_DELETE', reading: { readingId: variables.id } });
+        }
         setActionError(problemMessage(t, error));
       },
     },
@@ -59,6 +70,7 @@ export function ReadingHistory({ meter }: { meter: Meter }) {
 
   function open(kind: 'correct' | 'delete', reading: MeterReading) {
     setActionError(undefined);
+    setSuccess(undefined);
     setDialog({ kind, reading });
   }
 
@@ -103,7 +115,8 @@ export function ReadingHistory({ meter }: { meter: Meter }) {
       key: 'actions',
       header: h.columns.actions,
       cell: (r) =>
-        r.changeable ? (
+        // a reading a charge uses is not `changeable`, but its correction opens the recalculation step (or the hint)
+        r.changeable || (r.status === 'APPROVED' && canEnter) ? (
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" onClick={() => open('correct', r)}>
               {h.correct}
@@ -119,6 +132,7 @@ export function ReadingHistory({ meter }: { meter: Meter }) {
   return (
     <>
       {actionError && <Notice tone="danger">{actionError}</Notice>}
+      {success && <Notice tone="success">{success}</Notice>}
       <QueryBoundary query={query} isEmpty={(data) => data.readings.length === 0} emptyMessage={h.empty}>
         {(data) => (
           <DataTable
@@ -134,7 +148,10 @@ export function ReadingHistory({ meter }: { meter: Meter }) {
         <CorrectReadingDialog
           meter={meter}
           reading={dialog.reading}
-          onSaved={() => setDialog(undefined)}
+          onSaved={(recalculated) => {
+            setDialog(undefined);
+            if (recalculated) setSuccess(t.readings.recalc.corrected);
+          }}
           onClose={() => setDialog(undefined)}
         />
       )}
@@ -146,6 +163,17 @@ export function ReadingHistory({ meter }: { meter: Meter }) {
           busy={remove.isPending}
           onConfirm={() => remove.mutate({ id: dialog.reading.id })}
           onCancel={() => setDialog(undefined)}
+        />
+      )}
+      {deleteCause && (
+        <ReadingRecalculationDialog
+          meterId={meter.id}
+          cause={deleteCause}
+          onDone={(recalculated) => {
+            setDeleteCause(undefined);
+            if (recalculated) setSuccess(t.readings.recalc.deleted);
+          }}
+          onClose={() => setDeleteCause(undefined)}
         />
       )}
     </>

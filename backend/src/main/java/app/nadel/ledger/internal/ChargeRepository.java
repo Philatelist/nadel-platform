@@ -53,11 +53,70 @@ interface ChargeRepository extends JpaRepository<ChargeRecord, UUID> {
     @Query("select c.sourceKey from ChargeRecord c where c.sourceKey in :keys")
     List<String> existingSourceKeys(@Param("keys") Collection<String> keys);
 
+    /**
+     * The source keys among {@code keys} whose charge a recalculation set aside ({@link ChargeKeys}): a reversal of the
+     * source cancels it, or its adjustments bring it to {@code 0.00} (a charge of a closed month that should no longer
+     * exist).
+     */
+    @Query("select c.sourceKey from ChargeRecord c where c.sourceKey in :keys and (exists "
+            + "(select r.id from ChargeRecord r where r.reversesChargeId = c.id and r.source = :source) "
+            + "or -c.amount = (select sum(a.amount) from ChargeRecord a where a.adjustsChargeId = c.id))")
+    List<String> setAsideBy(@Param("keys") Collection<String> keys, @Param("source") ChargeSource source);
+
+    /**
+     * The sources ({@code CONSUMPTION}, {@code LOSSES}) of the standing charges of one interval of the meter, whatever
+     * their source key: regular charges of no run whose calculation reads the two point dates (the interval's
+     * {@link ChargeIdentity}), not reversed and not adjusted to {@code 0.00} ({@link ChargeKeys#standingOfInterval}).
+     */
+    @Query(value = """
+            select distinct c.source from charge c
+            where c.meter_id = :meter and c.kind = 'REGULAR' and c.run_id is null
+              and c.source in ('CONSUMPTION', 'LOSSES')
+              and c.calculation -> 'readings' -> 0 ->> 'takenOn' = :fromDate
+              and c.calculation -> 'readings' -> 1 ->> 'takenOn' = :toDate
+              and not exists (select 1 from charge r where r.reverses_charge_id = c.id)
+              and coalesce((select sum(a.amount) from charge a where a.adjusts_charge_id = c.id), 0) <> -c.amount
+            """, nativeQuery = true)
+    List<String> standingIntervalSources(@Param("meter") UUID meterId, @Param("fromDate") String fromDate,
+            @Param("toDate") String toDate);
+
+    /**
+     * The charges with the source key {@code base} or a key that starts with {@code prefix} ({@code base#r}: booked
+     * again by a recalculation or after one), each as its key and the source, recalculation and time of the reversal
+     * that cancels it (nulls while it stands); {@link ChargeKeys}.
+     */
+    @Query("select c.sourceKey, r.source, r.recalculationId, r.createdAt from ChargeRecord c "
+            + "left join ChargeRecord r on r.reversesChargeId = c.id "
+            + "where c.sourceKey = :base or substring(c.sourceKey, 1, :prefixLength) = :prefix")
+    List<Object[]> revisionsOf(@Param("base") String base, @Param("prefix") String prefix,
+            @Param("prefixLength") int prefixLength);
+
+    /**
+     * The adjustments of the charges with the source key {@code base} or a key that starts with {@code prefix}, each as
+     * the charge's key and amount and the adjustment's amount, recalculation and time ({@link ChargeKeys}).
+     */
+    @Query("select c.sourceKey, c.amount, a.amount, a.recalculationId, a.createdAt from ChargeRecord c "
+            + "join ChargeRecord a on a.adjustsChargeId = c.id "
+            + "where c.sourceKey = :base or substring(c.sourceKey, 1, :prefixLength) = :prefix")
+    List<Object[]> adjustmentsOf(@Param("base") String base, @Param("prefix") String prefix,
+            @Param("prefixLength") int prefixLength);
+
     /** The opening balances of the plots that no reversal cancels, in no particular order (the Excel import). */
     @Query("select c from ChargeRecord c where c.plotId in :plotIds and c.kind = :kind and not exists "
             + "(select r.id from ChargeRecord r where r.reversesChargeId = c.id)")
     List<ChargeRecord> findStandingOfKind(@Param("plotIds") Collection<UUID> plotIds,
             @Param("kind") ChargeKind kind);
+
+    /** The charges of the kind and source of the plots and charge types, in no particular order (a recalculation). */
+    @Query("select c from ChargeRecord c where c.plotId in :plotIds and c.chargeTypeId in :typeIds "
+            + "and c.kind = :kind and c.source = :source")
+    List<ChargeRecord> findOfPlotsAndTypes(@Param("plotIds") Collection<UUID> plotIds,
+            @Param("typeIds") Collection<UUID> chargeTypeIds, @Param("kind") ChargeKind kind,
+            @Param("source") ChargeSource source);
+
+    /** The reversals and adjustments of the charges, in no particular order (a recalculation's booked chains). */
+    @Query("select c from ChargeRecord c where c.reversesChargeId in :ids or c.adjustsChargeId in :ids")
+    List<ChargeRecord> findReversalsAndAdjustmentsOf(@Param("ids") Collection<UUID> chargeIds);
 
     /** The plots among {@code plotIds} that have at least one charge of any kind. */
     @Query("select distinct c.plotId from ChargeRecord c where c.plotId in :plotIds")

@@ -39,8 +39,10 @@ class ChargesController implements ChargesApi {
 
     /** No {@code @PreAuthorize}: {@code CHARGES_VIEW} sees any plot, anyone else the plots they own now. */
     @Override
-    public ResponseEntity<PlotAccount> getPlotAccount(UUID id, @Nullable LocalDate from, @Nullable LocalDate to) {
-        return ResponseEntity.ok(accounts.account(id, from, to, currentUser.profile()));
+    public ResponseEntity<PlotAccount> getPlotAccount(UUID id, @Nullable LocalDate from, @Nullable LocalDate to,
+            nadel.contract.model.@Nullable ChargeKind kind) {
+        return ResponseEntity.ok(accounts.account(id, from, to, kind == null ? null : ChargeKind.valueOf(kind.name()),
+                currentUser.profile()));
     }
 
     @Override

@@ -9,6 +9,7 @@
  *
  * OpenAPI spec version: 0.1.0
  */
+import type { ChargeAdjustmentTarget } from './chargeAdjustmentTarget';
 import type { ChargeCalculation } from './chargeCalculation';
 import type { ChargeKind } from './chargeKind';
 import type { ChargeSource } from './chargeSource';
@@ -38,13 +39,18 @@ export interface Charge {
   serviceTo: string;
   /** The day the debt counts from (its age) */
   accruedOn: string;
-  /** The reason of a reversal (always present), or the optional reason or document reference of an opening balance (user content) */
+  /** The reason of a reversal or an adjustment (always present), or the optional reason or document reference of an opening balance (user content) */
   reason?: string;
   /** The charge a reversal cancels */
   reverses?: string;
   /** The reversal that cancelled this charge */
   reversedBy?: string;
-  /** True when the caller may reverse the charge now: the caller has `CHARGES_REVERSE`, the charge is not a reversal, was not reversed and its billing month is open */
+  adjusts?: ChargeAdjustmentTarget;
+  /** The adjustments of this charge, oldest first; absent when it has none */
+  adjustedBy?: string[];
+  /** The recalculation that booked the charge (an adjustment, or a reversal or charge of a recalculation); only for callers with `CHARGES_VIEW` */
+  recalculationId?: string;
+  /** True when the caller may reverse the charge now: the caller has `CHARGES_REVERSE`, the charge is neither a reversal nor an adjustment, was not reversed and its billing month is open */
   reversible: boolean;
   calculation: ChargeCalculation;
   createdAt: string;

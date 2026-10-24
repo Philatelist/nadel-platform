@@ -38,7 +38,9 @@ const previewRange = [
 
 /**
  * name, demo user, path, optional link to follow (CSS selector, optional exact text), optional phone viewport.
- * Also optional: `steps` ({ fill: { label, value } } or { click: button name }, nothing is ever saved) and `element`
+ * Also optional: `steps` ({ fill: { label, value, within? } }, { check: checkbox label } or { click: button name };
+ * nothing is ever saved: a recalculation is only previewed, and a correction of a used tariff version or reading stops
+ * at its preview) and `element`
  * (screenshot only the panel with this heading, or the element of a CSS selector).
  */
 const SHOTS = [
@@ -153,6 +155,74 @@ const SHOTS = [
     path: '/settings',
     element: { heading: T('Водопостачання', 'Water supply') },
   },
+  // feature 012: recalculation. Nothing is booked: the demo already holds one booked recalculation (plot 2, 60 -> 50).
+  { name: 'recalculations', user: 'chairman', path: '/charges/recalculations' },
+  { name: 'recalculation-new', user: 'chairman', path: '/charges/recalculations/new' },
+  {
+    // the demo is consistent, so the preview of all plots of the open month finds nothing to change
+    name: 'recalculation-preview-empty',
+    user: 'chairman',
+    path: '/charges/recalculations/new',
+    steps: [{ click: T('Переглянути', 'Preview') }],
+  },
+  {
+    name: 'recalculation-detail',
+    user: 'chairman',
+    path: '/charges/recalculations',
+    open: { css: 'main a[href^="/charges/recalculations/"]:not([href$="/new"])' },
+  },
+  {
+    // the rate is edited in the form and saved: the used version answers with the preview (step 2), nothing is stored
+    name: 'tariff-recalculation-step',
+    user: 'chairman',
+    path: '/tariffs',
+    open: { css: 'main a[href^="/tariffs/"]:not([href$="/new"])' },
+    steps: [
+      { click: T('Редагувати', 'Edit') },
+      {
+        fill: {
+          label: T('Ставка, ₴', 'Rate, ₴'),
+          value: '55',
+          within: T('Редагувати версію', 'Edit version'),
+        },
+      },
+      { click: T('Зберегти', 'Save') },
+    ],
+  },
+  {
+    // both readings of this meter are charged: the correction answers with the preview (step 2), nothing is stored
+    name: 'reading-recalculation-step',
+    user: 'chairman',
+    path: '/meters',
+    open: { css: 'main a[href^="/meters/"]', text: 'ЕЛ-9/2' },
+    steps: [
+      { click: T('Виправити', 'Correct') },
+      { fill: { label: T('Показ, кВт·год', 'Reading, kWh'), value: '195' } },
+      { click: T('Зберегти виправлення', 'Save the correction') },
+    ],
+    element: { css: 'dialog[open]' },
+  },
+  {
+    name: 'electrician-reading-hint',
+    user: 'electrician',
+    path: '/meters',
+    open: { css: 'main a[href^="/meters/"]', text: 'ЕЛ-9/2' },
+    steps: [
+      { click: T('Виправити', 'Correct') },
+      { fill: { label: T('Показ, кВт·год', 'Reading, kWh'), value: '195' } },
+      { click: T('Зберегти виправлення', 'Save the correction') },
+    ],
+    element: { css: 'dialog[open]' },
+  },
+  {
+    // plot 2: the booked adjustment of the closed month, with the filter "Adjustments only" on
+    name: 'plot-account-adjustment',
+    user: 'chairman',
+    path: '/plots',
+    open: { css: 'main a[href^="/plots/"]', text: '2' },
+    steps: [{ check: T('Лише коригування', 'Adjustments only') }],
+    element: { heading: T('Рахунок', 'Account') },
+  },
   { name: 'treasurer-charges', user: 'treasurer', path: `/charges/months/${thisMonth}` },
   {
     name: 'member-charges',
@@ -237,7 +307,13 @@ try {
             }
             for (const step of shot.steps ?? []) {
               if (step.fill) {
-                await page.getByLabel(step.fill.label[lang], { exact: true }).fill(step.fill.value);
+                const scope = step.fill.within
+                  ? page.getByRole('form', { name: step.fill.within[lang], exact: true })
+                  : page;
+                await scope.getByLabel(step.fill.label[lang], { exact: true }).fill(step.fill.value);
+              } else if (step.check) {
+                await page.getByLabel(step.check[lang], { exact: true }).click();
+                await page.waitForLoadState('networkidle');
               } else {
                 await page
                   .getByRole('button', { name: step.click[lang], exact: true })
