@@ -10,3 +10,6 @@ auditConfig:
     - GHSA-86w9-cpqp-85rv
     # braces via metro-file-map (Expo bundler): build-time only, input is our own source tree. No patched version yet.
     - GHSA-vfj7-8cjw-p6xm
+    # zod 3.x via @expo/cli: Expo CLI dev/build tooling only, never shipped in the app or the server; no patched 3.x yet.
+    # Revisit when Expo moves @expo/cli to zod 4 or a patched 3.x appears.
+    - GHSA-mrhx-c7xc-m3w5
