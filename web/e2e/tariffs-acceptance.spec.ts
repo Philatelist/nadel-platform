@@ -168,6 +168,7 @@ test.describe('tariffs: acceptance', () => {
     const stamp = Date.now().toString(36);
     const typeName = `E2E тип ${stamp}`;
     const tariffName = `E2E тариф ${stamp}`;
+    const plots: CreatedPlot[] = [];
     let typeId: string | undefined;
     await signIn(page, 'chairman@demo.local', 'uk');
     try {
@@ -178,6 +179,15 @@ test.describe('tariffs: acceptance', () => {
         frequency: 'YEARLY',
         rate: '50',
       });
+      // The back-dated version below books a recalculation. The ledger is append-only, so the tariff is limited to a
+      // throwaway plot first: the booking must never write charges for the demo plots.
+      const plot = await newPlot(page, `E2E-V-${stamp}`);
+      plots.push(plot);
+      const scope = await api(page, 'PUT', `/tariffs/${tariff}/scope`, {
+        kind: 'SELECTED_PLOTS',
+        plotIds: [plot.id],
+      });
+      expect(scope.status).toBe(200);
       await page.goto(`/tariffs/${tariff}`);
       await expect(page.getByRole('heading', { level: 1, name: tariffName })).toBeVisible();
       const form = (label: string | RegExp) => main(page).getByLabel(label);
@@ -223,11 +233,13 @@ test.describe('tariffs: acceptance', () => {
       await expect(main(page).getByText('Нарахування за минулі періоди буде перераховано')).toBeVisible();
       await main(page).getByRole('button', { name: 'Додати версію', exact: true }).click();
       // a past date reaches booked months, so the save opens the recalculation step; the reason books it
+      await expect(main(page).getByText(plot.number).first()).toBeVisible();
       await main(page).getByLabel('Причина', { exact: true }).fill('E2E: версія заднім числом');
       await main(page).getByRole('button', { name: 'Провести перерахунок', exact: true }).click();
       await expect(versions).toHaveCount(3);
     } finally {
       if (typeId) await api(page, 'POST', `/charge-types/${typeId}/archive`).catch(() => undefined);
+      await archiveLeftovers(page, plots, [], kyivDay(0));
     }
   });
 
