@@ -1080,7 +1080,10 @@ paths:
         Returns the settings of the current cooperative. Every member of the cooperative may call it; the platform
         operator has no cooperative data: 403. A cooperative that never saved its settings has the defaults
         (`memberPlotStatusVisibility` `OWN_ONLY`, `lossesMode` `FIXED_PERCENT`, `lossesPercent` `0.00`,
-        `commonConsumerDefaultSplit` `CONNECTED_PLOTS`, `redAmount` `1000.00`, `redDays` 90).
+        `commonConsumerDefaultSplit` `CONNECTED_PLOTS`, `redAmount` `1000.00`, `redDays` 90) and no requisites. The
+        requisites (`officialName`, `legalAddress`, `bankName`, `iban`) and the read-only ЄДРПОУ code (`edrpou`, set by
+        the platform operator) are public data of the legal entity, not personal data; a requisite that is not set is
+        absent.
       responses:
         '200':
           description: OK
@@ -1102,8 +1105,13 @@ paths:
         A change is written to the audit log (`SETTINGS_UPDATED`) with the old and the new value of every changed
         field; saving the current values changes nothing and writes no audit entry. 400 `VALIDATION_FAILED`:
         `redAmount` negative or with more than 12 integer digits (`INVALID`), `lossesPercent` above `100.00`
-        (`INVALID`), `redDays` outside 0..36500, an unknown enum value or a malformed number. A change of the red
-        threshold applies to every plot status shown from then on (the status is derived when it is read).
+        (`INVALID`), `redDays` outside 0..36500, an unknown enum value or a malformed number; `officialName`,
+        `legalAddress` or `bankName` over its maximum length (`TOO_LONG`). A requisite is saved without leading and
+        trailing spaces, and an empty string clears it. The IBAN is saved without spaces and in upper case; one that is
+        not a valid Ukrainian IBAN (`UA` and 27 digits with a correct mod-97 check) is 400 `IBAN_INVALID` with the field
+        error `iban` `IBAN_INVALID`, and nothing is saved. `edrpou` is read-only: it is changed only by the platform
+        operator, and a value sent here is ignored. A change of the red threshold applies to every plot status shown
+        from then on (the status is derived when it is read).
       requestBody:
         required: true
         content:
@@ -4092,6 +4100,8 @@ components:
         - CHARGES_REVERSE
         - PERIODS_CLOSE
         - RECALCULATION_RUN
+        - REPORTS_VIEW
+        - REPORT_TEMPLATES_MANAGE
 
     PlotStatusVisibility:
       type: string
@@ -4157,6 +4167,29 @@ components:
           format: int32
           minimum: 0
           maximum: 36500
+        officialName:
+          type: string
+          maxLength: 300
+          description: The full official name of the cooperative; absent when not set
+        legalAddress:
+          type: string
+          maxLength: 500
+          description: The legal address of the cooperative; absent when not set
+        bankName:
+          type: string
+          maxLength: 200
+          description: The name of the cooperative's bank; absent when not set
+        iban:
+          type: string
+          pattern: '^UA[0-9]{27}$'
+          description: The cooperative's IBAN, a valid Ukrainian IBAN without spaces; absent when not set
+          examples: ['UA213223130000026007233566001']
+        edrpou:
+          type: string
+          readOnly: true
+          description: >-
+            The ЄДРПОУ code of the cooperative, read-only: it is changed only by the platform operator. Absent when not
+            set
 
     CooperativeSettingsUpdate:
       type: object
@@ -4179,6 +4212,26 @@ components:
           format: int32
           minimum: 0
           maximum: 36500
+        officialName:
+          type: string
+          maxLength: 300
+          description: The full official name; an empty string clears it
+        legalAddress:
+          type: string
+          maxLength: 500
+          description: The legal address; an empty string clears it
+        bankName:
+          type: string
+          maxLength: 200
+          description: The name of the bank; an empty string clears it
+        iban:
+          type: string
+          maxLength: 64
+          description: >-
+            A Ukrainian IBAN; spaces and lower case are accepted and normalised (`ua21 3223 1300 ...` is saved as
+            `UA213223...`). No pattern here on purpose: any value that is not a valid Ukrainian IBAN (wrong country,
+            length, characters or mod-97 check) is the one answer 400 `IBAN_INVALID`. An empty string clears it.
+          examples: ['UA21 3223 1300 0002 6007 2335 6600 1']
 
     BaseRole:
       type: string
@@ -5305,7 +5358,8 @@ components:
             `AMOUNT_NOT_POSITIVE` (an amount that is zero or negative), `DATE_IN_FUTURE` (a date after today in
             Europe/Kyiv), `NOT_FOUND` (no such charge type in the cooperative, or not a node of the meter tree in the
             range of a losses run), `PLOT_COMMON_LAND` (common land is
-            never connected to water)
+            never connected to water), `IBAN_INVALID` (not a valid Ukrainian IBAN; with the top-level code
+            `IBAN_INVALID`)
         message:
           type: string
 

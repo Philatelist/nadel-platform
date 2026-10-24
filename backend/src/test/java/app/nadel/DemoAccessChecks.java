@@ -42,7 +42,7 @@ public final class DemoAccessChecks {
                         "ROLES_MANAGE", "AUDIT_VIEW", "PLOTS_VIEW", "PLOTS_EDIT", "OWNERSHIP_EDIT", "IMPORT_RUN",
                         "SETTINGS_MANAGE", "TARIFFS_VIEW", "TARIFFS_MANAGE", "METERS_VIEW", "METERS_MANAGE", "READINGS_ENTER",
                         "READINGS_APPROVE", "CHARGES_VIEW", "CHARGES_RUN", "CHARGES_REVERSE", "PERIODS_CLOSE",
-                        "RECALCULATION_RUN")));
+                        "RECALCULATION_RUN", "REPORTS_VIEW", "REPORT_TEMPLATES_MANAGE")));
     }
 
     public static void treasurerHasReadPermissions(MockMvc mvc) throws Exception {
@@ -51,7 +51,7 @@ public final class DemoAccessChecks {
                 .andExpect(jsonPath("$.roles[0].baseCode").value("TREASURER"))
                 .andExpect(jsonPath("$.permissions",
                         containsInAnyOrder("MEMBERS_VIEW", "PLOTS_VIEW", "AUDIT_VIEW", "TARIFFS_VIEW",
-                                "METERS_VIEW", "CHARGES_VIEW")));
+                                "METERS_VIEW", "CHARGES_VIEW", "REPORTS_VIEW")));
     }
 
     public static void memberHasNoPermissions(MockMvc mvc) throws Exception {

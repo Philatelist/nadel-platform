@@ -17,6 +17,10 @@ class Tenant {
     @Column(nullable = false)
     private String name;
 
+    /** Changed only by the platform operator; read-only for the application. */
+    @Column(name = "edrpou", insertable = false, updatable = false)
+    private String edrpou;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -29,5 +33,9 @@ class Tenant {
 
     String getName() {
         return name;
+    }
+
+    String getEdrpou() {
+        return edrpou;
     }
 }

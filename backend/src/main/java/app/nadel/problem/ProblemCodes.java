@@ -48,6 +48,11 @@ public final class ProblemCodes {
     public static final String FILE_TOO_LARGE = "FILE_TOO_LARGE";
     /** 400: the upload is not an {@code .xlsx} workbook (also a corrupt, encrypted or oversized-when-unpacked one). */
     public static final String FILE_NOT_XLSX = "FILE_NOT_XLSX";
+    /**
+     * 400: the IBAN is not a valid Ukrainian IBAN ({@code UA} and 27 digits with a correct mod-97 check); also the code
+     * of the field {@code iban} in {@code errors[]}.
+     */
+    public static final String IBAN_INVALID = "IBAN_INVALID";
     /** 400: the workbook has more rows than one import accepts. */
     public static final String IMPORT_LIMIT_EXCEEDED = "IMPORT_LIMIT_EXCEEDED";
     /** 409: the preview has problems and cannot be committed. */

@@ -2,13 +2,13 @@
 
 Rules for every slice: contract first (`api/openapi.yaml`, then `make gen`), Flyway only through the new `V20__reports.sql`, every text through the i18n catalogs (uk default), no personal data in logs, no new dependency, no edits to generated code. Verify tasks run only the slice's own narrow tests (see CLAUDE.md verification levels); the full `make check` and `make e2e` run once in Phase 4. Every Verify task stops anything it started and deletes its own temporary files.
 
-- [ ] **Slice 1: Permissions, requisites and tenant ЄДРПОУ**
-  - [ ] Write `V20__reports.sql`: `report_template` and `report_template_version` (RLS, grants, guard trigger, constraints as in technical-considerations 2.4), requisite columns on `cooperative_settings`, re-created `seed_base_roles`, targeted `role_permission` inserts for existing cooperatives. **[Agent: postgres-database]**
-  - [ ] Add `REPORTS_VIEW` and `REPORT_TEMPLATES_MANAGE` to `Permission`, `BaseRoles`, `PermissionCatalog`, the OpenAPI `Permission` enum, and both i18n catalogs; update `BaseRolesMatrixTests` and `SeedBaseRolesTests`. **[Agent: spring-backend]**
-  - [ ] Extend settings with requisites (`Iban` value object with mod 97, `IBAN_INVALID`, audited through `SETTINGS_UPDATED`), `TenantSummary.edrpou`, read-only `edrpou` in `GET /settings`; update `settings/README.md`. **[Agent: spring-backend]**
-  - [ ] Add the `RequisitesPanel` to the settings page (IBAN field error, read-only ЄДРПОУ with hint), i18n uk and en. **[Agent: react-frontend]**
-  - [ ] Isolation, privilege and constraint tests for the two new tables; migration test of V20 over V19. **[Agent: postgres-database]**
-  - [ ] Verify: `cd backend && ./mvnw test -Dtest='app.nadel.settings.**,app.nadel.members.**,app.nadel.tenancy.**,app.nadel.identity.**,app.nadel.ModularityTests'` and `pnpm -r typecheck && pnpm -r lint && pnpm --filter web exec vitest run src/pages/SettingsPage.test.tsx` and `pnpm --filter shared test`; delete temporary files. **[Agent: spring-backend]**
+- [x] **Slice 1: Permissions, requisites and tenant ЄДРПОУ**
+  - [x] Write `V20__reports.sql`: `report_template` and `report_template_version` (RLS, grants, guard trigger, constraints as in technical-considerations 2.4), requisite columns on `cooperative_settings`, re-created `seed_base_roles`, targeted `role_permission` inserts for existing cooperatives. **[Agent: postgres-database]**
+  - [x] Add `REPORTS_VIEW` and `REPORT_TEMPLATES_MANAGE` to `Permission`, `BaseRoles`, `PermissionCatalog`, the OpenAPI `Permission` enum, and both i18n catalogs; update `BaseRolesMatrixTests` and `SeedBaseRolesTests`. **[Agent: spring-backend]**
+  - [x] Extend settings with requisites (`Iban` value object with mod 97, `IBAN_INVALID`, audited through `SETTINGS_UPDATED`), `TenantSummary.edrpou`, read-only `edrpou` in `GET /settings`; update `settings/README.md`. **[Agent: spring-backend]**
+  - [x] Add the `RequisitesPanel` to the settings page (IBAN field error, read-only ЄДРПОУ with hint), i18n uk and en. **[Agent: react-frontend]**
+  - [x] Isolation, privilege and constraint tests for the two new tables; migration test of V20 over V19. **[Agent: postgres-database]**
+  - [x] Verify: `cd backend && ./mvnw test -Dtest='app.nadel.settings.**,app.nadel.members.**,app.nadel.tenancy.**,app.nadel.identity.**,app.nadel.ModularityTests'` and `pnpm -r typecheck && pnpm -r lint && pnpm --filter web exec vitest run src/pages/SettingsPage.test.tsx` and `pnpm --filter shared test`; delete temporary files. **[Agent: spring-backend]**
 
 - [ ] **Slice 2: Shared workbook guard (`xlsx` module)**
   - [ ] Create module `app.nadel.xlsx` with public `WorkbookGuard` and `UnsafeWorkbookException`; move `ZipGuard` and its tests; rewire `imports` to map the exception to `FILE_NOT_XLSX` with unchanged behaviour. Update ADR 0012 note. **[Agent: spring-backend]**

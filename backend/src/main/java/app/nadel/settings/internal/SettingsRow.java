@@ -3,6 +3,7 @@ package app.nadel.settings.internal;
 import app.nadel.settings.CommonConsumerSplit;
 import app.nadel.settings.LossesMode;
 import app.nadel.settings.PlotStatusVisibility;
+import app.nadel.settings.Requisites;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -43,6 +44,18 @@ class SettingsRow {
     @Column(name = "red_days", nullable = false)
     private int redDays;
 
+    @Column(name = "official_name")
+    private String officialName;
+
+    @Column(name = "legal_address")
+    private String legalAddress;
+
+    @Column(name = "bank_name")
+    private String bankName;
+
+    @Column(name = "iban")
+    private String iban;
+
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
@@ -52,6 +65,6 @@ class SettingsRow {
     /** The stored values. */
     SettingsValues values() {
         return new SettingsValues(memberPlotStatusVisibility, lossesMode, lossesPercent, commonConsumerDefaultSplit,
-                redAmount, redDays);
+                redAmount, redDays, new Requisites(officialName, legalAddress, bankName, iban));
     }
 }

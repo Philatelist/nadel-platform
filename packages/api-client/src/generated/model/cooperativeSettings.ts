@@ -29,4 +29,26 @@ export interface CooperativeSettings {
      * @maximum 36500
      */
   redDays: number;
+  /**
+     * The full official name of the cooperative; absent when not set
+     * @maxLength 300
+     */
+  officialName?: string;
+  /**
+     * The legal address of the cooperative; absent when not set
+     * @maxLength 500
+     */
+  legalAddress?: string;
+  /**
+     * The name of the cooperative's bank; absent when not set
+     * @maxLength 200
+     */
+  bankName?: string;
+  /**
+     * The cooperative's IBAN, a valid Ukrainian IBAN without spaces; absent when not set
+     * @pattern ^UA[0-9]{27}$
+     */
+  iban?: string;
+  /** The ЄДРПОУ code of the cooperative, read-only: it is changed only by the platform operator. Absent when not set */
+  readonly edrpou?: string;
 }

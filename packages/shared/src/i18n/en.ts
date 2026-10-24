@@ -130,6 +130,14 @@ export const en = {
       description:
         'Preview and book recalculations of past charges; correct used tariff versions and readings',
     },
+    REPORTS_VIEW: {
+      name: 'View reports',
+      description: 'Build and download reports and fill in report templates',
+    },
+    REPORT_TEMPLATES_MANAGE: {
+      name: 'Manage report templates',
+      description: 'Upload, replace, download and archive report templates',
+    },
   },
   roles: {
     CHAIRMAN: 'Chairman',
@@ -558,6 +566,18 @@ export const en = {
     save: 'Save',
     saving: 'Saving…',
     saved: 'Settings saved.',
+    requisites: {
+      title: 'Requisites',
+      text: 'The details printed on invoices and reports.',
+      officialName: 'Official name',
+      legalAddress: 'Legal address',
+      bankName: 'Bank name',
+      iban: 'IBAN',
+      edrpou: 'EDRPOU code',
+      edrpouHint: 'Changed by the platform operator',
+      save: 'Save the requisites',
+      errors: { ibanInvalid: 'The IBAN is not valid' },
+    },
     threshold: {
       title: 'Red status threshold',
       text: 'A plot turns red when its debt reaches this amount, or when the oldest debt is this many days old. Any other debt is yellow.',

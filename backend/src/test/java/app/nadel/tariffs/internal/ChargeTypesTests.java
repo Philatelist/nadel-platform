@@ -594,7 +594,7 @@ class ChargeTypesTests extends IntegrationTest {
         body.put("name", "Treasurer");
         body.put("description", "Read access to members, plots and audit");
         body.put("permissions", List.of("MEMBERS_VIEW", "PLOTS_VIEW", "AUDIT_VIEW", "TARIFFS_VIEW", "METERS_VIEW",
-                "CHARGES_VIEW", "TARIFFS_MANAGE"));
+                "CHARGES_VIEW", "REPORTS_VIEW", "TARIFFS_MANAGE"));
         try {
             send(chairman, put("/api/v1/roles/" + treasurerRole), body).andExpect(status().isOk());
 
