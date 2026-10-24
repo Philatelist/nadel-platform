@@ -2,21 +2,34 @@ package app.nadel.reports.internal;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
-
 import static org.mockito.Mockito.when;
 
+import app.nadel.ledger.CorrectionCause;
+import app.nadel.ledger.CorrectionKind;
+import app.nadel.ledger.CorrectionSource;
 import app.nadel.ledger.LedgerReadModel;
 import app.nadel.ledger.MonthStatus;
 import app.nadel.members.MemberDirectory;
 import app.nadel.money.Money;
+import app.nadel.money.Rate;
 import app.nadel.plots.PlotCatalog;
+import app.nadel.plots.PlotCatalog.PlotFacts;
 import app.nadel.plots.PlotOwners;
 import app.nadel.plots.PlotStatuses;
 import app.nadel.reports.internal.ReportResult.Column;
 import app.nadel.reports.internal.ReportResult.Sheet;
 import app.nadel.settings.CooperativeSettings;
+import app.nadel.tariffs.Basis;
 import app.nadel.tariffs.ChargeTypeCatalog.ChargeTypeFacts;
+import app.nadel.tariffs.ExpectedAmounts;
+import app.nadel.tariffs.Frequency;
+import app.nadel.tariffs.VersionShare;
+import app.nadel.tariffs.YearExpectation;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.ArrayList;
@@ -99,6 +112,18 @@ class ReportTextsTests {
         for (PlotStatus status : PlotStatus.values()) {
             keys.add("reports.filters.options.statuses." + status.getValue());
         }
+        // the corrections' code columns and their filter
+        keys.add("reports.filters.params.year");
+        keys.add("reports.filters.params.correctionKinds");
+        for (CorrectionKind kind : CorrectionKind.values()) {
+            keys.add("reports.filters.options.correctionKinds." + kind.name());
+        }
+        for (CorrectionSource source : CorrectionSource.values()) {
+            keys.add("reports.corrections.sources." + source.name());
+        }
+        for (CorrectionCause cause : CorrectionCause.values()) {
+            keys.add("recalculation.causeKind." + cause.name());
+        }
         for (Run run : runs()) {
             ReportResult result = run.definition().load(run.filters(), CONTEXT);
             String code = run.definition().code().getValue();
@@ -131,7 +156,8 @@ class ReportTextsTests {
 
     /**
      * Every definition on facades that return nothing, with filters that make it say all its notes: plot balances for
-     * a past day with one of two charge types and every status chosen.
+     * a past day with one of two charge types and every status chosen; land tax with one plot charged nothing of its
+     * expected 210.00.
      */
     private static List<Run> runs() {
         ReportDefinition chargesByMonth = new ChargesByMonthReport(mock(LedgerReadModel.class),
@@ -146,8 +172,27 @@ class ReportTextsTests {
         RawFilters pastWithOneType = new RawFilters(null, null, null, null, TODAY.minusDays(30), null,
                 List.of(MEMBERSHIP.id()), "Лісова", List.of(PlotStatus.values()), null, null, null, null, null,
                 null);
+        ReportDefinition landTax = landTaxWithAMismatch();
+        ReportDefinition corrections = new CorrectionsReport(mock(LedgerReadModel.class), mock(PlotCatalog.class),
+                mock(MemberDirectory.class));
         return List.of(new Run(chargesByMonth, ReportFilters.parse(chargesByMonth.filters(), RawFilters.NONE, CONTEXT)),
                 new Run(plotBalances, ReportFilters.parse(plotBalances.filters(), pastWithOneType, CONTEXT)),
-                new Run(debtors, ReportFilters.parse(debtors.filters(), pastWithOneType, CONTEXT)));
+                new Run(debtors, ReportFilters.parse(debtors.filters(), pastWithOneType, CONTEXT)),
+                new Run(landTax, ReportFilters.parse(landTax.filters(), RawFilters.NONE, CONTEXT)),
+                new Run(corrections, ReportFilters.parse(corrections.filters(), RawFilters.NONE, CONTEXT)));
+    }
+
+    private static ReportDefinition landTaxWithAMismatch() {
+        UUID plot = UUID.randomUUID();
+        PlotCatalog plots = mock(PlotCatalog.class);
+        when(plots.findActive(null)).thenReturn(List.of(new PlotFacts(plot, "1", null, false, false,
+                new BigDecimal("600.00"))));
+        ExpectedAmounts expected = mock(ExpectedAmounts.class);
+        Money year = Money.parse("210.00");
+        when(expected.yearByVersion(anyString(), anyInt(), any())).thenReturn(Map.of(plot, new YearExpectation(plot,
+                new BigDecimal("600.00"), new BigDecimal("6.0000"), List.of(new VersionShare(UUID.randomUUID(),
+                        UUID.randomUUID(), Basis.PER_AREA_SOTKA, Frequency.YEARLY, Rate.parse("35"),
+                        TODAY.withDayOfYear(1), TODAY.withMonth(12).withDayOfMonth(31), 365, year)), year)));
+        return new LandTaxReport(plots, expected, mock(LedgerReadModel.class));
     }
 }

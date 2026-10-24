@@ -347,10 +347,10 @@ class ChargesByMonthReportTests extends ReportsTestSupport {
         send(treasurer, get("/api/v1/reports/nonsense"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("MALFORMED_REQUEST"));
-        send(treasurer, get("/api/v1/reports/land-tax"))
+        send(treasurer, get("/api/v1/reports/water"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("NOT_FOUND"));
-        send(treasurer, get("/api/v1/reports/land-tax.xlsx"))
+        send(treasurer, get("/api/v1/reports/water.xlsx"))
                 .andExpect(status().isNotFound());
         awaitOutbox();
         assertThat(reportEntries()).isEmpty();

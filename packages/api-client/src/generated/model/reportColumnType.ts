@@ -11,7 +11,7 @@
  */
 
 /**
- * How the values of a column are written and shown. `TEXT`: as stored, for example a plot number or a name. `CODE`: an enum code the client shows from its catalog for the column key. `CHARGE_TYPE`: the id of one of the report's `chargeTypes`. `MONEY`: an amount with two decimals (`"1250.50"`). `QUANTITY`: kWh or m³ with three decimals (`"152.400"`). `PERCENT`: a percentage with two decimals (`"4.75"`). `INTEGER`: a whole number. `DATE`: an ISO day. `MONTH`: a month `YYYY-MM`. `BOOLEAN`: `true` or `false`.
+ * How the values of a column are written and shown. `TEXT`: as stored, for example a plot number or a name. `CODE`: an enum code the client shows from its catalog for the column key. `CHARGE_TYPE`: the id of one of the report's `chargeTypes`. `MONEY`: an amount with two decimals (`"1250.50"`). `QUANTITY`: kWh or m³ with three decimals (`"152.400"`). `PERCENT`: a percentage with two decimals (`"4.75"`). `INTEGER`: a whole number. `DATE`: an ISO day. `MONTH`: a month `YYYY-MM`. `BOOLEAN`: `true` or `false`. `DECIMAL`: an exact number that is not money, with at most four decimals, never rounded, for example a tariff rate (`"35.0000"`) or an area in m² (`"600.00"`) or in sotkas (`"6.1235"`); shown with its significant decimals, at least two.
  */
 export type ReportColumnType = typeof ReportColumnType[keyof typeof ReportColumnType];
 
@@ -27,4 +27,5 @@ export const ReportColumnType = {
   DATE: 'DATE',
   MONTH: 'MONTH',
   BOOLEAN: 'BOOLEAN',
+  DECIMAL: 'DECIMAL',
 } as const;

@@ -93,7 +93,7 @@ class ReportsAccessTests extends IntegrationTest {
         for (String caller : callers) {
             // a report that exists and one that is not defined yet answer alike: the permission is checked first
             for (String path : List.of(PATHS.get(1), PATHS.get(2), "/api/v1/reports/land-tax",
-                    "/api/v1/reports/debtors.xlsx")) {
+                    "/api/v1/reports/corrections.xlsx", "/api/v1/reports/water", "/api/v1/reports/debtors.xlsx")) {
                 mvc.perform(get(path).header(HttpHeaders.AUTHORIZATION, caller))
                         .andExpect(status().isForbidden())
                         .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));

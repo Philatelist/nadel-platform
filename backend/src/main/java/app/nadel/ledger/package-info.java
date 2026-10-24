@@ -12,8 +12,9 @@
  * Public API: the event {@link app.nadel.ledger.ChargesBooked}, published after every booking or reversal so that the
  * plot status can follow the debt, the import facade {@link app.nadel.ledger.OpeningBalanceImport} (the "Opening
  * balances" sheet of the Excel import) and the read facade of the reports {@link app.nadel.ledger.LedgerReadModel}
- * (aggregates in the caller's transaction, no personal data: month totals and {@link app.nadel.ledger.PlotDebts} as
- * of a day). Everything else is internal: the entities, the pure
+ * (aggregates in the caller's transaction, no personal data: month totals, {@link app.nadel.ledger.PlotDebts} as
+ * of a day, the {@link app.nadel.ledger.CorrectionRow} of every reversal and adjustment of the billing months, and the
+ * effective amount charged per plot for a year). Everything else is internal: the entities, the pure
  * rules {@code BillingCalendar} (which month a charge is booked in) and {@code DebtCalculator} (debt per charge
  * type), the reversal and opening balance commands, the account query, the billing months (list, check list, closing
  * in order), the month run ({@code MonthRun}, {@code TariffMonthPlanning}), the charges of plot meter intervals

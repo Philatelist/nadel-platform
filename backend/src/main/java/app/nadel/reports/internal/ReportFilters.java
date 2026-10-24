@@ -1,5 +1,6 @@
 package app.nadel.reports.internal;
 
+import app.nadel.ledger.CorrectionKind;
 import app.nadel.money.Money;
 import app.nadel.plots.PlotStatus;
 import app.nadel.problem.ApiProblemException;
@@ -39,6 +40,8 @@ final class ReportFilters {
     private Set<PlotStatus> statuses = Set.of();
     private @Nullable Money minDebt;
     private @Nullable Integer olderThanDays;
+    private @Nullable Integer year;
+    private Set<CorrectionKind> correctionKinds = Set.of();
     private final List<ReportFilterValue> values = new ArrayList<>();
 
     ReportFilters() {
@@ -103,6 +106,17 @@ final class ReportFilters {
         values.add(new ReportFilterValue(ReportFilterParam.OLDER_THAN_DAYS, Integer.toString(days)));
     }
 
+    void year(int year) {
+        this.year = year;
+        values.add(new ReportFilterValue(ReportFilterParam.YEAR, Integer.toString(year)));
+    }
+
+    void correctionKinds(List<CorrectionKind> kinds) {
+        Set<CorrectionKind> chosen = new LinkedHashSet<>(kinds);
+        this.correctionKinds = Collections.unmodifiableSet(chosen);
+        chosen.forEach(kind -> values.add(new ReportFilterValue(ReportFilterParam.CORRECTION_KINDS, kind.name())));
+    }
+
     // ---- read by the report definitions
 
     /** The first billing month; only for a report with a month range. */
@@ -143,6 +157,16 @@ final class ReportFilters {
     /** A debt older than this many days matches; only for a report with an age filter. */
     int olderThanDays() {
         return required(olderThanDays, "age");
+    }
+
+    /** The calendar year; only for a report with a year filter. */
+    int year() {
+        return required(year, "year");
+    }
+
+    /** The chosen kinds of correction in the order given; empty means both. */
+    Set<CorrectionKind> correctionKinds() {
+        return correctionKinds;
     }
 
     /** The days the report covers: a month range runs from the first day of its first to the last of its last month. */

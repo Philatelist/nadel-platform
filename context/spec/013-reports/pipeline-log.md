@@ -39,4 +39,6 @@ Out: official tax form, PDF, payment reports, scheduled reports, operator-shared
 - Slice 3: the 'Tests' task was delivered inside the framework task (ChargesByMonthReportTests, ReportsAccessTests, ReportRunnerTests); marked done on that evidence.
 - Slice 3 · c69e9b5 · slice verify green (backend reports+ledger+Modularity, typecheck, lint, vitest 17, shared 130) · review: PASS round 1
 - Slice 4: the 'Tests' task was delivered inside the definitions task (PlotBalancesReportTests, DebtorsReportTests, LedgerDebtsAsOfTests, PlotReportFacadesTests, MemberContactsTests); marked done on that evidence.
-- Slice 4 · (hash below) · slice verify green (backend reports+plots+members+ledger+Modularity, typecheck, lint, vitest 22, shared 130) · review: running (round 1)
+- Slice 4 · ac306f8 · slice verify green (backend reports+plots+members+ledger+Modularity, typecheck, lint, vitest 22, shared 130) · review: PASS round 1
+- Slice 5: new column type DECIMAL added to the contract (rates and sotkas have 4 decimals; QUANTITY is 3). Reason column shown on every correction row, not only recalculations. 'Tests' task delivered inside the definitions/facade tasks.
+- Slice 5 · (hash below) · slice verify green (backend reports+tariffs+ledger+Modularity, typecheck, lint, vitest 22, shared 130) · review: running (round 1)

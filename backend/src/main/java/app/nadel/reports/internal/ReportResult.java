@@ -104,7 +104,8 @@ record ReportResult(List<Sheet> sheets, List<Note> notes) {
 
     /**
      * One cell. The value's Java type follows the column type: {@link Money} for {@code MONEY}, {@link BigDecimal} with
-     * its scale for {@code QUANTITY} and {@code PERCENT}, a {@link Number} for {@code INTEGER}, {@link LocalDate},
+     * its scale for {@code QUANTITY}, {@code PERCENT} and {@code DECIMAL}, a {@link Number} for {@code INTEGER},
+     * {@link LocalDate},
      * {@link YearMonth}, {@link Boolean}, {@link UUID} for {@code CHARGE_TYPE} and a {@link String} for {@code TEXT}
      * and {@code CODE}. An empty cell has no value; a value that is not known has none either, but a reason.
      */
@@ -132,7 +133,7 @@ record ReportResult(List<Sheet> sheets, List<Note> notes) {
                 return null;
             }
             return switch (type) {
-                case QUANTITY, PERCENT -> ((BigDecimal) value).toPlainString();
+                case QUANTITY, PERCENT, DECIMAL -> ((BigDecimal) value).toPlainString();
                 case MONEY, TEXT, CODE, CHARGE_TYPE, INTEGER, DATE, MONTH, BOOLEAN -> value.toString();
             };
         }

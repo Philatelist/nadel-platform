@@ -48,7 +48,7 @@ cooperative that is not reversed, and a reversal never target an adjustment or a
 |---|---|
 | `ChargesBooked(tenantId, plotIds)` | Published inside the transaction of every booking or reversal (a reversal, an opening balance, the month run, a retry and the charges of readings, at most 500 plots per event; every later booking path must publish it too). `PlotStatusRefresher` recomputes the debt of those plots from the committed ledger. Ids only, no personal data; the set is never empty |
 | `OpeningBalanceImport` (with `Row`, `Item`, `Plan`, `Problem`, `Action`) | The "Opening balances" sheet of the Excel import (slice 8), `plan`/`lock`/`apply` like `meters.MeterImport`; implemented by `internal.OpeningBalanceImportService`, see Opening balances from the import |
-| `LedgerReadModel` (with `MonthTypeTotals`, `MonthGrouping`, `MonthStatus`, `PlotDebts`) | The read facade of the reports (feature 013), implemented by `internal.LedgerReportQueries`; see The read model of the reports |
+| `LedgerReadModel` (with `MonthTypeTotals`, `MonthGrouping`, `MonthStatus`, `PlotDebts`, `CorrectionRow`, `CorrectionKind`, `CorrectionSource`, `CorrectionCause`) | The read facade of the reports (feature 013), implemented by `internal.LedgerReportQueries`; see The read model of the reports |
 
 Everything else is in `internal`.
 
@@ -306,7 +306,8 @@ reading the ledger tables. Rules for every method:
 - It aggregates in the database (parameterised native queries, no N+1) and answers ids, codes and `Money` only: **no
   personal data**, no names. The caller orders and names charge types (`tariffs.ChargeTypeCatalog`) and plots
   (`plots.PlotCatalog`).
-- Results are bounded by their filters (months x charge types, or the plots asked for), so no row limit applies.
+- Aggregates are bounded by their filters (months x charge types, or the plots asked for), so no row limit applies to
+  them; `corrections`, a list of single rows, takes a `limit` (the caller passes its cap plus one).
 
 Methods:
 
@@ -339,6 +340,34 @@ Methods:
   (`charge_plot_type_idx`). Test: `LedgerDebtsAsOfTests` (a worked ledger with a reversal, an opening balance,
   later-month adjustments, a fully adjusted and a reversed oldest charge, past days, the type filter, reconciliation
   with `GET /plots/{id}/account` and the status cache, another cooperative, the caller's transaction).
+- `corrections(fromMonth, toMonth, chargeTypeIds, kinds, limit)` (corrections, 013 §3.8): one `CorrectionRow` per
+  `REVERSAL` or `ADJUSTMENT` row booked in the billing months from–to (`kinds` empty = both, `chargeTypeIds` empty =
+  every type), joined to the charge it corrects (`reverses_charge_id` or `adjusts_charge_id`: `originalChargeId`, its
+  service period and its booked amount) and to its `recalculation` (`recalculationId`, `cause`
+  `MANUAL`/`TARIFF_VERSION`/`READING`): `kind`, `bookedAt` (`created_at`) and `bookedOn` (that instant as a Kyiv date,
+  on the `Clock`'s zone), `billingMonth`, `plotId`, `chargeTypeId`, `amount` (signed as booked), `reason` (the reason
+  booked with the row: a hand or run reversal's, or the recalculation's, which a recalculation stores on every row it
+  books; user content) and `bookedBy` (`created_by`, a member id the caller names through `members`). **Source**
+  (`CorrectionSource`), derived in SQL: `source = 'RECALCULATION'` -> `RECALCULATION` (every adjustment, and the
+  reversals of a recalculation, also of a run it rebooks); a `MANUAL_REVERSAL` row whose run (`run_id`, a
+  `losses_run` or `common_consumer_run`) is `REVERSED` with `reversed_at` equal to the row's `created_at` ->
+  `RUN_REVERSAL` (the run reversal writes the run and its reversals from one `Instant`); every other
+  `MANUAL_REVERSAL` row -> `MANUAL_REVERSAL` (one charge by hand, also a single charge of a run reversed before its
+  run). Rows by billing month, then `created_at`, then id; at most `limit` (>= 1) rows; `toMonth` before `fromMonth`
+  or `limit` below 1 is an `IllegalArgumentException`. Index: `charge_month_type_idx`. Test: `LedgerCorrectionsTests`
+  (a hand reversal, a recalculation's adjustment and reversal with cause and reason, a hand-reversed charge of a run,
+  a losses run and a common consumer run reversal, the Kyiv day of a booking late in the UTC evening, the kind, month
+  and type filters, the limit, another cooperative, invalid arguments, the caller's transaction).
+- `chargedInYear(chargeTypeCode, year, plotIds)` (land tax, 013 §3.7): per distinct plot asked (in order of first
+  appearance; `0.00` for a plot without such charges or unknown), the effective amount (money rules 5.4) charged by the
+  type with the code (resolved through `tariffs.ChargeTypeCatalog`; an unknown code gives `0.00` everywhere) for the
+  year: `SUM(amount)` of its `REGULAR`, `REVERSAL` and `ADJUSTMENT` rows whose `service_from` is from 1 January to
+  31 December of the year. A reversal and an adjustment keep their charge's service period, so they count in its
+  year whatever month they were booked in (a December charge booked in January counts in December's year). Opening
+  balances are left out: they carry a debt from before the ledger, not a charge of the year. One query per 500 plots
+  (`charge_plot_type_idx`). Test: `LedgerChargedInYearTests` (the year boundary, a late-booked December charge, an
+  adjustment and a reversal, an opening balance, another type and an unknown code, another cooperative, the caller's
+  transaction).
 
 ## Billing months (tag `billing`, slice 2)
 

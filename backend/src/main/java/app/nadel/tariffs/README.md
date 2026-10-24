@@ -24,8 +24,9 @@ The module root exports `ChargeCalculator` (pure, no Spring, no database), `Vers
 `Basis`, `Frequency`, `ExpectedCharge` (`Amount` or `ByReadings` with the meter basis), `DaySet` (pure: sorted disjoint
 closed date ranges, `ALL`, `NONE`, `of`, `count`, `intersect`, `contains`, `first`, `last`), `TariffResolver` (pure),
 the port `TariffVersionUsage`, the read API `ChargeTypeCatalog` (`find`, `findAndLockShared`, `all`: `ChargeTypeFacts` with code, stored name, `nameCustomized`, active, archived, position and the audit token `auditName()`; `findByNames`: the types a typed name stands for, by the stored name and, while a seeded type is not renamed, its default names of `DefaultChargeTypeNames` in both languages, ignoring case and extra spaces, for the ledger's opening balances import; implemented by `JpaChargeTypeCatalog`) and the read API `TariffBook`
-(implemented by `JpaTariffBook`), and the facade `TariffVersionChanges` (feature 012, see Correcting a used version);
-everything else is in `internal`. Feature 011 (the ledger) calls the same
+(implemented by `JpaTariffBook`), the facade `TariffVersionChanges` (feature 012, see Correcting a used version), and
+the read facade of the reports `ExpectedAmounts` with `YearExpectation` and `VersionShare` (feature 013, see Expected
+amounts of a year); everything else is in `internal`. Feature 011 (the ledger) calls the same
 `ChargeCalculator`, so the preview and the real charge never diverge.
 
 Permissions (ADR 0009, defined in `identity.Permission`, seeded for the Chairman by `seed_base_roles`; the Treasurer gets
@@ -284,6 +285,36 @@ stands in (`TariffVersionCorrectionTests`).
   versions are in use (`TARIFF_VERSION_IN_USE` on a correction; the chairman corrects them with the recalculation
   step).
 
+## Expected amounts of a year (feature 013): `ExpectedAmounts`
+
+`ExpectedAmounts.yearByVersion(chargeTypeCode, year, plotIds)` (implemented by `ExpectedYearQueries`) gives the land
+tax report (013 §3.7) what the tariffs of a charge type are expected to charge each plot over a year, per tariff
+version, so the report compares it with `ledger.LedgerReadModel.chargedInYear` without a money rule of its own.
+
+- Runs in the **caller's transaction** (`Propagation.MANDATORY`), bound to the cooperative (RLS); reads the
+  `TariffBook` snapshot once and the plots through `PlotCatalog.findAll` (500 per call). Ids, codes, rates and `Money`.
+- **Month by month, as the month run charges.** For each month of the year: `TariffResolver.resolve` over the month
+  (scope, exclusions, inactive or archived type, archived plot, common land); of the tariffs it names, those whose
+  `ChargeCalculator.breakdown` over every day (`DaySet.ALL`) is above `0.00` take part, and exactly one charges the
+  month (none, or a conflict of two or more, charges nothing), mirroring `ledger.internal.TariffMonthPlanning.plan`.
+  The yearly amount is the sum of those monthly amounts, each rounded once by the calculator: 35.0000 per sotka per
+  year on 600 m² is 12 x 17.50 = **210.00**, so a plot charged correctly every month shows no difference.
+- **One `VersionShare` per version** (tariff, version, basis, frequency, rate as entered, first and last day, days,
+  amount), oldest first: its days are the days of its parts in every month (the versions of a tariff that covers the
+  year add up to its days); its amount is the months it charges alone plus its part of a month it shares: every
+  version of such a month but the last gets `breakdown` over its own days (rounded once), the last gets the rest of
+  the month's amount, so the shares add up exactly to the yearly total with no further rounding (rate 35.00 to 40.00
+  from 16.07.2025 on 600 m²: July 18.79 = 8.47 + 10.32; 196 days 113.47 and 169 days 110.32, total 223.79).
+- **`YearExpectation`**: `areaM2`, `areaSotka` (`ChargeCalculator.sotkas`, exact m² / 100, the units of the
+  calculation; display only), the shares and their `total`. A plot charged on no day of the year (out of scope,
+  excluded, archived, common land, no version in the year, a conflict all year) or unknown is absent; an unknown code
+  or an inactive type gives an empty map.
+- Every day counts, so the facade is meant for types charged on every day (land tax), not water (the month run counts
+  only the connection days) nor tariffs by readings (no amount).
+- Test: `ExpectedAmountsTests` (210.00 and 6 sotkas, two rates with a mid-month change against the calculator month by
+  month, a first version inside the year, exclusions, common land, archived and unknown plots, selected plots with
+  612 m², a conflict from July, an unknown code, an inactive type, another cooperative, the caller's transaction).
+
 ## Audit
 
 `TARIFF_CREATED`, `TARIFF_VERSION_ADDED`, `TARIFF_VERSION_UPDATED` and `TARIFF_VERSION_DELETED` (entity type `TARIFF`,
@@ -332,5 +363,6 @@ narrow exception to "everything in the repository is English", of the same kind 
 `plots` (the public `PlotCatalog` only: `find`, `findAll`, `inNaturalOrder`, `countChargeable`, `findChargeable`) and `meters` (the public
 `MeterCatalog` only: `plotIdsWithActiveMeter`, `hasMeterBetween`; `meters` never depends on `tariffs`). The module root exports
 `Basis`, `Frequency`, `VersionTerms`, `ExpectedCharge`, `ChargeCalculator`, `DaySet`, `TariffBook`, `TariffResolver`,
-`TariffVersionUsage`, `ChargeTypeCatalog` and `TariffVersionChanges`. The ledger (feature 011) depends on this module and implements
+`TariffVersionUsage`, `ChargeTypeCatalog`, `TariffVersionChanges` and `ExpectedAmounts` (with `YearExpectation` and
+`VersionShare`), which `reports` reads. The ledger (feature 011) depends on this module and implements
 `TariffVersionUsage`.

@@ -24,8 +24,9 @@ that needs a permission the caller lacks is 403 `PERMISSION_DENIED` (`ReportCata
 `/reports/{code}.xlsx` wins over `/reports/{code}`: its pattern is the more specific one
 (`ChargesByMonthReportTests.theXlsxPathWinsOverTheCodePath`).
 
-Done so far: `charges-by-month`, `plot-balances` and `debtors`. The other codes are 404 until their definitions
-arrive. `GET /reports` runs in a read-only transaction: the debtors' defaults are settings of the cooperative.
+Done so far: `charges-by-month`, `plot-balances`, `debtors`, `land-tax` and `corrections`. The other codes are 404
+until their definitions arrive. `GET /reports` runs in a read-only transaction: the debtors' defaults are settings of
+the cooperative.
 
 ## Framework (`internal`)
 
@@ -33,8 +34,8 @@ arrive. `GET /reports` runs in a read-only transaction: the debtors' defaults ar
 |---|---|
 | `ReportDefinition` | One bean per report: `code`, `requiredPermissions` (default `REPORTS_VIEW`; debtors adds `MEMBERS_VIEW`), `personalData`, `filters` (the period first), `load(filters, context)` returning a `ReportResult`, `filenameRange(filters, context)` (default: the period of the filters; a report for one day gives that day twice) |
 | `ReportCatalog` | The definitions in the order of `ReportCode`; `available`/`infos` filter by the caller's permissions, `require` is 404 or 403 |
-| `ReportFilterDefinition` | One filter: key, type, query parameters, required, basis, defaults on a day, `apply` (read the parameters into `ReportFilters`, adding field errors) and `describe` (the header block's text). Implemented: `MonthRangeFilter` (`period`, `fromMonth`/`toMonth`, default the previous month), `ChargeTypesFilter` (`chargeTypes`, default all), `StreetFilter` (`street`, default all), `AsOfFilter` (`asOf`, `DATE`, required, default today; a day after today is `INVALID`), `StatusesFilter` (`statuses`, `STATUS`, default all), `MinDebtFilter` (`minDebt`, `MONEY`) and `OlderThanDaysFilter` (`olderThanDays`, `INT`), both required with a default the definition gives (the debtors: the cooperative's red amount and red days, read when the list or the report is made); later reports add theirs. In the file a filter is named by `reports.filters.<key>` (period, charge types, street) or `reports.filters.params.<param>`, the web form's labels |
-| `ReportFilters` | The typed filter values of one run and the values as the query string carries them (echoed in the preview, written to the audit entry); `parse` throws 400 `REPORT_FILTER_INVALID` with every field error: `REQUIRED` (a required filter without a default), `INVALID` (`toMonth` before `fromMonth`), `NOT_FOUND` (`chargeTypeIds[i]` not a charge type of the cooperative). Malformed values never get here: the contract answers 400 `VALIDATION_FAILED` |
+| `ReportFilterDefinition` | One filter: key, type, query parameters, required, basis, defaults on a day, `apply` (read the parameters into `ReportFilters`, adding field errors) and `describe` (the header block's text). Implemented: `MonthRangeFilter` (`period`, `fromMonth`/`toMonth`, default the previous month), `ChargeTypesFilter` (`chargeTypes`, default all), `StreetFilter` (`street`, default all), `AsOfFilter` (`asOf`, `DATE`, required, default today; a day after today is `INVALID`), `StatusesFilter` (`statuses`, `STATUS`, default all), `MinDebtFilter` (`minDebt`, `MONEY`) and `OlderThanDaysFilter` (`olderThanDays`, `INT`), both required with a default the definition gives (the debtors: the cooperative's red amount and red days, read when the list or the report is made), `YearFilter` (`year`, `YEAR`, required, default the current year in Kyiv; a year after it is `INVALID`) and `CorrectionKindsFilter` (`correctionKinds`, `CORRECTION_KIND`, default both); later reports add theirs. In the file a filter is named by `reports.filters.<key>` (period, charge types, street) or `reports.filters.params.<param>`, the web form's labels |
+| `ReportFilters` | The typed filter values of one run and the values as the query string carries them (echoed in the preview, written to the audit entry); `parse` throws 400 `REPORT_FILTER_INVALID` with every field error: `REQUIRED` (a required filter without a default), `INVALID` (`toMonth` before `fromMonth`, `asOf` after today, `year` after the current year), `NOT_FOUND` (`chargeTypeIds[i]` not a charge type of the cooperative). Malformed values never get here: the contract answers 400 `VALIDATION_FAILED` |
 | `ReportResult` | Sheets (`key`, typed `Column`s, `Row`s of kind `DETAIL`/`SUBTOTAL` with a tree level, `Total`s) and header `Note`s (code + params). A `Cell` holds a typed value (`Money`, `BigDecimal`, `LocalDate`, `YearMonth`, `UUID` of a charge type, codes and text) or nothing, or a reason when the value is not known (never 0) |
 | `ReportRunner` | `preview` and `file`, each one plain `@Transactional` (not read-only: the outbox inserts the audit publication). Order: caller and permission, filters, `load`, the row cap, the preview or the workbook, the audit event **last**, so a refused run or a failure while writing leaves no entry |
 | `ReportLimits` | The row cap, 20 000 per sheet (property `nadel.reports.row-cap`), and the 200 preview rows |
@@ -49,7 +50,7 @@ arrive. `GET /reports` runs in a read-only transaction: the debtors' defaults ar
 `headerNotes`, `chargeTypes` (every type a cell, a column or the filter names, in configured order, as
 `ChargeTypeRef`) and per sheet the columns, the first 200 rows, the totals over **all** rows, `rowCount` and
 `truncated`. Cells are strings formatted by column type: money with two decimals (`Money.toString`), quantities and
-percentages as given (`toPlainString`), ISO days, `YYYY-MM` months, codes and charge type ids. Totals are sums of the
+percentages and `DECIMAL` (rates and areas, never rounded) as given (`toPlainString`), ISO days, `YYYY-MM` months, codes and charge type ids. Totals are sums of the
 rows as listed (`Money.plus`, no re-rounding); a column without a total is empty.
 
 ### The file
@@ -59,7 +60,7 @@ characters, unique). Rows 1-5 are the header block: the cooperative's name (`Ten
 filters (`Filters: <label>: <value>; ...`, months as `MM.yyyy`), when it was made (`dd.MM.yyyy HH:mm`, Kyiv) and the
 caller's display name. Then one line per header note, an empty line, the column headers (frozen below), every row
 and the totals. Money is a numeric cell with `#,##0.00`, quantities `#,##0.000`, percentages `0.00`, integers
-`#,##0`, days dates `dd.mm.yyyy`, months the date of their first day as `mm.yyyy`. A `CODE` column writes
+`#,##0`, `DECIMAL` `#,##0.00##` (a rate 35.0000 shows 35.00, 1.4532 all four decimals), days dates `dd.mm.yyyy`, months the date of their first day as `mm.yyyy`. A `CODE` column writes
 `<codes>.<VALUE>` from the bundle (the column names its catalog, for example `billing.status`); a charge type is its
 stored name when customised, otherwise `chargeTypes.defaultNames.<CODE>`. A subtotal and a totals line are bold and
 write their label (`reports.rows.SUBTOTAL`, `reports.totals.<key>`) into their first empty text column; a tree row is
@@ -75,8 +76,11 @@ the same text in the web catalogs (`packages/shared/src/i18n/uk.ts`, `en.ts`), s
 `reports.<code>.title`, `reports.<code>.sheets.<sheetKey>`, `reports.<code>.columns.<columnKey>` (the contract's
 column keys), `reports.notes.<ReportNoteCode>`, `reports.filters.*`, `reports.file.*`, `reports.rows.SUBTOTAL`,
 `reports.totals.<key>`, `reports.reasons.<ReportCellReason>`, the filter labels and options
-(`reports.filters.params.*`, `reports.filters.options.statuses.*`, which also name the plot balances' status codes),
-and the shared `billing.status.*` and `chargeTypes.defaultNames.*`. A column per charge type (`debt.<chargeTypeId>`,
+(`reports.filters.params.*`, `reports.filters.options.statuses.*`, which also name the plot balances' status codes,
+`reports.filters.options.correctionKinds.*`, which also name the corrections' kinds), the corrections' sources
+(`reports.corrections.sources.*`), and the shared `billing.status.*`, `chargeTypes.defaultNames.*` and
+`recalculation.causeKind.*` (the corrections' recalculation causes). On the web `ReportPreviewTable.codeLabels` maps a
+`CODE` column (`<report>/<column key>`) to the same catalog. A column per charge type (`debt.<chargeTypeId>`,
 `chargeTypeId` set) has no key of its own: its header is the charge type's name, in the file
 `chargeTypes.defaultNames.<CODE>` for a seeded type that was not renamed and the stored name otherwise (the runner's
 `chargeTypeNames`), on the web `chargeTypeName`. `ReportTextsTests` checks that both bundles have the same keys and every key a
@@ -190,9 +194,55 @@ filters and their notes; no name in the plot balances preview or file; the debto
 settings, both owners with contacts, a lower amount listing more plots; 403 and no card for a custom role with
 `REPORTS_VIEW` but not `MEMBERS_VIEW` (allowed with both), the definition's own refusal; the audit entries.
 
+## Report: land tax (`land-tax`, functional spec 2.9)
+
+Filter: the year (`year`, default the current year in Kyiv, not after it). Needs `REPORTS_VIEW` only, no personal data.
+The money rule stays in tariffs and ledger; the definition only lays the two side by side:
+
+- **Expected**: `tariffs.ExpectedAmounts.yearByVersion("LAND_TAX", year, plots)`: month by month as the month run
+  charges (the tariff `TariffResolver` names, `ChargeCalculator` over every day of the month, rounded once per month),
+  one share per tariff version with its days; the shares of a plot add up to its yearly amount exactly. 35.00 per
+  sotka per year on 600 m² is 6 sotkas and 17.50 a month, 210.00 a year.
+- **Charged**: `ledger.LedgerReadModel.chargedInYear("LAND_TAX", year, plots)`: the effective amount (charges plus
+  adjustments minus reversals) of the land tax charges whose service period starts in the year, whenever they were
+  booked; opening balances left out.
+
+Sheet `main`: the active plots without common land (`PlotCatalog.findActive`, natural order) that the land tax charges
+on some day of the year; a plot outside every tariff's scope, excluded, archived or without a version in the year is
+not listed (even if something was charged to it). One row per tariff version, oldest first: `number`, `street`,
+`areaM2`, `areaSotka` (exact, `DECIMAL`), `rate` (per sotka per year, `DECIMAL`, as entered), `from`, `to`, `days`,
+`expected` (the version's share), `charged`, `mismatch` (`BOOLEAN`). The plot's first row carries the area, the
+charged amount and the mark; a continuation row (another rate in the year) repeats number and street and leaves area,
+`charged` and `mismatch` empty, so each amount is listed once. `mismatch` is true when the plot's expected total (the
+sum of its shares) is not its charged amount. The totals `all` sum `expected` and `charged` of the rows listed. With
+at least one mark the header note `RECALCULATION_SUGGESTED` (param `count`: plots marked) suggests a recalculation
+(feature 012); the report books nothing. File name `land-tax_<year>-01-01_<year>-12-31.xlsx`.
+
+## Report: corrections (`corrections`, functional spec 2.10)
+
+Filters: billing months (`period`, default the previous month), charge types (default all), kinds of correction
+(`correctionKinds`, default both). Needs `REPORTS_VIEW` only. Reads `ledger.LedgerReadModel.corrections` with the row
+cap plus one as its limit, the plot numbers from `PlotCatalog.findAll` (500 ids a call, archived plots included) and
+the authors' names from `MemberDirectory.find` (one call for the distinct authors).
+
+Sheet `main`, one row per reversal or adjustment booked in the months, in the ledger's order (billing month, time
+booked, id): `bookedOn` (the Kyiv day), `month` (the billing month), `number`, `chargeType`, `kind` (`REVERSAL`,
+`ADJUSTMENT`), `originalFrom`, `originalTo`, `originalAmount` (the service period and booked amount of the corrected
+charge), `amount` (signed as booked), `source`, `cause`, `reason`, `bookedBy` ("Last First" of the member; empty
+without an author). Sources (`ledger.CorrectionSource`): `MANUAL_REVERSAL` (one charge reversed by hand),
+`RECALCULATION` (every adjustment and the reversals a recalculation books), `RUN_REVERSAL` (the charges of a losses or
+common consumer run reversed with the run). `cause` is the recalculation's cause (`MANUAL`, `TARIFF_VERSION`,
+`READING`) and only set for `RECALCULATION`; `reason` is the reason booked with the correction (the recalculation's,
+or the one given for the reversal), user content shown as entered. The totals `all` sum `amount` only (original
+amounts would count a charge twice when it was corrected twice). No corrections in the range: the sheet has no rows
+and no totals line; the screen says there is nothing to show, the file has the header block and column headers only.
+
+Tests: `LandTaxReportTests` and `CorrectionsReportTests` (worked fixtures in a cooperative of their own, preview and
+file, filters, permission, audit), `ReportFiltersTests` (year and kinds), `ReportTextsTests`.
+
 ## Depends on
 
-`ledger` (`LedgerReadModel`), `plots` (`PlotCatalog`, `PlotOwners`, `PlotStatuses`), `members` (`MemberDirectory`,
-debtors only), `settings` (`CooperativeSettings`: red amount and days), `tariffs` (`ChargeTypeCatalog`), `tenancy`
-(`TenantDirectory`), `identity` (`CurrentUser`, `AccessProfile`, `Permission`), `audit`, `money` and `problem`. No
-module depends on `reports`.
+`ledger` (`LedgerReadModel`), `plots` (`PlotCatalog`, `PlotOwners`, `PlotStatuses`), `members` (`MemberDirectory`:
+debtors' contacts, names of who booked a correction), `settings` (`CooperativeSettings`: red amount and days),
+`tariffs` (`ChargeTypeCatalog`, `ExpectedAmounts`), `tenancy` (`TenantDirectory`), `identity` (`CurrentUser`,
+`AccessProfile`, `Permission`), `audit`, `money` and `problem`. No module depends on `reports`.

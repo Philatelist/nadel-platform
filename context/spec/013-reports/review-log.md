@@ -20,3 +20,7 @@ Backend `./mvnw verify` on 6c121fb (detached worktree): green, exit 0, no failin
 - Reviewer accepted the minimal change to the guard test in `MembersAccessAcceptanceTests` (`land-tax` stripped before matching "tax").
 - Minor notes (not fixed): `ReportRunner.java:~93` writes an empty cooperative name if the tenant is missing; `LedgerReportQueries.java:~47` `group by 2` on a null-cast column is obscure; `ReportRunner.file()` ordering note only.
 
+### Slice 4 — Plot balances and Debtors (ac306f8)
+- Round 1: PASS. Backend slice tests 1216 run, 0 failures on the reviewer side; web code read only (node_modules missing in the worktree).
+- Minor notes (not fixed): `LedgerReportQueries.debtsAsOf` does not null-guard `byPlot.get(...)`; `DebtorsReport.load` uses `debts.get` while `PlotBalancesReport` uses `getOrDefault` (inconsistent, both safe today).
+

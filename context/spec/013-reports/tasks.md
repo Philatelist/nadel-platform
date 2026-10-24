@@ -29,11 +29,11 @@ Rules for every slice: contract first (`api/openapi.yaml`, then `make gen`), Fly
   - [x] Tests on fixed fixtures with worked numbers; Debtors without `MEMBERS_VIEW` is 403; two owners; no names in plot balances. **[Agent: spring-backend]**
   - [x] Verify: `cd backend && ./mvnw test -Dtest='app.nadel.reports.**,app.nadel.plots.**,app.nadel.members.**,app.nadel.ledger.**,app.nadel.ModularityTests'` and `pnpm --filter web exec vitest run src/pages/ReportsPage.test.tsx src/pages/ReportPage.test.tsx`; delete temporary files. **[Agent: spring-backend]**
 
-- [ ] **Slice 5: Corrections and Land tax**
-  - [ ] `LedgerReadModel.corrections` and `chargedInYear`; `ExpectedAmounts.yearByVersion` in tariffs. **[Agent: spring-backend]**
-  - [ ] `corrections` and `land-tax` definitions (one row per rate version, mismatch mark and recalculation hint, empty-state message); i18n. **[Agent: spring-backend]**
-  - [ ] Tests: 35,00 per sotka and 600 m² gives 6 sotkas and 210,00; two rate versions; recalculation correction with cause and reason; kind filter. **[Agent: spring-backend]**
-  - [ ] Verify: `cd backend && ./mvnw test -Dtest='app.nadel.reports.**,app.nadel.tariffs.**,app.nadel.ledger.**,app.nadel.ModularityTests'`; delete temporary files. **[Agent: spring-backend]**
+- [x] **Slice 5: Corrections and Land tax**
+  - [x] `LedgerReadModel.corrections` and `chargedInYear`; `ExpectedAmounts.yearByVersion` in tariffs. **[Agent: spring-backend]**
+  - [x] `corrections` and `land-tax` definitions (one row per rate version, mismatch mark and recalculation hint, empty-state message); i18n. **[Agent: spring-backend]**
+  - [x] Tests: 35,00 per sotka and 600 m² gives 6 sotkas and 210,00; two rate versions; recalculation correction with cause and reason; kind filter. **[Agent: spring-backend]**
+  - [x] Verify: `cd backend && ./mvnw test -Dtest='app.nadel.reports.**,app.nadel.tariffs.**,app.nadel.ledger.**,app.nadel.ModularityTests'`; delete temporary files. **[Agent: spring-backend]**
 
 - [ ] **Slice 6: Electricity by meter tree**
   - [ ] `MeterReports.tree` (same data as `GET /meter-tree`), `LedgerReadModel.electricityCharged` (consumption, losses fixed and proportional runs, common consumer runs, adjustments and reversals with original service period). **[Agent: spring-backend]**

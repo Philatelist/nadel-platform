@@ -3,6 +3,7 @@ package app.nadel.reports.internal;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import app.nadel.ledger.CorrectionKind;
 import app.nadel.problem.ApiProblemException;
 import app.nadel.problem.FieldProblem;
 import app.nadel.tariffs.ChargeTypeCatalog.ChargeTypeFacts;
@@ -11,6 +12,7 @@ import java.time.YearMonth;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import nadel.contract.model.ReportCorrectionKind;
 import nadel.contract.model.ReportFilter;
 import nadel.contract.model.ReportFilterValue;
 import nadel.contract.model.ReportPeriodBasis;
@@ -127,6 +129,48 @@ class ReportFiltersTests {
         ReportTexts en = ReportTexts.of(ReportLanguage.EN);
         assertThat(CHARGES_BY_MONTH.stream().map(filter -> filter.describe(all, en, names::get)).toList())
                 .containsExactly("Billing months: 09.2026 – 09.2026", "Charge types: all", "Street: all");
+    }
+
+    @Test
+    void theYearIsTheCurrentOneByDefaultAndAYearAfterItIsInvalid() {
+        List<ReportFilterDefinition> landTax = List.of(new YearFilter());
+
+        ReportFilters current = ReportFilters.parse(landTax, RawFilters.NONE, CONTEXT);
+        assertThat(current.year()).isEqualTo(2026);
+        assertThat(values(current)).containsExactly("year=2026");
+        assertThat(landTax.getFirst().info(TODAY).getDefaults()).extracting(ReportFilterValue::getValue)
+                .containsExactly("2026");
+        ReportFilters past = ReportFilters.parse(landTax, year(2024), CONTEXT);
+        assertThat(past.year()).isEqualTo(2024);
+        assertThat(landTax.getFirst().describe(past, ReportTexts.of(ReportLanguage.UK), id -> "")).isEqualTo(
+                "Рік: 2024");
+        assertThat(problems(year(2027), landTax)).containsExactly(new FieldProblem("year", "INVALID"));
+        assertThatThrownBy(ReportFilters.parse(CHARGES_BY_MONTH, RawFilters.NONE, CONTEXT)::year)
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void theKindsOfCorrectionAreBothByDefaultAndARepeatedKindCountsOnce() {
+        List<ReportFilterDefinition> kinds = List.of(new CorrectionKindsFilter());
+
+        ReportFilters both = ReportFilters.parse(kinds, RawFilters.NONE, CONTEXT);
+        assertThat(both.correctionKinds()).isEmpty();
+        assertThat(values(both)).isEmpty();
+        assertThat(kinds.getFirst().describe(both, ReportTexts.of(ReportLanguage.EN), id -> ""))
+                .isEqualTo("Kinds of correction: all");
+
+        ReportFilters reversals = ReportFilters.parse(kinds, new RawFilters(null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, List.of(ReportCorrectionKind.REVERSAL,
+                        ReportCorrectionKind.ADJUSTMENT, ReportCorrectionKind.REVERSAL)), CONTEXT);
+        assertThat(reversals.correctionKinds()).containsExactly(CorrectionKind.REVERSAL, CorrectionKind.ADJUSTMENT);
+        assertThat(values(reversals)).containsExactly("correctionKinds=REVERSAL", "correctionKinds=ADJUSTMENT");
+        assertThat(kinds.getFirst().describe(reversals, ReportTexts.of(ReportLanguage.UK), id -> ""))
+                .isEqualTo("Види виправлень: Сторно, Коригування");
+    }
+
+    private static RawFilters year(int year) {
+        return new RawFilters(null, null, null, null, null, year, null, null, null, null, null, null, null, null,
+                null);
     }
 
     private static List<FieldProblem> problems(RawFilters raw, List<ReportFilterDefinition> definitions) {

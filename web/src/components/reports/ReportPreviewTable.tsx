@@ -7,6 +7,7 @@ import {
   formatMonth,
   formatMoney,
   formatPercent,
+  formatRate,
   type Messages,
 } from '@nadel/shared';
 import { chargeTypeName } from '../../chargeTypeName';
@@ -15,7 +16,7 @@ import { reportTexts } from '../../reportTexts';
 import { ChargeTypeName } from '../ChargeTypeName';
 import { UserContent } from '../UserContent';
 
-const NUMERIC_TYPES: ReadonlySet<string> = new Set(['MONEY', 'QUANTITY', 'PERCENT', 'INTEGER']);
+const NUMERIC_TYPES: ReadonlySet<string> = new Set(['MONEY', 'QUANTITY', 'PERCENT', 'INTEGER', 'DECIMAL']);
 const NAMING_TYPES: ReadonlySet<string> = new Set(['TEXT', 'CODE', 'CHARGE_TYPE']);
 
 /** The catalog texts of a CODE column, by report code and column key; a report without an entry shows the billing status texts for `status`. */
@@ -23,6 +24,9 @@ function codeLabels(t: Messages, report: string, key: string): Readonly<Record<s
   const lookup: Readonly<Record<string, Readonly<Record<string, string>>>> = {
     'plot-balances/status': t.reports.filters.options.statuses,
     'debtors/status': t.reports.filters.options.statuses,
+    'corrections/kind': t.reports.filters.options.correctionKinds,
+    'corrections/source': t.reports.corrections.sources,
+    'corrections/cause': t.recalculation.causeKind,
     '*/status': t.billing.status,
   };
   return lookup[`${report}/${key}`] ?? lookup[`*/${key}`];
@@ -49,6 +53,9 @@ function formatValue(
         return formatMeterValue(value, locale);
       case 'PERCENT':
         return formatPercent(value, locale);
+      case 'DECIMAL':
+        // a rate or an area: exact, its significant decimals but at least two
+        return formatRate(value, locale);
       case 'DATE':
         return formatDay(value, locale);
       case 'MONTH':

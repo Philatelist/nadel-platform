@@ -109,10 +109,12 @@ abstract class ReportsTestSupport extends IntegrationTest {
             sql.update("delete from charge where tenant_id = ? and reverses_charge_id is not null", id);
             sql.update("delete from charge where tenant_id = ?", id);
             sql.update("delete from recalculation where tenant_id = ?", id);
+            sql.update("delete from losses_run where tenant_id = ?", id);
             sql.update("delete from billing_month where tenant_id = ?", id);
         });
-        for (String table : List.of("audit_entry", "ownership", "plot_status", "plot", "member_role", "role_permission", "role",
-                "member", "charge_type", "cooperative_settings")) {
+        for (String table : List.of("audit_entry", "ownership", "plot_status", "tariff_scope_plot", "tariff_version",
+                "tariff", "plot", "member_role", "role_permission", "role", "member", "charge_type",
+                "cooperative_settings")) {
             ownerJdbc().update("delete from " + table + " where tenant_id = ?", id);
         }
         ownerJdbc().update("delete from tenant where id = ?", id);
@@ -305,9 +307,14 @@ abstract class ReportsTestSupport extends IntegrationTest {
     }
 
     UUID plot(String number, String street) {
+        return plot(number, street, "600.00");
+    }
+
+    /** An active plot of the area in square metres. */
+    UUID plot(String number, String street, String areaM2) {
         UUID id = UUID.randomUUID();
         ownerJdbc().update("insert into plot (id, tenant_id, number, street, kind, area_m2) "
-                + "values (?, ?, ?, ?, 'PLOT', 600)", id, tenant, number, street);
+                + "values (?, ?, ?, ?, 'PLOT', ?)", id, tenant, number, street, new BigDecimal(areaM2));
         ownerJdbc().update("insert into plot_status (plot_id, tenant_id, status) values (?, ?, 'GREY')", id, tenant);
         return id;
     }
@@ -365,6 +372,86 @@ abstract class ReportsTestSupport extends IntegrationTest {
                 + "service_from, service_to, accrued_on, ?, id, ?, 'Виправлено ставку' from charge where id = ?",
                 monthRow(bookedIn), new BigDecimal(amount), "ADJUSTMENT:" + recalculation + ":" + original,
                 recalculation, original);
+    }
+
+    // ---- tariffs (land tax)
+
+    /** A tariff of the charge type for every plot of the cooperative. */
+    UUID tariff(UUID chargeType, String name) {
+        UUID id = UUID.randomUUID();
+        ownerJdbc().update("insert into tariff (id, tenant_id, charge_type_id, name) values (?, ?, ?, ?)", id, tenant,
+                chargeType, name);
+        return id;
+    }
+
+    /** A yearly per-sotka version of the tariff. */
+    UUID perSotkaYearly(UUID tariff, String rate, String validFrom) {
+        UUID id = UUID.randomUUID();
+        ownerJdbc().update("insert into tariff_version (id, tenant_id, tariff_id, valid_from, basis, frequency, rate) "
+                + "values (?, ?, ?, ?::date, 'PER_AREA_SOTKA', 'YEARLY', ?)", id, tenant, tariff, validFrom,
+                new BigDecimal(rate));
+        return id;
+    }
+
+    /** Leaves the plot out of the tariff. */
+    void exclude(UUID tariff, UUID plot) {
+        ownerJdbc().update("insert into tariff_scope_plot (tenant_id, tariff_id, plot_id, kind, reason) "
+                + "values (?, ?, ?, 'EXCLUDED', 'Звільнено')", tenant, tariff, plot);
+    }
+
+    // ---- corrections with their author and time
+
+    /**
+     * A reversal of the charge in its own month, booked at {@code at} (an ISO timestamp with offset) by {@code by}
+     * (null: no author), with the source, recalculation and reason given.
+     */
+    UUID reversal(UUID original, String source, UUID recalculation, String reason, UUID by, String at) {
+        UUID id = UUID.randomUUID();
+        ownerJdbc().update("insert into charge (id, tenant_id, plot_id, charge_type_id, billing_month_id, kind, "
+                + "source, amount, service_from, service_to, accrued_on, reverses_charge_id, run_id, recalculation_id, "
+                + "reason, created_by, created_at) select ?, tenant_id, plot_id, charge_type_id, billing_month_id, "
+                + "'REVERSAL', ?, -amount, service_from, service_to, accrued_on, id, run_id, ?, ?, ?, ?::timestamptz "
+                + "from charge where id = ?", id, source, recalculation, reason, by, at, original);
+        return id;
+    }
+
+    /** An adjustment of the charge booked in {@code bookedIn} by the recalculation, at {@code at} by {@code by}. */
+    void adjustment(UUID original, UUID recalculation, String amount, String bookedIn, UUID by, String at) {
+        ownerJdbc().update("insert into charge (tenant_id, plot_id, charge_type_id, billing_month_id, kind, source, "
+                + "amount, service_from, service_to, accrued_on, source_key, adjusts_charge_id, recalculation_id, "
+                + "reason, created_by, created_at) select tenant_id, plot_id, charge_type_id, ?, 'ADJUSTMENT', "
+                + "'RECALCULATION', ?, service_from, service_to, accrued_on, ?, id, ?, 'Виправлено ставку', ?, "
+                + "?::timestamptz from charge where id = ?", monthRow(bookedIn), new BigDecimal(amount),
+                "ADJUSTMENT:" + recalculation + ":" + original, recalculation, by, at, original);
+    }
+
+    /** A recalculation of the cause with the reason "Виправлено ставку", booked by {@code by}. */
+    UUID recalculation(String cause, UUID by) {
+        UUID id = UUID.randomUUID();
+        ownerJdbc().update("insert into recalculation (id, tenant_id, cause, reason, total, line_count, plot_count, "
+                + "digest, created_by) values (?, ?, ?, 'Виправлено ставку', 0.00, 2, 1, 'test-digest', ?)", id,
+                tenant, cause, by);
+        return id;
+    }
+
+    /** A losses run booked in the month and reversed as a whole at {@code reversedAt} by {@code by}. */
+    UUID reversedLossesRun(String month, UUID by, String reversedAt) {
+        UUID id = UUID.randomUUID();
+        ownerJdbc().update("insert into losses_run (id, tenant_id, from_date, to_date, status, billing_month_id, "
+                + "total, created_by, reversed_at, reversed_by, reverse_reason) values (?, ?, ?::date, ?::date, "
+                + "'REVERSED', ?, 12.40, ?, ?::timestamptz, ?, 'Помилковий розрахунок')", id, tenant, month + "-01",
+                month + "-14", monthRow(month), by, reversedAt, by);
+        return id;
+    }
+
+    /** A regular charge of a run, written as the database owner. */
+    UUID runCharge(UUID plot, UUID type, UUID run, String amount, String from, String to, String bookedIn) {
+        UUID id = UUID.randomUUID();
+        ownerJdbc().update("insert into charge (id, tenant_id, plot_id, charge_type_id, billing_month_id, kind, "
+                + "source, amount, service_from, service_to, accrued_on, source_key, run_id) values (?, ?, ?, ?, ?, "
+                + "'REGULAR', 'LOSSES', ?, ?::date, ?::date, ?::date, ?, ?)", id, tenant, plot, type,
+                monthRow(bookedIn), new BigDecimal(amount), from, to, from, "TEST:" + id, run);
+        return id;
     }
 
     /** A member of the cooperative with one base role; returns a token. */

@@ -1693,6 +1693,8 @@ export const en = {
       STATUS_ALL_CHARGE_TYPES: 'The status counts every charge type, not only the chosen ones.',
       OLDEST_UNPAID_IS_OLDEST_CHARGE:
         'Until payments are recorded, the oldest unpaid charge is the oldest charge that still has a debt.',
+      RECALCULATION_SUGGESTED:
+        'Plots charged another amount than expected: {count}. A recalculation may be due; the report books nothing.',
     },
     'charges-by-month': {
       title: 'Charges by month',
@@ -1747,6 +1749,55 @@ export const en = {
         total: 'Total debt',
         oldestUnpaid: 'Oldest unpaid charge',
         daysOverdue: 'Days overdue',
+      },
+    },
+    'land-tax': {
+      title: 'Land tax',
+      description:
+        'The land tax of every plot for a year: the amount the tariff expects and the amount charged, differences marked.',
+      sheets: {
+        main: 'Land tax',
+      },
+      columns: {
+        number: 'Plot',
+        street: 'Street',
+        areaM2: 'Area, m²',
+        areaSotka: 'Area, sotkas',
+        rate: 'Rate per sotka',
+        from: 'From',
+        to: 'To',
+        days: 'Days',
+        expected: 'Expected',
+        charged: 'Charged for the year',
+        mismatch: 'Differs',
+      },
+    },
+    corrections: {
+      title: 'Corrections',
+      description:
+        'Every reversal and adjustment booked in the chosen billing months, with the original charge, the source and who booked it.',
+      sheets: {
+        main: 'Corrections',
+      },
+      columns: {
+        bookedOn: 'Booked on',
+        month: 'Billing month',
+        number: 'Plot',
+        chargeType: 'Charge type',
+        kind: 'Kind',
+        originalFrom: 'Service from',
+        originalTo: 'Service to',
+        originalAmount: 'Original amount',
+        amount: 'Amount',
+        source: 'Source',
+        cause: 'Recalculation cause',
+        reason: 'Reason',
+        bookedBy: 'Booked by',
+      },
+      sources: {
+        MANUAL_REVERSAL: 'Manual reversal',
+        RECALCULATION: 'Recalculation',
+        RUN_REVERSAL: 'Run reversal',
       },
     },
   },

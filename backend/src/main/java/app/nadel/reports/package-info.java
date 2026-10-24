@@ -8,8 +8,9 @@
  * {@code ReportDefinition}, {@code ReportFilters}, {@code ReportRunner}, {@code XlsxReportWriter},
  * {@code ReportLanguage}, {@code ReportTexts}) and one definition per report. Depends on {@code ledger}
  * ({@code LedgerReadModel}), {@code plots} ({@code PlotCatalog}, {@code PlotOwners}, {@code PlotStatuses}),
- * {@code members} ({@code MemberDirectory}, the debtors' contacts only), {@code settings} ({@code CooperativeSettings},
- * the red threshold), {@code tariffs} ({@code ChargeTypeCatalog}), {@code tenancy} ({@code TenantDirectory}),
+ * {@code members} ({@code MemberDirectory}: the debtors' contacts, the names of who booked a correction),
+ * {@code settings} ({@code CooperativeSettings}, the red threshold), {@code tariffs} ({@code ChargeTypeCatalog},
+ * {@code ExpectedAmounts} for the land tax), {@code tenancy} ({@code TenantDirectory}),
  * {@code identity} ({@code CurrentUser}, {@code Permission}), {@code audit}, {@code money} and {@code problem}; no
  * module depends on it.
  */

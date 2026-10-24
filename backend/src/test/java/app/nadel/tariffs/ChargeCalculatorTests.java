@@ -427,4 +427,12 @@ class ChargeCalculatorTests {
                     .isEqualTo(amount(versions, "700.00", NOV_2026));
         }
     }
+
+    @Test
+    void theAreaInSotkasIsSquareMetresOverOneHundredExactly() {
+        assertThat(ChargeCalculator.sotkas(area("600.00"))).isEqualTo(new BigDecimal("6.0000"));
+        assertThat(ChargeCalculator.sotkas(area("612.00"))).isEqualTo(new BigDecimal("6.1200"));
+        assertThat(ChargeCalculator.sotkas(area("1.50"))).isEqualTo(new BigDecimal("0.0150"));
+        assertThatThrownBy(() -> ChargeCalculator.sotkas(null)).isInstanceOf(NullPointerException.class);
+    }
 }

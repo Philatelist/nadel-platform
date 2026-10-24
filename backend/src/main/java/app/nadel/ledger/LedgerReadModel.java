@@ -1,5 +1,6 @@
 package app.nadel.ledger;
 
+import app.nadel.money.Money;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.Collection;
@@ -14,8 +15,8 @@ import org.jspecify.annotations.Nullable;
  * Every method runs in the caller's transaction ({@code Propagation.MANDATORY}: a call without one fails), which the
  * tenant-aware transaction manager has bound to the cooperative, so the rows of other cooperatives are invisible (RLS).
  * The answers carry ids, codes and {@code Money} only, never personal data; the caller orders and names the charge
- * types and plots through their own modules. Results are bounded by their filters (months times charge types, or the
- * plots asked for), so no row limit applies.
+ * types and plots through their own modules. Aggregates are bounded by their filters (months times charge types, or the
+ * plots asked for), so no row limit applies to them; {@link #corrections}, a list of single rows, takes a limit.
  */
 public interface LedgerReadModel {
 
@@ -67,4 +68,42 @@ public interface LedgerReadModel {
      *                      appearance
      */
     Map<UUID, PlotDebts> debtsAsOf(LocalDate asOf, Set<UUID> chargeTypeIds, Collection<UUID> plotIds);
+
+    /**
+     * Every reversal and adjustment booked in the billing months from {@code fromMonth} to {@code toMonth} (the
+     * corrections report, feature 013 §3.8), one {@link CorrectionRow} per row, with the service period and the booked
+     * amount of the charge it corrects, its source ({@link CorrectionSource}: manual reversal, recalculation or run
+     * reversal), the cause of its recalculation and the member who booked it. Charges of other kinds (regular charges,
+     * opening balances) are never listed.
+     * <p>
+     * Rows come ordered by billing month, then by the time they were booked, then by id; the caller puts plots in their
+     * natural order if it wants another order. At most {@code limit} rows are returned: a caller with a row cap passes
+     * the cap plus one, so that one row more than the cap tells it the result is too large.
+     *
+     * @param fromMonth     the first billing month, inclusive
+     * @param toMonth       the last billing month, inclusive; not before {@code fromMonth}
+     * @param chargeTypeIds the charge types; empty means every type
+     * @param kinds         the kinds; empty means both
+     * @param limit         the most rows returned; at least 1
+     * @throws IllegalArgumentException when {@code toMonth} is before {@code fromMonth} or {@code limit} is below 1
+     */
+    List<CorrectionRow> corrections(YearMonth fromMonth, YearMonth toMonth, Set<UUID> chargeTypeIds,
+            Set<CorrectionKind> kinds, int limit);
+
+    /**
+     * The effective amount charged to each plot for a year by the charge type with the code (the land tax report,
+     * feature 013 §3.7: "charges of type {@code LAND_TAX} with a service period in the year"): the signed sum (money
+     * rules 5.4) of the regular charges, reversals and adjustments of that type whose service period starts in the year
+     * ({@code service_from} from 1 January to 31 December). A reversal and an adjustment keep the service period of the
+     * charge they correct, so they count in the year of that charge, whatever month they were booked in. Opening
+     * balances are left out: they carry a debt from before the ledger, not a charge for the year.
+     *
+     * @param chargeTypeCode the code of a seeded charge type (for example {@code LAND_TAX}); a code the cooperative has no
+     *                       type for gives {@code 0.00} for every plot
+     * @param year           the calendar year
+     * @param plotIds        the plots; every distinct id is a key of the result, in the order of first appearance
+     *                       ({@code 0.00} for a plot without such charges or unknown in the cooperative); asked 500 per
+     *                       query
+     */
+    Map<UUID, Money> chargedInYear(String chargeTypeCode, int year, Collection<UUID> plotIds);
 }

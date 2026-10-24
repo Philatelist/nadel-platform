@@ -33,11 +33,11 @@ import org.springframework.stereotype.Component;
  * same totals as the preview. Each worksheet starts with the header block (the cooperative's name, the report's name,
  * the filters, when it was made in Europe/Kyiv and who made it), then one line per header note, an empty line and the
  * column headers, which stay frozen. Numbers are numbers ({@code #,##0.00} for money, {@code #,##0.000} for kWh and
- * m³, {@code 0.00} for percentages, {@code #,##0} for whole numbers), days are dates ({@code dd.mm.yyyy}) and months
- * the date of their first day shown as {@code mm.yyyy}. A subtotal and a totals line are bold and name themselves in
- * their first empty text cell; a row of a tree is indented by its level. A value that is not known is an empty cell
- * with its reason as a comment, never 0. Texts come from {@link ReportTexts}; plot numbers, names and other content
- * people typed are written as stored.
+ * m³, {@code 0.00} for percentages, {@code #,##0} for whole numbers, {@code #,##0.00##} for rates and areas), days
+ * are dates ({@code dd.mm.yyyy}) and months the date of their first day shown as {@code mm.yyyy}. A subtotal and a
+ * totals line are bold and name themselves in their first empty text cell; a row of a tree is indented by its level.
+ * A value that is not known is an empty cell with its reason as a comment, never 0. Texts come from
+ * {@link ReportTexts}; plot numbers, names and other content people typed are written as stored.
  */
 @Component
 class XlsxReportWriter {
@@ -45,6 +45,8 @@ class XlsxReportWriter {
     private static final DateTimeFormatter GENERATED_AT = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm");
     private static final int HEADER_BLOCK_ROWS = 5;
     private static final int MAX_SHEET_NAME = 31;
+    /** A rate or an area: at least two decimals, the third and fourth only when they are not zero. */
+    static final String DECIMAL_FORMAT = "#,##0.00##";
 
     /** The header block of every worksheet. */
     record Header(String cooperativeName, ZonedDateTime generatedAt, String generatedBy) {
@@ -195,6 +197,7 @@ class XlsxReportWriter {
                 case MONEY -> number(row, index, ((Money) value).value(), "#,##0.00");
                 case QUANTITY -> number(row, index, (BigDecimal) value, "#,##0.000");
                 case PERCENT -> number(row, index, (BigDecimal) value, "0.00");
+                case DECIMAL -> number(row, index, (BigDecimal) value, DECIMAL_FORMAT);
                 case INTEGER -> number(row, index, (Number) value, "#,##0");
                 case DATE -> {
                     worksheet.value(row, index, (LocalDate) value);
@@ -229,7 +232,7 @@ class XlsxReportWriter {
                 case TEXT, CHARGE_TYPE -> 24;
                 case CODE -> 16;
                 case MONEY, QUANTITY -> 15;
-                case DATE -> 12;
+                case DATE, DECIMAL -> 12;
                 case MONTH, PERCENT, INTEGER, BOOLEAN -> 10;
             };
         }

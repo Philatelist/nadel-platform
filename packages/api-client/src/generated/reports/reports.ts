@@ -205,8 +205,8 @@ export const getGetReportUrl = (code: 'charges-by-month' | 'plot-balances' | 'de
  * surrounding spaces; `resource` and `waterSource` left out mean all. In `debtors`, `minDebt` and
  * `olderThanDays` combine with OR, as in the red status.
  *
- * A malformed parameter (a wrong format, an unknown enum value, a number out of range) is 400
- * `VALIDATION_FAILED`. Filters that do not fit the report are 400 `REPORT_FILTER_INVALID` with
+ * A malformed parameter (a wrong format, a number out of range) is 400 `VALIDATION_FAILED`, an unknown enum
+ * value 400 `MALFORMED_REQUEST`. Filters that do not fit the report are 400 `REPORT_FILTER_INVALID` with
  * `errors[{field, code}]`, where `field` is the parameter: `REQUIRED` (a required filter without a default is
  * missing), `INVALID` (`toMonth` before `fromMonth`, `to` before `from`), `NOT_FOUND` (`chargeTypeIds[i]` is not a
  * charge type of the cooperative). A sheet of more than 20 000 rows is 422 `REPORT_TOO_LARGE`: nothing is
@@ -223,7 +223,7 @@ export const getGetReportUrl = (code: 'charges-by-month' | 'plot-balances' | 'de
  * Every run is written to the audit log (`REPORT_GENERATED`, entity type `REPORT`, `output` `PREVIEW`) with the
  * filters as ids, codes and dates, the row count and whether the report holds personal data, never its contents.
  * Requires `REPORTS_VIEW`; `debtors` also needs `MEMBERS_VIEW` (403 `PERMISSION_DENIED` otherwise). An unknown
- * code is 400 `VALIDATION_FAILED`.
+ * code is 400 `MALFORMED_REQUEST`; a code of `ReportCode` this server does not produce yet is 404 `NOT_FOUND`.
  * @summary The on-screen preview of a report
  */
 export const getReport = async (code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections',
