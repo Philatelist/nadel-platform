@@ -31,6 +31,7 @@ const ALL_PERMISSIONS = [
   'Run charges',
   'Reverse charges',
   'Close periods',
+  'Recalculate charges',
 ];
 
 const nav = (page: Page) => page.locator('#app-menu nav');
@@ -220,7 +221,7 @@ test.describe('§2.7 / §2.8 members list and read-only card', () => {
 });
 
 test.describe('§2.2 / §2.13 roles screen', () => {
-  test('§2.2 #1, #2 and §2.13 #2: five roles, base role names are editable, Chairman has all nineteen permissions locked', async ({
+  test('§2.2 #1, #2 and §2.13 #2: five roles, base role names are editable, Chairman has all twenty permissions locked', async ({
     page,
   }) => {
     await loginAs(page, 'chairman@demo.local');
@@ -336,7 +337,7 @@ test.describe('§2.2 / §2.13 roles screen', () => {
     expect(await page.getByRole('main').innerText()).not.toContain('base:');
   });
 
-  test('§2.1 #1 and §2.11 #3: nineteen permissions with descriptions in Ukrainian by default, English on switch', async ({
+  test('§2.1 #1 and §2.11 #3: twenty permissions with descriptions in Ukrainian by default, English on switch', async ({
     browser,
   }) => {
     // a browser language that is not supported falls back to the default locale (Ukrainian)
@@ -383,6 +384,10 @@ test.describe('§2.2 / §2.13 roles screen', () => {
       ['Проведення нарахувань', 'Вносити вхідне сальдо ділянок і проводити нарахування'],
       ['Сторнування нарахувань', 'Сторнувати нарахування з указанням причини'],
       ['Закриття періодів', 'Закривати місяці нарахувань'],
+      [
+        'Перерахунок нарахувань',
+        'Переглядати й проводити перерахунок минулих нарахувань, виправляти використані версії тарифів і покази',
+      ],
     ];
     await expect(page.getByRole('checkbox')).toHaveCount(ALL_PERMISSIONS.length);
     for (const [name, description] of ukrainian as [string, string][]) {

@@ -96,6 +96,15 @@ export function ChargeDetailDialog({
   if (lossesPercent !== undefined) rows.push([d.lossesPercent, formatPercent(lossesPercent, locale)]);
   if (charge.reason) rows.push([d.reason, <UserContent key="reason">{charge.reason}</UserContent>]);
   if (charge.adjusts) {
+    // The row names the original charge (its own label, period and amount), never the adjustment itself.
+    const period = formatMonth(charge.adjusts.billingMonth, locale);
+    const text = original ? (
+      <>
+        {chargeEntryLabel(t, original)} · {period}: <Money amount={original.amount} />
+      </>
+    ) : (
+      period
+    );
     rows.push([
       d.adjusts,
       original && onOpenCharge ? (
@@ -105,10 +114,10 @@ export function ChargeDetailDialog({
           className="text-accent underline"
           onClick={() => onOpenCharge(original)}
         >
-          {adjustmentLead(t, charge, locale)}
+          {text}
         </button>
       ) : (
-        adjustmentLead(t, charge, locale)
+        text
       ),
     ]);
   }

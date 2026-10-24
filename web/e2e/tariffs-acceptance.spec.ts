@@ -222,6 +222,9 @@ test.describe('tariffs: acceptance', () => {
       await form('Діє з').fill(kyivDay(-1));
       await expect(main(page).getByText('Нарахування за минулі періоди буде перераховано')).toBeVisible();
       await main(page).getByRole('button', { name: 'Додати версію', exact: true }).click();
+      // a past date reaches booked months, so the save opens the recalculation step; the reason books it
+      await main(page).getByLabel('Причина', { exact: true }).fill('E2E: версія заднім числом');
+      await main(page).getByRole('button', { name: 'Провести перерахунок', exact: true }).click();
       await expect(versions).toHaveCount(3);
     } finally {
       if (typeId) await api(page, 'POST', `/charge-types/${typeId}/archive`).catch(() => undefined);
