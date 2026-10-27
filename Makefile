@@ -4,6 +4,10 @@ SHELL := /bin/bash
 
 COMPOSE := docker compose -f infra/docker-compose.yml
 
+# The local personal-data master key lives in infra/.env (git-ignored). It is sourced only for the backend
+# process, never exported by Make and never referenced by docker compose.
+LOAD_ENV := set -a; . infra/.env; set +a
+
 .PHONY: help install up down infra backend web mobile dev gen test check lint format format-check clean e2e-install e2e guide-shots guide
 
 help: ## Show available targets
@@ -18,8 +22,13 @@ infra: ## Start Postgres + PostGIS and Keycloak and wait until healthy
 down: ## Stop local infrastructure
 	$(COMPOSE) down
 
-backend: ## Run the backend API on :8080 (needs `make infra`)
-	cd backend && ./mvnw spring-boot:run
+# File target: created once, never overwritten. Losing the key makes encrypted contacts unreadable.
+infra/.env:
+	@umask 077; echo "NADEL_PD_MASTER_KEY=$$(openssl rand -base64 32)" > $@
+	@echo "Created $@ with a local master key. Keep it: losing it makes encrypted contacts unreadable."
+
+backend: infra/.env ## Run the backend API on :8080 (needs `make infra`); creates infra/.env with a local master key
+	$(LOAD_ENV); cd backend && ./mvnw spring-boot:run
 
 web: ## Run the web app on :5173 (proxies /api to :8080)
 	pnpm --filter web dev
@@ -27,9 +36,9 @@ web: ## Run the web app on :5173 (proxies /api to :8080)
 mobile: ## Start the Expo dev server
 	pnpm --filter mobile start
 
-up: infra ## Start infrastructure, backend and web together (Ctrl+C stops backend and web)
+up: infra infra/.env ## Start infrastructure, backend and web together (creates infra/.env with a local master key; Ctrl+C stops)
 	@trap 'kill 0' INT TERM; \
-	(cd backend && ./mvnw -q spring-boot:run) & \
+	($(LOAD_ENV); cd backend && ./mvnw -q spring-boot:run) & \
 	pnpm --filter web dev & \
 	wait
 
@@ -60,7 +69,7 @@ e2e-install: ## Install the Playwright browser (chromium) for the end-to-end spe
 E2E_DB ?= nadel_e2e
 
 # Needs JDK 25 on PATH/JAVA_HOME (as the backend build does). Ports 8080 and 5173 must be free. Not part of `check`.
-e2e: infra ## End-to-end specs: starts infra, backend jar and web, runs Playwright, stops them
+e2e: infra infra/.env ## End-to-end specs: starts infra, backend jar and web, runs Playwright, stops them
 	cd backend && ./mvnw -B -q -DskipTests package
 	@set -e -m; mkdir -p backend/target; \
 	pids=""; \

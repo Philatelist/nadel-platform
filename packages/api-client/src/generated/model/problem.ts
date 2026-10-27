@@ -19,7 +19,7 @@ export interface Problem {
   title: string;
   status: number;
   detail?: string;
-  /** Stable machine-readable error code, for example `VALIDATION_FAILED`, `NOT_FOUND` or `PLOT_NOT_FOUND` */
+  /** Stable machine-readable error code, for example `VALIDATION_FAILED`, `NOT_FOUND` or `PLOT_NOT_FOUND`. Any endpoint that reads stored personal data (member contacts) may answer 500 `PERSONAL_DATA_UNREADABLE` when a stored value cannot be decrypted; the body never carries a value. */
   code: string;
   /** Field-level validation errors */
   errors?: ProblemFieldError[];

@@ -6111,7 +6111,9 @@ components:
         code:
           type: string
           description: >-
-            Stable machine-readable error code, for example `VALIDATION_FAILED`, `NOT_FOUND` or `PLOT_NOT_FOUND`
+            Stable machine-readable error code, for example `VALIDATION_FAILED`, `NOT_FOUND` or `PLOT_NOT_FOUND`.
+            Any endpoint that reads stored personal data (member contacts) may answer 500 `PERSONAL_DATA_UNREADABLE`
+            when a stored value cannot be decrypted; the body never carries a value.
         errors:
           type: array
           description: Field-level validation errors

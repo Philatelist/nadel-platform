@@ -2382,6 +2382,8 @@ export const en = {
       'There is no tariff for common consumers, so the run cannot be booked. Add the tariff first.',
     COMMON_CONSUMER_RANGE_OVERLAP:
       'This common consumer has already been charged for these days. Preview again and book the other consumers.',
+    PERSONAL_DATA_UNREADABLE:
+      'Contact details could not be read. Do not re-enter them; report the problem to the administrator.',
     UNKNOWN: 'Something went wrong. Please try again.',
   },
   map: {

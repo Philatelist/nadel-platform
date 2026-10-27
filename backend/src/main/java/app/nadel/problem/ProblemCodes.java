@@ -15,6 +15,11 @@ public final class ProblemCodes {
      */
     public static final String PLOT_NOT_FOUND = "PLOT_NOT_FOUND";
     public static final String INTERNAL_ERROR = "INTERNAL_ERROR";
+    /**
+     * 500: a stored personal value could not be decrypted (malformed, copied from another row or sealed with another
+     * key). The answer never carries a value; the server log names the table, column and row id only.
+     */
+    public static final String PERSONAL_DATA_UNREADABLE = "PERSONAL_DATA_UNREADABLE";
     public static final String EMAIL_TAKEN = "EMAIL_TAKEN";
     public static final String LAST_CHAIRMAN = "LAST_CHAIRMAN";
     public static final String ROLE_NAME_TAKEN = "ROLE_NAME_TAKEN";

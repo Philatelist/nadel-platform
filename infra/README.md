@@ -40,3 +40,17 @@ database, creates a fresh one in the same Postgres (owner `nadel_owner`, PostGIS
 pointing at it (Flyway migrates it and loads the demo data of the `dev` profile), and drops it in the cleanup
 trap after the backend stops, also when the run fails or is interrupted. Keycloak keeps its own database and users.
 Override the name with `make e2e E2E_DB=other_name`.
+
+## Local master key (`infra/.env`)
+
+`make up`, `make backend` and `make e2e` create `infra/.env` on first use with one line,
+`NADEL_PD_MASTER_KEY=<random base64 key>`, the local master key for personal-data encryption. The file is
+git-ignored, has mode 600 and is sourced only for the backend process (docker compose never reads it). An existing
+file is never overwritten. Never commit it. Losing the key makes the contacts encrypted with it unreadable; to start
+over, delete the file and recreate the local data:
+
+```bash
+rm infra/.env
+docker compose -f infra/docker-compose.yml down -v
+make up
+```

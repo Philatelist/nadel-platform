@@ -64,6 +64,14 @@ logging:
     # ('a.b@example.com', ...)"), which is personal data. The failure itself is still thrown and mapped.
     org.hibernate.orm.jdbc.error: "OFF"
 
+nadel:
+  privacy:
+    # Personal data master key: 32 random bytes in base64 (openssl rand -base64 32), from the environment only. Every
+    # profile except dev refuses to start without it; see backend/src/main/java/app/nadel/privacy/README.md
+    master-key: ${NADEL_PD_MASTER_KEY:}
+    # The master key before a rotation; set only until the start-up log reports 0 keys left on it
+    previous-master-key: ${NADEL_PD_MASTER_KEY_PREVIOUS:}
+
 management:
   endpoints:
     web:
@@ -84,3 +92,19 @@ spring:
     placeholders:
       # The demo ledger block of R__demo_data.sql runs only when this is "on" (integration tests turn it off)
       demoledger: "on"
+nadel:
+  privacy:
+    # Without NADEL_PD_MASTER_KEY the local key is read from the first existing file (repository root or backend/);
+    # when none exists and infra/ is in the working directory, a random key is written to infra/.env (mode 600)
+    dev-key-file: infra/.env,../infra/.env
+
+---
+# Production. The personal data master key has no fallback: start-up fails without NADEL_PD_MASTER_KEY or with a
+# malformed one, and with PD_MASTER_KEY_MISMATCH when it is not the key the database was encrypted with.
+spring:
+  config:
+    activate:
+      on-profile: prod
+  flyway:
+    # The start-up key-check and master key rotation run as a Flyway callback, so Flyway must stay enabled
+    enabled: true

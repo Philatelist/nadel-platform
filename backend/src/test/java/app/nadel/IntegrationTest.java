@@ -1,8 +1,10 @@
 package app.nadel;
 
 import app.nadel.tenancy.TenantContext;
+import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Function;
@@ -36,6 +38,9 @@ public abstract class IntegrationTest {
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer(TestPostgis.image())
             .withInitScript("db/test-init.sql");
 
+    /** The personal data master key of this JVM's contexts: random per run, never written anywhere. */
+    protected static final String MASTER_KEY = randomMasterKey();
+
     /** The owner connections of {@link #ownerJdbc()}: pooled, a new connection costs a backend start and SCRAM. */
     private static final OwnerDataSource OWNER;
 
@@ -60,6 +65,16 @@ public abstract class IntegrationTest {
         // DemoLedgerData loads the demo ledger block for the tests that want it
         registry.add("spring.flyway.placeholders.demoledger", () -> "off");
         registry.add("spring.security.oauth2.resourceserver.jwt.issuer-uri", () -> "http://localhost:0/realms/test");
+        // A fresh personal data master key per JVM, shared by every context on the one container; set explicitly, so
+        // the dev key file (infra/.env) is never read or created by a test
+        registry.add("nadel.privacy.master-key", () -> MASTER_KEY);
+        registry.add("nadel.privacy.previous-master-key", () -> "");
+    }
+
+    private static String randomMasterKey() {
+        byte[] key = new byte[32];
+        new SecureRandom().nextBytes(key);
+        return Base64.getEncoder().encodeToString(key);
     }
 
     @Autowired
