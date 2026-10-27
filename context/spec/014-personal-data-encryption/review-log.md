@@ -53,3 +53,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `643fef6..bdf737e` | PASS | — | minor: upgrade test does not assert the queued publication's notes are sealed and omits the chairman e-mail from the scan; no positive control on log capture; `delete from import_run` unscoped; members-search e2e second positive assertion may pass on the previous results (Java test covers it strictly) |
+
+## Fix — CI run 40601193666 e2e failures (PR #53)
+
+| Round | Commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `e762a13..9651998` | PASS | — | causes A/B judged from code and log, not artefacts; minor: `removedOn!` after toBeDefined |
