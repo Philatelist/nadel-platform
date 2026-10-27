@@ -13,6 +13,10 @@ auditConfig:
     # zod 3.x via @expo/cli: Expo CLI dev/build tooling only, never shipped in the app or the server; no patched 3.x yet.
     # Revisit when Expo moves @expo/cli to zod 4 or a patched 3.x appears.
     - GHSA-mrhx-c7xc-m3w5
+    # deepmerge 4.3.1 via @expo/config: mobile build tooling only, merges our own app config, never user input; not in
+    # the backend or the web bundle; no fixed release yet. Revisit in phase 5 or when a fixed deepmerge or an
+    # @expo/config without it is released.
+    - GHSA-gcqx-w48m-w2h4
 
 # Transitive security fixes: @scalar/json-magic (via orval) pins undici 7.29.1 exactly. Scoped to 7.x so jsdom's undici 8 is untouched.
 # Remove when @scalar/json-magic ships a version that depends on undici >= 7.30.1.
