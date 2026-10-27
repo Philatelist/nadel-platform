@@ -61,3 +61,7 @@ Backend `./mvnw verify` on 6c121fb (detached worktree): green, exit 0, no failin
 - Reviewer confirmed: demo SQL is gated by the `${demoledger}` placeholder (dev only; tests override it to off), `app.ledger_maintenance` is transaction-local, inserts idempotent, IBAN checksum valid, EDRPOU fake and set only WHERE NULL.
 - Minor notes (not fixed): the header comment of `R__demo_report_templates.sql` says it "sorts before" `R__demo_data.sql`; it sorts after and depends on that order (comment wrong); the plot report link is a bare `Link` between panels (cosmetic).
 
+### Slice 11 — Documentation, guides and e2e specs (7db0b2e)
+- Round 1: PASS. The reviewer ran no typecheck/unit/Playwright (no node_modules, no app allowed); guides and e2e specs read and compared with code. uk/en structure identical; figures and PDFs present; `/reports/templates` Ukrainian skip removed from the purity spec, no allowed tokens added.
+- Minor notes (not fixed): `report-templates.spec.ts:38` `cleanUp` archives any active TAX template before the test (harmless on the disposable `nadel_e2e` DB, risky if pointed at a developer DB: add a comment or guard); owner manual says "Manage settings" while the catalog name is "Manage cooperative settings"; uk board guide mixes "файла"/"файлу"; `imports/README.md:100` line over 120 characters; `support/reportFile.ts` parses cell text with regexes and would miss `<t>` split across rich-text runs.
+

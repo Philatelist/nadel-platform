@@ -57,6 +57,9 @@ test.describe('Reports', () => {
       await expect(page.getByRole('heading', { level: 1, name: t.access.denied })).toBeVisible();
       await page.goto('/reports/electricity-tree');
       await expect(page.getByRole('heading', { level: 1, name: t.access.denied })).toBeVisible();
+      // the templates page is behind the same gate: neither permission, no access (functional spec 2.11)
+      await page.goto('/reports/templates');
+      await expect(page.getByRole('heading', { level: 1, name: t.access.denied })).toBeVisible();
     });
   }
 });

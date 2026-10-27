@@ -201,6 +201,32 @@ describe('ReportPage', () => {
     );
   });
 
+  it('offers no file and no table for a report that is too large', () => {
+    report = {
+      data: undefined,
+      error: new ApiError(422, { code: 'REPORT_TOO_LARGE' }),
+      isPending: false,
+      isError: true,
+      refetch: vi.fn(),
+    };
+    renderReport();
+    expect(screen.getByRole('button', { name: 'Download Excel' })).toBeDisabled();
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    expect(downloadReport).not.toHaveBeenCalled();
+  });
+
+  it('says the same when the file itself is refused as too large, and saves nothing', async () => {
+    downloadReport.mockRejectedValue(new ApiError(422, { code: 'REPORT_TOO_LARGE' }));
+    renderReport();
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Download Excel' }));
+    expect(
+      await screen.findByText(
+        'The report has more than 20 000 rows on a sheet. Narrow the filters and try again.',
+      ),
+    ).toBeInTheDocument();
+    expect(downloadBlob).not.toHaveBeenCalled();
+  });
+
   it('shows the plot status as its text, the per-type debt columns by charge type name, and the new notes', () => {
     reports = [balancesInfo];
     report = ok(

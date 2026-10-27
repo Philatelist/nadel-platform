@@ -92,6 +92,28 @@ describe('SettingsPage', () => {
     expect(screen.getAllByRole('radio').length).toBeGreaterThan(0);
   });
 
+  it('shows the requisites block with SETTINGS_MANAGE: four fields and a read-only EDRPOU code', () => {
+    settingsQuery = { ...settingsQuery, data: { ...settings, edrpou: '12345678' } };
+    renderPage();
+    expect(screen.getByLabelText('Official name')).toBeInTheDocument();
+    expect(screen.getByLabelText('Legal address')).toBeInTheDocument();
+    expect(screen.getByLabelText('Bank name')).toBeInTheDocument();
+    expect(screen.getByLabelText('IBAN')).toBeInTheDocument();
+    expect(screen.getByLabelText('EDRPOU code')).toHaveValue('12345678');
+    expect(screen.getByLabelText('EDRPOU code')).toHaveAttribute('readonly');
+    expect(screen.getByRole('button', { name: 'Save the requisites' })).toBeInTheDocument();
+  });
+
+  it('offers the requisites to nobody without SETTINGS_MANAGE', () => {
+    settingsQuery = { ...settingsQuery, data: { ...settings, edrpou: '12345678' } };
+    permissions = ['METERS_VIEW', 'METERS_MANAGE', 'PLOTS_VIEW'];
+    renderPage();
+    expect(screen.queryByLabelText('IBAN')).toBeNull();
+    expect(screen.queryByLabelText('Official name')).toBeNull();
+    expect(screen.queryByLabelText('EDRPOU code')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Save the requisites' })).toBeNull();
+  });
+
   it('shows a loading state', () => {
     settingsQuery = { error: null, isPending: true, isError: false };
     renderPage();
