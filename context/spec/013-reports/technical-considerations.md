@@ -1,7 +1,7 @@
 # Technical Specification: Reports and report templates
 
 - **Functional Specification:** `context/spec/013-reports/functional-spec.md` (requirement: `docs/features/013-reports.md`)
-- **Status:** Draft
+- **Status:** Completed
 - **Author(s):** Alex Usov
 
 ---

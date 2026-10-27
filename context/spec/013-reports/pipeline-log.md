@@ -75,4 +75,38 @@ Out: official tax form, PDF, payment reports, scheduled reports, operator-shared
 - Guide part B: started backend (java 41297) and web (node 41145) for screenshots; to stop: kill 41297 41145
 - Guide part B done: make guide-shots (8 new images, 82 existing regenerated because every screen now has the Reports menu item) and make guide (4 PDFs). Stopped backend 41297 and web 41145 by PID; ports free.
 - Slice 11 · 7db0b2e · verify: narrow Playwright (reports, report-templates, reports-acceptance, language-purity) 12/12 and @smoke 15/15 by the e2e agents; own checks: typecheck, lint, full web vitest 747, shared 130, prettier. Full make e2e runs in Phase 4. Review: PASS round 1
-- Slice 12 · (hash below) · acceptance coverage 61 criteria: 59 covered, 2 partial (2.8 link click not tested; 2.16 demo template generated at backend level only), 0 GAP; 22 new tests, RED-validated; own run: ReportsAcceptanceTests 11/11, web 48/48, typecheck, lint, prettier. Not run by the agent: new reports.spec.ts addition (member/electrician on /reports/templates). Review: running (round 1)
+- Slice 12 · c587fe4 · acceptance coverage 61 criteria: 59 covered, 2 partial (2.8 link click not tested; 2.16 demo template generated at backend level only), 0 GAP; 22 new tests, RED-validated; own run: ReportsAcceptanceTests 11/11, web 48/48, typecheck, lint, prettier. Not run by the agent: new reports.spec.ts addition (member/electrician on /reports/templates). Review: PASS round 1
+- Phase 4 started: all 12 slice reviews PASS (slices 8 and 9 after one fix round each).
+- Phase 4 full suite: `make check` green (backend 2840 tests, JaCoCo floor met, client typecheck/lint/tests incl. web 758; contract regeneration without drift). Full Playwright (steps of `make e2e` run by hand because the dev Postgres cannot create nadel_e2e from template1: collation 2.36 vs OS 2.31 — the Makefile's own CREATE DATABASE fails here; used TEMPLATE template0): 131 passed, 5 FAILED = regressions caused by this feature: acceptance.spec.ts:224 and :340, design-system.spec.ts:201 and :266, role-names.spec.ts:44 hard-code 20 permissions / 11 menu links; the feature adds 2 permissions and the Reports menu item. Baseline e2e was never run (only backend baseline); cause is certain. Sent to the builder as a regression fix (update exact expectations, no weakening).
+- Regression fix commit 8110724 (web/e2e: 22 permissions, 12 menu links incl. Reports); narrow run 77 passed; fix-review running; full e2e re-run started
+- Phase 4 UI verification: started backend 71402 + web 71333 (dev profile, localhost), drove the UI with the browser tool as chairman@demo.local (local dev Keycloak, dev credentials from CLAUDE.md): reports list, electricity report, templates page with the demo template, Generate dialog (not submitted: a browser download needs the user's permission; the generated file content is proven by acceptance and e2e tests), missing readings + click on the Not charged link (opens /charges/not-charged). Screenshots: docs/screenshots/013-reports-*.jpg (6). Stopped both servers by PID.
+
+## Phase 4 final report (2026-10-27)
+
+**Branch and commits.** `013-reports`, cut from `6c121fb` (the reconciled spec on `origin/docs/feature-013-reports`, a descendant of main `d8d7092`). 17 commits: spec `3eedb2f`; slices 1-12 `c4057b0`, `4562a10`, `c69e9b5`, `ac306f8`, `e0b1a38`, `5943a23`, `ac01355`, `0af4b79`, `15674cb`, `e7a811a`, `7db0b2e`, `c587fe4`; review fixes `65a96af` (slice 8) and `8f78b3e` (slice 9); docs `44e19c9`; e2e regression fix `8110724`.
+
+**Acceptance criteria.** 61 of 61 verified (see "Verification" in functional-spec.md and `acceptance-coverage.md`); no `[?]` items. Specs are `Completed`. Six screenshots of the real UI in `docs/screenshots/013-reports-*.jpg`.
+
+**Reviews.** Slices 1-7, 10, 11, 12: PASS in round 1. Slice 8: MAJOR_ISSUES round 1 (regexes in `ExternalLinkStripper` could overflow the stack on a long start tag, giving a 500 on a crafted upload), fixed in `65a96af`, PASS round 2. Slice 9: MAJOR_ISSUES round 1 (characters forbidden by XML 1.0 in free text corrupted generated workbooks), fixed in `8f78b3e`, PASS round 2. The e2e regression fix: fix-review PASS. Minor notes (not fixed) are in `review-log.md`.
+
+**Full suite against the baseline.** Baseline (backend `./mvnw verify` at 6c121fb): green; client checks and e2e were not run for the baseline. On the branch: `make check` green (backend 2 840 tests, JaCoCo floor met, no contract drift, web 758). Full Playwright: first run 131 passed / 5 failed = regressions caused by the feature (the roles screen lists 22 permissions instead of 20, the menu has 12 links instead of 11); fixed in `8110724` by updating the exact expectations; re-run: 136 passed, exit 0. Without a client/e2e baseline, the 5 failures were attributed from the failure text alone (counts 20 vs 22, 11 vs 12), which is unambiguous.
+
+**Assumptions after Phase 1 (AUTO).** Preview is audited as well as the file; `IBAN_INVALID` is a top-level 400 with a field error; a new upload into an archived tax slot is allowed; slot code `TAX`; own streaming OOXML filler (ADR 0015) with Apache POI as the recorded fallback; one migration V20; row cap per sheet (spec says per report); charged-in-period semantics for `totals.charged.<type>` (service_from in range, no opening balances); `lang` only on the `.xlsx` and generate endpoints (JSON returns codes); versions list and download need REPORT_TEMPLATES_MANAGE; `TEMPLATE_SLOT_TAKEN` and `TEMPLATE_VERSION_CONFLICT` codes, the `DECIMAL` column type and the `report-templates` API tag added beyond the spec; the tax-word guard test (`MembersAccessAcceptanceTests`) relaxed twice with exact exceptions; missing-readings treats a meter installed or removed inside the range as having a reading point.
+
+**User answers.** Spec source: reconciled spec (answer to the Phase 1 question). Old feature-012 stack on ports 8080/5173 (vite 89673, java 89864, no pids file): the user told me to stop it; stopped by PID.
+
+**Parked items.** None.
+
+**For the owner to decide or check.**
+- Missing readings: a plot meter installed or removed inside the range is never listed (spec only excludes meters installed after or removed before the range).
+- Land tax rejects a future year (not in the spec).
+- A well pump's share (COMMON_CONSUMER, split CONNECTED_PLOTS) appears in both electricity-tree and water; the guide warns not to add the two totals.
+- Filler engine is 1 912 lines vs the ADR's ~2 000-line POI trigger; record a decision before the next filler change.
+- No generated template was opened in real Excel or LibreOffice; stripped external links leave `[1]` references in formulas/defined names (Excel may offer a repair).
+- The tax card shows no message when a 409 TEMPLATE_NAME_TAKEN happens (an ordinary template already carries the tax default name).
+- The "not charged" link needs CHARGES_VIEW; a custom role with REPORTS_VIEW only sees the link but no access on that page.
+- e2e `report-templates.spec.ts` `cleanUp` archives any active TAX template at the start: harmless on the disposable e2e DB only.
+- INFRA (not this feature): the dev compose Postgres cannot `CREATE DATABASE ... OWNER nadel_owner` from template1 (collation version 2.36 vs OS 2.31), so `make e2e` fails here as is; I ran its steps by hand with `TEMPLATE template0`. Fix the volume/image (`ALTER DATABASE ... REFRESH COLLATION VERSION` or recreate) or change the Makefile (protected file: not edited).
+- Screenshots of the guides were regenerated (82 existing images changed because every screen now has the Reports menu item).
+
+**Suggested follow-ups.** No `/awos:hire` needed (slice 11 docs/guides ran under `general-purpose`: no docs specialist exists). `/awos:architecture` and `/awos:product`: `context/product/architecture.md` was already updated by hand for the `reports` and `xlsx` modules; no change to product-definition suggested.

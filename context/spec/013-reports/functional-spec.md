@@ -5,7 +5,7 @@
   Each report is shown on screen and downloaded as an Excel file. The chairman can also upload a report form (for
   example a tax office form) as an Excel file with placeholders, and the app fills it in. The tax report itself is a
   placeholder slot until its official form is uploaded.
-- **Status:** Draft
+- **Status:** Completed
 - **Author:** Alex Usov
 - **Source:** `docs/features/013-reports.md` (roadmap phase 2, feature 5 of 5)
 
@@ -42,11 +42,11 @@ calculates every number; the screens only show them.
 - **As a** chairman or treasurer, **I want to** open a "Reports" section, **so that** I can find every report I am
   allowed to run.
   - **Acceptance Criteria:**
-    - [ ] When a chairman or treasurer signs in, then the menu contains "Reports", and when they open it, they see a
+    - [x] When a chairman or treasurer signs in, then the menu contains "Reports", and when they open it, they see a
           card for each built-in report they may run and, below them, the report templates.
-    - [ ] When a member or a user with the "Electrician" role signs in, then the menu has no "Reports" item, and when
+    - [x] When a member or a user with the "Electrician" role signs in, then the menu has no "Reports" item, and when
           they open the address of a report directly, then they see a message that they have no access.
-    - [ ] When the platform operator signs in, then they see no reports and no cooperative data.
+    - [x] When the platform operator signs in, then they see no reports and no cooperative data.
 
 ### 2.2 Rules common to every report
 
@@ -71,15 +71,15 @@ calculates every number; the screens only show them.
 - Making any report is recorded in the audit log: who, which report, which filters and how many rows, but never the
   contents.
   - **Acceptance Criteria:**
-    - [ ] When the user asks for a report with filters that give more than 20 000 rows, then they see "The report is
+    - [x] When the user asks for a report with filters that give more than 20 000 rows, then they see "The report is
           too large. Narrow the filters." and no file is offered.
-    - [ ] When the user changes the language to English and downloads a report, then the column headers and the header
+    - [x] When the user changes the language to English and downloads a report, then the column headers and the header
           block of the file are in English, and plot numbers and names are unchanged.
-    - [ ] When the user downloads a report that shows more than 200 rows on screen, then the file contains all rows and
+    - [x] When the user downloads a report that shows more than 200 rows on screen, then the file contains all rows and
           the same totals as the screen.
-    - [ ] When a chairman has run a report and then opens the audit log, then there is an entry with their name, the
+    - [x] When a chairman has run a report and then opens the audit log, then there is an entry with their name, the
           report, the filters and the row count, and the entry shows no report content.
-    - [ ] When a fixed set of 300 plots with 12 months of charges is reported, then the report appears within 5
+    - [x] When a fixed set of 300 plots with 12 months of charges is reported, then the report appears within 5
           seconds.
 
 ### 2.3 Charges by month
@@ -94,13 +94,13 @@ calculates every number; the screens only show them.
     adjustment booked in March for January shows under January there. A sentence in the header explains the
     difference between the two sheets.
   - **Acceptance Criteria:**
-    - [ ] When the treasurer opens the report for one month, then the effective total over all charge types equals the
+    - [x] When the treasurer opens the report for one month, then the effective total over all charge types equals the
           total of that month on the billing months screen, to the kopeck.
-    - [ ] When a reversal has been booked for a charge, then the report shows it in the reversals column and the
+    - [x] When a reversal has been booked for a charge, then the report shows it in the reversals column and the
           effective total is smaller by that amount.
-    - [ ] When an adjustment booked in March belongs to a January charge, then the "By service period" sheet shows it
+    - [x] When an adjustment booked in March belongs to a January charge, then the "By service period" sheet shows it
           under January and the main sheet shows it under March.
-    - [ ] When the treasurer chooses a street, then only plots on that street are counted and summed.
+    - [x] When the treasurer chooses a street, then only plots on that street are counted and summed.
 
 ### 2.4 Plot balances
 
@@ -112,12 +112,12 @@ calculates every number; the screens only show them.
   - For today the status is the one shown on the map. For a past date the status is worked out as of that date with
     today's thresholds, and the header says so.
   - **Acceptance Criteria:**
-    - [ ] When the treasurer opens the report for today, then each plot's total debt and status equal those on its
+    - [x] When the treasurer opens the report for today, then each plot's total debt and status equal those on its
           account and on the plot map.
-    - [ ] When the treasurer chooses a past date, then charges booked for later dates are not counted and the header
+    - [x] When the treasurer chooses a past date, then charges booked for later dates are not counted and the header
           says that today's thresholds were used.
-    - [ ] When the treasurer filters by status "red", then only red plots are listed.
-    - [ ] When the report is opened, then no owner names appear in it.
+    - [x] When the treasurer filters by status "red", then only red plots are listed.
+    - [x] When the report is opened, then no owner names appear in it.
 
 ### 2.5 Debtors
 
@@ -130,12 +130,12 @@ calculates every number; the screens only show them.
   - The report needs the permission to view members in addition to the permission to view reports. Without it the
     report is not listed and its address shows no access.
   - **Acceptance Criteria:**
-    - [ ] When the treasurer opens Debtors with the default filters, then only plots over the red amount or older than
+    - [x] When the treasurer opens Debtors with the default filters, then only plots over the red amount or older than
           the red days are listed, with owners' names and contacts.
-    - [ ] When a user whose role has "view reports" but not "view members" opens the Reports section, then the
+    - [x] When a user whose role has "view reports" but not "view members" opens the Reports section, then the
           Debtors card is not shown, and when they open its address directly, then they see no access.
-    - [ ] When a plot has two owners, then both names and contacts appear in its row.
-    - [ ] When the user lowers the amount threshold, then more plots are listed.
+    - [x] When a plot has two owners, then both names and contacts appear in its row.
+    - [x] When the user lowers the amount threshold, then more plots are listed.
 
 ### 2.6 Electricity by meter tree
 
@@ -156,14 +156,14 @@ calculates every number; the screens only show them.
     The header shows the cooperative's current losses mode and percent; a run booked under another mode still shows
     what it booked.
   - **Acceptance Criteria:**
-    - [ ] When the chairman opens the report for a month with a fully known tree, then each node shows start, end,
+    - [x] When the chairman opens the report for a month with a fully known tree, then each node shows start, end,
           consumption and the sum of its children, and losses equal consumption minus the children's sum.
-    - [ ] When a meter value is unknown, then the cells derived from it are empty with the reason and nothing shows 0.
-    - [ ] When the chairman downloads the report, then the amounts on the "Charged" sheet equal the electricity
+    - [x] When a meter value is unknown, then the cells derived from it are empty with the reason and nothing shows 0.
+    - [x] When the chairman downloads the report, then the amounts on the "Charged" sheet equal the electricity
           charges for that range shown on the plot accounts.
-    - [ ] When a common-consumer run is booked in the range, then it appears with its split, consumption, amount, plots
+    - [x] When a common-consumer run is booked in the range, then it appears with its split, consumption, amount, plots
           and plot-days.
-    - [ ] When a booked charge has been adjusted, then the adjustment is a separate row showing the original service
+    - [x] When a booked charge has been adjusted, then the adjustment is a separate row showing the original service
           period.
 
 ### 2.7 Water
@@ -177,10 +177,10 @@ calculates every number; the screens only show them.
     metres and amount.
   - Plots that were not connected are not listed.
   - **Acceptance Criteria:**
-    - [ ] When a plot was connected for only part of the range, then its row shows only the connected days and the cubic
+    - [x] When a plot was connected for only part of the range, then its row shows only the connected days and the cubic
           metres of those days.
-    - [ ] When a plot was not connected on any day of the range, then it is not in the report.
-    - [ ] When the chairman picks the source "well", then only plots connected to a well are listed.
+    - [x] When a plot was not connected on any day of the range, then it is not in the report.
+    - [x] When the chairman picks the source "well", then only plots connected to a well are listed.
 
 ### 2.8 Missing readings
 
@@ -195,10 +195,10 @@ calculates every number; the screens only show them.
   - A water meter of a plot not connected on any day of the range is not listed. A meter installed after the range or
     removed before it is not listed.
   - **Acceptance Criteria:**
-    - [ ] When a plot meter has an approved reading in the range, then it is not listed.
-    - [ ] When a plot meter has only a reading waiting for approval, then it is listed and marked as waiting.
-    - [ ] When a water meter belongs to a plot not connected during the range, then it is not listed.
-    - [ ] When the user follows the link to the "not charged" list, then the list opens.
+    - [x] When a plot meter has an approved reading in the range, then it is not listed.
+    - [x] When a plot meter has only a reading waiting for approval, then it is listed and marked as waiting.
+    - [x] When a water meter belongs to a plot not connected during the range, then it is not listed.
+    - [x] When the user follows the link to the "not charged" list, then the list opens.
 
 ### 2.9 Land tax
 
@@ -210,12 +210,12 @@ calculates every number; the screens only show them.
   - A plot whose expected and charged amounts differ is marked, and the report suggests a recalculation without
     booking one.
   - **Acceptance Criteria:**
-    - [ ] When the rate is 35,00 per sotka per year and a plot is 600 m², then its row shows 6 sotkas and a yearly
+    - [x] When the rate is 35,00 per sotka per year and a plot is 600 m², then its row shows 6 sotkas and a yearly
           amount of 210,00.
-    - [ ] When the amount charged differs from the expected amount, then the row is marked and the suggestion to
+    - [x] When the amount charged differs from the expected amount, then the row is marked and the suggestion to
           recalculate is shown.
-    - [ ] When two rates applied in the year, then the plot has one row per rate with its days.
-    - [ ] When the user reads the total, then it equals the sum of the rows as listed.
+    - [x] When two rates applied in the year, then the plot has one row per rate with its days.
+    - [x] When the user reads the total, then it equals the sum of the rows as listed.
 
 ### 2.10 Corrections
 
@@ -226,10 +226,10 @@ calculates every number; the screens only show them.
     amount), the amount, the source (manual reversal, recalculation or run reversal), the cause and reason of the
     recalculation if there was one, and who booked it.
   - **Acceptance Criteria:**
-    - [ ] When a recalculation booked an adjustment, then the report lists it with the original charge, the cause and
+    - [x] When a recalculation booked an adjustment, then the report lists it with the original charge, the cause and
           the reason, and the name of the person who booked it.
-    - [ ] When the user chooses only "reversal", then adjustments are not listed.
-    - [ ] When a month has no corrections, then the report says there is nothing to show instead of an empty table.
+    - [x] When the user chooses only "reversal", then adjustments are not listed.
+    - [x] When a month has no corrections, then the report says there is nothing to show instead of an empty table.
 
 ### 2.11 Report templates
 
@@ -256,24 +256,24 @@ calculates every number; the screens only show them.
     unreasonably large when unpacked. Links to other files are removed and listed as a warning. The app never runs
     formulas or code from a template.
   - **Acceptance Criteria:**
-    - [ ] When the chairman uploads a valid template, then it appears in the list as version 1, and when they upload a
+    - [x] When the chairman uploads a valid template, then it appears in the list as version 1, and when they upload a
           new file to it, then it becomes version 2 and version 1 can still be downloaded.
-    - [ ] When the chairman generates from a template with a repeating row for plots, then the file has one row per
+    - [x] When the chairman generates from a template with a repeating row for plots, then the file has one row per
           plot with the plot's values.
-    - [ ] When a cell contains only `${totals.landTax.expected}`, then the generated cell holds a number and a formula
+    - [x] When a cell contains only `${totals.landTax.expected}`, then the generated cell holds a number and a formula
           in the template that refers to it still works.
-    - [ ] When a template contains `${nonsense.field}`, then the generated file still shows `${nonsense.field}` in the
+    - [x] When a template contains `${nonsense.field}`, then the generated file still shows `${nonsense.field}` in the
           cell and the warning list names it.
-    - [ ] When the chairman uploads a file with macros, a file over 2 MB, a file that is not an Excel workbook or a
+    - [x] When the chairman uploads a file with macros, a file over 2 MB, a file that is not an Excel workbook or a
           compressed bomb, then they see "The template file is not valid" (or "too large" for size) and nothing is
           stored.
-    - [ ] When the chairman archives a template, then it can no longer be generated and shows as archived, and its
+    - [x] When the chairman archives a template, then it can no longer be generated and shows as archived, and its
           versions can still be downloaded.
-    - [ ] When a chairman generates from a template, then the audit log has an entry with the template name, its
+    - [x] When a chairman generates from a template, then the audit log has an entry with the template name, its
           version and the period.
-    - [ ] When a user with the permission to view reports but not to manage templates opens the Reports section, then
+    - [x] When a user with the permission to view reports but not to manage templates opens the Reports section, then
           they can generate from active templates but cannot upload, archive or download template versions.
-    - [ ] When a user has neither permission, then the templates page and its addresses show no access.
+    - [x] When a user has neither permission, then the templates page and its addresses show no access.
 
 ### 2.12 The tax report slot
 
@@ -282,9 +282,9 @@ calculates every number; the screens only show them.
   into the slot like any other template. Fields missing from the catalog for the official form are added in a later
   feature.
   - **Acceptance Criteria:**
-    - [ ] When the chairman opens the templates page of any cooperative that has uploaded nothing, then the "Tax report"
+    - [x] When the chairman opens the templates page of any cooperative that has uploaded nothing, then the "Tax report"
           slot shows "template not added yet".
-    - [ ] When the chairman uploads a template into the slot, then its status changes to the template's version and the
+    - [x] When the chairman uploads a template into the slot, then its status changes to the template's version and the
           slot can be used to generate.
 
 ### 2.13 Cooperative requisites
@@ -296,13 +296,13 @@ calculates every number; the screens only show them.
     platform operator". These are public data of the legal entity, not personal data. Changing them needs the
     permission to manage settings and is recorded in the audit log with the changed fields.
   - **Acceptance Criteria:**
-    - [ ] When the chairman enters a valid IBAN and saves, then the requisites are saved and the audit log shows the
+    - [x] When the chairman enters a valid IBAN and saves, then the requisites are saved and the audit log shows the
           changed fields.
-    - [ ] When the chairman enters an IBAN that is not a valid Ukrainian IBAN, then they see "The IBAN is not valid" and
+    - [x] When the chairman enters an IBAN that is not a valid Ukrainian IBAN, then they see "The IBAN is not valid" and
           nothing is saved.
-    - [ ] When the chairman opens the block, then the ЄДРПОУ code is shown but cannot be edited.
-    - [ ] When a user without the permission to manage settings opens settings, then the requisites cannot be changed.
-    - [ ] When a template uses the IBAN placeholder, then the generated file contains the saved IBAN.
+    - [x] When the chairman opens the block, then the ЄДРПОУ code is shown but cannot be edited.
+    - [x] When a user without the permission to manage settings opens settings, then the requisites cannot be changed.
+    - [x] When a template uses the IBAN placeholder, then the generated file contains the saved IBAN.
 
 ### 2.14 Permissions
 
@@ -311,25 +311,25 @@ calculates every number; the screens only show them.
   to view members. Custom roles can be given these permissions in the roles screen. Members and the electrician get no
   reports by default.
   - **Acceptance Criteria:**
-    - [ ] When the treasurer signs in, then they see all reports including Debtors, and no template management.
-    - [ ] When the chairman opens the roles screen, then "View reports" and "Manage report templates" appear with
+    - [x] When the treasurer signs in, then they see all reports including Debtors, and no template management.
+    - [x] When the chairman opens the roles screen, then "View reports" and "Manage report templates" appear with
           descriptions, and the chairman role has both.
-    - [ ] When a custom role is given "View reports" without "View members", then its holders see every report except
+    - [x] When a custom role is given "View reports" without "View members", then its holders see every report except
           Debtors.
 
 ### 2.15 Links from other screens
 
 - The plot account and the billing months screen link to the matching report with filters already set.
   - **Acceptance Criteria:**
-    - [ ] When the treasurer clicks the report link on a billing month, then Charges by month opens for that month.
-    - [ ] When the treasurer clicks the report link on a plot's account, then Plot balances opens filtered to that
+    - [x] When the treasurer clicks the report link on a billing month, then Charges by month opens for that month.
+    - [x] When the treasurer clicks the report link on a plot's account, then Plot balances opens filtered to that
           plot's street.
 
 ### 2.16 Sample template and demo data
 
 - The demo cooperative includes a sample template "Land tax statement", so "Generate" works in the demo.
   - **Acceptance Criteria:**
-    - [ ] When the chairman of the demo cooperative generates the "Land tax statement" for the current year, then they
+    - [x] When the chairman of the demo cooperative generates the "Land tax statement" for the current year, then they
           receive a filled file with every plot, its area, rate and yearly amount.
 
 ---
@@ -376,3 +376,15 @@ calculates every number; the screens only show them.
 ## Change Log
 
 - (none)
+
+---
+
+## Verification (feature pipeline, Phase 4, 2026-10-27)
+
+All 61 acceptance criteria are marked verified. Evidence:
+
+- **Test map:** every criterion is mapped to the tests that check it in `acceptance-coverage.md` (59 covered by tests; the two that were partial are closed below).
+- **Full suites on branch `013-reports`:** `make check` green (backend 2 840 tests, JaCoCo floor met, contract regenerated without drift, web 758 tests, shared and api-client tests, typecheck, lint, format). Full Playwright run, 136 passed, exit 0 (after the regression fix of the e2e counts for the 22 permissions and the new menu item; the first run had 131 passed and 5 failed for exactly that reason).
+- **Real rendering (browser, local dev stack, chairman, English UI):** `docs/screenshots/013-reports-list.jpg` (the eight reports, 2.1), `013-reports-electricity-tree.jpg` (2.6: tree with substation, quarter, common consumer and plots, period basis, Download Excel), `013-reports-templates-page.jpg` (2.11, 2.12: the tax report slot "The template is not added yet", the demo template «Відомість земельного податку», the placeholder catalog with search and copy), `013-reports-generate-dialog.jpg` (2.11 / 2.16: Generate dialog with the period and its hint), `013-reports-missing-readings.jpg` and `013-reports-not-charged-link-target.jpg` (2.8: the note counts the open "not charged" items and its link opens the Not charged list).
+- **2.16 (demo template):** the generated file is verified by `ReportsAcceptanceTests.section216_theDemoLandTaxStatementIsFilledWithEveryPlotItsAreaRateAndYearlyAmount` (runs the real demo SQL and the generate endpoint, compares every row with the Land tax report). In the browser the dialog was opened but the download was not triggered (a file download to the machine needs the user's permission); the e2e specs download generated files.
+- **Look and feel:** the criteria are checkable states (a card, a column, a notice, a button), self-certified from the screenshots and tests; the visual polish of the new screens was not judged here.
