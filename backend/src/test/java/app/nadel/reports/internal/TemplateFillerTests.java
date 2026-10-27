@@ -611,7 +611,7 @@ class TemplateFillerTests {
     private static void assertWellFormed(String name, byte[] content) {
         try {
             XMLInputFactory factory = XMLInputFactory.newFactory();
-            factory.setProperty(XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES, false);
+            factory.setProperty("javax.xml.stream.isSupportingExternalEntities", false);
             factory.setProperty(XMLInputFactory.SUPPORT_DTD, false);
             XMLStreamReader reader = factory.createXMLStreamReader(new ByteArrayInputStream(content));
             while (reader.hasNext()) {

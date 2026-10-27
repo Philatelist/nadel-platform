@@ -1,11 +1,11 @@
 # Pipeline log — feature 013 reports
 
 - Status: running (resumed 2026-10-27 after a user stop)
-- Phase: 3, Slice 11 in progress (tasks 1 docs done; task 3 e2e specs written, NOT run; task 2 guides not started)
+- Phase: 5, waiting for the PR checks
 - Branch: 013-reports · Base: origin/docs/feature-013-reports @ 6c121fb (user's choice; main d8d7092 is its ancestor)
 - Requirement: document docs/features/013-reports.md as on origin/docs/feature-013-reports
 - Autonomy: minimal (.claude/feature-pipeline.yml)
-- Publish: pr+checks · PR: — · Checks: —
+- Publish: pr+checks · PR: https://github.com/Philatelist/nadel-platform/pull/51 · Checks: pending
 - Review run: on (make up) after green checks
 
 ## Project facts
@@ -110,3 +110,7 @@ Out: official tax form, PDF, payment reports, scheduled reports, operator-shared
 - Screenshots of the guides were regenerated (82 existing images changed because every screen now has the Reports menu item).
 
 **Suggested follow-ups.** No `/awos:hire` needed (slice 11 docs/guides ran under `general-purpose`: no docs specialist exists). `/awos:architecture` and `/awos:product`: `context/product/architecture.md` was already updated by hand for the `reports` and `xlsx` modules; no change to product-definition suggested.
+
+## Phase 5
+- Pushed `013-reports` (19 commits, no AI attribution, author Alex Usov); opened PR #51 https://github.com/Philatelist/nadel-platform/pull/51 against main with title `feat(reports): reports for the board and report templates`.
+- CI round 1 on PR #51: Backend, Clients, Security, End-to-end (Playwright smoke) passed; SAST (Semgrep) FAILED with one blocking finding in a test file (`TemplateFillerTests.java:613`, `xmlinputfactory-possible-xxe`). Branch failure, attempt 1: fixed by setting the external-entity and DTD properties on that factory (dbb7e93), fix-review PASS; the reviewer was unsure the constant form satisfies the rule, so a second commit uses the literal key. No nosemgrep, no config change.

@@ -73,3 +73,6 @@ Backend `./mvnw verify` on 6c121fb (detached worktree): green, exit 0, no failin
 ### Regression fix — e2e counts for the new permissions and menu item (8110724)
 - Fix-review round 1: PASS. Updated exact expectations only (22 permissions, 12 menu links, Reports in the Tab order, `ALL_PERMISSIONS` +2); nothing weakened. The reviewer grepped web/e2e for Treasurer/Member menu or permission assertions: none would fail (`expectNavigation` checks presence/absence only). Minor (not fixed): the literal 22 is hard-coded twice in `role-names.spec.ts:71-72`.
 
+### CI fix — Semgrep xmlinputfactory-possible-xxe in TemplateFillerTests (dbb7e93 + follow-up)
+- Fix-review round 1: PASS (the reviewer could not confirm Semgrep accepts the `XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES` constant; recommended the literal key, applied in the follow-up commit). No other XML factory in backend/src is unhardened (`TemplateXml` uses `newDefaultFactory()` with DTD and external entities off; `TemplateFiller` only writes).
+
