@@ -104,3 +104,5 @@ wiring vs protected `.github/`.
   - AUTO (notTestableLocally=auto): the Playwright repeat run (`ownership ownership-acceptance meters --repeat-each=3 --retries=0`) and `@smoke` could not run — ports 8080/5173 are held by the owner's own `make up` stack (PIDs 79572 vite, 79613 java), which the pipeline does not stop. Deferred to Phase 4 / CI; the criterion "ownership checks pass without retries" stays [?] until then.
 - Slice 6 committed 5ea5800 — review: PASS round 1.
 - Slice 7 verify: make guide rebuilt 4 PDFs; prettier clean; owner manuals mention PD_MASTER_KEY_MISMATCH (uk 4, en 4); board guides carry the last-4 search rule; no platform/other-cooperative mention added. Screenshots (members hint, audit «приховано») to refresh once the app runs this branch.
+- Slice 7 committed 643fef6 — review: PASS round 1. All slices 1–7 PASS; gate for Slice 8 open.
+- Slice 8: PersonalDataEncryptionAcceptanceTests (4) + PersonalDataUpgradeAcceptanceTests (1) green (orchestrator re-run 5/0; builder acceptance package 106/0); members-search.spec.ts (@smoke) and privacy.spec.ts typechecked, not run locally (ports). No GAP found.

@@ -41,3 +41,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `7130cc6..5ea5800` | PASS | — | Playwright not run (ports held by the owner's stack); minor: unused `active` field and unexplained `.reverse()` in cleanupMeterPlot; no test for the path guard (unmount is tested); copy-pasted "resets paging" comment on Meters/ReadingsRound pages |
+
+## Slice 7 — docs and guides
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `5ea5800..643fef6` | PASS | — | minor: en board guide audit paragraph quotes «приховано» where the English UI shows "hidden"; tasks.md claims a status update of the 014 feature doc that has no status field; members/audit screenshots stale until `make guide-shots` runs on this branch |
