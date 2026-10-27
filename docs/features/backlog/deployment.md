@@ -84,6 +84,34 @@ keep the previous release working.
   production backup onto staging monthly and runs a smoke check (backup is proven readable).
 - Production deploys take a backup right before migrating.
 
+## 7a. Personal data master key
+
+Feature 014 (ADR 0016) encrypts members' contacts and notes. Every cooperative's data keys are wrapped by one master
+key, `NADEL_PD_MASTER_KEY`. Lost key means lost contacts: nothing else can open them.
+
+- Where it lives: the server's secret store (a root-only env file with mode 0600, or the platform's secret mechanism),
+  passed to the backend as an environment variable. Never in git, images, compose files, logs or backups.
+- Generate: `openssl rand -base64 32` (32 random bytes in base64). Use different keys per environment (staging,
+  production); a key copied between them defeats the separation.
+- Copies: at least two offline copies, a password manager entry and a sealed paper copy, held apart from the database
+  backups. A backup and its key stored together give no protection.
+- The `prod` profile refuses to start without a valid key (missing or not 32 bytes of base64). Flyway must be enabled
+  there: the key-check runs as a Flyway callback after the migrations, on every start. If the key is not the one the
+  database was encrypted with, start-up fails with an ERROR log line containing `PD_MASTER_KEY_MISMATCH` (never a key or a
+  value).
+- Restore drills need the key. Each drill restores the database, boots the backend with the key and checks that
+  contacts open. A second drill boots with a wrong key and expects start-up to fail with `PD_MASTER_KEY_MISMATCH`.
+- Rotation:
+  1. Generate a new key: `NADEL_PD_MASTER_KEY=<output of: openssl rand -base64 32>`.
+  2. Deploy with `NADEL_PD_MASTER_KEY=<new key>` and `NADEL_PD_MASTER_KEY_PREVIOUS=<old key>`.
+  3. At start-up the server re-wraps every cooperative's keys (one transaction per cooperative) and logs counts only:
+     `Personal data keys: N checked, M re-wrapped, 0 left on the previous master key`. Any key wrapped with neither
+     key stops the start-up with `PD_MASTER_KEY_MISMATCH` before anything is re-wrapped.
+  4. Remove `NADEL_PD_MASTER_KEY_PREVIOUS` and redeploy.
+  5. Keep the old key offline until no backup that predates the rotation is retained: such a backup still holds keys
+     wrapped by the old master key.
+- The data keys themselves are not rotated in this feature; only the master key is.
+
 ## 8. Monitoring
 
 - External uptime check of the web and API health endpoints, alerting to Telegram.

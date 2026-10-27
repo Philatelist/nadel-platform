@@ -35,3 +35,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `a46cd13..7130cc6` | PASS | — | minor: plots README added lines exceed the wrap width; archive returns empty errors (consistent with PLOT_HAS_METER) |
+
+## Slice 6 — reliable e2e: search debounce, ownership specs, meters clean-up
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `7130cc6..5ea5800` | PASS | — | Playwright not run (ports held by the owner's stack); minor: unused `active` field and unexplained `.reverse()` in cleanupMeterPlot; no test for the path guard (unmount is tested); copy-pasted "resets paging" comment on Meters/ReadingsRound pages |
