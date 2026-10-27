@@ -1,6 +1,6 @@
 import { useGetReportTemplateCatalog, type ReportTemplateField } from '@nadel/api-client';
 import { format } from '@nadel/shared';
-import { useState } from 'react';
+import { Fragment, useState, type ReactNode } from 'react';
 import { QueryBoundary } from '../QueryBoundary';
 import { Badge, Button, SearchField } from '../ui';
 import { useT } from '../../i18n';
@@ -27,6 +27,20 @@ async function copyText(text: string): Promise<boolean> {
       return false;
     }
   }
+}
+
+/** Fills a `{token}` of a catalog text with a node; the node is a literal sample, so it is marked as code. */
+function withCode(text: string, token: string, value: string): ReactNode {
+  const [before = '', after = ''] = text.split(`{${token}}`);
+  return (
+    <Fragment>
+      {before}
+      <code data-code className="font-mono">
+        {value}
+      </code>
+      {after}
+    </Fragment>
+  );
 }
 
 /** The seeded types are named by the catalog; a custom type is only known by its id here. */
@@ -59,7 +73,7 @@ export function FieldCatalog() {
   return (
     <section aria-label={s.catalog.title} className="flex flex-col gap-3">
       <h2 className="text-[17px] font-semibold">{s.catalog.title}</h2>
-      <p className="text-ink-muted">{s.catalog.intro}</p>
+      <p className="text-ink-muted">{withCode(s.catalog.intro, 'placeholder', '${totals.debt}')}</p>
       <SearchField
         label={s.catalog.search}
         value={search}
@@ -94,7 +108,7 @@ export function FieldCatalog() {
                             <Badge tone="neutral">{s.catalog.types[field.type]}</Badge>
                             <Button
                               variant="secondary"
-                              aria-label={format(s.catalog.copy, { key: field.key })}
+                              aria-label={format(s.catalog.copy, { description: describe(field) })}
                               onClick={() => void copy(field.key)}
                             >
                               {s.catalog.copyButton}
@@ -110,7 +124,7 @@ export function FieldCatalog() {
                           <p>{describe(field)}</p>
                           {field.example !== undefined && (
                             <p className="text-sm text-ink-muted">
-                              {format(s.catalog.example, { value: field.example })}
+                              {withCode(s.catalog.example, 'value', field.example)}
                             </p>
                           )}
                         </li>

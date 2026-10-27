@@ -55,7 +55,8 @@ describe('FieldCatalog', () => {
     expect(within(debt).getByText('${totals.debt}').tagName).toBe('CODE');
     expect(within(debt).getByText('Amount')).toBeInTheDocument();
     expect(within(debt).getByText('Debt of all active plots at the end of the period')).toBeInTheDocument();
-    expect(within(debt).getByText('Example: 1250.50')).toBeInTheDocument();
+    expect(within(debt).getByText('1250.50').tagName).toBe('CODE');
+    expect(debt).toHaveTextContent('Example: 1250.50');
   });
 
   it('names the charge type in a family description', () => {
@@ -83,7 +84,11 @@ describe('FieldCatalog', () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal('navigator', { clipboard: { writeText } });
     renderWithApp(<FieldCatalog />);
-    await u.click(screen.getByRole('button', { name: 'Copy totals.debt' }));
+    await u.click(
+      screen.getByRole('button', {
+        name: 'Copy the placeholder: Debt of all active plots at the end of the period',
+      }),
+    );
     expect(writeText).toHaveBeenCalledWith('${totals.debt}');
     expect(await screen.findByText('Copied')).toBeInTheDocument();
   });
@@ -93,7 +98,11 @@ describe('FieldCatalog', () => {
     const u = user();
     vi.stubGlobal('navigator', { clipboard: { writeText: vi.fn().mockRejectedValue(new Error('denied')) } });
     renderWithApp(<FieldCatalog />);
-    await u.click(screen.getByRole('button', { name: 'Copy totals.debt' }));
+    await u.click(
+      screen.getByRole('button', {
+        name: 'Copy the placeholder: Debt of all active plots at the end of the period',
+      }),
+    );
     expect(await screen.findByText(/Could not copy/)).toBeInTheDocument();
   });
 
@@ -104,9 +113,30 @@ describe('FieldCatalog', () => {
     const exec = vi.fn(() => true);
     Object.assign(document, { execCommand: exec });
     renderWithApp(<FieldCatalog />);
-    await u.click(screen.getByRole('button', { name: 'Copy totals.debt' }));
+    await u.click(
+      screen.getByRole('button', {
+        name: 'Copy the placeholder: Debt of all active plots at the end of the period',
+      }),
+    );
     expect(await screen.findByText('Copied')).toBeInTheDocument();
     expect(exec).toHaveBeenCalledWith('copy');
     Reflect.deleteProperty(document, 'execCommand');
+  });
+
+  it('in Ukrainian, the copy button label carries the description and no Latin key', () => {
+    window.localStorage.setItem('nadel.locale', 'uk');
+    renderWithApp(<FieldCatalog />);
+    const buttons = screen
+      .getAllByRole('button')
+      .filter((b) => b.getAttribute('aria-label')?.startsWith('Копіювати'));
+    expect(buttons).toHaveLength(catalog.length);
+    for (const button of buttons)
+      expect(button.getAttribute('aria-label')).not.toMatch(/cooperative|totals|rows|\w\.\w/);
+  });
+
+  it('marks the sample placeholder of the intro and the example value as code', () => {
+    renderWithApp(<FieldCatalog />);
+    expect(document.querySelectorAll('code[data-code]').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText('${totals.debt}', { selector: 'code[data-code]' })).toBeInTheDocument();
   });
 });

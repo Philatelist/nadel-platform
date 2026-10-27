@@ -65,3 +65,20 @@ describe('auditValue for reports and report templates', () => {
     expect(en.audit.fields.fileName).toBe('File name');
   });
 });
+
+describe('audit field labels of reports and report templates', () => {
+  const fieldNames: Record<string, string[]> = {
+    REPORT_GENERATED: ['report', 'output', 'filters', 'rows', 'personalData'],
+    REPORT_TEMPLATE_GENERATED: ['template', 'version', 'filters', 'rows', 'personalData', 'output'],
+    REPORT_TEMPLATE_UPLOADED: ['version', 'fileName'],
+    REPORT_TEMPLATE_ARCHIVED: ['version'],
+  };
+
+  for (const locale of ['en', 'uk'] as const) {
+    it(`labels every field the backend publishes for the report actions (${locale})`, () => {
+      const labels = messages(locale).audit.fields as Record<string, string | undefined>;
+      for (const names of Object.values(fieldNames))
+        for (const name of names) expect(labels[name], `${locale}: ${name}`).toBeTruthy();
+    });
+  }
+});

@@ -223,6 +223,17 @@ const SHOTS = [
     steps: [{ check: T('Лише коригування', 'Adjustments only') }],
     element: { heading: T('Рахунок', 'Account') },
   },
+  // feature 013: reports and templates. Read-only: the screens are opened with their default filters, nothing is
+  // generated or uploaded.
+  { name: 'reports', user: 'chairman', path: '/reports' },
+  { name: 'report-electricity', user: 'chairman', path: '/reports/electricity-tree' },
+  { name: 'report-templates', user: 'chairman', path: '/reports/templates' },
+  {
+    name: 'settings-requisites',
+    user: 'chairman',
+    path: '/settings',
+    element: { heading: T('Реквізити', 'Requisites') },
+  },
   { name: 'treasurer-charges', user: 'treasurer', path: `/charges/months/${thisMonth}` },
   {
     name: 'member-charges',

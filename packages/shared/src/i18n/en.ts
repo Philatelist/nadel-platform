@@ -950,6 +950,7 @@ export const en = {
       personalData: 'Personal data',
       version: 'Version',
       fileName: 'File name',
+      template: 'Template',
     },
     yes: 'Yes',
     no: 'No',
@@ -1718,7 +1719,7 @@ export const en = {
     catalog: {
       title: 'Placeholders',
       intro:
-        'Write a placeholder such as ${totals.debt} in a cell of the template. The app replaces it with the value when you generate a file.',
+        'Write a placeholder such as {placeholder} in a cell of the template. The app replaces it with the value when you generate a file.',
       search: 'Search placeholders',
       empty: 'No placeholders match the search.',
       groups: {
@@ -1740,7 +1741,7 @@ export const en = {
       },
       example: 'Example: {value}',
       copyButton: 'Copy',
-      copy: 'Copy {key}',
+      copy: 'Copy the placeholder: {description}',
       copied: 'Copied',
       copyFailed: 'Could not copy. Select the text and copy it by hand.',
       customChargeType: 'a custom charge type',

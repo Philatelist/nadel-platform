@@ -19,7 +19,7 @@
         <dt>System state</dt>
         <dd>Phases 1–2: part I — working in the system, part II — how the system calculates</dd>
         <dt>Edition</dt>
-        <dd>22 October 2026</dd>
+        <dd>27 October 2026</dd>
       </dl>
     </div>
 
@@ -50,7 +50,7 @@
         </li>
         <li><a href="#r-water">Water and connections</a><span class="tag done">works</span></li>
         <li><a href="#r-recalc">Corrections and recalculation</a><span class="tag done">works</span></li>
-        <li><a href="#r-reports">Reports and templates</a><span class="tag planned">planned · 013</span></li>
+        <li><a href="#r-reports">Reports and templates</a><span class="tag done">works</span></li>
         <li><a href="#next">What comes next</a><span class="tag planned">planned</span></li>
       </ol>
     </nav>
@@ -247,6 +247,17 @@
             <td>View audit log</td>
             <td>Read the audit log</td>
           </tr>
+          <tr>
+            <td>View reports</td>
+            <td>
+              Open and download reports, generate files from templates (the "Debtors" report also needs "View
+              members")
+            </td>
+          </tr>
+          <tr>
+            <td>Manage report templates</td>
+            <td>Upload, replace, download and archive report templates</td>
+          </tr>
         </tbody>
       </table>
     </section>
@@ -387,6 +398,11 @@
       <p>
         Below the colour choice: the red status threshold, how losses are charged, the split of common
         consumers and the water supply of plots. They are described in chapters 17–19.
+      </p>
+      <h3>Requisites</h3>
+      <p>
+        The "Requisites" block: official name, legal address, bank, IBAN; the EDRPOU code is read-only. Report
+        templates use them — see chapter 21.
       </p>
     </section>
 
@@ -747,6 +763,12 @@
         <dd>
           Charges, owners and readings are never edited in place. A mistake is fixed by a new record (a
           reversal, a new version, a new reading); the old one stays in the history.
+        </dd>
+        <dt>Reports calculate nothing again</dt>
+        <dd>
+          A report only selects, groups and adds up amounts already booked under these same rules, so every
+          amount in a report can be reconciled to the kopeck with a plot account or the month screen (chapter
+          21).
         </dd>
         <dt>Audit log</dt>
         <dd>Every board action is recorded with old and new values.</dd>
@@ -1607,27 +1629,386 @@ prepayment           = Σ payments − Σ allocated payments</pre>
     </section>
 
     <section class="chapter" id="r-reports">
-      <h2>
-        <span class="num">21</span> Reports and templates <span class="tag planned">planned · 013</span>
-      </h2>
+      <h2><span class="num">21</span> Reports and templates <span class="tag done">works</span></h2>
+      <p>
+        Reports put into one table what the system already knows: charges, debts, electricity, water,
+        corrections. Every report is shown on screen and can be downloaded as an Excel file. Besides the
+        built-in reports, the chairman can upload their own Excel form (a template) and the system fills it in
+        with the cooperative's data.
+      </p>
+      <div class="note">
+        <span class="callout-title">Reports introduce no new rules</span>
+        <p>
+          A report calculates nothing "its own way": it only selects, groups and adds up the amounts already
+          booked under the rules of chapters 13-20. So any amount in a report can be reconciled to the kopeck
+          with a plot account or the billing months screen. Amounts in reports are always
+          <strong>effective</strong>
+          amounts: charges plus adjustments minus reversals.
+        </p>
+      </div>
+
+      <h3>Who sees reports</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>What</th>
+            <th>Permission</th>
+            <th>Who has it by default</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Open and download reports, generate files from templates</td>
+            <td>View reports</td>
+            <td>Chairman, treasurer</td>
+          </tr>
+          <tr>
+            <td>The "Debtors" report (this permission is needed as well)</td>
+            <td>View members</td>
+            <td>Chairman, treasurer</td>
+          </tr>
+          <tr>
+            <td>Upload, replace, download and archive templates</td>
+            <td>Manage report templates</td>
+            <td>Chairman only</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>
+        A member and the electrician have no "Reports" item in the menu, and a direct address shows a message
+        that they have no access. You can give your own role these permissions in "Roles" (chapter 3). A role
+        with "View reports" but without "View members" sees every report except "Debtors".
+      </p>
+
+      <h3>The "Reports" screen</h3>
+      <p>
+        Menu → <strong>Reports</strong>. At the top are the cards of the reports available to you, below them
+        the templates. A card has the report's name and one sentence about it; a click opens the report.
+      </p>
+      <figure>
+        <img src="../img/en/reports.png" alt="Reports" />
+        <figcaption>The "Reports" section: report cards and templates</figcaption>
+      </figure>
       <ul>
         <li>
-          Built-in reports with filters and Excel download: charges for a period, plot balances, debtors,
-          electricity by the tree (readings, cost per kWh, amount, losses in kWh and %), missing readings,
-          land tax.
+          <strong>Filters</strong> are at the top of a report page; press <strong>"Show"</strong> to refresh
+          the table. Under the filters it is written what the period counts by: <em>billing months</em> (the
+          month a charge belongs to in the ledger), <em>service days</em> (the days a service was provided) or
+          <em>reading dates</em>. They differ: an adjustment booked in March for January stands in March in
+          "billing months" and in January in "service days".
         </li>
         <li>
-          <strong>Templates</strong>: the chairman uploads their own Excel file with placeholders such as
-          <code>${cooperative.name}</code>, <code>${period.from}</code> and rows
-          <code>${rows.plots.number}</code>; the system fills it in. The catalogue of all placeholders is on
-          the templates page.
+          <strong>Preview</strong>: the screen shows the first 200 rows and the totals; the line "Showing
+          first … of … rows. The Excel file has all of them" tells how many rows the report has in all.
         </li>
         <li>
-          <strong>Tax report</strong>: for now a placeholder "template not added yet"; the official form is
-          added later as a template, without code changes.
+          <strong>"Download Excel"</strong> gives a file with all rows and the same totals. It has one sheet
+          per report (some reports have two), a header block (cooperative, report name, filters, date and time
+          in Kyiv time, who made it) and a frozen header row; numbers are stored as numbers and dates as
+          dates. The file is in the interface language. The file name is the report code and the period in
+          Latin letters, for example <code>land-tax_2026-01-01_2026-12-31.xlsx</code>.
         </li>
-        <li>The cooperative's requisites join the settings: full name, ЄДРПОУ code, address, bank, IBAN.</li>
+        <li>
+          <strong>The limit</strong>: a report with more than 20 000 rows on a sheet is not produced; you see
+          "The report has more than 20 000 rows on a sheet. Narrow the filters and try again".
+        </li>
+        <li>
+          A value that is not known (for example a reading at the start of the period) is shown
+          <strong>empty</strong> with the reason, never as zero. There is no "Paid" column: payments will
+          appear with payments.
+        </li>
+        <li>
+          Every report that is made is recorded in the audit log: who, which report, the filters and the row
+          count; the content is not recorded.
+        </li>
       </ul>
+
+      <h3>The eight reports</h3>
+      <dl class="terms">
+        <dt>Charges by month</dt>
+        <dd>
+          What was charged in each month, by charge type. Filters: "From month", "To month", charge types,
+          street. A row is a month and a type: "Plots", "Charged", "Opening balances", "Reversals",
+          "Adjustments" and "Effective total" (the amount you see on the month screen). The second sheet,
+          <strong>"By service period"</strong>, groups the same money by the month of the service.
+        </dd>
+        <dt>Plot balances</dt>
+        <dd>
+          The debt of every active plot by charge type as of a date ("As of", today by default), with the
+          oldest unpaid charge, days overdue and status (red, yellow, green, grey). There are no owner names.
+          For a past date the status is worked out with today's thresholds; the header says so.
+        </dd>
+        <dt>Debtors</dt>
+        <dd>
+          Plots with a debt from an amount ("Debt from", by default the cooperative's red threshold)
+          <em>or</em>
+          older than a number of days ("Older than, days"). Unlike the other reports, this one has the
+          <strong>names, phones and e-mails of the owners</strong>: personal data. So the report needs the
+          "View members" permission as well, and making it is recorded in the audit log. Do not pass the file
+          on to outsiders.
+        </dd>
+        <dt>Electricity by meter tree</dt>
+        <dd>
+          Electricity from the substation down to the plots for the range "From"-"To" (the previous month by
+          default, service days). The <strong>"Consumption"</strong> sheet: one tree node per row (indented by
+          level), readings at the start and end with their type ("Real", "Calculated", "Unknown"),
+          consumption, "Children, kWh" (the sum of the consumption of the nodes below it),
+          <strong>losses in kWh and %</strong> (the node's consumption minus the sum below it; only for
+          substations and quarter meters whose values are known at both ends) and "Plots fed". When a value is
+          unknown, everything that depends on it in the row is <strong>empty</strong> with the reason, not
+          zero. The <strong>"Charged"</strong>
+          sheet shows what was booked in the ledger for the range: plots' consumption (kWh, price, amount),
+          losses (a fixed percent or runs per node), common-consumer runs with their split, plots and
+          plot-days; adjustments and reversals are separate rows with the original service period. The totals
+          are "Consumption of plots", "Losses charged" and "Common consumers charged". The header shows the
+          current losses mode; a run booked under another mode shows what it booked.
+        </dd>
+        <dt>Water</dt>
+        <dd>
+          Plots connected to water on the chosen days ("From", "To", "Water source": "Cooperative supply" or
+          "Well"). A row has the source, "Connected days", the meter, cubic metres for connected days only,
+          and the charges by kind: "By meter", "Fixed fee", "Well pump share", with a separate column for
+          reversals and adjustments. The "By source" sheet totals plots, plot-days, cubic metres and amount.
+          Plots that were not connected are not listed.
+        </dd>
+        <dt>Missing readings</dt>
+        <dd>
+          Meters with no <em>approved</em> reading in the range; filters: dates, resource (electricity,
+          water), meter kind (plot meters by default), street. A row has the resource, kind, plot or name,
+          serial number, last reading (date and value), days since it and the mark "Reading waiting for
+          approval" (such a meter stays in the list). Not listed: a water meter of a plot that was not
+          connected on any day of the range; a meter installed after the range or removed before it; and also
+          a meter installed or removed <em>inside</em> the range, which is treated as having had a point to
+          read. Under the table is how many open "Not charged" items there are for these meters, with a link
+          to the list.
+        </dd>
+        <dt>Land tax</dt>
+        <dd>
+          The filter is "Year". A row is a plot the tax applies to: area in m² and sotkas, rate per sotka,
+          "Expected" (the amount the system expects for the year) and "Charged for the year". If two rates
+          applied in the year, the plot has one row per rate with its days. A plot whose expected and charged
+          amounts differ is marked in "Differs", and a hint under the table says that a recalculation may be
+          due (the report books nothing itself). Example: the rate is 35.00 ₴ per sotka per year and the plot
+          is 600 m² = 6 sotkas → 6 × 35.00 = <strong>210.00 ₴</strong> a year (17.50 ₴ a month).
+        </dd>
+        <dt>Corrections</dt>
+        <dd>
+          Every reversal and adjustment of the chosen billing months (filters: months, charge types,
+          "Reversal" or "Adjustment"). A row: booked on, month, plot, type, the original charge (period and
+          amount), the amount, the source ("Manual reversal", "Recalculation", "Run reversal"), the
+          recalculation cause, the reason and who booked it. It is a ready list of changes of the past for a
+          general meeting. When there are no corrections, the report says so.
+        </dd>
+      </dl>
+      <figure>
+        <img src="../img/en/report-electricity.png" alt="Electricity by meter tree" />
+        <figcaption>The report "Electricity by meter tree": readings, consumption, losses</figcaption>
+      </figure>
+      <div class="warn">
+        <span class="callout-title">The same pump share in two reports</span>
+        <p>
+          The electricity of a well pump is split among its plots as a common-consumer row (chapter 19). That
+          row is on the "Charged" sheet of the electricity report <em>and</em> in the "Well pump share" column
+          of the "Water" report. It is the same amount seen from two sides: do not add the two reports
+          together.
+        </p>
+      </div>
+      <p>
+        Reports are easy to open from other screens: on a billing month the "Report" link opens "Charges by
+        month" for exactly that month, and a plot account has a link to the balances report for that plot's
+        street.
+      </p>
+
+      <h3>Templates: your own Excel form</h3>
+      <p>
+        If you need your own form (a statement for the meeting, a report for the tax office), prepare it in
+        Excel as usual, and where a value from the system should stand, write a
+        <strong>placeholder</strong> such as <code>${name.of.field}</code>. The system replaces placeholders
+        with data and keeps your formats, merged cells, column widths and formulas. The full list of
+        placeholders is on the <strong>"Report templates"</strong> page, in the "Placeholders" block: type,
+        description, example, a search box and a "Copy" button.
+      </p>
+      <figure>
+        <img src="../img/en/report-templates.png" alt="Report templates" />
+        <figcaption>The "Report templates" page: the tax report, other templates, placeholders</figcaption>
+      </figure>
+      <ul>
+        <li>
+          <strong>A placeholder alone in a cell</strong> (<code>${rows.plots.landTax.expected}</code> and
+          nothing else) is filled with a number or a date, not text, so formulas over it work. Give the cell a
+          date format for a date. <strong>A placeholder inside text</strong> ("Land tax for ${period.year}")
+          is filled as text in Ukrainian number and date format.
+        </li>
+        <li>
+          <strong>Single values</strong>: <code>${cooperative.name}</code>,
+          <code>${cooperative.officialName}</code>, <code>${cooperative.iban}</code> (requisites from the
+          settings), <code>${period.from}</code>, <code>${period.to}</code>, <code>${period.year}</code> (the
+          year of the last day of the period), <code>${totals.debt}</code>,
+          <code>${totals.landTax.expected}</code> and other totals.
+        </li>
+        <li>
+          <strong>A repeating row</strong>: when a row holds placeholders of one set —
+          <code>rows.plots.*</code> (plots), <code>rows.months.*</code> (billing months),
+          <code>rows.meters.*</code> (electricity meters) or <code>rows.water.*</code> (water) — the row is
+          repeated once per row of the set. <strong>One repeating row per sheet</strong>; two sets in one row
+          or two repeating rows on a sheet are refused.
+        </li>
+        <li>
+          Names and contacts of people are not available in templates: only data of the cooperative, plots and
+          meters, and amounts.
+        </li>
+      </ul>
+
+      <div class="example">
+        <span class="callout-title">A small example: the land tax statement</span>
+        <p>
+          The template is an Excel table (rate 35.00 ₴ per sotka per year; plots of 600, 800 and 1000 m²).
+          What you write in the template:
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>Row</th>
+              <th>A</th>
+              <th>B</th>
+              <th>C</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>1</td>
+              <td colspan="3"><code>${cooperative.officialName}</code></td>
+            </tr>
+            <tr>
+              <td>2</td>
+              <td colspan="3">Land tax for <code>${period.year}</code></td>
+            </tr>
+            <tr>
+              <td>4</td>
+              <td>Plot</td>
+              <td>Area, m²</td>
+              <td>Tax for the year, ₴</td>
+            </tr>
+            <tr>
+              <td>5</td>
+              <td><code>${rows.plots.number}</code></td>
+              <td><code>${rows.plots.area}</code></td>
+              <td><code>${rows.plots.landTax.expected}</code></td>
+            </tr>
+            <tr>
+              <td>6</td>
+              <td>Total</td>
+              <td></td>
+              <td><code>=SUM(C5:C5)</code></td>
+            </tr>
+          </tbody>
+        </table>
+        <p>What you get for the period 01.01-31.12.2026 (row 5 is repeated for every plot):</p>
+        <table>
+          <thead>
+            <tr>
+              <th>Plot</th>
+              <th class="num">Area, m²</th>
+              <th class="num">Tax for the year, ₴</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>1</td>
+              <td class="num">600</td>
+              <td class="num">210.00</td>
+            </tr>
+            <tr>
+              <td>2</td>
+              <td class="num">800</td>
+              <td class="num">280.00</td>
+            </tr>
+            <tr>
+              <td>3</td>
+              <td class="num">1000</td>
+              <td class="num">350.00</td>
+            </tr>
+            <tr>
+              <td>Total</td>
+              <td></td>
+              <td class="num">840.00</td>
+            </tr>
+          </tbody>
+        </table>
+        <p>
+          An area of 600 m² is 6 sotkas, 6 × 35.00 = 210.00; likewise 8 × 35.00 = 280.00 and 10 × 35.00 =
+          350.00. The formula <code>=SUM(C5:C5)</code> under the repeating row was turned by the system into
+          <code>=SUM(C5:C7)</code>: it covers all three copies, so "Total" equals the sum of the rows. The
+          title in row 1 is the full name of the cooperative from the requisites, and row 2 reads "Land tax
+          for 2026".
+        </p>
+      </div>
+
+      <h3>What the system does with a template</h3>
+      <ul>
+        <li>
+          <strong>An unknown placeholder</strong> (a typo, or a field that is not in the catalogue)
+          <strong>does not disappear</strong>: it stays in the cell as written, and a
+          <strong>"Warnings"</strong>
+          sheet at the end of the file names the cell and the reason. The same goes for a placeholder whose
+          value is unknown (no reading, a requisite not entered): the cell is empty, not zero, and it is
+          listed in the warnings.
+        </li>
+        <li>
+          The system does <strong>not evaluate</strong> formulas: it writes the placeholders and leaves the
+          formulas to you. Excel or LibreOffice recalculates them when you open the file; a viewer that does
+          not calculate formulas shows them empty.
+        </li>
+        <li>
+          A valid file is an ordinary <code>.xlsx</code> workbook <strong>up to 2 MB</strong>. Files with
+          macros (<code>.xlsm</code>), active content or embedded objects, damaged files and files that are
+          "too large when unpacked" are refused and nothing is stored. Links to other files are removed from a
+          template with a warning. Charts that refer to the repeating row are not shifted (a warning).
+        </li>
+      </ul>
+
+      <h3>Versions, the archive and the tax report</h3>
+      <ul>
+        <li>
+          <strong>Add a template</strong>: a name, a description, a file. Uploading a new file into an
+          existing template ("Upload new version") makes <strong>version 2, 3…</strong>; the latest version is
+          always the one used, and older ones can be downloaded under "Versions" ("Download"). The generated
+          file's name contains the template's name; the file properties and the audit log record the template
+          and its version.
+        </li>
+        <li>
+          <strong>Archive</strong>: the template is no longer offered for generation and takes no new
+          versions, its name becomes free, and its versions stay downloadable.
+        </li>
+        <li>
+          <strong>Tax report</strong> is a separate card with the status "The template is not added yet" until
+          the chairman uploads the form with "Upload the template". The official form will be added as an
+          ordinary template, without changing the program; when the form changes, upload a new version. Fields
+          the official form may be missing will be added by a later feature.
+        </li>
+        <li>
+          <strong>"Generate"</strong> next to an active template opens the "Generate a file" window: "From"
+          and "To" (both days are included, the period is up to one year). "Generate and download" makes the
+          file and downloads it. The system <strong>does not keep</strong> generated files. If there are
+          warnings you see "The file was downloaded. Warnings in the file: …" with the first of them; the full
+          list is on the "Warnings" sheet. The treasurer generates from the "Reports" section, the chairman
+          from the templates page.
+        </li>
+      </ul>
+
+      <h3>Cooperative requisites</h3>
+      <p>
+        <strong>Settings</strong> has a <strong>"Requisites"</strong> block (changing it needs the "Manage
+        cooperative settings" permission): "Official name", "Legal address", "Bank name", "IBAN" and "EDRPOU
+        code". The IBAN must be a valid Ukrainian IBAN (otherwise "The IBAN is not valid" and nothing is
+        saved). The EDRPOU code is read-only — "Changed by the platform operator". These are public data of
+        the legal entity, not personal data; changes are recorded in the audit log. These are the data that go
+        into <code>${cooperative.officialName}</code>, <code>${cooperative.iban}</code> and so on.
+      </p>
+      <figure>
+        <img src="../img/en/settings-requisites.png" alt="Requisites" />
+        <figcaption>The "Requisites" block in the settings</figcaption>
+      </figure>
     </section>
 
     <section class="chapter" id="next">

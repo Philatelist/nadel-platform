@@ -222,6 +222,10 @@ const CHAIRMAN_SCREENS = [
   '/charges/not-charged',
   '/charges/losses',
   '/charges/common',
+  // feature 013: the reports list, one report with its preview and the templates page
+  '/reports',
+  '/reports/electricity-tree',
+  '/reports/templates',
   '/no-such-screen',
 ];
 
