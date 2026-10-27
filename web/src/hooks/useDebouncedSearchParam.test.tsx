@@ -10,7 +10,11 @@ function Search({ value }: { value: string }) {
 
 function Where() {
   const location = useLocation();
-  return <output data-testid="where">{location.pathname + location.search}</output>;
+  return (
+    <output data-testid="where" data-key={location.key}>
+      {location.pathname + location.search}
+    </output>
+  );
 }
 
 function setup(value: string, mounted = true) {
@@ -49,5 +53,12 @@ describe('useDebouncedSearchParam', () => {
     result.rerender(view(false, '9'));
     act(() => void vi.advanceTimersByTime(1000));
     expect(where()).toBe('/plots?page=2');
+  });
+
+  it('does not navigate when the URL already holds the value, so a pending navigation is not cancelled', () => {
+    const { result } = setup('');
+    const before = result.getByTestId('where').getAttribute('data-key');
+    act(() => void vi.advanceTimersByTime(1000));
+    expect(result.getByTestId('where').getAttribute('data-key')).toBe(before);
   });
 });

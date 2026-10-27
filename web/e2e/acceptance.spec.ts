@@ -176,11 +176,14 @@ test.describe('§2.7 / §2.8 members list and read-only card', () => {
     await page.getByRole('button', { name: 'Previous' }).click();
     await expect(page.getByText('Page 1 of 2')).toBeVisible();
 
-    await page.getByRole('searchbox').fill('067');
+    // 014: the search matches names (substring), the whole e-mail, the whole phone or its last 4 digits, so a digit
+    // fragment such as "067" finds nobody; the last name of a listed member does
+    const searchName = (secondPage[0] ?? '').slice(0, 5);
+    await page.getByRole('searchbox').fill(searchName);
     await expect(async () => {
       const texts = await rows.allInnerTexts();
       expect(texts.length).toBeGreaterThan(0);
-      for (const text of texts) expect(text).toContain('067');
+      for (const text of texts) expect(text.toLowerCase()).toContain(searchName);
     }).toPass();
 
     await page.getByRole('searchbox').fill('zzzz-nobody');

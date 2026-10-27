@@ -65,7 +65,7 @@ by users are shown as entered.
   - a phone by the whole number written in any usual way (`+380 50 123 45 67`, `0501234567`, `380501234567`), or by
     exactly its last 4 digits.
 - Searching by a part of an e-mail or by digits in the middle of a phone number no longer finds anything.
-- The hint in the search field says what can be searched: «ПІБ, повний телефон або останні 4 цифри, точний email»
+- The hint in the search field says what can be searched: «ПІБ, повний телефон або останні 4 цифри, точна адреса ел. пошти»
   ("Full name, full phone or its last 4 digits, exact e-mail").
   - **Acceptance Criteria:**
     - [x] When the chairman types part of a member's surname in any letter case, then the member is found as before. — verified: MemberSearchTests, MembersReadTests
@@ -233,4 +233,4 @@ by users are shown as entered.
 
 ## Change Log
 
-- (none)
+- 2026-10-28 — CI fix on PR #53 (language-purity e2e) — the Ukrainian search hint uses «точна адреса ел. пошти» instead of «точний email»: the Ukrainian UI shows no Latin words (CLAUDE.md one-language rule); meaning unchanged.

@@ -9,7 +9,8 @@ interface Options {
 /**
  * Writes `value` (trimmed) to the URL search parameter `key` once it has stayed unchanged for `delayMs`, replacing the
  * history entry. The write is dropped when the page has unmounted or the browser has moved to another path in the
- * meantime, so a late timer can never drag the user back from the page they just opened.
+ * meantime, so a late timer can never drag the user back from the page they just opened. It does not navigate when the
+ * URL already holds the value, so it never interrupts a navigation that is still loading.
  */
 export function useDebouncedSearchParam(
   key: string,
@@ -17,17 +18,22 @@ export function useDebouncedSearchParam(
   delayMs: number,
   { resetPage = false }: Options = {},
 ): void {
-  const [, setParams] = useSearchParams();
+  const [params, setParams] = useSearchParams();
   const setParamsRef = useRef(setParams);
+  const currentRef = useRef(params.get(key) ?? '');
   useEffect(() => {
     setParamsRef.current = setParams;
-  }, [setParams]);
+    currentRef.current = params.get(key) ?? '';
+  }, [setParams, params, key]);
   const trimmed = value.trim();
 
   useEffect(() => {
     const startedAt = window.location.pathname;
     const id = window.setTimeout(() => {
       if (window.location.pathname !== startedAt) return;
+      // Nothing to change: do not navigate at all. With lazy routes a click on a link is still pending (the URL
+      // has not moved yet), and even a no-op navigation here would cancel it.
+      if (currentRef.current === trimmed) return;
       setParamsRef.current(
         (prev) => {
           if ((prev.get(key) ?? '') === trimmed) return prev;

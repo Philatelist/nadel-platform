@@ -5,7 +5,7 @@
 - Branch: 014-personal-data-encryption (planned) · Base: main @ 67e3916
 - Requirement: document docs/features/014-personal-data-encryption.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
-- Publish: pr+checks · PR: — · Checks: —
+- Publish: pr+checks · PR: https://github.com/Philatelist/nadel-platform/pull/53 · Checks: red: security (OSV, owner decision), e2e (fix attempt 1)
 - Review run: on (pending)
 
 ## Project facts
@@ -124,3 +124,8 @@ wiring vs protected `.github/`.
 - Reviews: all 8 slices PASS in round 1; no fix rounds; minor notes in review-log.md.
 - Decided automatically: see the AUTO: entries above (Phase 1 recommended answers; dev key file; demo contacts callback; plan digest inside the sealed plan; PERSONAL_DATA_UNREADABLE; debounce root cause; guard order ledger→meter→water; uk wording «відключіть»; e2e and UI checks deferred to CI because of the owner's running stack).
 - Follow-ups for the owner: run `make guide-shots` then `make guide` on this branch to refresh the members and audit screenshots; consider a CI e2e step that sets NADEL_PD_MASTER_KEY explicitly (today the dev key file fallback covers it); a CLAUDE.md line about `infra/.env` (protected file); the en board guide quotes «приховано» where the English UI shows "hidden" (slice 7 minor); test-tightening notes from the slice 8 review.
+- Phase 5: pushed 014-personal-data-encryption, opened PR #53 (label full-e2e). Waiting for checks.
+- CI run 40601193666 on PR #53: Backend, Clients, SAST green; Security red; End-to-end (full) red.
+  - Security: OSV reports GHSA-gcqx-w48m-w2h4 (deepmerge 4.3.1, medium, no fixed version) in pnpm-lock.yaml — a new advisory, not caused by this branch (no dependency changes). The only fix inside the repo is an `osv-scanner.toml` ignore with a reason, which the pipeline must not add to pass a check → proposed to the owner.
+  - End-to-end: 6 failed, 1 flaky of 138 (acceptance members list, language-purity uk/en, meters-acceptance §2.10 #1 and plot 9 replacement chain, plots-acceptance §2.3 #6 and §2.2). CI fix attempt 1 delegated to react-frontend (root cause from the CI artefact).
+- CI fix attempt 1: debounce hook no longer navigates when the URL already holds the value (cancelled pending lazy-route link clicks: meters §2.10 #1, plots §2.3 #6, plots §2.2 flaky, language-purity retries); uk search hint without Latin («точна адреса ел. пошти», spec change log); acceptance.spec members search updated to the new rule; meters plot 9 chain date read from the API (UTC vs Kyiv day, pre-existing). Local: typecheck, lint, format, vitest 764/764.
