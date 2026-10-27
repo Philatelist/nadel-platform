@@ -99,10 +99,26 @@ interface PlotRepository extends JpaRepository<Plot, UUID> {
             + "order by p.number_sort_key, p.number, p.id", nativeQuery = true)
     List<Plot> findChargeableInNaturalOrder();
 
+    /**
+     * The active plots that are not common land whose street, without surrounding spaces, equals the given one ignoring
+     * case (lowered by the database, as {@link #findIdsOnStreet}), in natural order of the number.
+     */
+    @Query(value = "select * from plot p where p.archived_at is null and p.kind <> 'COMMON' "
+            + "and lower(btrim(p.street)) = lower(:street) order by p.number_sort_key, p.number, p.id",
+            nativeQuery = true)
+    List<Plot> findChargeableOnStreetInNaturalOrder(@Param("street") String street);
+
     /** The given plots' ids in natural order of the number (the order of the plots list). */
     @Query(value = "select p.id from plot p where p.id in (:ids) order by p.number_sort_key, p.number, p.id",
             nativeQuery = true)
     List<UUID> findIdsInNaturalOrder(@Param("ids") Collection<UUID> ids);
+
+    /**
+     * The ids of every plot (archived and common land included) whose street, without surrounding spaces, equals the
+     * given one ignoring case; both sides are lowered by the database, so Cyrillic letters compare alike.
+     */
+    @Query(value = "select p.id from plot p where lower(btrim(p.street)) = lower(:street)", nativeQuery = true)
+    List<UUID> findIdsOnStreet(@Param("street") String street);
 
     /** The active plot with this number, ignoring case; at most one (unique index {@code plot_tenant_number_uq}). */
     @Query("select p from Plot p where p.tenantId = :tenantId and lower(p.number) = lower(:number) "

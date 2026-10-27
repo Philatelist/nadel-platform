@@ -25,6 +25,7 @@ import { useLocale, useT } from '../i18n';
 import { useCan, useMe } from '../me';
 import { useCanEditPlots } from '../hooks/useCanEditPlots';
 import { plotStatusLabel } from '../plotStatus';
+import { reportPath } from '../reportFilters';
 import { problemMessage } from '../problem';
 import { useDocumentTitle } from '../useDocumentTitle';
 import { NotFoundPage } from './NotFoundPage';
@@ -64,6 +65,7 @@ function PlotView({ plot }: { plot: PlotDetails }) {
   const { locale } = useLocale();
   const canView = useCan('PLOTS_VIEW');
   const canViewCharges = useCan('CHARGES_VIEW');
+  const canViewReports = useCan('REPORTS_VIEW');
   const canEdit = useCanEditPlots();
   const isOwner = useMe().ownedPlots.some((p) => p.plotId === plot.id);
   const navigate = useNavigate();
@@ -176,6 +178,11 @@ function PlotView({ plot }: { plot: PlotDetails }) {
           <OwnersPanel plotId={plot.id} kind={plot.kind} archived={plot.archived} />
         ))}
       {plot.kind !== 'COMMON' && (canViewCharges || isOwner) && <PlotAccountPanel plotId={plot.id} />}
+      {plot.kind !== 'COMMON' && canViewReports && (
+        <Link to={reportPath('plot-balances', { street: plot.street })} className="text-accent underline">
+          {t.reports.plotBalancesLink}
+        </Link>
+      )}
       {plot.kind !== 'COMMON' && <PlotTariffsPanel plotId={plot.id} />}
       {plot.kind !== 'COMMON' && <PlotMeterPanel plotId={plot.id} />}
       {plot.kind !== 'COMMON' && (canView || isOwner) && (

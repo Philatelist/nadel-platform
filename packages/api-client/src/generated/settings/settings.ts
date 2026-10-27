@@ -70,7 +70,10 @@ export const getGetSettingsUrl = () => {
  * Returns the settings of the current cooperative. Every member of the cooperative may call it; the platform
  * operator has no cooperative data: 403. A cooperative that never saved its settings has the defaults
  * (`memberPlotStatusVisibility` `OWN_ONLY`, `lossesMode` `FIXED_PERCENT`, `lossesPercent` `0.00`,
- * `commonConsumerDefaultSplit` `CONNECTED_PLOTS`, `redAmount` `1000.00`, `redDays` 90).
+ * `commonConsumerDefaultSplit` `CONNECTED_PLOTS`, `redAmount` `1000.00`, `redDays` 90) and no requisites. The
+ * requisites (`officialName`, `legalAddress`, `bankName`, `iban`) and the read-only ЄДРПОУ code (`edrpou`, set by
+ * the platform operator) are public data of the legal entity, not personal data; a requisite that is not set is
+ * absent.
  * @summary Cooperative settings
  */
 export const getSettings = async ( options?: Parameters<typeof nadelFetch>[1]): Promise<CooperativeSettings> => {
@@ -176,8 +179,13 @@ export const getUpdateSettingsUrl = () => {
  * A change is written to the audit log (`SETTINGS_UPDATED`) with the old and the new value of every changed
  * field; saving the current values changes nothing and writes no audit entry. 400 `VALIDATION_FAILED`:
  * `redAmount` negative or with more than 12 integer digits (`INVALID`), `lossesPercent` above `100.00`
- * (`INVALID`), `redDays` outside 0..36500, an unknown enum value or a malformed number. A change of the red
- * threshold applies to every plot status shown from then on (the status is derived when it is read).
+ * (`INVALID`), `redDays` outside 0..36500, an unknown enum value or a malformed number; `officialName`,
+ * `legalAddress` or `bankName` over its maximum length (`TOO_LONG`). A requisite is saved without leading and
+ * trailing spaces, and an empty string clears it. The IBAN is saved without spaces and in upper case; one that is
+ * not a valid Ukrainian IBAN (`UA` and 27 digits with a correct mod-97 check) is 400 `IBAN_INVALID` with the field
+ * error `iban` `IBAN_INVALID`, and nothing is saved. `edrpou` is read-only: it is changed only by the platform
+ * operator, and a value sent here is ignored. A change of the red threshold applies to every plot status shown
+ * from then on (the status is derived when it is read).
  * @summary Change cooperative settings
  */
 export const updateSettings = async (cooperativeSettingsUpdate: CooperativeSettingsUpdate, options?: Parameters<typeof nadelFetch>[1]): Promise<CooperativeSettings> => {

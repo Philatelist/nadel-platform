@@ -15,6 +15,8 @@ export * from './permissions/permissions';
 export * from './plots/plots';
 export * from './readings/readings';
 export * from './recalculations/recalculations';
+export * from './report-templates/report-templates';
+export * from './reports/reports';
 export * from './roles/roles';
 export * from './settings/settings';
 export * from './tariffs/tariffs';

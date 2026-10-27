@@ -14,6 +14,7 @@ import app.nadel.settings.CommonConsumerSplit;
 import app.nadel.settings.CooperativeSettings;
 import app.nadel.settings.LossesMode;
 import app.nadel.settings.PlotStatusVisibility;
+import app.nadel.settings.Requisites;
 import app.nadel.tenancy.TenantContext;
 import java.math.BigDecimal;
 import java.time.Duration;
@@ -61,8 +62,11 @@ class SettingsTests extends IntegrationTest {
         // a first sign-in links the demo members to a subject; other tests expect them unlinked (their own subject)
         inTenant(DEMO_TENANT, sql -> sql.update("update member set keycloak_subject = null where email in "
                 + "('chairman@demo.local', 'treasurer@demo.local', 'member@demo.local', 'electrician@demo.local')"));
+        inTenant(OTHER_TENANT, sql -> sql.update(
+                "update member set keycloak_subject = null where email = 'member@other.local'"));
         // the demo cooperative goes back to "never saved", the default other tests rely on
-        ownerJdbc().update("delete from cooperative_settings where tenant_id = ?", DEMO_TENANT);
+        ownerJdbc().update("delete from cooperative_settings where tenant_id in (?, ?)", DEMO_TENANT, OTHER_TENANT);
+        ownerJdbc().update("update tenant set edrpou = null where id in (?, ?)", DEMO_TENANT, OTHER_TENANT);
     }
 
     // ---- defaults
@@ -360,6 +364,141 @@ class SettingsTests extends IntegrationTest {
 
         Thread.sleep(500); // an event, if one were published, would be written within this time
         assertThat(auditCount()).isEqualTo(before + 1);
+    }
+
+    // ---- requisites (feature 013, functional spec 2.13)
+
+    private static final String VALID_IBAN = "UA213223130000026007233566001";
+
+    @Test
+    void theChairmanSavesValidRequisitesAndTheAuditShowsTheChangedFields() throws Exception {
+        long before = auditCount();
+        String chairman = demo("chairman@demo.local");
+
+        save(chairman, Map.of("officialName", "  Garden cooperative Nadiia  ", "legalAddress", "1 Garden St, Kyiv",
+                "bankName", "Test Bank", "iban", "ua21 3223 1300 0002 6007 2335 6600 1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.officialName").value("Garden cooperative Nadiia"))
+                .andExpect(jsonPath("$.legalAddress").value("1 Garden St, Kyiv"))
+                .andExpect(jsonPath("$.bankName").value("Test Bank"))
+                .andExpect(jsonPath("$.iban").value(VALID_IBAN))
+                .andExpect(jsonPath("$.memberPlotStatusVisibility").value("OWN_ONLY"));
+
+        assertThat(ownerJdbc().queryForMap("select official_name, legal_address, bank_name, iban "
+                + "from cooperative_settings where tenant_id = ?", DEMO_TENANT))
+                .containsEntry("official_name", "Garden cooperative Nadiia")
+                .containsEntry("legal_address", "1 Garden St, Kyiv")
+                .containsEntry("bank_name", "Test Bank")
+                .containsEntry("iban", VALID_IBAN);
+        read(demo("member@demo.local")).andExpect(jsonPath("$.iban").value(VALID_IBAN))
+                .andExpect(jsonPath("$.officialName").value("Garden cooperative Nadiia"));
+        assertThat(TenantContext.runAs(DEMO_TENANT, cooperativeSettings::requisites)).isEqualTo(new Requisites(
+                "Garden cooperative Nadiia", "1 Garden St, Kyiv", "Test Bank", VALID_IBAN));
+
+        await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> assertThat(auditCount()).isEqualTo(before + 1));
+        Map<String, Object> entry = auditEntries().getLast();
+        assertThat(entry.get("action")).isEqualTo("SETTINGS_UPDATED");
+        JsonNode changes = json.readTree((String) entry.get("changes"));
+        assertThat(changes).hasSize(4);
+        List<String> fields = new ArrayList<>();
+        changes.forEach(change -> fields.add(change.get("field").asString()));
+        assertThat(fields).containsExactly("officialName", "legalAddress", "bankName", "iban");
+        assertThat(changes.get(3).get("old").isNull()).isTrue();
+        assertThat(changes.get(3).get("new").asString()).isEqualTo(VALID_IBAN);
+
+        // an empty string clears one requisite; the others and the plain settings keep their values
+        save(chairman, Map.of("bankName", "")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.bankName").doesNotExist())
+                .andExpect(jsonPath("$.iban").value(VALID_IBAN));
+        assertThat(ownerJdbc().queryForMap("select official_name, bank_name, iban from cooperative_settings "
+                + "where tenant_id = ?", DEMO_TENANT))
+                .containsEntry("official_name", "Garden cooperative Nadiia")
+                .containsEntry("bank_name", null)
+                .containsEntry("iban", VALID_IBAN);
+        await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> assertThat(auditCount()).isEqualTo(before + 2));
+        JsonNode cleared = json.readTree((String) auditEntries().getLast().get("changes"));
+        assertThat(cleared).hasSize(1);
+        assertThat(cleared.get(0).get("field").asString()).isEqualTo("bankName");
+        assertThat(cleared.get(0).get("old").asString()).isEqualTo("Test Bank");
+        assertThat(cleared.get(0).get("new").isNull()).isTrue();
+    }
+
+    @Test
+    void anInvalidIbanIsRejectedAndNothingIsSaved() throws Exception {
+        long before = auditCount();
+        String chairman = demo("chairman@demo.local");
+
+        for (String iban : List.of("UA223223130000026007233566001", "UA21322313000002600723356600",
+                "DE89370400440532013000", "UA21-3223-1300-0002-6007-2335-6600-1", "not an iban")) {
+            save(chairman, Map.of("officialName", "Garden cooperative Nadiia", "iban", iban))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("IBAN_INVALID"))
+                    .andExpect(jsonPath("$.errors.length()").value(1))
+                    .andExpect(jsonPath("$.errors[0].field").value("iban"))
+                    .andExpect(jsonPath("$.errors[0].code").value("IBAN_INVALID"));
+        }
+        save(chairman, Map.of("iban", "UA" + "1".repeat(63))).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.errors[0].field").value("iban"))
+                .andExpect(jsonPath("$.errors[0].code").value("TOO_LONG"));
+        save(chairman, Map.of("officialName", "x".repeat(301))).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("officialName"))
+                .andExpect(jsonPath("$.errors[0].code").value("TOO_LONG"));
+        assertThat(rowCount(DEMO_TENANT)).isZero();
+        Thread.sleep(500); // an event, if one were published, would be written within this time
+        assertThat(auditCount()).isEqualTo(before);
+
+        // the longest values the contract allows are saved
+        save(chairman, Map.of("officialName", "x".repeat(300), "legalAddress", "y".repeat(500),
+                "bankName", "z".repeat(200), "iban", VALID_IBAN)).andExpect(status().isOk());
+    }
+
+    @Test
+    void theEdrpouIsShownButCannotBeChangedThroughTheSettings() throws Exception {
+        String chairman = demo("chairman@demo.local");
+        read(chairman).andExpect(status().isOk()).andExpect(jsonPath("$.edrpou").doesNotExist());
+
+        ownerJdbc().update("update tenant set edrpou = '12345678' where id = ?", DEMO_TENANT);
+        read(chairman).andExpect(jsonPath("$.edrpou").value("12345678"));
+        read(demo("member@demo.local")).andExpect(jsonPath("$.edrpou").value("12345678"));
+
+        save(chairman, Map.of("edrpou", "87654321", "bankName", "Test Bank")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.edrpou").value("12345678"))
+                .andExpect(jsonPath("$.bankName").value("Test Bank"));
+        assertThat(ownerJdbc().queryForObject("select edrpou from tenant where id = ?", String.class, DEMO_TENANT))
+                .isEqualTo("12345678");
+    }
+
+    @Test
+    void withoutSettingsManageTheRequisitesCannotBeChanged() throws Exception {
+        Map<String, Object> requisites = Map.of("officialName", "Garden cooperative Nadiia", "iban", VALID_IBAN);
+        for (String bearer : List.of(demo("treasurer@demo.local"), demo("member@demo.local"),
+                demo("electrician@demo.local"), customRoleToken("PLOTS_EDIT"))) {
+            save(bearer, requisites).andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
+        }
+        assertThat(rowCount(DEMO_TENANT)).isZero();
+
+        save(customRoleToken("SETTINGS_MANAGE"), requisites).andExpect(status().isOk())
+                .andExpect(jsonPath("$.iban").value(VALID_IBAN));
+    }
+
+    @Test
+    void theRequisitesAndTheEdrpouOfOneCooperativeAreNotSeenByAnother() throws Exception {
+        ownerJdbc().update("update tenant set edrpou = '12345678' where id = ?", DEMO_TENANT);
+        ownerJdbc().update("update tenant set edrpou = '99999999' where id = ?", OTHER_TENANT);
+        save(demo("chairman@demo.local"), Map.of("officialName", "Garden cooperative Nadiia", "iban", VALID_IBAN))
+                .andExpect(status().isOk());
+
+        String otherMember = TestTokens.bearer(OTHER_TENANT, "sub-member@other.local", "member@other.local");
+        read(otherMember).andExpect(status().isOk())
+                .andExpect(jsonPath("$.officialName").doesNotExist())
+                .andExpect(jsonPath("$.iban").doesNotExist())
+                .andExpect(jsonPath("$.edrpou").value("99999999"));
+        assertThat(rowCount(OTHER_TENANT)).isZero();
+        assertThat(TenantContext.runAs(OTHER_TENANT, cooperativeSettings::requisites)).isEqualTo(Requisites.NONE);
+        assertThat(TenantContext.runAs(DEMO_TENANT, cooperativeSettings::requisites).iban()).isEqualTo(VALID_IBAN);
+        read(demo("member@demo.local")).andExpect(jsonPath("$.edrpou").value("12345678"));
     }
 
     // ---- helpers

@@ -44,3 +44,41 @@ describe('auditValue for common consumers', () => {
     expect(label.container.textContent).toBe('1 Oct 2026 – 15 Oct 2026');
   });
 });
+
+describe('auditValue for reports and report templates', () => {
+  const en = messages('en');
+  const uk = messages('uk');
+
+  it('shows the report by its title, the output and personal data as text, rows and version as numbers', () => {
+    expect(text(auditValue('REPORT', 'report', 'charges-by-month', en, 'en'))).toBe('Charges by month');
+    expect(text(auditValue('REPORT', 'output', 'XLSX', uk, 'uk'))).toBe('Файл Excel');
+    expect(text(auditValue('REPORT', 'personalData', 'true', en, 'en'))).toBe('Yes');
+    expect(text(auditValue('REPORT', 'rows', '12345', en, 'en'))).toBe('12,345');
+    expect(text(auditValue('REPORT_TEMPLATE', 'version', '3', en, 'en'))).toBe('3');
+  });
+
+  it('shows the template file name as user content and labels a report by its title', () => {
+    const name = render(<>{auditValue('REPORT_TEMPLATE', 'fileName', 'tax.xlsx', en, 'en')}</>);
+    expect(name.container.querySelector('[data-user-content]')?.textContent).toBe('tax.xlsx');
+    const label = render(<>{auditRecordLabel('REPORT', 'charges-by-month', en, 'en')}</>);
+    expect(label.container.textContent).toBe('Charges by month');
+    expect(en.audit.fields.fileName).toBe('File name');
+  });
+});
+
+describe('audit field labels of reports and report templates', () => {
+  const fieldNames: Record<string, string[]> = {
+    REPORT_GENERATED: ['report', 'output', 'filters', 'rows', 'personalData'],
+    REPORT_TEMPLATE_GENERATED: ['template', 'version', 'filters', 'rows', 'personalData', 'output'],
+    REPORT_TEMPLATE_UPLOADED: ['version', 'fileName'],
+    REPORT_TEMPLATE_ARCHIVED: ['version'],
+  };
+
+  for (const locale of ['en', 'uk'] as const) {
+    it(`labels every field the backend publishes for the report actions (${locale})`, () => {
+      const labels = messages(locale).audit.fields as Record<string, string | undefined>;
+      for (const names of Object.values(fieldNames))
+        for (const name of names) expect(labels[name], `${locale}: ${name}`).toBeTruthy();
+    });
+  }
+});

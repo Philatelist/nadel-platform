@@ -28,6 +28,17 @@ export class ApiError extends Error {
   }
 }
 
+/** Headers of the response a Blob came from; filled only for the Blobs nadelFetch returns. */
+const blobHeaders = new WeakMap<Blob, Headers>();
+
+/**
+ * The response headers of a file download made through nadelFetch (the Blob alone carries none).
+ * Undefined for a Blob that did not come from nadelFetch.
+ */
+export function responseHeadersOf(blob: Blob): Headers | undefined {
+  return blobHeaders.get(blob);
+}
+
 export async function nadelFetch<T>(url: string, init?: RequestInit): Promise<T> {
   const token = await tokenProvider();
   const headers = new Headers(init?.headers);
@@ -44,7 +55,9 @@ export async function nadelFetch<T>(url: string, init?: RequestInit): Promise<T>
   // A successful non-JSON body (a file download) is returned as a Blob; 204 and empty bodies stay undefined.
   if (response.status !== 204 && contentType !== '' && !isJson(contentType)) {
     const blob = await response.blob();
-    return (blob.size > 0 ? blob : undefined) as T;
+    if (blob.size === 0) return undefined as T;
+    blobHeaders.set(blob, response.headers);
+    return blob as T;
   }
   return parseJson(await response.text()) as T;
 }

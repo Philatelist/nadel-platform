@@ -34,6 +34,12 @@ Questions that needed a decision:
   files, are refused), `[Content_Types].xml` and `xl/workbook.xml` present, at most 200 entries, 50 MB per entry and
   100 MB in total counted from the bytes decompression really produces, never from the sizes the archive declares.
   Anything the library throws becomes 400 `FILE_NOT_XLSX`. File names, sheet names and cell values are never logged.
+  *Note (feature 013):* the guard moved out of `imports` into its own module `xlsx` as the public `WorkbookGuard`
+  (refusals are an `UnsafeWorkbookException` with a neutral `UnsafeWorkbookReason`, no HTTP semantics; the limits are
+  set per caller, the defaults are the ones above) because report templates (feature 013) check their uploads with the
+  same code and tighter limits. The checks and the import's answer are unchanged: `imports` maps every refusal to 400
+  `FILE_NOT_XLSX`; report templates map it to `TEMPLATE_INVALID`. commons-compress is used directly by `xlsx` now, under
+  the same conscious exception as before.
 - **Preview storage:** a preview inserts one `import_run` row (V9, tenant column, RLS `tenant_isolation`) holding the
   normalised rows (`plan`, personal data), the counts, the problem count and a **plan digest** (SHA-256 of a canonical,
   order-independent text of the whole plan; ids of records the import itself creates are left out). A previewed plan is valid

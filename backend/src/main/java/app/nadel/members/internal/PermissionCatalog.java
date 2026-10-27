@@ -49,6 +49,10 @@ final class PermissionCatalog {
             case PERIODS_CLOSE -> new String[] {"Close months", "Close a billing month so that it never changes again"};
             case RECALCULATION_RUN -> new String[] {"Recalculate charges",
                     "Preview and book recalculations of past charges; correct used tariff versions and readings"};
+            case REPORTS_VIEW -> new String[] {"View reports",
+                    "Build and download reports and fill in report templates"};
+            case REPORT_TEMPLATES_MANAGE -> new String[] {"Manage report templates",
+                    "Upload, replace, download and archive report templates"};
         };
         return new PermissionInfo(nadel.contract.model.Permission.fromValue(permission.name()), text[0], text[1]);
     }

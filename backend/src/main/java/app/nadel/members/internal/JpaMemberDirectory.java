@@ -1,7 +1,9 @@
 package app.nadel.members.internal;
 
+import app.nadel.members.MemberContacts;
 import app.nadel.members.MemberDirectory;
 import app.nadel.members.MemberRef;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
@@ -17,6 +19,9 @@ import org.springframework.transaction.annotation.Transactional;
 /** Serves the public {@link MemberDirectory} from the member table. */
 @Component
 class JpaMemberDirectory implements MemberDirectory {
+
+    /** Values per {@code IN} list. */
+    private static final int CHUNK = 500;
 
     private final MemberRepository members;
 
@@ -46,6 +51,20 @@ class JpaMemberDirectory implements MemberDirectory {
                 .map(member -> new MemberRef(member.getId(), member.getLastName(), member.getFirstName(),
                         member.getMiddleName(), member.isArchived()))
                 .collect(Collectors.toMap(MemberRef::id, Function.identity()));
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Map<UUID, MemberContacts> contacts(Collection<UUID> ids) {
+        List<UUID> distinct = ids.stream().distinct().toList();
+        List<Member> found = new ArrayList<>();
+        for (int from = 0; from < distinct.size(); from += CHUNK) {
+            found.addAll(members.findAllById(distinct.subList(from, Math.min(distinct.size(), from + CHUNK))));
+        }
+        return found.stream()
+                .map(member -> new MemberContacts(member.getId(), member.getLastName(), member.getFirstName(),
+                        member.getMiddleName(), member.getPhones(), member.getEmail(), member.isArchived()))
+                .collect(Collectors.toMap(MemberContacts::id, Function.identity()));
     }
 
     @Override

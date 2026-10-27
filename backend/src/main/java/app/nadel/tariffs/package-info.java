@@ -13,7 +13,9 @@
  * and versions, and their shared lock), the pure {@link app.nadel.tariffs.TariffResolver} (which tariff charges a plot,
  * or a conflict) and {@link app.nadel.tariffs.DaySet} (the days a tariff may charge), and for recalculations (feature
  * 012) the facade {@link app.nadel.tariffs.TariffVersionChanges} (a version added, corrected or deleted in the ledger's
- * transaction, without the use check). The endpoints of tags
+ * transaction, without the use check), and for the reports (feature 013) the read facade
+ * {@link app.nadel.tariffs.ExpectedAmounts} (the expected amount of a year per tariff version, with
+ * {@link app.nadel.tariffs.YearExpectation} and {@link app.nadel.tariffs.VersionShare}). The endpoints of tags
  * {@code charge-types} and {@code tariffs} are internal. It depends on {@code identity}, {@code audit},
  * {@code problem}, {@code money}, {@code plots} (the public {@code PlotCatalog}) and {@code meters} (the public
  * {@code MeterCatalog}: a tariff charged by meter reaches only the plots with a meter of its resource).

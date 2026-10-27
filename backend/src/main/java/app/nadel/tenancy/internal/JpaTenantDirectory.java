@@ -16,11 +16,12 @@ class JpaTenantDirectory implements TenantDirectory {
         this.tenants = tenants;
     }
 
+    /** Reads the cooperative's own {@code tenant} row: RLS shows no other one. */
     @Override
     @Transactional(readOnly = true)
     public Optional<TenantSummary> current() {
         return TenantContext.currentTenantId()
                 .flatMap(tenants::findById)
-                .map(t -> new TenantSummary(t.getId(), t.getName()));
+                .map(t -> new TenantSummary(t.getId(), t.getName(), t.getEdrpou()));
     }
 }

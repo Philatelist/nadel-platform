@@ -48,6 +48,7 @@ cooperative that is not reversed, and a reversal never target an adjustment or a
 |---|---|
 | `ChargesBooked(tenantId, plotIds)` | Published inside the transaction of every booking or reversal (a reversal, an opening balance, the month run, a retry and the charges of readings, at most 500 plots per event; every later booking path must publish it too). `PlotStatusRefresher` recomputes the debt of those plots from the committed ledger. Ids only, no personal data; the set is never empty |
 | `OpeningBalanceImport` (with `Row`, `Item`, `Plan`, `Problem`, `Action`) | The "Opening balances" sheet of the Excel import (slice 8), `plan`/`lock`/`apply` like `meters.MeterImport`; implemented by `internal.OpeningBalanceImportService`, see Opening balances from the import |
+| `LedgerReadModel` (with `MonthTypeTotals`, `MonthGrouping`, `MonthStatus`, `PlotDebts`, `CorrectionRow`, `CorrectionKind`, `CorrectionSource`, `CorrectionCause`, `ChargedRow`, `ChargedRowKind`, `ChargedSource` (with `TARIFF` for the water rows), `ChargedPart`, `LossesRunNodeRow`, `LossesRunNodeOutcome`, `CommonConsumerRunLineRow`, `CommonConsumerRunLineOutcome`, `RunStatus`) | The read facade of the reports (feature 013), implemented by `internal.LedgerReportQueries`; see The read model of the reports |
 
 Everything else is in `internal`.
 
@@ -292,6 +293,141 @@ Opening balances do not take it (they are never recalculated).
   without a reason the source key is the reference to the import. `ChargesBooked` for the plots, at most 500 plots per
   event (`TariffChargeWriter.PLOTS_PER_EVENT`, as the runs); one `OPENING_BALANCE_ENTERED` audit event per balance,
   returned to the import, which publishes them as `AuditBatch`es.
+
+## The read model of the reports (feature 013)
+
+`LedgerReadModel` (implemented by `LedgerReportQueries`) gives the `reports` module the figures it needs without
+reading the ledger tables. Rules for every method:
+
+- It runs in the **caller's transaction** (`Propagation.MANDATORY`; a call without one fails with
+  `IllegalTransactionStateException`), which the tenant-aware transaction manager has bound to the cooperative, so RLS
+  hides other cooperatives' rows as for every ledger query. The caller (`reports.ReportRunner`) opens a plain,
+  not read-only, transaction.
+- It aggregates in the database (parameterised native queries, no N+1) and answers ids, codes and `Money` only: **no
+  personal data**, no names. The caller orders and names charge types (`tariffs.ChargeTypeCatalog`) and plots
+  (`plots.PlotCatalog`).
+- Aggregates are bounded by their filters (months x charge types, or the plots asked for), so no row limit applies to
+  them; `corrections` and `electricityCharged`, lists of single rows, take a `limit` (the caller passes its cap plus
+  one); the runs of a range are bounded by the runs times the nodes or consumers of the tree.
+
+Methods:
+
+- `monthTotals(fromMonth, toMonth, chargeTypeIds, plotIds, grouping)` (charges by month, 013 §3.1): one
+  `MonthTypeTotals` per month and charge type that has a row: `status` (`OPEN`/`CLOSED` of the billing month; `null`
+  by service month), `plotCount` (distinct plots with any row of any kind in the group), the sums of `regular`,
+  `opening`, `reversals` (negative) and `adjustments` (either sign), and `effective` = `SUM(amount)` of every row
+  (money rules 5.4: charges plus adjustments minus reversals). `BILLING_MONTH` groups by `charge.billing_month_id`
+  with the predicate of the billing months screen (`ChargeRepository.totalsPerMonthAndType`), so `effective` of a
+  month and type is the screen's total cent for cent; `SERVICE_MONTH` groups by the month of `service_from` over the
+  days from the first of `fromMonth` to the last of `toMonth` (an adjustment or a reversal keeps the service period of
+  its charge, so an adjustment booked in March for January counts in January; a reading interval that starts in the
+  previous month counts there). `chargeTypeIds` empty = every type; `plotIds` `null` = every plot (a street resolved by
+  the caller), empty = no rows. Rows by month, then type id; `toMonth` before `fromMonth` is an
+  `IllegalArgumentException`. Test: `LedgerReadModelTests` (a worked ledger with a reversal, an opening balance and
+  later-month adjustments in both groupings, reconciliation with `GET /billing-months` for every listed month, the
+  filters, another cooperative, the caller's transaction).
+- `debtsAsOf(asOf, chargeTypeIds, plotIds)` (plot balances and debtors, 013 §3.2 and §3.3): one `PlotDebts` per
+  distinct plot asked (a plot without counted charges, or an unknown id, is `PlotDebts.none`: no types, `0.00`, no
+  date), with `DebtCalculator`'s rule (money rules 2, 5.4, 9) applied in SQL to the charges with `accrued_on <= asOf`
+  of the given types (empty = every type): `byChargeType` is the signed sum per type (reversals negative, adjustments
+  with their sign, opening balances included; a type that sums to `0.00` is kept), `total` their sum, `oldestUnpaid`
+  the oldest `accrued_on` among the counted charges that are neither a reversal nor an adjustment, are not reversed by a
+  counted reversal and whose amount plus their counted adjustments is above `0.00` (no payments yet), and
+  `daysOverdue` = `asOf - oldestUnpaid` in days, computed here (null without a date). A reversal and an adjustment keep
+  the debt date and charge type of their charge, so both filters keep or drop a charge with its corrections, and the
+  per-type answer folds into `DebtCalculator`'s per-plot one. The day is the debt date, not the booking time: an
+  adjustment booked in March for a January charge counts as of any day from the charge's date, as on the account. As
+  of today with every type it equals the plot account and the `plot_status` cache. One query per 500 plots
+  (`charge_plot_type_idx`). Test: `LedgerDebtsAsOfTests` (a worked ledger with a reversal, an opening balance,
+  later-month adjustments, a fully adjusted and a reversed oldest charge, past days, the type filter, reconciliation
+  with `GET /plots/{id}/account` and the status cache, another cooperative, the caller's transaction).
+- `corrections(fromMonth, toMonth, chargeTypeIds, kinds, limit)` (corrections, 013 §3.8): one `CorrectionRow` per
+  `REVERSAL` or `ADJUSTMENT` row booked in the billing months from–to (`kinds` empty = both, `chargeTypeIds` empty =
+  every type), joined to the charge it corrects (`reverses_charge_id` or `adjusts_charge_id`: `originalChargeId`, its
+  service period and its booked amount) and to its `recalculation` (`recalculationId`, `cause`
+  `MANUAL`/`TARIFF_VERSION`/`READING`): `kind`, `bookedAt` (`created_at`) and `bookedOn` (that instant as a Kyiv date,
+  on the `Clock`'s zone), `billingMonth`, `plotId`, `chargeTypeId`, `amount` (signed as booked), `reason` (the reason
+  booked with the row: a hand or run reversal's, or the recalculation's, which a recalculation stores on every row it
+  books; user content) and `bookedBy` (`created_by`, a member id the caller names through `members`). **Source**
+  (`CorrectionSource`), derived in SQL: `source = 'RECALCULATION'` -> `RECALCULATION` (every adjustment, and the
+  reversals of a recalculation, also of a run it rebooks); a `MANUAL_REVERSAL` row whose run (`run_id`, a
+  `losses_run` or `common_consumer_run`) is `REVERSED` with `reversed_at` equal to the row's `created_at` ->
+  `RUN_REVERSAL` (the run reversal writes the run and its reversals from one `Instant`); every other
+  `MANUAL_REVERSAL` row -> `MANUAL_REVERSAL` (one charge by hand, also a single charge of a run reversed before its
+  run). Rows by billing month, then `created_at`, then id; at most `limit` (>= 1) rows; `toMonth` before `fromMonth`
+  or `limit` below 1 is an `IllegalArgumentException`. Index: `charge_month_type_idx`. Test: `LedgerCorrectionsTests`
+  (a hand reversal, a recalculation's adjustment and reversal with cause and reason, a hand-reversed charge of a run,
+  a losses run and a common consumer run reversal, the Kyiv day of a booking late in the UTC evening, the kind, month
+  and type filters, the limit, another cooperative, invalid arguments, the caller's transaction).
+- `chargedInYear(chargeTypeCode, year, plotIds)` (land tax, 013 §3.7): per distinct plot asked (in order of first
+  appearance; `0.00` for a plot without such charges or unknown), the effective amount (money rules 5.4) charged by the
+  type with the code (resolved through `tariffs.ChargeTypeCatalog`; an unknown code gives `0.00` everywhere) for the
+  year: `SUM(amount)` of its `REGULAR`, `REVERSAL` and `ADJUSTMENT` rows whose `service_from` is from 1 January to
+  31 December of the year. A reversal and an adjustment keep their charge's service period, so they count in its
+  year whatever month they were booked in (a December charge booked in January counts in December's year). Opening
+  balances are left out: they carry a debt from before the ledger, not a charge of the year. One query per 500 plots
+  (`charge_plot_type_idx`). Test: `LedgerChargedInYearTests` (the year boundary, a late-booked December charge, an
+  adjustment and a reversal, an opening balance, another type and an unknown code, another cooperative, the caller's
+  transaction).
+- `chargedByType(from, to)` (report templates, `totals.charged.<type>`, 013 §4.1): the same rule per charge type over
+  a range of days and every plot of the cooperative (archived plots and common land included): `SUM(amount)` of the
+  `REGULAR`, `REVERSAL` and `ADJUSTMENT` rows whose `service_from` is from `from` to `to`, grouped by
+  `charge_type_id`; a type without such rows is absent (`0.00`). Opening balances are left out. One query (bounded by
+  the charge types; it reads the cooperative's charges through `charge_tenant_idx`). `to` before `from` is an
+  `IllegalArgumentException`. Test: `LedgerChargedInYearTests` (a range of three months and of one, without the
+  opening balance, another cooperative, a range backwards, the caller's transaction).
+- `electricityCharged(from, to, limit)` (electricity report, "Charged" sheet, 013 §3.4): one `ChargedRow` per ledger
+  row (`REGULAR`, `REVERSAL`, `ADJUSTMENT`; never an opening) of the `REGULAR` charges of source `CONSUMPTION` or
+  `LOSSES` of the type `ELECTRICITY` (resolved by code through `tariffs.ChargeTypeCatalog`) and of source
+  `COMMON_CONSUMER` (type `COMMON_CONSUMERS`) whose service period overlaps the days `from`..`to`, each correction its
+  own row with the original charge's service period, source (`ChargedSource`), meter, run and, for a common consumer
+  share, the consumer its calculation names (`consumerMeterId`), whatever month it was booked in. Water, tariff charges and opening balances are left out. **One row per charge, never per part**: a
+  charge's parts are added exactly and rounded once (money rules 6.5), so an amount per part would round twice; the row
+  carries its `parts` (`ChargedPart`: tariff version, days, exact quantity, rate, losses node) and `rate()` is the
+  price per kWh when they share one, `null` when the rate changed within the charge's days. `quantity` is the exact
+  kWh the row adds: a regular charge its parts' sum; a reversal minus the parts of the state it cancels (its `parts`
+  are those, negated); an adjustment its own parts (the charge as recalculated, written by the recalculation) minus
+  those of the state before it (the previous adjustment of the charge, else the charge), so a charge's rows add up to
+  its effective kWh as to its effective amount. Runs are listed like any charge: a reversed run brings its charges and
+  their reversals (they add up to zero). Rows by service period, plot, source, booking time and id, each charge
+  followed by its corrections in booking order; at most `limit` (>= 1) rows; `to` before `from` or `limit` below 1 is
+  an `IllegalArgumentException`. Two queries: the rows (correlated lookup of the previous adjustment,
+  `charge_adjusts_idx`), then the parts, 500 charges per `IN` list. Test: `LedgerElectricityChargedTests` (an interval
+  with fixed-percentage losses, two later-month adjustments of the same charge, a charge with two rates reversed by
+  hand, a common consumer share, charges outside the range and of other types, reconciliation with the plot account,
+  the limit, another cooperative, invalid arguments, the caller's transaction).
+- `waterCharged(from, to, plotIds, limit)` (water report, 013 §3.5): the same `ChargedRow`s and query as
+  `electricityCharged` (one SQL template, `CHARGED`, with a predicate per report) for the plots asked (500 per `IN`
+  list; the chunks' rows are merged in the query's order, `uuid` compared as unsigned bytes like PostgreSQL, and cut
+  to `limit`): the `REGULAR` charges of source `CONSUMPTION` (m³) and `TARIFF` (the fixed water fee) of the type
+  `WATER` (by code through `tariffs.ChargeTypeCatalog`), and **a well pump's share**: the `COMMON_CONSUMER` charges
+  (type `COMMON_CONSUMERS`) whose `calculation ->> 'split'` is `CONNECTED_PLOTS`. That split shares a consumer among the
+  plots connected to it as their water source (money rules 6.7, 11), and it is the only link between a common consumer
+  and water the ledger stores (the connections are the meters module's table); a consumer split another way (street
+  lighting, `EQUAL_PER_PLOT`) is not water. Every reversal and adjustment is its own row with the original service
+  period. A pump share is also a row of `electricityCharged`; a report showing both counts it in each. `quantity` is
+  m³ for consumption, kWh for a pump share and **null for a `TARIFF` row** (a fixed fee measures nothing; its parts
+  count plots or sotkas). An empty `plotIds` gives no rows. Test: `LedgerWaterChargedTests` (consumption with a
+  later-month adjustment, a fixed fee reversed by hand, a well pump share and a lighting share, a charge outside the
+  range, other types and plots, the sum per plot, the limit over three chunks of plots, another cooperative, invalid
+  arguments, the caller's transaction).
+- `openIntervalItems(meterIds)` (missing readings, 013 §3.6): per distinct meter asked (in order of first appearance;
+  `0` without items or for an unknown id) the number of `not_charged_item` rows of kind `INTERVAL` and status `OPEN`
+  (the items `GET /not-charged` lists) whose `meter_id` it is, 500 meters per query. Test:
+  `LedgerOpenIntervalItemsTests` (open, resolved and other-kind items, another cooperative, the caller's
+  transaction).
+- `lossesRunsInRange(from, to)` and `commonConsumerRunsInRange(from, to)` (money rules 6.6, 6.7): the nodes of every
+  losses run (`LossesRunNodeRow`) and the consumers of every common consumer run (`CommonConsumerRunLineRow`) whose
+  range overlaps `from`..`to`, as booked (`losses_run_node`, `common_consumer_run_line`: outcome, consumption, children,
+  losses and percent, or split, consumption and plot-days, amount; quantities exact from the stored three decimals),
+  with the run's range, status, reversal time, billing month and total, `plotsShared` (the shares stored with the
+  node or line) and `plotsCharged` (the distinct plots with a `REGULAR` charge of the run for the node, by a part's
+  `node_meter_id`, or for the consumer, by its calculation's `consumerMeterId`; a plot a recalculation added to a run
+  of a closed month included). **Reversed runs are included** with `RunStatus.REVERSED`, consistently with
+  `electricityCharged`, which lists their charges with their reversals; the caller shows or leaves them out. Rows by
+  the run's range, booking time and id, then position. Test: `LedgerElectricityRunsTests` (a proportional losses run
+  booked, reversed and booked again, a common consumer run, their charges in `electricityCharged`, another
+  cooperative, invalid ranges, the caller's transaction).
 
 ## Billing months (tag `billing`, slice 2)
 
@@ -788,8 +924,8 @@ cache writer `PlotDebtCache`; the import records `PlotImportRow`, `PlotImportPla
 `connectedToSource`, `MeterCatalog.find`, `chainOf` and `plotMeterIds`; the port `ReadingUsage`, implemented here;
 the facade `ReadingChanges`), `settings` (`CooperativeSettings.lossesMode`, `lossesPercent`,
 `commonConsumerDefaultSplit`; `LossesMode`, `CommonConsumerSplit`), `money` (`Money`), `identity` (`CurrentUser`, `AccessProfile`, `Permission`,
-`OwnedPlotsSource`), `audit` (events, `ActorNames`), `problem`, `tenancy` (`TenantContext`). Only `imports` depends on
-`ledger` (`OpeningBalanceImport`).
+`OwnedPlotsSource`), `audit` (events, `ActorNames`), `problem`, `tenancy` (`TenantContext`). `imports` depends on
+`ledger` (`OpeningBalanceImport`) and `reports` reads it through `LedgerReadModel`.
 
 ## Permissions
 

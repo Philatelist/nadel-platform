@@ -65,6 +65,36 @@ function renderCard() {
   );
 }
 
+describe('PlotPage report link', () => {
+  const name = 'Plot balances report for this street';
+  beforeEach(() => {
+    permissions = ['PLOTS_VIEW', 'REPORTS_VIEW'];
+    plot = { ...active, street: 'Лісова & Co 5' };
+  });
+
+  it('opens plot balances filtered to the encoded street', () => {
+    renderCard();
+    const href = screen.getByRole('link', { name }).getAttribute('href') ?? '';
+    const url = new URL(href, 'http://x');
+    expect(url.pathname).toBe('/reports/plot-balances');
+    expect(url.searchParams.get('street')).toBe('Лісова & Co 5');
+    expect(href).not.toContain('&Co');
+    expect(href).not.toContain(' ');
+  });
+
+  it('omits the street parameter for a plot without a street', () => {
+    plot = active;
+    renderCard();
+    expect(screen.getByRole('link', { name })).toHaveAttribute('href', '/reports/plot-balances');
+  });
+
+  it('has no link without REPORTS_VIEW', () => {
+    permissions = ['PLOTS_VIEW'];
+    renderCard();
+    expect(screen.queryByRole('link', { name })).toBeNull();
+  });
+});
+
 describe('PlotPage actions', () => {
   beforeEach(() => {
     permissions = ['PLOTS_VIEW', 'PLOTS_EDIT'];

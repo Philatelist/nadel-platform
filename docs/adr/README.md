@@ -18,3 +18,4 @@ Format: context → decision → consequences. A new decision is a new file `NNN
 | 0012 | Excel import module: facades in members and plots, preview stored in the database, synchronous two-pass commit | accepted, implemented (spec 008) |
 | 0013 | Money module: `Money` is the only place that rounds, `Rate` (4 decimals, never rounded) is not money | accepted, implemented (spec 009) |
 | 0014 | Meter quantities: `MeterValue` is not money, consumption is exact rational arithmetic, calculated values are rounded once for display | accepted, implemented (spec 010) |
+| 0015 | Report templates: an own streaming OOXML filler in `reports` (no Apache POI), POI 5.x as the recorded fallback; supported placeholders, one repeating row per sheet, A1 reference shifting, no formula evaluation | accepted (spec 013) |

@@ -29,4 +29,24 @@ export interface CooperativeSettingsUpdate {
      * @maximum 36500
      */
   redDays?: number;
+  /**
+     * The full official name; an empty string clears it
+     * @maxLength 300
+     */
+  officialName?: string;
+  /**
+     * The legal address; an empty string clears it
+     * @maxLength 500
+     */
+  legalAddress?: string;
+  /**
+     * The name of the bank; an empty string clears it
+     * @maxLength 200
+     */
+  bankName?: string;
+  /**
+     * A Ukrainian IBAN; spaces and lower case are accepted and normalised (`ua21 3223 1300 ...` is saved as `UA213223...`). No pattern here on purpose: any value that is not a valid Ukrainian IBAN (wrong country, length, characters or mod-97 check) is the one answer 400 `IBAN_INVALID`. An empty string clears it.
+     * @maxLength 64
+     */
+  iban?: string;
 }

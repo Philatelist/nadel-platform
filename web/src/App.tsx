@@ -174,6 +174,30 @@ const router = createBrowserRouter([
         ],
       },
       {
+        element: <RequirePermission permission="REPORTS_VIEW" />,
+        children: [
+          {
+            path: 'reports',
+            lazy: () => import('./pages/ReportsPage').then((m) => ({ Component: m.ReportsPage })),
+          },
+          {
+            path: 'reports/templates',
+            element: <RequirePermission permission="REPORT_TEMPLATES_MANAGE" />,
+            children: [
+              {
+                index: true,
+                lazy: () =>
+                  import('./pages/ReportTemplatesPage').then((m) => ({ Component: m.ReportTemplatesPage })),
+              },
+            ],
+          },
+          {
+            path: 'reports/:code',
+            lazy: () => import('./pages/ReportPage').then((m) => ({ Component: m.ReportPage })),
+          },
+        ],
+      },
+      {
         element: <RequirePermission permission="AUDIT_VIEW" />,
         children: [
           {

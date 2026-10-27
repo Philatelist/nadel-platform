@@ -1,38 +1,68 @@
-package app.nadel.imports.internal;
+package app.nadel.xlsx;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import app.nadel.problem.ApiProblemException;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
+import org.dhatim.fastexcel.Workbook;
+import org.dhatim.fastexcel.Worksheet;
 import org.junit.jupiter.api.Test;
-import org.springframework.http.HttpStatus;
 
 /** What the guard lets through and what it refuses before any workbook parser sees the file. */
-class ZipGuardTests {
+class WorkbookGuardTests {
 
     private static final long MB = 1024L * 1024;
-    private final ZipGuard guard = new ZipGuard();
+    private final WorkbookGuard guard = WorkbookGuard.withDefaultLimits();
 
+    /** A one-sheet workbook written by the spreadsheet library, as the import template and report files are. */
     private static byte[] workbook() {
-        return ImportWorkbooks.plots(ImportWorkbooks.plot("1", 600));
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        try (Workbook workbook = new Workbook(out, "Nadel tests", "1.0")) {
+            Worksheet sheet = workbook.newWorksheet("Plots");
+            sheet.value(0, 0, "number");
+            sheet.value(0, 1, "area_m2");
+            sheet.value(1, 0, "1");
+            sheet.value(1, 1, 600);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+        return out.toByteArray();
     }
 
-    private void assertRefused(String fileName, byte[] content) {
+    private void assertRefused(String fileName, byte[] content, UnsafeWorkbookReason reason) {
+        assertRefused(guard, fileName, content, reason);
+    }
+
+    private static void assertRefused(WorkbookGuard guard, String fileName, byte[] content,
+            UnsafeWorkbookReason reason) {
         assertThatThrownBy(() -> guard.check(fileName, content))
-                .isInstanceOfSatisfying(ApiProblemException.class, e -> {
-                    assertThat(e.status()).isEqualTo(HttpStatus.BAD_REQUEST);
-                    assertThat(e.code()).isEqualTo("FILE_NOT_XLSX");
+                .isInstanceOfSatisfying(UnsafeWorkbookException.class, e -> {
+                    assertThat(e.reason()).isEqualTo(reason);
+                    assertThat(e.getMessage()).doesNotContain(fileName);
                 });
+    }
+
+    /** A zip of the given parts (name to text). */
+    private static byte[] zipOfTexts(Map<String, String> parts) {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        try (ZipOutputStream zip = new ZipOutputStream(out)) {
+            for (Map.Entry<String, String> part : parts.entrySet()) {
+                addText(zip, part.getKey(), part.getValue());
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+        return out.toByteArray();
     }
 
     /** A zip with a ready-made set of parts plus the given extra entries (name to size of zero bytes). */
@@ -79,10 +109,14 @@ class ZipGuardTests {
 
     @Test
     void aWorkbookWithADoctypeIsNotTheGuardsConcern() {
-        byte[] file = ImportWorkbooks.handMade(Map.of("xl/worksheets/sheet1.xml", """
+        Map<String, String> parts = new LinkedHashMap<>();
+        parts.put("[Content_Types].xml", "<Types/>");
+        parts.put("xl/workbook.xml", "<workbook/>");
+        parts.put("xl/worksheets/sheet1.xml", """
                 <?xml version="1.0"?>
                 <!DOCTYPE worksheet [<!ENTITY xxe SYSTEM "file:///etc/passwd">]>
-                <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData/></worksheet>"""));
+                <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData/></worksheet>""");
+        byte[] file = zipOfTexts(parts);
 
         assertThatCode(() -> guard.check("plots.xlsx", file)).doesNotThrowAnyException();
     }
@@ -91,18 +125,19 @@ class ZipGuardTests {
 
     @Test
     void aWrongExtensionIsRefused() {
-        assertRefused("plots.csv", workbook());
-        assertRefused("plots.xls", workbook());
-        assertRefused("plots", workbook());
-        assertRefused("plots.xlsx.exe", workbook());
+        assertRefused("plots.csv", workbook(), UnsafeWorkbookReason.WRONG_EXTENSION);
+        assertRefused("plots.xls", workbook(), UnsafeWorkbookReason.WRONG_EXTENSION);
+        assertRefused("plots", workbook(), UnsafeWorkbookReason.WRONG_EXTENSION);
+        assertRefused("plots.xlsx.exe", workbook(), UnsafeWorkbookReason.WRONG_EXTENSION);
     }
 
     @Test
     void aFileThatIsNotAZipIsRefused() {
-        assertRefused("plots.xlsx", "number,street\n1,Garden\n".getBytes(StandardCharsets.UTF_8));
-        assertRefused("plots.xlsx", "%PDF-1.7 ...".getBytes(StandardCharsets.UTF_8));
-        assertRefused("plots.xlsx", new byte[0]);
-        assertRefused("plots.xlsx", new byte[] {'P', 'K'});
+        assertRefused("plots.xlsx", "number,street\n1,Garden\n".getBytes(StandardCharsets.UTF_8),
+                UnsafeWorkbookReason.NOT_A_ZIP);
+        assertRefused("plots.xlsx", "%PDF-1.7 ...".getBytes(StandardCharsets.UTF_8), UnsafeWorkbookReason.NOT_A_ZIP);
+        assertRefused("plots.xlsx", new byte[0], UnsafeWorkbookReason.NOT_A_ZIP);
+        assertRefused("plots.xlsx", new byte[] {'P', 'K'}, UnsafeWorkbookReason.NOT_A_ZIP);
     }
 
     @Test
@@ -112,14 +147,14 @@ class ZipGuardTests {
         byte[] signature = {(byte) 0xD0, (byte) 0xCF, 0x11, (byte) 0xE0, (byte) 0xA1, (byte) 0xB1, 0x1A, (byte) 0xE1};
         System.arraycopy(signature, 0, ole2, 0, signature.length);
 
-        assertRefused("plots.xlsx", ole2);
+        assertRefused("plots.xlsx", ole2, UnsafeWorkbookReason.NOT_A_ZIP);
     }
 
     @Test
     void aTruncatedWorkbookIsRefused() {
         byte[] whole = workbook();
 
-        assertRefused("plots.xlsx", Arrays.copyOf(whole, whole.length / 2));
+        assertRefused("plots.xlsx", Arrays.copyOf(whole, whole.length / 2), UnsafeWorkbookReason.UNREADABLE);
     }
 
     @Test
@@ -138,9 +173,9 @@ class ZipGuardTests {
             addText(zip, "word/document.xml", "<document/>");
         }
 
-        assertRefused("plots.xlsx", onlyTypes.toByteArray());
-        assertRefused("plots.xlsx", onlyWorkbook.toByteArray());
-        assertRefused("plots.xlsx", document.toByteArray());
+        assertRefused("plots.xlsx", onlyTypes.toByteArray(), UnsafeWorkbookReason.NOT_A_WORKBOOK);
+        assertRefused("plots.xlsx", onlyWorkbook.toByteArray(), UnsafeWorkbookReason.NOT_A_WORKBOOK);
+        assertRefused("plots.xlsx", document.toByteArray(), UnsafeWorkbookReason.NOT_A_WORKBOOK);
     }
 
     @Test
@@ -149,17 +184,17 @@ class ZipGuardTests {
         try (ZipOutputStream zip = new ZipOutputStream(out)) {
             addText(zip, "[Content_Types].xml", "<Types/>");
             addText(zip, "xl/workbook.xml", "<workbook/>");
-            for (int i = 0; i < ZipGuard.DEFAULT_MAX_ENTRIES - 1; i++) {
+            for (int i = 0; i < WorkbookGuard.DEFAULT_MAX_ENTRIES - 1; i++) {
                 addText(zip, "xl/media/image" + i + ".xml", "x");
             }
         }
-        assertRefused("plots.xlsx", out.toByteArray()); // 201 entries
+        assertRefused("plots.xlsx", out.toByteArray(), UnsafeWorkbookReason.TOO_MANY_ENTRIES); // 201 entries
 
         ByteArrayOutputStream fits = new ByteArrayOutputStream();
         try (ZipOutputStream zip = new ZipOutputStream(fits)) {
             addText(zip, "[Content_Types].xml", "<Types/>");
             addText(zip, "xl/workbook.xml", "<workbook/>");
-            for (int i = 0; i < ZipGuard.DEFAULT_MAX_ENTRIES - 2; i++) {
+            for (int i = 0; i < WorkbookGuard.DEFAULT_MAX_ENTRIES - 2; i++) {
                 addText(zip, "xl/media/image" + i + ".xml", "x");
             }
         }
@@ -174,7 +209,7 @@ class ZipGuardTests {
         byte[] bomb = zipWith(Map.of("xl/worksheets/sheet1.xml", 60 * MB));
 
         assertThat(bomb.length).isLessThan((int) MB);
-        assertRefused("plots.xlsx", bomb);
+        assertRefused("plots.xlsx", bomb, UnsafeWorkbookReason.ENTRY_TOO_LARGE);
     }
 
     @Test
@@ -186,14 +221,14 @@ class ZipGuardTests {
                 "xl/worksheets/sheet3.xml", 40 * MB));
 
         assertThat(bomb.length).isLessThan((int) MB);
-        assertRefused("plots.xlsx", bomb);
+        assertRefused("plots.xlsx", bomb, UnsafeWorkbookReason.TOTAL_TOO_LARGE);
     }
 
     @Test
     void aTwoHundredMegabyteBombIsRefused() {
         byte[] bomb = zipWith(Map.of("xl/sharedStrings.xml", 200 * MB));
 
-        assertRefused("plots.xlsx", bomb);
+        assertRefused("plots.xlsx", bomb, UnsafeWorkbookReason.ENTRY_TOO_LARGE);
     }
 
     @Test
@@ -202,19 +237,45 @@ class ZipGuardTests {
         byte[] bomb = zipWith(Map.of("xl/worksheets/sheet1.xml", 200 * MB));
         lieAboutUncompressedSizes(bomb, 10);
 
-        assertRefused("plots.xlsx", bomb);
+        assertRefused("plots.xlsx", bomb, UnsafeWorkbookReason.ENTRY_TOO_LARGE);
     }
 
     @Test
     void theLimitsCanBeSetSmaller() {
-        ZipGuard small = new ZipGuard(10, 1000, 1500);
+        WorkbookGuard small = WorkbookGuard.withLimits(10, 1000, 1500);
         byte[] oneBigEntry = zipWith(Map.of("xl/a.xml", 2000L));
         byte[] twoMediumEntries = zipWith(Map.of("xl/a.xml", 800L, "xl/b.xml", 800L));
         byte[] fits = zipWith(Map.of("xl/a.xml", 500L));
 
-        assertThatThrownBy(() -> small.check("plots.xlsx", oneBigEntry)).isInstanceOf(ApiProblemException.class);
-        assertThatThrownBy(() -> small.check("plots.xlsx", twoMediumEntries)).isInstanceOf(ApiProblemException.class);
+        assertRefused(small, "plots.xlsx", oneBigEntry, UnsafeWorkbookReason.ENTRY_TOO_LARGE);
+        assertRefused(small, "plots.xlsx", twoMediumEntries, UnsafeWorkbookReason.TOTAL_TOO_LARGE);
         assertThatCode(() -> small.check("plots.xlsx", fits)).doesNotThrowAnyException();
+        assertRefused(WorkbookGuard.withLimits(2, 1000, 1500), "plots.xlsx", fits,
+                UnsafeWorkbookReason.TOO_MANY_ENTRIES); // three entries
+    }
+
+    @Test
+    void limitsMustBePositive() {
+        assertThatThrownBy(() -> WorkbookGuard.withLimits(0, 1000, 1500)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> WorkbookGuard.withLimits(10, 0, 1500)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> WorkbookGuard.withLimits(10, 1000, 0)).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void anEncryptedEntryIsRefused() {
+        byte[] encrypted = zipWith(Map.of("xl/worksheets/sheet1.xml", 100L));
+        markEntriesEncrypted(encrypted);
+
+        assertRefused("plots.xlsx", encrypted, UnsafeWorkbookReason.UNREADABLE);
+    }
+
+    /** Sets the encryption bit of the general purpose flag of every central directory header (offset 8). */
+    private static void markEntriesEncrypted(byte[] zip) {
+        for (int i = 0; i + 9 < zip.length; i++) {
+            if (zip[i] == 'P' && zip[i + 1] == 'K' && zip[i + 2] == 1 && zip[i + 3] == 2) {
+                zip[i + 8] |= 1;
+            }
+        }
     }
 
     /** Overwrites the uncompressed size field of every central directory header ({@code PK 01 02}, offset 24). */

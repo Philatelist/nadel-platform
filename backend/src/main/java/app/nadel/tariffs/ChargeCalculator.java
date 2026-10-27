@@ -118,7 +118,7 @@ public final class ChargeCalculator {
             return Optional.empty();
         }
         BigDecimal daysInMonth = BigDecimal.valueOf(month.lengthOfMonth());
-        BigDecimal sotkas = areaM2.movePointLeft(2); // exact: m2 / 100
+        BigDecimal sotkas = sotkas(areaM2);
         BigDecimal numerator = BigDecimal.ZERO;
         List<Part> parts = new ArrayList<>();
         for (Overlap overlap : overlaps) {
@@ -141,6 +141,14 @@ public final class ChargeCalculator {
             }
         }
         return Optional.of(new Breakdown(Money.ofQuotient(numerator, daysInMonth.multiply(MONTHS_IN_YEAR)), parts));
+    }
+
+    /**
+     * The area in sotkas, exactly: square metres divided by 100 (the units of a {@link Basis#PER_AREA_SOTKA} version;
+     * 600.00 m2 is 6.0000 sotkas, 612.00 m2 is 6.1200). Never rounded.
+     */
+    public static BigDecimal sotkas(BigDecimal areaM2) {
+        return Objects.requireNonNull(areaM2, "areaM2").movePointLeft(2);
     }
 
     /**

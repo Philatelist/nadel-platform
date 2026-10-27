@@ -641,3 +641,45 @@ never overlap. Common land and archived plots are never connected.
 - Connections are entered on the plot card, in bulk on the water source's page in the settings and by the optional
   "Вода" / "Water" column of the Plots import sheet (yes: the cooperative's only source; a source name: that well; no or
   empty: unchanged); connecting and disconnecting are audited.
+
+## 12. Reports
+
+Feature 013. Reports introduce no money rule. Every number in a report or in a filled report template comes from a rule
+above, through the read facades of the modules that own it (ADR 0001); a report only selects, groups and adds up.
+
+| Report | Where its numbers come from |
+|---|---|
+| Charges by month | The effective amount of a charge (5.4: the charge plus its reversals and adjustments) grouped by billing month (3.1), per charge type |
+| Plot balances | The balance (2) per plot and charge type as of a day, and the plot status (9). A past day shows the status worked out with today's thresholds, because only today's thresholds exist |
+| Debtors | The red rule of 9 (debt above `red_amount` for more than `red_days` days) over the same balances; nothing is added |
+| Electricity by meter tree | Consumption and losses from the meter tree (6.3: losses are a node's consumption minus its children's) and range consumption (6.4); the charged side from the charges by readings, losses runs and common consumer runs (6.5-6.7) at their effective amount (5.4) |
+| Water | Water tariffs and connected days only (7 and 11); the m3 of an interval keeps its connected days (6.5) |
+| Missing readings | The same missing-readings rule (6.4) and, for water, the connected days (11) |
+| Land tax | Expected against charged (4.1, 10). The expected amount is worked out month by month by the same rules the month run charges with (the tariff version valid in each month and `ChargeCalculator`, rounded once per month), so it equals what the month runs would charge; the charged amount is the effective amount (5.4) of the land tax charges of the year |
+| Corrections | The reversals, adjustments and recalculation records of 5.4; the sources are those of the recalculation of feature 012 (5.3) |
+
+**Values of a report template.** A template is filled with the figures of the reports above and with these totals,
+whose meaning feature 013 fixes:
+
+- `totals.charged.<type>`: the effective amount (5.4), without opening balances, of the charges of the charge type
+  whose service period starts (`service_from`) inside the period `from..to` (both days included), booked whenever and on
+  every plot. It is the land tax report's year rule over any range of days. A type with no such charges is `0.00`.
+- `totals.debt`, `totals.plots.count`, `totals.plots.areaSotka` and the plot rows: the balances of every active plot
+  (common land excluded) as of `min(to, today)`; there is no balance of a day that has not come.
+- `totals.landTax.*`: the land tax report of the year of `to`.
+
+A value that cannot be determined (a reading that does not exist, a requisite that is not entered) is written empty and
+reported in the warnings sheet, never as `0`.
+
+**Rounding.** No report rounds. Every total is the sum of the rows it stands for (`Money.plus`), so a total always equals
+its rows. `Money` stays the only place that rounds an amount (1). Quantities (kWh, m3) keep three decimals as the meters
+module gives them (6.4), and rates and areas in the `DECIMAL` column type (four decimals) are shown as stored, never
+rounded.
+
+**Example (land tax, `ExpectedAmountsTests`).** The rate is 35.00 per sotka a year and the plot is 600 m2, that is 6
+sotka: each month charges 6 x 35.00 / 12 = 17.50, and the year is 12 x 17.50 = 210.00, which is the land tax report's
+expected and charged amount for the plot. If a second version of 40.00 starts on 16 July, the year has two rates: the
+35.00 version applies for 196 days and gives 6 x 17.50 + 8.47 = 113.47 (8.47 is 17.50 x 15/31 for 1-15 July), and the
+40.00 version for 169 days gives 10.32 + 5 x 20.00 = 110.32 (10.32 is 20.00 x 16/31 for 16-31 July). The expected amount
+is 113.47 + 110.32 = 223.79 over 365 days; the report shows the two shares as rows and no rate for the plot
+(`SEVERAL_RATES`).

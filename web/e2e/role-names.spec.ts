@@ -68,8 +68,8 @@ test.describe('Role names in Ukrainian', () => {
         .click();
       await expect(nameField(page)).toBeEnabled();
       const boxes = page.getByRole('checkbox');
-      await expect(boxes).toHaveCount(20); // every permission, settings and charges included
-      for (let i = 0; i < 20; i++) {
+      await expect(boxes).toHaveCount(22); // every permission, settings and charges included
+      for (let i = 0; i < 22; i++) {
         await expect(boxes.nth(i)).toBeChecked();
         await expect(boxes.nth(i)).toBeDisabled();
       }

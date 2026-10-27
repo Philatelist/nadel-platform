@@ -1,6 +1,7 @@
 package app.nadel.imports.internal;
 
 import app.nadel.problem.ApiProblemException;
+import app.nadel.problem.ProblemCodes;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -16,6 +17,7 @@ import org.dhatim.fastexcel.reader.ReadingOptions;
 import org.dhatim.fastexcel.reader.Row;
 import org.dhatim.fastexcel.reader.Sheet;
 import org.jspecify.annotations.Nullable;
+import org.springframework.http.HttpStatus;
 
 /**
  * Streams the rows of the sheets of a workbook. The only class that uses the spreadsheet library, so the rest of the
@@ -39,12 +41,18 @@ final class WorkbookReader implements AutoCloseable {
         this.workbook = workbook;
     }
 
+    /** The one answer of the import to a file that is not a safe, readable workbook: 400 {@code FILE_NOT_XLSX}. */
+    static ApiProblemException notXlsx() {
+        return new ApiProblemException(HttpStatus.BAD_REQUEST, ProblemCodes.FILE_NOT_XLSX,
+                "The file is not a valid .xlsx workbook.");
+    }
+
     /** @throws ApiProblemException 400 {@code FILE_NOT_XLSX} when the workbook cannot be opened */
     static WorkbookReader open(byte[] content) {
         try {
             return new WorkbookReader(new ReadableWorkbook(new ByteArrayInputStream(content), OPTIONS));
         } catch (IOException | RuntimeException e) {
-            throw ZipGuard.notXlsx();
+            throw notXlsx();
         }
     }
 
@@ -74,7 +82,7 @@ final class WorkbookReader implements AutoCloseable {
         } catch (ApiProblemException e) {
             throw e;
         } catch (IOException | RuntimeException e) {
-            throw ZipGuard.notXlsx();
+            throw notXlsx();
         }
         return true;
     }

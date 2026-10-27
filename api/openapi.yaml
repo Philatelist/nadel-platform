@@ -58,6 +58,14 @@ tags:
     description: >-
       Recalculations of past charges (corrections of open months by reversal and new charge, of closed months by an
       adjustment in the earliest open month) and their history
+  - name: reports
+    description: >-
+      Built-in reports over what the app has booked (charges, debts, meters, water, land tax, corrections): the list of
+      reports the caller may run, the on-screen preview and the Excel file
+  - name: report-templates
+    description: >-
+      Report templates of the cooperative: Excel forms with placeholders that the app fills in, the fixed tax report
+      slot, their versions and their archive
 
 paths:
   /me:
@@ -1080,7 +1088,10 @@ paths:
         Returns the settings of the current cooperative. Every member of the cooperative may call it; the platform
         operator has no cooperative data: 403. A cooperative that never saved its settings has the defaults
         (`memberPlotStatusVisibility` `OWN_ONLY`, `lossesMode` `FIXED_PERCENT`, `lossesPercent` `0.00`,
-        `commonConsumerDefaultSplit` `CONNECTED_PLOTS`, `redAmount` `1000.00`, `redDays` 90).
+        `commonConsumerDefaultSplit` `CONNECTED_PLOTS`, `redAmount` `1000.00`, `redDays` 90) and no requisites. The
+        requisites (`officialName`, `legalAddress`, `bankName`, `iban`) and the read-only ЄДРПОУ code (`edrpou`, set by
+        the platform operator) are public data of the legal entity, not personal data; a requisite that is not set is
+        absent.
       responses:
         '200':
           description: OK
@@ -1102,8 +1113,13 @@ paths:
         A change is written to the audit log (`SETTINGS_UPDATED`) with the old and the new value of every changed
         field; saving the current values changes nothing and writes no audit entry. 400 `VALIDATION_FAILED`:
         `redAmount` negative or with more than 12 integer digits (`INVALID`), `lossesPercent` above `100.00`
-        (`INVALID`), `redDays` outside 0..36500, an unknown enum value or a malformed number. A change of the red
-        threshold applies to every plot status shown from then on (the status is derived when it is read).
+        (`INVALID`), `redDays` outside 0..36500, an unknown enum value or a malformed number; `officialName`,
+        `legalAddress` or `bankName` over its maximum length (`TOO_LONG`). A requisite is saved without leading and
+        trailing spaces, and an empty string clears it. The IBAN is saved without spaces and in upper case; one that is
+        not a valid Ukrainian IBAN (`UA` and 27 digits with a correct mod-97 check) is 400 `IBAN_INVALID` with the field
+        error `iban` `IBAN_INVALID`, and nothing is saved. `edrpou` is read-only: it is changed only by the platform
+        operator, and a value sent here is ignored. A change of the red threshold applies to every plot status shown
+        from then on (the status is derived when it is read).
       requestBody:
         required: true
         content:
@@ -3931,6 +3947,576 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
 
+  /reports:
+    get:
+      tags: [reports]
+      operationId: listReports
+      summary: The reports the caller may run, with their filters
+      description: |
+        The built-in reports the caller may run, in the order of `ReportCode`, each with its filters: what the filter
+        is (`key`, `type`), which query parameters of `getReport` and `downloadReport` it fills (`params`), whether
+        it must be given, the values it starts with (`defaults`) and, for a period, whether it means billing months,
+        service days or reading dates (`basis`). A report that needs a permission the caller lacks is not listed:
+        `debtors` also needs `MEMBERS_VIEW`. A cooperative that has booked nothing still gets every report it may run.
+
+        The server returns codes only: the name and description of a report and the label of a filter come from the
+        client's catalogs by the report code and the filter key, in the user's language. Defaults that depend on the
+        day (today, the previous calendar month, the current year) are worked out in Europe/Kyiv when the list is
+        read; the defaults of `debtors` (`minDebt`, `olderThanDays`) are the cooperative's current red amount and red
+        days. Requires `REPORTS_VIEW`; the platform operator has no cooperative data: 403.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReportInfo'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /reports/{code}:
+    get:
+      tags: [reports]
+      operationId: getReport
+      summary: The on-screen preview of a report
+      description: |
+        Runs the report with the given filters and returns its preview: per sheet the columns, the first 200 rows, the
+        totals over all rows and the number of rows. `downloadReport` with the same filters writes every row and the
+        same totals: preview and file come from one query, so their numbers always agree.
+
+        Filters are query parameters. A report reads only the parameters of its filters (see `listReports`) and
+        ignores the others; a filter left out takes its default. `fromMonth` and `toMonth` are billing months
+        (`YYYY-MM`, both included); `from` and `to` are calendar days in Europe/Kyiv, both included, meaning service
+        days or reading dates as the filter's `basis` says; `chargeTypeIds`, `statuses`, `meterKinds` and
+        `correctionKinds` left out mean all; `street` is compared with the plot's street as stored, ignoring case and
+        surrounding spaces; `resource` and `waterSource` left out mean all. In `debtors`, `minDebt` and
+        `olderThanDays` combine with OR, as in the red status.
+
+        A malformed parameter (a wrong format, a number out of range) is 400 `VALIDATION_FAILED`, an unknown enum
+        value 400 `MALFORMED_REQUEST`. Filters that do not fit the report are 400 `REPORT_FILTER_INVALID` with
+        `errors[{field, code}]`, where `field` is the parameter: `REQUIRED` (a required filter without a default is
+        missing), `INVALID` (`toMonth` before `fromMonth`, `to` before `from`, a range of days longer than one year on
+        `to`), `NOT_FOUND` (`chargeTypeIds[i]` is not a charge type of the cooperative). A sheet of more than 20 000 rows
+        is 422 `REPORT_TOO_LARGE`: nothing is returned and nothing is written to the audit log.
+
+        A cell holds a string formatted by its column type (see `ReportColumnType`): money with two decimals
+        (`"1250.50"`), kWh and m³ with three (`"152.400"`), ISO dates, `YYYY-MM` months and codes. A value that is not
+        known is absent with a `reason`, never `0`. Totals are the sums of the rows as listed, with no separate
+        rounding. "Charged" is always the effective amount (charges plus their adjustments, reversals counting
+        negative); columns that split it show regular charges, reversals and adjustments separately. Plots are listed in
+        the natural order of their numbers, meters in the order of the meter tree, charge types in their configured
+        order. No report has a "paid" column until payments exist.
+
+        Every run is written to the audit log (`REPORT_GENERATED`, entity type `REPORT`, `output` `PREVIEW`) with the
+        filters as ids, codes and dates, the row count and whether the report holds personal data, never its contents.
+        Requires `REPORTS_VIEW`; `debtors` also needs `MEMBERS_VIEW` (403 `PERMISSION_DENIED` otherwise). An unknown
+        code is 400 `MALFORMED_REQUEST`; a code of `ReportCode` this server does not produce yet is 404 `NOT_FOUND`.
+      parameters:
+        - $ref: '#/components/parameters/ReportCodePath'
+        - $ref: '#/components/parameters/ReportFromMonth'
+        - $ref: '#/components/parameters/ReportToMonth'
+        - $ref: '#/components/parameters/ReportFrom'
+        - $ref: '#/components/parameters/ReportTo'
+        - $ref: '#/components/parameters/ReportAsOf'
+        - $ref: '#/components/parameters/ReportYear'
+        - $ref: '#/components/parameters/ReportChargeTypeIds'
+        - $ref: '#/components/parameters/ReportStreet'
+        - $ref: '#/components/parameters/ReportStatuses'
+        - $ref: '#/components/parameters/ReportMinDebt'
+        - $ref: '#/components/parameters/ReportOlderThanDays'
+        - $ref: '#/components/parameters/ReportResource'
+        - $ref: '#/components/parameters/ReportMeterKinds'
+        - $ref: '#/components/parameters/ReportWaterSource'
+        - $ref: '#/components/parameters/ReportCorrectionKinds'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportPreview'
+        '400':
+          $ref: '#/components/responses/ReportBadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ReportTooLarge'
+
+  /reports/{code}.xlsx:
+    get:
+      tags: [reports]
+      operationId: downloadReport
+      summary: Download a report as an Excel file
+      description: |
+        The report of `getReport` with the same filters as an `.xlsx` workbook with every row and the same totals. One
+        sheet per sheet of the preview, each with a header block (the cooperative's name, the report's name, the
+        filters, when it was made in Europe/Kyiv time and the display name of who made it), a frozen header row,
+        numbers stored as numbers with a number format and dates as dates. A value that is not known is an empty cell
+        with its reason, never `0`. Plot numbers, names and anything else people typed are written as stored.
+
+        The texts of the file (sheet names, header block, column headers, codes) are in the language of the `lang`
+        query parameter; without it the best match of `uk` and `en` in the `Accept-Language` header decides, and
+        without a match `uk`, as for the import template. A `lang` other than `uk` and `en` is 400
+        `VALIDATION_FAILED`.
+
+        The file name is ASCII, in the `Content-Disposition` header: the report code and the period as ISO days,
+        `<code>_<from>_<to>.xlsx`, for example `land-tax_2026-01-01_2026-12-31.xlsx`. A month range gives the first
+        day of `fromMonth` and the last day of `toMonth`, a year its first and last day, an "as of" date that day
+        twice.
+
+        Errors, permissions and the audit entry are those of `getReport`, with `output` `XLSX`. This path is matched
+        before `/reports/{code}`.
+      parameters:
+        - $ref: '#/components/parameters/ReportCodePath'
+        - $ref: '#/components/parameters/ReportFromMonth'
+        - $ref: '#/components/parameters/ReportToMonth'
+        - $ref: '#/components/parameters/ReportFrom'
+        - $ref: '#/components/parameters/ReportTo'
+        - $ref: '#/components/parameters/ReportAsOf'
+        - $ref: '#/components/parameters/ReportYear'
+        - $ref: '#/components/parameters/ReportChargeTypeIds'
+        - $ref: '#/components/parameters/ReportStreet'
+        - $ref: '#/components/parameters/ReportStatuses'
+        - $ref: '#/components/parameters/ReportMinDebt'
+        - $ref: '#/components/parameters/ReportOlderThanDays'
+        - $ref: '#/components/parameters/ReportResource'
+        - $ref: '#/components/parameters/ReportMeterKinds'
+        - $ref: '#/components/parameters/ReportWaterSource'
+        - $ref: '#/components/parameters/ReportCorrectionKinds'
+        - name: lang
+          in: query
+          required: false
+          description: >-
+            Language of the file's texts, `uk` or `en`. Without it the `Accept-Language` header decides, then `uk`.
+          schema:
+            type: string
+            enum: [uk, en]
+            pattern: '^(uk|en)$'
+      responses:
+        '200':
+          description: The report workbook, sent as an attachment
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+        '400':
+          $ref: '#/components/responses/ReportBadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ReportTooLarge'
+
+  /report-templates:
+    get:
+      tags: [report-templates]
+      operationId: listReportTemplates
+      summary: The tax report slot and the templates of the cooperative
+      description: |
+        The fixed tax report slot first, then every other template of the cooperative: active ones before archived
+        ones, each group by name ignoring case. The slot is a fixed entry of the app, not a stored row: while no active
+        template is in it, it is listed with `status` `NOT_ADDED`, its `slot`, `versionCount` 0 and no `id`, `name`,
+        `description` or `latestVersion` (the client shows the slot's name from its catalogs). Once an active template
+        is in the slot, that template is the first entry. An archived template of the slot is listed among the other
+        templates with its `slot`, and the slot shows `NOT_ADDED` again until a template is uploaded into it.
+
+        `latestVersion` is the version generation uses. The file contents are never part of the list.
+        Requires `REPORTS_VIEW` or `REPORT_TEMPLATES_MANAGE`; the platform operator has no cooperative data: 403.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReportTemplate'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [report-templates]
+      operationId: uploadReportTemplate
+      summary: Upload a new template as its version 1
+      description: |
+        Stores a new active template of the cooperative with the uploaded workbook as its version 1, either a free
+        template (no `slot`) or the template of the tax report slot (`slot` given). A template is data: placeholders
+        `${...}` are filled and one row per sheet may repeat; no formula and no code of a template is ever run.
+        Surrounding spaces of `name` and `description` are removed; an empty `description` is none.
+
+        Refusals (nothing is stored):
+
+        - 400 `VALIDATION_FAILED`: `name` missing, blank or over 200 characters, `description` over 500 characters,
+          `file` missing (`errors[{field}]`); an unknown `slot` is 400 `MALFORMED_REQUEST`;
+        - 422 `TEMPLATE_TOO_LARGE`: the file is over 2 MB (2 097 152 bytes), checked before the file is read; a
+          request over the upload limit of 10 MB is 413 `FILE_TOO_LARGE`;
+        - 400 `TEMPLATE_INVALID`: the file is not a usable template, with one `errors[{field: file, code}]` naming why:
+          - `NOT_XLSX`: the name does not end in `.xlsx`, the content does not start with the zip signature, or the
+            archive is not an Excel workbook (`.xlsm`, `.xls` and any other file are refused);
+          - `MACROS`: a macro-enabled workbook content type or a `vbaProject.bin` part;
+          - `ACTIVE_CONTENT`: ActiveX controls or embedded OLE objects;
+          - `BROKEN_ZIP`: the archive or one of its parts is damaged or encrypted, or a part is not well-formed XML or
+            declares a document type;
+          - `UNPACKED_TOO_LARGE`: too many parts, too large when unpacked or compressed too highly (a compressed bomb),
+            with the limits of the Excel import;
+          - `TWO_ROW_SETS`: a sheet has more than one repeating row, or one row mixes placeholders of two row sets;
+          - `ARRAY_ACROSS_ROW`: an array formula's range crosses the repeating row of its sheet (Excel refuses to
+            insert rows there too);
+        - 409 `TEMPLATE_NAME_TAKEN` (`errors[{field: name}]`): another active template of the cooperative has the name,
+          ignoring case;
+        - 409 `TEMPLATE_SLOT_TAKEN` (`errors[{field: slot}]`): an active template is in the slot already; upload a
+          new version of it instead (an archived template frees its slot and its name).
+
+        Links to other workbooks and data connections are removed from the stored file and listed in `warnings`
+        (`EXTERNAL_LINKS_REMOVED`). `fileName` of the version is the base name of the uploaded file, sanitised;
+        `sha256` and `sizeBytes` are those of the stored file. Written to the audit log as
+        `REPORT_TEMPLATE_UPLOADED` (entity type `REPORT_TEMPLATE`, label the name, fields the version number and file
+        name). Requires `REPORT_TEMPLATES_MANAGE`; the platform operator has no cooperative data: 403.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, name]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: The workbook (`.xlsx`, at most 2 MB)
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 200
+                  description: Name of the template, unique among the active templates ignoring case
+                description:
+                  type: string
+                  maxLength: 500
+                slot:
+                  $ref: '#/components/schemas/ReportTemplateSlot'
+      responses:
+        '201':
+          description: The stored template with its version 1 and the warnings of the upload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportTemplateUploadResult'
+        '400':
+          $ref: '#/components/responses/ReportTemplateBadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: >-
+            Another active template has the name (code `TEMPLATE_NAME_TAKEN`, with `errors[{field: name}]`) or the
+            slot holds an active template (code `TEMPLATE_SLOT_TAKEN`, with `errors[{field: slot}]`)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '422':
+          $ref: '#/components/responses/ReportTemplateTooLarge'
+
+  /report-templates/catalog:
+    get:
+      tags: [report-templates]
+      operationId: getReportTemplateCatalog
+      summary: Every placeholder a template can use
+      description: |
+        The field catalog (feature 013 §4.2): every placeholder `${key}` the app fills, in a fixed order (the
+        cooperative, the period, when and by whom, the totals, then the row sets `plots`, `months`, `meters`, `water`),
+        each with its value type, its row set (absent for a single value), a language-neutral example where one exists
+        and the permission it needs. The server returns codes, never text: the description of an entry is
+        `reportTemplates.fields.<field>` in the client's catalogs.
+
+        Two families depend on the cooperative's charge types and are listed once per charge type, archived ones
+        included, in the configured order: `totals.charged.<type>` and `rows.plots.debt.<type>`, where `<type>` is the
+        code of a seeded type (`MEMBERSHIP`, `ELECTRICITY`, `LAND_TAX`, `WATER`, `COMMON_CONSUMERS`) and the id of a
+        custom type. Such an entry carries the family in `pattern`, the description code of the family in `field` and
+        the type in `chargeTypeId` (the client names it). Names, phones and e-mails of people are never placeholders.
+
+        Requires `REPORTS_VIEW` or `REPORT_TEMPLATES_MANAGE`; the platform operator has no cooperative data: 403.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReportTemplateField'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /report-templates/{id}/versions:
+    get:
+      tags: [report-templates]
+      operationId: listReportTemplateVersions
+      summary: The versions of a template, newest first
+      description: |
+        Every version of the template, newest (highest `versionNo`) first, also of an archived template. The file
+        contents are not part of the list; a version is downloaded with `downloadReportTemplateVersion`. An unknown
+        id, and the id of another cooperative's template, is 404. Requires `REPORT_TEMPLATES_MANAGE`; the platform
+        operator has no cooperative data: 403.
+      parameters:
+        - $ref: '#/components/parameters/ReportTemplateIdPath'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReportTemplateVersion'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      tags: [report-templates]
+      operationId: uploadReportTemplateVersion
+      summary: Upload a new version of a template
+      description: |
+        Stores the uploaded workbook as the next version of the template (its latest `versionNo` plus one); generation
+        uses it from now on and the older versions stay downloadable. The file is checked as by
+        `uploadReportTemplate` (400 `TEMPLATE_INVALID` with the same `errors[{field: file, code}]`, 422
+        `TEMPLATE_TOO_LARGE`, 413 `FILE_TOO_LARGE`, 400 `VALIDATION_FAILED` without a file) and links to other
+        workbooks are removed and listed in `warnings` the same way. An archived template takes no new version: 409
+        `TEMPLATE_ARCHIVED`. Two uploads at the same moment get consecutive numbers. An unknown id, and the id of
+        another cooperative's template, is 404. Nothing is stored when the upload is refused. Written to the audit log
+        as `REPORT_TEMPLATE_UPLOADED` with the new version. Requires `REPORT_TEMPLATES_MANAGE`; the platform operator
+        has no cooperative data: 403.
+      parameters:
+        - $ref: '#/components/parameters/ReportTemplateIdPath'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: The workbook (`.xlsx`, at most 2 MB)
+      responses:
+        '201':
+          description: The template with its new latest version and the warnings of the upload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportTemplateUploadResult'
+        '400':
+          $ref: '#/components/responses/ReportTemplateBadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: >-
+            The template is archived and takes no new version (code `TEMPLATE_ARCHIVED`), or another file was stored
+            for the template at the same moment despite the lock (code `TEMPLATE_VERSION_CONFLICT`; send the file
+            again)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '422':
+          $ref: '#/components/responses/ReportTemplateTooLarge'
+
+  /report-templates/{id}/archive:
+    post:
+      tags: [report-templates]
+      operationId: archiveReportTemplate
+      summary: Archive a template
+      description: |
+        Archives the template: it can no longer be generated from or take a new version, it stays in the list as
+        `ARCHIVED` and its versions stay downloadable. Its name and its slot are free again for a new template.
+        Archiving cannot be undone. Archiving an archived template changes nothing and answers 200 with the template
+        as it is, without a new audit entry. An unknown id, and the id of another cooperative's template, is 404.
+        Written to the audit log as `REPORT_TEMPLATE_ARCHIVED` (entity type `REPORT_TEMPLATE`, label the name, field
+        the latest version number). Requires `REPORT_TEMPLATES_MANAGE`; the platform operator has no cooperative
+        data: 403.
+      parameters:
+        - $ref: '#/components/parameters/ReportTemplateIdPath'
+      responses:
+        '200':
+          description: The archived template
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportTemplate'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /report-templates/{id}/generate:
+    post:
+      tags: [report-templates]
+      operationId: generateReportTemplate
+      summary: Fill the latest version of a template for a period
+      description: |
+        Fills the latest version of an active template with the cooperative's data for the period and returns the
+        workbook (feature 013 §4.3, ADR 0015). Nothing is stored. The template's styles, merged cells, column widths,
+        print settings and formulas are kept; no formula is evaluated on the server (`fullCalcOnLoad`: Excel and
+        LibreOffice calculate on opening).
+
+        A placeholder alone in a cell becomes a typed value (a number, or a date as a date serial), so formulas still
+        work on it; inside text it is written as text in Ukrainian number and date format. The row of a row set
+        (`${rows.<set>.<field>}`) is copied once per row of the set, with the references below it moved. The period
+        (`from` to `to`, both included, days in Europe/Kyiv) means for each value (see `getReportTemplateCatalog`):
+
+        - `period.from`, `period.to` the days given, `period.year` the year of `to`;
+        - `totals.landTax.*` and `rows.plots.landTax.*`: the land tax report for the year of `to`;
+        - `totals.charged.<type>`: the effective amount (charges plus adjustments minus reversals, opening balances
+          left out) of the type's charges whose first service day is from `from` to `to`, booked whenever;
+        - `totals.debt`, `totals.plots.*` and the row set `plots`: the plot balances of the active plots (common land
+          left out) as of `to`, or as of today when `to` is later;
+        - the row set `months`: per billing month from the month of `from` to the month of `to` that has charges, the
+          cooperative's totals as on the charges by month report;
+        - the row sets `meters` (the electricity tree's consumption) and `water` (the water report's plots): the
+          service days from `from` to `to`.
+
+        Warnings, never errors, are listed in a sheet added at the end of the file when there is at least one
+        ("Попередження" or "Warnings", made unique if the template has a sheet of that name) and in the response
+        headers (`X-Report-Warnings` is `0` without warnings): a placeholder the app does not know is left in the cell as written
+        (`UNKNOWN_PLACEHOLDER`); a known placeholder without a known value is written empty, never `0`
+        (`VALUE_UNKNOWN`, with the reason); see `ReportTemplateWarningCode`.
+
+        The texts of the file (the warnings sheet, codes such as statuses) are in `lang`; without it the best match of
+        `uk` and `en` in `Accept-Language`, then `uk`. The file name is in `Content-Disposition`: the template's name
+        and the period, `<name>_<from>_<to>.xlsx` (`filename*` in UTF-8 with an ASCII `filename` fallback). The
+        document properties name the template (title) and its version.
+
+        Errors: 400 `VALIDATION_FAILED` for a malformed body; 400 `REPORT_FILTER_INVALID` with
+        `errors[{field: to, code: INVALID}]` when `to` is before `from` or the period is longer than one year (`to` on
+        or after the same day a year after `from`); 404 for an unknown template or one of another cooperative; 409
+        `TEMPLATE_ARCHIVED` for an archived template; 400 `TEMPLATE_INVALID` (with the reason, as at upload) when the
+        stored file no longer passes the upload checks, which are run again before every fill; 422 `REPORT_TOO_LARGE`
+        when a row set used by the template has more than 20 000 rows, the row sets together write more than 20 000
+        rows, or the file would unpack to more than 256 MB. Every generated file is written to the audit log as `REPORT_GENERATED` (entity type
+        `REPORT_TEMPLATE`, entity id the template, label its name) with the fields `template` (the id), `version`,
+        `filters` (`from`, `to`), `rows` (the rows written for row sets), `personalData` (`false`) and `output`
+        (`XLSX`), never the contents. Requires `REPORTS_VIEW`; the platform operator has no cooperative data: 403.
+      parameters:
+        - $ref: '#/components/parameters/ReportTemplateIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportTemplateGenerateRequest'
+      responses:
+        '200':
+          description: The filled workbook, sent as an attachment
+          headers:
+            X-Report-Warnings:
+              description: The number of warnings (all of them; the warnings sheet lists each)
+              schema:
+                type: integer
+                format: int32
+                minimum: 0
+            X-Report-Warnings-Detail:
+              description: >-
+                The first warnings as a JSON array of `ReportTemplateWarning`, UTF-8, encoded as base64url without
+                padding: at most 50, and fewer when the encoded value would reach 4 KB. Absent without warnings
+              schema:
+                type: string
+                pattern: '^[A-Za-z0-9_-]*$'
+            Content-Disposition:
+              description: '`attachment` with the file name `<name>_<from>_<to>.xlsx`'
+              schema:
+                type: string
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+        '400':
+          $ref: '#/components/responses/ReportBadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: The template is archived and can no longer be generated from (code `TEMPLATE_ARCHIVED`)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          $ref: '#/components/responses/ReportTooLarge'
+
+  /report-templates/{id}/versions/{versionId}/file:
+    get:
+      tags: [report-templates]
+      operationId: downloadReportTemplateVersion
+      summary: Download the file of a template version
+      description: |
+        The stored workbook of the version as it is kept (links to other workbooks already removed), also of an
+        archived template, sent as an attachment. The file name is the version's `fileName`, in the
+        `Content-Disposition` header (`filename*` in UTF-8 with an ASCII `filename` fallback). An unknown template or
+        version, a version of another template and anything of another cooperative is 404. Downloading is not written
+        to the audit log. Requires `REPORT_TEMPLATES_MANAGE`; the platform operator has no cooperative data: 403.
+      parameters:
+        - $ref: '#/components/parameters/ReportTemplateIdPath'
+        - name: versionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The template workbook, sent as an attachment
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -4060,6 +4646,203 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/Problem'
+    ReportBadRequest:
+      description: >-
+        Malformed request or failed validation of a parameter (code `VALIDATION_FAILED` or `MALFORMED_REQUEST`), or
+        filters that do not fit the report (code `REPORT_FILTER_INVALID`, with `errors[{field, code}]` naming the
+        query parameter)
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    ReportTooLarge:
+      description: >-
+        The report would have more than 20 000 rows in a sheet (code `REPORT_TOO_LARGE`); the client asks the user to
+        narrow the filters
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    ReportTemplateBadRequest:
+      description: >-
+        Malformed request or failed validation of a form field (code `VALIDATION_FAILED` or `MALFORMED_REQUEST`), or a
+        file that is not a usable template (code `TEMPLATE_INVALID`, with one `errors[{field: file, code}]` whose code
+        is `NOT_XLSX`, `MACROS`, `ACTIVE_CONTENT`, `BROKEN_ZIP`, `UNPACKED_TOO_LARGE`, `TWO_ROW_SETS` or
+        `ARRAY_ACROSS_ROW`, see `uploadReportTemplate`)
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    ReportTemplateTooLarge:
+      description: The template file is over 2 MB (code `TEMPLATE_TOO_LARGE`); nothing is stored
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+
+  parameters:
+    ReportTemplateIdPath:
+      name: id
+      in: path
+      required: true
+      description: Id of a report template of the cooperative
+      schema:
+        type: string
+        format: uuid
+    ReportCodePath:
+      name: code
+      in: path
+      required: true
+      description: The report, one of `ReportCode`
+      schema:
+        $ref: '#/components/schemas/ReportCode'
+    ReportFromMonth:
+      name: fromMonth
+      in: query
+      required: false
+      description: First billing month of the range, `YYYY-MM` (filter type `MONTH_RANGE`)
+      schema:
+        type: string
+        pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+    ReportToMonth:
+      name: toMonth
+      in: query
+      required: false
+      description: Last billing month of the range, `YYYY-MM`, not before `fromMonth` (filter type `MONTH_RANGE`)
+      schema:
+        type: string
+        pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+    ReportFrom:
+      name: from
+      in: query
+      required: false
+      description: First day of the range (filter type `DATE_RANGE`)
+      schema:
+        type: string
+        format: date
+    ReportTo:
+      name: to
+      in: query
+      required: false
+      description: Last day of the range, not before `from` (filter type `DATE_RANGE`)
+      schema:
+        type: string
+        format: date
+    ReportAsOf:
+      name: asOf
+      in: query
+      required: false
+      description: The day the report is made for (filter type `DATE`)
+      schema:
+        type: string
+        format: date
+    ReportYear:
+      name: year
+      in: query
+      required: false
+      description: A calendar year (filter type `YEAR`)
+      schema:
+        type: integer
+        format: int32
+        minimum: 2000
+        maximum: 2100
+    ReportChargeTypeIds:
+      name: chargeTypeIds
+      in: query
+      required: false
+      description: Charge types to include; left out means all (filter type `CHARGE_TYPES`)
+      schema:
+        type: array
+        maxItems: 100
+        items:
+          type: string
+          format: uuid
+    ReportStreet:
+      name: street
+      in: query
+      required: false
+      description: >-
+        Only plots on this street, compared with the street as stored, ignoring case and surrounding spaces (filter
+        type `STREET`)
+      schema:
+        type: string
+        maxLength: 100
+    ReportStatuses:
+      name: statuses
+      in: query
+      required: false
+      description: Only plots of these status colours; left out means all (filter type `STATUS`)
+      schema:
+        type: array
+        maxItems: 4
+        items:
+          $ref: '#/components/schemas/PlotStatus'
+    ReportMinDebt:
+      name: minDebt
+      in: query
+      required: false
+      description: A debt above this amount, two decimals, for example `1500.00` (filter type `MONEY`)
+      schema:
+        type: string
+        pattern: '^\d{1,12}\.\d{2}$'
+    ReportOlderThanDays:
+      name: olderThanDays
+      in: query
+      required: false
+      description: A debt older than this number of days (filter type `INT`)
+      schema:
+        type: integer
+        format: int32
+        minimum: 0
+        maximum: 36500
+    ReportResource:
+      name: resource
+      in: query
+      required: false
+      description: Only meters of this resource; left out means both (filter type `RESOURCE`)
+      schema:
+        $ref: '#/components/schemas/MeterResource'
+    ReportMeterKinds:
+      name: meterKinds
+      in: query
+      required: false
+      description: Only meters of these kinds; left out means the filter's default (filter type `METER_KIND`)
+      schema:
+        type: array
+        maxItems: 4
+        items:
+          $ref: '#/components/schemas/MeterKind'
+    ReportWaterSource:
+      name: waterSource
+      in: query
+      required: false
+      description: >-
+        Only plots connected to a source of this kind (`METER`: a well or another common consumer meter,
+        `COOPERATIVE_SUPPLY`: the cooperative's water supply); left out means all (filter type `WATER_SOURCE`)
+      schema:
+        $ref: '#/components/schemas/WaterSourceKind'
+    ReportCorrectionKinds:
+      name: correctionKinds
+      in: query
+      required: false
+      description: Only corrections of these kinds; left out means both (filter type `CORRECTION_KIND`)
+      schema:
+        type: array
+        maxItems: 2
+        items:
+          $ref: '#/components/schemas/ReportCorrectionKind'
 
   schemas:
     Money:
@@ -4092,6 +4875,8 @@ components:
         - CHARGES_REVERSE
         - PERIODS_CLOSE
         - RECALCULATION_RUN
+        - REPORTS_VIEW
+        - REPORT_TEMPLATES_MANAGE
 
     PlotStatusVisibility:
       type: string
@@ -4157,6 +4942,29 @@ components:
           format: int32
           minimum: 0
           maximum: 36500
+        officialName:
+          type: string
+          maxLength: 300
+          description: The full official name of the cooperative; absent when not set
+        legalAddress:
+          type: string
+          maxLength: 500
+          description: The legal address of the cooperative; absent when not set
+        bankName:
+          type: string
+          maxLength: 200
+          description: The name of the cooperative's bank; absent when not set
+        iban:
+          type: string
+          pattern: '^UA[0-9]{27}$'
+          description: The cooperative's IBAN, a valid Ukrainian IBAN without spaces; absent when not set
+          examples: ['UA213223130000026007233566001']
+        edrpou:
+          type: string
+          readOnly: true
+          description: >-
+            The ЄДРПОУ code of the cooperative, read-only: it is changed only by the platform operator. Absent when not
+            set
 
     CooperativeSettingsUpdate:
       type: object
@@ -4179,6 +4987,26 @@ components:
           format: int32
           minimum: 0
           maximum: 36500
+        officialName:
+          type: string
+          maxLength: 300
+          description: The full official name; an empty string clears it
+        legalAddress:
+          type: string
+          maxLength: 500
+          description: The legal address; an empty string clears it
+        bankName:
+          type: string
+          maxLength: 200
+          description: The name of the bank; an empty string clears it
+        iban:
+          type: string
+          maxLength: 64
+          description: >-
+            A Ukrainian IBAN; spaces and lower case are accepted and normalised (`ua21 3223 1300 ...` is saved as
+            `UA213223...`). No pattern here on purpose: any value that is not a valid Ukrainian IBAN (wrong country,
+            length, characters or mod-97 check) is the one answer 400 `IBAN_INVALID`. An empty string clears it.
+          examples: ['UA21 3223 1300 0002 6007 2335 6600 1']
 
     BaseRole:
       type: string
@@ -4511,6 +5339,9 @@ components:
         - COMMON_CONSUMER_RUN_REVERSED
         - COMMON_CONSUMER_BILLING_CHANGED
         - RECALCULATION_BOOKED
+        - REPORT_GENERATED
+        - REPORT_TEMPLATE_UPLOADED
+        - REPORT_TEMPLATE_ARCHIVED
 
     AuditEntityType:
       type: string
@@ -4523,7 +5354,15 @@ components:
         `NOT_CHARGED_RETRIED` entry of a losses node or common consumer item is a `METER` entry about the node or
         consumer meter, and so is `COMMON_CONSUMER_BILLING_CHANGED` (about the consumer meter, label its name). A
         `RECALCULATION` entry (`RECALCULATION_BOOKED`) is about a booked recalculation: its label is its months as
-        `from/to` (`YYYY-MM`).
+        `from/to` (`YYYY-MM`). A `REPORT` entry (`REPORT_GENERATED`) is about one run of a report: its entity id is
+        the same for every run of the report (the name-based UUID of `report:<code>`, so the log can be filtered by
+        report), its label the report code (for example `charges-by-month`), and its fields are `report` (the code),
+        `output` (`PREVIEW` or `XLSX`), `filters` (a JSON array of `{param, value}` as the query string carries them:
+        ids, codes, dates and the street as typed), `rows` (the rows of every sheet) and `personalData`, never its
+        contents. A `REPORT_TEMPLATE` entry (`REPORT_TEMPLATE_UPLOADED`, `REPORT_TEMPLATE_ARCHIVED`, and
+        `REPORT_GENERATED` for a file generated from the template) is about a report template: its entity id is the
+        template, its label the template's name and its fields name the version; a generated file adds `template`,
+        `filters` (`from`, `to`), `rows`, `personalData` and `output` (`XLSX`), never the contents.
       enum:
         [
           MEMBER,
@@ -4541,6 +5380,8 @@ components:
           LOSSES_RUN,
           COMMON_CONSUMER_RUN,
           RECALCULATION,
+          REPORT,
+          REPORT_TEMPLATE,
         ]
 
     AuditFieldChange:
@@ -5305,7 +6146,9 @@ components:
             `AMOUNT_NOT_POSITIVE` (an amount that is zero or negative), `DATE_IN_FUTURE` (a date after today in
             Europe/Kyiv), `NOT_FOUND` (no such charge type in the cooperative, or not a node of the meter tree in the
             range of a losses run), `PLOT_COMMON_LAND` (common land is
-            never connected to water)
+            never connected to water), `IBAN_INVALID` (not a valid Ukrainian IBAN; with the top-level code
+            `IBAN_INVALID`); with `TEMPLATE_INVALID` on `file`: `NOT_XLSX`, `MACROS`, `ACTIVE_CONTENT`,
+            `BROKEN_ZIP`, `UNPACKED_TOO_LARGE`, `TWO_ROW_SETS`, `ARRAY_ACROSS_ROW` (see `uploadReportTemplate`)
         message:
           type: string
 
@@ -8259,3 +9102,549 @@ components:
         totalPages:
           type: integer
           format: int32
+
+    ReportCode:
+      type: string
+      description: >-
+        A built-in report. `charges-by-month`: what was charged per billing month and charge type, with a second sheet
+        by service period. `plot-balances`: the debt of every active plot per charge type on a day, without names.
+        `debtors`: the plots over the red amount or older than the red days, with the owners' names and contacts
+        (also needs `MEMBERS_VIEW`). `electricity-tree`: electricity from the substation down to the plots, with a
+        consumption sheet and a charged sheet. `water`: water use and water charges of the connected plots.
+        `missing-readings`: active meters without an approved reading in a range. `land-tax`: the expected and the
+        charged land tax per plot for a year. `corrections`: every reversal and adjustment booked in a range of
+        billing months.
+      enum:
+        - charges-by-month
+        - plot-balances
+        - debtors
+        - electricity-tree
+        - water
+        - missing-readings
+        - land-tax
+        - corrections
+
+    ReportFilterType:
+      type: string
+      description: >-
+        What a filter asks for and the query parameters it fills. `MONTH_RANGE`: billing months `fromMonth` and
+        `toMonth`. `DATE_RANGE`: days `from` and `to`. `DATE`: one day `asOf`. `YEAR`: `year`. `MONEY`: an amount
+        (`minDebt`). `INT`: a whole number (`olderThanDays`). `CHARGE_TYPES`: charge types `chargeTypeIds`, several.
+        `STREET`: one street `street`. `STATUS`: status colours `statuses`, several. `RESOURCE`: `resource`.
+        `METER_KIND`: meter kinds `meterKinds`, several. `WATER_SOURCE`: the kind of water source `waterSource`.
+        `CORRECTION_KIND`: `correctionKinds`, several.
+      enum:
+        - MONTH_RANGE
+        - DATE_RANGE
+        - DATE
+        - YEAR
+        - MONEY
+        - INT
+        - CHARGE_TYPES
+        - STREET
+        - STATUS
+        - RESOURCE
+        - METER_KIND
+        - WATER_SOURCE
+        - CORRECTION_KIND
+
+    ReportFilterParam:
+      type: string
+      description: A query parameter of `getReport` and `downloadReport` that a filter fills
+      enum:
+        - fromMonth
+        - toMonth
+        - from
+        - to
+        - asOf
+        - year
+        - chargeTypeIds
+        - street
+        - statuses
+        - minDebt
+        - olderThanDays
+        - resource
+        - meterKinds
+        - waterSource
+        - correctionKinds
+
+    ReportPeriodBasis:
+      type: string
+      description: >-
+        What the period of a report means; the filter label says so. `BILLING_MONTHS`: the billing months the entries
+        were booked in. `SERVICE_DAYS`: the days a service was provided (the service period of a charge).
+        `READING_DATES`: the dates of meter readings.
+      enum: [BILLING_MONTHS, SERVICE_DAYS, READING_DATES]
+
+    ReportCorrectionKind:
+      type: string
+      description: A kind of correction in the ledger, `REVERSAL` or `ADJUSTMENT`
+      enum: [REVERSAL, ADJUSTMENT]
+
+    ReportFilterValue:
+      type: object
+      description: >-
+        One value of a filter parameter as the query string carries it; a filter of several values (charge types,
+        statuses, meter kinds, correction kinds) has one entry per value
+      required: [param, value]
+      properties:
+        param:
+          $ref: '#/components/schemas/ReportFilterParam'
+        value:
+          type: string
+          maxLength: 100
+
+    ReportFilter:
+      type: object
+      description: One filter of a report
+      required: [key, type, params, required, defaults]
+      properties:
+        key:
+          type: string
+          pattern: '^[a-z][A-Za-z]*$'
+          description: >-
+            Names the filter in the client's catalogs: `period`, `asOf`, `year`, `chargeTypes`, `street`, `statuses`,
+            `minDebt`, `olderThanDays`, `resource`, `meterKinds`, `waterSource` or `correctionKinds`
+        type:
+          $ref: '#/components/schemas/ReportFilterType'
+        params:
+          type: array
+          description: The query parameters the filter fills, in order (`fromMonth`, `toMonth` for a month range)
+          minItems: 1
+          maxItems: 2
+          items:
+            $ref: '#/components/schemas/ReportFilterParam'
+        required:
+          type: boolean
+          description: True when the report cannot run without the filter; a required filter always has defaults
+        defaults:
+          type: array
+          description: The values the filter starts with; empty when it starts empty (meaning all)
+          items:
+            $ref: '#/components/schemas/ReportFilterValue'
+        basis:
+          $ref: '#/components/schemas/ReportPeriodBasis'
+
+    ReportInfo:
+      type: object
+      description: A report the caller may run
+      required: [code, personalData, filters]
+      properties:
+        code:
+          $ref: '#/components/schemas/ReportCode'
+        personalData:
+          type: boolean
+          description: True when the report holds names and contacts of people (only `debtors`)
+        filters:
+          type: array
+          description: The filters in the order the form shows them; the period comes first
+          items:
+            $ref: '#/components/schemas/ReportFilter'
+
+    ReportColumnType:
+      type: string
+      description: >-
+        How the values of a column are written and shown. `TEXT`: as stored, for example a plot number or a name.
+        `CODE`: an enum code the client shows from its catalog for the column key. `CHARGE_TYPE`: the id of one of the
+        report's `chargeTypes`. `MONEY`: an amount with two decimals (`"1250.50"`). `QUANTITY`: kWh or m³ with three
+        decimals (`"152.400"`). `PERCENT`: a percentage with two decimals (`"4.75"`). `INTEGER`: a whole number.
+        `DATE`: an ISO day. `MONTH`: a month `YYYY-MM`. `BOOLEAN`: `true` or `false`. `DECIMAL`: an exact number that
+        is not money, with at most four decimals, never rounded, for example a tariff rate (`"35.0000"`) or an area in
+        m² (`"600.00"`) or in sotkas (`"6.1235"`); shown with its significant decimals, at least two.
+      enum: [TEXT, CODE, CHARGE_TYPE, MONEY, QUANTITY, PERCENT, INTEGER, DATE, MONTH, BOOLEAN, DECIMAL]
+
+    ReportColumn:
+      type: object
+      description: >-
+        A column of a sheet. The client shows the header from its catalog by the report code, the sheet key and the
+        column key; a column per charge type shows the charge type's name
+      required: [key, type]
+      properties:
+        key:
+          type: string
+          pattern: '^[a-z][A-Za-z0-9]*(\.[A-Za-z0-9-]+)?$'
+          description: >-
+            Stable within the report, for example `month`, `effective` or, for a column per charge type,
+            `debt.<chargeTypeId>`
+        type:
+          $ref: '#/components/schemas/ReportColumnType'
+        chargeTypeId:
+          type: string
+          format: uuid
+          description: Set on a column per charge type; one of the report's `chargeTypes`
+
+    ReportCellReason:
+      type: string
+      description: >-
+        Why a cell has no value. `NO_READING`: there is no counted reading at or around the day, so the meter value is
+        not known. `DERIVED_FROM_UNKNOWN`: the value is worked out from a value that is not known. `SEVERAL_RATES`: the
+        days of the charge were priced at more than one rate, so there is no single price per unit (the amount is
+        exact).
+      enum: [NO_READING, DERIVED_FROM_UNKNOWN, SEVERAL_RATES]
+
+    ReportCell:
+      type: object
+      description: >-
+        One cell. `value` is absent when the cell is empty; an empty cell with a `reason` is a value that is not
+        known, which is never shown as `0`
+      properties:
+        value:
+          type: string
+          description: The value formatted by the column type
+        reason:
+          $ref: '#/components/schemas/ReportCellReason'
+
+    ReportRowKind:
+      type: string
+      description: '`DETAIL` a row of the report; `SUBTOTAL` the totals of the group above it, for example of a month'
+      enum: [DETAIL, SUBTOTAL]
+
+    ReportRow:
+      type: object
+      required: [kind, level, cells]
+      properties:
+        kind:
+          $ref: '#/components/schemas/ReportRowKind'
+        level:
+          type: integer
+          format: int32
+          minimum: 0
+          description: The depth in a tree report (0 for a root and in every report without a tree), shown as an indent
+        cells:
+          type: array
+          description: One cell per column, in the order of the columns
+          items:
+            $ref: '#/components/schemas/ReportCell'
+
+    ReportTotal:
+      type: object
+      description: A totals line over all rows of a sheet, not only the rows of the preview
+      required: [key, cells]
+      properties:
+        key:
+          type: string
+          pattern: '^[A-Za-z][A-Za-z0-9_]*$'
+          description: >-
+            Names the line in the client's catalogs: `all` for the whole report, a code for a part of it, for example
+            the charge source `CONSUMPTION` or `LOSSES`
+        cells:
+          type: array
+          description: One cell per column, in the order of the columns; columns without a total are empty
+          items:
+            $ref: '#/components/schemas/ReportCell'
+
+    ReportSheet:
+      type: object
+      description: >-
+        One sheet of a report; the file has one worksheet per sheet. `charges-by-month` has `byBillingMonth` and
+        `byServicePeriod`, `electricity-tree` has `consumption` and `charged`, `water` has `main` (per plot and
+        source) and `summary` (per source); a report with one sheet calls it `main`
+      required: [key, columns, rows, totals, rowCount, truncated]
+      properties:
+        key:
+          type: string
+          pattern: '^[a-z][A-Za-z]*$'
+        columns:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReportColumn'
+        rows:
+          type: array
+          description: The first 200 rows
+          maxItems: 200
+          items:
+            $ref: '#/components/schemas/ReportRow'
+        totals:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReportTotal'
+        rowCount:
+          type: integer
+          format: int32
+          minimum: 0
+          description: The number of rows of the sheet in all, at most 20 000; the file holds every one
+        truncated:
+          type: boolean
+          description: True when `rowCount` is more than the rows of the preview
+
+    ReportNoteCode:
+      type: string
+      description: >-
+        A sentence of the report header. `SERVICE_PERIOD_SHEET`: the second sheet groups the charges by the month of
+        the service, so an adjustment booked later shows under the month it is for. `PAST_DATE_STATUS`: for a past day
+        the status is worked out as of that day with today's thresholds. `STATUS_ALL_CHARGE_TYPES`: with a charge type
+        filter, today's status still counts every charge type. `OLDEST_UNPAID_IS_OLDEST_CHARGE`: until payments exist,
+        the oldest unpaid charge is the oldest charge with a debt. `LOSSES_FIXED_PERCENT`: the cooperative charges losses
+        now as a fixed percentage of each interval (param `percent`, two decimals); `LOSSES_PROPORTIONAL`: it charges
+        losses now by proportional runs; with either, a charge or a run booked under another mode shows what it booked.
+        `RECALCULATION_SUGGESTED`: some rows differ from the expected amount and a recalculation may be due (param
+        `count`). `OPEN_NOT_CHARGED`: open "not charged" items exist for the listed meters (param `count`).
+      enum:
+        - SERVICE_PERIOD_SHEET
+        - PAST_DATE_STATUS
+        - STATUS_ALL_CHARGE_TYPES
+        - OLDEST_UNPAID_IS_OLDEST_CHARGE
+        - LOSSES_FIXED_PERCENT
+        - LOSSES_PROPORTIONAL
+        - RECALCULATION_SUGGESTED
+        - OPEN_NOT_CHARGED
+
+    ReportNote:
+      type: object
+      required: [code, params]
+      properties:
+        code:
+          $ref: '#/components/schemas/ReportNoteCode'
+        params:
+          type: object
+          description: Parameters of the sentence as codes, numbers and dates, never display text
+          additionalProperties:
+            type: string
+
+    ReportPreview:
+      type: object
+      description: The on-screen preview of a report
+      required: [code, generatedAt, filters, headerNotes, chargeTypes, sheets]
+      properties:
+        code:
+          $ref: '#/components/schemas/ReportCode'
+        generatedAt:
+          type: string
+          format: date-time
+        filters:
+          type: array
+          description: The filter values the report used, defaults filled in
+          items:
+            $ref: '#/components/schemas/ReportFilterValue'
+        headerNotes:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReportNote'
+        chargeTypes:
+          type: array
+          description: >-
+            The charge types the report refers to, in their configured order: a `CHARGE_TYPE` cell and a column with
+            `chargeTypeId` name one of them by id
+          items:
+            $ref: '#/components/schemas/ChargeTypeRef'
+        sheets:
+          type: array
+          minItems: 1
+          maxItems: 2
+          items:
+            $ref: '#/components/schemas/ReportSheet'
+
+    ReportTemplateSlot:
+      type: string
+      description: >-
+        A fixed place of the app that a template fills. The only one is the tax report slot, which every cooperative
+        has; its official form is uploaded into it like any other template.
+      enum: [TAX]
+
+    ReportTemplateStatus:
+      type: string
+      description: >-
+        `ACTIVE`: the template can be generated from and takes new versions. `ARCHIVED`: hidden from generation, its
+        versions stay downloadable. `NOT_ADDED`: only the tax report slot while no active template is in it.
+      enum: [ACTIVE, ARCHIVED, NOT_ADDED]
+
+    ReportTemplate:
+      type: object
+      description: >-
+        A template of the cooperative, or the empty tax report slot (`status` `NOT_ADDED`, which has neither `id`,
+        `name`, `description` nor `latestVersion`, and `versionCount` 0)
+      required: [status, versionCount]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Absent only for the empty tax report slot
+        slot:
+          $ref: '#/components/schemas/ReportTemplateSlot'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: As the chairman entered it; absent only for the empty tax report slot
+        description:
+          type: string
+          maxLength: 500
+          description: As the chairman entered it; absent when there is none
+        status:
+          $ref: '#/components/schemas/ReportTemplateStatus'
+        latestVersion:
+          $ref: '#/components/schemas/ReportTemplateVersion'
+        versionCount:
+          type: integer
+          format: int32
+          minimum: 0
+
+    ReportTemplateVersion:
+      type: object
+      description: One uploaded file of a template; versions are never changed or deleted
+      required: [id, versionNo, fileName, sizeBytes, sha256, uploadedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        versionNo:
+          type: integer
+          format: int32
+          minimum: 1
+          description: 1 for the first upload, then one more for each new file
+        fileName:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Base name of the uploaded file, sanitised
+        sizeBytes:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 2097152
+          description: Size of the stored file in bytes
+        sha256:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+          description: SHA-256 digest of the stored file, lower-case hex
+        uploadedAt:
+          type: string
+          format: date-time
+        uploadedByName:
+          type: string
+          description: >-
+            The current name of the member who uploaded the file; absent when the member no longer exists
+
+    ReportTemplateWarningCode:
+      type: string
+      description: >-
+        What the app changed in or could not fill from a template; a warning never stops an upload or a generation.
+        `EXTERNAL_LINKS_REMOVED`: the file linked to other workbooks or had data connections; they were removed from the
+        stored file (the only warning of an upload). The others come with a generated file:
+        `UNKNOWN_PLACEHOLDER`: the app does not know the placeholder (not in the catalog, or a charge type the
+        cooperative does not have); it was left in the cell as written. `VALUE_UNKNOWN`: the placeholder is known but
+        its value is not (a meter value without a reading, a requisite that is not set); the cell was left empty,
+        never `0`. `RICH_TEXT_FLATTENED`: a cell with a placeholder had text in several formats; it was written as
+        plain text. `CHART_REFS_NOT_SHIFTED`: a chart refers to a sheet whose rows were repeated; its references were
+        not moved
+      enum:
+        - EXTERNAL_LINKS_REMOVED
+        - UNKNOWN_PLACEHOLDER
+        - VALUE_UNKNOWN
+        - RICH_TEXT_FLATTENED
+        - CHART_REFS_NOT_SHIFTED
+
+    ReportTemplateValueReason:
+      type: string
+      description: >-
+        Why a known placeholder has no value (`VALUE_UNKNOWN`). `NO_READING`, `DERIVED_FROM_UNKNOWN` and
+        `SEVERAL_RATES` as in `ReportCellReason` (a land tax rate of a plot that two rates charged in the year is
+        `SEVERAL_RATES`). `NOT_SET`: a requisite of the cooperative (official name, legal address, bank, IBAN,
+        ЄДРПОУ) is not entered
+      enum: [NO_READING, DERIVED_FROM_UNKNOWN, SEVERAL_RATES, NOT_SET]
+
+    ReportTemplateWarning:
+      type: object
+      description: >-
+        One warning of a generated file, as the header `X-Report-Warnings-Detail` carries it. The sheet name and the
+        placeholder are as written in the template
+      required: [code]
+      properties:
+        code:
+          $ref: '#/components/schemas/ReportTemplateWarningCode'
+        sheet:
+          type: string
+          description: The sheet of the template; absent for a warning about the whole file
+        cell:
+          type: string
+          description: The cell in A1 notation in the generated file (`B7`); absent for a warning about the whole file
+        placeholder:
+          type: string
+          description: The placeholder key without `${` and `}`
+        reason:
+          $ref: '#/components/schemas/ReportTemplateValueReason'
+
+    ReportTemplateFieldType:
+      type: string
+      description: >-
+        The value of a placeholder. `TEXT`: text (codes such as a status are written in the file's language).
+        `NUMBER`: an exact number that is not money, for example an area or a rate. `MONEY`: an amount with two
+        decimals. `QUANTITY`: kWh or m³ with three decimals. `INT`: a whole number. `DATE`: a day. `MONTH`: a month
+        (alone in a cell, the date of its first day). `DATE_TIME`: a day and time in Europe/Kyiv
+      enum: [TEXT, NUMBER, MONEY, QUANTITY, INT, DATE, MONTH, DATE_TIME]
+
+    ReportTemplateRowSet:
+      type: string
+      description: >-
+        The rows a template row repeats over. `PLOTS`: the active plots with their balances and land tax. `MONTHS`:
+        the billing months with charges. `METERS`: the nodes of the electricity meter tree. `WATER`: the plots
+        connected to water, one row per plot and source
+      enum: [PLOTS, MONTHS, METERS, WATER]
+
+    ReportTemplateField:
+      type: object
+      description: One placeholder of the field catalog
+      required: [key, field, type, permission]
+      properties:
+        key:
+          type: string
+          pattern: '^[A-Za-z][A-Za-z0-9_.\-]*$'
+          description: What to write in the template between `${` and `}`, for example `totals.debt`
+        field:
+          type: string
+          description: >-
+            The description code: the description is `reportTemplates.fields.<field>` in the client's catalogs. The
+            key itself for a fixed placeholder; for a placeholder of a charge type family the family's code,
+            `totals.charged.byChargeType` or `rows.plots.debt.byChargeType`, whose text names the type
+            (`{chargeType}`)
+        pattern:
+          type: string
+          description: >-
+            Only for a charge type family: the family's keys, `totals.charged.<type>` or `rows.plots.debt.<type>`
+            (`<type>` the code of a seeded type or the id of a custom type)
+        chargeTypeId:
+          type: string
+          format: uuid
+          description: Only for a charge type family, the charge type of this entry
+        type:
+          $ref: '#/components/schemas/ReportTemplateFieldType'
+        rowSet:
+          $ref: '#/components/schemas/ReportTemplateRowSet'
+        example:
+          type: string
+          description: >-
+            A language-neutral example of the value as the API writes values (`"1250.50"`, `"2026-01-31"`,
+            `"152.400"`); absent for text that depends on the language or on what the cooperative entered
+        permission:
+          $ref: '#/components/schemas/Permission'
+
+    ReportTemplateGenerateRequest:
+      type: object
+      description: The period to fill a template for, both days included, in Europe/Kyiv
+      required: [from, to]
+      properties:
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+        lang:
+          type: string
+          enum: [uk, en]
+          description: >-
+            Language of the file's texts, `uk` or `en`. Without it the `Accept-Language` header decides, then `uk`
+
+    ReportTemplateUploadResult:
+      type: object
+      description: >-
+        A stored upload: the template with the new file as its `latestVersion`, and what was changed in the file
+      required: [template, warnings]
+      properties:
+        template:
+          $ref: '#/components/schemas/ReportTemplate'
+        warnings:
+          type: array
+          description: What was changed in the stored file; an upload lists only `EXTERNAL_LINKS_REMOVED`
+          items:
+            $ref: '#/components/schemas/ReportTemplateWarningCode'

@@ -90,13 +90,14 @@ the owning module (`INVALID`). Yes and no (`так`/`ні`, `yes`/`no`, `true`/`
 
 1. The size is checked (over 10 MB: 413 `FILE_TOO_LARGE`; the multipart limits in `application.yml` and the container
    answer the same way before the controller is reached).
-2. `ZipGuard` refuses anything that is not a safe `.xlsx` (400 `FILE_NOT_XLSX`): wrong extension, no zip signature (so
-   also the old `.xls` and encrypted workbooks, which are OLE2 files), a corrupt archive, missing
+2. `xlsx.WorkbookGuard` (module `xlsx`, default limits) refuses anything that is not a safe `.xlsx`, and the import
+   answers every refusal (`UnsafeWorkbookException`, whatever its reason) with 400 `FILE_NOT_XLSX`: wrong extension, no
+   zip signature (so also the old `.xls` and encrypted workbooks, which are OLE2 files), a corrupt archive, missing
    `[Content_Types].xml` or `xl/workbook.xml`, more than 200 entries, an entry over 50 MB or an archive over 100 MB once
    unpacked. Unpacked sizes are counted from the bytes decompression really produces, never from the sizes the archive
    declares (a zip bomb declares what it likes). The archive is read with commons-compress, which the spreadsheet
    library brings along; the JDK's `ZipInputStream` cannot read files written with data descriptors (as fastexcel does).
-3. `WorkbookReader` (the only user of the spreadsheet library) streams the rows; `PlotsSheet`, `MembersSheet` and
+3. `WorkbookReader` (the only reader of uploaded workbooks in the import; `reports` writes files with the same library) streams the rows; `PlotsSheet`, `MembersSheet` and
    `OwnershipSheet` find the columns with `HeaderMatcher`, read every cell with `Cells` and stop with 400
    `IMPORT_LIMIT_EXCEEDED` at the 2,001st plot row, the 3,001st member row or the 6,001st ownership row. The workbook's
    date system (1900 or 1904) comes from `WorkbookReader.date1904()` and is used for the Excel dates of `valid_from`,

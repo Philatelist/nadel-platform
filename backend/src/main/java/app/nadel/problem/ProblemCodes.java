@@ -48,6 +48,11 @@ public final class ProblemCodes {
     public static final String FILE_TOO_LARGE = "FILE_TOO_LARGE";
     /** 400: the upload is not an {@code .xlsx} workbook (also a corrupt, encrypted or oversized-when-unpacked one). */
     public static final String FILE_NOT_XLSX = "FILE_NOT_XLSX";
+    /**
+     * 400: the IBAN is not a valid Ukrainian IBAN ({@code UA} and 27 digits with a correct mod-97 check); also the code
+     * of the field {@code iban} in {@code errors[]}.
+     */
+    public static final String IBAN_INVALID = "IBAN_INVALID";
     /** 400: the workbook has more rows than one import accepts. */
     public static final String IMPORT_LIMIT_EXCEEDED = "IMPORT_LIMIT_EXCEEDED";
     /** 409: the preview has problems and cannot be committed. */
@@ -136,6 +141,42 @@ public final class ProblemCodes {
     public static final String WATER_SOURCE_INVALID = "WATER_SOURCE_INVALID";
     /** 409: plots are or were connected to the meter as their water source, so it is not deleted. */
     public static final String WATER_SOURCE_IN_USE = "WATER_SOURCE_IN_USE";
+
+    /**
+     * 400: the filters do not fit the report (a required filter is missing, a range ends before it starts, an unknown
+     * charge type); {@code errors[]} names each query parameter.
+     */
+    public static final String REPORT_FILTER_INVALID = "REPORT_FILTER_INVALID";
+    /** 422: a sheet of the report would have more than 20 000 rows; the user narrows the filters. */
+    public static final String REPORT_TOO_LARGE = "REPORT_TOO_LARGE";
+    /**
+     * 400: the uploaded file is not a usable report template; {@code errors[]} has one entry on {@code file} whose code
+     * names why ({@link #NOT_XLSX}, {@link #MACROS}, {@link #ACTIVE_CONTENT}, {@link #BROKEN_ZIP},
+     * {@link #UNPACKED_TOO_LARGE}, {@link #TWO_ROW_SETS}, {@link #ARRAY_ACROSS_ROW}).
+     */
+    public static final String TEMPLATE_INVALID = "TEMPLATE_INVALID";
+    /** 422: the template file is over 2 MB; checked before the file is read. */
+    public static final String TEMPLATE_TOO_LARGE = "TEMPLATE_TOO_LARGE";
+    /** 409: the template is archived: it is not generated from and takes no new version. */
+    public static final String TEMPLATE_ARCHIVED = "TEMPLATE_ARCHIVED";
+    /** 409: another active template of the cooperative has the name, ignoring case; {@code errors[]} names it. */
+    public static final String TEMPLATE_NAME_TAKEN = "TEMPLATE_NAME_TAKEN";
+    /** 409: an active template is in the slot already; a new file goes in as its new version. */
+    public static final String TEMPLATE_SLOT_TAKEN = "TEMPLATE_SLOT_TAKEN";
+    /**
+     * 409: another version of the template was stored at the same moment (the backstop of the version number's unique
+     * key behind the row lock on the template); the client sends the file again.
+     */
+    public static final String TEMPLATE_VERSION_CONFLICT = "TEMPLATE_VERSION_CONFLICT";
+
+    /** Codes of {@code errors[{field: file}]} with {@link #TEMPLATE_INVALID}. */
+    public static final String NOT_XLSX = "NOT_XLSX";
+    public static final String MACROS = "MACROS";
+    public static final String ACTIVE_CONTENT = "ACTIVE_CONTENT";
+    public static final String BROKEN_ZIP = "BROKEN_ZIP";
+    public static final String UNPACKED_TOO_LARGE = "UNPACKED_TOO_LARGE";
+    public static final String TWO_ROW_SETS = "TWO_ROW_SETS";
+    public static final String ARRAY_ACROSS_ROW = "ARRAY_ACROSS_ROW";
 
     /** Codes of single fields in {@code errors[]}. */
     public static final String REQUIRED = "REQUIRED";

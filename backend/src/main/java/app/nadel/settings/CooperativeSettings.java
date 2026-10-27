@@ -27,4 +27,7 @@ public interface CooperativeSettings {
 
     /** A plot whose oldest unpaid charge is older than this many days is red; 90 when never saved. */
     int redDays();
+
+    /** The legal details of the cooperative; {@link Requisites#NONE} when never saved. */
+    Requisites requisites();
 }

@@ -10,6 +10,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -90,6 +91,13 @@ class JpaPlotCatalog implements PlotCatalog {
 
     @Override
     @Transactional(readOnly = true)
+    public List<UUID> idsOnStreet(String street) {
+        String wanted = street.strip();
+        return wanted.isEmpty() ? List.of() : plots.findIdsOnStreet(wanted);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public long countChargeable() {
         return plots.countByArchivedAtIsNullAndKindNot(PlotKind.COMMON);
     }
@@ -98,6 +106,15 @@ class JpaPlotCatalog implements PlotCatalog {
     @Transactional(readOnly = true)
     public List<PlotFacts> findChargeable() {
         return plots.findChargeableInNaturalOrder().stream().map(JpaPlotCatalog::facts).toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<PlotFacts> findActive(@Nullable String street) {
+        String wanted = street == null ? "" : street.strip();
+        List<Plot> found = wanted.isEmpty() ? plots.findChargeableInNaturalOrder()
+                : plots.findChargeableOnStreetInNaturalOrder(wanted);
+        return found.stream().map(JpaPlotCatalog::facts).toList();
     }
 
     private static PlotFacts facts(Plot plot) {

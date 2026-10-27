@@ -24,7 +24,9 @@ public enum Permission {
     CHARGES_RUN,
     CHARGES_REVERSE,
     PERIODS_CLOSE,
-    RECALCULATION_RUN;
+    RECALCULATION_RUN,
+    REPORTS_VIEW,
+    REPORT_TEMPLATES_MANAGE;
 
     public static final String AUTHORITY_PREFIX = "PERM_";
 

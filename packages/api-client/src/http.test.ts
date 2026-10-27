@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, configureApi, nadelFetch } from './http';
+import { ApiError, configureApi, nadelFetch, responseHeadersOf } from './http';
 
 const fetchMock = vi.fn();
 const onUnauthorized = vi.fn();
@@ -71,5 +71,20 @@ describe('nadelFetch', () => {
     fetchMock.mockResolvedValue(new Response('', { status: 401 }));
     await expect(nadelFetch('/x')).rejects.toBeInstanceOf(ApiError);
     expect(onUnauthorized).toHaveBeenCalledOnce();
+  });
+
+  it('lets the caller read the headers of a downloaded file through its Blob', async () => {
+    fetchMock.mockResolvedValue(
+      new Response('xlsx-bytes', {
+        status: 200,
+        headers: { 'Content-Type': 'application/octet-stream', 'X-Report-Warnings': '3' },
+      }),
+    );
+    const blob = await nadelFetch<Blob>('/x');
+    expect(responseHeadersOf(blob)?.get('X-Report-Warnings')).toBe('3');
+  });
+
+  it('knows no headers for a Blob that did not come from nadelFetch', () => {
+    expect(responseHeadersOf(new Blob(['x']))).toBeUndefined();
   });
 });

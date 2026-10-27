@@ -16,6 +16,8 @@ export * from './generated/permissions/permissions';
 export * from './generated/plots/plots';
 export * from './generated/readings/readings';
 export * from './generated/recalculations/recalculations';
+export * from './generated/report-templates/report-templates';
+export * from './generated/reports/reports';
 export * from './generated/roles/roles';
 export * from './generated/settings/settings';
 export * from './generated/tariffs/tariffs';

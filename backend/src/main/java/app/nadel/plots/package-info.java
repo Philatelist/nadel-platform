@@ -6,7 +6,9 @@
  * plot facts (number, street, kind, archived, area) through {@link app.nadel.plots.PlotCatalog} and may veto deleting,
  * archiving or turning a plot into common land through the SPI {@link app.nadel.plots.PlotChangeGuard} (ADR 0011).
  * The ledger keeps the debt behind the status through {@link app.nadel.plots.PlotDebtCache}; the colour is derived
- * from it, the red threshold of the settings and today whenever it is read.
+ * from it, the red threshold of the settings and today whenever it is read. The staff reports read the current owners
+ * through {@link app.nadel.plots.PlotOwners} (ids only) and the status through {@link app.nadel.plots.PlotStatuses}
+ * ({@link app.nadel.plots.PlotStatus}).
  */
 @org.springframework.modulith.ApplicationModule(displayName = "Plots and map")
 package app.nadel.plots;

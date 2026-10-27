@@ -6,7 +6,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.math.BigInteger;
 import org.junit.jupiter.api.Test;
 
-/** A quantity is an exact reduced fraction; only {@code toMeterValue} rounds, HALF_UP to three decimals. */
+/**
+ * A quantity is an exact reduced fraction; only {@code toDecimal} (and {@code toMeterValue} through it) rounds, HALF_UP
+ * to three decimals.
+ */
 class QuantityTests {
 
     private static Quantity q(long numerator, long denominator) {
@@ -86,6 +89,18 @@ class QuantityTests {
         assertThat(third.times(3)).isEqualTo(q(1, 1));
         // rounding first and then multiplying is what this type exists to avoid
         assertThat(Quantity.of(third.toMeterValue()).times(3)).isNotEqualTo(q(1, 1));
+    }
+
+    @Test
+    void theSignedDisplayValueRoundsTheSameWayAndKeepsTheSign() {
+        assertThat(q(1, 3).toDecimal()).hasToString("0.333");
+        assertThat(q(-1, 3).toDecimal()).hasToString("-0.333");
+        assertThat(q(-50, 1).toDecimal()).hasToString("-50.000");
+        // HALF_UP rounds a tie away from zero on both sides
+        assertThat(q(1, 2000).toDecimal()).hasToString("0.001");
+        assertThat(q(-1, 2000).toDecimal()).hasToString("-0.001");
+        assertThat(q(-1, 8000).toDecimal().signum()).isZero();
+        assertThat(q(2, 3).toDecimal()).isEqualTo(q(2, 3).toMeterValue().value());
     }
 
     @Test

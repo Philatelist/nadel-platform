@@ -10,14 +10,21 @@
  * consumer run changes only by its reversal (trigger {@code run_reversal_guard}).
  * <p>
  * Public API: the event {@link app.nadel.ledger.ChargesBooked}, published after every booking or reversal so that the
- * plot status can follow the debt, and the import facade {@link app.nadel.ledger.OpeningBalanceImport} (the "Opening
- * balances" sheet of the Excel import). Everything else is internal: the entities, the pure rules {@code BillingCalendar}
- * (which month a charge is booked in) and {@code DebtCalculator} (debt per charge type), the reversal and opening
- * balance commands, the account query, the billing months (list, check list, closing in order), the month run
- * ({@code MonthRun}, {@code TariffMonthPlanning}), the charges of plot meter intervals ({@code ReadingCharges}, the
- * listener of {@link app.nadel.meters.PlotMeterPointsChanged}; {@code IntervalCharging}; the pure
- * {@code ReadingChargePlanning} and {@code ReadingChargeCalculator}), the losses runs ({@code LossesRuns}; the pure
- * {@code LossesCalculator} and {@code LossesPlanning}), the common consumer runs ({@code CommonConsumerRuns},
+ * plot status can follow the debt, the import facade {@link app.nadel.ledger.OpeningBalanceImport} (the "Opening
+ * balances" sheet of the Excel import) and the read facade of the reports {@link app.nadel.ledger.LedgerReadModel}
+ * (aggregates in the caller's transaction, no personal data: month totals, {@link app.nadel.ledger.PlotDebts} as
+ * of a day, the {@link app.nadel.ledger.CorrectionRow} of every reversal and adjustment of the billing months, the
+ * effective amount charged per plot for a year, the {@link app.nadel.ledger.ChargedRow} of every electricity charge,
+ * reversal and adjustment of a range of days and of every water charge of the plots asked, the open reading interval
+ * items of the "not charged" queue per meter, and the booked losses and common consumer runs of a range as
+ * {@link app.nadel.ledger.LossesRunNodeRow} and {@link app.nadel.ledger.CommonConsumerRunLineRow}). Everything else is
+ * internal: the entities, the pure
+ * rules {@code BillingCalendar} (which month a charge is booked in) and {@code DebtCalculator} (debt per charge
+ * type), the reversal and opening balance commands, the account query, the billing months (list, check list, closing
+ * in order), the month run ({@code MonthRun}, {@code TariffMonthPlanning}), the charges of plot meter intervals
+ * ({@code ReadingCharges}, the listener of {@link app.nadel.meters.PlotMeterPointsChanged}; {@code IntervalCharging};
+ * the pure {@code ReadingChargePlanning} and {@code ReadingChargeCalculator}), the losses runs ({@code LossesRuns}; the
+ * pure {@code LossesCalculator} and {@code LossesPlanning}), the common consumer runs ({@code CommonConsumerRuns},
  * {@code CommonConsumerBillings}; the pure {@code CommonConsumerSplitCalculator} and {@code CommonConsumerPlanning}),
  * the queue ({@code NotChargedQueue}), the
  * implementations of the ports {@link app.nadel.tariffs.TariffVersionUsage} ({@code LedgerTariffVersionUsage}) and
@@ -33,7 +40,8 @@
  * {@code WaterConnections}: water tariffs charge only the days a plot is connected, a well pump is shared among the
  * plots connected to it),
  * {@code settings} ({@code CooperativeSettings}), {@code money}, {@code identity}, {@code audit},
- * {@code problem} and {@code tenancy}; only {@code imports} depends on it (the opening balances sheet).
+ * {@code problem} and {@code tenancy}; {@code imports} depends on it (the opening balances sheet) and {@code reports}
+ * reads it through {@code LedgerReadModel}.
  */
 @org.springframework.modulith.ApplicationModule(displayName = "Ledger and charges")
 package app.nadel.ledger;

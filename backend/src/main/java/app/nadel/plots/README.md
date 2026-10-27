@@ -48,7 +48,22 @@ status refresh, `OWNERSHIP_CHANGED` event and its texts) is `OwnershipRecorder`,
 import. A violation of the plot number, cadastral number or ownership overlap constraint at a flush, or a plan that no
 longer holds, is 409 `IMPORT_STALE`.
 
-`plots` also implements the SPIs `members.MemberArchiveGuard` (see Guards) and `identity.OwnedPlotsSource` (`GET /me` ownedPlots), serves the debt cache writer `PlotDebtCache` (see Status) and the public read facade `PlotCatalog` (`JpaPlotCatalog`: `find`, `findAll`, `findAndLockShared` (the plot `FOR SHARE`, `MANDATORY` transaction: taken by `meters` before it registers a plot meter, so it waits for a delete, archive or edit of the plot in progress and they wait for it), `findAllAndLockShared` (the same lock for many plots in id order, 500 per `IN` list: the Excel import's meters), `findActiveByNumbers` (active plots by number ignoring case, 500 values per `IN` list), `inNaturalOrder` (ids sorted by the natural order of the number, as in the plots list), `inStreetOrder` (ids by street in the Ukrainian alphabet with the ICU collation `uk-x-icu`, plots without a street last, then the natural order of the number: the meter register and round), `countChargeable`, `findChargeable` (the active plots that are not common land in natural order of the number: the ledger's month run and the tariffs' conflict warning); plain `PlotFacts` records with number, street, common land, archived and area, used by `tariffs`, `meters` and `ledger`; runs in the caller's transaction under RLS), defines the veto SPI `PlotChangeGuard` (see Guards), and uses `members.MemberDirectory` and `settings.CooperativeSettings`.
+`plots` also implements the SPIs `members.MemberArchiveGuard` (see Guards) and `identity.OwnedPlotsSource` (`GET /me` ownedPlots), serves the debt cache writer `PlotDebtCache` (see Status) and the public read facade `PlotCatalog` (`JpaPlotCatalog`: `find`, `findAll`, `findAndLockShared` (the plot `FOR SHARE`, `MANDATORY` transaction: taken by `meters` before it registers a plot meter, so it waits for a delete, archive or edit of the plot in progress and they wait for it), `findAllAndLockShared` (the same lock for many plots in id order, 500 per `IN` list: the Excel import's meters), `findActiveByNumbers` (active plots by number ignoring case, 500 values per `IN` list), `inNaturalOrder` (ids sorted by the natural order of the number, as in the plots list), `inStreetOrder` (ids by street in the Ukrainian alphabet with the ICU collation `uk-x-icu`, plots without a street last, then the natural order of the number: the meter register and round), `idsOnStreet` (the ids of every plot, archived ones and common land included, whose street equals the given one ignoring case and surrounding spaces, lowered by the database: the street filter of the reports), `countChargeable`, `findChargeable` (the active plots that are not common land in natural order of the number: the ledger's month run and the tariffs' conflict warning), `findActive(street)` (the same plots, optionally of one street compared as in `idsOnStreet`; `null` or blank = every street: the rows of the plot balances and debtors reports); plain `PlotFacts` records with number, street, common land, archived and area, used by `tariffs`, `meters`, `ledger` and `reports`; runs in the caller's transaction under RLS), defines the veto SPI `PlotChangeGuard` (see Guards), and uses `members.MemberDirectory` and `settings.CooperativeSettings`.
+
+For the staff reports of feature 013 (plot balances, debtors) the module also serves two read facades, both in the
+caller's transaction (`MANDATORY`) under RLS, ids and codes only, 500 ids per `IN` list, and staff-only (the caller
+checks its permissions; the member visibility rules of the plots endpoints are not applied):
+
+- `PlotOwners` (`JpaPlotOwners`): `ownerCounts(plotIds)` (the number of **current** owners, an `ownership` row with
+  `valid_to` null; ended ownerships are not counted) and `currentOwnerIds(plotIds)` (their member ids, the earliest
+  start first, then member id). Every distinct id asked is a key (0 or an empty list when there is no current owner or
+  the plot is unknown). No names: a report that may show names asks `members.MemberDirectory.contacts`.
+- `PlotStatuses` (`JpaPlotStatuses`) with the public enum `PlotStatus` (`RED`, `YELLOW`, `GREEN`, `GREY`; the
+  internal `PlotStatusCode` maps to it by name): `current(plotIds)` is the status on the map today (the `plot_status`
+  cache, current owners, current thresholds and today, see Status); `classify(debts, asOf)` applies the same
+  `PlotStatusPolicy` to a given `PlotStatuses.Debt(total, oldestUnpaid)` per plot with `asOf` in place of today
+  (a past date of the plot balances report), today's thresholds and today's kind and owners. With the cached debt and
+  today it equals `current`. Unknown ids and other cooperatives' plots are absent. Test: `PlotReportFacadesTests`.
 
 ## Endpoints
 
@@ -177,7 +192,7 @@ from a stored colour: `PlotStatusPolicy.statusOf(kind, hasOwner, debt, oldestDeb
   than the red days;
 - YELLOW for any other debt; GREEN without a debt (zero or less).
 
-`PlotStatusBasis` reads the thresholds (`settings.CooperativeSettings.redAmount()`/`redDays()`) and today (the
+The read facade `PlotStatuses` (see Public API) derives the same status for the reports. `PlotStatusBasis` reads the thresholds (`settings.CooperativeSettings.redAmount()`/`redDays()`) and today (the
 Europe/Kyiv `Clock`) once per request; `ViewerScope` carries them. The repository reads `plot_status.debt`,
 `oldest_debt_date` and whether a current owner exists with each row (`PlotRow`); a plot without a `plot_status` row has
 no debt. The list's status filter repeats the same rule in SQL (`PlotRepository.search`, with `redAmount` and

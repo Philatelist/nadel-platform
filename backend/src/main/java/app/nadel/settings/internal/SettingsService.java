@@ -12,6 +12,7 @@ import app.nadel.settings.CommonConsumerSplit;
 import app.nadel.settings.CooperativeSettings;
 import app.nadel.settings.LossesMode;
 import app.nadel.settings.PlotStatusVisibility;
+import app.nadel.settings.Requisites;
 import app.nadel.tenancy.TenantContext;
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -43,11 +44,13 @@ class SettingsService implements CooperativeSettings {
 
     /**
      * A change of the settings: a null field keeps its value. {@code lossesPercent} and {@code redAmount} are the
-     * request's strings, checked here.
+     * request's strings, checked here. A requisite is trimmed and a blank one clears it; the IBAN is normalised and
+     * checked here (its length by the contract before this runs).
      */
     record Change(@Nullable PlotStatusVisibility memberPlotStatusVisibility, @Nullable LossesMode lossesMode,
             @Nullable String lossesPercent, @Nullable CommonConsumerSplit commonConsumerDefaultSplit,
-            @Nullable String redAmount, @Nullable Integer redDays) {
+            @Nullable String redAmount, @Nullable Integer redDays, @Nullable String officialName,
+            @Nullable String legalAddress, @Nullable String bankName, @Nullable String iban) {
     }
 
     private final SettingsRepository settings;
@@ -94,6 +97,12 @@ class SettingsService implements CooperativeSettings {
         return current().redDays();
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public Requisites requisites() {
+        return current().requisites();
+    }
+
     @Transactional(readOnly = true)
     SettingsValues values(AccessProfile viewer) {
         return valuesOf(viewer.tenantId());
@@ -102,7 +111,8 @@ class SettingsService implements CooperativeSettings {
     /**
      * Applies the change. 400 {@code VALIDATION_FAILED} with {@code INVALID} on {@code redAmount} (negative or more
      * than 12 integer digits) or {@code lossesPercent} (above 100); the shape of both strings is checked by the
-     * contract before this runs.
+     * contract before this runs. Then 400 {@code IBAN_INVALID} with the field {@code iban} {@code IBAN_INVALID} when
+     * the IBAN is not a valid Ukrainian IBAN. Either way nothing is saved.
      */
     @Transactional
     SettingsValues update(Change change, AccessProfile actor) {
@@ -120,6 +130,7 @@ class SettingsService implements CooperativeSettings {
             throw new ApiProblemException(HttpStatus.BAD_REQUEST, ProblemCodes.VALIDATION_FAILED,
                     "The request is not valid.", errors);
         }
+        String iban = change.iban() == null ? null : ibanOf(change.iban());
 
         UUID tenantId = actor.tenantId();
         SettingsValues before = valuesOf(tenantId);
@@ -129,12 +140,18 @@ class SettingsService implements CooperativeSettings {
                 orElse(lossesPercent, before.lossesPercent()),
                 orElse(change.commonConsumerDefaultSplit(), before.commonConsumerDefaultSplit()),
                 orElse(redAmount, before.redAmount()),
-                orElse(change.redDays(), before.redDays()));
+                orElse(change.redDays(), before.redDays()),
+                new Requisites(
+                        textOf(change.officialName(), before.requisites().officialName()),
+                        textOf(change.legalAddress(), before.requisites().legalAddress()),
+                        textOf(change.bankName(), before.requisites().bankName()),
+                        change.iban() == null ? before.requisites().iban() : iban));
         List<FieldChange> changes = after.changesSince(before);
         if (!changes.isEmpty()) {
             settings.upsert(tenantId, after.memberPlotStatusVisibility().name(), after.lossesMode().name(),
                     after.lossesPercent(), after.commonConsumerDefaultSplit().name(), after.redAmount(),
-                    after.redDays());
+                    after.redDays(), after.requisites().officialName(), after.requisites().legalAddress(),
+                    after.requisites().bankName(), after.requisites().iban());
             events.publishEvent(AuditEvent.now(
                     tenantId,
                     new Actor(actor.memberId(), actor.subject(), actor.displayName()),
@@ -157,6 +174,25 @@ class SettingsService implements CooperativeSettings {
 
     private SettingsValues valuesOf(UUID tenantId) {
         return settings.findById(tenantId).map(SettingsRow::values).orElse(SettingsValues.DEFAULTS);
+    }
+
+    /** The normalised IBAN; null for a blank text (clears it); 400 {@code IBAN_INVALID} for anything else. */
+    private static @Nullable String ibanOf(String text) {
+        if (text.isBlank()) {
+            return null;
+        }
+        return Iban.parse(text).map(Iban::value).orElseThrow(() -> new ApiProblemException(HttpStatus.BAD_REQUEST,
+                ProblemCodes.IBAN_INVALID, "The IBAN is not valid.",
+                List.of(new FieldProblem("iban", ProblemCodes.IBAN_INVALID))));
+    }
+
+    /** A requisite: null keeps the current value, a blank text clears it, anything else is stored trimmed. */
+    private static @Nullable String textOf(@Nullable String value, @Nullable String current) {
+        if (value == null) {
+            return current;
+        }
+        String trimmed = value.strip();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     private static <T> T orElse(@Nullable T value, T fallback) {

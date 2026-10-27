@@ -20,7 +20,7 @@
         <dt>State</dt>
         <dd>Chapters marked "works" describe the system as it is; "planned" — decided but not built yet</dd>
         <dt>Edition</dt>
-        <dd>22 October 2026</dd>
+        <dd>27 October 2026</dd>
       </dl>
     </div>
 
@@ -1041,6 +1041,97 @@ END $$;</pre>
         </ul>
       </div>
 
+      <h3>Reports</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Element</th>
+            <th>What it does</th>
+            <th>Permission</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Reports (menu) → a report card</td>
+            <td>Opens one of the eight reports; "Debtors" is there only with "View members"</td>
+            <td>View reports</td>
+          </tr>
+          <tr>
+            <td>Report → filters, "Show"</td>
+            <td>
+              Refreshes the preview (first 200 rows and totals); under the filters it says what the period
+              counts by
+            </td>
+            <td>View reports</td>
+          </tr>
+          <tr>
+            <td>Report → "Download Excel"</td>
+            <td>
+              A file with all rows in the interface language; more than 20 000 rows on a sheet is refused;
+              recorded in the audit log
+            </td>
+            <td>View reports</td>
+          </tr>
+          <tr>
+            <td>Reports → "Report templates"</td>
+            <td>The templates page (below)</td>
+            <td>Manage report templates</td>
+          </tr>
+          <tr>
+            <td>Reports → "Generate" next to a template</td>
+            <td>
+              The "Generate a file" window: "From", "To" (up to a year), "Generate and download"; the file is
+              not stored
+            </td>
+            <td>View reports</td>
+          </tr>
+          <tr>
+            <td>Templates → "Tax report" → "Upload the template"</td>
+            <td>A fixed slot; until it is uploaded the status is "The template is not added yet"</td>
+            <td>Manage report templates</td>
+          </tr>
+          <tr>
+            <td>Templates → "Add a template"</td>
+            <td>
+              A name, a description, an .xlsx file up to 2 MB; refuses macros, damaged and oversize files
+            </td>
+            <td>Manage report templates</td>
+          </tr>
+          <tr>
+            <td>Template → "Upload new version", "Versions" → "Download"</td>
+            <td>The new version becomes current; older versions stay available</td>
+            <td>Manage report templates</td>
+          </tr>
+          <tr>
+            <td>Template → "Archive"</td>
+            <td>The template becomes read-only, its name is freed, its versions can be downloaded</td>
+            <td>Manage report templates</td>
+          </tr>
+          <tr>
+            <td>Templates → "Placeholders" (search, "Copy")</td>
+            <td>The catalogue of every placeholder: type, description, example</td>
+            <td>Manage report templates</td>
+          </tr>
+          <tr>
+            <td>Settings → "Requisites" → "Save the requisites"</td>
+            <td>
+              Official name, legal address, bank, IBAN (validated); the EDRPOU code is read-only; recorded in
+              the audit log
+            </td>
+            <td>Manage settings</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="note">
+        <span class="callout-title">Demo data</span>
+        <p>
+          The sample template "Відомість земельного податку" (Land tax statement) and the made-up requisites
+          (EDRPOU, address, IBAN) exist only in the demo data of the local profile
+          (<code>demoledger=on</code>), so that "Generate" works at once. The "Tax report" slot is left empty
+          in the demo on purpose. None of this is present in tests or on a server.
+        </p>
+      </div>
+
       <h3>Audit log and account</h3>
       <table>
         <thead>
@@ -1188,6 +1279,20 @@ END $$;</pre>
             <td>—</td>
             <td>—</td>
           </tr>
+          <tr>
+            <td>View reports</td>
+            <td>yes</td>
+            <td>yes</td>
+            <td>—</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>Manage report templates</td>
+            <td>yes</td>
+            <td>—</td>
+            <td>—</td>
+            <td>—</td>
+          </tr>
         </tbody>
       </table>
       <ul>
@@ -1200,6 +1305,13 @@ END $$;</pre>
           opening balances; "Reverse charges" reverses a charge or a run; "Close periods" closes a month;
           "Recalculate charges" (the chairman only) recalculates past charges and books corrections of used
           tariff versions and readings. A member without "View charges" sees only their own accounts.
+        </li>
+        <li>
+          Reports: "View reports" (chairman, treasurer) opens the eight reports, downloads, and generates
+          files from templates; the "Debtors" report also needs "View members". "Manage report templates" (the
+          chairman only) uploads, replaces, downloads and archives templates, including the tax report slot. A
+          member and the electrician have no reports by default; the chairman gives these permissions to a
+          custom role in "Roles".
         </li>
       </ul>
     </section>
@@ -1225,6 +1337,24 @@ END $$;</pre>
         <dd>
           Only from environment variables; the repository holds only local development passwords. CI scans for
           leaked secrets (gitleaks).
+        </dd>
+        <dt>Report templates are data</dt>
+        <dd>
+          The system <strong>never executes</strong> formulas or code from a template: placeholders are
+          substituted, formulas are left alone, and Excel recalculates them in the opened file. Macros
+          (<code>.xlsm</code>), active content, OLE objects and external links never reach storage (links are
+          removed with a warning). Only <code>.xlsx</code> up to 2 MB is accepted; the zip-bomb guard (limits
+          on the unpacked size and the compression ratio) and the XXE guard (XML without DTDs or external
+          entities) apply both at upload and at every generation. Templates and versions are tables with
+          <code>tenant_id</code>, RLS and isolation between cooperatives; generated files are not stored.
+        </dd>
+        <dt>Reports and personal data</dt>
+        <dd>
+          Personal data (names, phones, e-mails) is only in the "Debtors" report, which also needs "View
+          members"; templates have none. The platform operator sees neither reports nor cooperative data. The
+          audit log has the actions <code>REPORT_GENERATED</code> (the report or the template with its
+          version, the filters, the row count — never the content), <code>REPORT_TEMPLATE_UPLOADED</code> and
+          <code>REPORT_TEMPLATE_ARCHIVED</code>; a change of requisites is recorded with the changed fields.
         </dd>
         <dt>Dependencies</dt>
         <dd>CI checks known vulnerabilities (pnpm audit, OSV) and the code (Semgrep).</dd>
@@ -1466,6 +1596,14 @@ END $$;</pre>
             <td>System Settings → Privacy &amp; Security → Full Disk Access → IntelliJ IDEA, restart.</td>
           </tr>
           <tr>
+            <td>A generated Excel file opens with a repair prompt</td>
+            <td>
+              Tell the developer and attach the template and the generated file. The template filler is our
+              own (ADR 0015); a repair message is one of the conditions for reconsidering it in favour of
+              Apache POI.
+            </td>
+          </tr>
+          <tr>
             <td>The pipeline stopped</td>
             <td><code>/feature-pipeline resume</code> continues where it stopped, from its log.</td>
           </tr>
@@ -1556,6 +1694,15 @@ END $$;</pre>
             <td>
               Two guides in Ukrainian and English in <code>main</code>: for the board (working in the system
               and the calculation rules) and for the platform owner (this one).
+            </td>
+          </tr>
+          <tr>
+            <td>27.10.2026</td>
+            <td>
+              Reports introduce no new rules, and templates are data (ADR 0015): our own streaming OOXML
+              filler instead of Apache POI (POI stays the recorded fallback; the engine is about 1900 lines
+              against the threshold of 2000 that triggers a review), with no formula evaluation, no macros and
+              no external links.
             </td>
           </tr>
         </tbody>

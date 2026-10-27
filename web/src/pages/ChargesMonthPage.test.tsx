@@ -42,6 +42,20 @@ describe('ChargesMonthPage', () => {
     month = openMonth;
   });
 
+  it('links to the charges report of the month with REPORTS_VIEW', () => {
+    permissions = ['CHARGES_VIEW', 'REPORTS_VIEW'];
+    renderPage();
+    expect(screen.getByRole('link', { name: 'Report' })).toHaveAttribute(
+      'href',
+      '/reports/charges-by-month?fromMonth=2026-09&toMonth=2026-09',
+    );
+  });
+
+  it('has no report link without REPORTS_VIEW', () => {
+    renderPage();
+    expect(screen.queryByRole('link', { name: 'Report' })).toBeNull();
+  });
+
   it('shows the totals and the check list', () => {
     renderPage();
     expect(screen.getByRole('heading', { name: 'September 2026' })).toBeInTheDocument();

@@ -10,6 +10,7 @@ import { normalizeMoneyInput, normalizePercentInput } from '@nadel/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
+import { RequisitesPanel } from '../components/RequisitesPanel';
 import { CommonConsumersSection } from '../components/settings/CommonConsumersSection';
 import { WaterSourcesSection } from '../components/water/WaterSourcesSection';
 import { QueryBoundary } from '../components/QueryBoundary';
@@ -56,6 +57,7 @@ function CooperativeSettings() {
           <StatusThresholdSection saved={data} />
           <LossesSettingsSection saved={data} />
           <CommonConsumersSection saved={data} />
+          <RequisitesPanel saved={data} />
         </>
       )}
     </QueryBoundary>

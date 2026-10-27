@@ -62,6 +62,9 @@ Questions:
   (days of a few hundred, a thousand for the three decimals) and are reduced after every operation.
 - A consumer of `Quantity` that needs a fixed-point number has `toMeterValue()` (rounded, display only) and the exact
   `numerator()` and `denominator()`; a new use of either is reviewed against this ADR.
+- Feature 013 (reports) shows differences that can be negative (the losses of a node, the kWh of a reversal), which are
+  not meter values. `Quantity.toDecimal()` is the same display rounding with the sign kept (a `BigDecimal` of scale 3);
+  `toMeterValue()` is `toDecimal()` refused below zero, so the rounding still lives in one method.
 - Water is held in the same type (m3 with three decimals, litres). A resource with another precision would be a new decision.
 - Clients never calculate consumption: they receive `MeterValue` strings for readings and for calculated values, marked as
   calculated, and show them.

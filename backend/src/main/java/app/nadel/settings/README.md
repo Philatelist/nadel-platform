@@ -17,6 +17,22 @@ Settings (V7, and V14 for the ledger, feature 011):
 
 A change of the red threshold applies to every status read from then on: `plots` derives the colour at read time.
 
+Requisites (V20, feature 013, functional spec 2.13): the legal details of the cooperative, printed on reports and filled
+into templates. They are public data of the legal entity, not personal data, so they are audited with their values. All
+are optional (`null` when not set, absent from the JSON).
+
+| Requisite | Column | Rule |
+|---|---|---|
+| `officialName` | `official_name text`, CHECK 1..300 characters | The full official name |
+| `legalAddress` | `legal_address text`, CHECK 1..500 characters | The legal address |
+| `bankName` | `bank_name text`, CHECK 1..200 characters | The name of the bank |
+| `iban` | `iban text`, CHECK `^UA[0-9]{27}$` | A valid Ukrainian IBAN, stored without spaces and in upper case; the mod-97 check is in `internal/Iban` |
+
+The ЄДРПОУ code is not a setting: it is the `edrpou` column of the cooperative's own `tenant` row, changed only by the
+platform operator. `GET /settings` and the answer of `PUT /settings` carry it read-only (`edrpou`, read through
+`tenancy.TenantDirectory`, where RLS shows only the caller's own `tenant` row); `PUT` has no such field and an `edrpou`
+sent in the body is ignored.
+
 The visibility setting:
 
 | Value | Meaning |
@@ -32,7 +48,8 @@ filter then matches only the member's own plots).
 
 | Type | Use |
 |---|---|
-| `CooperativeSettings` | `memberPlotStatusVisibility()`, `lossesMode()`, `lossesPercent()` (`BigDecimal`, two decimals), `commonConsumerDefaultSplit()`, `redAmount()` (`money.Money`), `redDays()` for the cooperative of the current transaction or request (`TenantContext`); the defaults when never saved, and also when no cooperative is bound (RLS would show no row). Call it inside a transaction |
+| `CooperativeSettings` | `memberPlotStatusVisibility()`, `lossesMode()`, `lossesPercent()` (`BigDecimal`, two decimals), `commonConsumerDefaultSplit()`, `redAmount()` (`money.Money`), `redDays()`, `requisites()` for the cooperative of the current transaction or request (`TenantContext`); the defaults when never saved, and also when no cooperative is bound (RLS would show no row). Call it inside a transaction |
+| `Requisites` | `officialName`, `legalAddress`, `bankName`, `iban` (each nullable); `Requisites.NONE` when never saved |
 | `PlotStatusVisibility` | `OWN_ONLY`, `ALL_PLOTS` |
 | `LossesMode` | `FIXED_PERCENT`, `PROPORTIONAL` |
 | `CommonConsumerSplit` | `CONNECTED_PLOTS`, `EQUAL_PER_PLOT`, `SERVICE_USERS`, `NOT_CHARGED` |
@@ -47,7 +64,12 @@ filter then matches only the member's own plots).
 The cooperative always comes from the token, never from the request. `PUT` takes `CooperativeSettingsUpdate`: every
 field is optional and a field left out keeps its value (each section of the settings page saves its own fields; `{}`
 changes nothing). An unknown value, a malformed number, `redDays` outside 0..36500, a negative `redAmount` or one with
-more than 12 integer digits (`INVALID`) and `lossesPercent` above 100 (`INVALID`) are 400.
+more than 12 integer digits (`INVALID`), `lossesPercent` above 100 (`INVALID`) and a requisite over its maximum length
+(`TOO_LONG`; the IBAN at most 64 characters as typed) are 400 `VALIDATION_FAILED`. A requisite is trimmed and an empty
+string clears it. The IBAN is normalised (spaces removed, upper case) and checked: anything that is not a valid Ukrainian
+IBAN (`UA` and 27 digits with a mod-97 check of 1: another country, a wrong length, other characters or a wrong
+checksum) is 400 `IBAN_INVALID` with the field error `iban` `IBAN_INVALID`, and nothing is saved. The contract has no
+pattern on the IBAN of the update on purpose, so every such mistake is that one answer.
 
 ## Writes
 
@@ -56,7 +78,8 @@ anything differs it upserts the whole row (`insert ... on conflict (tenant_id) d
 collide) and publishes one `audit.AuditEvent` `SETTINGS_UPDATED` (entity `SETTINGS`, entity id = the cooperative id,
 label = the code `settings` (the client shows the name in the reader's language)) with one field change per changed
 setting, old and new as codes and plain numbers (`memberPlotStatusVisibility` `OWN_ONLY`, `redAmount` `1000.00`,
-`redDays` `90`, `lossesPercent` `0.00`, ...; a never-saved cooperative reports the defaults as the old values). Saving the
+`redDays` `90`, `lossesPercent` `0.00`, ...; the requisites `officialName`, `legalAddress`, `bankName` and `iban` as
+their text, `null` when not set or cleared; a never-saved cooperative reports the defaults as the old values). Saving the
 current values changes nothing and writes no audit entry.
 
 Depends on `identity`, `audit`, `problem`, `tenancy` and `money` (`redAmount()` is `Money`).
