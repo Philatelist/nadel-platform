@@ -99,3 +99,6 @@ wiring vs protected `.github/`.
 - Slice 5 verify green: meters/plots/ledger/modularity 1309 tests 0 failures; pnpm typecheck, lint, shared 130, PlotForm 10.
   - AUTO: explicit guard order ledger 100 → meter 200 → water 300 (keeps the previous effective order; ledger only refuses DELETE).
   - AUTO: uk wording «відключіть» (matches the meters UI) instead of «завершіть».
+- Slice 5 committed 7130cc6 — review: PASS round 1.
+- Slice 6 implemented: shared `useDebouncedSearchParam` (timer cleared on unmount, no write after the path changed) on Plots/Members/Meters/ReadingsRound pages; ownership specs wait for `?q=9`; `cleanupMeterPlot` in e2e support used by meters.spec finally and beforeAll sweep. Root cause confirmed from CI artefact (final page `/plots?q=9` after the click). Verify: typecheck, lint, format, vitest 120 files / 763 tests green.
+  - AUTO (notTestableLocally=auto): the Playwright repeat run (`ownership ownership-acceptance meters --repeat-each=3 --retries=0`) and `@smoke` could not run — ports 8080/5173 are held by the owner's own `make up` stack (PIDs 79572 vite, 79613 java), which the pipeline does not stop. Deferred to Phase 4 / CI; the criterion "ownership checks pass without retries" stays [?] until then.

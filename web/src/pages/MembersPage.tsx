@@ -1,11 +1,11 @@
 import { useListMembers, type Member } from '@nadel/api-client';
 import { keepPreviousData } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { Pagination } from '../components/Pagination';
 import { QueryBoundary } from '../components/QueryBoundary';
 import { Badge, buttonClass, DataTable, PageHeader, Panel, SearchField, type Column } from '../components/ui';
-import { useDebouncedValue } from '../hooks/useDebouncedValue';
+import { useDebouncedSearchParam } from '../hooks/useDebouncedSearchParam';
 import { useT } from '../i18n';
 import { useCan } from '../me';
 import { RoleNameList } from '../components/RoleName';
@@ -25,22 +25,9 @@ export function MembersPage() {
   const page = Math.max(0, Number.parseInt(params.get('page') ?? '0', 10) || 0);
 
   const [input, setInput] = useState(q);
-  const debounced = useDebouncedValue(input.trim(), SEARCH_DELAY_MS);
 
-  // A changed search resets paging; the URL keeps the filters shareable.
-  useEffect(() => {
-    setParams(
-      (prev) => {
-        if ((prev.get('q') ?? '') === debounced) return prev;
-        const next = new URLSearchParams(prev);
-        if (debounced) next.set('q', debounced);
-        else next.delete('q');
-        next.delete('page');
-        return next;
-      },
-      { replace: true },
-    );
-  }, [debounced, setParams]);
+  // A changed search resets paging where there is one; the URL keeps the filters shareable.
+  useDebouncedSearchParam('q', input, SEARCH_DELAY_MS, { resetPage: true });
 
   function update(change: (next: URLSearchParams) => void) {
     const next = new URLSearchParams(params);

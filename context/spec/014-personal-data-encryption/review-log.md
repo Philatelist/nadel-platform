@@ -29,3 +29,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `25852a7..a46cd13` | PASS | — | minor: StoredPlan javadoc line too long; check leftover imports in ImportRun; ImportCommitter.commit javadoc lacks the 500 PERSONAL_DATA_UNREADABLE outcome |
+
+## Slice 5 — water connection guard on plot archive and common land
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `a46cd13..7130cc6` | PASS | — | minor: plots README added lines exceed the wrap width; archive returns empty errors (consistent with PLOT_HAS_METER) |
