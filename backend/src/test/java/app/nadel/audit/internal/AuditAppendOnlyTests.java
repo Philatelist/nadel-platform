@@ -57,6 +57,19 @@ class AuditAppendOnlyTests extends IntegrationTest {
     }
 
     @Test
+    void sealedValuesCannotBeRewrittenByTheApplication() {
+        // only the schema owner may rewrite the form of stored values (Java migration 24, ADR 0016)
+        UUID id = insertEntry();
+
+        assertThatThrownBy(() -> asDemo(() -> tx.execute(s -> jdbc.update(
+                "update audit_entry set changes = cast(? as jsonb) where id = ?",
+                "[{\"field\": \"email\", \"old\": null, \"new\": {\"enc\": \"AQ==\"}}]", id))))
+                .isInstanceOf(DataAccessException.class)
+                .hasRootCauseInstanceOf(SQLException.class)
+                .satisfies(e -> assertThat(((SQLException) rootCause(e)).getSQLState()).isEqualTo("42501"));
+    }
+
+    @Test
     void deleteIsDeniedByPrivileges() {
         UUID id = insertEntry();
 

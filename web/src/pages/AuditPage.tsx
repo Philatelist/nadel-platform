@@ -248,7 +248,11 @@ function AuditChanges({ entry }: { entry: AuditEntry }) {
                 : fieldNames[change.field]) ?? change.field}
             :{' '}
           </span>
-          {change.field === 'permissions' ? (
+          {change.hidden ? (
+            <span data-testid="audit-hidden" className="text-ink-muted italic">
+              {a.hiddenValue}
+            </span>
+          ) : change.field === 'permissions' ? (
             auditPermissionChanges(change.oldValue, change.newValue, t).join(', ')
           ) : (
             <>

@@ -179,9 +179,15 @@ roles have no base code. Electrician is no longer a base role.
   `OpenedContacts`, or just the phones and e-mail for the list and `MemberDirectory.contacts`), seals (`seal` re-seals
   only the fields that changed and keeps `email_bidx` in step) and rewrites `member_phone_index` (delete + insert, after
   the member row is flushed, only when the phones changed). `MemberDtoMapper` and `MemberSnapshot` work on the opened
-  contacts; the audit values are still plaintext strings in this slice. A value that does not open is
+  contacts. A value that does not open is
   `PersonalDataUnreadableException` (500 `PERSONAL_DATA_UNREADABLE`): the card and every save of that member fail
   rather than show or write back an empty field.
+- **Audit values.** `MemberAuditPublisher` (the only place members build audit events of a member, for the endpoints
+  and the Excel import alike) generates the event id first and seals the old and new values of `phones`, `email`,
+  `postalAddress`, `telegramUsername`, `viberPhone` and `notes` at `FieldRef("audit_entry", "changes.<field>.old|new",
+  eventId)` (snake case: `changes.postal_address.old`), as base64 with `FieldChange.sealed`; names, the channel and
+  `archived` stay plain. So the outbox and the audit log never hold a contact in the clear; `GET /audit` shows the
+  values only to readers with `MEMBERS_VIEW` (see the audit README).
 - **Java migration 22.1** (`EncryptMemberContactsMigration`, a `JavaMigration` bean that Spring Boot hands to Flyway):
   on Flyway's owner connection and in its transaction, through `privacy.OwnerKeyring` (no JPA), it seals every
   member's plaintext contacts, fills `email_bidx` and `member_phone_index`, in pages of 500 members by id. Idempotent

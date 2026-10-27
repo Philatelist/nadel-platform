@@ -5399,6 +5399,9 @@ components:
         correction adds `from` and `to`, ISO dates, `to` absent while the record is open). Meter readings are plain
         decimals with three decimals (`8205.000`). Money amounts are plain decimals with two decimals (`-25.00`), a
         billing month is `YYYY-MM`. Values written before this format are plain text and are shown as stored.
+        Personal values (a member's phones, e-mail, postal address, Telegram username, Viber phone and notes) are
+        stored encrypted and returned only to a reader who may also view members; for anyone else `hidden` is true
+        and both values are absent.
       required: [field]
       properties:
         field:
@@ -5407,6 +5410,12 @@ components:
           type: string
         newValue:
           type: string
+        hidden:
+          type: boolean
+          default: false
+          description: >-
+            True means the field holds personal data and the reader may not view members (or the stored value could
+            not be read): `oldValue` and `newValue` are then absent.
 
     AuditEntry:
       type: object

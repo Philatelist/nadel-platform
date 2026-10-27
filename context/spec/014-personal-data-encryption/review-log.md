@@ -11,3 +11,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `e1fa7ea..2ad5d2a` | PASS | — | minor: TenantKeyCache duplicate load on a concurrent miss (harmless); decrypt-failure log carries table/column/row id (internal ids only); KeyCheckCallback rewrap ordering fine |
+
+## Slice 2 — member contacts stored encrypted, exact search, sign-in and import matching
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `2ad5d2a..9140a23` | PASS | — | minor: IntegrationTest static bean reference (sequential runs only); replacePhoneIndex DELETE for new members; V23 guard vs migration blank-value definitions differ (whitespace-only legacy values would abort V23 clearly); test copy of PhoneNumber rules may drift |

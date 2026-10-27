@@ -22,7 +22,10 @@ The caller normalises before indexing: e-mail `strip().toLowerCase(Locale.ROOT)`
 Field references in use: `members` seals each contact as `FieldRef("member", "<column>_enc", memberId)`, the column
 being the `bytea` column the value is stored in (`phones_enc`, `email_enc`, `postal_address_enc`,
 `telegram_username_enc`, `viber_phone_enc`, `notes_enc`), identically in its Java migration 22.1, its demo contacts
-callback and at runtime (see the members README).
+callback and at runtime (see the members README). The audit values of those contacts are sealed as
+`FieldRef("audit_entry", "changes.<field>.old" | "changes.<field>.new", entryId)` with the field in snake case
+(`changes.postal_address.old`), by `members` when it publishes and by the audit Java migration 24 (see the audit
+README).
 
 ## Formats
 

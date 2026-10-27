@@ -12,11 +12,15 @@ import java.sql.Timestamp;
 import java.util.List;
 import java.util.UUID;
 import org.hibernate.Session;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Inserts the audit entry of an event, or of a whole batch of them. Idempotent: the entry id is the event id, so a redelivery does nothing.
+ * <p>
+ * A sealed change ({@link FieldChange#sealed()}) is stored as {@code {"enc": "<base64>"}} per value, exactly as the
+ * publisher sealed it; the writer never sees personal data in the clear.
  * <p>
  * Must run in a transaction whose tenant is the event's tenant (the listener arranges that); row level security
  * rejects an insert for any other tenant.
@@ -102,11 +106,25 @@ class AuditWriter {
     }
 
     private static List<ChangeJson> toJson(List<FieldChange> changes) {
-        return changes.stream().map(c -> new ChangeJson(c.field(), c.oldValue(), c.newValue())).toList();
+        return changes.stream().map(c -> new ChangeJson(c.field(), stored(c.oldValue(), c.sealed()),
+                stored(c.newValue(), c.sealed()))).toList();
     }
 
-    /** Stored shape of a change: {@code {"field": ..., "old": ..., "new": ...}}, nulls kept. */
+    /** A value as stored: the text itself, or {@code {"enc": "<base64>"}} for a sealed value; null stays null. */
+    private static @Nullable Object stored(@Nullable String value, boolean sealed) {
+        return value == null || !sealed ? value : new SealedJson(value);
+    }
+
+    /**
+     * Stored shape of a change: {@code {"field": ..., "old": ..., "new": ...}}, nulls kept. A value is a string, or
+     * {@code {"enc": "<base64>"}} when sealed.
+     */
     @JsonInclude(JsonInclude.Include.ALWAYS)
-    record ChangeJson(String field, @JsonProperty("old") String oldValue, @JsonProperty("new") String newValue) {
+    record ChangeJson(String field, @JsonProperty("old") @Nullable Object oldValue,
+            @JsonProperty("new") @Nullable Object newValue) {
+    }
+
+    /** Stored shape of a sealed value: the base64 text of the sealed bytes (ADR 0016). */
+    record SealedJson(String enc) {
     }
 }

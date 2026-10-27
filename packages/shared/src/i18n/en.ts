@@ -774,6 +774,7 @@ export const en = {
   },
   audit: {
     title: 'Audit log',
+    hiddenValue: 'hidden',
     columns: { time: 'Time', author: 'Author', action: 'Action', record: 'Record', changes: 'Changes' },
     action: {
       MEMBER_CREATED: 'Member created',

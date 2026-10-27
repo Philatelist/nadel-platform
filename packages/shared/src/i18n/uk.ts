@@ -789,6 +789,7 @@ export const uk: Messages = {
   },
   audit: {
     title: 'Журнал змін',
+    hiddenValue: 'приховано',
     columns: { time: 'Час', author: 'Автор', action: 'Дія', record: 'Запис', changes: 'Зміни' },
     action: {
       MEMBER_CREATED: 'Члена кооперативу додано',

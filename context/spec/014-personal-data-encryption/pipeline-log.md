@@ -91,3 +91,5 @@ wiring vs protected `.github/`.
 - Slice 1 committed 2ad5d2a — verify green (privacy/tenancy/modularity/ImportUploadLimit tests, pnpm typecheck; no infra/.env created); review: PASS round 1.
   - Note for slice 3: FieldRef names must match [a-z_.]+ → audit refs use snake_case field names.
 - Slice 2 verify green: members/identity/imports/reports/privacy/modularity 1096 tests, 0 failures (1 skipped, pre-existing); fixture packages settings/ledger/tariffs/meters/plots/audit/acceptance 1780/0 (builder run); pnpm typecheck, lint, MembersPage vitest green.
+- Slice 2 committed 9140a23 — review: PASS round 1.
+- Slice 3 verify green: audit/members/modularity 318 tests 0 failures; pnpm typecheck, lint, AuditPage vitest 30/30. Builder found and fixed FieldChange deserialisation of pending outbox rows without 'sealed'.

@@ -11,9 +11,11 @@ import app.nadel.members.MemberImportAction;
 import app.nadel.members.MemberImportItem;
 import app.nadel.members.MemberImportPlan;
 import app.nadel.members.MemberImportRow;
+import app.nadel.privacy.FieldRef;
 import app.nadel.privacy.IndexKind;
 import app.nadel.privacy.PersonalDataCipher;
 import app.nadel.tenancy.TenantContext;
+import java.util.Base64;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
@@ -83,8 +85,19 @@ class MemberImportApplyTests extends IntegrationTest {
         assertThat(phoneIndex(existing)).containsExactly(index(IndexKind.PHONE, "+380931230003"));
 
         assertThat(events).extracting(AuditEvent::action).containsExactly("MEMBER_CREATED", "MEMBER_UPDATED");
-        assertThat(events.get(1).changes()).containsExactly(
-                new FieldChange("phones", "+380931230001", "+380931230003"));
+        // the import's audit events carry the personal values sealed at their place in the entry (ADR 0016)
+        FieldChange phones = events.get(1).changes().getFirst();
+        assertThat(events.get(1).changes()).hasSize(1);
+        assertThat(phones.field()).isEqualTo("phones");
+        assertThat(phones.sealed()).isTrue();
+        UUID entry = events.get(1).eventId();
+        assertThat(openAudit(FieldChange.oldValueRef(entry, "phones"), phones.oldValue())).isEqualTo("+380931230001");
+        assertThat(openAudit(FieldChange.newValueRef(entry, "phones"), phones.newValue())).isEqualTo("+380931230003");
+    }
+
+    private String openAudit(FieldRef ref, String base64) {
+        byte[] sealed = Base64.getDecoder().decode(base64);
+        return TenantContext.runAs(DEMO_TENANT, () -> cipher.decrypt(DEMO_TENANT, ref, sealed));
     }
 
     private byte[] index(IndexKind kind, String value) {
