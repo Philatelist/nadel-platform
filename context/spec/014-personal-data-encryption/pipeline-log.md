@@ -1,7 +1,7 @@
 # Pipeline log — 014 personal data encryption
 
 - Status: running
-- Phase: 3 (implement, slice 2)
+- Phase: 5 (publish)
 - Branch: 014-personal-data-encryption (planned) · Base: main @ 67e3916
 - Requirement: document docs/features/014-personal-data-encryption.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
@@ -106,3 +106,21 @@ wiring vs protected `.github/`.
 - Slice 7 verify: make guide rebuilt 4 PDFs; prettier clean; owner manuals mention PD_MASTER_KEY_MISMATCH (uk 4, en 4); board guides carry the last-4 search rule; no platform/other-cooperative mention added. Screenshots (members hint, audit «приховано») to refresh once the app runs this branch.
 - Slice 7 committed 643fef6 — review: PASS round 1. All slices 1–7 PASS; gate for Slice 8 open.
 - Slice 8: PersonalDataEncryptionAcceptanceTests (4) + PersonalDataUpgradeAcceptanceTests (1) green (orchestrator re-run 5/0; builder acceptance package 106/0); members-search.spec.ts (@smoke) and privacy.spec.ts typechecked, not run locally (ports). No GAP found.
+- Slice 8 committed bdf737e — review: PASS round 1. All 8 slices PASS.
+
+## Phase 4 — verify and full suite
+
+- Full `make check` on the spec branch: green — backend 2969 tests, 0 failures, JaCoCo floor met; contract, format, lint, client typecheck and tests green. Baseline (main 67e3916): 2840/0. Regressions: none.
+- /awos:verify: 22 of 27 acceptance criteria verified [x] with test evidence; 5 marked [?]:
+  - members search hint rendered on screen; «приховано» rendered for an AUDIT_VIEW-only role; `make up` on a fresh checkout + gitleaks; meters e2e leaves no test plot; ownership plot 9 checks pass without retries.
+  - Reason: ports 8080/5173 held by the owner's own running `make up` stack (PIDs 79572, 79613) and Keycloak redirects only to :5173, so the app on this branch could not be started for UI checks or Playwright; gitleaks is not installed locally. Covered next by CI (smoke e2e, full e2e via the `full-e2e` label, gitleaks in the security job).
+- Status: functional spec and technical considerations set to `Implemented — pending manual check`.
+- Product docs: architecture.md already updated in slices 1 and 7. Suggested (not run): `/awos:product Members' contacts are stored encrypted per cooperative; search by phone and e-mail is exact (full phone or last 4 digits, whole e-mail)`.
+- Worktrees: only the main checkout plus the pre-existing 012 worktree (not created by this run, left untouched).
+
+## Final report
+
+- Branch `014-personal-data-encryption`, commits: e1fa7ea (specs), 2ad5d2a (S1), 9140a23 (S2), 25852a7 (S3), a46cd13 (S4), 7130cc6 (S5), 5ea5800 (S6), 643fef6 (S7), bdf737e (S8), plus the Phase 4 commit.
+- Reviews: all 8 slices PASS in round 1; no fix rounds; minor notes in review-log.md.
+- Decided automatically: see the AUTO: entries above (Phase 1 recommended answers; dev key file; demo contacts callback; plan digest inside the sealed plan; PERSONAL_DATA_UNREADABLE; debounce root cause; guard order ledger→meter→water; uk wording «відключіть»; e2e and UI checks deferred to CI because of the owner's running stack).
+- Follow-ups for the owner: run `make guide-shots` then `make guide` on this branch to refresh the members and audit screenshots; consider a CI e2e step that sets NADEL_PD_MASTER_KEY explicitly (today the dev key file fallback covers it); a CLAUDE.md line about `infra/.env` (protected file); the en board guide quotes «приховано» where the English UI shows "hidden" (slice 7 minor); test-tightening notes from the slice 8 review.

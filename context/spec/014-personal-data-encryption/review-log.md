@@ -47,3 +47,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `5ea5800..643fef6` | PASS | — | minor: en board guide audit paragraph quotes «приховано» where the English UI shows "hidden"; tasks.md claims a status update of the 014 feature doc that has no status field; members/audit screenshots stale until `make guide-shots` runs on this branch |
+
+## Slice 8 — feature testing and regression
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `643fef6..bdf737e` | PASS | — | minor: upgrade test does not assert the queued publication's notes are sealed and omits the chairman e-mail from the scan; no positive control on log capture; `delete from import_run` unscoped; members-search e2e second positive assertion may pass on the previous results (Java test covers it strictly) |

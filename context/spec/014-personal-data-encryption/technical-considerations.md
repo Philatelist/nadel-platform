@@ -2,7 +2,7 @@
 
 - **Functional Specification:** [functional-spec.md](functional-spec.md)
 - **Requirement:** `docs/features/014-personal-data-encryption.md`
-- **Status:** Draft
+- **Status:** Implemented — pending manual check
 - **Author(s):** Alex Usov
 
 ---
