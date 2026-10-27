@@ -1,12 +1,12 @@
 # Pipeline log — feature 013 reports
 
-- Status: running (resumed 2026-10-27 after a user stop)
-- Phase: 5, waiting for the PR checks
+- Status: finished
+- Phase: 6 done (review run started)
 - Branch: 013-reports · Base: origin/docs/feature-013-reports @ 6c121fb (user's choice; main d8d7092 is its ancestor)
 - Requirement: document docs/features/013-reports.md as on origin/docs/feature-013-reports
 - Autonomy: minimal (.claude/feature-pipeline.yml)
-- Publish: pr+checks · PR: https://github.com/Philatelist/nadel-platform/pull/51 · Checks: pending
-- Review run: on (make up) after green checks
+- Publish: pr+checks · PR: https://github.com/Philatelist/nadel-platform/pull/51 · Checks: green (run of 66e8598: Backend, Clients, End-to-end, SAST, Security)
+- Review run: running at http://localhost:5173 (web) and http://localhost:8080 (API); PIDs and stop commands are in a scratchpad file outside the repository (see the hand-off in the final report)
 
 ## Project facts
 - Build/tests: `./mvnw verify` (backend, Testcontainers, JaCoCo floor), single class `cd backend && ./mvnw test -Dtest='app.nadel.<module>.**'`, clients `pnpm -r typecheck && pnpm -r lint && pnpm -r test`, `make check` (all CI), `make e2e`, `pnpm --filter web exec playwright test <spec>`, `make gen` (orval + backend generated interfaces from api/openapi.yaml).
@@ -114,3 +114,11 @@ Out: official tax form, PDF, payment reports, scheduled reports, operator-shared
 ## Phase 5
 - Pushed `013-reports` (19 commits, no AI attribution, author Alex Usov); opened PR #51 https://github.com/Philatelist/nadel-platform/pull/51 against main with title `feat(reports): reports for the board and report templates`.
 - CI round 1 on PR #51: Backend, Clients, Security, End-to-end (Playwright smoke) passed; SAST (Semgrep) FAILED with one blocking finding in a test file (`TemplateFillerTests.java:613`, `xmlinputfactory-possible-xxe`). Branch failure, attempt 1: fixed by setting the external-entity and DTD properties on that factory (dbb7e93), fix-review PASS; the reviewer was unsure the constant form satisfies the rule, so a second commit uses the literal key. No nosemgrep, no config change.
+- CI round 2 (after the Semgrep fix 66e8598): all five jobs green: Backend 4m55s, Clients 1m56s, End-to-end 3m0s, SAST 58s, Security 48s. Phase 5 done. The PR description is unchanged and still accurate.
+
+## Phase 6: review run (2026-10-27)
+- Preconditions met (branch checked out, clean tree, ports free, safe local run mode = dev profile with demo data started as backend + web; no infra change on the branch, so no realm reset).
+- Started backend and web detached (nohup), ready after about 20 s; both answer 200. Web http://localhost:5173, API http://localhost:8080, Keycloak http://localhost:8180 (realm nadel). The app runs the PR branch, not main.
+- Try this (password nadel for all): chairman@demo.local: Reports menu, all eight reports (electricity by meter tree for September 2026), Report templates (tax slot "not added yet", the demo template Vidomist zemelnoho podatku: Generate), Settings > Requisites; treasurer@demo.local: Reports including Debtors, no templates page; member@demo.local and electrician@demo.local: no Reports; operator@nadel.local: no cooperative data.
+- Stop: kill the two PIDs saved in the scratchpad pids file (backend java, web node). Infra (docker postgres and keycloak) is left running.
+- INCIDENT (my mistake, orchestrator): a shell command of mine had an unquoted heredoc whose text contained a backticked command, so the shell executed `make up` by command substitution. Effects: (1) the docker containers nadel-postgres-1 and nadel-keycloak-1 were recreated (the data volume survived: 33 plots, 271 charges, the demo template and migrations intact, checked afterwards); (2) a second dev stack attempt started: its backend exited on the occupied port, a stray Vite dev server is still running on port 5174 together with the shells of that command (process group 79749: pids 79749, 79750, 79751, 79957, 79959, 80084, 80102). The review run itself (group 79421: java 79613, node 79572) was not touched. The auto-mode classifier denied my attempt to stop the stray group, so it is left running for the user to stop: `kill -TERM -79749`.
