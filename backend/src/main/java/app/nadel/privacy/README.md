@@ -25,6 +25,8 @@ being the `bytea` column the value is stored in (`phones_enc`, `email_enc`, `pos
 callback and at runtime (see the members README). The audit values of those contacts are sealed as
 `FieldRef("audit_entry", "changes.<field>.old" | "changes.<field>.new", entryId)` with the field in snake case
 (`changes.postal_address.old`), by `members` when it publishes and by the audit Java migration 24 (see the audit
+README). The plan of a pending Excel import preview is sealed as one envelope `{"plan", "digest"}` at
+`FieldRef("import_run", "plan_enc", importId)`, by `imports` at runtime and by its Java migration 25.1 (see the imports
 README).
 
 ## Formats

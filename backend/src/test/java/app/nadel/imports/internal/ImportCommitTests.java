@@ -134,8 +134,7 @@ class ImportCommitTests extends ImportCommitSupport {
 
         Map<String, Object> run = runRow(id);
         assertThat(run).containsEntry("status", "COMMITTED");
-        assertThat(run.get("plan")).isNull();
-        assertThat(run.get("plan_digest")).isNull();
+        assertThat(run.get("plan_enc")).isNull();
         assertThat(run.get("committed_at")).isNotNull();
     }
 
@@ -437,8 +436,7 @@ class ImportCommitTests extends ImportCommitSupport {
 
         Map<String, Object> run = runRow(id);
         assertThat(run).containsEntry("status", "STALE");
-        assertThat(run.get("plan")).isNull();
-        assertThat(run.get("plan_digest")).isNull();
+        assertThat(run.get("plan_enc")).isNull();
         // nothing of the file was saved: only the plot somebody else created is there
         assertThat(plotsLike("CMT-" + tag)).isEqualTo(1);
         assertThat(membersLike("Fixt" + tag)).isZero();
@@ -464,7 +462,7 @@ class ImportCommitTests extends ImportCommitSupport {
     @Test
     void aPreviewOlderThanThirtyMinutesIsRefusedAndItsPlanIsDropped() throws Exception {
         String id = preview(threePlots()).get("id").asString();
-        assertThat(runRow(id).get("plan")).isNotNull();
+        assertThat(runRow(id).get("plan_enc")).isNotNull();
         clock.advance(Duration.ofMinutes(31));
 
         commit(id)
@@ -473,8 +471,7 @@ class ImportCommitTests extends ImportCommitSupport {
 
         Map<String, Object> run = runRow(id);
         assertThat(run).containsEntry("status", "PREVIEW");
-        assertThat(run.get("plan")).isNull();
-        assertThat(run.get("plan_digest")).isNull();
+        assertThat(run.get("plan_enc")).isNull();
         assertThat(plotsLike("CMT-" + tag)).isZero();
         assertThat(membersLike("Fixt" + tag)).isZero();
     }
@@ -547,7 +544,7 @@ class ImportCommitTests extends ImportCommitSupport {
         assertThat(ownershipOfPlotsLike("CMT-" + tag)).as("ownership").isZero();
         Map<String, Object> run = runRow(id);
         assertThat(run).containsEntry("status", "PREVIEW");
-        assertThat(run.get("plan")).as("the preview can be tried again").isNotNull();
+        assertThat(run.get("plan_enc")).as("the preview can be tried again").isNotNull();
         // no audit entry is ever written for the rolled-back records
         await().during(Duration.ofSeconds(2)).atMost(Duration.ofSeconds(6)).untilAsserted(() -> {
             assertThat(auditLike("MEMBER_CREATED", "Fixt" + tag)).isZero();
@@ -630,15 +627,15 @@ class ImportCommitTests extends ImportCommitSupport {
     void anotherCooperativesImportIsNotFoundAndStaysAsItWas() throws Exception {
         UUID otherRun = UUID.randomUUID();
         ownerJdbc().update("insert into import_run (id, tenant_id, file_name, created_by_subject, created_by_name, "
-                + "created_at, expires_at, status, plan, plan_digest) values (?, ?, 'other.xlsx', 's', 'n', now(), "
-                + "now() + interval '30 minutes', 'PREVIEW', '{\"version\": 1}'::jsonb, 'abc')", otherRun,
+                + "created_at, expires_at, status, plan_enc) values (?, ?, 'other.xlsx', 's', 'n', now(), "
+                + "now() + interval '30 minutes', 'PREVIEW', '\\x01'::bytea)", otherRun,
                 OTHER_TENANT);
 
         commit(otherRun.toString()).andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("NOT_FOUND"));
 
         Map<String, Object> run = runRow(otherRun.toString());
         assertThat(run).containsEntry("status", "PREVIEW");
-        assertThat(run.get("plan")).isNotNull();
+        assertThat(run.get("plan_enc")).isNotNull();
     }
 
     @Test

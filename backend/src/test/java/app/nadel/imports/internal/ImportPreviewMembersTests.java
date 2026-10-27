@@ -127,7 +127,7 @@ class ImportPreviewMembersTests extends ImportsIntegrationTest {
                 .isEqualTo(outboxBefore);
         Map<String, Object> run = runRow(body(result).get("id").asString());
         assertThat(run).containsEntry("status", "PREVIEW");
-        JsonNode plan = JSON.readTree(run.get("plan").toString());
+        JsonNode plan = storedPlan(run.get("id").toString());
         assertThat(plan.get("members")).hasSize(1);
         JsonNode stored = plan.get("members").get(0);
         assertThat(stored.get("row").asInt()).isEqualTo(2);
@@ -185,7 +185,7 @@ class ImportPreviewMembersTests extends ImportsIntegrationTest {
         assertThat(preview.get("counts").get("members").get("created").asInt()).isEqualTo(1);
         assertThat(runRow(preview.get("id").asString())).containsEntry("status", "HAS_ERRORS")
                 .containsEntry("problem_count", 8);
-        assertThat(runRow(preview.get("id").asString()).get("plan")).isNull();
+        assertThat(runRow(preview.get("id").asString()).get("plan_enc")).isNull();
     }
 
     @Test
@@ -272,7 +272,7 @@ class ImportPreviewMembersTests extends ImportsIntegrationTest {
                 .andExpect(jsonPath("$.counts.members.created").value(1))
                 .andReturn();
 
-        JsonNode stored = JSON.readTree(runRow(body(result).get("id").asString()).get("plan").toString())
+        JsonNode stored = storedPlan(body(result).get("id").asString())
                 .get("members").get(0);
         assertThat(stored.get("externalId").asString()).isEqualTo("К-1");
         assertThat(stored.get("lastName").asString()).isEqualTo("Шевченко" + tag);
@@ -292,7 +292,7 @@ class ImportPreviewMembersTests extends ImportsIntegrationTest {
                 .andExpect(jsonPath("$.counts.members.created").value(3))
                 .andReturn();
 
-        JsonNode plan = JSON.readTree(runRow(body(result).get("id").asString()).get("plan").toString())
+        JsonNode plan = storedPlan(body(result).get("id").asString())
                 .get("members");
         assertThat(plan.get(0).get("phones").get(0).asString()).isEqualTo("0671110151");
         assertThat(plan.get(1).get("phones")).hasSize(2);

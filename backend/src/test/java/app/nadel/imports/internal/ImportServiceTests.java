@@ -55,7 +55,7 @@ class ImportServiceTests {
                 throw new IOException("disk gone");
             }
         };
-        ImportService service = new ImportService(null, null, null, Clock.systemUTC());
+        ImportService service = new ImportService(null, null, null, null, Clock.systemUTC());
 
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.preview(unreadable, null))
                 .isInstanceOfSatisfying(ApiProblemException.class, e -> assertThat(e.code()).isEqualTo("FILE_NOT_XLSX"));

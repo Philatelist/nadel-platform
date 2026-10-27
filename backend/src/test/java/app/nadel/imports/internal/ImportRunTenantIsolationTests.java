@@ -17,8 +17,9 @@ import org.springframework.dao.DataIntegrityViolationException;
 class ImportRunTenantIsolationTests extends IntegrationTest {
 
     private static final String INSERT = "insert into import_run (id, tenant_id, file_name, created_by_subject, "
-            + "created_by_name, created_at, expires_at, committed_at, status, plan) values "
-            + "(?, ?, ?, 's', 'n', now(), now() + interval '30 minutes', ?::timestamptz, ?, ?::jsonb)";
+            + "created_by_name, created_at, expires_at, committed_at, status, plan_enc) values "
+            + "(?, ?, ?, 's', 'n', now(), now() + interval '30 minutes', ?::timestamptz, ?, "
+            + "convert_to(cast(? as text), 'UTF8'))";
 
     private UUID demoRun;
     private UUID otherRun;
@@ -69,10 +70,10 @@ class ImportRunTenantIsolationTests extends IntegrationTest {
     @Test
     void cannotUpdateTheRunOfAnotherCooperative() {
         Integer updated = inTenant(DEMO_TENANT, sql -> sql.update(
-                "update import_run set plan = null where id = ?", otherRun));
+                "update import_run set plan_enc = null where id = ?", otherRun));
 
         assertThat(updated).isZero();
-        assertThat(ownerJdbc().queryForObject("select plan is not null from import_run where id = ?", Boolean.class,
+        assertThat(ownerJdbc().queryForObject("select plan_enc is not null from import_run where id = ?", Boolean.class,
                 otherRun)).isTrue();
     }
 

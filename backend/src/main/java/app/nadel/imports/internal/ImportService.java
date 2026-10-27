@@ -48,13 +48,15 @@ class ImportService {
     private final WorkbookGuard workbookGuard = WorkbookGuard.withDefaultLimits();
     private final ImportPlanner planner;
     private final ImportRunRepository runs;
+    private final SealedPlans sealedPlans;
     private final TransactionTemplate transaction;
     private final Clock clock;
 
-    ImportService(ImportPlanner planner, ImportRunRepository runs, PlatformTransactionManager transactions,
-            Clock clock) {
+    ImportService(ImportPlanner planner, ImportRunRepository runs, SealedPlans sealedPlans,
+            PlatformTransactionManager transactions, Clock clock) {
         this.planner = planner;
         this.runs = runs;
+        this.sealedPlans = sealedPlans;
         this.transaction = new TransactionTemplate(transactions);
         this.clock = clock;
     }
@@ -99,7 +101,8 @@ class ImportService {
             ImportRun run = runs.save(ImportRun.create(importId, actor.tenantId(), fileName, actor.memberId(),
                     actor.subject(), actor.displayName(), now, now.plus(PREVIEW_VALID_FOR),
                     plan.hasProblems() ? ImportStatus.HAS_ERRORS : ImportStatus.PREVIEW, plan.counts().toMap(),
-                    plan.problems().size(), plan.hasProblems() ? null : plan.rows(), plan.digest()));
+                    plan.problems().size(), plan.hasProblems() ? null
+                            : sealedPlans.seal(actor.tenantId(), importId, plan.rows(), plan.digest())));
             return toPreview(run, plan);
         });
     }

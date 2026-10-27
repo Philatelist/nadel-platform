@@ -15,8 +15,8 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
 
 /**
- * Reads the rows of a preview back from {@code import_run.plan} (written by {@code ImportPlanner}), so the commit can
- * plan them again. The stored rows were free of problems, so the parsed sheets come back without any. Personal data:
+ * Reads the rows of a preview back from the opened {@code import_run.plan_enc} envelope (rows written by
+ * {@code ImportPlanner}, sealed by {@link SealedPlans}), so the commit can plan them again. The stored rows were free of problems, so the parsed sheets come back without any. Personal data:
  * never log it.
  */
 final class StoredPlan {

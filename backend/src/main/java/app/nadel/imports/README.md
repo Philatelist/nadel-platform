@@ -115,8 +115,8 @@ the owning module (`INVALID`). Yes and no (`так`/`ні`, `yes`/`no`, `true`/`
 The preview lists the problems found (at most 1,000; `problemCount` is the total) with sheet, Excel row (0 for the file or
 the whole sheet), canonical column and code. A row with a problem is not counted. `committable` is true only without
 problems and with something to create or update, so the unchanged template and a workbook that is already imported are
-not committable. The run is `PREVIEW` (with the normalised rows in `plan`, valid 30 minutes on the Kyiv clock) or
-`HAS_ERRORS` (no plan).
+not committable. The run is `PREVIEW` (with the normalised rows and their digest sealed in `plan_enc`, valid 30 minutes
+on the Kyiv clock) or `HAS_ERRORS` (no plan). The uploaded file itself is never stored.
 
 Members are matched among the active members by e-mail when the row has one, otherwise by last name, first name and
 first phone; a blank cell keeps the stored value; `MEMBER_KEY_MISSING`, `MEMBER_AMBIGUOUS`, `EMAIL_TAKEN` and
@@ -199,20 +199,32 @@ key `OPENING:{importId}:{row}`; without a reason that key is the reference to th
 
 ### Stored plan and digest
 
-The stored `plan` (version 1, now with a fifth array) holds the normalised rows: `plots` (with the `water` cell as typed),
+The plan is stored sealed (feature 014, ADR 0016): `import_run.plan_enc` holds the envelope
+`{"plan": <rows>, "digest": <PlanDigest>}` sealed by `SealedPlans` through `privacy.PersonalDataCipher` at
+`FieldRef("import_run", "plan_enc", importId)` with the cooperative of the run (the import id is generated before the
+run is saved, so it is known when sealing). Neither the rows (names, contacts) nor their digest are readable in the
+database, and the sealed plan lives at most 30 minutes: it is cleared on commit, on a stale or expired refusal and by
+the lazy clearing of expired previews (below). A plan that does not open, for instance one copied into another run or
+cooperative, is 500 `PERSONAL_DATA_UNREADABLE` and the run is left as it was (never treated as an empty plan). The Java
+migration 25.1 (`SealImportPlansMigration`, on Flyway's owner connection through `privacy.OwnerKeyring`) sealed the
+plaintext plans of the previous release in the same envelope; V26 then dropped `plan` and `plan_digest` (refusing to run
+while a plaintext plan had no sealed copy).
+
+The stored rows (version 1, now with a fifth array) hold the normalised rows: `plots` (with the `water` cell as typed),
 `members`, `ownership` (row, plot number, member key as typed, share, `valid_from` as an ISO date), `meters` (row, plot
 number, resource, serial, `installedOn` as an ISO date, `initialReading` as plain decimal text) and `openingBalances`
 (row, plot number, charge type as typed, `amount` as plain decimal text, `date` as an ISO date, reason). A plan stored
 before the Meters sheet existed has no `meters` and reads as an empty sheet; one stored before feature 011 has no
 `water` cells and no `openingBalances`. Member ids are never stored: they are derived
 again when the plan is recomputed. `PlanDigest` computes the SHA-256 of a canonical text of the whole plan and the
-preview stores it in `import_run.plan_digest` (null for a run with problems). One line per plot row, member row,
+preview stores it inside the sealed envelope (a run with problems has no plan and no digest). One line per plot row, member row,
 ownership row, meter row, water cell that asks for a connection (the plot, the action and the source the plan found)
 and opening balance row (the plot, the action, the charge type id, the amount, the date and the reason) with the sheet,
 the natural key (lower case), the action or outcome, the id of the matched record or `new`,
 the changed field names and the values of the file; the lines are sorted, so the digest does not depend on the order of
 the rows; ids of records the import creates are left out because they depend on the import's own id. The commit slice
-recomputes the plan from the stored rows and refuses the preview as stale when the digest differs.
+recomputes the plan from the stored rows and refuses the preview as stale when the digest differs from the one inside
+the envelope.
 
 Rules for reading a sheet: the header is the first row that is not empty and not a comment; a row whose first cell
 starts with `#` and an empty row are skipped; Excel row numbers are kept. Cells: text is trimmed; a number cell is
@@ -233,7 +245,7 @@ or saves nothing. In this order:
    `IMPORT_STALE`, a `PREVIEW` past `expires_at` (Kyiv `Clock`; also one whose plan was already dropped) is 410
    `IMPORT_EXPIRED`, and a preview with nothing to create or update is 409 `IMPORT_NOTHING_TO_COMMIT` (an accurate code
    of its own: a commit would only add a no-op audit entry; `IMPORT_HAS_ERRORS` would be false).
-3. The stored rows are read back (`StoredPlan`) and planned once to learn which existing plots, meters and members they
+3. The sealed plan is opened (`SealedPlans`) and its rows read back (`StoredPlan`) and planned once to learn which existing plots, meters and members they
    touch; the persistence context is cleared; `PlotImport.lock` takes those plots `FOR UPDATE`, then `MeterImport.lock`
    the stored plots that get a new meter `FOR SHARE` (the lock of a registration by hand) and the unchanged meters
    `FOR UPDATE`, then `WaterConnectionImport.lock` the stored plots that get a connection `FOR SHARE` and the
@@ -241,7 +253,7 @@ or saves nothing. In this order:
    balance and their charge types `FOR SHARE`, then `MemberImport.lock` those members, each in id order. The order is that of a change of owner (plot first, then its owners) and of archiving
    (member row), so no lock cycle exists; the advisory lock serialises two imports. The clear matters: without it the
    second planning would read the first one's managed entities instead of the locked rows.
-4. The rows are planned again under the locks and the digest is compared with the stored one: a different digest, or any
+4. The rows are planned again under the locks and the digest is compared with the one in the sealed envelope: a different digest, or any
    problem, is `IMPORT_STALE` (a plot with one of the file's numbers created meanwhile, an owner changed, a member
    archived, a meter registered, removed or replaced, a plot connected to water, an opening balance entered or
    reversed, a charge type renamed or archived, ...).
@@ -282,6 +294,10 @@ a reversed balance imported again, a renamed seeded type, every problem code, mi
 `ImportCommitTests` and `ImportConstraintViolationTests` (a rule broken between the plan and the flush is 409
 `IMPORT_STALE`, for each of the four constraints, through the batched flush). `ImportLargeCommitTests` (a file at the
 limits) is tagged `large`; it runs in `make test` by default and can be skipped with `-DexcludedGroups=large`.
+`ImportPlanEncryptionTests` (no readable value of the file in `import_run`, a sealed preview commits, the digest inside
+the envelope decides staleness, a plan copied into another run is `PERSONAL_DATA_UNREADABLE`),
+`SealImportPlansMigrationTests` (25.1 over plaintext previews of two cooperatives, idempotent) and
+`ImportPlanMigrationGuardTests` (the V26 guard).
 
 ## History
 
@@ -310,7 +326,8 @@ UI catalogs; recorded in ADR 0012. `template_en.properties` is English like the 
 
 Table: `import_run` (V9, RLS `tenant_isolation`; the application role cannot delete rows, the history is kept). It stores the
 author as a snapshot (member id, Keycloak subject, display name), the counts, the problem count and, for a preview that
-can still be committed, the normalised rows (`plan`, personal data, cleared when no longer needed).
+can still be committed, the normalised rows and their digest sealed (`plan_enc`, V25; personal data, cleared when no
+longer needed; `plan` and `plan_digest` were dropped by V26).
 
-Depends on `identity`, `problem`, `tenancy`, `plots`, `members`, `meters` (`MeterImport`, `WaterConnectionImport`),
+Depends on `identity`, `problem`, `tenancy`, `privacy` (the sealed plan), `plots`, `members`, `meters` (`MeterImport`, `WaterConnectionImport`),
 `ledger` (`OpeningBalanceImport`) and `audit` (it publishes `IMPORT_COMMITTED`).

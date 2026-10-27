@@ -197,6 +197,9 @@ class EncryptMemberContactsMigrationTests {
                         "--spring.flyway.password=" + postgres.getPassword(),
                         "--spring.flyway.locations=classpath:db/migration",
                         "--spring.flyway.target=" + target,
+                        // the entities map the latest schema (import_run.plan_enc of V25), so a context stopped at an
+                        // earlier version cannot validate it
+                        "--spring.jpa.hibernate.ddl-auto=" + ("latest".equals(target) ? "validate" : "none"),
                         "--spring.security.oauth2.resourceserver.jwt.issuer-uri=http://localhost:0/realms/test",
                         "--server.port=0",
                         "--spring.main.banner-mode=off");

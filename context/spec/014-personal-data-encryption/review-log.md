@@ -17,3 +17,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `2ad5d2a..9140a23` | PASS | — | minor: IntegrationTest static bean reference (sequential runs only); replacePhoneIndex DELETE for new members; V23 guard vs migration blank-value definitions differ (whitespace-only legacy values would abort V23 clearly); test copy of PhoneNumber rules may drift |
+
+## Slice 3 — audit values encrypted and hidden without MEMBERS_VIEW
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `9140a23..25852a7` | PASS | — | minor: personal-field set duplicated in members and audit migration 24 (documented); FieldChange.snakeCase javadoc promises an IllegalArgumentException it does not throw (FieldRef validates the result) |

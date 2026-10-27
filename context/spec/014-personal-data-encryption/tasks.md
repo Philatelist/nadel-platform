@@ -27,10 +27,10 @@ commits. Verify tasks run only the slice's own narrow tests (CLAUDE.md verificat
   - [x] Web: `AuditPage` renders `<span data-testid="audit-hidden">` with `audit.hiddenValue` («приховано» / "hidden") when `change.hidden`; Vitest case. **[Agent: react-frontend]**
   - [x] Verify: `cd backend && ./mvnw test -Dtest='app.nadel.audit.**,app.nadel.members.**,app.nadel.ModularityTests'` and `pnpm -r typecheck && pnpm -r lint && pnpm --filter web exec vitest run src/pages/AuditPage.test.tsx`; delete temporary files. **[Agent: spring-backend]**
 
-- [ ] **Slice 4: Pending Excel import plan encrypted**
-  - [ ] `V25__import_plan_encrypted.sql` (add `plan_enc`), Java migration 25.1 in `imports.internal` (seal `{"plan", "digest"}` with `FieldRef("import_run", "plan_enc", runId)`), `V26__drop_import_plan_plaintext.sql` (DO guard; drop `plan`, `plan_digest`; `import_run_plan_ck` on `plan_enc`). `ImportRun`/`StoredPlan`/`ImportCommitter` read and write the sealed envelope with the digest inside; expired-plan clearing unchanged; imports README. **[Agent: spring-backend]**
-  - [ ] Tests: preview → commit round trip; stale-digest refusal still works; expired plans cleared; no plaintext contact in `import_run`; migration 25.1 over a plaintext preview. **[Agent: spring-backend]**
-  - [ ] Verify: `cd backend && ./mvnw test -Dtest='app.nadel.imports.**,app.nadel.members.**,app.nadel.ModularityTests'`; delete temporary files. **[Agent: spring-backend]**
+- [x] **Slice 4: Pending Excel import plan encrypted**
+  - [x] `V25__import_plan_encrypted.sql` (add `plan_enc`), Java migration 25.1 in `imports.internal` (seal `{"plan", "digest"}` with `FieldRef("import_run", "plan_enc", runId)`), `V26__drop_import_plan_plaintext.sql` (DO guard; drop `plan`, `plan_digest`; `import_run_plan_ck` on `plan_enc`). `ImportRun`/`StoredPlan`/`ImportCommitter` read and write the sealed envelope with the digest inside; expired-plan clearing unchanged; imports README. **[Agent: spring-backend]**
+  - [x] Tests: preview → commit round trip; stale-digest refusal still works; expired plans cleared; no plaintext contact in `import_run`; migration 25.1 over a plaintext preview. **[Agent: spring-backend]**
+  - [x] Verify: `cd backend && ./mvnw test -Dtest='app.nadel.imports.**,app.nadel.members.**,app.nadel.ModularityTests'`; delete temporary files. **[Agent: spring-backend]**
 
 - [ ] **Slice 5: Water connection guard on plot archive and common land**
   - [ ] Contract and `ProblemCodes`: `PLOT_HAS_WATER_CONNECTION` (plot update `errors[{field: kind}]`, archive); `make gen`. `meters/internal/WaterConnectionPlotGuard implements PlotChangeGuard` with `WaterConnectionRepository.plotIdsWithLastingConnection`, `@Order` after `MeterPlotGuard`; meters README "known gaps" updated; tests (archive refused, kind change to common land refused with field `kind`, plot without connection archives, plot import planning path). **[Agent: spring-backend]**

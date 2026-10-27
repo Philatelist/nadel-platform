@@ -79,10 +79,10 @@ class ImportPreviewPlotsTests extends ImportsIntegrationTest {
         assertThat(run.get("created_by_subject")).isEqualTo("sub-chairman@demo.local");
         assertThat(run.get("created_by_member_id")).isNotNull();
         assertThat(run.get("created_by_name")).isNotNull();
-        assertThat((String) run.get("plan_digest")).matches("[0-9a-f]{64}");
+        assertThat(openedPlan(run.get("id").toString()).digest()).matches("[0-9a-f]{64}");
         JsonNode counts = JSON.readTree(run.get("counts").toString());
         assertThat(counts.get("plots").get("created").asInt()).isEqualTo(2);
-        JsonNode plan = JSON.readTree(run.get("plan").toString());
+        JsonNode plan = storedPlan(run.get("id").toString());
         assertThat(plan.get("version").asInt()).isEqualTo(1);
         assertThat(plan.get("plots")).hasSize(2);
         JsonNode first = plan.get("plots").get(0);
@@ -164,7 +164,7 @@ class ImportPreviewPlotsTests extends ImportsIntegrationTest {
 
         Map<String, Object> run = runRow(body(result).get("id").asString());
         assertThat(run).containsEntry("status", "HAS_ERRORS").containsEntry("problem_count", 4);
-        assertThat(run.get("plan")).isNull();
+        assertThat(run.get("plan_enc")).isNull();
     }
 
     @Test
@@ -261,7 +261,7 @@ class ImportPreviewPlotsTests extends ImportsIntegrationTest {
                 .andExpect(jsonPath("$.problemCount").value(0))
                 .andReturn();
 
-        JsonNode plan = JSON.readTree(runRow(body(result).get("id").asString()).get("plan").toString());
+        JsonNode plan = storedPlan(body(result).get("id").asString());
         JsonNode row = plan.get("plots").get(0);
         assertThat(row.get("number").asString()).isEqualTo(number);
         assertThat(row.get("street").asString()).isEqualTo("Garden");
@@ -275,7 +275,7 @@ class ImportPreviewPlotsTests extends ImportsIntegrationTest {
                 .andExpect(jsonPath("$.problemCount").value(0))
                 .andReturn();
 
-        JsonNode plan = JSON.readTree(runRow(body(result).get("id").asString()).get("plan").toString());
+        JsonNode plan = storedPlan(body(result).get("id").asString());
         assertThat(plan.get("plots").get(0).get("areaM2").asString()).isEqualTo("600");
     }
 
@@ -475,17 +475,17 @@ class ImportPreviewPlotsTests extends ImportsIntegrationTest {
         UUID demoLive = UUID.randomUUID();
         UUID otherExpired = UUID.randomUUID();
         String insert = "insert into import_run (id, tenant_id, file_name, created_by_subject, created_by_name, "
-                + "created_at, expires_at, status, plan) values (?, ?, 'f.xlsx', 's', 'n', now() - ?::interval, "
-                + "now() + ?::interval, 'PREVIEW', '{\"plots\": []}'::jsonb)";
+                + "created_at, expires_at, status, plan_enc) values (?, ?, 'f.xlsx', 's', 'n', now() - ?::interval, "
+                + "now() + ?::interval, 'PREVIEW', '\\x01'::bytea)";
         ownerJdbc().update(insert, demoExpired, DEMO_TENANT, "2 hours", "-1 hour");
         ownerJdbc().update(insert, demoLive, DEMO_TENANT, "1 minute", "29 minutes");
         ownerJdbc().update(insert, otherExpired, OTHER_TENANT, "2 hours", "-1 hour");
 
         upload(plots(plot(unique(), 600))).andExpect(status().isCreated());
 
-        assertThat(runRow(demoExpired.toString()).get("plan")).isNull();
-        assertThat(runRow(demoLive.toString()).get("plan")).isNotNull();
-        assertThat(runRow(otherExpired.toString()).get("plan")).isNotNull();
+        assertThat(runRow(demoExpired.toString()).get("plan_enc")).isNull();
+        assertThat(runRow(demoLive.toString()).get("plan_enc")).isNotNull();
+        assertThat(runRow(otherExpired.toString()).get("plan_enc")).isNotNull();
         assertThat(runRow(demoExpired.toString())).containsEntry("status", "PREVIEW");
     }
 }

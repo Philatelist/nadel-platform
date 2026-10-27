@@ -77,7 +77,7 @@ class ImportPreviewMetersTests extends ImportCommitSupport {
         assertThat(preview.get("committable").asBoolean()).isTrue();
 
         Map<String, Object> run = runRow(preview.get("id").asString());
-        JsonNode plan = JSON.readTree(run.get("plan").toString());
+        JsonNode plan = storedPlan(run.get("id").toString());
         assertThat(plan.get("version").asInt()).isEqualTo(1);
         assertThat(plan.get("meters")).hasSize(3);
         JsonNode first = plan.get("meters").get(0);
@@ -107,7 +107,7 @@ class ImportPreviewMetersTests extends ImportCommitSupport {
 
         assertThat(problems(preview)).isEmpty();
         assertThat(preview.get("counts").get("meters").get("created").asInt()).isEqualTo(2);
-        JsonNode stored = JSON.readTree(runRow(preview.get("id").asString()).get("plan").toString()).get("meters");
+        JsonNode stored = storedPlan(preview.get("id").asString()).get("meters");
         assertThat(stored.get(0).get("resource").asString()).isEqualTo("ELECTRICITY");
         assertThat(stored.get(1).get("resource").asString()).isEqualTo("WATER");
     }
@@ -199,7 +199,7 @@ class ImportPreviewMetersTests extends ImportCommitSupport {
         assertThat(preview.get("counts").get("meters").get("created").asInt()).isEqualTo(2);
         assertThat(preview.get("committable").asBoolean()).isFalse();
         assertThat(runRow(preview.get("id").asString())).containsEntry("status", "HAS_ERRORS")
-                .containsEntry("plan", null).containsEntry("plan_digest", null);
+                .containsEntry("plan_enc", null);
     }
 
     @Test

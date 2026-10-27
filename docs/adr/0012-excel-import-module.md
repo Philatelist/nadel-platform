@@ -44,7 +44,9 @@ Questions that needed a decision:
   normalised rows (`plan`, personal data), the counts, the problem count and a **plan digest** (SHA-256 of a canonical,
   order-independent text of the whole plan; ids of records the import itself creates are left out). A previewed plan is valid
   for **30 minutes** (the application `Clock`). Expired plans are cleared lazily on upload and on commit; `EXPIRED` is a derived status, never
-  stored. The application role cannot delete `import_run` rows, so the history stays.
+  stored. The application role cannot delete `import_run` rows, so the history stays. Since feature 014 (ADR 0016) the rows and the
+  digest are stored together as one sealed value, `import_run.plan_enc` (V25, Java migration 25.1, V26 dropped `plan`
+  and `plan_digest`).
 - **Synchronous commit, no JobRunr.** The limits keep a run bounded (measured: 2,000 plots, 3,000 members and 2,000
   ownership rows in about 7 seconds, their audit entries written within about a second after the commit), JobRunr is not in the project yet and a half-finished background import would need
   its own state machine. The commit runs in the request, in one transaction.
@@ -112,8 +114,8 @@ Questions that needed a decision:
   message and a re-upload button in the UI).
 - A commit holds row locks on every touched plot and member for its duration (seconds at the limits) and one advisory lock per
   cooperative; ordinary edits of those rows wait, other cooperatives are not affected.
-- The preview stores personal data in `import_run.plan` for up to 30 minutes (RLS protected, cleared on commit, expiry and
-  stale refusal); a cooperative that never uploads again keeps an expired plan until its next upload or commit.
+- The preview stores personal data in `import_run.plan_enc` (sealed since ADR 0016) for up to 30 minutes (RLS protected,
+  cleared on commit, expiry and stale refusal); a cooperative that never uploads again keeps an expired plan until its next upload or commit.
 - A bump of `fastexcel` must re-check `commons-compress` and the OSV report; the supply-chain check never gets an ignore for
   this feature.
 - `CLAUDE.md` says that everything is English except `uk.ts`; the vocabulary file and `template_uk.properties` are further
