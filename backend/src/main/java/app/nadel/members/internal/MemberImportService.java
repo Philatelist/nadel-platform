@@ -8,6 +8,7 @@ import app.nadel.members.MemberImportAction;
 import app.nadel.members.MemberImportItem;
 import app.nadel.members.MemberImportPlan;
 import app.nadel.members.MemberImportRow;
+import app.nadel.privacy.IndexKind;
 import app.nadel.problem.ApiProblemException;
 import app.nadel.problem.ConstraintViolations;
 import app.nadel.problem.FieldProblem;
@@ -16,6 +17,7 @@ import app.nadel.problem.ValidationProblems;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import jakarta.validation.Validator;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
@@ -41,8 +43,9 @@ import org.springframework.validation.BeanPropertyBindingResult;
 import org.springframework.validation.beanvalidation.SpringValidatorAdapter;
 
 /**
- * Plans the member rows of an Excel import. Reads with a few bulk queries (active members by e-mail, active members by
- * phone), never one query per row, and writes nothing.
+ * Plans the member rows of an Excel import. Reads with a few bulk queries (active members by the blind index of the
+ * e-mail, active members by the blind index of a phone in {@code member_phone_index}, 500 values per query), never one
+ * query per row, and writes nothing. The contacts of the matched members are opened through {@link MemberCrypto}.
  * <p>
  * Matching, among active members only: a row with an e-mail matches the member with that e-mail; a row without one
  * matches the member with the same last name, first name and first phone (case ignored, phones in international
@@ -61,25 +64,36 @@ class MemberImportService implements MemberImport {
     /** Upper bound of one {@code IN (...)} list. */
     private static final int CHUNK = 500;
 
-    private static final String EMAIL_INDEX = "member_tenant_email_uq";
+    private static final String EMAIL_INDEX = "member_tenant_email_bidx_uq";
 
     private final MemberRepository members;
     private final SpringValidatorAdapter validator;
     private final MemberAuditPublisher auditPublisher;
+    private final MemberCrypto crypto;
     private final Clock clock;
 
     @PersistenceContext
     private EntityManager entityManager;
 
-    MemberImportService(MemberRepository members, Validator validator, MemberAuditPublisher audit, Clock clock) {
+    MemberImportService(MemberRepository members, Validator validator, MemberAuditPublisher audit,
+            MemberCrypto crypto, Clock clock) {
         this.members = members;
         this.validator = new SpringValidatorAdapter(validator);
         this.auditPublisher = audit;
+        this.crypto = crypto;
         this.clock = clock;
     }
 
+    /** An active member with its opened contacts. */
+    private record Existing(Member member, OpenedContacts contacts) {
+
+        UUID id() {
+            return member.getId();
+        }
+    }
+
     /** What is known while the rows are walked in file order. */
-    private record Context(Map<String, Member> byEmail, Map<String, Map<UUID, Member>> byPhone,
+    private record Context(Map<String, Existing> byEmail, Map<String, Map<UUID, Existing>> byPhone,
             Set<String> seenKeys, Set<String> seenEmails, Set<List<String>> seenNamePhones, Set<UUID> matched) {
     }
 
@@ -120,28 +134,39 @@ class MemberImportService implements MemberImport {
     public List<AuditEvent> apply(UUID tenantId, List<MemberImportRow> rows, MemberImportPlan plan, Actor actor) {
         Instant now = clock.instant();
         List<AuditEvent> entries = new ArrayList<>();
-        Map<UUID, Member> matched = loadMatched(plan);
+        // the phone index refers to the member rows, so it is written after the final flush
+        Map<Member, List<String>> phoneIndex = new LinkedHashMap<>();
+        Map<UUID, Existing> matched = loadMatched(plan);
         for (int index = 0; index < rows.size(); index++) {
             MemberImportItem item = plan.items().get(index);
             MemberImportAction action = item.action();
             if (action == MemberImportAction.NEW) {
                 MemberData data = dataOf(rows.get(index), null);
                 Member member = Member.create(item.memberId(), tenantId, data, now);
+                OpenedContacts contacts = crypto.seal(member, OpenedContacts.NONE, data);
                 entityManager.persist(member);
+                if (!contacts.phones().isEmpty()) {
+                    phoneIndex.put(member, contacts.phones());
+                }
                 entries.add(auditPublisher.event(tenantId, actor, "MEMBER_CREATED", member,
-                        MemberSnapshot.diff(MemberSnapshot.NONE, MemberSnapshot.of(member))));
+                        MemberSnapshot.diff(MemberSnapshot.NONE, MemberSnapshot.of(member, contacts))));
             } else if (action == MemberImportAction.UPDATE) {
-                Member member = matched.get(item.memberId());
-                if (member == null || member.isArchived()) {
+                Existing existing = matched.get(item.memberId());
+                if (existing == null || existing.member().isArchived()) {
                     throw stale();
                 }
-                MemberData data = dataOf(rows.get(index), member);
-                MemberSnapshot before = MemberSnapshot.of(member);
+                Member member = existing.member();
+                MemberData data = dataOf(rows.get(index), existing);
+                MemberSnapshot before = MemberSnapshot.of(member, existing.contacts());
                 member.apply(data);
-                List<FieldChange> changes = MemberSnapshot.diff(before, MemberSnapshot.of(member));
+                OpenedContacts contacts = crypto.seal(member, existing.contacts(), data);
+                List<FieldChange> changes = MemberSnapshot.diff(before, MemberSnapshot.of(member, contacts));
                 if (!changes.isEmpty()) {
                     member.touch(now);
                     entries.add(auditPublisher.event(tenantId, actor, "MEMBER_UPDATED", member, changes));
+                }
+                if (!contacts.phones().equals(existing.contacts().phones())) {
+                    phoneIndex.put(member, contacts.phones());
                 }
             }
         }
@@ -153,26 +178,27 @@ class MemberImportService implements MemberImport {
             }
             throw e;
         }
+        phoneIndex.forEach(crypto::replacePhoneIndex);
         return entries;
     }
 
-    /** The members the plan updates, in one bulk query per chunk (already managed when they were locked). */
-    private Map<UUID, Member> loadMatched(MemberImportPlan plan) {
+    /** The members the plan updates, in one bulk query per chunk (already managed when they were locked), opened. */
+    private Map<UUID, Existing> loadMatched(MemberImportPlan plan) {
         List<UUID> ids = plan.items().stream()
                 .filter(item -> item.action() == MemberImportAction.UPDATE)
                 .map(MemberImportItem::memberId)
                 .toList();
-        Map<UUID, Member> byId = new HashMap<>();
+        Map<UUID, Existing> byId = new HashMap<>();
         for (List<UUID> chunk : chunks(ids)) {
             for (Member member : members.findAllById(chunk)) {
-                byId.put(member.getId(), member);
+                byId.put(member.getId(), new Existing(member, crypto.open(member)));
             }
         }
         return byId;
     }
 
     /** The member data of a row, with the same overlay and rules as the plan; a problem here means the plan is stale. */
-    private MemberData dataOf(MemberImportRow row, @Nullable Member existing) {
+    private MemberData dataOf(MemberImportRow row, @Nullable Existing existing) {
         List<FieldProblem> problems = new ArrayList<>();
         MemberData.Validation validation = validate(row, existing, problems);
         if (!onePerField(problems).isEmpty() || validation.data() == null) {
@@ -213,8 +239,8 @@ class MemberImportService implements MemberImport {
         if (key == null) {
             problems.add(new FieldProblem("externalId", ProblemCodes.REQUIRED));
         }
-        Member existing = match(row, email, nameAndPhone, context, problems);
-        if (existing != null && !context.matched().add(existing.getId())) {
+        Existing existing = match(row, email, nameAndPhone, context, problems);
+        if (existing != null && !context.matched().add(existing.id())) {
             // another row already stands for this member
             problems.add(new FieldProblem(email != null ? "email" : "phones", ProblemCodes.DUPLICATE_IN_FILE));
             existing = null;
@@ -229,27 +255,28 @@ class MemberImportService implements MemberImport {
         if (existing == null) {
             return new MemberImportItem(row.row(), MemberImportAction.NEW, newId(importId, key), List.of(), List.of());
         }
-        List<String> changed = MemberSnapshot.diff(MemberSnapshot.of(existing), MemberSnapshot.of(data)).stream()
+        List<String> changed = MemberSnapshot.diff(MemberSnapshot.of(existing.member(), existing.contacts()),
+                        MemberSnapshot.of(data)).stream()
                 .map(FieldChange::field)
                 .toList();
         return new MemberImportItem(row.row(),
                 changed.isEmpty() ? MemberImportAction.UNCHANGED : MemberImportAction.UPDATE,
-                existing.getId(), changed, List.of());
+                existing.id(), changed, List.of());
     }
 
     /**
      * The member the row stands for, or null for a new one. Adds the matching problems ({@code MEMBER_KEY_MISSING},
      * {@code MEMBER_AMBIGUOUS}, {@code EMAIL_TAKEN}) to {@code problems}.
      */
-    private static @Nullable Member match(MemberImportRow row, @Nullable String email,
+    private static @Nullable Existing match(MemberImportRow row, @Nullable String email,
             @Nullable List<String> nameAndPhone, Context context, List<FieldProblem> problems) {
-        List<Member> sameNameAndPhone = nameAndPhone == null ? List.of()
+        List<Existing> sameNameAndPhone = nameAndPhone == null ? List.of()
                 : context.byPhone().getOrDefault(nameAndPhone.get(2), Map.of()).values().stream()
-                        .filter(member -> lower(member.getLastName()).equals(nameAndPhone.get(0))
-                                && lower(member.getFirstName()).equals(nameAndPhone.get(1)))
+                        .filter(existing -> lower(existing.member().getLastName()).equals(nameAndPhone.get(0))
+                                && lower(existing.member().getFirstName()).equals(nameAndPhone.get(1)))
                         .toList();
         if (email != null) {
-            Member byEmail = context.byEmail().get(email);
+            Existing byEmail = context.byEmail().get(email);
             if (byEmail != null && !sameNameAndPhone.isEmpty() && !sameNameAndPhone.contains(byEmail)) {
                 problems.add(new FieldProblem("email", ProblemCodes.EMAIL_TAKEN));
                 return null;
@@ -271,20 +298,21 @@ class MemberImportService implements MemberImport {
      * Applies the blank-keeps-existing rule, then the rules of {@link MemberData} and of the API contract. Problems
      * are added to {@code problems}; the data is present only when the member rules found none.
      */
-    private MemberData.Validation validate(MemberImportRow row, @Nullable Member existing,
+    private MemberData.Validation validate(MemberImportRow row, @Nullable Existing existing,
             List<FieldProblem> problems) {
-        String lastName = firstNonBlank(row.lastName(), existing == null ? null : existing.getLastName());
-        String firstName = firstNonBlank(row.firstName(), existing == null ? null : existing.getFirstName());
-        String middleName = firstNonBlank(row.middleName(), existing == null ? null : existing.getMiddleName());
-        List<String> phones = row.phones().isEmpty() ? (existing == null ? List.of() : existing.getPhones())
-                : row.phones();
-        String email = firstNonBlank(row.email(), existing == null ? null : existing.getEmail());
-        String address = firstNonBlank(row.postalAddress(), existing == null ? null : existing.getPostalAddress());
-        String telegram = firstNonBlank(row.telegramUsername(), existing == null ? null : existing.getTelegramUsername());
-        String viber = firstNonBlank(row.viberPhone(), existing == null ? null : existing.getViberPhone());
-        String notes = existing == null ? null : existing.getNotes();
+        Member member = existing == null ? null : existing.member();
+        OpenedContacts stored = existing == null ? OpenedContacts.NONE : existing.contacts();
+        String lastName = firstNonBlank(row.lastName(), member == null ? null : member.getLastName());
+        String firstName = firstNonBlank(row.firstName(), member == null ? null : member.getFirstName());
+        String middleName = firstNonBlank(row.middleName(), member == null ? null : member.getMiddleName());
+        List<String> phones = row.phones().isEmpty() ? stored.phones() : row.phones();
+        String email = firstNonBlank(row.email(), stored.email());
+        String address = firstNonBlank(row.postalAddress(), stored.postalAddress());
+        String telegram = firstNonBlank(row.telegramUsername(), stored.telegramUsername());
+        String viber = firstNonBlank(row.viberPhone(), stored.viberPhone());
+        String notes = stored.notes();
 
-        DeliveryChannel channel = existing == null ? DeliveryChannel.PAPER : existing.getDeliveryChannel();
+        DeliveryChannel channel = member == null ? DeliveryChannel.PAPER : member.getDeliveryChannel();
         String channelText = blankToNull(row.deliveryChannel());
         if (channelText != null) {
             DeliveryChannel parsed = parseChannel(channelText);
@@ -322,41 +350,52 @@ class MemberImportService implements MemberImport {
                 .toList();
     }
 
-    private Map<String, Member> activeByEmail(UUID tenantId, List<MemberImportRow> rows) {
-        List<String> emails = rows.stream()
-                .map(row -> lowerOrNull(row.email()))
-                .filter(Objects::nonNull)
-                .distinct()
-                .toList();
-        Map<String, Member> byEmail = new HashMap<>();
-        for (List<String> chunk : chunks(emails)) {
-            for (Member member : members.findActiveByLowerEmails(tenantId, chunk)) {
-                byEmail.put(lower(member.getEmail()), member);
+    /** The active members with one of the rows' e-mails, by that (lower-case) e-mail. */
+    private Map<String, Existing> activeByEmail(UUID tenantId, List<MemberImportRow> rows) {
+        Map<ByteBuffer, String> wanted = new LinkedHashMap<>();
+        for (MemberImportRow row : rows) {
+            String email = lowerOrNull(row.email());
+            if (email != null) {
+                wanted.putIfAbsent(ByteBuffer.wrap(crypto.index(tenantId, IndexKind.EMAIL, email)), email);
+            }
+        }
+        Map<String, Existing> byEmail = new HashMap<>();
+        for (List<ByteBuffer> chunk : chunks(List.copyOf(wanted.keySet()))) {
+            for (Member member : members.findActiveByEmailBidxIn(tenantId, bytes(chunk))) {
+                byEmail.put(wanted.get(ByteBuffer.wrap(member.getEmailBidx())),
+                        new Existing(member, crypto.open(member)));
             }
         }
         return byEmail;
     }
 
     /** The active members that have one of the rows' first phones, indexed by that phone. */
-    private Map<String, Map<UUID, Member>> activeByPhone(UUID tenantId, List<MemberImportRow> rows) {
-        Set<String> wanted = new LinkedHashSet<>();
+    private Map<String, Map<UUID, Existing>> activeByPhone(UUID tenantId, List<MemberImportRow> rows) {
+        Map<ByteBuffer, String> wanted = new LinkedHashMap<>();
         for (MemberImportRow row : rows) {
             String phone = row.phones().isEmpty() ? null : normalisedPhone(row.phones().get(0));
             if (phone != null) {
-                wanted.add(phone);
+                wanted.putIfAbsent(ByteBuffer.wrap(crypto.index(tenantId, IndexKind.PHONE, phone)), phone);
             }
         }
-        Map<String, Map<UUID, Member>> byPhone = new HashMap<>();
-        for (List<String> chunk : chunks(List.copyOf(wanted))) {
-            for (Member member : members.findActiveByAnyPhone(tenantId, chunk)) {
-                for (String phone : member.getPhones()) {
-                    if (wanted.contains(phone)) {
-                        byPhone.computeIfAbsent(phone, p -> new LinkedHashMap<>()).put(member.getId(), member);
+        Set<String> phones = Set.copyOf(wanted.values());
+        Map<String, Map<UUID, Existing>> byPhone = new HashMap<>();
+        for (List<ByteBuffer> chunk : chunks(List.copyOf(wanted.keySet()))) {
+            for (Member member : members.findActiveByPhoneBidxIn(tenantId, bytes(chunk))) {
+                Existing existing = new Existing(member, crypto.open(member));
+                for (String phone : existing.contacts().phones()) {
+                    String normalised = PhoneIndexValues.normalisedPhone(phone);
+                    if (phones.contains(normalised)) {
+                        byPhone.computeIfAbsent(normalised, p -> new LinkedHashMap<>()).put(member.getId(), existing);
                     }
                 }
             }
         }
         return byPhone;
+    }
+
+    private static List<byte[]> bytes(List<ByteBuffer> buffers) {
+        return buffers.stream().map(ByteBuffer::array).toList();
     }
 
     private static MemberImportItem problem(MemberImportRow row, List<FieldProblem> problems) {

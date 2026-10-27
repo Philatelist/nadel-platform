@@ -24,9 +24,11 @@ class JpaMemberDirectory implements MemberDirectory {
     private static final int CHUNK = 500;
 
     private final MemberRepository members;
+    private final MemberCrypto crypto;
 
-    JpaMemberDirectory(MemberRepository members) {
+    JpaMemberDirectory(MemberRepository members, MemberCrypto crypto) {
         this.members = members;
+        this.crypto = crypto;
     }
 
     @Override
@@ -53,6 +55,11 @@ class JpaMemberDirectory implements MemberDirectory {
                 .collect(Collectors.toMap(MemberRef::id, Function.identity()));
     }
 
+    /**
+     * Opens the phones and the e-mail of each member with the key of the caller's cooperative (the cipher refuses any
+     * other than {@code TenantContext}'s, and RLS hides other cooperatives' members anyway). A value that does not open
+     * fails the call ({@code PERSONAL_DATA_UNREADABLE}), never returns an empty contact.
+     */
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public Map<UUID, MemberContacts> contacts(Collection<UUID> ids) {
@@ -63,7 +70,7 @@ class JpaMemberDirectory implements MemberDirectory {
         }
         return found.stream()
                 .map(member -> new MemberContacts(member.getId(), member.getLastName(), member.getFirstName(),
-                        member.getMiddleName(), member.getPhones(), member.getEmail(), member.isArchived()))
+                        member.getMiddleName(), crypto.phones(member), crypto.email(member), member.isArchived()))
                 .collect(Collectors.toMap(MemberContacts::id, Function.identity()));
     }
 

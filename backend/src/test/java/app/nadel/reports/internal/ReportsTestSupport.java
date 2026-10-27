@@ -134,6 +134,7 @@ abstract class ReportsTestSupport extends IntegrationTest {
                 "role_permission", "role", "report_template", "member", "charge_type", "cooperative_settings")) {
             ownerJdbc().update("delete from " + table + " where tenant_id = ?", id);
         }
+        deleteDataKeys(id);
         ownerJdbc().update("delete from tenant where id = ?", id);
     }
 
@@ -205,13 +206,19 @@ abstract class ReportsTestSupport extends IntegrationTest {
     UUID owner(UUID plot, String lastName, String firstName, String middleName, String phones, String email,
             String from, String to) {
         UUID id = UUID.randomUUID();
-        ownerJdbc().update("insert into member (id, tenant_id, last_name, first_name, middle_name, phones, email) "
-                + "values (?, ?, ?, ?, ?, cast(? as text[]), ?)", id, tenant, lastName, firstName, middleName, phones,
-                email);
+        ownerJdbc().update("insert into member (id, tenant_id, last_name, first_name, middle_name) "
+                + "values (?, ?, ?, ?, ?)", id, tenant, lastName, firstName, middleName);
+        insertContacts(tenant, id, email, phoneList(phones));
         ownerJdbc().update("insert into ownership (tenant_id, plot_id, member_id, share_numerator, "
                 + "share_denominator, valid_from, valid_to) values (?, ?, ?, 1, 1, ?::date, ?::date)", tenant, plot,
                 id, from, to);
         return id;
+    }
+
+    /** The phones of a PostgreSQL array literal ({@code {+380...,+380...}}, or {@code {}}). */
+    private static String[] phoneList(String literal) {
+        String inner = literal == null ? "" : literal.replace("{", "").replace("}", "").strip();
+        return inner.isEmpty() ? new String[0] : inner.split(",");
     }
 
     /** The debt and oldest unpaid date of the plot in the {@code plot_status} cache. */
@@ -237,8 +244,9 @@ abstract class ReportsTestSupport extends IntegrationTest {
         }
         UUID id = UUID.randomUUID();
         String email = "custom-" + id + "@reports.test";
-        ownerJdbc().update("insert into member (id, tenant_id, last_name, first_name, email) "
-                + "values (?, ?, 'Звітний', ?, ?)", id, tenant, roleName, email);
+        ownerJdbc().update("insert into member (id, tenant_id, last_name, first_name) "
+                + "values (?, ?, 'Звітний', ?)", id, tenant, roleName);
+        insertContacts(tenant, id, email);
         ownerJdbc().update("insert into member_role (tenant_id, member_id, role_id) values (?, ?, ?)", tenant, id,
                 role);
         return TestTokens.bearer(tenant, "sub-" + email, email);
@@ -508,8 +516,9 @@ abstract class ReportsTestSupport extends IntegrationTest {
     static String person(UUID cooperative, String baseRole) {
         UUID id = UUID.randomUUID();
         String email = baseRole.toLowerCase() + "-" + id + "@reports.test";
-        ownerJdbc().update("insert into member (id, tenant_id, last_name, first_name, email) "
-                + "values (?, ?, 'Звітний', ?, ?)", id, cooperative, baseRole, email);
+        ownerJdbc().update("insert into member (id, tenant_id, last_name, first_name) "
+                + "values (?, ?, 'Звітний', ?)", id, cooperative, baseRole);
+        sealContacts(cooperative, id, email);
         ownerJdbc().update("insert into member_role (tenant_id, member_id, role_id) "
                 + "select ?, ?, id from role where tenant_id = ? and base_code = ?", cooperative, id, cooperative,
                 baseRole);

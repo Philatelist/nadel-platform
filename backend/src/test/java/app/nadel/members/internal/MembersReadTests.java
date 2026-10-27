@@ -95,8 +95,8 @@ class MembersReadTests extends IntegrationTest {
                 "+380501234567", "+380931234567");
         giveBaseRole(DEMO_TENANT, member, "MEMBER");
         giveBaseRole(DEMO_TENANT, member, "TREASURER");
-        inTenant(DEMO_TENANT, sql -> sql.update(
-                "update member set notes = 'private note', postal_address = 'private address' where id = ?", member));
+        setContact(DEMO_TENANT, member, "notes", "private note");
+        setContact(DEMO_TENANT, member, "postal_address", "private address");
 
         getAs(token, "/api/v1/members?q=" + tag)
                 .andExpect(status().isOk())
@@ -124,7 +124,7 @@ class MembersReadTests extends IntegrationTest {
     @Test
     void listShowsACustomRoleWithoutBaseCode() throws Exception {
         // Demo data: Polishchuk Oksana (09) holds the custom Secretary role plus the base Member role.
-        getAs(viewer(DEMO_TENANT), "/api/v1/members?q=polishchuk")
+        getAs(viewer(DEMO_TENANT), "/api/v1/members?q=поліщук")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items[?(@.id == '" + DEMO_SECRETARY + "')]", hasSize(1)))
                 .andExpect(jsonPath("$.items[?(@.id == '" + DEMO_SECRETARY + "')].roles[?(@.name == 'Секретар')]",
@@ -143,15 +143,20 @@ class MembersReadTests extends IntegrationTest {
     // ---- search -----------------------------------------------------------------------------------------------
 
     @Test
-    void searchMatchesNamesAndEmailCaseInsensitively() throws Exception {
+    void searchMatchesNamesByAnyPartAndTheEmailOnlyWhole() throws Exception {
         String token = viewer(DEMO_TENANT);
         String tag = tag();
-        UUID member = newMember(DEMO_TENANT, "Kovalchuk" + tag, "Svitlana", "Mykolaivna", tag + "@Demo.local".toLowerCase());
+        UUID member = newMember(DEMO_TENANT, "Kovalchuk" + tag, "Svitlana", "Mykolaivna", tag + "@demo.local");
 
         for (String q : List.of("kovalchuk" + tag, "KOVALCHUK" + tag.toUpperCase(), "valchuk" + tag.substring(0, 3),
-                "svitlan", "SVITLANA", "mykolaiv", tag + "@demo", tag.toUpperCase() + "@DEMO.LOCAL")) {
+                "svitlan", "SVITLANA", "mykolaiv", tag.toUpperCase() + "@DEMO.LOCAL")) {
             assertThat(idsOf(getJson(token, "/api/v1/members?size=100&q=" + q)))
                     .as("q=%s", q).contains(member);
+        }
+        // the e-mail is sealed: a part of it finds nothing
+        for (String q : List.of(tag + "@demo", "@demo.local")) {
+            assertThat(idsOf(getJson(token, "/api/v1/members?size=100&q=" + q))).as("q=%s", q)
+                    .doesNotContain(member);
         }
         assertThat(idsOf(getJson(token, "/api/v1/members?q=" + tag + "nomatch"))).isEmpty();
     }
@@ -168,17 +173,21 @@ class MembersReadTests extends IntegrationTest {
     }
 
     @Test
-    void searchByDigitsMatchesAnyPhoneIgnoringFormatting() throws Exception {
+    void searchByPhoneMatchesAnyWholePhoneIgnoringFormattingOrItsLastFourDigits() throws Exception {
         String token = viewer(DEMO_TENANT);
         UUID member = newMember(DEMO_TENANT, "Phone" + tag(), "Test", null, null,
                 "+380501234567", "+38 (093) 777-88-99");
 
-        assertThat(idsOf(getJson(token, "/api/v1/members?size=100&q=" + "+380 50 123")))
+        assertThat(idsOf(getJson(token, "/api/v1/members?size=100&q=" + "+380 50 123 45 67")))
                 .as("first phone, formatted query").contains(member);
         assertThat(idsOf(getJson(token, "/api/v1/members?size=100&q=" + "0937778899")))
                 .as("second phone stored with punctuation").contains(member);
+        assertThat(idsOf(getJson(token, "/api/v1/members?size=100&q=" + "8899")))
+                .as("last 4 digits of the second phone").contains(member);
+        assertThat(idsOf(getJson(token, "/api/v1/members?size=100&q=" + "+380 50 123")))
+                .as("the beginning of a phone").doesNotContain(member);
         assertThat(idsOf(getJson(token, "/api/v1/members?size=100&q=" + "38093")))
-                .as("second phone, formatted storage").contains(member);
+                .as("digits from the middle").doesNotContain(member);
         assertThat(idsOf(getJson(token, "/api/v1/members?size=100&q=" + "99999999999"))).doesNotContain(member);
     }
 
@@ -209,9 +218,11 @@ class MembersReadTests extends IntegrationTest {
         assertThat(idsOf(getJson(token, "/api/v1/members?size=100&q=" + "Name004")))
                 .as("mixed text and digits never searches phones").doesNotContain(phoneOnly);
         assertThat(idsOf(getJson(token, "/api/v1/members?size=100&q=" + "04")))
-                .as("fewer than three digits never searches phones").doesNotContain(phoneOnly);
+                .as("fewer than four digits never searches phones").doesNotContain(phoneOnly);
         assertThat(idsOf(getJson(token, "/api/v1/members?size=100&q=" + "123 40")))
-                .as("phone-like query still matches").contains(phoneOnly);
+                .as("digits from the middle never match").doesNotContain(phoneOnly);
+        assertThat(idsOf(getJson(token, "/api/v1/members?size=100&q=" + "4004")))
+                .as("exactly the last four digits match").contains(phoneOnly);
     }
 
     @Test
@@ -345,7 +356,7 @@ class MembersReadTests extends IntegrationTest {
         String email = tag + "@demo.local";
         UUID own = newMember(DEMO_TENANT, "Own" + tag, "Test", null, email);
         giveBaseRole(DEMO_TENANT, own, "MEMBER");
-        inTenant(DEMO_TENANT, sql -> sql.update("update member set notes = 'private note' where id = ?", own));
+        setContact(DEMO_TENANT, own, "notes", "private note");
         UUID other = newMember(DEMO_TENANT, "Other" + tag, "Test", null, null);
         String token = TestTokens.bearer(DEMO_TENANT, UUID.randomUUID().toString(), email);
 
@@ -367,7 +378,7 @@ class MembersReadTests extends IntegrationTest {
     void aViewerOpensAnyCardOfTheirCooperativeIncludingNotes() throws Exception {
         String tag = tag();
         UUID member = newMember(DEMO_TENANT, "Card" + tag, "Test", null, null);
-        inTenant(DEMO_TENANT, sql -> sql.update("update member set notes = 'private note' where id = ?", member));
+        setContact(DEMO_TENANT, member, "notes", "private note");
 
         getAs(viewer(DEMO_TENANT), "/api/v1/members/" + member)
                 .andExpect(status().isOk())
@@ -449,7 +460,7 @@ class MembersReadTests extends IntegrationTest {
     }
 
     private String emailOf(UUID tenant, UUID member) {
-        return inTenant(tenant, sql -> sql.queryForObject("select email from member where id = ?", String.class, member));
+        return decryptedContacts(tenant, member).email();
     }
 
     /** Lower-case token that is unique per call and does not occur in demo data. */

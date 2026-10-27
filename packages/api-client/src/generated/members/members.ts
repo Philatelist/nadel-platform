@@ -80,9 +80,12 @@ export const getListMembersUrl = (params?: ListMembersParams,) => {
 
 /**
  * Returns a page of members of the current cooperative. Requires the `MEMBERS_VIEW` permission.
- * `q` is a case-insensitive substring match against the last, first and middle name and the email, or,
- * when it looks like a phone number (only digits, spaces and + ( ) - ., with at least three digits), against the digits of the phone numbers. Archived members are excluded unless
- * `includeArchived` is true. The result is sorted by last name, then first name.
+ * `q` (trimmed) matches the last, first and middle name by a case-insensitive substring. Contacts are stored
+ * encrypted, so they match only exactly: a `q` with `@` matches the whole email (case ignored), a `q` that is a
+ * full phone number in any usual spelling (`+380 50 123 45 67`, `0501234567`, `380501234567`) matches that
+ * phone, and exactly four digits match the last four digits of any phone. A part of an email or digits from the
+ * middle of a phone match nothing. Archived members are excluded unless `includeArchived` is true. The result
+ * is sorted by last name, then first name.
  * @summary List members
  */
 export const listMembers = async (params?: ListMembersParams, options?: Parameters<typeof nadelFetch>[1]): Promise<MemberPage> => {

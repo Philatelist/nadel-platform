@@ -95,8 +95,7 @@ class MemberLinkingTests extends IntegrationTest {
         String subject = UUID.randomUUID().toString();
         me(TestTokens.bearer(DEMO_TENANT, subject, "before.edit@demo.local")).andExpect(status().isOk());
 
-        inTenant(DEMO_TENANT, sql -> sql.update(
-                "update member set email = 'after.edit@demo.local' where id = ?", member));
+        insertContacts(DEMO_TENANT, member, "after.edit@demo.local");
 
         me(TestTokens.bearer(DEMO_TENANT, subject, "after.edit@demo.local"))
                 .andExpect(status().isOk())

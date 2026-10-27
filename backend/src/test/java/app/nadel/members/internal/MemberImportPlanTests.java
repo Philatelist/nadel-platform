@@ -58,13 +58,17 @@ class MemberImportPlanTests extends IntegrationTest {
     private UUID member(String lastName, String firstName, String middleName, String email, String address,
             String channel, String telegram, String viber, boolean archived, String... phones) {
         UUID id = UUID.randomUUID();
-        ownerJdbc().update("insert into member (id, tenant_id, last_name, first_name, middle_name, phones, email, "
-                + "postal_address, delivery_channel, telegram_username, viber_phone, notes, archived_at) "
-                + "values (?, ?, ?, ?, ?, string_to_array(?, ','), ?, ?, ?, ?, ?, 'secret note', "
-                + (archived ? "now()" : "null") + ")",
-                id, DEMO_TENANT, lastName, firstName, middleName, String.join(",", phones), email, address, channel,
-                telegram, viber);
+        ownerJdbc().update("insert into member (id, tenant_id, last_name, first_name, middle_name) "
+                + "values (?, ?, ?, ?, ?)", id, DEMO_TENANT, lastName, firstName, middleName);
         created.add(id);
+        insertContacts(DEMO_TENANT, id, email, phones);
+        setContact(DEMO_TENANT, id, "postal_address", address);
+        setContact(DEMO_TENANT, id, "telegram_username", telegram);
+        setContact(DEMO_TENANT, id, "viber_phone", viber);
+        setContact(DEMO_TENANT, id, "notes", "secret note");
+        // the channel after the contacts it needs (channel rule on the ciphertext), the archive state last
+        ownerJdbc().update("update member set delivery_channel = ?, archived_at = "
+                + (archived ? "now()" : "null") + " where id = ?", channel, id);
         return id;
     }
 

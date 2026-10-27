@@ -150,9 +150,10 @@ class ImportConstraintViolationTests extends ImportCommitSupport {
         assertStale(() -> inTransaction(() -> {
             MemberImportPlan plan = memberImport.plan(DEMO_TENANT, UUID.randomUUID(), rows);
             assertThat(plan.items()).allMatch(item -> item.action() == MemberImportAction.NEW);
-            ownerJdbc().update("insert into member (id, tenant_id, last_name, first_name, email, delivery_channel) "
-                    + "values (?, ?, ?, 'Holder', ?, 'EMAIL')", UUID.randomUUID(), DEMO_TENANT, "Fixt" + tag + "Holder",
-                    taken);
+            UUID holder = UUID.randomUUID();
+            ownerJdbc().update("insert into member (id, tenant_id, last_name, first_name) values (?, ?, ?, 'Holder')",
+                    holder, DEMO_TENANT, "Fixt" + tag + "Holder");
+            insertContacts(DEMO_TENANT, holder, taken);
             memberImport.apply(DEMO_TENANT, rows, plan, ACTOR);
             return null;
         }));

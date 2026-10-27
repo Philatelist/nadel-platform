@@ -12,6 +12,7 @@
 
 export type ListMembersParams = {
 /**
+ * Part of a name, an exact email, a full phone number or the last 4 digits of a phone.
  * @maxLength 100
  */
 q?: string;

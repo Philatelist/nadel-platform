@@ -37,6 +37,8 @@ import tools.jackson.databind.json.JsonMapper;
 class MembersWriteTests extends IntegrationTest {
 
     static final UUID DEMO_CHAIRMAN = UUID.fromString("aaaaaaaa-0000-0000-0000-000000000001");
+    static final UUID DEMO_TREASURER = UUID.fromString("aaaaaaaa-0000-0000-0000-000000000002");
+    static final UUID DEMO_MEMBER = UUID.fromString("aaaaaaaa-0000-0000-0000-000000000003");
     static final UUID OTHER_MEMBER = UUID.fromString("bbbbbbbb-0000-0000-0000-000000000001");
 
     @Autowired
@@ -53,8 +55,8 @@ class MembersWriteTests extends IntegrationTest {
         // first sign-in links the demo members and a refused archive must leave the chairman active
         inTenant(DEMO_TENANT, sql -> sql.update(
                 "update member set keycloak_subject = null, archived_at = null where id = ?", DEMO_CHAIRMAN));
-        inTenant(DEMO_TENANT, sql -> sql.update("update member set keycloak_subject = null "
-                + "where email in ('treasurer@demo.local', 'member@demo.local')"));
+        inTenant(DEMO_TENANT, sql -> sql.update("update member set keycloak_subject = null where id in (?, ?)",
+                DEMO_TREASURER, DEMO_MEMBER));
         for (UUID id : createdThroughApi) {
             inTenant(DEMO_TENANT, sql -> sql.update("delete from member where id = ?", id));
         }
@@ -534,12 +536,10 @@ class MembersWriteTests extends IntegrationTest {
     }
 
     private String notes(UUID id) {
-        return inTenant(DEMO_TENANT, sql -> sql.queryForObject(
-                "select notes from member where id = ?", String.class, id));
+        return decryptedContacts(DEMO_TENANT, id).notes();
     }
 
     private String emailOf(UUID id) {
-        return inTenant(DEMO_TENANT, sql -> sql.queryForObject(
-                "select email from member where id = ?", String.class, id));
+        return decryptedContacts(DEMO_TENANT, id).email();
     }
 }

@@ -19,6 +19,11 @@ Table `tenant_data_key` (V21). No endpoints. Depends on `tenancy` (`TenantContex
 The caller normalises before indexing: e-mail `strip().toLowerCase(Locale.ROOT)`, a phone in the international form of
 `PhoneNumber`, last 4 = the last four digits of that form. A multi-valued field (phones) is one JSON array sealed once.
 
+Field references in use: `members` seals each contact as `FieldRef("member", "<column>_enc", memberId)`, the column
+being the `bytea` column the value is stored in (`phones_enc`, `email_enc`, `postal_address_enc`,
+`telegram_username_enc`, `viber_phone_enc`, `notes_enc`), identically in its Java migration 22.1, its demo contacts
+callback and at runtime (see the members README).
+
 ## Formats
 
 | Item | Format |

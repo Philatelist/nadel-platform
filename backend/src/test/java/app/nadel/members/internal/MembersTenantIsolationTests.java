@@ -75,7 +75,7 @@ class MembersTenantIsolationTests extends IntegrationTest {
     @Test
     void cannotUpdateOrDeleteRowsOfAnotherTenant() {
         Integer updated = as(DEMO, () -> tx.execute(s -> jdbc.update(
-                "update member set notes = 'tampered' where tenant_id = ?", OTHER)));
+                "update member set middle_name = 'tampered' where tenant_id = ?", OTHER)));
         Integer deleted = as(DEMO, () -> tx.execute(s -> jdbc.update(
                 "delete from member_role where tenant_id = ?", OTHER)));
 

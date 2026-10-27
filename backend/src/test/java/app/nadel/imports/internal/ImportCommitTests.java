@@ -122,11 +122,10 @@ class ImportCommitTests extends ImportCommitSupport {
         // the ids are those of the plan: derived from the import id and the key
         assertThat(ownerJdbc().queryForObject("select count(*) from plot where id = ?", Integer.class,
                 plotId(id, plotNo("a")))).isEqualTo(1);
-        assertThat(ownerJdbc().queryForObject("select email from member where id = ?", String.class,
-                memberId(id, "M-3"))).isEqualTo(email("three"));
+        assertThat(memberEmail(DEMO_TENANT, memberId(id, "M-3"))).isEqualTo(email("three"));
         List<Map<String, Object>> shares = ownerJdbc().queryForList(
-                "select m.email, o.share_numerator, o.share_denominator, o.valid_from, o.valid_to "
-                        + "from ownership o join member m on m.id = o.member_id where o.plot_id = ? order by o.share_numerator desc",
+                "select o.share_numerator, o.share_denominator, o.valid_from, o.valid_to "
+                        + "from ownership o where o.plot_id = ? order by o.share_numerator desc",
                 plotId(id, plotNo("b")));
         assertThat(shares).hasSize(2);
         assertThat(shares.get(0)).containsEntry("share_numerator", 2).containsEntry("share_denominator", 3);
@@ -267,8 +266,7 @@ class ImportCommitTests extends ImportCommitSupport {
                 plotNo("a"));
         assertThat(plot).containsEntry("street", "Orchard St").containsEntry("notes", "Keep me");
         assertThat(membersLike("Fixt" + tag)).isEqualTo(1);
-        assertThat(ownerJdbc().queryForObject("select array_to_string(phones, ',') from member where id = ?",
-                String.class, member)).isEqualTo("+380501112233");
+        assertThat(decryptedContacts(DEMO_TENANT, member).phones()).containsExactly("+380501112233");
         awaitAudit("PLOT_UPDATED", plotNo("a"), 1);
         awaitAudit("MEMBER_UPDATED", "Fixt" + tag, 1);
     }

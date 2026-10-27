@@ -117,7 +117,7 @@ class MeEndpointTests extends IntegrationTest {
 
     @Test
     void ownCardForAMemberHasNoNotes() throws Exception {
-        inTenant(DEMO_TENANT, sql -> sql.update("update member set notes = 'internal note' where id = ?", MEMBER));
+        setContact(DEMO_TENANT, MEMBER, "notes", "internal note");
         try {
             getAs(demo("member@demo.local"), "/api/v1/members/" + MEMBER)
                     .andExpect(status().isOk())
@@ -130,20 +130,19 @@ class MeEndpointTests extends IntegrationTest {
                     .andExpect(content().string(not(containsString("notes"))))
                     .andExpect(content().string(not(containsString("internal note"))));
         } finally {
-            inTenant(DEMO_TENANT, sql -> sql.update("update member set notes = null where id = ?", MEMBER));
+            setContact(DEMO_TENANT, MEMBER, "notes", null);
         }
     }
 
     @Test
     void ownCardForAViewerOfMembersHasNotes() throws Exception {
-        inTenant(DEMO_TENANT, sql -> sql.update(
-                "update member set notes = 'internal note' where id = ?", TREASURER));
+        setContact(DEMO_TENANT, TREASURER, "notes", "internal note");
         try {
             getAs(demo("treasurer@demo.local"), "/api/v1/members/" + TREASURER)
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.notes").value("internal note"));
         } finally {
-            inTenant(DEMO_TENANT, sql -> sql.update("update member set notes = null where id = ?", TREASURER));
+            setContact(DEMO_TENANT, TREASURER, "notes", null);
         }
     }
 

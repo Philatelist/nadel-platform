@@ -729,9 +729,8 @@ class DemoLedgerDataTests extends IntegrationTest {
 
     /** A first sign-in links the demo members to a subject; other tests expect them unlinked. */
     private void unlinkDemoMembers() {
-        owner.update("update member set keycloak_subject = null where tenant_id = ? and email in "
-                + "('chairman@demo.local', 'treasurer@demo.local', 'member@demo.local', 'electrician@demo.local')",
-                DEMO_TENANT);
+        unlinkByEmail(DEMO_TENANT, "chairman@demo.local", "treasurer@demo.local", "member@demo.local",
+                "electrician@demo.local");
     }
 
     /** Waits until the asynchronous plot status listener has handled every {@link ChargesBooked}. */

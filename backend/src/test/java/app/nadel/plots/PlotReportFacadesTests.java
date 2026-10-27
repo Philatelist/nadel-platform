@@ -201,8 +201,8 @@ class PlotReportFacadesTests extends IntegrationTest {
 
     private UUID member(UUID tenant) {
         UUID id = UUID.randomUUID();
-        ownerJdbc().update("insert into member (id, tenant_id, last_name, first_name, phones) "
-                + "values (?, ?, 'Facade', 'Test', '{}')", id, tenant);
+        ownerJdbc().update("insert into member (id, tenant_id, last_name, first_name) "
+                + "values (?, ?, 'Facade', 'Test')", id, tenant);
         members.add(id);
         return id;
     }

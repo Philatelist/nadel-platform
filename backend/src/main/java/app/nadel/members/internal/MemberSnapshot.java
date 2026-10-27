@@ -28,22 +28,26 @@ record MemberSnapshot(
     static final MemberSnapshot NONE = new MemberSnapshot(null, null, null, null, null, null, null, null, null, null,
             false);
 
-    static MemberSnapshot of(Member member) {
+    /** The state of a member with its opened contacts. */
+    static MemberSnapshot of(Member member, OpenedContacts contacts) {
         return new MemberSnapshot(
                 member.getLastName(),
                 member.getFirstName(),
                 member.getMiddleName(),
-                join(member.getPhones()),
-                member.getEmail(),
-                member.getPostalAddress(),
+                join(contacts.phones()),
+                contacts.email(),
+                contacts.postalAddress(),
                 member.getDeliveryChannel().name(),
-                member.getTelegramUsername(),
-                member.getViberPhone(),
-                member.getNotes(),
+                contacts.telegramUsername(),
+                contacts.viberPhone(),
+                contacts.notes(),
                 member.isArchived());
     }
 
-    /** The state a member would have with this data: active, phones sorted and joined as in {@link #of(Member)}. */
+    /**
+     * The state a member would have with this data: active, phones sorted and joined as in
+     * {@link #of(Member, OpenedContacts)}.
+     */
     static MemberSnapshot of(MemberData data) {
         return new MemberSnapshot(data.lastName(), data.firstName(), data.middleName(), join(data.phones()),
                 data.email(), data.postalAddress(), data.deliveryChannel().name(), data.telegramUsername(),

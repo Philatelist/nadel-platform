@@ -423,7 +423,7 @@ class OwnershipVisibilityTests extends OwnershipTestSupport {
 
     /** A token of an existing member of the demo cooperative who holds the MEMBER role. */
     private String tokenOf(UUID member) {
-        String email = ownerJdbc().queryForObject("select email from member where id = ?", String.class, member);
+        String email = memberEmail(DEMO_TENANT, member);
         giveBaseRole(DEMO_TENANT, member, "MEMBER");
         return TestTokens.bearer(DEMO_TENANT, UUID.randomUUID().toString(), email);
     }

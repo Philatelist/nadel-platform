@@ -298,6 +298,7 @@ export const en = {
   members: {
     title: 'Members',
     searchPlaceholder: 'Search by name, phone or email',
+    searchHint: 'Name, full phone or last 4 digits, exact email',
     showArchived: 'Show archived',
     archived: 'Archived',
     empty: 'No members yet',

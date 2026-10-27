@@ -49,10 +49,9 @@ class RoleNamesAcceptanceTests extends IntegrationTest {
             sql.update("update role set name = 'Treasurer', name_customized = false, "
                     + "description = 'Read access to members, plots and audit', description_customized = false "
                     + "where base_code = 'TREASURER'");
-            sql.update("update member set keycloak_subject = null "
-                    + "where email in ('chairman@demo.local', 'treasurer@demo.local')");
             return null;
         });
+        unlinkByEmail(DEMO_TENANT, "chairman@demo.local", "treasurer@demo.local");
     }
 
     private static String bearer(String email) {

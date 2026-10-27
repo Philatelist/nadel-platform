@@ -69,8 +69,9 @@ class RolesTests extends IntegrationTest {
     @AfterEach
     void cleanUp() {
         // first sign-in links the demo members; some tests change base roles
-        inTenant(DEMO_TENANT, sql -> sql.update("update member set keycloak_subject = null "
-                + "where email in ('chairman@demo.local', 'treasurer@demo.local', 'member@demo.local')"));
+        inTenant(DEMO_TENANT, sql -> sql.update("update member set keycloak_subject = null where id in ("
+                + "'aaaaaaaa-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000002', "
+                + "'aaaaaaaa-0000-0000-0000-000000000003')"));
         for (UUID role : createdRoles) {
             inTenant(DEMO_TENANT, sql -> {
                 sql.update("delete from member_role where role_id = ?", role);

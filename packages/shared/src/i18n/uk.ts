@@ -312,6 +312,7 @@ export const uk: Messages = {
   members: {
     title: 'Члени кооперативу',
     searchPlaceholder: 'Пошук за іменем, телефоном або поштою',
+    searchHint: 'ПІБ, повний телефон або останні 4 цифри, точний email',
     showArchived: 'Показати архівних',
     archived: 'В архіві',
     empty: 'Членів кооперативу ще немає',

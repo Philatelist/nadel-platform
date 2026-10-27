@@ -1,7 +1,7 @@
 # Pipeline log — 014 personal data encryption
 
 - Status: running
-- Phase: 3 (implement, slice 1)
+- Phase: 3 (implement, slice 2)
 - Branch: 014-personal-data-encryption (planned) · Base: main @ 67e3916
 - Requirement: document docs/features/014-personal-data-encryption.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
@@ -88,3 +88,6 @@ wiring vs protected `.github/`.
 - Tasks written: 8 slices. Staffing gap: guides (Slice 7 HTML/PDF guides) → general-purpose (no docs specialist); no Open Questions section kept.
 - Removed `<!-- not-user-reviewed -->` from tasks.md (Phase 1 answers stand in for plan review).
 - Baseline: `make check` on main 67e3916 green (2840 backend tests, 0 failures).
+- Slice 1 committed 2ad5d2a — verify green (privacy/tenancy/modularity/ImportUploadLimit tests, pnpm typecheck; no infra/.env created); review: PASS round 1.
+  - Note for slice 3: FieldRef names must match [a-z_.]+ → audit refs use snake_case field names.
+- Slice 2 verify green: members/identity/imports/reports/privacy/modularity 1096 tests, 0 failures (1 skipped, pre-existing); fixture packages settings/ledger/tariffs/meters/plots/audit/acceptance 1780/0 (builder run); pnpm typecheck, lint, MembersPage vitest green.

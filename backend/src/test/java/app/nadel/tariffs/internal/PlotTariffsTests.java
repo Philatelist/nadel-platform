@@ -194,8 +194,7 @@ class PlotTariffsTests extends TariffScopeSupport {
         tariff(typeId(DEMO_TENANT, "ELECTRICITY"), "By meter", version("2026-01-01", "PER_KWH", "MONTHLY", "4.32",
                 null));
         UUID plot = newPlot("PT-1", "PLOT", false);
-        UUID member = ownerJdbc().queryForObject("select id from member where tenant_id = ? and email = ?",
-                UUID.class, DEMO_TENANT, "member@demo.local");
+        UUID member = memberIdByEmail(DEMO_TENANT, "member@demo.local");
         ownerJdbc().update("insert into ownership (tenant_id, plot_id, member_id, share_numerator, share_denominator, "
                 + "valid_from) values (?, ?, ?, 1, 1, date '2020-01-01')", DEMO_TENANT, plot, member);
 

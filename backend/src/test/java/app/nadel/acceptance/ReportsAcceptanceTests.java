@@ -580,8 +580,9 @@ class ReportsAcceptanceTests extends IntegrationTest {
         }
         UUID id = UUID.randomUUID();
         String email = "custom-" + id + "@reports.test";
-        ownerJdbc().update("insert into member (id, tenant_id, last_name, first_name, email) values (?, ?, 'Звітний', ?, ?)",
-                id, tenant, roleName, email);
+        ownerJdbc().update("insert into member (id, tenant_id, last_name, first_name) "
+                + "values (?, ?, 'Звітний', ?)", id, tenant, roleName);
+        insertContacts(tenant, id, email);
         ownerJdbc().update("insert into member_role (tenant_id, member_id, role_id) values (?, ?, ?)", tenant, id, role);
         return TestTokens.bearer(tenant, "sub-" + email, email);
     }

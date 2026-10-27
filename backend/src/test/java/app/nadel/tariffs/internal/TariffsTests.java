@@ -76,8 +76,8 @@ class TariffsTests extends IntegrationTest {
         }
         roles.clear();
         // a first sign-in links the demo members to a subject; other tests expect them unlinked (their own subject)
-        inTenant(DEMO_TENANT, sql -> sql.update("update member set keycloak_subject = null where email in "
-                + "('chairman@demo.local', 'treasurer@demo.local', 'member@demo.local', 'electrician@demo.local')"));
+        unlinkByEmail(DEMO_TENANT, "chairman@demo.local", "treasurer@demo.local", "member@demo.local",
+                "electrician@demo.local");
     }
 
     // ---- create

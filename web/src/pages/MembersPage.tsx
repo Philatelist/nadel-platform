@@ -109,6 +109,7 @@ export function MembersPage() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder={t.members.searchPlaceholder}
+              hint={t.members.searchHint}
             />
           </div>
           <label className="flex min-h-11 items-center gap-2">

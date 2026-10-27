@@ -3,8 +3,8 @@ package app.nadel.members.internal;
 import app.nadel.identity.AccessProfile;
 import app.nadel.identity.AccessProfileSource;
 import app.nadel.identity.RoleRef;
+import app.nadel.privacy.IndexKind;
 import java.util.List;
-import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -32,13 +32,15 @@ class MemberAccessProfileSource implements AccessProfileSource {
 
     private final MemberRepository members;
     private final RoleGrantReader grants;
+    private final MemberCrypto crypto;
     private final TransactionTemplate reading;
     private final TransactionTemplate writing;
 
-    MemberAccessProfileSource(MemberRepository members, RoleGrantReader grants,
+    MemberAccessProfileSource(MemberRepository members, RoleGrantReader grants, MemberCrypto crypto,
             PlatformTransactionManager transactionManager) {
         this.members = members;
         this.grants = grants;
+        this.crypto = crypto;
         this.reading = new TransactionTemplate(transactionManager);
         this.reading.setReadOnly(true);
         this.writing = new TransactionTemplate(transactionManager);
@@ -68,7 +70,9 @@ class MemberAccessProfileSource implements AccessProfileSource {
     }
 
     private Optional<AccessProfile> linkByEmail(UUID tenantId, String subject, String email) {
-        Optional<Member> candidate = members.findActiveByEmail(tenantId, email);
+        // the e-mail is sealed: the member is found by the blind index of the normalised address
+        Optional<Member> candidate = members.findActiveByEmailBidx(tenantId,
+                crypto.index(tenantId, IndexKind.EMAIL, email));
         if (candidate.isEmpty()) {
             return Optional.empty();
         }
@@ -97,9 +101,6 @@ class MemberAccessProfileSource implements AccessProfileSource {
     }
 
     private static @Nullable String normalize(@Nullable String email) {
-        if (email == null || email.isBlank()) {
-            return null;
-        }
-        return email.strip().toLowerCase(Locale.ROOT);
+        return PhoneIndexValues.normalisedEmail(email);
     }
 }

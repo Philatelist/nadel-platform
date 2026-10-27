@@ -35,22 +35,17 @@ class ImportsTemplateTests extends IntegrationTest {
     @Autowired
     MockMvc mvc;
 
-    private List<String> unlinkedBefore = List.of();
+    private List<UUID> unlinkedBefore = List.of();
 
     /** The first sign-in links a demo member to a Keycloak subject; other tests expect their own subject. */
     @BeforeEach
     void rememberUnlinkedDemoMembers() {
-        unlinkedBefore = inTenant(DEMO_TENANT, sql -> sql.queryForList(
-                "select email from member where keycloak_subject is null and email = any (string_to_array(?, ','))",
-                String.class, String.join(",", DEMO_EMAILS)));
+        unlinkedBefore = unlinkedMembersByEmail(DEMO_TENANT, DEMO_EMAILS.toArray(String[]::new));
     }
 
     @AfterEach
     void unlinkWhatThisTestLinked() {
-        for (String email : unlinkedBefore) {
-            inTenant(DEMO_TENANT, sql -> sql.update(
-                    "update member set keycloak_subject = null where email = ?", email));
-        }
+        unlinkMembers(DEMO_TENANT, unlinkedBefore);
     }
 
     private List<String> sheetNames(MvcResult result) throws Exception {

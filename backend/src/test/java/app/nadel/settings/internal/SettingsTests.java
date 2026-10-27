@@ -60,10 +60,9 @@ class SettingsTests extends IntegrationTest {
         }
         roles.clear();
         // a first sign-in links the demo members to a subject; other tests expect them unlinked (their own subject)
-        inTenant(DEMO_TENANT, sql -> sql.update("update member set keycloak_subject = null where email in "
-                + "('chairman@demo.local', 'treasurer@demo.local', 'member@demo.local', 'electrician@demo.local')"));
-        inTenant(OTHER_TENANT, sql -> sql.update(
-                "update member set keycloak_subject = null where email = 'member@other.local'"));
+        unlinkByEmail(DEMO_TENANT, "chairman@demo.local", "treasurer@demo.local", "member@demo.local",
+                "electrician@demo.local");
+        unlinkByEmail(OTHER_TENANT, "member@other.local");
         // the demo cooperative goes back to "never saved", the default other tests rely on
         ownerJdbc().update("delete from cooperative_settings where tenant_id in (?, ?)", DEMO_TENANT, OTHER_TENANT);
         ownerJdbc().update("update tenant set edrpou = null where id in (?, ?)", DEMO_TENANT, OTHER_TENANT);
@@ -90,8 +89,9 @@ class SettingsTests extends IntegrationTest {
         owner.update("insert into tenant (id, name) values (?, 'Settings Test Cooperative')", tenant);
         try {
             owner.queryForList("select seed_base_roles(?)", tenant);
-            owner.update("insert into member (id, tenant_id, last_name, first_name, email) values (?, ?, 'Test', 'New', ?)",
-                    member, tenant, email);
+            owner.update("insert into member (id, tenant_id, last_name, first_name) values (?, ?, 'Test', 'New')",
+                    member, tenant);
+            insertContacts(tenant, member, email);
             owner.update("insert into member_role (tenant_id, member_id, role_id) "
                     + "select ?, ?, id from role where tenant_id = ? and base_code = 'CHAIRMAN'", tenant, member, tenant);
 
@@ -108,6 +108,7 @@ class SettingsTests extends IntegrationTest {
             owner.update("delete from role_permission where tenant_id = ?", tenant);
             owner.update("delete from role where tenant_id = ?", tenant);
             owner.update("delete from cooperative_settings where tenant_id = ?", tenant);
+            deleteDataKeys(tenant);
             owner.update("delete from tenant where id = ?", tenant);
         }
     }

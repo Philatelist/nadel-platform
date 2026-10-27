@@ -57,10 +57,9 @@ class RoleDescriptionsAcceptanceTests extends IntegrationTest {
         inTenant(DEMO_TENANT, sql -> {
             sql.update("update role set name = 'Treasurer', name_customized = false, description = ?, "
                     + "description_customized = false where base_code = 'TREASURER'", STANDARD);
-            sql.update("update member set keycloak_subject = null "
-                    + "where email in ('chairman@demo.local', 'treasurer@demo.local')");
             return null;
         });
+        unlinkByEmail(DEMO_TENANT, "chairman@demo.local", "treasurer@demo.local");
     }
 
     private static String bearer(String email) {

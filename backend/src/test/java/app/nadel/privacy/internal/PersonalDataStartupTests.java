@@ -70,6 +70,9 @@ class PersonalDataStartupTests {
         Flyway.configure()
                 .dataSource(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword())
                 .locations("classpath:db/migration")
+                // up to the keys only: the application's Flyway applies the rest, including the Java migration 22.1
+                // (a bean), which plain Flyway cannot resolve and which must not be left behind an applied V23
+                .target("21")
                 .load()
                 .migrate();
         owner = new JdbcTemplate(new DriverManagerDataSource(postgres.getJdbcUrl(), postgres.getUsername(),

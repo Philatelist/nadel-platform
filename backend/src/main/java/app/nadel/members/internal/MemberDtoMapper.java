@@ -7,52 +7,56 @@ import java.util.List;
 import nadel.contract.model.BaseRole;
 import nadel.contract.model.MemberSummary;
 import nadel.contract.model.RoleRef;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The only place that turns a member into API output, and therefore the only place that decides what a viewer may
- * see. {@code notes} is filled only for a viewer with {@code MEMBERS_VIEW}; otherwise it stays null and the key is
- * absent from the JSON (null properties are not serialised).
+ * see. The contacts come opened ({@link MemberCrypto}). {@code notes} is filled only for a viewer with
+ * {@code MEMBERS_VIEW}; otherwise it stays null and the key is absent from the JSON (null properties are not
+ * serialised).
  */
 final class MemberDtoMapper {
 
     private MemberDtoMapper() {
     }
 
-    static nadel.contract.model.Member toDto(Member member, List<RoleGrant> roles, AccessProfile viewer) {
+    static nadel.contract.model.Member toDto(Member member, OpenedContacts contacts, List<RoleGrant> roles,
+            AccessProfile viewer) {
         var dto = new nadel.contract.model.Member(
                 member.getId(),
                 member.getLastName(),
                 member.getFirstName(),
-                List.copyOf(member.getPhones()),
+                List.copyOf(contacts.phones()),
                 nadel.contract.model.DeliveryChannel.fromValue(member.getDeliveryChannel().name()),
                 roles.stream().map(MemberDtoMapper::roleRef).toList(),
                 member.isArchived());
         dto.setMiddleName(member.getMiddleName());
-        dto.setEmail(member.getEmail());
-        dto.setPostalAddress(member.getPostalAddress());
-        dto.setTelegramUsername(member.getTelegramUsername());
-        dto.setViberPhone(member.getViberPhone());
+        dto.setEmail(contacts.email());
+        dto.setPostalAddress(contacts.postalAddress());
+        dto.setTelegramUsername(contacts.telegramUsername());
+        dto.setViberPhone(contacts.viberPhone());
         if (member.getArchivedAt() != null) {
             dto.setArchivedAt(member.getArchivedAt().atOffset(ZoneOffset.UTC));
         }
         if (viewer.can(Permission.MEMBERS_VIEW)) {
-            dto.setNotes(member.getNotes());
+            dto.setNotes(contacts.notes());
         }
         return dto;
     }
 
     /** A row of the list. It carries no {@code notes} by construction: the summary schema has no such field. */
-    static MemberSummary toSummary(Member member, List<app.nadel.identity.RoleRef> roles) {
+    static MemberSummary toSummary(Member member, List<String> phones, @Nullable String email,
+            List<app.nadel.identity.RoleRef> roles) {
         var dto = new MemberSummary(
                 member.getId(),
                 member.getLastName(),
                 member.getFirstName(),
-                List.copyOf(member.getPhones()),
+                List.copyOf(phones),
                 nadel.contract.model.DeliveryChannel.fromValue(member.getDeliveryChannel().name()),
                 roles.stream().map(MemberDtoMapper::roleRef).toList(),
                 member.isArchived());
         dto.setMiddleName(member.getMiddleName());
-        dto.setEmail(member.getEmail());
+        dto.setEmail(email);
         return dto;
     }
 

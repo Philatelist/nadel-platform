@@ -214,8 +214,9 @@ class ReadingRecalculationTests extends ReadingChargeSupport {
     private String customRole(String... permissions) {
         UUID member = UUID.randomUUID();
         String email = "custom-" + member + "@run.test";
-        owner().update("insert into member (id, tenant_id, last_name, first_name, email) values (?, ?, 'Test', "
-                + "'Custom', ?)", member, tenant, email);
+        owner().update("insert into member (id, tenant_id, last_name, first_name) values (?, ?, 'Test', 'Custom')",
+                member, tenant);
+        insertContacts(tenant, member, email);
         UUID role = UUID.randomUUID();
         owner().update("insert into role (id, tenant_id, name) values (?, ?, ?)", role, tenant, "Custom " + role);
         for (String permission : permissions) {

@@ -1,0 +1,445 @@
+[
+  {
+    "memberId": "aaaaaaaa-0000-0000-0000-000000000001",
+    "phones": [
+      "+380501110001"
+    ],
+    "email": "chairman@demo.local",
+    "postalAddress": null,
+    "telegramUsername": null,
+    "viberPhone": null,
+    "notes": null,
+    "deliveryChannel": "EMAIL"
+  },
+  {
+    "memberId": "aaaaaaaa-0000-0000-0000-000000000002",
+    "phones": [
+      "+380501110002"
+    ],
+    "email": "treasurer@demo.local",
+    "postalAddress": null,
+    "telegramUsername": null,
+    "viberPhone": null,
+    "notes": null,
+    "deliveryChannel": "EMAIL"
+  },
+  {
+    "memberId": "aaaaaaaa-0000-0000-0000-000000000003",
+    "phones": [
+      "+380501110003"
+    ],
+    "email": "member@demo.local",
+    "postalAddress": null,
+    "telegramUsername": null,
+    "viberPhone": null,
+    "notes": null,
+    "deliveryChannel": "EMAIL"
+  },
+  {
+    "memberId": "aaaaaaaa-0000-0000-0000-000000000004",
+    "phones": [
+      "+380501110004"
+    ],
+    "email": "electrician@demo.local",
+    "postalAddress": null,
+    "telegramUsername": null,
+    "viberPhone": null,
+    "notes": null,
+    "deliveryChannel": "EMAIL"
+  },
+  {
+    "memberId": "bbbbbbbb-0000-0000-0000-000000000001",
+    "phones": [
+      "+380502220001"
+    ],
+    "email": "member@other.local",
+    "postalAddress": null,
+    "telegramUsername": null,
+    "viberPhone": null,
+    "notes": null,
+    "deliveryChannel": "EMAIL"
+  },
+  {
+    "memberId": "bbbbbbbb-0000-0000-0000-000000000002",
+    "phones": [],
+    "email": null,
+    "postalAddress": null,
+    "telegramUsername": null,
+    "viberPhone": null,
+    "notes": null,
+    "deliveryChannel": "PAPER"
+  },
+  {
+    "memberId": "aaaaaaaa-0000-0000-0000-000000000005",
+    "phones": [
+      "+380672000005"
+    ],
+    "email": "natalia.marchenko@example.com",
+    "postalAddress": null,
+    "telegramUsername": null,
+    "viberPhone": null,
+    "notes": null,
+    "deliveryChannel": "EMAIL"
+  },
+  {
+    "memberId": "aaaaaaaa-0000-0000-0000-000000000006",
+    "phones": [
+      "+380672000006"
+    ],
+    "email": "viktor.savchenko@example.com",
+    "postalAddress": null,
+    "telegramUsername": null,
+    "viberPhone": null,
+    "notes": null,
+    "deliveryChannel": "EMAIL"
+  },
+  {
+    "memberId": "aaaaaaaa-0000-0000-0000-000000000007",
+    "phones": [
+      "+380672000007",
+      "+380933000007"
+    ],
+    "email": "halyna.moroz@example.com",
+    "postalAddress": null,
+    "telegramUsername": null,
+    "viberPhone": null,
+    "notes": null,
+    "deliveryChannel": "EMAIL"
+  },
+  {
+    "memberId": "aaaaaaaa-0000-0000-0000-000000000008",
+    "phones": [
+      "+380672000008"
+    ],
+    "email": "dmytro.kravchenko@example.com",
+    "postalAddress": null,
+    "telegramUsername": "@dmytro_kravchenko",
+    "viberPhone": null,
+    "notes": null,
+    "deliveryChannel": "TELEGRAM"
+  },
+  {
+    "memberId": "aaaaaaaa-0000-0000-0000-000000000009",
+    "phones": [
+      "+380672000009"
+    ],
+    "email": "oksana.polishchuk@example.com",
+    "postalAddress": null,
+    "telegramUsername": null,
+    "viberPhone": null,
+    "notes": "Секретар правління",
+    "deliveryChannel": "EMAIL"
+  },
+  {
+    "memberId": "aaaaaaaa-0000-0000-0000-000000000010",
+    "phones": [
+      "+380672000010"
+    ],
+    "email": "bohdan.rudenko@example.com",
+    "postalAddress": null,
+    "telegramUsername": null,
+    "viberPhone": "+380672000010",
+    "notes": null,
+    "deliveryChannel": "VIBER"
+  },
+  {
+    "memberId": "aaaaaaaa-0000-0000-0000-000000000011",
+    "phones": [
+      "+380672000011"
+    ],
+    "email": "svitlana.lytvynenko@example.com",
+    "postalAddress": null,
+    "telegramUsername": null,
+    "viberPhone": null,
+    "notes": null,
+    "deliveryChannel": "EMAIL"
+  },
+  {
+    "memberId": "aaaaaaaa-0000-0000-0000-000000000012",
+    "phones": [
+      "+380672000012"
+    ],
+    "email": "yurii.hrytsenko@example.com",
+    "postalAddress": "вул. Садова, 12, Київ",
+    "telegramUsername": null,
+    "viberPhone": null,
+    "notes": null,
+    "deliveryChannel": "PAPER"
+  },
+  {
+    "memberId": "aaaaaaaa-0000-0000-0000-000000000013",
+    "phones": [
+      "+380672000013"
+    ],
+    "email": "tetiana.zinchenko@example.com",
+    "postalAddress": null,
+    "telegramUsername": "@tetiana_zinchenko",
+    "viberPhone": null,
+    "notes": null,
+    "deliveryChannel": "TELEGRAM"
+  },
+  {
+    "memberId": "aaaaaaaa-0000-0000-0000-000000000014",
+    "phones": [
+      "+380672000014",
+      "+380933000014"
+    ],
+    "email": "roman.pavlenko@example.com",
+    "postalAddress": null,
+    "telegramUsername": null,
+    "viberPhone": null,
+    "notes": "Краще телефонувати ввечері",
+    "deliveryChannel": "EMAIL"
+  },
+  {
+    "memberId": "aaaaaaaa-0000-0000-0000-000000000015",
+    "phones": [
+      "+380672000015"
+    ],
+    "email": "liudmyla.boiko@example.com",
+    "postalAddress": null,
+    "telegramUsername": null,
+    "viberPhone": "+380672000015",
+    "notes": null,
+    "deliveryChannel": "VIBER"
+  },
+  {
+    "memberId": "aaaaaaaa-0000-0000-0000-000000000016",
+    "phones": [
+      "+380672000016"
+    ],
+    "email": "vasyl.kuzmenko@example.com",
+    "postalAddress": null,
+    "telegramUsername": null,
+    "viberPhone": null,
+    "notes": null,
+    "deliveryChannel": "EMAIL"
+  },
+  {
+    "memberId": "aaaaaaaa-0000-0000-0000-000000000017",
+    "phones": [
+      "+380672000017"
+    ],
+    "email": "kateryna.oliinyk@example.com",
+    "postalAddress": null,
+    "telegramUsername": null,
+    "viberPhone": null,
+    "notes": null,
+    "deliveryChannel": "EMAIL"
+  },
+  {
+    "memberId": "aaaaaaaa-0000-0000-0000-000000000018",
+    "phones": [
+      "+380672000018"
+    ],
+    "email": "ihor.tkachuk@example.com",
+    "postalAddress": null,
+    "telegramUsername": "@ihor_tkachuk",
+    "viberPhone": null,
+    "notes": null,
+    "deliveryChannel": "TELEGRAM"
+  },
+  {
+    "memberId": "aaaaaaaa-0000-0000-0000-000000000019",
+    "phones": [
+      "+380672000019"
+    ],
+    "email": null,
+    "postalAddress": "вул. Садова, 19, Київ",
+    "telegramUsername": null,
+    "viberPhone": null,
+    "notes": null,
+    "deliveryChannel": "PAPER"
+  },
+  {
+    "memberId": "aaaaaaaa-0000-0000-0000-000000000020",
+    "phones": [
+      "+380672000020"
+    ],
+    "email": "mykola.honcharenko@example.com",
+    "postalAddress": null,
+    "telegramUsername": null,
+    "viberPhone": null,
+    "notes": "Продав ділянку, збережено для історії",
+    "deliveryChannel": "EMAIL"
+  },
+  {
+    "memberId": "aaaaaaaa-0000-0000-0000-000000000021",
+    "phones": [
+      "+380672000021"
+    ],
+    "email": "valentyna.sydorenko@example.com",
+    "postalAddress": null,
+    "telegramUsername": null,
+    "viberPhone": null,
+    "notes": null,
+    "deliveryChannel": "EMAIL"
+  },
+  {
+    "memberId": "aaaaaaaa-0000-0000-0000-000000000022",
+    "phones": [
+      "+380672000022"
+    ],
+    "email": "pavlo.kovalchuk@example.com",
+    "postalAddress": null,
+    "telegramUsername": null,
+    "viberPhone": null,
+    "notes": null,
+    "deliveryChannel": "EMAIL"
+  },
+  {
+    "memberId": "aaaaaaaa-0000-0000-0000-000000000023",
+    "phones": [
+      "+380672000023"
+    ],
+    "email": "olha.danylenko@example.com",
+    "postalAddress": null,
+    "telegramUsername": "@olha_danylenko",
+    "viberPhone": null,
+    "notes": null,
+    "deliveryChannel": "TELEGRAM"
+  },
+  {
+    "memberId": "aaaaaaaa-0000-0000-0000-000000000024",
+    "phones": [
+      "+380672000024"
+    ],
+    "email": "stepan.bilous@example.com",
+    "postalAddress": null,
+    "telegramUsername": null,
+    "viberPhone": null,
+    "notes": null,
+    "deliveryChannel": "EMAIL"
+  },
+  {
+    "memberId": "aaaaaaaa-0000-0000-0000-000000000025",
+    "phones": [
+      "+380672000025"
+    ],
+    "email": "alla.nesterenko@example.com",
+    "postalAddress": null,
+    "telegramUsername": null,
+    "viberPhone": "+380672000025",
+    "notes": null,
+    "deliveryChannel": "VIBER"
+  },
+  {
+    "memberId": "aaaaaaaa-0000-0000-0000-000000000026",
+    "phones": [],
+    "email": null,
+    "postalAddress": "вул. Садова, 26, Київ",
+    "telegramUsername": null,
+    "viberPhone": null,
+    "notes": "Без телефону та пошти; лише листи",
+    "deliveryChannel": "PAPER"
+  },
+  {
+    "memberId": "aaaaaaaa-0000-0000-0000-000000000027",
+    "phones": [
+      "+380672000027"
+    ],
+    "email": "zoriana.fedorenko@example.com",
+    "postalAddress": null,
+    "telegramUsername": null,
+    "viberPhone": null,
+    "notes": null,
+    "deliveryChannel": "EMAIL"
+  },
+  {
+    "memberId": "aaaaaaaa-0000-0000-0000-000000000028",
+    "phones": [
+      "+380672000028"
+    ],
+    "email": "leonid.chernenko@example.com",
+    "postalAddress": null,
+    "telegramUsername": "@leonid_chernenko",
+    "viberPhone": null,
+    "notes": null,
+    "deliveryChannel": "TELEGRAM"
+  },
+  {
+    "memberId": "aaaaaaaa-0000-0000-0000-000000000029",
+    "phones": [
+      "+380672000029",
+      "+380933000029"
+    ],
+    "email": "iryna.shapoval@example.com",
+    "postalAddress": null,
+    "telegramUsername": null,
+    "viberPhone": null,
+    "notes": null,
+    "deliveryChannel": "EMAIL"
+  },
+  {
+    "memberId": "aaaaaaaa-0000-0000-0000-000000000030",
+    "phones": [
+      "+380672000030"
+    ],
+    "email": "taras.vovk@example.com",
+    "postalAddress": null,
+    "telegramUsername": null,
+    "viberPhone": "+380672000030",
+    "notes": null,
+    "deliveryChannel": "VIBER"
+  },
+  {
+    "memberId": "aaaaaaaa-0000-0000-0000-000000000031",
+    "phones": [
+      "+380672000031"
+    ],
+    "email": "daryna.lukianenko@example.com",
+    "postalAddress": null,
+    "telegramUsername": null,
+    "viberPhone": null,
+    "notes": null,
+    "deliveryChannel": "EMAIL"
+  },
+  {
+    "memberId": "aaaaaaaa-0000-0000-0000-000000000032",
+    "phones": [
+      "+380672000032"
+    ],
+    "email": null,
+    "postalAddress": "вул. Садова, 32, Київ",
+    "telegramUsername": null,
+    "viberPhone": null,
+    "notes": null,
+    "deliveryChannel": "PAPER"
+  },
+  {
+    "memberId": "aaaaaaaa-0000-0000-0000-000000000033",
+    "phones": [
+      "+380672000033"
+    ],
+    "email": "nadiia.dovzhenko@example.com",
+    "postalAddress": null,
+    "telegramUsername": "@nadiia_dovzhenko",
+    "viberPhone": null,
+    "notes": null,
+    "deliveryChannel": "TELEGRAM"
+  },
+  {
+    "memberId": "aaaaaaaa-0000-0000-0000-000000000034",
+    "phones": [
+      "+380672000034"
+    ],
+    "email": "yevhen.kharchenko@example.com",
+    "postalAddress": null,
+    "telegramUsername": null,
+    "viberPhone": null,
+    "notes": null,
+    "deliveryChannel": "EMAIL"
+  },
+  {
+    "memberId": "aaaaaaaa-0000-0000-0000-000000000035",
+    "phones": [
+      "+380672000035"
+    ],
+    "email": "larysa.stetsenko@example.com",
+    "postalAddress": null,
+    "telegramUsername": null,
+    "viberPhone": "+380672000035",
+    "notes": null,
+    "deliveryChannel": "VIBER"
+  }
+]

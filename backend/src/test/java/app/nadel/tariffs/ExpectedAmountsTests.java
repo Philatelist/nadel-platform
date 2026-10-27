@@ -58,6 +58,7 @@ class ExpectedAmountsTests extends IntegrationTest {
                 "plot", "member_role", "role_permission", "role", "member", "charge_type", "cooperative_settings")) {
             ownerJdbc().update("delete from " + table + " where tenant_id = ?", tenant);
         }
+        deleteDataKeys(tenant);
         ownerJdbc().update("delete from tenant where id = ?", tenant);
     }
 
