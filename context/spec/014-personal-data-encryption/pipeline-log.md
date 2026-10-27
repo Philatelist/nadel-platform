@@ -95,3 +95,7 @@ wiring vs protected `.github/`.
 - Slice 3 verify green: audit/members/modularity 318 tests 0 failures; pnpm typecheck, lint, AuditPage vitest 30/30. Builder found and fixed FieldChange deserialisation of pending outbox rows without 'sealed'.
 - Slice 3 committed 25852a7 — review: PASS round 1.
 - Slice 4 verify green: imports/members/modularity 585 tests 0 failures (1 skipped). Decision (builder): a copied/unopenable plan → 500 PERSONAL_DATA_UNREADABLE, run left untouched.
+- Slice 4 committed a46cd13 — review: PASS round 1.
+- Slice 5 verify green: meters/plots/ledger/modularity 1309 tests 0 failures; pnpm typecheck, lint, shared 130, PlotForm 10.
+  - AUTO: explicit guard order ledger 100 → meter 200 → water 300 (keeps the previous effective order; ledger only refuses DELETE).
+  - AUTO: uk wording «відключіть» (matches the meters UI) instead of «завершіть».

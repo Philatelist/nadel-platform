@@ -6,6 +6,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 /**
@@ -15,8 +16,12 @@ import org.springframework.stereotype.Component;
  * <p>
  * Runs inside the plot's transaction after the plot row was locked {@code FOR UPDATE}. An opening balance takes the
  * plot {@code FOR SHARE} first, so the two never interleave. The guard only reads and takes no locks.
+ * <p>
+ * Asked first among the plot guards ({@code @Order(100)}; {@code meters} follows), so a plot that has both charges
+ * and a meter is refused with {@code PLOT_HAS_CHARGES}.
  */
 @Component
+@Order(100)
 class LedgerPlotGuard implements PlotChangeGuard {
 
     private static final Refusal HAS_CHARGES = new Refusal(ProblemCodes.PLOT_HAS_CHARGES,

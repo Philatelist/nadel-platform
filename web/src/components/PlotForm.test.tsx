@@ -125,6 +125,16 @@ describe('PlotForm', () => {
     ).toBeInTheDocument();
   });
 
+  it('shows the water-connection conflict under the kind field', async () => {
+    renderForm(existing);
+    updateOptions.mutation.onError(conflict('PLOT_HAS_WATER_CONNECTION', 'kind'));
+    expect(
+      await screen.findByText(
+        'The plot has a lasting water connection and cannot become common land — disconnect it first',
+      ),
+    ).toBeInTheDocument();
+  });
+
   it('reminds holders of RECALCULATION_RUN that past charges stay as they are, when a plot is edited', () => {
     canRecalculate = true;
     renderForm(existing);

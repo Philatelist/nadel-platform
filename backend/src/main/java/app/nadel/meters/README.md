@@ -131,6 +131,15 @@ plot has any meter (active or removed: its history stays readable), archive whil
 `PLOT_HAS_METER`; the import's plan of the Plots sheet reports the same code on `kind`. It only reads. Registration takes
 the plot `FOR SHARE` and the plot changes hold it `FOR UPDATE`, so the two run one after another.
 
+`WaterConnectionPlotGuard` implements the same SPI (feature 014): archive and a change to common land are refused while
+the plot has a lasting water connection (`valid_to IS NULL`, `WaterConnectionRepository.plotIdsWithLastingConnection`),
+with 409 `PLOT_HAS_WATER_CONNECTION` (`errors[{field: kind}]` for the update, and on `kind` in the import's plan); end
+the connection first. A connection with an end date, even a later one, does not refuse, and a delete is not refused
+here (the connections go with the plot, `ON DELETE CASCADE`). Connecting, ending and the import's water column take the
+plot `FOR SHARE` first, so they run one after another with a plot change. The guards are asked in a fixed order
+(`@Order`: `ledger` 100, `MeterPlotGuard` 200, `WaterConnectionPlotGuard` 300), so a plot with an active meter and a
+lasting connection is refused with `PLOT_HAS_METER`. Tests: `WaterConnectionPlotGuardTests`.
+
 ### Audit
 
 Entity type `METER`, label = the name of a named meter or the serial number of a plot meter. `METER_REGISTERED` (`kind`,
@@ -482,12 +491,10 @@ Internal: `WaterConnectionRecord`, `WaterConnectionRepository`, `WaterConnection
   missing readings, the facade, the delete guard), `MeterNetworkTests` (stale water meters); the import column in
   `imports` (`ImportPlotsWaterTests`).
 - **Known gaps (not guarded, review of slice 5).** A well meter that is removed keeps the lasting connections to it,
-  and the settings page lists only active wells, so those connections can be ended only on each plot card. Archiving
-  a plot or turning it into common land is not refused while it has a lasting water connection (`MeterPlotGuard`
-  looks at meters only); the connection then stays in the plot's history and charges nothing, since archived plots and
-  common land are never charged. A guard needs a new problem code in the contract and the clients; it is left for a
-  later feature. A replaced well meter keeps its connections on the old meter's id (a run of the pump reads the whole
-  chain, `WaterConnections.connectedToSource` per meter).
+  and the settings page lists only active wells, so those connections can be ended only on each plot card. A replaced
+  well meter keeps its connections on the old meter's id (a run of the pump reads the whole chain,
+  `WaterConnections.connectedToSource` per meter). Archiving a plot or turning it into common land while it has a
+  lasting connection is refused since feature 014 (`WaterConnectionPlotGuard`, see Plot guard).
 
 ## Permissions
 

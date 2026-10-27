@@ -365,6 +365,8 @@ export const uk: Messages = {
     AREA_INVALID: 'Введіть коректну площу: до двох знаків після коми в м², для ділянки більше нуля.',
     SHARE_INVALID: 'Введіть частку як 1/2 (знаменник до 1000).',
     PLOT_HAS_OWNERSHIP_HISTORY_kind: 'Ділянка мала власників і не може стати спільною землею',
+    PLOT_HAS_WATER_CONNECTION_kind:
+      'На ділянці є постійне підключення води, тож вона не може стати спільною землею — спершу відключіть її',
     MEMBER_NOT_FOUND: 'Цього члена не знайдено.',
     OWNERSHIP_NOT_FOUND: 'Запис про володіння не знайдено. Перезавантажте сторінку.',
     REQUIRED_reason: 'Вкажіть причину',
@@ -547,6 +549,7 @@ export const uk: Messages = {
     METER_VALUE_INVALID: 'Початковий показ має бути невід’ємним числом, не більше трьох знаків після коми.',
     READING_DATE_IN_FUTURE: 'Дата не може бути в майбутньому.',
     PLOT_HAS_METER: 'Ділянка має лічильник — спершу зніміть його.',
+    PLOT_HAS_WATER_CONNECTION: 'На ділянці є постійне підключення води — спершу відключіть її від води.',
     AMOUNT_NOT_POSITIVE: 'Сума має бути більшою за нуль.',
     INVALID_OPENING_BALANCES_amount: 'У сумі більше двох знаків після коми або вона завелика.',
     INVALID_OPENING_BALANCES_charge_type:
@@ -2371,6 +2374,7 @@ export const uk: Messages = {
     TREE_PARENT_INACTIVE: 'Батьківський лічильник уже знято',
     TREE_DATE_BEFORE_LATEST: 'Дата раніша за останню зміну місця лічильника в дереві',
     PLOT_HAS_METER: 'Спершу зніміть лічильник ділянки',
+    PLOT_HAS_WATER_CONNECTION: 'На ділянці є постійне підключення води — спершу відключіть її від води',
     READING_DATE_IN_FUTURE: 'Дата не може бути в майбутньому',
     READING_DATE_OUTSIDE_METER: 'Дата поза періодом роботи лічильника',
     READING_OUT_OF_ORDER: 'Показ менший за попередній або більший за наступний',

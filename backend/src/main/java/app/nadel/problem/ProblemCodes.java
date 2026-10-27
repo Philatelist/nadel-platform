@@ -72,6 +72,8 @@ public final class ProblemCodes {
     public static final String IMPORT_EXPIRED = "IMPORT_EXPIRED";
     /** 409: a plot that has a meter is deleted or turned into common land, or a plot with an active meter is archived. */
     public static final String PLOT_HAS_METER = "PLOT_HAS_METER";
+    /** 409: a plot with a lasting water connection is archived or turned into common land. */
+    public static final String PLOT_HAS_WATER_CONNECTION = "PLOT_HAS_WATER_CONNECTION";
     /** 409: the plot already has an active meter of the resource. */
     public static final String METER_ACTIVE_EXISTS = "METER_ACTIVE_EXISTS";
     /** 409: common land has no plot meters. */

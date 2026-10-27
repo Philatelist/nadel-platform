@@ -23,7 +23,8 @@
  * and the import facades {@link app.nadel.meters.MeterImport} with its
  * records (the Meters sheet of the Excel import) and {@link app.nadel.meters.WaterConnectionImport} (the water column of
  * the Plots sheet). The meter register (entity, commands, queries, the endpoints of tag
- * {@code meters} and the plot guard {@code MeterPlotGuard}, an implementation of {@link app.nadel.plots.PlotChangeGuard}),
+ * {@code meters} and the plot guards {@code MeterPlotGuard} and {@code WaterConnectionPlotGuard}, implementations of
+ * {@link app.nadel.plots.PlotChangeGuard}),
  * the readings (entity, rules, commands, the round, the member's submission, approvals and the endpoints of tag
  * {@code readings}), replacement with the tree periods it moves, range consumption over a chain of meters and the water
  * connections (entity, commands, queries and the endpoints of tag {@code water}) are internal. It depends on {@code identity}, {@code audit}, {@code problem} and {@code plots} (the public

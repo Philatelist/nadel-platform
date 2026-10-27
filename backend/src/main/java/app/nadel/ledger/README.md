@@ -809,7 +809,8 @@ change of the red threshold needs no refresh. Tests: `PlotStatusRefreshTests` (t
 
 `LedgerPlotGuard` implements `plots.PlotChangeGuard`: a plot that has any charge (reversed or not) is not deleted, 409
 `PLOT_HAS_CHARGES` (the foreign key `charge_plot_fk` is the backstop). Archiving and turning into common land are not
-refused here.
+refused here. It is asked first among the plot guards (`@Order(100)`, before the guards of `meters`), so a plot with
+charges and a meter is refused with `PLOT_HAS_CHARGES`.
 
 ## Audit
 

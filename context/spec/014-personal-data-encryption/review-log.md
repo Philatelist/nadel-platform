@@ -23,3 +23,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `9140a23..25852a7` | PASS | — | minor: personal-field set duplicated in members and audit migration 24 (documented); FieldChange.snakeCase javadoc promises an IllegalArgumentException it does not throw (FieldRef validates the result) |
+
+## Slice 4 — pending Excel import plan encrypted
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `25852a7..a46cd13` | PASS | — | minor: StoredPlan javadoc line too long; check leftover imports in ImportRun; ImportCommitter.commit javadoc lacks the 500 PERSONAL_DATA_UNREADABLE outcome |
