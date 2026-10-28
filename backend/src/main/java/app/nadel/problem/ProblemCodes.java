@@ -109,6 +109,11 @@ public final class ProblemCodes {
     public static final String ALLOCATION_EXCEEDS_PAYMENT = "ALLOCATION_EXCEEDS_PAYMENT";
     /** 400: an allocation line exceeds what is open on its charge ({@code errors[{field: lines[j].amount}]}). */
     public static final String ALLOCATION_EXCEEDS_CHARGE = "ALLOCATION_EXCEEDS_CHARGE";
+    /**
+     * 400: the parts of a payment split over several plots do not add up to the payment
+     * ({@code errors[{field: split.parts}]}).
+     */
+    public static final String SPLIT_TOTAL_MISMATCH = "SPLIT_TOTAL_MISMATCH";
     /** 409: the charge was reversed before; a charge is reversed at most once. */
     public static final String CHARGE_ALREADY_REVERSED = "CHARGE_ALREADY_REVERSED";
     /** 409: the charge is a reversal, which cannot itself be reversed. */

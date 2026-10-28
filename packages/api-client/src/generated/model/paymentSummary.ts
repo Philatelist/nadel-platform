@@ -19,6 +19,8 @@ import type { PaymentSource } from './paymentSource';
 export interface PaymentSummary {
   id: string;
   groupId: string;
+  /** The number of payments in the group (the parts of a split payment, reversed ones included); 1 for a payment of one plot */
+  groupSize?: number;
   receiptNumber?: number;
   bankReference?: string;
   receivedOn: string;

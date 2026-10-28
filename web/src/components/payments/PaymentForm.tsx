@@ -1,5 +1,6 @@
 import {
   PaymentSource,
+  type PaymentSplitPartInput,
   useEnterPayment,
   type PaymentEntryRequest,
   type PaymentLineInput,
@@ -13,11 +14,14 @@ import { useT } from '../../i18n';
 import { kyivToday } from '../../kyivToday';
 import { problemCode } from '../../problem';
 import type { PickedMember } from '../ownership/MemberPicker';
-import { Button, LoadingState, Notice, Panel, Select, TextArea, TextField } from '../ui';
+import { Button, LoadingState, Notice, Panel, RadioGroup, Select, TextArea, TextField } from '../ui';
 import { PayerPicker } from './PayerPicker';
+import { PaymentGroupSaved } from './PaymentGroupSaved';
 import { PaymentSaved } from './PaymentSaved';
 import { PlotSelect } from './PlotSelect';
 import { ProposalTable } from './ProposalTable';
+import { SplitParts, type SplitEdits } from './SplitParts';
+import { SplitPayerStep } from './SplitPayerStep';
 import { invalidateAfterPayment } from './paymentInvalidation';
 import { paymentErrors } from './paymentProblems';
 import { usePaymentPreview } from './usePaymentPreview';
@@ -54,10 +58,42 @@ function linesOf(edits: Edits): Lines {
   return { lines, ids, invalid };
 }
 
+type Mode = 'single' | 'split';
+
+/** The parts to send once the treasurer has edited a part, and the typed texts that are not an amount. */
+function splitParts(edits: SplitEdits | null): {
+  parts: PaymentSplitPartInput[] | undefined;
+  invalid: Set<string>;
+  /** Charge ids of each part's lines in the order sent, by plot id. */
+  lineIds: Record<string, string[]>;
+} {
+  const invalid = new Set<string>();
+  const lineIds: Record<string, string[]> = {};
+  if (edits === null) return { parts: undefined, invalid, lineIds };
+  const parts = edits.order.map((plotId) => {
+    const part: PaymentSplitPartInput = { plotId };
+    const text = edits.amounts?.[plotId];
+    if (text !== undefined) {
+      const amount = normalizeMoneyInput(text);
+      if (amount === undefined) invalid.add(plotId);
+      else part.amount = amount;
+    }
+    const typedLines = edits.lines[plotId];
+    if (typedLines !== undefined) {
+      const typed = linesOf(typedLines);
+      for (const chargeId of typed.invalid) invalid.add(`${plotId}/${chargeId}`);
+      part.lines = typed.lines;
+      lineIds[plotId] = typed.ids;
+    }
+    return part;
+  });
+  return { parts, invalid, lineIds };
+}
+
 /**
- * Enter one payment for one plot: the plot, source, date, amount, payer, note and bank reference; the server's
- * proposal of how the money is allocated (editable); Save with the digest of the proposal that was shown.
- * Single-plot mode; the split mode of a later slice is another body inside the same shell.
+ * Enter one payment: the source, date, amount, payer, note and bank reference; the server's proposal of how the money
+ * is allocated (editable); Save with the digest of the proposal that was shown. Two modes share the shell: one plot,
+ * or one payment split over the current plots of one payer.
  */
 export function PaymentForm({ initialPlotId }: { initialPlotId?: string }) {
   const t = useT();
@@ -65,7 +101,10 @@ export function PaymentForm({ initialPlotId }: { initialPlotId?: string }) {
   const queryClient = useQueryClient();
   const today = kyivToday();
 
+  const [mode, setMode] = useState<Mode>('single');
   const [plotId, setPlotId] = useState(initialPlotId);
+  const [splitPayer, setSplitPayer] = useState<PickedMember | null>(null);
+  const [splitEdits, setSplitEdits] = useState<SplitEdits | null>(null);
   const [source, setSource] = useState<PaymentSource>('CASH');
   const [receivedOn, setReceivedOn] = useState(today);
   const [amountText, setAmountText] = useState('');
@@ -77,19 +116,39 @@ export function PaymentForm({ initialPlotId }: { initialPlotId?: string }) {
   const [outdated, setOutdated] = useState(false);
   const [saveError, setSaveError] = useState<unknown>();
   const [saved, setSaved] = useState<{ payment: SavedPayment; bankReference?: string }>();
+  const [savedGroup, setSavedGroup] = useState<{
+    payments: SavedPayment[];
+    plotNumbers: Record<string, string>;
+  }>();
 
   const amount = normalizeMoneyInput(amountText);
   const typed = linesOf(edits);
-  const request: PaymentEntryRequest | undefined =
-    plotId !== undefined && amount !== undefined && receivedOn !== '' && typed.invalid.size === 0
+  const isSplit = mode === 'split';
+  const typedParts = splitParts(splitEdits);
+  const common = amount !== undefined && receivedOn !== '';
+  const request: PaymentEntryRequest | undefined = isSplit
+    ? splitPayer !== null && common && typedParts.invalid.size === 0
+      ? {
+          amount,
+          receivedOn,
+          source,
+          split: {
+            payerMemberId: splitPayer.id,
+            ...(typedParts.parts === undefined ? {} : { parts: typedParts.parts }),
+          },
+        }
+      : undefined
+    : plotId !== undefined && common && typed.invalid.size === 0
       ? { plotId, amount, receivedOn, source, ...(typed.lines === undefined ? {} : { lines: typed.lines }) }
       : undefined;
 
-  const preview = usePaymentPreview(request, plotId);
+  const owner = isSplit ? splitPayer?.id : plotId;
+  const preview = usePaymentPreview(request, owner);
   const enter = useEnterPayment();
   const errors = paymentErrors(t, saveError ?? preview.error);
-  const ready = plotId !== undefined && amount !== undefined && receivedOn !== '';
-  const part: PaymentPartProposal | undefined = ready ? preview.shown?.parts[0] : undefined;
+  const ready = (isSplit ? splitPayer !== null : plotId !== undefined) && common;
+  const part: PaymentPartProposal | undefined = ready && !isSplit ? preview.shown?.parts[0] : undefined;
+  const splitShown = ready && isSplit ? preview.shown : undefined;
 
   const lineErrors: Record<string, string> = {};
   for (const [index, text] of Object.entries(errors.lines)) {
@@ -99,8 +158,38 @@ export function PaymentForm({ initialPlotId }: { initialPlotId?: string }) {
   const amountErrors: Record<string, string> = {};
   for (const id of typed.invalid) amountErrors[id] = t.payments.proposal.amountInvalid;
 
+  const partAmountErrors: Record<string, string> = {};
+  const partLineErrors: Record<string, Record<string, string>> = {};
+  if (isSplit) {
+    for (const key of typedParts.invalid) {
+      if (!key.includes('/')) partAmountErrors[key] = t.payments.proposal.amountInvalid;
+      else {
+        const [plot = '', charge = ''] = key.split('/');
+        (partLineErrors[plot] ??= {})[charge] = t.payments.proposal.amountInvalid;
+      }
+    }
+    const order = splitEdits?.order ?? [];
+    for (const [index, text] of Object.entries(errors.parts.amount)) {
+      const plot = order[Number(index)];
+      if (plot !== undefined) partAmountErrors[plot] = text;
+    }
+    for (const [index, text] of Object.entries(errors.parts.plot)) {
+      const plot = order[Number(index)];
+      if (plot !== undefined) partAmountErrors[plot] = text;
+    }
+    for (const [index, byLine] of Object.entries(errors.parts.lines)) {
+      const plot = order[Number(index)];
+      if (plot === undefined) continue;
+      for (const [lineIndex, text] of Object.entries(byLine)) {
+        const charge = typedParts.lineIds[plot]?.[Number(lineIndex)];
+        if (charge !== undefined) (partLineErrors[plot] ??= {})[charge] = text;
+      }
+    }
+  }
+
   function resetProposal() {
     setEdits(null);
+    setSplitEdits(null);
     setTouched(new Set());
     setOutdated(false);
     setSaveError(undefined);
@@ -124,6 +213,50 @@ export function PaymentForm({ initialPlotId }: { initialPlotId?: string }) {
     edit(chargeId, '0.00');
   }
 
+  /** The first edit of a part seeds the explicit parts from what the server proposed, in its order. */
+  function baseSplit(): SplitEdits {
+    return (
+      splitEdits ?? {
+        order: (splitShown?.parts ?? []).map((p) => p.plotId),
+        amounts: null,
+        lines: {},
+        touched: {},
+      }
+    );
+  }
+
+  function editPartAmount(plotId: string, text: string) {
+    const base = baseSplit();
+    const amounts =
+      base.amounts ?? Object.fromEntries((splitShown?.parts ?? []).map((p) => [p.plotId, p.amount]));
+    setSplitEdits({ ...base, amounts: { ...amounts, [plotId]: text } });
+    setSaveError(undefined);
+  }
+
+  function editPartLine(plotId: string, chargeId: string, text: string) {
+    const base = baseSplit();
+    const proposal = splitShown?.parts.find((p) => p.plotId === plotId);
+    const seeded =
+      base.lines[plotId] ??
+      Object.fromEntries(
+        (proposal?.lines ?? [])
+          .filter((line) => !isZeroMoney(line.proposed))
+          .map((line) => [line.chargeId, line.proposed]),
+      );
+    setSplitEdits({
+      ...base,
+      lines: { ...base.lines, [plotId]: { ...seeded, [chargeId]: text } },
+      touched: { ...base.touched, [plotId]: new Set(base.touched[plotId]).add(chargeId) },
+    });
+    setSaveError(undefined);
+  }
+
+  function changeMode(next: Mode) {
+    if (next === mode) return;
+    setMode(next);
+    resetProposal();
+  }
+
   const canSave =
     request !== undefined && preview.current !== undefined && !preview.pending && !enter.isPending;
 
@@ -132,7 +265,7 @@ export function PaymentForm({ initialPlotId }: { initialPlotId?: string }) {
     const data: PaymentEntryRequest = {
       ...request,
       digest: preview.current.digest,
-      ...(payer === null ? {} : { payerMemberId: payer.id }),
+      ...(isSplit || payer === null ? {} : { payerMemberId: payer.id }),
       ...(note.trim() === '' ? {} : { payerNote: note.trim() }),
       ...(source === 'BANK' && reference.trim() !== '' ? { bankReference: reference.trim() } : {}),
     };
@@ -144,7 +277,13 @@ export function PaymentForm({ initialPlotId }: { initialPlotId?: string }) {
         onSuccess: async (result) => {
           const payment = result.payments[0];
           await invalidateAfterPayment(queryClient);
-          if (payment !== undefined) {
+          if (payment === undefined) return;
+          if (data.split !== undefined) {
+            const plotNumbers = Object.fromEntries(
+              (preview.current?.parts ?? []).map((p) => [p.plotId, p.plotNumber]),
+            );
+            setSavedGroup({ payments: result.payments, plotNumbers });
+          } else {
             setSaved({ payment, bankReference: data.bankReference });
           }
         },
@@ -162,6 +301,8 @@ export function PaymentForm({ initialPlotId }: { initialPlotId?: string }) {
 
   function another() {
     setSaved(undefined);
+    setSavedGroup(undefined);
+    setSplitPayer(null);
     setAmountText('');
     setPayer(null);
     setNote('');
@@ -170,6 +311,15 @@ export function PaymentForm({ initialPlotId }: { initialPlotId?: string }) {
     resetProposal();
   }
 
+  if (savedGroup !== undefined) {
+    return (
+      <PaymentGroupSaved
+        payments={savedGroup.payments}
+        plotNumbers={savedGroup.plotNumbers}
+        onAnother={another}
+      />
+    );
+  }
   if (saved !== undefined) {
     return <PaymentSaved payment={saved.payment} bankReference={saved.bankReference} onAnother={another} />;
   }
@@ -184,17 +334,39 @@ export function PaymentForm({ initialPlotId }: { initialPlotId?: string }) {
       }}
     >
       <Panel>
-        <PlotSelect
-          label={f.plot}
-          plotId={plotId}
-          changeLabel={f.changePlot}
-          onChange={(id) => {
-            setPlotId(id);
-            setPayer(null);
-            resetProposal();
-          }}
+        <RadioGroup
+          legend={f.mode}
+          value={mode}
+          onChange={(value) => changeMode(value as Mode)}
+          options={[
+            { value: 'single', label: f.modeSingle },
+            { value: 'split', label: f.modeSplit },
+          ]}
         />
-        {errors.fields.plotId && <p className="text-sm text-danger">{errors.fields.plotId}</p>}
+        {isSplit ? (
+          <SplitPayerStep
+            payer={splitPayer}
+            error={errors.parts.payer}
+            onChange={(member) => {
+              setSplitPayer(member);
+              resetProposal();
+            }}
+          />
+        ) : (
+          <>
+            <PlotSelect
+              label={f.plot}
+              plotId={plotId}
+              changeLabel={f.changePlot}
+              onChange={(id) => {
+                setPlotId(id);
+                setPayer(null);
+                resetProposal();
+              }}
+            />
+            {errors.fields.plotId && <p className="text-sm text-danger">{errors.fields.plotId}</p>}
+          </>
+        )}
         <div className="grid gap-4 sm:grid-cols-2">
           <Select
             label={f.source}
@@ -242,7 +414,14 @@ export function PaymentForm({ initialPlotId }: { initialPlotId?: string }) {
           )}
         </div>
         {receivedOn !== '' && receivedOn !== today && <Notice tone="warning">{f.dateWarning}</Notice>}
-        <PayerPicker plotId={plotId} value={payer} error={errors.fields.payerMemberId} onChange={setPayer} />
+        {!isSplit && (
+          <PayerPicker
+            plotId={plotId}
+            value={payer}
+            error={errors.fields.payerMemberId}
+            onChange={setPayer}
+          />
+        )}
         <TextArea
           label={f.note}
           hint={f.noteHint}
@@ -252,11 +431,30 @@ export function PaymentForm({ initialPlotId }: { initialPlotId?: string }) {
           error={errors.fields.payerNote}
         />
       </Panel>
-      <Panel title={t.payments.proposal.title}>
+      <Panel title={isSplit ? t.payments.split.title : t.payments.proposal.title}>
         {outdated && <Notice tone="warning">{t.payments.proposal.outdated}</Notice>}
         {showNotice && <Notice tone="danger">{errors.notice}</Notice>}
         {!ready ? (
-          <p className="text-ink-muted">{f.needPlotAndAmount}</p>
+          <p className="text-ink-muted">
+            {isSplit ? t.payments.split.needPayerAndAmount : f.needPlotAndAmount}
+          </p>
+        ) : isSplit ? (
+          splitShown === undefined ? (
+            preview.pending ? (
+              <LoadingState message={f.previewing} />
+            ) : null
+          ) : (
+            <div aria-busy={preview.pending}>
+              <SplitParts
+                result={splitShown}
+                edits={splitEdits}
+                amountErrors={partAmountErrors}
+                lineErrors={partLineErrors}
+                onAmount={editPartAmount}
+                onLine={editPartLine}
+              />
+            </div>
+          )
         ) : part === undefined ? (
           preview.pending ? (
             <LoadingState message={f.previewing} />

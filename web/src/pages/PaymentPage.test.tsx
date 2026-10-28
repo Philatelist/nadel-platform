@@ -96,4 +96,24 @@ describe('PaymentPage', () => {
     expect(screen.getByText('Брат власника')).toBeInTheDocument();
     expect(screen.getByText('Сторновано')).toBeInTheDocument();
   });
+
+  it('lists the other parts of a split payment with links and the reversed badge', () => {
+    payment = {
+      ...base(),
+      groupParts: [
+        { id: 'pay2', plotId: 'p15', plotNumber: '15', amount: '400.00', reversed: false },
+        { id: 'pay3', plotId: 'p16', plotNumber: '16', amount: '100.00', reversed: true },
+      ],
+    };
+    renderCard();
+    const panel = screen.getByRole('table', { name: 'Інші частини одного платежу по ділянках платника' });
+    expect(within(panel).getByRole('link', { name: '15' })).toHaveAttribute('href', '/payments/pay2');
+    expect(within(panel).getByRole('link', { name: '16' })).toHaveAttribute('href', '/payments/pay3');
+    expect(within(panel).getAllByText('Сторновано')).toHaveLength(1);
+  });
+
+  it('has no group panel for a payment of one plot', () => {
+    renderCard();
+    expect(screen.queryByText('Інші частини цього платежу')).not.toBeInTheDocument();
+  });
 });

@@ -112,3 +112,8 @@ red plots; guide PDFs.
 - Slice 1 committed 23557e8 (verify: 168 tests 0 failures + typecheck); review round 1 started.
 - Slice 1 review round 1: PASS (minor notes in review-log).
 - Slice 2 verify: backend 476 tests 0 failures; pnpm typecheck/lint/test green.
+- Slice 2 committed faf6564; review round 1: PASS (minor notes in review-log).
+- Slice 3 backend: split implemented (38 narrow tests green). Builder choices (assumptions): a 0.00 part is shown but not saved;
+  a part without an amount takes the proposal; payer with no eligible plot → 400 `split.payerMemberId` NOT_FOUND; group id =
+  first part's id; split weights = open amounts (prepayment not subtracted); only part plots are locked.
+- Slice 3 verify: backend 43 tests 0 failures; pnpm typecheck/lint/test green.

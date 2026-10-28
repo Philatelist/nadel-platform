@@ -11,15 +11,17 @@
  */
 import type { Money } from './money';
 import type { PaymentPartProposal } from './paymentPartProposal';
+import type { PaymentSplitPreview } from './paymentSplitPreview';
 import type { SavedPayment } from './savedPayment';
 
 /**
- * The proposal of a payment (preview) or the payment saved with it (save). `parts` has one part per plot (one in this version); `payments` is empty for a preview.
+ * The proposal of a payment (preview) or the payments saved with it (save). `parts` has one part per plot: one for a payment of one plot, one per plot of the split (in natural plot order, parts of `0.00` included) for a split payment, which also has `split`. `payments` is empty for a preview; a save lists one payment per part above zero, all of one group.
  */
 export interface PaymentEntryResult {
   preview: boolean;
   amount: Money;
   parts: PaymentPartProposal[];
+  split?: PaymentSplitPreview;
   /** Send it back with the save to refuse it when the open charges changed since */
   digest: string;
   payments: SavedPayment[];

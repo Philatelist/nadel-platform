@@ -41,8 +41,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Reads payments for the API ({@code GET /payments}, {@code GET /payments/{id}}, feature 015 §2.4): the list, newest
- * first, with what each payment pays on charges now and what is left of it, and the card with the allocations and
- * releases, the group and the reversal. The payer note is opened only for a viewer who may view members
+ * first, with what each payment pays on charges now, what is left of it and the size of its group (the parts of a split
+ * payment), and the card with the allocations and releases, the other parts of its group and the reversal. The payer note is opened only for a viewer who may view members
  * ({@code MEMBERS_VIEW}). The callers check {@code PAYMENTS_VIEW}. Read-only transactions; RLS hides other
  * cooperatives' rows.
  */
@@ -131,6 +131,10 @@ class PaymentQueries {
         Map<UUID, PlotFacts> plotFacts = plots.findAll(byId.values().stream().map(PaymentRecord::getPlotId)
                 .collect(Collectors.toSet()));
         Map<UUID, MemberRef> payers = payers(byId.values());
+        Map<UUID, Integer> groupSizes = new HashMap<>();
+        payments.countByGroup(PaymentKind.PAYMENT, byId.values().stream().map(PaymentRecord::getGroupId)
+                .collect(Collectors.toSet()))
+                .forEach(row -> groupSizes.put((UUID) row[0], ((Number) row[1]).intValue()));
         PaymentViews.Context context = views.context(List.of());
         List<PaymentSummary> items = new ArrayList<>();
         for (UUID id : ids) {
@@ -142,6 +146,7 @@ class PaymentQueries {
                     plotFacts.get(payment.getPlotId()).number(), PaymentSource.fromValue(payment.getSource().name()),
                     payment.getAmount().toString(), net.toString(), left(payment, net, isReversed).toString(),
                     isReversed);
+            item.setGroupSize(groupSizes.getOrDefault(payment.getGroupId(), 1));
             item.setReceiptNumber(payment.getReceiptNumber());
             item.setBankReference(payment.getBankReference());
             item.setPayer(PaymentViews.payer(payment.getPayerMemberId(), payers));

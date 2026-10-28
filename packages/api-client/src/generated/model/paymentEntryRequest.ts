@@ -12,9 +12,10 @@
 import type { Money } from './money';
 import type { PaymentLineInput } from './paymentLineInput';
 import type { PaymentSource } from './paymentSource';
+import type { PaymentSplitInput } from './paymentSplitInput';
 
 /**
- * A payment for one plot (`plotId`, required). Kept open for a payment split over several plots of one payer, which comes as an alternative to `plotId`.
+ * A payment for one plot (`plotId`, with optional `lines`) or one payment split over several plots of one payer (`split`); exactly one of `plotId` and `split` is given.
  */
 export interface PaymentEntryRequest {
   amount: Money;
@@ -26,21 +27,22 @@ export interface PaymentEntryRequest {
      * @maxLength 64
      */
   bankReference?: string;
-  /** The member who paid; any member of the cooperative, optional */
+  /** The member who paid; any member of the cooperative, optional. With `split` the payer is `split.payerMemberId`; this field is then absent or the same member */
   payerMemberId?: string;
   /**
      * A note about the payer (for example the name of a relative who brought the money): personal data, stored encrypted; surrounding whitespace is trimmed, blank means none
      * @maxLength 200
      */
   payerNote?: string;
-  /** The plot the payment is for; required */
+  /** The plot the payment is for; required unless `split` is given */
   plotId?: string;
   /**
-     * The caller's allocation, each charge at most once; absent (or null) saves the proposal, an empty list places nothing
+     * The caller's allocation for `plotId`, each charge at most once; absent (or null) saves the proposal, an empty list places nothing. Not with `split` (each part has its own lines)
      * @maxItems 1000
      * @nullable
      */
   lines?: PaymentLineInput[] | null;
+  split?: PaymentSplitInput;
   /**
      * The `digest` of the preview the caller saw; optional
      * @maxLength 64

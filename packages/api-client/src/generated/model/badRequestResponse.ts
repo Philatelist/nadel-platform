@@ -12,6 +12,6 @@
 import type { Problem } from './problem';
 
 /**
- * Malformed request or failed validation (code `VALIDATION_FAILED` or `MALFORMED_REQUEST`); the allocation lines of a payment together exceed the payment (code `ALLOCATION_EXCEEDS_PAYMENT`) or a line exceeds what is open on its charge (code `ALLOCATION_EXCEEDS_CHARGE`)
+ * Malformed request or failed validation (code `VALIDATION_FAILED` or `MALFORMED_REQUEST`); the allocation lines of a payment together exceed the payment (code `ALLOCATION_EXCEEDS_PAYMENT`) or a line exceeds what is open on its charge (code `ALLOCATION_EXCEEDS_CHARGE`); the parts of a split payment do not add up to the payment (code `SPLIT_TOTAL_MISMATCH`)
  */
 export type BadRequestResponse = Problem;

@@ -63,8 +63,8 @@ class PaymentViews {
 
     /**
      * The proposal of {@code amount} on the plot: every open charge of the plot in planner order with what the lines
-     * place on it ({@code 0.00} when nothing), the total placed and what the payment leaves as prepayment. The lines
-     * are valid (each an open charge of the plot).
+     * place on it ({@code 0.00} when nothing), the total placed, what the payment leaves as prepayment and what the
+     * plot owes before the payment. The lines are valid (each an open charge of the plot).
      */
     PaymentPartProposal part(UUID plotId, String plotNumber, Money amount, PlotLedgerState state,
             List<AllocationPlanner.Line> lines) {
@@ -85,8 +85,16 @@ class PaymentViews {
                     charge.accruedOn(), charge.open().toString(),
                     placed.getOrDefault(charge.id(), Money.ZERO).toString());
         }).toList();
-        return new PaymentPartProposal(plotId, plotNumber, amount.toString(), rows, total.toString(),
-                amount.minus(total).toString());
+        PaymentPartProposal proposal = new PaymentPartProposal(plotId, plotNumber, amount.toString(), rows,
+                total.toString(), amount.minus(total).toString());
+        proposal.setDebt(debt(state).toString());
+        return proposal;
+    }
+
+    /** What the plot owes: the sum of what is open on its charges that money can be placed on. */
+    static Money debt(PlotLedgerState state) {
+        return AllocationPlanner.openInOrder(state.charges()).stream().map(ChargeState::open)
+                .reduce(Money.ZERO, Money::plus);
     }
 
     /** A payment just saved, booked in {@code month}. */

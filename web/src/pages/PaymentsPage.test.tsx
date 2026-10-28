@@ -82,6 +82,23 @@ describe('PaymentsPage', () => {
     expect(screen.getByRole('link', { name: 'Внести платіж' })).toHaveAttribute('href', '/payments/new');
   });
 
+  it('marks the payments that belong to a split group', () => {
+    useListPayments.mockReturnValue(
+      queryResult({
+        items: [
+          { ...cash, groupSize: 2 },
+          { ...bankReversed, groupSize: 1 },
+        ],
+        page: 0,
+        size: 20,
+        totalItems: 2,
+        totalPages: 1,
+      }),
+    );
+    renderList();
+    expect(screen.getAllByText('Одна оплата, ділянок: 2')).toHaveLength(1);
+  });
+
   it('hides "Внести платіж" without the permission to enter payments', () => {
     canEnter = false;
     renderList();

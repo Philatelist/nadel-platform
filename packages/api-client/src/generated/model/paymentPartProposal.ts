@@ -23,4 +23,6 @@ export interface PaymentPartProposal {
   allocatedTotal: Money;
   /** What the payment leaves unplaced (the amount minus `allocatedTotal`) */
   prepayment: Money;
+  /** What the plot owes before the payment (the sum of `open` of its open charges) */
+  debt?: Money;
 }

@@ -59,6 +59,19 @@ class PaymentDigestTests {
     }
 
     @Test
+    void thePayerOfASplitIsPartOfTheEntryDigest() {
+        List<Part> parts = List.of(new Part(PLOT, money("700.00"), ledger.state().charges()));
+        UUID payer = UUID.randomUUID();
+
+        String split = PaymentDigest.entry(money("700.00"), payer, parts);
+
+        assertThat(split).matches("[0-9a-f]{64}").isEqualTo(PaymentDigest.entry(money("700.00"), payer, parts));
+        assertThat(PaymentDigest.entry(money("700.00"), UUID.randomUUID(), parts)).isNotEqualTo(split);
+        assertThat(PaymentDigest.entry(money("700.00"), null, parts)).isNotEqualTo(split)
+                .isEqualTo(PaymentDigest.entry(money("700.00"), parts));
+    }
+
+    @Test
     void aFullyPaidChargeIsNotInTheEntryDigest() {
         PaymentLedger other = new PaymentLedger();
         ChargeEntry paid = other.charge(MEMBERSHIP, "100.00", "2026-01-01");

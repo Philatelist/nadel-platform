@@ -51,7 +51,7 @@ cooperative that is not reversed, and a reversal never target an adjustment or a
 |---|---|
 | `ChargesBooked(tenantId, plotIds)` | Published inside the transaction of every booking or reversal (a reversal, an opening balance, the month run, a retry and the charges of readings, at most 500 plots per event; every later booking path must publish it too). `PlotStatusRefresher` recomputes the debt of those plots from the committed ledger. Ids only, no personal data; the set is never empty |
 | `OpeningBalanceImport` (with `Row`, `Item`, `Plan`, `Problem`, `Action`) | The "Opening balances" sheet of the Excel import (slice 8), `plan`/`lock`/`apply` like `meters.MeterImport`; implemented by `internal.OpeningBalanceImportService`, see Opening balances from the import |
-| `PaymentsChanged(tenantId, plotIds)` | Published inside the transaction of every change of payments or allocations of plots (feature 015: a payment entered; later slices a reversal, a reallocation, a prepayment allocation by hand or automatically), never empty, at most 500 plots. `PlotStatusRefresher` recomputes the debt and prepayment of those plots. Ids only |
+| `PaymentsChanged(tenantId, plotIds)` | Published inside the transaction of every change of payments or allocations of plots (feature 015: a payment entered, one event with every plot of a split; later slices a reversal, a reallocation, a prepayment allocation by hand or automatically), never empty, at most 500 plots. `PlotStatusRefresher` recomputes the debt and prepayment of those plots. Ids only |
 | `PaymentSource` (`CASH`, `BANK`) | Where the money of a payment came from (feature 015; column `payment.source`, V27); 016 adds the bank statement import |
 | `LedgerReadModel` (with `MonthTypeTotals`, `MonthGrouping`, `MonthStatus`, `PlotDebts`, `CorrectionRow`, `CorrectionKind`, `CorrectionSource`, `CorrectionCause`, `ChargedRow`, `ChargedRowKind`, `ChargedSource` (with `TARIFF` for the water rows), `ChargedPart`, `LossesRunNodeRow`, `LossesRunNodeOutcome`, `CommonConsumerRunLineRow`, `CommonConsumerRunLineOutcome`, `RunStatus`) | The read facade of the reports (feature 013), implemented by `internal.LedgerReportQueries`; see The read model of the reports |
 
@@ -811,13 +811,13 @@ no interval, so it publishes nothing). `ReadingCharges` listens with the ADR 000
   every tariff `FOR SHARE` -> the billing month `FOR SHARE`. The month run takes the meters of its retries before its
   tariffs.
 
-## Payments (tag `payments`, feature 015 slice 2)
+## Payments (tag `payments`, feature 015 slices 2 and 3)
 
 | Endpoint | Operation | Who |
 |---|---|---|
-| `GET /payments?from&to&source&plotId&month&page&size` | The payments (kind `PAYMENT`; a reversal marks its payment `reversed`), newest first (`received_on`, then `created_at`, then id), filtered by `received_on`, source, plot and the billing month they are booked in; each with its receipt number or bank reference, the payer's short name, `allocated` (net allocations) and `prepayment` (what is left, `0.00` once reversed). `from` after `to` is 400 (`from` `INVALID`) | `PAYMENTS_VIEW` |
+| `GET /payments?from&to&source&plotId&month&page&size` | The payments (kind `PAYMENT`; a reversal marks its payment `reversed`), newest first (`received_on`, then `created_at`, then id), filtered by `received_on`, source, plot and the billing month they are booked in; each with its receipt number or bank reference, the payer's short name, `allocated` (net allocations), `prepayment` (what is left, `0.00` once reversed) and `groupSize` (the payments of its group: the parts of a split, reversed ones included; 1 for a payment of one plot). `from` after `to` is 400 (`from` `INVALID`) | `PAYMENTS_VIEW` |
 | `GET /payments/{id}` | The card: the payment, its allocations and releases (oldest first, with the charge type, period, origin or release cause and `system` for rows written by the system), the other parts of its group, the reversal, the author's current name, and `payerNote` only for a viewer with `MEMBERS_VIEW`. Unknown, another cooperative's or a reversal's id: 404 `NOT_FOUND` | `PAYMENTS_VIEW` |
-| `POST /payments?preview=true\|false` | One plot (`plotId`); `lines` absent (or null) saves the proposal, an empty list places nothing. Preview (200): every open charge of the plot in planner order with `open` and `proposed` (`0.00` when nothing), `allocatedTotal`, the prepayment the payment leaves and the `digest`; nothing written, no lock. Save (201): the same plus `payments` (id, group, receipt number of a cash payment) | `PAYMENTS_ENTER` |
+| `POST /payments?preview=true\|false` | One plot (`plotId`) or a split over the plots of one payer (`split`, see Split below), exactly one of them. For one plot, `lines` absent (or null) saves the proposal, an empty list places nothing. Preview (200): per part every open charge of the plot in planner order with `open` and `proposed` (`0.00` when nothing), `allocatedTotal`, the prepayment the payment leaves, the plot's `debt` (the sum of its open amounts), for a split also `split` (the payer and every plot of the split with its `debt` and `proposedAmount`), and the `digest`; nothing written, no lock. Save (201): the same plus `payments` (id, group, receipt number of a cash payment; one per part above zero) | `PAYMENTS_ENTER` |
 
 `PaymentService.enter`, in this order: the values (`PaymentRules`: `amount` `AMOUNT_NOT_POSITIVE`/`INVALID`,
 `receivedOn` `DATE_IN_FUTURE`, `plotId` `REQUIRED`, `payerNote` `TOO_LONG`, `bankReference` `TOO_LONG` or `INVALID` on
@@ -834,6 +834,31 @@ and keeps its `received_on`), its own group, with the next receipt number for ca
 `ENTRY`, `created_by` the actor; the payment is flushed first because inserts are ordered by entity), the audit entry
 and `PaymentsChanged`. Logs carry ids and counts only.
 
+**Split** (feature 015 §2.6, slice 3; `split: {payerMemberId, parts?: [{plotId, amount?, lines?}]}` instead of
+`plotId`; `plotId` and `split` together are 400 `split` `INVALID`, `lines` with `split` 400 `lines` `INVALID`, a
+top-level `payerMemberId` other than `split.payerMemberId` 400 `payerMemberId` `INVALID`). The payer must be a member
+(`split.payerMemberId` `MEMBER_NOT_FOUND`); the plots of the split are the payer's current plots
+(`identity.OwnedPlotsSource.currentPlotsOf`: owned now, any share) that are neither common land nor archived, in natural
+plot order (`PlotCatalog.inNaturalOrder`); none is 400 `split.payerMemberId` `NOT_FOUND`. Their ledgers are loaded in
+one `PlotLedgerQueries.load`; a plot's debt is the sum of what is open on its charges (`PaymentViews.debt`), and
+`PaymentSplitter.split` proposes the parts. Without `parts` the proposal is used (every plot is a part, `0.00` ones
+included). With `parts` (not empty, else `split.parts` `REQUIRED`): each `plotId` a plot of the split
+(`split.parts[i].plotId` `NOT_FOUND`, also for a plot of another member, an archived plot or common land) at most once
+(`DUPLICATE`); `amount` `0.00` or more (`split.parts[i].amount` `INVALID` below zero or over 12 integer digits), absent
+= the proposed part of the plot; a part of `0.00` is shown in the answer but not saved. The parts are put in natural
+plot order; their sum must equal `amount` (400 `SPLIT_TOTAL_MISMATCH`, field `split.parts`). The digest
+(`PaymentDigest.entry(amount, payer, parts)`) covers the amount, the payer, the parts (plot, amount) and each part's
+open charges; a stale one is 409 `PREVIEW_OUTDATED`. Each part's lines are its proposal or the caller's lines checked as
+for one plot, with field names under `split.parts[i].` (`split.parts[i].lines`, `split.parts[i].lines[j].amount`, ...).
+A save first locks the plots of the parts `FOR SHARE` in one call (`PlotCatalog.findAllAndLockShared`; a plot archived
+or turned into common land since is 409 as for one plot), then all their plot ledger locks in one sorted call, and only
+then reads the ledgers, so the debts, the proposal and the digest are those of the locked plots. It books one month,
+takes **one** receipt number for a cash split, and writes one payment per part above zero: the same `group_id` (the id
+of the first part), the receipt number on every part, the payer `split.payerMemberId`, the bank reference, and the payer
+note sealed per payment (its own `FieldRef`). One `PAYMENT_RECORDED` per part (about its plot) and one
+`PaymentsChanged` with every plot of the group. The card of a part lists the other parts (`groupParts`: id, plot,
+amount, reversed).
+
 **Lock order** (technical considerations 2.4): charging lock (paths that charge) -> network / queue / charge type /
 tariff `FOR SHARE` -> plot `FOR SHARE` (`PlotCatalog.findAndLockShared`) -> **plot ledger locks** (`PlotLedgerLock`:
 `pg_advisory_xact_lock(hashtextextended('ledger.plot:'||tenant||':'||plot, 0))`, all plots of a path in one call in
@@ -845,7 +870,8 @@ lock the plots; paths that only add charges do not.
 **Receipt numbers** (`ReceiptCounter`, `MANDATORY`): inside the saving transaction, after the plot ledger lock and the
 month, `INSERT ... ON CONFLICT DO NOTHING` of `(tenant, 0)` and `UPDATE ... SET last_number = last_number + 1 RETURNING`.
 The row lock serialises concurrent cash saves of the cooperative (no duplicates); a rollback undoes the step (no gaps).
-Bank payments take no number.
+Bank payments take no number. A cash split takes one number for the whole group, stored on every part (the gist
+exclusion `payment_receipt_group_excl` keeps a number to one group).
 
 **Payer note** (`PaymentNoteCipher`): sealed with `privacy.PersonalDataCipher` at `FieldRef("payment", "payer_note",
 paymentId)` (the id is chosen before the row), opened only for the card of a viewer with `MEMBERS_VIEW`; sealed again
@@ -1088,7 +1114,15 @@ operator; adjustments: the debt, `adjusts`/`adjustedBy`, `recalculationId` only 
 archived, the values, unknown and foreign plots, a stale digest writing nothing, a preview writing nothing, the list
 and the card with the payer note only for `MEMBERS_VIEW`, permissions, the plot guard),
 `ReceiptNumberConcurrencyTests` (example 17 with both saves waiting on the counter row, a failed save leaves no gap, a
-bank payment takes no number, a reversed number is not reused), `PaymentAuditTests` (`PAYMENT_RECORDED` values, the
+bank payment takes no number, a reversed number is not reused), `PaymentSplitTests` (examples 12, 13, 14 and 15 end to
+end: the payer's plots with debts and proposed parts, parts without amounts, one group and one receipt number for a
+cash split with the payer and a sealed note on every part, the card's other parts and `groupSize` in the list; a bank
+split without a number, a mismatch writing nothing, a plot of another member, twice or archived, nothing owed -> all to
+the first plot and a `0.00` part not saved, per-part line errors and lines, the request checks, a stale digest,
+permissions), `AllocationConcurrencyTests` (two entries on one plot, and a split with a payment of one of its plots, in
+real concurrent transactions: the second waits on the plot ledger lock while the first holds the receipt counter, then
+reads the ledger afresh, so no charge and no payment is ever over-allocated; without the lock the deferred backstop
+refuses one at commit), `PaymentAuditTests` (`PAYMENT_RECORDED` values, the
 sealed note: not readable in `payment`, `audit_entry`, the outbox or the debug log), the payment cases of
 `PlotStatusRefreshTests` (red to yellow, green with a prepayment, the oldest unpaid charge, a redelivered
 `PaymentsChanged`, the cache equal to an SQL rebuild); `PaymentTenantIsolationTests`, `PaymentAppendOnlyTests` (V27) and

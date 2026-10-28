@@ -1,4 +1,4 @@
-import { useGetPayment, type PaymentAllocation } from '@nadel/api-client';
+import { useGetPayment, type PaymentAllocation, type PaymentGroupPart } from '@nadel/api-client';
 import { format, formatDateTime, formatDay } from '@nadel/shared';
 import type { ReactNode } from 'react';
 import { Link, useParams } from 'react-router';
@@ -45,6 +45,22 @@ export function PaymentPage() {
       cell: (a) => servicePeriodLabel(a.serviceFrom, a.serviceTo, t, locale),
     },
     { key: 'amount', header: c.amountColumn, numeric: true, cell: (a) => <Money amount={a.amount} /> },
+  ];
+
+  const groupColumns: Column<PaymentGroupPart>[] = [
+    {
+      key: 'plot',
+      header: c.groupPlot,
+      cell: (g) => (
+        <span className="flex flex-wrap items-center gap-2">
+          <Link to={`/payments/${g.id}`} className="font-medium text-accent underline">
+            <UserContent>{g.plotNumber}</UserContent>
+          </Link>
+          {g.reversed && <Badge tone="neutral">{t.payments.reversed}</Badge>}
+        </span>
+      ),
+    },
+    { key: 'amount', header: c.groupAmount, numeric: true, cell: (g) => <Money amount={g.amount} /> },
   ];
 
   return (
@@ -113,6 +129,17 @@ export function PaymentPage() {
                   emptyMessage={c.noAllocations}
                 />
               </Panel>
+              {p.groupParts.length > 0 && (
+                <Panel title={c.groupTitle}>
+                  <DataTable
+                    columns={groupColumns}
+                    rows={p.groupParts}
+                    rowKey={(g) => g.id}
+                    caption={c.groupCaption}
+                    emptyMessage=""
+                  />
+                </Panel>
+              )}
               <p className="text-sm text-ink-muted">
                 {c.entered}{' '}
                 {p.createdByName && (

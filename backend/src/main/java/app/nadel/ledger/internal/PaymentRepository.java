@@ -26,6 +26,11 @@ interface PaymentRepository extends JpaRepository<PaymentRecord, UUID> {
     /** The reversals of any of the payments. */
     List<PaymentRecord> findByReversesPaymentIdIn(Collection<UUID> paymentIds);
 
+    /** The number of payments of the kind in each of the groups, as {@code [groupId, count]} rows. */
+    @Query("select p.groupId, count(p) from PaymentRecord p where p.kind = :kind and p.groupId in :groupIds "
+            + "group by p.groupId")
+    List<Object[]> countByGroup(@Param("kind") PaymentKind kind, @Param("groupIds") Collection<UUID> groupIds);
+
     /** The plots among {@code plotIds} that have at least one payment (or payment reversal). */
     @Query("select distinct p.plotId from PaymentRecord p where p.plotId in :plotIds")
     List<UUID> plotIdsWithPayments(@Param("plotIds") Collection<UUID> plotIds);

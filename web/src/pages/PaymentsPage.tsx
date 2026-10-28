@@ -76,6 +76,9 @@ export function PaymentsPage() {
             )}
           </Link>
           {p.reversed && <Badge tone="neutral">{t.payments.reversed}</Badge>}
+          {(p.groupSize ?? 1) > 1 && (
+            <Badge tone="neutral">{format(t.payments.groupMarker, { count: p.groupSize ?? 1 })}</Badge>
+          )}
         </span>
       ),
     },

@@ -11,3 +11,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `6a3d4a3..23557e8` | PASS | — | minor: release-cap check in `allocation_guard` relies on the per-plot lock of later slices (service must lock before releasing); allocation to a reversed payment caught by the deferred backstop when the reversal is in the same transaction |
+
+## Slice 2 — enter a payment for one plot, list and card
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `23557e8..faf6564` | PASS | — | minor: Javadoc over 120 columns in `PlotDebtCache`/`PlotStatusEntry`; `Money.parse` and `YearMonth.parse` rely on the contract pattern (a bypass would be 500, not 400) |

@@ -193,8 +193,9 @@ export const getEnterPaymentUrl = (params: EnterPaymentParams,) => {
 }
 
 /**
- * Money received for one plot (`plotId`), as cash at the cooperative's cash desk (`CASH`) or a bank transfer
- * entered by hand (`BANK`), placed on the plot's open charges (money rules section 2, feature 015 §2.2). Only
+ * Money received for one plot (`plotId`), or one payment split over several plots of one payer (`split`), as
+ * cash at the cooperative's cash desk (`CASH`) or a bank transfer entered by hand (`BANK`), placed on the plots'
+ * open charges (money rules section 2, feature 015 §2.2). Exactly one of `plotId` and `split` is given. Only
  * `REGULAR` and `OPENING` charges that are not reversed are open: their effective amount (the charge plus its
  * adjustments) minus what payments already placed on them. The proposal fills the open charges oldest debt date
  * (`accruedOn`) first, then by the cooperative's order of charge types, then by the start of the service period,
@@ -210,20 +211,41 @@ export const getEnterPaymentUrl = (params: EnterPaymentParams,) => {
  * month after it; it keeps its `receivedOn`. Sent with the `digest` of a preview whose open charges no longer
  * match, the save is 409 `PREVIEW_OUTDATED` and writes nothing.
  *
+ * **Split** (`split`, feature 015 §2.6): the payer's current plots (owned now, not common land, not archived) in
+ * natural plot order are the plots of the split; the preview lists them in `split.plots` with their debt (the
+ * sum of what is open on their charges) and the proposed part. The proposal is in proportion to the debts
+ * (kopecks rounded down, the leftover kopecks to the largest remainders, ties to the plot listed first); an
+ * amount of at least the total debt gives each plot its debt and the excess to the first plot as prepayment (also
+ * when the plots owe nothing). Without `split.parts` the proposal is used; with them, each part names a plot of
+ * the payer at most once, its `amount` (`0.00` allowed: such a part is shown but not saved; absent takes the
+ * proposed part of the plot) and its `lines` as for one plot. The parts must add up to `amount` (400
+ * `SPLIT_TOTAL_MISMATCH`, `errors[{field: split.parts}]`). `parts` of the answer has one part per plot of the
+ * split, in natural plot order. A save writes one payment per part above zero, all with one `groupId` and the
+ * payer `split.payerMemberId`; a cash group takes one receipt number, stored on every part. The `digest` covers
+ * the amount, the payer, the parts (plot, amount) and each part's open charges.
+ *
  * 400 `VALIDATION_FAILED`: `amount` not above zero (`AMOUNT_NOT_POSITIVE`) or with more than 12 integer digits
- * (`INVALID`), `receivedOn` after today in Europe/Kyiv (`DATE_IN_FUTURE`), `plotId` missing (`REQUIRED`),
+ * (`INVALID`), `receivedOn` after today in Europe/Kyiv (`DATE_IN_FUTURE`), `plotId` missing without `split`
+ * (`REQUIRED`), `split` together with `plotId` (`split` `INVALID`) or with `lines` (`lines` `INVALID`),
+ * `payerMemberId` differing from `split.payerMemberId` (`INVALID`), `split.payerMemberId` not a member of the
+ * cooperative (`MEMBER_NOT_FOUND`) or a member without a current plot that takes payments (`NOT_FOUND`), an
+ * empty `split.parts` (`REQUIRED`), `split.parts[i].plotId` not a current plot of the payer (`NOT_FOUND`) or
+ * named twice (`DUPLICATE`), `split.parts[i].amount` negative or with more than 12 integer digits (`INVALID`),
+ * the lines of a part as for one plot under `split.parts[i].lines[j]`,
  * `payerNote` over 200 characters or `bankReference` over 64 (`TOO_LONG`), a `bankReference` on a cash payment
  * (`INVALID`), `payerMemberId` not a member of the cooperative (`MEMBER_NOT_FOUND`; an archived member may pay),
  * `lines[j].chargeId` not an open charge of the plot (`NOT_FOUND`) or named twice (`DUPLICATE`),
  * `lines[j].amount` not above zero (`AMOUNT_NOT_POSITIVE`). 400 `ALLOCATION_EXCEEDS_PAYMENT` when the lines
- * together exceed `amount` (`errors[{field: lines}]`); 400 `ALLOCATION_EXCEEDS_CHARGE` when a line exceeds what
- * is open on its charge (`errors[{field: lines[j].amount}]`). An unknown plot, or one of another cooperative, is
+ * together exceed `amount` (`errors[{field: lines}]`, of a part: its amount, `split.parts[i].lines`); 400
+ * `ALLOCATION_EXCEEDS_CHARGE` when a line exceeds what is open on its charge (`errors[{field: lines[j].amount}]`,
+ * of a part `split.parts[i].lines[j].amount`). An unknown plot, or one of another cooperative, is
  * 404 `PLOT_NOT_FOUND`; common land is 409 `PLOT_COMMON_LAND` and an archived plot 409 `PLOT_ARCHIVED`.
  *
  * The payer note is personal data: it is stored encrypted and is never logged. Requires `PAYMENTS_ENTER`; a save
  * is written to the audit log (`PAYMENT_RECORDED`, entity type `PAYMENT` about the plot, with the amount, source,
- * date, billing month, receipt number or bank reference, and the payer note sealed).
- * @summary Preview or save a payment for a plot
+ * date, billing month, receipt number or bank reference, and the payer note sealed; one entry per saved part of
+ * a split).
+ * @summary Preview or save a payment for a plot, or one payment split over several plots of one payer
  */
 export const enterPayment = async (paymentEntryRequest: PaymentEntryRequest,
     params: EnterPaymentParams, options?: Parameters<typeof nadelFetch>[1]): Promise<PaymentEntryResult> => {
@@ -290,7 +312,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type EnterPaymentMutationVariables = {data: PaymentEntryRequest;params: EnterPaymentParams}
 
     /**
- * @summary Preview or save a payment for a plot
+ * @summary Preview or save a payment for a plot, or one payment split over several plots of one payer
  */
 export const useEnterPayment = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof enterPayment>>, TError,EnterPaymentMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}

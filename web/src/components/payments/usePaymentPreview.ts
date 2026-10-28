@@ -17,12 +17,14 @@ export interface PaymentPreview {
   refresh: () => Promise<void>;
 }
 
-/** A kept answer is shown only while it is about the plot of the request. */
-function ofPlot(
-  plotId: string | undefined,
+/** A kept answer is shown only while it is about the plot (or, for a split, the payer) of the request. */
+function ofOwner(
+  owner: string | undefined,
   result: PaymentEntryResult | undefined,
 ): PaymentEntryResult | undefined {
-  return plotId !== undefined && result?.parts[0]?.plotId === plotId ? result : undefined;
+  if (owner === undefined || result === undefined) return undefined;
+  const resultOwner = result.split !== undefined ? result.split.payerMemberId : result.parts[0]?.plotId;
+  return resultOwner === owner ? result : undefined;
 }
 
 /**
@@ -33,7 +35,7 @@ function ofPlot(
  */
 export function usePaymentPreview(
   request: PaymentEntryRequest | undefined,
-  plotId: string | undefined,
+  owner: string | undefined,
 ): PaymentPreview {
   const key = request === undefined ? '' : JSON.stringify(request);
   const settledKey = useDebouncedValue(key, PREVIEW_DEBOUNCE_MS);
@@ -56,7 +58,7 @@ export function usePaymentPreview(
   const waiting = key !== settledKey || query.isFetching;
   const fresh = settled !== undefined && !waiting && !query.isError && !query.isPlaceholderData;
   return {
-    shown: ofPlot(plotId, shown ?? query.data),
+    shown: ofOwner(owner, shown ?? query.data),
     current: fresh ? query.data : undefined,
     pending: request !== undefined && waiting,
     error: request !== undefined && !waiting ? query.error : undefined,
