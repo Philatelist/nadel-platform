@@ -50,8 +50,8 @@ temporary files. References "TC x.y" are sections of `technical-considerations.m
   - [x] Verify: `cd backend && ./mvnw test -Dtest='DemoLedgerDataTests'`; with the app running locally (`make up`, PIDs recorded) `pnpm --filter web exec playwright test payments plots-acceptance ownership-acceptance` and `pnpm --filter web exec playwright test --grep @smoke`; `make guide` builds without errors; stop everything started by its PIDs; delete temporary files. **[Agent: react-frontend]**
     - Note (pipeline, AUTO notTestableLocally): `DemoLedgerDataTests` 27/0, e2e typecheck, lint and format-check green; the Playwright runs and `make guide` were not run locally — ports 8080/5173 held by the owner's own `make up` stack; Playwright runs in CI on the PR (`full-e2e` label); guide screenshots and PDFs are an owner follow-up.
 
-- [ ] **Slice 9: Feature Testing & Regression**
+- [x] **Slice 9: Feature Testing & Regression**
 
   > Verifies the whole feature end-to-end against functional-spec.md, run after all implementation slices are complete.
-  - [ ] Read functional-spec.md acceptance criteria in full. Generate acceptance-level tests that verify the entire feature as a whole — not individual slices. Cover applicable layers (unit for pure logic, integration for service interactions, e2e for user flows) based on the project's testing stack. Write tests with RED validation (must fail before implementation is confirmed done). Annotate each test with `@spec: 015-payments-and-allocation` and `@regression` if suitable for long-term regression. **[Agent: testing-expert]**
-  - [ ] Run all generated tests. All must pass. Fix any failures before proceeding. **[Agent: testing-expert]**
+  - [x] Read functional-spec.md acceptance criteria in full. Generate acceptance-level tests that verify the entire feature as a whole — not individual slices. Cover applicable layers (unit for pure logic, integration for service interactions, e2e for user flows) based on the project's testing stack. Write tests with RED validation (must fail before implementation is confirmed done). Annotate each test with `@spec: 015-payments-and-allocation` and `@regression` if suitable for long-term regression. **[Agent: testing-expert]**
+  - [x] Run all generated tests. All must pass. Fix any failures before proceeding. **[Agent: testing-expert]**
