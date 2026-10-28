@@ -385,7 +385,6 @@ export const en = {
     MEMBER_NOT_FOUND: 'This member was not found.',
     OWNERSHIP_NOT_FOUND: 'This ownership record was not found. Reload the page.',
     REQUIRED_reason: 'Enter a reason',
-    TOO_LONG_reason: 'The reason is too long (at most 500 characters).',
     INVALID_asOf: 'The date cannot be in the future.',
     INVALID_amount: 'Enter an amount like 1250.50',
     DUPLICATE_OWNER: 'This member is already chosen.',

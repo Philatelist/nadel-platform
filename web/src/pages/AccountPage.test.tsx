@@ -19,6 +19,7 @@ vi.mock('../me', () => ({
 vi.mock('../roleName', () => ({ useRoleName: () => () => '' }));
 vi.mock('../components/ownership/MyPlotsPanel', () => ({ MyPlotsPanel: () => <p>my plots</p> }));
 vi.mock('../components/readings/MyMetersPanel', () => ({ MyMetersPanel: () => <p>my meters</p> }));
+vi.mock('../components/invoices/MyInvoices', () => ({ MyInvoices: () => <p>my invoices</p> }));
 vi.mock('../components/MemberDetails', () => ({ MemberDetails: () => <p>details</p> }));
 vi.mock('@nadel/api-client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@nadel/api-client')>()),

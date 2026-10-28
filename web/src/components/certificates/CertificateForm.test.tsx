@@ -41,6 +41,7 @@ function renderForm() {
 
 describe('CertificateForm', () => {
   beforeEach(() => {
+    window.localStorage.setItem('nadel.locale', 'uk');
     permissions = ['CERTIFICATES_ISSUE'];
     mutate.mockReset();
   });

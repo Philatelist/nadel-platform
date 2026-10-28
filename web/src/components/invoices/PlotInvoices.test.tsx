@@ -2,7 +2,6 @@ import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ApiError, type InvoiceRow, type Permission, type RequisiteField } from '@nadel/api-client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderWithApp } from '../../test/render';
 import { PlotInvoices, invoiceFileName } from './PlotInvoices';
@@ -95,12 +94,7 @@ describe('PlotInvoices', () => {
 });
 
 describe('RequisitesWarning', () => {
-  const renderWarning = (fields: RequisiteField[]) =>
-    renderWithApp(
-      <MemoryRouter>
-        <RequisitesWarning missing={fields} />
-      </MemoryRouter>,
-    );
+  const renderWarning = (fields: RequisiteField[]) => renderWithApp(<RequisitesWarning missing={fields} />);
 
   it('links a missing IBAN to Settings', () => {
     renderWarning(['IBAN']);

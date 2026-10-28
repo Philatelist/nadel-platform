@@ -399,7 +399,6 @@ export const uk: Messages = {
     MEMBER_NOT_FOUND: 'Цього члена не знайдено.',
     OWNERSHIP_NOT_FOUND: 'Запис про володіння не знайдено. Перезавантажте сторінку.',
     REQUIRED_reason: 'Вкажіть причину',
-    TOO_LONG_reason: 'Причина задовга (не більше 500 символів).',
     INVALID_asOf: 'Дата не може бути в майбутньому.',
     INVALID_amount: 'Вкажіть суму, наприклад 1250,50',
     DUPLICATE_OWNER: 'Цей член уже вибраний.',

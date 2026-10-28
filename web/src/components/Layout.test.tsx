@@ -74,11 +74,11 @@ describe('Layout', () => {
       Array.from(screen.getByRole('navigation', { name: 'Main menu' }).querySelectorAll('a')).map((a) =>
         a.getAttribute('href'),
       );
-    expect(hrefs()).toEqual(['/plots', '/charges', '/payments', '/reports']);
+    expect(hrefs()).toEqual(['/plots', '/charges', '/payments', '/reports', '/documents/certificates']);
     unmount();
     me = meWith(['CHARGES_VIEW']);
     renderWithApp(<Layout />);
-    expect(hrefs()).toEqual(['/plots', '/charges']);
+    expect(hrefs()).toEqual(['/plots', '/charges', '/documents/certificates']);
   });
 
   it('shows Reports after Charges, only with REPORTS_VIEW', () => {
@@ -88,11 +88,11 @@ describe('Layout', () => {
       Array.from(screen.getByRole('navigation', { name: 'Main menu' }).querySelectorAll('a')).map((a) =>
         a.getAttribute('href'),
       );
-    expect(hrefs()).toEqual(['/plots', '/charges', '/reports']);
+    expect(hrefs()).toEqual(['/plots', '/charges', '/reports', '/documents/certificates']);
     unmount();
     me = meWith(['CHARGES_VIEW']);
     renderWithApp(<Layout />);
-    expect(hrefs()).toEqual(['/plots', '/charges']);
+    expect(hrefs()).toEqual(['/plots', '/charges', '/documents/certificates']);
   });
 
   it('shows Cooperative settings last, only with SETTINGS_MANAGE', () => {

@@ -10,7 +10,10 @@ let permissions: Permission[];
 const mutate = vi.fn();
 const listParams = vi.fn();
 
-vi.mock('../me', () => ({ useCan: (p: Permission) => permissions.includes(p) }));
+vi.mock('../me', () => ({
+  useCan: (p: Permission) => permissions.includes(p),
+  useOptionalMe: () => null,
+}));
 
 const issued: CertificateRow = {
   id: 'c1',
@@ -59,6 +62,7 @@ function renderPage(route = '/documents/certificates') {
 
 describe('CertificatesPage', () => {
   beforeEach(() => {
+    window.localStorage.setItem('nadel.locale', 'uk');
     permissions = ['CHARGES_VIEW', 'CERTIFICATES_ISSUE'];
     mutate.mockReset();
     listParams.mockReset();
