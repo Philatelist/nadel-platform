@@ -77,7 +77,7 @@ class RoleNamesAcceptanceTests extends IntegrationTest {
         body.put("name", name);
         body.put("description", "Read access to members, plots and audit");
         body.put("permissions", List.of("MEMBERS_VIEW", "PLOTS_VIEW", "AUDIT_VIEW", "TARIFFS_VIEW", "METERS_VIEW",
-                "CHARGES_VIEW", "REPORTS_VIEW"));
+                "CHARGES_VIEW", "REPORTS_VIEW", "PAYMENTS_VIEW", "PAYMENTS_ENTER"));
         return body;
     }
 

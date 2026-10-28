@@ -65,7 +65,7 @@ class LedgerAppendOnlyTests extends LedgerTestSupport {
         // a table that others reference is truncated together with them (the foreign key check comes first otherwise);
         // the trigger of either ledger table refuses
         assertThatThrownBy(() -> ownerJdbc().execute(
-                "truncate charge, charge_part, meter_value_use, recalculation_line, recalculation"))
+                "truncate charge, charge_part, meter_value_use, recalculation_line, recalculation, allocation"))
                 .isInstanceOf(DataAccessException.class)
                 .hasStackTraceContaining("is append-only: TRUNCATE");
         assertTrigger("charge_part", "TRUNCATE", () -> ownerJdbc().execute("truncate charge_part"));

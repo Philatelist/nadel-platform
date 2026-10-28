@@ -1,5 +1,8 @@
 package app.nadel.ledger.internal;
 
+import app.nadel.ledger.internal.OpenAmounts.AllocationEntry;
+import app.nadel.ledger.internal.OpenAmounts.ChargeEntry;
+import app.nadel.ledger.internal.OpenAmounts.PaymentEntry;
 import app.nadel.money.Money;
 import java.time.LocalDate;
 import java.util.Collection;
@@ -14,14 +17,19 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
 /**
- * The debt of a plot from its charges (money-rules section 2, feature 011 §2.1). Pure: no Spring, no database.
+ * The debt of a plot (money-rules sections 2 and 9, feature 011 §2.1, feature 015 §2.5). Pure: no Spring, no database.
  * <p>
- * The debt of a charge type is the sum of the plot's charges of that type, reversals counting negative and adjustments
- * (feature 012) with their sign; the total is the sum over the types. Money is added exactly (every amount already has
- * two decimals), nothing is rounded. Until payments exist (phase 3) nothing is paid, so the oldest unpaid accrual is the
- * oldest {@code accruedOn} among the charges that are neither a reversal nor an adjustment, were not reversed, and whose
- * effective amount (the charge plus its adjustments) is above zero. An adjustment carries the debt age of the charge it
- * adjusts, so it never counts on its own.
+ * {@link #of(Collection, Collection, Collection)} is the rule after payments: the debt of a charge type is the sum of
+ * the plot's charges of that type (reversals negative, adjustments of feature 012 with their sign) minus the net
+ * allocations to them (allocations minus releases); the total is the sum over the types; the prepayment is the
+ * payments (reversals negative) minus the net allocations, never below zero; the oldest unpaid accrual is the oldest
+ * {@code accruedOn} among the {@code REGULAR} and {@code OPENING} charges that were not reversed and still have an open
+ * amount above zero ({@link OpenAmounts}). An adjustment carries the debt age of the charge it adjusts, so it never
+ * counts on its own.
+ * <p>
+ * {@link #of(Collection)} is the same rule for a plot without payments (the charges only): nothing is allocated, so
+ * the open amount of a charge is its effective amount (the charge plus its adjustments) and the prepayment is zero.
+ * Money is added exactly (every amount already has two decimals), nothing is rounded.
  */
 final class DebtCalculator {
 
@@ -50,19 +58,23 @@ final class DebtCalculator {
      * @param byType        the debt per charge type, for every type the plot has a charge of (also when it is zero),
      *                      in the order the types first appear among the lines
      * @param total         the sum of the debts
-     * @param oldestAccrual the oldest day a debt counts from; null when no charge is left with an effective amount above
+     * @param oldestAccrual the oldest day a debt counts from; null when no charge is left with an open amount above
      *                      zero
+     * @param prepayment    the money paid for the plot that is on no charge, never below zero
      */
-    record Debts(Map<UUID, Money> byType, Money total, @Nullable LocalDate oldestAccrual) {
+    record Debts(Map<UUID, Money> byType, Money total, @Nullable LocalDate oldestAccrual, Money prepayment) {
 
         Debts {
             byType = Collections.unmodifiableMap(new LinkedHashMap<>(byType));
+            Objects.requireNonNull(total, "total");
+            Objects.requireNonNull(prepayment, "prepayment");
         }
     }
 
     private DebtCalculator() {
     }
 
+    /** The debts of a plot without payments, from its charges only; the prepayment is zero. */
     static Debts of(Collection<Line> lines) {
         Set<UUID> reversed = new HashSet<>();
         Map<UUID, Money> adjustments = new HashMap<>();
@@ -88,7 +100,40 @@ final class DebtCalculator {
                 oldest = line.accruedOn();
             }
         }
-        return new Debts(byType, total, oldest);
+        return new Debts(byType, total, oldest, Money.ZERO);
+    }
+
+    /**
+     * The debts of a plot after payments, from all its ledger rows (the charges, allocations and payments of the one
+     * plot), in the order the types first appear among the charges.
+     *
+     * @throws IllegalArgumentException when an allocation names a charge that is not among the charges
+     */
+    static Debts of(Collection<ChargeEntry> charges, Collection<AllocationEntry> allocations,
+            Collection<PaymentEntry> payments) {
+        Map<UUID, UUID> typeOfCharge = new HashMap<>();
+        Map<UUID, Money> byType = new LinkedHashMap<>();
+        for (ChargeEntry charge : charges) {
+            typeOfCharge.put(charge.id(), charge.chargeTypeId());
+            byType.merge(charge.chargeTypeId(), charge.amount(), Money::plus);
+        }
+        for (AllocationEntry allocation : allocations) {
+            UUID type = typeOfCharge.get(allocation.chargeId());
+            if (type == null) {
+                throw new IllegalArgumentException("An allocation names a charge of the plot");
+            }
+            byType.merge(type, allocation.amount().negate(), Money::plus);
+        }
+        Money total = byType.values().stream().reduce(Money.ZERO, Money::plus);
+        PlotLedgerState state = OpenAmounts.of(charges, allocations, payments, Map.of());
+        LocalDate oldest = null;
+        for (ChargeState charge : state.charges()) {
+            if (charge.allocatable() && charge.open().signum() > 0
+                    && (oldest == null || charge.accruedOn().isBefore(oldest))) {
+                oldest = charge.accruedOn();
+            }
+        }
+        return new Debts(byType, total, oldest, state.prepayment());
     }
 
     /** The line of a stored charge. */

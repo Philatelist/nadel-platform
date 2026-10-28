@@ -57,9 +57,11 @@ class LedgerMigrationTests {
             flyway(postgres, null).migrate();
 
             for (UUID tenant : List.of(first, second)) {
-                // V13 adds the four ledger permissions, V19 RECALCULATION_RUN, V20 the two report permissions
-                assertThat(permissions(sql, tenant, "CHAIRMAN")).hasSize(22).containsAll(LEDGER_PERMISSIONS)
-                        .contains("RECALCULATION_RUN", "REPORTS_VIEW", "REPORT_TEMPLATES_MANAGE");
+                // V13 adds the four ledger permissions, V19 RECALCULATION_RUN, V20 the two report permissions, V27 the
+                // three payment permissions
+                assertThat(permissions(sql, tenant, "CHAIRMAN")).hasSize(25).containsAll(LEDGER_PERMISSIONS)
+                        .contains("RECALCULATION_RUN", "REPORTS_VIEW", "REPORT_TEMPLATES_MANAGE", "PAYMENTS_VIEW",
+                                "PAYMENTS_ENTER", "PAYMENTS_REVERSE");
                 assertThat(permissions(sql, tenant, "MEMBER")).isEmpty();
                 assertThat(sql.queryForList("select code from charge_type where tenant_id = ? and code is not null order by position",
                         String.class, tenant)).containsExactly("MEMBERSHIP", "ELECTRICITY", "LAND_TAX", "WATER",
@@ -75,11 +77,13 @@ class LedgerMigrationTests {
                     String.class, second, customOne, customTwo)).containsExactly(
                     "common consumers (" + customOne.toString().substring(0, 8) + ")",
                     "Спільні споживачі (" + customTwo.toString().substring(0, 8) + ")");
-            // the removed permission stays removed; the Treasurer gets CHARGES_VIEW (V13) and REPORTS_VIEW (V20) only
+            // the removed permission stays removed; the Treasurer gets CHARGES_VIEW (V13) REPORTS_VIEW (V20) and the two
+            // payment permissions (V27) only
             assertThat(permissions(sql, first, "TREASURER")).containsExactlyInAnyOrder("MEMBERS_VIEW", "PLOTS_VIEW",
-                    "AUDIT_VIEW", "TARIFFS_VIEW", "CHARGES_VIEW", "REPORTS_VIEW");
+                    "AUDIT_VIEW", "TARIFFS_VIEW", "CHARGES_VIEW", "REPORTS_VIEW", "PAYMENTS_VIEW", "PAYMENTS_ENTER");
             assertThat(permissions(sql, second, "TREASURER")).containsExactlyInAnyOrder("MEMBERS_VIEW", "PLOTS_VIEW",
-                    "AUDIT_VIEW", "TARIFFS_VIEW", "METERS_VIEW", "CHARGES_VIEW", "REPORTS_VIEW");
+                    "AUDIT_VIEW", "TARIFFS_VIEW", "METERS_VIEW", "CHARGES_VIEW", "REPORTS_VIEW", "PAYMENTS_VIEW",
+                    "PAYMENTS_ENTER");
             assertThat(sql.queryForObject("select name from charge_type where tenant_id = ? and code = 'WATER'",
                     String.class, first)).as("a renamed type keeps its name").isEqualTo("Водопостачання");
 
@@ -87,9 +91,10 @@ class LedgerMigrationTests {
             UUID fresh = UUID.randomUUID();
             sql.update("insert into tenant (id, name) values (?, 'New Cooperative')", fresh);
             sql.queryForList("select seed_base_roles(?)", fresh);
-            assertThat(permissions(sql, fresh, "CHAIRMAN")).hasSize(22);
+            assertThat(permissions(sql, fresh, "CHAIRMAN")).hasSize(25);
             assertThat(permissions(sql, fresh, "TREASURER")).containsExactlyInAnyOrder("MEMBERS_VIEW", "PLOTS_VIEW",
-                    "AUDIT_VIEW", "TARIFFS_VIEW", "METERS_VIEW", "CHARGES_VIEW", "REPORTS_VIEW");
+                    "AUDIT_VIEW", "TARIFFS_VIEW", "METERS_VIEW", "CHARGES_VIEW", "REPORTS_VIEW", "PAYMENTS_VIEW",
+                    "PAYMENTS_ENTER");
             assertThat(sql.queryForObject("select count(*) from charge_type where tenant_id = ?", Integer.class, fresh))
                     .isEqualTo(5);
         }

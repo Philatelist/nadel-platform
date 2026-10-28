@@ -139,6 +139,19 @@ export const en = {
       name: 'Manage report templates',
       description: 'Upload, replace, download and archive report templates',
     },
+    PAYMENTS_VIEW: {
+      name: 'View payments',
+      description: 'See the payments, their allocations to charges and the payments report',
+    },
+    PAYMENTS_ENTER: {
+      name: 'Enter payments',
+      description:
+        'Enter cash and bank payments, split them over plots, reallocate them and allocate prepayment',
+    },
+    PAYMENTS_REVERSE: {
+      name: 'Reverse payments',
+      description: 'Reverse a payment, giving a reason',
+    },
   },
   roles: {
     CHAIRMAN: 'Chairman',

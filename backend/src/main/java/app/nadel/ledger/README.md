@@ -48,6 +48,7 @@ cooperative that is not reversed, and a reversal never target an adjustment or a
 |---|---|
 | `ChargesBooked(tenantId, plotIds)` | Published inside the transaction of every booking or reversal (a reversal, an opening balance, the month run, a retry and the charges of readings, at most 500 plots per event; every later booking path must publish it too). `PlotStatusRefresher` recomputes the debt of those plots from the committed ledger. Ids only, no personal data; the set is never empty |
 | `OpeningBalanceImport` (with `Row`, `Item`, `Plan`, `Problem`, `Action`) | The "Opening balances" sheet of the Excel import (slice 8), `plan`/`lock`/`apply` like `meters.MeterImport`; implemented by `internal.OpeningBalanceImportService`, see Opening balances from the import |
+| `PaymentSource` (`CASH`, `BANK`) | Where the money of a payment came from (feature 015; column `payment.source`, V27); 016 adds the bank statement import |
 | `LedgerReadModel` (with `MonthTypeTotals`, `MonthGrouping`, `MonthStatus`, `PlotDebts`, `CorrectionRow`, `CorrectionKind`, `CorrectionSource`, `CorrectionCause`, `ChargedRow`, `ChargedRowKind`, `ChargedSource` (with `TARIFF` for the water rows), `ChargedPart`, `LossesRunNodeRow`, `LossesRunNodeOutcome`, `CommonConsumerRunLineRow`, `CommonConsumerRunLineOutcome`, `RunStatus`) | The read facade of the reports (feature 013), implemented by `internal.LedgerReportQueries`; see The read model of the reports |
 
 Everything else is in `internal`.
@@ -63,9 +64,41 @@ Everything else is in `internal`.
 - `DebtCalculator.of(lines)`: debt per charge type = the sum of the plot's charges of the type, reversals negative,
   adjustments with their sign; total = their sum; the oldest unpaid accrual = the oldest `accrued_on` among the charges
   that are neither a reversal nor an adjustment, were not reversed, and whose effective amount (the charge plus its
-  adjustments) is above zero (until payments exist); an adjustment carries the debt age of its charge and never counts
-  on its own. The account and the plot status (`PlotStatusRefresher`) both use it. Exact `Money` addition, no rounding.
-  Tests: `DebtCalculatorTests`.
+  adjustments) is above zero; prepayment zero. This is the rule for charges only; the account and the plot status
+  (`PlotStatusRefresher`) use it until they load payments (feature 015, slices 2 and 6). An adjustment carries the debt
+  age of its charge and never counts on its own. Exact `Money` addition, no rounding. Tests: `DebtCalculatorTests`.
+- `DebtCalculator.of(charges, allocations, payments)` (feature 015 §2.5): debt per charge type = Σ charges of the type
+  − Σ net allocations to them (releases negative); prepayment = Σ payments (reversals negative) − Σ net allocations,
+  never below zero; the oldest unpaid accrual = the oldest `accrued_on` among the `REGULAR`/`OPENING` charges that were
+  not reversed and still have an open amount above zero. A plot with debt 0.00 and a prepayment is GREEN. Tests:
+  `DebtCalculatorTests` (examples 4, 5, 8).
+- Payments, pure (feature 015 §2.2-§2.6, technical considerations 2.3), fed with the ledger rows of a plot
+  (`OpenAmounts.ChargeEntry`, `AllocationEntry`, `PaymentEntry`, which `OpenAmounts.entry(record)` builds from the
+  entities):
+  - `OpenAmounts.of(...)` → `PlotLedgerState` (`ChargeState`, `AllocationState`, `PaymentState`): only `REGULAR` and
+    `OPENING` charges receive money; effective = the charge plus its adjustments, `0.00` once reversed; open =
+    effective − net allocations; what is left of an allocation = it plus its releases; a payment is reversed when a
+    `PAYMENT_REVERSAL` points at it. The charge type position is the index in `ChargeTypeCatalog.all()`, unknown last.
+  - `AllocationPlanner`: `ORDER` = `accrued_on`, then the charge type position, then the service start (fallback
+    `accrued_on`), then `created_at`, then the id as text (PostgreSQL's `uuid` order); `propose(amount, charges)` gives
+    each open charge `min(remaining, open)`, the rest is the remainder; `validate` returns `ALLOCATION_EXCEEDS_PAYMENT`
+    (all lines) and per line `DUPLICATE`, `AMOUNT_NOT_POSITIVE`, `NOT_FOUND` (not an allocatable charge of the plot),
+    `ALLOCATION_EXCEEDS_CHARGE`; `pairWithPayments` names prepayment lines after the payments with money left, oldest
+    first (`received_on`, `created_at`, id). Tests: `AllocationPlannerTests` (examples 1, 2, 3, 10, 11, 18, tiebreaks).
+  - `PaymentSplitter.split(amount, plotDebts)`: amount ≥ total debt → each plot its debt and the excess to the first
+    plot (also when they owe nothing); otherwise `Money.allocate(debts)` (kopecks down, leftover to the largest
+    remainders, ties to the first plot; the rounding lives in `Money`, ADR 0013). Tests: `PaymentSplitterTests`
+    (examples 12, 13, 14), `MoneyAllocateTests`.
+  - `ReleasePlanner`: `forCharges(state)` releases everything on a reversed charge (`CHARGE_REVERSED`) and the excess
+    over a lowered charge's effective amount from its latest allocations first (`CHARGE_ADJUSTED`);
+    `forPayment(payment, allocations, cause)` releases every live allocation of a reversed (`PAYMENT_REVERSED`) or
+    reallocated (`REALLOCATED`) payment. Tests: `ReleasePlannerTests` (examples 6, 7, 9).
+  - `PaymentDigest` (SHA-256 hex): `entry` (amount, parts in order, each plot's open charges in planner order as
+    `chargeId:open`), `reallocation` (payment, live allocations `id:remaining`, open charges as if released),
+    `prepayment` (plot, prepayment, open charges). Tests: `PaymentDigestTests`.
+  - `PaymentRules`: amount above zero within `numeric(14,2)`, a date not after today in Kyiv (`Clock`), payer note
+    ≤ 200 characters, bank reference ≤ 64 characters and only on a bank payment, reversal reason 1–500 characters
+    (field codes `AMOUNT_NOT_POSITIVE`, `INVALID`, `DATE_IN_FUTURE`, `TOO_LONG`, `REQUIRED`). Tests: `PaymentRulesTests`.
 - `BillingMonths.openForBooking(tenant, date)` (inside the caller's transaction, `MANDATORY`; every booking path goes
   through it): asks the calendar with the months' current statuses (scalars, never stale managed entities), inserts the
   month `ON CONFLICT DO NOTHING` when missing, locks it `FOR SHARE` and reads its status as a scalar under the lock, so a
@@ -933,8 +966,8 @@ the facade `ReadingChanges`), `settings` (`CooperativeSettings.lossesMode`, `los
 `CHARGES_VIEW` (Chairman, Treasurer): every plot's account, the months, the queue, the losses runs and the common
 consumer runs. `CHARGES_RUN` (Chairman): opening balances, the month run (and its preview), retries, losses runs and
 common consumer runs (and their previews). `CHARGES_REVERSE` (Chairman): reversing a charge, a losses run or a common
-consumer run. `SETTINGS_MANAGE`: reading and changing the split and service users of a common consumer. `PERIODS_CLOSE` (Chairman): closing a month. `RECALCULATION_RUN` (Chairman, V19): previewing and booking a recalculation; reading the recalculations needs `CHARGES_VIEW`. Defined in
-`identity.Permission`, seeded by `seed_base_roles` (V13, V19; existing cooperatives by targeted inserts).
+consumer run. `SETTINGS_MANAGE`: reading and changing the split and service users of a common consumer. `PERIODS_CLOSE` (Chairman): closing a month. `RECALCULATION_RUN` (Chairman, V19): previewing and booking a recalculation; reading the recalculations needs `CHARGES_VIEW`. `PAYMENTS_VIEW` (Chairman, Treasurer, V27): the payments, their allocations and the payments report. `PAYMENTS_ENTER` (Chairman, Treasurer, V27): entering, splitting and reallocating payments, allocating prepayment. `PAYMENTS_REVERSE` (Chairman, V27): reversing a payment. Defined in
+`identity.Permission`, seeded by `seed_base_roles` (V13, V19, V27; existing cooperatives by targeted inserts).
 
 ## Tests
 

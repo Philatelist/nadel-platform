@@ -53,6 +53,11 @@ final class PermissionCatalog {
                     "Build and download reports and fill in report templates"};
             case REPORT_TEMPLATES_MANAGE -> new String[] {"Manage report templates",
                     "Upload, replace, download and archive report templates"};
+            case PAYMENTS_VIEW -> new String[] {"View payments",
+                    "See the payments, their allocations to charges and the payments report"};
+            case PAYMENTS_ENTER -> new String[] {"Enter payments",
+                    "Enter cash and bank payments, split them over plots, reallocate them and allocate prepayment"};
+            case PAYMENTS_REVERSE -> new String[] {"Reverse payments", "Reverse a payment with a reason"};
         };
         return new PermissionInfo(nadel.contract.model.Permission.fromValue(permission.name()), text[0], text[1]);
     }

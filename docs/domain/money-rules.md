@@ -8,6 +8,7 @@ Any rule change is made here first.
 - Currency is the hryvnia (UAH), 2 decimal places.
 - Java: `BigDecimal` through the `Money` value object (module `app.nadel.money`). DB: `numeric(14,2)`. JSON: string `"1250.50"`.
 - Rounding is `HALF_UP` to kopecks, done only by the `Money` value object (`Money.of`, `Money.ofQuotient`) and applied only when an amount is produced (a charge, or the expected amount of a plot), never in intermediate calculations: those stay exact `BigDecimal`s.
+- A proportional split (one payment over several plots by their debts, feature 015) rounds in one place too, `Money.allocate(weights)`: each part is its exact share rounded down to the kopeck, the leftover kopecks go to the largest remainders, ties to the earlier weight, so the parts add up to the amount (100.00 over three equal debts → 33.34, 33.33, 33.33; 200.00 over 300.00 and 100.00 → 150.00 and 50.00). With every weight zero the whole amount is the first part (ADR 0013).
 - A tariff rate is not money. It is the `Rate` value object (module `app.nadel.money`): not negative, at most 10 integer digits and at most 4 decimals, held with scale 4 (`numeric(14,4)`, JSON string `"4.3200"`). A rate is never rounded, not even to 4 places: a fifth decimal is rejected at the boundary, never cut.
 
 ## 2. Balance

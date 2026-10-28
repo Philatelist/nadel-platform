@@ -5,7 +5,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import app.nadel.ledger.internal.DebtCalculator.Debts;
 import app.nadel.ledger.internal.DebtCalculator.Line;
+import app.nadel.ledger.internal.OpenAmounts.AllocationEntry;
+import app.nadel.ledger.internal.OpenAmounts.ChargeEntry;
+import app.nadel.ledger.internal.OpenAmounts.PaymentEntry;
 import app.nadel.money.Money;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -13,9 +17,11 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 /**
- * The debt of a plot (feature 011 §2.1 and §3, feature 012 §2.3): the sum of its charges per charge type, reversals
- * negative, adjustments with their sign; until payments exist the oldest unpaid accrual is the oldest charge that was not
- * reversed and whose amount plus its adjustments is above zero.
+ * The debt of a plot (feature 011 §2.1 and §3, feature 012 §2.3, feature 015 §2.5 and §3 examples 4, 5 and 8): the sum
+ * of its charges per charge type, reversals negative, adjustments with their sign, minus the net allocations to them;
+ * the prepayment is the payments minus the allocations; the oldest unpaid accrual is the oldest charge that was not
+ * reversed and still has an open amount above zero. Without payments the open amount is the charge plus its
+ * adjustments.
  */
 class DebtCalculatorTests {
 
@@ -194,6 +200,174 @@ class DebtCalculatorTests {
     @Test
     void aLineNeedsItsFields() {
         assertThatThrownBy(() -> new Line(UUID.randomUUID(), MEMBERSHIP, null, LocalDate.now(), null, null))
+                .isInstanceOf(NullPointerException.class);
+    }
+
+    // ---- after payments (feature 015 §2.5)
+
+    @Test
+    void withoutPaymentsTheDebtIsTheOldRuleAndThePrepaymentZero() {
+        Debts debts = DebtCalculator.of(List.of(charge(MEMBERSHIP, "25.00", "2026-10-01")));
+
+        assertThat(debts.prepayment()).isEqualTo(Money.ZERO);
+    }
+
+    @Test
+    void example4_example2ThenLandTax120WithAutoAllocationOn_isPaidFromThePrepaymentAnd30Remains() {
+        PaymentLedger ledger = new PaymentLedger();
+        ChargeEntry membership = ledger.charge(PaymentLedger.MEMBERSHIP, "600.00", "2026-01-01");
+        ChargeEntry electricity = ledger.charge(PaymentLedger.ELECTRICITY, "250.00", "2026-02-01");
+        PaymentEntry payment = ledger.pay("1000.00", "2026-10-28");
+        ledger.allocate(payment, membership, "600.00");
+        ledger.allocate(payment, electricity, "250.00");
+        ChargeEntry land = ledger.charge(PaymentLedger.LAND_TAX, "120.00", "2026-10-28");
+
+        // the automatic allocation: the current prepayment by the planner's order, paired with the payments
+        AllocationPlanner.Proposal proposal = AllocationPlanner.propose(ledger.debts().prepayment(),
+                ledger.state().charges());
+        ledger.applyPaired(AllocationPlanner.pairWithPayments(proposal.lines(), ledger.state().payments()));
+
+        assertThat(proposal.lines()).containsExactly(PaymentLedger.line(land, "120.00"));
+        Debts debts = ledger.debts();
+        assertThat(debts.byType().get(PaymentLedger.LAND_TAX)).isEqualTo(Money.ZERO);
+        assertThat(debts.total()).isEqualTo(Money.ZERO);
+        assertThat(debts.prepayment()).isEqualTo(Money.parse("30.00"));
+        assertThat(debts.oldestAccrual()).isNull();
+    }
+
+    @Test
+    void example5_example4WithAutoAllocationOff_landTaxStaysOpen120AndThePrepayment150() {
+        PaymentLedger ledger = new PaymentLedger();
+        ChargeEntry membership = ledger.charge(PaymentLedger.MEMBERSHIP, "600.00", "2026-01-01");
+        ChargeEntry electricity = ledger.charge(PaymentLedger.ELECTRICITY, "250.00", "2026-02-01");
+        PaymentEntry payment = ledger.pay("1000.00", "2026-10-28");
+        ledger.allocate(payment, membership, "600.00");
+        ledger.allocate(payment, electricity, "250.00");
+        ChargeEntry land = ledger.charge(PaymentLedger.LAND_TAX, "120.00", "2026-10-28");
+
+        Debts debts = ledger.debts();
+
+        assertThat(ledger.open(land)).isEqualTo(Money.parse("120.00"));
+        assertThat(debts.byType()).containsExactly(Map.entry(PaymentLedger.MEMBERSHIP, Money.ZERO),
+                Map.entry(PaymentLedger.ELECTRICITY, Money.ZERO),
+                Map.entry(PaymentLedger.LAND_TAX, Money.parse("120.00")));
+        assertThat(debts.total()).isEqualTo(Money.parse("120.00"));
+        assertThat(debts.prepayment()).isEqualTo(Money.parse("150.00"));
+        assertThat(debts.oldestAccrual()).isEqualTo(LocalDate.parse("2026-10-28"));
+    }
+
+    @Test
+    void example8_aFullyPaidMembershipAdjustedBy50Up_owes50AndIsNoLongerFree() {
+        PaymentLedger ledger = new PaymentLedger();
+        ChargeEntry membership = ledger.charge(PaymentLedger.MEMBERSHIP, "600.00", "2026-01-01");
+        ledger.allocate(ledger.pay("600.00", "2026-02-01"), membership, "600.00");
+        assertThat(ledger.debts().oldestAccrual()).isNull();
+
+        ledger.adjust(membership, "50.00");
+
+        Debts debts = ledger.debts();
+        assertThat(ledger.open(membership)).isEqualTo(Money.parse("50.00"));
+        assertThat(debts.total()).isEqualTo(Money.parse("50.00"));
+        // a debt above zero with a debt date: the plot status is no longer GREEN
+        assertThat(debts.oldestAccrual()).isEqualTo(LocalDate.parse("2026-01-01"));
+        assertThat(debts.prepayment()).isEqualTo(Money.ZERO);
+    }
+
+    @Test
+    void aFullyPaidPlotWith50LeftOverOwesNothingAndHasAPrepaymentOf50() {
+        // functional spec 2.9: green, also with a prepayment
+        PaymentLedger ledger = new PaymentLedger();
+        ChargeEntry membership = ledger.charge(PaymentLedger.MEMBERSHIP, "600.00", "2026-01-01");
+        ledger.allocate(ledger.pay("650.00", "2026-02-01"), membership, "600.00");
+
+        Debts debts = ledger.debts();
+
+        assertThat(debts.total()).isEqualTo(Money.ZERO);
+        assertThat(debts.byType()).containsExactly(Map.entry(PaymentLedger.MEMBERSHIP, Money.ZERO));
+        assertThat(debts.oldestAccrual()).isNull();
+        assertThat(debts.prepayment()).isEqualTo(Money.parse("50.00"));
+    }
+
+    @Test
+    void theOldestUnpaidChargeAfterPaymentsSkipsTheFullyPaidOnes() {
+        PaymentLedger ledger = new PaymentLedger();
+        ChargeEntry january = ledger.charge(PaymentLedger.MEMBERSHIP, "100.00", "2026-01-01");
+        ChargeEntry february = ledger.charge(PaymentLedger.ELECTRICITY, "100.00", "2026-02-01");
+        ledger.charge(PaymentLedger.LAND_TAX, "100.00", "2026-03-01");
+        PaymentEntry payment = ledger.pay("150.00", "2026-03-10");
+        ledger.allocate(payment, january, "100.00");
+        ledger.allocate(payment, february, "50.00");
+
+        Debts debts = ledger.debts();
+
+        assertThat(debts.oldestAccrual()).isEqualTo(LocalDate.parse("2026-02-01"));
+        assertThat(debts.total()).isEqualTo(Money.parse("150.00"));
+        assertThat(debts.prepayment()).isEqualTo(Money.ZERO);
+    }
+
+    @Test
+    void aReleaseOwesTheChargeAgainAndBecomesPrepayment() {
+        PaymentLedger ledger = new PaymentLedger();
+        ChargeEntry membership = ledger.charge(PaymentLedger.MEMBERSHIP, "600.00", "2026-01-01");
+        AllocationEntry allocation = ledger.allocate(ledger.pay("600.00", "2026-02-01"), membership, "600.00");
+        ledger.release(List.of(new ReleasePlanner.Release(allocation.id(), allocation.paymentId(),
+                allocation.chargeId(), allocation.plotId(), Money.parse("200.00"), ReleaseCause.REALLOCATED)));
+
+        Debts debts = ledger.debts();
+
+        assertThat(debts.total()).isEqualTo(Money.parse("200.00"));
+        assertThat(debts.prepayment()).isEqualTo(Money.parse("200.00"));
+        assertThat(debts.oldestAccrual()).isEqualTo(LocalDate.parse("2026-01-01"));
+    }
+
+    @Test
+    void aReversedPaymentLeavesNoPrepaymentAndThePrepaymentIsNeverNegative() {
+        PaymentLedger reversed = new PaymentLedger();
+        reversed.charge(PaymentLedger.MEMBERSHIP, "600.00", "2026-01-01");
+        reversed.reversePayment(reversed.pay("100.00", "2026-02-01"));
+        assertThat(reversed.debts().prepayment()).isEqualTo(Money.ZERO);
+        assertThat(reversed.debts().total()).isEqualTo(Money.parse("600.00"));
+
+        // rows that break the payment cap (the database refuses them) still never give a negative prepayment
+        PaymentLedger broken = new PaymentLedger();
+        ChargeEntry membership = broken.charge(PaymentLedger.MEMBERSHIP, "600.00", "2026-01-01");
+        broken.allocate(broken.pay("100.00", "2026-02-01"), membership, "300.00");
+        assertThat(broken.debts().prepayment()).isEqualTo(Money.ZERO);
+    }
+
+    @Test
+    void withoutAllocationsAndPaymentsBothRulesAgree() {
+        PaymentLedger ledger = new PaymentLedger();
+        ChargeEntry september = ledger.charge(MEMBERSHIP, "30.00", "2026-09-01");
+        ledger.adjust(september, "-5.00");
+        ChargeEntry october = ledger.charge(LAND_TAX, "25.00", "2026-10-01");
+        ledger.reverse(october);
+        ledger.opening(MEMBERSHIP, "1500.00", "2026-08-01");
+        List<Line> lines = ledger.charges().stream().map(entry -> new Line(entry.id(), entry.chargeTypeId(),
+                entry.amount(), entry.accruedOn(), entry.reverses(), entry.adjusts())).toList();
+
+        Debts old = DebtCalculator.of(lines);
+        Debts after = DebtCalculator.of(ledger.charges(), List.of(), List.of());
+
+        assertThat(after).isEqualTo(old);
+        assertThat(after.total()).isEqualTo(Money.parse("1525.00"));
+        assertThat(after.oldestAccrual()).isEqualTo(LocalDate.parse("2026-08-01"));
+    }
+
+    @Test
+    void anAllocationToAChargeThatIsNotAmongTheChargesIsRefused() {
+        ChargeEntry charge = new ChargeEntry(UUID.randomUUID(), UUID.randomUUID(), ChargeKind.REGULAR, MEMBERSHIP,
+                Money.parse("10.00"), LocalDate.parse("2026-10-01"), null, Instant.now(), null, null);
+        AllocationEntry elsewhere = new AllocationEntry(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
+                charge.plotId(), Money.parse("5.00"), null, Instant.now());
+
+        assertThatThrownBy(() -> DebtCalculator.of(List.of(charge), List.of(elsewhere), List.of()))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void debtsNeedATotalAndAPrepayment() {
+        assertThatThrownBy(() -> new Debts(Map.of(), Money.ZERO, null, null))
                 .isInstanceOf(NullPointerException.class);
     }
 }

@@ -4888,6 +4888,9 @@ components:
         - RECALCULATION_RUN
         - REPORTS_VIEW
         - REPORT_TEMPLATES_MANAGE
+        - PAYMENTS_VIEW
+        - PAYMENTS_ENTER
+        - PAYMENTS_REVERSE
 
     PlotStatusVisibility:
       type: string

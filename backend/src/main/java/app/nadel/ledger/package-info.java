@@ -20,7 +20,10 @@
  * {@link app.nadel.ledger.LossesRunNodeRow} and {@link app.nadel.ledger.CommonConsumerRunLineRow}). Everything else is
  * internal: the entities, the pure
  * rules {@code BillingCalendar} (which month a charge is booked in) and {@code DebtCalculator} (debt per charge
- * type), the reversal and opening balance commands, the account query, the billing months (list, check list, closing
+ * type and prepayment), the payment tables ({@code payment}, {@code allocation}, {@code receipt_counter}, V27; the
+ * public {@link app.nadel.ledger.PaymentSource}) with the pure allocation rules ({@code OpenAmounts},
+ * {@code AllocationPlanner}, {@code PaymentSplitter}, {@code ReleasePlanner}, {@code PaymentDigest},
+ * {@code PaymentRules}), the reversal and opening balance commands, the account query, the billing months (list, check list, closing
  * in order), the month run ({@code MonthRun}, {@code TariffMonthPlanning}), the charges of plot meter intervals
  * ({@code ReadingCharges}, the listener of {@link app.nadel.meters.PlotMeterPointsChanged}; {@code IntervalCharging};
  * the pure {@code ReadingChargePlanning} and {@code ReadingChargeCalculator}), the losses runs ({@code LossesRuns}; the
