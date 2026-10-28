@@ -281,6 +281,8 @@ test.describe('ownership: acceptance', () => {
     // plot 9 was sold: the previous owner is in the history with the basis of the new owner's record
     await page.goto('/plots');
     await main(page).getByLabel('Search by number, street or cadastral number', { exact: true }).fill('9');
+    // the search reaches the URL after its debounce: wait for it, so a late write cannot cancel the click below
+    await expect(page).toHaveURL(/[?&]q=9(&|$)/);
     await rows(page).getByRole('link', { name: '9', exact: true }).first().click();
     await expect(page.getByRole('heading', { level: 1, name: 'Plot 9' })).toBeVisible();
     await expect(main(page).getByRole('heading', { name: 'Ownership history' })).toBeVisible();

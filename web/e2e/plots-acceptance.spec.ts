@@ -240,6 +240,8 @@ test.describe('plots registry: acceptance', () => {
     await page.goto('/plots');
     await expect(page.getByRole('button', { name: 'Add plot' })).toHaveCount(0);
     await search(page, 'Search by number or street').fill('9');
+    // the search reaches the URL after its debounce: wait for it, so a late write cannot cancel the click below
+    await expect(page).toHaveURL(/[?&]q=9(&|$)/);
     await rows(page)
       .filter({ hasText: 'вул. Садова' })
       .first()
