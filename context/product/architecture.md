@@ -88,7 +88,7 @@
     own plots on the plot account. Audited as `PAYMENT_RECORDED`, `PAYMENT_REVERSED`, `PAYMENT_REALLOCATED`,
     `PREPAYMENT_ALLOCATED` (entity type `PAYMENT`); automatic allocations and releases are ledger rows only.
   - `reports` (feature 013, ADR 0015; tables `report_template` and `report_template_version` in V20, under RLS `tenant_isolation`): nine built-in reports (`charges-by-month`, `plot-balances`, `debtors`, `electricity-tree`, `water`, `missing-readings`, `land-tax`, `corrections`, and since feature 015 `payments`) shown as a preview and downloaded as `.xlsx`, and report templates (uploaded `.xlsx` files, versioned, archived, never deleted) filled by an own streaming OOXML filler from a field catalog. No public API, no domain events and no money rule: it only reads, through the read facades `ledger.LedgerReadModel`, `meters.MeterReports`, `plots.PlotCatalog`/`PlotOwners`/`PlotStatuses`, `members.MemberDirectory`, `settings.CooperativeSettings`, `tariffs.ChargeTypeCatalog`/`ExpectedAmounts`, `tenancy.TenantDirectory`, and `xlsx.WorkbookGuard` for uploads; it audits through `audit` (`REPORT_GENERATED`, `REPORT_TEMPLATE_UPLOADED`, `REPORT_TEMPLATE_ARCHIVED`). Permissions `REPORTS_VIEW` (a report with personal data, Debtors, also needs `MEMBERS_VIEW`) and `REPORT_TEMPLATES_MANAGE`. Endpoints (tags `reports`, `report-templates`): `GET /reports`, `GET /reports/{code}`, `GET /reports/{code}.xlsx`, `/report-templates` (list, upload, versions, archive, file, catalog, generate). No module depends on `reports`. Details in `backend/src/main/java/app/nadel/reports/README.md`.
-  - Modules planned, in roadmap order: `documents`, `notifications` (payments live in `ledger` since feature 015).
+  - Modules: `documents` (in code since feature 016); planned: `notifications` (payments live in `ledger` since feature 015).
   - The `plots` module keeps plots as records from phase 1; polygon import, coordinate conversion and the map view arrive in roadmap phase 6. `plot.boundary` is nullable, and every feature before phase 6 must work for plots without a polygon.
 - **Security:** Spring Security as an OAuth2 JWT resource server **[in code]**.
   - Starter: `spring-boot-starter-security-oauth2-resource-server` (the Boot 4 name). The issuer URI is in `application.yml`.
@@ -166,13 +166,14 @@
   - Balances are always calculated, never stored.
   - Corrections are a `REVERSAL` plus a new entry, or an `ADJUSTMENT` in the current open period. A closed period never changes.
   - The `plot_status` map-color cache **[in code, `V1__foundation.sql`]** can be rebuilt from the ledger at any time.
-- **Object storage (invoice PDFs, meter photos):** S3-compatible **[to decide, phase 4]**.
+- **Documents (invoices, certificates, receipts):** the `documents` module **[in code, feature 016]**. It keeps the data that was printed (invoice snapshots with versions, certificates with a numbered register, a per-cooperative counter), never the PDF: each PDF is rendered on demand with Apache PDFBox and an embedded font (IBM Plex Sans, OFL), so the same version always gives the same document. Documents are always in Ukrainian. See ADR 0017.
+- **Object storage (meter photos):** S3-compatible **[to decide, phase 5]**. Invoice PDFs do not need it: they are rendered on demand and not stored.
   - The product gets its own ADR. MinIO stopped publishing community images.
   - Candidates: Garage, SeaweedFS, or managed S3 from the hosting provider.
   - The backend should use only the S3 API, so the product can be swapped later.
 - **Event outbox:** the Spring Modulith Event Publication Registry (`spring-modulith-starter-jpa`) **[in code, since spec 002]**. Domain events are stored in the same transaction as the change that raised them and redelivered until their listeners finish; outstanding ones are resubmitted at startup, completed ones are deleted. All cross-module side effects (notifications, recalculations, status cache refresh) go through it. See ADR 0007.
   - The table `event_publication` (`V3__audit_and_event_publication.sql`) is the one table without `tenant_id` and RLS: startup resubmission runs without a tenant. Listeners bind the event's `tenantId` with `TenantContext.runAs` before opening their transaction (ADR 0007 implementation notes).
-- **Background jobs:** JobRunr with PostgreSQL storage **[planned, with scheduled runs and notifications]**. It runs scheduled and retryable jobs: monthly runs on a schedule, invoice generation, delivery retries to external channels. It is not the event outbox. See ADR 0007. Feature 011 needs none: month, losses and common consumer runs are started by the board and run synchronously in the request transaction; charges of readings are event listeners.
+- **Background jobs:** JobRunr with PostgreSQL storage **[planned, arrives with feature 017, delivery by e-mail and Telegram]**. It runs scheduled and retryable jobs: monthly runs on a schedule, delivery retries to external channels. It is not the event outbox. See ADR 0007. Features 011 and 016 need none (the month's invoices are built while the treasurer waits, in one transaction): month, losses and common consumer runs are started by the board and run synchronously in the request transaction; charges of readings are event listeners.
 - **Cash receipts:** a cash payment carries a receipt number from a per-cooperative counter **[planned, phase 3]**. The counter row is locked in the same transaction as the payment insert, so numbers are sequential, never reused and never changed; a reversed cash payment keeps its receipt number in history.
 - **Caching:** none beyond `plot_status` **[assumption]**. The load is small (tens to hundreds of cooperatives), so Redis is not justified.
 
@@ -212,7 +213,7 @@
 - **Messaging:** Telegram Bot API and Viber Bot API **[planned, phase 4]**. Viber charges for business messages, so its terms must be checked before committing.
 - **Push notifications:** Expo Push Service, which delivers to APNs and FCM **[planned, phase 5]**.
 - **Delivery pattern:** every channel sits behind the `notifications` module. Other modules trigger delivery through domain events and the outbox, never through direct calls.
-- **Payments, now:** the NBU payment QR standard printed on invoices, prefilled with amount, account and plot code **[planned, phase 4]**.
+- **Payments, now:** the NBU payment QR code (Resolution No. 97, format version 003) printed on invoices, prefilled with recipient, IBAN, ЄДРПОУ, amount and a purpose with the plot number; the payer may only change the amount **[in code, feature 016]**. The image is generated with ZXing (`core`); the layout is in `docs/domain/nbu-qr.md`.
 - **Payments, later:**
   - Bank APIs (PrivatBank, monobank business) for statement retrieval **[later, out of scope for v1]**.
   - Online acquiring **[later]**.
