@@ -175,3 +175,19 @@ introduction (tables via Flyway, RLS-free job storage), Supply-chain CI job with
 - Slices 3 and 4 committed together cd12fba (they share contract, generated client, i18n, README, test support; a split would not build). test-compile/typecheck/lint ok; tests written, not run; reviews deferred.
 - Slice 5 backend done (spring-backend): listMyInvoices, DemoDocuments runner (dev/demo only; closed month invoices + plot 9 certificate as of month end, issued in the demo chairman's name), MemberInvoicesTests, DemoDocumentsTests, DemoAccessChecks; test-compile/typecheck ok. Note for Slice 7: demo start-up pre-builds documents (e2e must expect existing invoices and Д-{year}-1).
 - Slice 5 web done (react-frontend): MyInvoices on AccountPage, ReceiptButton in PaymentEntryRow (shared with staff view), i18n; typecheck/lint ok.
+- Slice 5 committed 9745ab5 (compile/typecheck/lint ok; tests written, not run).
+- Verify of slices 1–5 started now on the owner's request (before Slice 6 finished), in worktree scratchpad/verify-016 at 9745ab5: all Verify test classes of slices 1–5 + changed tests, and pnpm typecheck/lint/test. InvoiceBuildLimitTests numbers to be re-measured alone (machine shared with the Slice 6 app run).
+- Verify run 1 (slices 1–5 at 9745ab5): backend 590 tests, 2 failures + 1 error (CertificateAccessTests ×2 register order; DocumentsTenantIsolationTests.theSameNumbersMayExistInTwoCooperatives — test updates a certificate, guard refuses); clients: packages green, web 12 failed / 841 passed (Layout ×2, ReverseRunDialog ×1 (existing 011 test), PlotInvoices ×3, AccountPage ×2, CertificatesPage ×3, CertificateForm ×1).
+- Measurement (InvoiceBuildLimitTests, machine shared with the Slice 6 app run): 2,000 plots, 12 months — first build 3,721 ms, rebuild 3,221 ms, on-request 156 ms → below ~5 s: spinner only, limit 2,000 kept. ADR 0017 filled by the backend fixer.
+- Fix attempt 1 sent: web failures → react-frontend; backend failures + ADR measurement → spring-backend.
+- Reviews round 1 started for Slices 1, 2, 3+4, 5 (worktrees scratchpad/review-016-*-r1).
+- Review Slice 1 round 1: PASS (minor notes in review-log). Orchestrator error: review worktrees were created with spaces in their names at 9745ab5 (zsh did not split the loop args); recreated correctly for S2/S34/S5 and told the running reviewers; removed the S1 one.
+- Slice 6 done (general-purpose): ledger README stale line, guide texts aligned with the real UI, sample-invoice.pdf (plot 9, 2026-09/9 v1, due 1640.59, demo closed month September), 12 new screenshots (uk/en), all guide screenshots re-captured, 4 guide PDFs rebuilt; make up started cleanly (first real start of the 016 code) and was stopped; hrefs + prettier ok. Note: guide ch.25 keeps the requirement's October worked examples.
+- Slice 6 committed 3991cb7.
+- Verify fix (backend) committed c6844a5: CertificateAccessTests look up their certificate by id; DocumentsTenantIsolationTests updates via the owner maintenance path; ADR 0017 'Measured' filled. Targeted run: 30 tests, 0 failures.
+- Verify fix (web) committed 39eb540: Layout tests (new nav item), removed the shared validation.TOO_LONG_reason override (production i18n bug that broke the 011 ReverseRunDialog text), router/query mocks, locale in tests. Orchestrator re-run: pnpm typecheck/lint/test exit 0 (web 853/853, shared 130, api-client 9, ui-tokens 56).
+- Review Slice 5 round 1: PASS (minor notes).
+- Review Slice 2 round 1: PASS (minor notes).
+- Review Slices 3+4 round 1: PASS (minor notes). All slice reviews PASS → gate for Slice 7 open. Review and verify worktrees removed.
+- Verify tasks of Slices 1–6 ticked: verify run 1 + fixes (backend fixed classes 30/30 green; clients 853/853 green). AUTO: the two verify fixes are test-only (plus one i18n key removal) and were not sent to a separate fix review; Slice 7 and the full suite cover them.
+- Phase 3: Slice 7 (Feature Testing & Regression) started on testing-expert.
