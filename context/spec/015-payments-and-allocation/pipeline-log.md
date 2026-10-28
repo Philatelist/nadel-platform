@@ -176,3 +176,9 @@ red plots; guide PDFs.
 - Phase 6: `make up` started detached from the spec branch (PID 4980; backend 5293, web 5155); Flyway migrated the dev DB to V27 and reapplied the demo data. Ready at :8080 and :5173.
 - Browser checks of the 3 [?] criteria (claude-in-chrome, demo users): receipt screen «Receipt № 10» after a 100,00 cash payment on plot 9; auto-allocation switch stays off after reload (DB false; switched back on); electrician has no «Payments» item and gets the no-access page on /payments. Screenshots in docs/screenshots/015-payments-and-allocation-*.png. All 50 criteria [x]; status Completed.
 - Note: the review run left a real 100,00 cash payment (receipt № 10) on plot 9 in the local dev DB.
+- Owner request: make guide-shots (108 shots) and make guide (4 PDFs) on the review run; capture-screens table step now scrolls the table into view (payment-form showed only the top of the form). Committed 152f27a and pushed.
+
+## Owner review of PR #56 (NOTES.local.md, 2026-10-28)
+
+- Status: running again (owner review round). Items: 1 reallocation dialog validation and stuck preview (also payment form and split); 2 payments list filter layout (plot popover, billing month select), also reports and plot account filters; 3 owner decision: with auto-allocation on, an unallocated remainder is placed at once on open debts (changes spec 2.4, 8.2, 8.4, money-rules 7, guides); 4 payment card: «Зараз зараховано» then collapsible «Історія розподілу».
+- Decision (conflict with CLAUDE.md "only the server calculates money"): item 1's "validate on the client" is met server-side — an invalid preview returns 200 with per-line problems and the server's allocated total; the table stays, the button is disabled, real errors show above the table. Owner can override by changing the CLAUDE.md rule.
