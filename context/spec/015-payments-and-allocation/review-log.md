@@ -60,3 +60,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `72a880e..cca927a` | PASS | — | minor: `fs2_4_…NewestFirst…` asserts in any order; closed-month loop passes silently if the month is absent; `event_publication` note count not scoped to the tenant |
+
+## Fix — full-suite regressions `MeEndpointTests.treasurerHasReadPermissions`, `SealImportPlansMigrationTests`
+
+| Round | Commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `939958d` | PASS | — | minor: stale description string in `ChargeTypesTests:596`; `finally` restores only TARIFFS_MANAGE (as before) |

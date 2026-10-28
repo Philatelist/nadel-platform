@@ -4,7 +4,7 @@
   transfer entered by hand. The app places each payment on the plot's debts (oldest first), keeps what is left as a
   prepayment, places prepayments on later charges, and from then on every debt, plot colour, report and member account
   reflects the payments.
-- **Status:** Draft
+- **Status:** Implemented — pending manual check
 - **Author:** Alex Usov
 - **Source:** `docs/features/015-payments-and-allocation.md` (roadmap phase 3, feature 1 of 3)
 
@@ -66,35 +66,48 @@ Charge type order used in the examples: Membership, Electricity, Land tax.
   open month and keeps its own date; the closed month's totals do not change.
 - A payment for common land or an archived plot is refused.
 - **Acceptance Criteria:**
-  - [ ] Given plot 9 owes membership 600,00 ₴ (January) and electricity 250,00 ₴ (February), when the treasurer
+  - [x] Given plot 9 owes membership 600,00 ₴ (January) and electricity 250,00 ₴ (February), when the treasurer
         enters a cash payment of 700,00 ₴ for plot 9, then the proposal shows membership 600,00 ₴, electricity
         100,00 ₴ (open 150,00 ₴ after saving) and prepayment 0,00 ₴.
-  - [ ] Given the same debts, when the treasurer enters 1000,00 ₴, then the proposal covers both charges in full and
+        *Verified:* PaymentsAcceptanceTests.fs2_1_700OnTheTwoDebtsPaysMembershipInFullAndElectricity100AndSaysTheReceipt; AllocationPlannerTests example 1
+  - [x] Given the same debts, when the treasurer enters 1000,00 ₴, then the proposal covers both charges in full and
         shows a prepayment of 150,00 ₴.
-  - [ ] Given membership 300,00 ₴ and electricity 200,00 ₴ both have the debt date 01.03, when the treasurer enters
+        *Verified:* PaymentsAcceptanceTests.fs2_1_1000CoversBothInFullAndLeavesAPrepaymentOf150; AllocationPlannerTests example 2
+  - [x] Given membership 300,00 ₴ and electricity 200,00 ₴ both have the debt date 01.03, when the treasurer enters
         400,00 ₴, then the proposal gives membership 300,00 ₴ and electricity 100,00 ₴.
-  - [ ] Given an opening balance of membership 1200,00 ₴ on the plot, when the treasurer enters 500,00 ₴, then the
+        *Verified:* PaymentsAcceptanceTests.fs2_1_sameDebtDateGoesByTheOrderOfChargeTypes; AllocationPlannerTests example 3
+  - [x] Given an opening balance of membership 1200,00 ₴ on the plot, when the treasurer enters 500,00 ₴, then the
         proposal puts 500,00 ₴ on the opening balance and 700,00 ₴ stays open.
-  - [ ] When the treasurer changes the proposal of a 700,00 ₴ payment to electricity 250,00 ₴ and membership
+        *Verified:* PaymentsAcceptanceTests.fs2_1_anOpeningBalanceReceivesThePaymentAndKeepsWhatIsOpen; AllocationPlannerTests example 18
+  - [x] When the treasurer changes the proposal of a 700,00 ₴ payment to electricity 250,00 ₴ and membership
         400,00 ₴ and saves, then the payment is saved as chosen and 200,00 ₴ of membership stays open.
-  - [ ] When the treasurer allocates 900,00 ₴ of a 700,00 ₴ payment, then they see "Розподілено більше, ніж сума
+        *Verified:* PaymentsAcceptanceTests.fs2_1_theTreasurersOwnLinesAreSavedAsChosen; AllocationPlannerTests example 10
+  - [x] When the treasurer allocates 900,00 ₴ of a 700,00 ₴ payment, then they see "Розподілено більше, ніж сума
         платежу" / "More is allocated than the payment amount" and nothing is saved.
-  - [ ] When the treasurer puts more on a line than is open on that charge, then they see "Сума перевищує залишок за
+        *Verified:* PaymentsAcceptanceTests.fs2_1_everyRefusalNamesItsCodeAndSavesNothingNorUsesUpAReceiptNumber (400 ALLOCATION_EXCEEDS_PAYMENT); screen text from the i18n catalogs; rendering covered by Vitest, real-browser rendering by `web/e2e/payments.spec.ts` in CI (Playwright could not run locally: ports 8080/5173 held by the owner's own app)
+  - [x] When the treasurer puts more on a line than is open on that charge, then they see "Сума перевищує залишок за
         нарахуванням" / "The amount exceeds what is open on the charge" and nothing is saved.
-  - [ ] When the treasurer saves a cash payment, then the next receipt number of the cooperative is shown large with
+        *Verified:* PaymentsAcceptanceTests.fs2_1_everyRefusal… (400 ALLOCATION_EXCEEDS_CHARGE); screen text from the i18n catalogs; rendering covered by Vitest, real-browser rendering by `web/e2e/payments.spec.ts` in CI (Playwright could not run locally: ports 8080/5173 held by the owner's own app)
+  - [?] When the treasurer saves a cash payment, then the next receipt number of the cooperative is shown large with
         "Ще один платіж".
-  - [ ] When the treasurer enters an amount of 0,00 ₴, then they see "Сума має бути більшою за нуль" / "The amount
+        *Pending manual check:* Server side verified (PaymentsAcceptanceTests.fs2_1_700… returns the receipt number; PaymentForm.test.tsx renders «Квитанція № 42» and «Ще один платіж»), but the large receipt screen was not seen in a real browser: Playwright and the app could not run locally (ports 8080/5173 held by the owner's own app); covered by the `@smoke` flow of `web/e2e/payments.spec.ts` in CI.
+  - [x] When the treasurer enters an amount of 0,00 ₴, then they see "Сума має бути більшою за нуль" / "The amount
         must be above zero".
-  - [ ] When the treasurer enters tomorrow's date, then they see "Дата не може бути в майбутньому" / "The date cannot
+        *Verified:* PaymentsAcceptanceTests.fs2_1_everyRefusal… (AMOUNT_NOT_POSITIVE); screen text from the i18n catalogs; rendering covered by Vitest, real-browser rendering by `web/e2e/payments.spec.ts` in CI (Playwright could not run locally: ports 8080/5173 held by the owner's own app)
+  - [x] When the treasurer enters tomorrow's date, then they see "Дата не може бути в майбутньому" / "The date cannot
         be in the future".
-  - [ ] Given January is closed, when the treasurer enters on 03.02 a cash payment received on 31.01, then it is
+        *Verified:* PaymentsAcceptanceTests.fs2_1_everyRefusal… (DATE_IN_FUTURE); screen text from the i18n catalogs; rendering covered by Vitest, real-browser rendering by `web/e2e/payments.spec.ts` in CI (Playwright could not run locally: ports 8080/5173 held by the owner's own app)
+  - [x] Given January is closed, when the treasurer enters on 03.02 a cash payment received on 31.01, then it is
         counted in February, the payment shows the date 31.01, and January's totals are unchanged.
-  - [ ] When the treasurer tries to enter a payment for common land or an archived plot, then they see "Платіж для
+        *Verified:* PaymentsAcceptanceTests.fs2_1_aPaymentOfAClosedMonthCountsInTheEarliestOpenMonthAndKeepsItsDate; PaymentEntryTests example 16
+  - [x] When the treasurer tries to enter a payment for common land or an archived plot, then they see "Платіж для
         спільної землі не приймається" / "No payment is taken for common land" or "Ділянка в архіві" / "The plot is
         archived" respectively.
-  - [ ] Given another user booked a charge on the plot after the proposal was shown, when the treasurer saves, then
+        *Verified:* PaymentsAcceptanceTests.fs2_1_everyRefusal… (409 PLOT_COMMON_LAND, PLOT_ARCHIVED); screen text from the i18n catalogs; rendering covered by Vitest, real-browser rendering by `web/e2e/payments.spec.ts` in CI (Playwright could not run locally: ports 8080/5173 held by the owner's own app)
+  - [x] Given another user booked a charge on the plot after the proposal was shown, when the treasurer saves, then
         they see "Дані змінилися після перегляду. Перегляньте знову перед збереженням." / "The data changed after the
         preview. Review it again before saving." and nothing is saved.
+        *Verified:* PaymentsAcceptanceTests.fs2_1_everyRefusal… (409 PREVIEW_OUTDATED, nothing written); PaymentEntryTests stale digest; screen text from the i18n catalogs; rendering covered by Vitest, real-browser rendering by `web/e2e/payments.spec.ts` in CI (Playwright could not run locally: ports 8080/5173 held by the owner's own app)
 
 ### 2.2 One payment for several plots of one payer
 
@@ -110,16 +123,21 @@ Charge type order used in the examples: Membership, Electricity, Land tax.
 - Each part is saved as a payment of its plot; the parts belong to one group. A cash group gets one receipt number for
   all its parts.
 - **Acceptance Criteria:**
-  - [ ] Given the member owns plot 7 (debt 300,00 ₴) and plot 15 (debt 100,00 ₴), when the treasurer splits 200,00 ₴,
+  - [x] Given the member owns plot 7 (debt 300,00 ₴) and plot 15 (debt 100,00 ₴), when the treasurer splits 200,00 ₴,
         then the proposal is 150,00 ₴ for plot 7 and 50,00 ₴ for plot 15.
-  - [ ] Given three plots each owe 100,00 ₴, when the treasurer splits 100,00 ₴, then the proposal is 33,34 ₴ for the
+        *Verified:* PaymentsAcceptanceTests.fs2_2_theSplitIsProposedInProportionToTheDebtsWithKopecksAndExcessRules; PaymentSplitterTests example 12
+  - [x] Given three plots each owe 100,00 ₴, when the treasurer splits 100,00 ₴, then the proposal is 33,34 ₴ for the
         first plot and 33,33 ₴ for the other two.
-  - [ ] Given plots 7 (300,00 ₴) and 15 (100,00 ₴), when the treasurer splits 500,00 ₴, then the proposal is 300,00 ₴
+        *Verified:* PaymentsAcceptanceTests.fs2_2_threePlotsOf100GetTheLeftOverKopeckOnTheFirst; PaymentSplitterTests example 13
+  - [x] Given plots 7 (300,00 ₴) and 15 (100,00 ₴), when the treasurer splits 500,00 ₴, then the proposal is 300,00 ₴
         and 100,00 ₴ plus 100,00 ₴ prepayment on plot 7.
-  - [ ] When the treasurer changes the parts so they no longer add up to the amount, then they see "Сума частин не
+        *Verified:* PaymentsAcceptanceTests.fs2_2_theSplitIsProposedInProportion…; PaymentSplitterTests example 14
+  - [x] When the treasurer changes the parts so they no longer add up to the amount, then they see "Сума частин не
         дорівнює сумі платежу" / "The parts do not add up to the payment amount" and nothing is saved.
-  - [ ] When the treasurer saves a cash split over plots 7 and 15, then one receipt number is shown, and each plot's
+        *Verified:* PaymentsAcceptanceTests.fs2_2_partsThatDoNotAddUpAreRefusedAndASavedCashSplitSharesOneReceipt (400 SPLIT_TOTAL_MISMATCH); screen text from the i18n catalogs; rendering covered by Vitest, real-browser rendering by `web/e2e/payments.spec.ts` in CI (Playwright could not run locally: ports 8080/5173 held by the owner's own app)
+  - [x] When the treasurer saves a cash split over plots 7 and 15, then one receipt number is shown, and each plot's
         account shows its own payment with that receipt number and a link to the other part.
+        *Verified:* PaymentsAcceptanceTests.fs2_2_partsThatDoNotAddUp…SharesOneReceipt (one receipt, groupParts on each card); PaymentSplitTests example 15
 
 ### 2.3 Receipt numbers
 
@@ -129,10 +147,12 @@ Charge type order used in the examples: Membership, Electricity, Land tax.
 - A number is never reused or changed. A reversed cash payment keeps its number and is shown as reversed.
 - Bank payments have no receipt number; they show the bank document number when one was entered.
 - **Acceptance Criteria:**
-  - [ ] Given the last receipt is № 40, when two treasurers save cash payments at the same moment, then the payments
+  - [x] Given the last receipt is № 40, when two treasurers save cash payments at the same moment, then the payments
         get № 41 and № 42, with no gap and no duplicate.
-  - [ ] Given a cash payment № 41 was reversed, when the treasurer saves the next cash payment, then it gets № 42 and
+        *Verified:* ReceiptNumberConcurrencyTests (example 17: concurrent saves get N+1 and N+2, a rollback leaves no gap)
+  - [x] Given a cash payment № 41 was reversed, when the treasurer saves the next cash payment, then it gets № 42 and
         № 41 is still listed, marked "Сторновано" ("Reversed").
+        *Verified:* PaymentsAcceptanceTests.fs2_3_receiptsAreSequentialAndAReversedOneKeepsItsNumberAndIsListedReversed
 
 ### 2.4 Payments list and payment card
 
@@ -143,10 +163,12 @@ Charge type order used in the examples: Membership, Electricity, Land tax.
   allocation and each release (when money was taken back from a charge) with the charge, its period and the amount, the
   other parts of its group, who entered it and when.
 - **Acceptance Criteria:**
-  - [ ] When the treasurer opens "Платежі" and filters by source "Готівка", then only cash payments are listed, each
+  - [x] When the treasurer opens "Платежі" and filters by source "Готівка", then only cash payments are listed, each
         with its receipt number.
-  - [ ] When the treasurer opens a payment of a split group, then the card shows its allocations and links to the
+        *Verified:* PaymentsAcceptanceTests.fs2_4_theSourceFilterListsOnlyCashWithReceiptsNewestFirstAndBankHasNone; PaymentQueriesTests
+  - [x] When the treasurer opens a payment of a split group, then the card shows its allocations and links to the
         other parts of the group.
+        *Verified:* PaymentsAcceptanceTests.fs2_2_partsThatDoNotAddUp… (card group parts); PaymentSplitTests
 
 ### 2.5 Reversing a payment
 
@@ -156,13 +178,17 @@ Charge type order used in the examples: Membership, Electricity, Land tax.
 - A payment is reversed once. A part of a split payment is reversed on its own; the other parts stay.
 - A payment of an archived plot can still be reversed.
 - **Acceptance Criteria:**
-  - [ ] Given the 700,00 ₴ payment of 2.1 paid membership 600,00 ₴ and electricity 100,00 ₴, when the chairman
+  - [x] Given the 700,00 ₴ payment of 2.1 paid membership 600,00 ₴ and electricity 100,00 ₴, when the chairman
         reverses it with the reason "Помилкова ділянка", then the debts are again 600,00 ₴ and 250,00 ₴ and the
         payment shows "Сторновано" with the reason.
-  - [ ] When the chairman tries to reverse the same payment again, then they see "Платіж уже сторновано" / "The
+        *Verified:* PaymentsAcceptanceTests.fs2_5_theChairmanReversesOnceWithAReasonAndTheDebtsAreBack; PaymentReversalTests example 9
+  - [x] When the chairman tries to reverse the same payment again, then they see "Платіж уже сторновано" / "The
         payment has already been reversed".
-  - [ ] When the chairman tries to reverse without a reason, then they see "Вкажіть причину" / "Enter a reason".
-  - [ ] When the treasurer opens a payment card, then "Сторнувати" is not offered.
+        *Verified:* PaymentsAcceptanceTests.fs2_5_… (409 PAYMENT_ALREADY_REVERSED); screen text from the i18n catalogs; rendering covered by Vitest, real-browser rendering by `web/e2e/payments.spec.ts` in CI (Playwright could not run locally: ports 8080/5173 held by the owner's own app)
+  - [x] When the chairman tries to reverse without a reason, then they see "Вкажіть причину" / "Enter a reason".
+        *Verified:* PaymentsAcceptanceTests.fs2_5_… (400 reason REQUIRED); ReversePaymentDialog.test.tsx; screen text from the i18n catalogs; rendering covered by Vitest, real-browser rendering by `web/e2e/payments.spec.ts` in CI (Playwright could not run locally: ports 8080/5173 held by the owner's own app)
+  - [x] When the treasurer opens a payment card, then "Сторнувати" is not offered.
+        *Verified:* PaymentsAcceptanceTests.fs2_5_… (treasurer gets reversible=false and 403); PaymentPage.test.tsx (button hidden without the flag)
 
 ### 2.6 Reallocating a payment and allocating a prepayment
 
@@ -171,12 +197,14 @@ Charge type order used in the examples: Membership, Electricity, Land tax.
 - When automatic allocation is off and a plot has a prepayment, the plot account shows "Розподілити аванс" ("Allocate
   prepayment") with a proposal over the plot's open charges, changeable as in 2.1.
 - **Acceptance Criteria:**
-  - [ ] Given a 700,00 ₴ payment paid membership 600,00 ₴ and electricity 100,00 ₴, when the treasurer reallocates it
+  - [x] Given a 700,00 ₴ payment paid membership 600,00 ₴ and electricity 100,00 ₴, when the treasurer reallocates it
         as electricity 250,00 ₴ and membership 450,00 ₴, then the account shows membership open 150,00 ₴, electricity
         open 0,00 ₴, and the payment card lists the released and the new allocations.
-  - [ ] Given automatic allocation is off and plot 9 has a prepayment of 150,00 ₴ and a land tax charge of 120,00 ₴
+        *Verified:* PaymentsAcceptanceTests.fs2_6_reallocatingMovesTheMoneyAndTheCardListsTheReleasedAndTheNewAllocations; ReallocationTests
+  - [x] Given automatic allocation is off and plot 9 has a prepayment of 150,00 ₴ and a land tax charge of 120,00 ₴
         open, when the treasurer uses "Розподілити аванс" and saves the proposal, then land tax is paid and the
         prepayment is 30,00 ₴.
+        *Verified:* PaymentsAcceptanceTests.fs2_6_withAutomaticAllocationOffThePrepaymentIsAllocatedByHandAndTheRestStays; PrepaymentAllocationTests
 
 ### 2.7 Prepayment and automatic allocation
 
@@ -191,13 +219,16 @@ Charge type order used in the examples: Membership, Electricity, Land tax.
   for new charges.
 - With the setting off, the prepayment stays until the treasurer allocates it by hand (2.6).
 - **Acceptance Criteria:**
-  - [ ] Given plot 9 has a prepayment of 150,00 ₴ and automatic allocation is on, when a land tax charge of 120,00 ₴ is
+  - [x] Given plot 9 has a prepayment of 150,00 ₴ and automatic allocation is on, when a land tax charge of 120,00 ₴ is
         booked for plot 9, then the plot account shows land tax 120,00 ₴ "Зараховано з авансу" and a prepayment of
         30,00 ₴.
-  - [ ] Given the same plot with automatic allocation off, when the land tax charge is booked, then land tax stays
+        *Verified:* PaymentsAcceptanceTests.fs2_7_aNewChargeIsPaidFromThePrepaymentAutomaticallyAndTheAccountSaysSo; AutoAllocationTests example 4
+  - [x] Given the same plot with automatic allocation off, when the land tax charge is booked, then land tax stays
         open 120,00 ₴ and the prepayment stays 150,00 ₴.
-  - [ ] When the chairman switches "Автоматично зараховувати аванс" off and saves the settings, then the switch stays
+        *Verified:* PaymentsAcceptanceTests.fs2_7_withTheSettingOffTheNewChargeStaysOpenAndThePrepaymentStays; AutoAllocationTests example 5
+  - [?] When the chairman switches "Автоматично зараховувати аванс" off and saves the settings, then the switch stays
         off after reloading the page, and a treasurer does not see the switch as changeable.
+        *Pending manual check:* Server side verified (PaymentsAcceptanceTests.fs2_7_theChairmanSwitchesTheSettingOff…: the setting stays off, a treasurer's PUT gets 403; SettingsPage.test.tsx: no switch without SETTINGS_MANAGE); the page reload in a real browser was not checked locally (ports held by the owner's app).
 
 ### 2.8 When paid money is taken back automatically
 
@@ -208,13 +239,16 @@ Charge type order used in the examples: Membership, Electricity, Land tax.
 - When a payment is reversed, all its allocations are taken back (2.5).
 - With automatic allocation on, the money taken back goes on to the plot's other open charges.
 - **Acceptance Criteria:**
-  - [ ] Given the 700,00 ₴ payment of 2.1 (membership 600,00 ₴, electricity 100,00 ₴) and automatic allocation on,
+  - [x] Given the 700,00 ₴ payment of 2.1 (membership 600,00 ₴, electricity 100,00 ₴) and automatic allocation on,
         when the chairman reverses the January membership charge, then 600,00 ₴ is taken back, 150,00 ₴ of it goes to
         the open electricity and the plot's prepayment is 450,00 ₴.
-  - [ ] Given membership 600,00 ₴ is fully paid, when a recalculation adjusts it by −100,00 ₴, then 100,00 ₴ is taken
+        *Verified:* PaymentsAcceptanceTests.fs2_8_reversingAPaidChargeTakesTheMoneyBackAndTheOpenElectricityGets150; AutoReleaseTests example 6
+  - [x] Given membership 600,00 ₴ is fully paid, when a recalculation adjusts it by −100,00 ₴, then 100,00 ₴ is taken
         back from the latest payment on it and becomes prepayment.
-  - [ ] Given membership 600,00 ₴ is fully paid, when a recalculation adjusts it by +50,00 ₴, then 50,00 ₴ of
+        *Verified:* AutoReleaseTests example 7 (release 100.00 of the latest allocation, cause CHARGE_ADJUSTED); ReleasePlannerTests
+  - [x] Given membership 600,00 ₴ is fully paid, when a recalculation adjusts it by +50,00 ₴, then 50,00 ₴ of
         membership is open, the debt is 50,00 ₴ and the plot is no longer green.
+        *Verified:* AutoReleaseTests example 8 (open 50.00, debt 50.00, status not GREEN)
 
 ### 2.9 Debt, map colour and the plot account
 
@@ -228,13 +262,16 @@ Charge type order used in the examples: Membership, Electricity, Land tax.
   - a filter "Лише платежі" ("Payments only");
   - the debt after payments, per charge type and in total.
 - **Acceptance Criteria:**
-  - [ ] Given plot 9 is red with a debt of 1200,00 ₴, when the treasurer enters a payment that lowers the debt to
+  - [x] Given plot 9 is red with a debt of 1200,00 ₴, when the treasurer enters a payment that lowers the debt to
         300,00 ₴ (below the red amount, no debt older than the red days), then within a few seconds the map shows
         plot 9 yellow and the account shows the payment and the debt 300,00 ₴.
-  - [ ] Given a plot's debt is fully paid with 50,00 ₴ left over, when anyone opens the map, then the plot is green and
+        *Verified:* PaymentsAcceptanceTests.fs2_9_aPaymentLowersTheDebtAndTheMapColourFollowsWithinSeconds (status RED → YELLOW, account debt); map rendering: screen text from the i18n catalogs; rendering covered by Vitest, real-browser rendering by `web/e2e/payments.spec.ts` in CI (Playwright could not run locally: ports 8080/5173 held by the owner's own app)
+  - [x] Given a plot's debt is fully paid with 50,00 ₴ left over, when anyone opens the map, then the plot is green and
         its account shows a prepayment of 50,00 ₴.
-  - [ ] When the treasurer chooses "Лише платежі" on a plot account, then only payments and their reversals are listed,
+        *Verified:* PaymentsAcceptanceTests.fs2_9_aFullyPaidPlotWithALeftOverIsGreenWithAPrepaymentAndPaymentsOnlyKeepsTheDebts; PlotStatusRefreshTests
+  - [x] When the treasurer chooses "Лише платежі" on a plot account, then only payments and their reversals are listed,
         and the debts above the list are unchanged.
+        *Verified:* PaymentsAcceptanceTests.fs2_9_aFullyPaidPlot…PaymentsOnlyKeepsTheDebts (kind=PAYMENTS); PlotAccountPayments.test.tsx
 
 ### 2.10 What a member sees
 
@@ -242,10 +279,12 @@ Charge type order used in the examples: Membership, Electricity, Land tax.
   number, amount and what each paid; reversed payments as reversed; the prepayment; and the debt after payments.
 - A member never sees payments of other plots, the payer note or who entered a payment.
 - **Acceptance Criteria:**
-  - [ ] Given a cash payment № 42 for plot 15 of the demo member, when the member opens "Мій рахунок", then they see
+  - [x] Given a cash payment № 42 for plot 15 of the demo member, when the member opens "Мій рахунок", then they see
         the payment with "№ 42", its amount, the charges it paid and the lower debt.
-  - [ ] When the member tries to open the payments of a plot that is not theirs, then they get "not found" and see no
+        *Verified:* PaymentsAcceptanceTests.fs2_10_aMemberSeesTheirPaymentWithTheReceiptAndNoNoteOrAuthorAndNotFoundForAnotherPlot; LedgerAccountTests
+  - [x] When the member tries to open the payments of a plot that is not theirs, then they get "not found" and see no
         amount.
+        *Verified:* PaymentsAcceptanceTests.fs2_10_… (404 for another plot, no amount); PaymentsPermissionTests
 
 ### 2.11 Reports and the billing months screen
 
@@ -260,13 +299,17 @@ Charge type order used in the examples: Membership, Electricity, Land tax.
   (without the payer note).
 - **Billing months screen:** "Надійшло" ("Received") next to "Нараховано" ("Charged") per month.
 - **Acceptance Criteria:**
-  - [ ] Given plot 9 was charged 850,00 ₴ and paid 700,00 ₴, when the treasurer opens the plot balances report, then
+  - [x] Given plot 9 was charged 850,00 ₴ and paid 700,00 ₴, when the treasurer opens the plot balances report, then
         plot 9 shows charged 850,00 ₴, paid 700,00 ₴, debt 150,00 ₴ and prepayment 0,00 ₴.
-  - [ ] Given a plot whose debt was fully paid, when the treasurer opens the debtors report, then that plot is not
+        *Verified:* PaymentsAcceptanceTests.fs2_11_plotBalancesAndDebtorsReflectThePaymentsAndAPaidPlotIsNotADebtor; PlotBalancesReportTests
+  - [x] Given a plot whose debt was fully paid, when the treasurer opens the debtors report, then that plot is not
         listed.
-  - [ ] When the treasurer opens the payments report for October with source "Готівка", then each cash payment of
+        *Verified:* PaymentsAcceptanceTests.fs2_11_plotBalancesAndDebtors…; DebtorsReportTests
+  - [x] When the treasurer opens the payments report for October with source "Готівка", then each cash payment of
         October is one row and the total equals the sum of those payments.
-  - [ ] When the treasurer opens the billing months screen, then each month shows "Надійшло" next to "Нараховано".
+        *Verified:* PaymentsAcceptanceTests.fs2_11_thePaymentsReportListsEachCashPaymentOfTheMonthWithATotalAndBillingMonthsShowReceived; PaymentsReportTests
+  - [x] When the treasurer opens the billing months screen, then each month shows "Надійшло" next to "Нараховано".
+        *Verified:* PaymentsAcceptanceTests.fs2_11_thePaymentsReport…BillingMonthsShowReceived; BillingMonthsTests; ChargesPage.test.tsx
 
 ### 2.12 Permissions
 
@@ -280,16 +323,21 @@ Charge type order used in the examples: Membership, Electricity, Land tax.
   audit log (the payer note hidden from those not allowed to see member data). Automatic allocations and take-backs are
   ledger lines, not audit entries.
 - **Acceptance Criteria:**
-  - [ ] When the demo electrician signs in, then "Платежі" is not in the menu and opening its address shows "no
+  - [?] When the demo electrician signs in, then "Платежі" is not in the menu and opening its address shows "no
         access".
-  - [ ] When the treasurer reverses a payment through any route, then it is refused with "no access".
-  - [ ] When the chairman opens the audit log after a payment was entered, reallocated and reversed, then three entries
+        *Pending manual check:* Server side verified (PaymentsAcceptanceTests.fs2_12_theElectrician…: 403 on every payments endpoint; Layout.test.tsx: no «Платежі» item without PAYMENTS_VIEW); the rendered menu and the no-access page were not seen in a real browser locally (ports held by the owner's app).
+  - [x] When the treasurer reverses a payment through any route, then it is refused with "no access".
+        *Verified:* PaymentsPermissionTests (treasurer reverse 403 on the endpoint); PaymentsAcceptanceTests.fs2_5_…
+  - [x] When the chairman opens the audit log after a payment was entered, reallocated and reversed, then three entries
         are listed: payment recorded (plot, amount, source, date, receipt number), payment reallocated (old and new
         lines) and payment reversed (the reason).
-  - [ ] Given a payment with a payer note, when someone reads the stored data directly (bypassing the app) or the
+        *Verified:* PaymentsAcceptanceTests.fs2_12_enteredReallocatedAndReversedAreThreeAuditEntriesAndTheNoteIsNotReadableAnywhere; PaymentAuditTests
+  - [x] Given a payment with a payer note, when someone reads the stored data directly (bypassing the app) or the
         server logs, then the note is not found in readable form.
-  - [ ] Given a member of another cooperative, when they try to open a payment of this cooperative, then they get "not
+        *Verified:* PaymentsAcceptanceTests.fs2_12_entered… (note unreadable in payment, audit_entry, event_publication); PaymentAuditTests (captured logs)
+  - [x] Given a member of another cooperative, when they try to open a payment of this cooperative, then they get "not
         found".
+        *Verified:* PaymentsAcceptanceTests.fs2_12_theElectricianAndAnotherCooperativeAreRefusedAndAnUnrelatedMemberFindsNothing; PaymentsPermissionTests
 
 ### 2.13 Demo data, docs and guides
 
@@ -299,10 +347,12 @@ Charge type order used in the examples: Membership, Electricity, Land tax.
 - The money rules, the glossary, the ledger notes and both guides (board guide and owner manual, Ukrainian and English)
   describe payments, with the new screens in the screenshot list and the PDFs rebuilt.
 - **Acceptance Criteria:**
-  - [ ] When the chairman opens the map on the demo cooperative, then green, yellow and red plots are all present, and
+  - [x] When the chairman opens the map on the demo cooperative, then green, yellow and red plots are all present, and
         "Платежі" lists cash and bank payments including one reversed and one split over plots 7 and 15.
-  - [ ] When the owner opens the board guide, then it has a chapter "Платежі та каса" ("Payments and cash desk") in
+        *Verified:* DemoLedgerDataTests (RED 11, YELLOW 8, GREEN 6; split 7+15 with one receipt; one reversed; bank payments) — map rendering: screen text from the i18n catalogs; rendering covered by Vitest, real-browser rendering by `web/e2e/payments.spec.ts` in CI (Playwright could not run locally: ports 8080/5173 held by the owner's own app)
+  - [x] When the owner opens the board guide, then it has a chapter "Платежі та каса" ("Payments and cash desk") in
         both languages, and Part II explains the allocation order with the examples of 2.1, 2.2, 2.7 and 2.8.
+        *Verified:* PaymentsAcceptanceTests.fs2_13_bothBoardGuidesHaveTheChapterAndPartTwoExplainsTheAllocationOrder (uk and en HTML); PDFs not rebuilt yet (owner follow-up)
 
 ---
 

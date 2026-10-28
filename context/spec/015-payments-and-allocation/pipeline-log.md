@@ -1,7 +1,7 @@
 # Pipeline log — 015 payments and allocation
 
 - Status: running
-- Phase: 4 (verify and full suite)
+- Phase: 5 (publish)
 - Branch: 015-payments-and-allocation (planned) · Base: main @ 75db154
 - Requirement: document docs/features/015-payments-and-allocation.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
@@ -138,3 +138,19 @@ red plots; guide PDFs.
 - Slice 9: PaymentsAcceptanceTests 27/0 (RED checked on 3 tests); registry context/qa/list-of-tests.md updated; UI-only criteria covered by Vitest + payments.spec.ts (CI).
 - Slice 9 committed cca927a; review round 1: PASS. All slice reviews PASS. Phase 4 started (full make check running in background).
 - Phase 4 full make check (attempt 1 for regressions): backend 3281 tests, 1 failure + 1 error, not in baseline: MeEndpointTests.treasurerHasReadPermissions (order-dependent treasurer permissions), SealImportPlansMigrationTests (context at V26 fails schema validation on allocation). Regression fix delegated to spring-backend.
+- Regression fix 939958d (ChargeTypesTests restores the treasurer role from its current permissions; SealImportPlansMigrationTests ddl-auto none below latest): fix review round 1 PASS. Full make check re-running.
+- Full `make check` (after regression fix 939958d): green — backend 3281 tests, 0 failures (baseline main 75db154: 2969/0), JaCoCo floor met; contract, format, lint, client typecheck and tests green (web 810, shared 130). Regressions: none left. Measured line coverage 0.9778 → `coverage.minimum` raised 0.974 → 0.977.
+- /awos:verify: 47 of 50 acceptance criteria [x] with test evidence (PaymentsAcceptanceTests + slice tests); 3 [?]: large receipt screen, settings switch after reload / treasurer view, electrician menu and no-access page — server side verified, real-browser rendering not checked locally (ports 8080/5173 held by the owner's own `make up`; Keycloak redirects only to :5173). Covered by `web/e2e/payments.spec.ts` and Vitest; Playwright runs in CI.
+- Status: functional spec and technical considerations set to `Implemented — pending manual check`.
+- Product docs: suggested (not run) `/awos:architecture Payments and allocations live in the ledger module (feature 015): payment, allocation and receipt_counter tables (V27), PlotLedgerLock, AllocationReleaser, PrepaymentAllocator, PaymentsChanged event, PaymentNotes port; remove "payments" from the planned modules`.
+- Worktrees: only the main checkout plus the pre-existing 012 worktree (not created by this run, left untouched).
+
+## Final report (Phase 4)
+
+- Branch `015-payments-and-allocation`, commits: 6a3d4a3 (specs), 23557e8 (S1), faf6564 (S2), ec792e9 (S3), 2bf814c (S4), 08e3d1d (S5), f6b5f41 (S6), 592d62a (S7), 9d2b59b (S8), 72a880e (S8 review fix), cca927a (S9), 939958d (regression fix), plus the Phase 4 commit.
+- Acceptance criteria: 47/50 verified; 3 [?] (browser rendering, see above).
+- Reviews: slices 1–7 and 9 PASS in round 1; slice 8 MAJOR_ISSUES (role-names permission count) → fixed → PASS in round 2; regression fix PASS. Minor notes in review-log.md.
+- Full suite vs baseline: 3281/0 vs 2969/0; two regressions found and fixed in tests (order-dependent treasurer role; migration test context at V26).
+- Decided automatically: see every `AUTO:` entry above (Phase 1 recommended answers, tech assumptions 1–12, builder choices logged per slice, e2e not runnable locally, PDFs not rebuilt).
+- Staffing: docs and guides task ran under `general-purpose` (no docs specialist).
+- Owner follow-ups: run `make guide-shots` (app on this branch) then `make guide` to add the four new screenshots and rebuild the PDFs; check the 3 [?] criteria in the browser; review the AUTO decisions; stale tariffs-chapter sentence in the board guide ("charges will appear later") predates this feature.
