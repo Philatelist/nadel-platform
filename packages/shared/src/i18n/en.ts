@@ -153,6 +153,14 @@ export const en = {
       name: 'Reverse payments',
       description: 'Reverse a payment, giving a reason',
     },
+    INVOICES_ISSUE: {
+      name: 'Issue invoices',
+      description: 'Build, re-issue and print the invoices of plots with the payment QR code',
+    },
+    CERTIFICATES_ISSUE: {
+      name: 'Issue certificates',
+      description: 'Issue and annul debt certificates of plots',
+    },
   },
   roles: {
     CHAIRMAN: 'Chairman',
@@ -221,6 +229,7 @@ export const en = {
     kind: { PLOT: 'Plot', COMMON: 'Common land' },
     cardTitlePlot: 'Plot {number}',
     cardTitleCommon: 'Common land {number}',
+    tabs: { label: 'Plot card sections', account: 'Account', invoices: 'Invoices' },
     back: 'Back to plots',
     fields: {
       number: 'Number',
@@ -863,6 +872,7 @@ export const en = {
       REPORT_GENERATED: 'Report generated',
       REPORT_TEMPLATE_UPLOADED: 'Report template uploaded',
       REPORT_TEMPLATE_ARCHIVED: 'Report template archived',
+      INVOICE_REISSUED: 'Invoice issued on request',
     },
     entityType: {
       MEMBER: 'Member',
@@ -883,6 +893,7 @@ export const en = {
       PAYMENT: 'Payment',
       REPORT: 'Report',
       REPORT_TEMPLATE: 'Report template',
+      INVOICE: 'Invoice',
     },
     output: { PREVIEW: 'On screen', XLSX: 'Excel file' },
     lossesMode: { FIXED_PERCENT: 'Fixed percentage', PROPORTIONAL: 'Proportional' },
@@ -1894,6 +1905,26 @@ export const en = {
       },
     },
   },
+  invoices: {
+    plotTitle: 'Plot invoices',
+    issueToday: 'Invoice for today',
+    issuing: 'Preparing the invoice…',
+    empty: 'This plot has no invoices yet.',
+    month: 'Month',
+    number: 'Number',
+    version: '(version {version})',
+    due: 'Due',
+    issuedAt: 'Issued',
+    download: 'Download PDF',
+    downloading: 'Downloading…',
+    latest: 'Latest version',
+    requisites: {
+      title: 'Invoices cannot be built yet',
+      IBAN: 'The IBAN of the cooperative is not filled in.',
+      ibanLink: 'Fill it in at Settings → Requisites',
+      EDRPOU: 'The ЄДРПОУ code of the cooperative is not filled in: contact the platform operator.',
+    },
+  },
   receipts: {
     print: 'Print receipt',
     printing: 'Preparing the receipt…',
@@ -2493,6 +2524,7 @@ export const en = {
       addPlaceholder: 'Choose a charge',
       allocatedTotal: 'Allocated',
       of: 'of',
+      exceedsOpen: 'More than the remaining {amount}',
       automatic: 'automatic',
       automaticNote: 'The remainder will be placed automatically on the oldest debts',
       prepayment: 'Prepayment',
@@ -2668,6 +2700,9 @@ export const en = {
     PREVIEW_OUTDATED: 'The charges changed since the preview. Preview again before booking.',
     PAYMENT_ALREADY_REVERSED: 'The payment has already been reversed',
     RECEIPT_NOT_AVAILABLE: 'A receipt is printed only for a cash payment',
+    REQUISITES_MISSING:
+      'Invoices cannot be built until the IBAN and the ЄДРПОУ of the cooperative are filled in',
+    PLOT_NOT_INVOICEABLE: 'Common land, an archived plot or a plot without an owner gets no invoice',
     NOTHING_TO_ALLOCATE: 'There is no prepayment to allocate',
     CHARGE_IN_CLOSED_MONTH: 'The billing month is closed: the correction is made by an adjustment',
     PLOT_HAS_CHARGES: 'The plot has charges, so it cannot be deleted',

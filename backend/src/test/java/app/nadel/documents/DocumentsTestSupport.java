@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.time.ZoneId;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -47,6 +48,8 @@ abstract class DocumentsTestSupport extends IntegrationTest {
 
     static final String PAYMENTS = "/api/v1/payments";
     static final String RECEIPT = "/api/v1/payments/%s/receipt.pdf";
+    static final String PLOT_INVOICES = "/api/v1/plots/%s/invoices";
+    static final String INVOICES = "/api/v1/invoices";
 
     static final String TREASURER_NAME = "Коваленко Олена Петрівна";
     static final String MEMBER_NAME = "Шевченко Тарас Григорович";
@@ -107,7 +110,10 @@ abstract class DocumentsTestSupport extends IntegrationTest {
             sql.update("delete from payment where tenant_id = ?", id);
             sql.update("delete from receipt_counter where tenant_id = ?", id);
             sql.update("delete from charge where tenant_id = ? and reverses_charge_id is not null", id);
+            sql.update("delete from charge where tenant_id = ? and adjusts_charge_id is not null", id);
             sql.update("delete from charge where tenant_id = ?", id);
+            sql.update("delete from recalculation where tenant_id = ?", id);
+            sql.update("delete from invoice where tenant_id = ?", id);
             sql.update("delete from billing_month where tenant_id = ?", id);
         });
         for (String table : List.of("audit_entry", "plot_status", "ownership", "plot", "member_role",
@@ -174,6 +180,16 @@ abstract class DocumentsTestSupport extends IntegrationTest {
         return LocalDate.now(ZoneId.of("Europe/Kyiv"));
     }
 
+    /** The current month in Kyiv, {@code YYYY-MM}. */
+    static String currentMonth() {
+        return YearMonth.from(today()).toString();
+    }
+
+    /** The month before the current one, {@code YYYY-MM}. */
+    static String previousMonth() {
+        return YearMonth.from(today()).minusMonths(1).toString();
+    }
+
     // ---- plots, owners and charges
 
     UUID plot(String number, String street) {
@@ -207,6 +223,65 @@ abstract class DocumentsTestSupport extends IntegrationTest {
                 + "'TARIFF', ?, ?, ?, ?, ?)", id, tenant, plot, typeId(typeCode), monthId, new BigDecimal(amount),
                 first, first.withDayOfMonth(first.lengthOfMonth()), first, "TEST:" + id);
         return id;
+    }
+
+    /** Closes the billing month (YYYY-MM) now, as the database owner. */
+    void closeMonth(String month) {
+        owner().update("insert into billing_month (tenant_id, month) values (?, ?::date) "
+                + "on conflict (tenant_id, month) do nothing", tenant, month + "-01");
+        owner().update("update billing_month set status = 'CLOSED', closed_at = now() where tenant_id = ? "
+                + "and month = ?::date", tenant, month + "-01");
+    }
+
+    /**
+     * An adjustment of the charge booked in {@code month} (YYYY-MM) by a recalculation written for it (feature 012):
+     * the original's plot, type, service period and debt age, source {@code RECALCULATION}; as the database owner.
+     */
+    UUID adjustment(UUID original, String amount, String month) {
+        owner().update("insert into billing_month (tenant_id, month) values (?, ?::date) "
+                + "on conflict (tenant_id, month) do nothing", tenant, month + "-01");
+        UUID monthId = owner().queryForObject("select id from billing_month where tenant_id = ? and month = ?::date",
+                UUID.class, tenant, month + "-01");
+        UUID recalculation = UUID.randomUUID();
+        owner().update("insert into recalculation (id, tenant_id, cause, reason, total, line_count, plot_count, "
+                + "digest) values (?, ?, 'MANUAL', 'Перерахунок', ?, 1, 1, 'test-digest')", recalculation, tenant,
+                new BigDecimal(amount));
+        UUID id = UUID.randomUUID();
+        owner().update("insert into charge (id, tenant_id, plot_id, charge_type_id, billing_month_id, kind, source, "
+                + "amount, service_from, service_to, accrued_on, source_key, adjusts_charge_id, recalculation_id, "
+                + "reason) select ?, tenant_id, plot_id, charge_type_id, ?, 'ADJUSTMENT', 'RECALCULATION', ?, "
+                + "service_from, service_to, accrued_on, ?, id, ?, 'Перерахунок' from charge where id = ?", id,
+                monthId, new BigDecimal(amount), "ADJUSTMENT:" + recalculation + ":" + original, recalculation,
+                original);
+        return id;
+    }
+
+    // ---- invoices
+
+    /** {@code POST /plots/{id}/invoices} with the month (YYYY-MM), or without a body when null. */
+    ResultActions issue(String bearer, UUID plot, String month) throws Exception {
+        return send(bearer, post(PLOT_INVOICES.formatted(plot)), month == null ? null : Map.of("month", month));
+    }
+
+    /** An invoice issued by the treasurer for the plot and month; returns its row. */
+    JsonNode issued(UUID plot, String month) throws Exception {
+        return body(issue(treasurer, plot, month).andExpect(status().isCreated()));
+    }
+
+    static UUID idOf(JsonNode row) {
+        return UUID.fromString(row.get("id").asString());
+    }
+
+    ResultActions invoice(String bearer, UUID invoice) throws Exception {
+        return send(bearer, get(INVOICES + "/" + invoice), null);
+    }
+
+    ResultActions invoicePdf(String bearer, UUID invoice) throws Exception {
+        return send(bearer, get(INVOICES + "/" + invoice + "/pdf"), null);
+    }
+
+    ResultActions invoiceQr(String bearer, UUID invoice) throws Exception {
+        return send(bearer, get(INVOICES + "/" + invoice + "/qr.png"), null);
     }
 
     // ---- payments

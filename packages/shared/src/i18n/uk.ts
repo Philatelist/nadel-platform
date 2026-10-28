@@ -167,6 +167,14 @@ export const uk: Messages = {
       name: 'Сторнування платежів',
       description: 'Сторнувати платіж з указанням причини',
     },
+    INVOICES_ISSUE: {
+      name: 'Формування рахунків',
+      description: 'Формувати, перевипускати й друкувати рахунки ділянок з QR-кодом для оплати',
+    },
+    CERTIFICATES_ISSUE: {
+      name: 'Видача довідок',
+      description: 'Видавати й анулювати довідки про стан розрахунків ділянок',
+    },
   },
   roles: {
     CHAIRMAN: 'Голова',
@@ -235,6 +243,7 @@ export const uk: Messages = {
     kind: { PLOT: 'Ділянка', COMMON: 'Спільні землі' },
     cardTitlePlot: 'Ділянка {number}',
     cardTitleCommon: 'Спільні землі {number}',
+    tabs: { label: 'Розділи картки ділянки', account: 'Рахунок', invoices: 'Рахунки' },
     back: 'До списку ділянок',
     fields: {
       number: 'Номер',
@@ -878,6 +887,7 @@ export const uk: Messages = {
       REPORT_GENERATED: 'Звіт сформовано',
       REPORT_TEMPLATE_UPLOADED: 'Шаблон звіту завантажено',
       REPORT_TEMPLATE_ARCHIVED: 'Шаблон звіту архівовано',
+      INVOICE_REISSUED: 'Рахунок сформовано на запит',
     },
     entityType: {
       MEMBER: 'Член кооперативу',
@@ -898,6 +908,7 @@ export const uk: Messages = {
       PAYMENT: 'Платіж',
       REPORT: 'Звіт',
       REPORT_TEMPLATE: 'Шаблон звіту',
+      INVOICE: 'Рахунок',
     },
     output: { PREVIEW: 'На екрані', XLSX: 'Файл Excel' },
     lossesMode: { FIXED_PERCENT: 'Фіксований відсоток', PROPORTIONAL: 'Пропорційно' },
@@ -1917,6 +1928,26 @@ export const uk: Messages = {
       },
     },
   },
+  invoices: {
+    plotTitle: 'Рахунки ділянки',
+    issueToday: 'Рахунок на сьогодні',
+    issuing: 'Формування рахунку…',
+    empty: 'Рахунків за цією ділянкою ще немає.',
+    month: 'Місяць',
+    number: 'Номер',
+    version: '(версія {version})',
+    due: 'До сплати',
+    issuedAt: 'Сформовано',
+    download: 'Завантажити PDF',
+    downloading: 'Завантаження…',
+    latest: 'Остання версія',
+    requisites: {
+      title: 'Рахунки поки не можна сформувати',
+      IBAN: 'Не заповнено IBAN кооперативу.',
+      ibanLink: 'Заповнити в Налаштування → Реквізити',
+      EDRPOU: 'Не заповнено код ЄДРПОУ кооперативу: зверніться до оператора платформи.',
+    },
+  },
   receipts: {
     print: 'Друкувати квитанцію',
     printing: 'Формування квитанції…',
@@ -2516,6 +2547,7 @@ export const uk: Messages = {
       addPlaceholder: 'Оберіть нарахування',
       allocatedTotal: 'Розподілено',
       of: 'з',
+      exceedsOpen: 'Більше, ніж залишок {amount}',
       automatic: 'автоматично',
       automaticNote: 'Залишок буде зараховано автоматично на найстаріші борги',
       prepayment: 'Аванс',
@@ -2692,6 +2724,9 @@ export const uk: Messages = {
     PREVIEW_OUTDATED: 'Нарахування змінилися після перегляду. Перегляньте знову перед проведенням.',
     PAYMENT_ALREADY_REVERSED: 'Платіж уже сторновано',
     RECEIPT_NOT_AVAILABLE: 'Квитанцію друкують лише для готівкового платежу',
+    REQUISITES_MISSING: 'Рахунки не можна сформувати, доки не заповнено IBAN і ЄДРПОУ кооперативу',
+    PLOT_NOT_INVOICEABLE:
+      'Для землі загального користування, архівної ділянки чи ділянки без власника рахунок не формують',
     NOTHING_TO_ALLOCATE: 'Немає авансу для розподілу',
     CHARGE_IN_CLOSED_MONTH: 'Місяць нарахування закрито: виправлення робиться коригуванням',
     PLOT_HAS_CHARGES: 'На ділянці є нарахування, тому її не можна видалити',

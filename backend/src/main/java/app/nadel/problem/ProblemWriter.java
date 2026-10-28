@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.util.List;
 import nadel.contract.model.Problem;
 import nadel.contract.model.ProblemFieldError;
+import nadel.contract.model.RequisiteField;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
@@ -26,6 +27,15 @@ public class ProblemWriter {
 
     /** The response body for a status and a code. {@code detail} must not contain personal data. */
     public static Problem body(HttpStatusCode status, String code, String detail, List<FieldProblem> errors) {
+        return body(status, code, detail, errors, List.of());
+    }
+
+    /**
+     * The response body with the missing requisites of {@code REQUISITES_MISSING} ({@code missing}, left out when
+     * empty).
+     */
+    public static Problem body(HttpStatusCode status, String code, String detail, List<FieldProblem> errors,
+            List<String> missing) {
         var problem = new Problem();
         problem.setType("about:blank");
         problem.setTitle(title(status));
@@ -36,6 +46,9 @@ public class ProblemWriter {
             problem.setErrors(errors.stream()
                     .map(e -> new ProblemFieldError(e.field(), e.code()).message(e.message()))
                     .toList());
+        }
+        if (!missing.isEmpty()) {
+            problem.setMissing(missing.stream().map(RequisiteField::fromValue).toList());
         }
         return problem;
     }

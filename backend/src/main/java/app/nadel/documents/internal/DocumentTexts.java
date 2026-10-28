@@ -16,9 +16,10 @@ import org.springframework.core.io.ClassPathResource;
  * The texts of the documents, from the UTF-8 bundle {@code documents/messages_uk.properties}. Documents are official
  * papers and always Ukrainian, whatever language the user's screens are in (feature 016 §1), so there is one bundle;
  * it is the ADR 0012 exception to the English-only rule for generated files, like the report bundles. The words of
- * amounts in words ({@link AmountInWords}) live here too. A missing key is a programming error.
+ * amounts in words ({@link AmountInWords}) live here too. A missing key is a programming error. Public inside the
+ * module only for the NBU QR code ({@code internal.nbu}: the month names and the purpose of payment).
  */
-final class DocumentTexts {
+public final class DocumentTexts {
 
     static final String RESOURCE = "documents/messages_uk.properties";
 
@@ -32,7 +33,7 @@ final class DocumentTexts {
     }
 
     /** The Ukrainian texts, read once. */
-    static DocumentTexts uk() {
+    public static DocumentTexts uk() {
         return UK;
     }
 
@@ -42,7 +43,7 @@ final class DocumentTexts {
     }
 
     /** The text of the key. */
-    String text(String key) {
+    public String text(String key) {
         String value = bundle.getProperty(key);
         if (value == null) {
             throw new IllegalStateException("No text " + key + " in the document bundle");
@@ -51,7 +52,7 @@ final class DocumentTexts {
     }
 
     /** The text of the key with its {@code {name}} placeholders filled in from {@code params}. */
-    String text(String key, Map<String, String> params) {
+    public String text(String key, Map<String, String> params) {
         return PLACEHOLDER.matcher(text(key)).replaceAll(match -> Matcher.quoteReplacement(
                 params.getOrDefault(match.group(1), match.group())));
     }

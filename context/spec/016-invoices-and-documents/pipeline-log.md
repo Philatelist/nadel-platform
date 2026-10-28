@@ -149,3 +149,17 @@ introduction (tables via Flyway, RLS-free job storage), Supply-chain CI job with
   the whole generated DocumentsApi), LedgerReadModel.cashReceipt, PDFBox 3.0.8 (+fontbox, pdfbox-io, commons-logging 1.3.6), IBM Plex
   Sans 1.1.0 TTF (₴ present) + OFL, ADR 0017 draft. Builder decisions: no-permission non-owner 403 before lookup, owner of part of a
   group 404; number words in the bundle. Orchestrator: `./mvnw -q test-compile` exit 0. Tests written, not run (owner rule).
+- Slice 1 committed c146796 (test-compile ok; tests written, not run; review deferred to after Slice 6). tasks.md in this commit also carries the early Slice 2 V28 tick.
+- Slice 2 task 2 done (spring-backend): docs/domain/nbu-qr.md (tables 1–2, items, Annex 1, our values, field 10 SUPP/SUPP quoted from item 4.10 + example 1, sign raster-only note, official-text inconsistencies §7), nbu package (NbuQrPayload, NbuQrImage, HryvniaSign glyph), ZXing core 3.5.4 + javase test; test-compile ok; tests written not run.
+- Parallelised on the owner's request: started now the parts that do not touch the documents contract/controller — Slice 5 015 polish (react-frontend), Slice 5 demo IBAN + wipe (postgres-database), Slice 6 code-independent docs and guide texts (general-purpose); Slice 2 invoice task (spring-backend) still running. Endpoint work of Slices 3–5 waits for the Slice 2 contract.
+- Slice 5 part (postgres-database): R__demo_data.sql IBAN → UA850000000000000000000123456 when null or old demo value; wipe + invoice, certificate, document_counter; DemoReportTemplatesTests expectation updated; test-compile ok. Old IBAN kept as a valid fixture in other tests and in TemplateField example text.
+- Slice 5 part (react-frontend): 015 polish — ProposalTable «X з Y» whitespace-nowrap; ALLOCATION_EXCEEDS_CHARGE line hint «Більше, ніж залишок {amount}» from the server's per-line open value (new key payments.proposal.exceedsOpen); tests updated; typecheck/lint ok.
+- Slice 2 task 3 done (spring-backend): invoice for one plot (contract issuePlotInvoice, listInvoices, getInvoiceReadiness, getInvoice,
+  getInvoicePdf, getInvoiceQrPng; InvoiceLedger/MonthMovements; owner shares; RoleHolders; IndexKind.DOCUMENT_CONTENT; Problem.missing;
+  permissions Java side; InvoiceBuilder.forPlot; DocumentsController (renamed from ReceiptController); money-rules §13). test-compile ok.
+  Builder decisions: outer tx holds the advisory month lock, build in an inner REQUIRES_NEW REPEATABLE READ tx (snapshot would
+  otherwise start before the lock); asOf = max(app clock, clock_timestamp()); later reversal of a payment booked in/before M does not
+  raise «До сплати» (to check in verify); list sorted by SQL text order of plot numbers (natural order for Slice 3).
+- Started in parallel: Slice 2 web (react-frontend, consumes the generated client) and Slice 3 backend (spring-backend, owns the contract/controller changes now).
+- Slice 6 part (general-purpose): glossary, architecture.md, 015 spec out-of-scope note, both guides (board guide ch.14 + part II ch.25 'Invoice numbers', chapters renumbered; owner manual documents section), capture-screens.mjs 6 shots (+ tab step). Open: sample PDF, screenshots, guide PDFs, ADR limit number, ledger README stale 016 line.
+- Slice 2 web done (react-frontend): PlotTabs, PlotInvoices, RequisitesWarning, i18n invoices.*; typecheck/lint ok.

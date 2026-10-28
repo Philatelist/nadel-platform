@@ -11,6 +11,7 @@ import app.nadel.ledger.CorrectionCause;
 import app.nadel.ledger.CorrectionKind;
 import app.nadel.ledger.CorrectionRow;
 import app.nadel.ledger.CorrectionSource;
+import app.nadel.ledger.InvoiceLedger;
 import app.nadel.ledger.LedgerReadModel;
 import app.nadel.ledger.LossesRunNodeOutcome;
 import app.nadel.ledger.LossesRunNodeRow;
@@ -110,6 +111,8 @@ import org.springframework.transaction.annotation.Transactional;
  * part with its {@code node_meter_id}) or the consumer (its calculation's {@code consumerMeterId}).
  * <p>
  * {@link #cashReceipt}: the payment group of a printed cash receipt, read by {@link CashReceiptQueries}.
+ * {@link #invoiceLedgers}: the figures of the invoices of plots for a month by the booking-month rule, read by
+ * {@link InvoiceLedgerQueries} and worked out by {@link MonthMovements}.
  */
 @Component
 class LedgerReportQueries implements LedgerReadModel {
@@ -456,13 +459,21 @@ class LedgerReportQueries implements LedgerReadModel {
     private final ChargeTypeCatalog chargeTypes;
     private final Clock clock;
     private final CashReceiptQueries cashReceipts;
+    private final InvoiceLedgerQueries invoiceLedgers;
 
     LedgerReportQueries(EntityManager entityManager, ChargeTypeCatalog chargeTypes, Clock clock,
-            CashReceiptQueries cashReceipts) {
+            CashReceiptQueries cashReceipts, InvoiceLedgerQueries invoiceLedgers) {
         this.entityManager = entityManager;
         this.chargeTypes = chargeTypes;
         this.clock = clock;
         this.cashReceipts = cashReceipts;
+        this.invoiceLedgers = invoiceLedgers;
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Map<UUID, InvoiceLedger> invoiceLedgers(Collection<UUID> plotIds, YearMonth month, Instant asOf) {
+        return invoiceLedgers.find(Objects.requireNonNull(plotIds, "plotIds"), month, asOf);
     }
 
     @Override

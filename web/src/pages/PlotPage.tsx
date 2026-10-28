@@ -15,6 +15,8 @@ import { Link, useNavigate, useParams } from 'react-router';
 import { QueryBoundary } from '../components/QueryBoundary';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { UserContent, formatUser } from '../components/UserContent';
+import { PlotTabs } from '../components/PlotTabs';
+import { PlotInvoices } from '../components/invoices/PlotInvoices';
 import { PlotAccountPanel } from '../components/charges/PlotAccountPanel';
 import { PlotTariffsPanel } from '../components/tariffs/PlotTariffsPanel';
 import { WaterConnectionPanel } from '../components/water/WaterConnectionPanel';
@@ -187,17 +189,40 @@ function PlotView({ plot }: { plot: PlotDetails }) {
         ) : (
           <OwnersPanel plotId={plot.id} kind={plot.kind} archived={plot.archived} />
         ))}
-      {plot.kind !== 'COMMON' && (canViewCharges || isOwner) && <PlotAccountPanel plotId={plot.id} />}
-      {plot.kind !== 'COMMON' && canViewReports && (
-        <Link to={reportPath('plot-balances', { street: plot.street })} className="text-accent underline">
-          {t.reports.plotBalancesLink}
-        </Link>
-      )}
-      {plot.kind !== 'COMMON' && <PlotTariffsPanel plotId={plot.id} />}
-      {plot.kind !== 'COMMON' && <PlotMeterPanel plotId={plot.id} />}
-      {plot.kind !== 'COMMON' && (canView || isOwner) && (
-        <WaterConnectionPanel plotId={plot.id} archived={plot.archived} />
-      )}
+      <PlotTabs
+        tabs={[
+          {
+            id: 'account',
+            label: t.plot.tabs.account,
+            content: (
+              <>
+                {plot.kind !== 'COMMON' && (canViewCharges || isOwner) && (
+                  <PlotAccountPanel plotId={plot.id} />
+                )}
+                {plot.kind !== 'COMMON' && canViewReports && (
+                  <Link
+                    to={reportPath('plot-balances', { street: plot.street })}
+                    className="text-accent underline"
+                  >
+                    {t.reports.plotBalancesLink}
+                  </Link>
+                )}
+                {plot.kind !== 'COMMON' && <PlotTariffsPanel plotId={plot.id} />}
+                {plot.kind !== 'COMMON' && <PlotMeterPanel plotId={plot.id} />}
+                {plot.kind !== 'COMMON' && (canView || isOwner) && (
+                  <WaterConnectionPanel plotId={plot.id} archived={plot.archived} />
+                )}
+              </>
+            ),
+          },
+          plot.kind !== 'COMMON' &&
+            (canViewCharges || isOwner) && {
+              id: 'invoices',
+              label: t.plot.tabs.invoices,
+              content: <PlotInvoices plotId={plot.id} />,
+            },
+        ]}
+      />
       {confirmingDelete && (
         <ConfirmDialog
           title={t.plot.deleteTitle}

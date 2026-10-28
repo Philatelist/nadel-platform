@@ -1,6 +1,8 @@
 package app.nadel.documents.internal;
 
 import app.nadel.money.Money;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.YearMonth;
@@ -22,6 +24,7 @@ final class DocumentFormat {
     static final char NBSP = ' ';
 
     private static final DateTimeFormatter DAY = DateTimeFormatter.ofPattern("dd.MM.yyyy");
+    private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm");
 
     private DocumentFormat() {
     }
@@ -33,11 +36,34 @@ final class DocumentFormat {
 
     /** {@code 1 234,56}: the amount without the sign; a negative amount starts with {@code -}. */
     static String amount(Money amount) {
-        String plain = Objects.requireNonNull(amount, "amount").value().toPlainString();
+        return grouped(Objects.requireNonNull(amount, "amount").value().toPlainString());
+    }
+
+    /**
+     * A stored decimal (a quantity {@code 338.300}, a rate {@code 50.0000}, a percentage {@code 5.00}) for a document:
+     * trailing zeros dropped down to {@code minScale} decimals, a decimal comma and no-break spaces between the
+     * thousands ({@code 8 205,000}). Not money: nothing is rounded, only zeros are dropped.
+     *
+     * @throws NumberFormatException when the text is not a decimal
+     */
+    static String decimal(String plain, int minScale) {
+        BigDecimal value = new BigDecimal(Objects.requireNonNull(plain, "plain").strip());
+        BigDecimal stripped = value.stripTrailingZeros();
+        int scale = Math.max(minScale, Math.max(0, stripped.scale()));
+        return grouped(value.setScale(scale, RoundingMode.UNNECESSARY).toPlainString());
+    }
+
+    /** {@code 05.11.2026 14:30}: the instant in Kyiv. */
+    static String time(Instant instant) {
+        return TIME.format(instant.atZone(ZONE));
+    }
+
+    /** Groups the integer part of a plain decimal with no-break spaces and writes a decimal comma. */
+    private static String grouped(String plain) {
         boolean negative = plain.startsWith("-");
         String digits = negative ? plain.substring(1) : plain;
         int point = digits.indexOf('.');
-        String whole = digits.substring(0, point);
+        String whole = point < 0 ? digits : digits.substring(0, point);
         StringBuilder grouped = new StringBuilder();
         for (int i = 0; i < whole.length(); i++) {
             if (i > 0 && (whole.length() - i) % 3 == 0) {
@@ -45,7 +71,7 @@ final class DocumentFormat {
             }
             grouped.append(whole.charAt(i));
         }
-        return (negative ? "-" : "") + grouped + "," + digits.substring(point + 1);
+        return (negative ? "-" : "") + grouped + (point < 0 ? "" : "," + digits.substring(point + 1));
     }
 
     /** {@code 05.11.2026}. */

@@ -56,6 +56,15 @@ PDFBox is the smallest stack with a permissive licence that gives exact control 
 documents are a handful of fixed forms, so an HTML engine would buy little and cost a second layout system. No
 OpenHTMLtoPDF, no Batik, no iText-family library.
 
+### QR matrix: ZXing core 3.5.4
+
+The NBU payment QR code of an invoice (`docs/domain/nbu-qr.md`) needs a QR encoder with a chosen error correction
+level and version. `com.google.zxing:core:3.5.4` (Apache-2.0, one artifact of about 0.6 MB without dependencies) is
+pinned in `backend/pom.xml` (`zxing.version`); only its encoder is used, for the module matrix. The background circle,
+the hryvnia sign and the drawing (vector rectangles in the PDF, Java2D for the PNG) are ours (`documents/internal/nbu`).
+`com.google.zxing:javase:3.5.4` is a test dependency only, to decode the drawn code (it brings `jcommander` 1.85 and
+`jai-imageio-core` 1.4.0 to the test classpath).
+
 ### Font: IBM Plex Sans, embedded as a subset
 
 The design system already uses IBM Plex Sans (`packages/ui-tokens`), licensed under the SIL Open Font License 1.1, which
@@ -90,9 +99,20 @@ A document is rendered on every download from its data: the receipt from the led
 016, later slices) from its stored snapshot. No PDF is written to the database or to object storage (this supersedes
 "object storage for invoice PDFs" in `context/product/architecture.md`).
 
+### One consistent read per build
+
+An invoice build (on request now, the month build in slice 3) reads every figure from one database snapshot: a new
+`REPEATABLE READ` transaction through the tenant-aware transaction manager. One build per cooperative and month runs
+at a time: the transaction-scoped advisory lock `documents.invoices:{tenant}:{YYYY-MM}` is taken first, in an outer
+transaction that holds it until the build has committed, and the `REPEATABLE READ` transaction begins only once the
+lock is held. A single `REPEATABLE READ` transaction could not take the lock itself: PostgreSQL fixes the snapshot at
+its first statement (the tenant's `set_config`), so after waiting for an earlier build it would not see that build's
+versions. The moment of the build (`asOf`) is the later of the application clock and the database clock, read once
+after the snapshot began, so every row committed before it counts whichever clock wrote its `created_at`.
+
 ## Consequences
 
-- One new library (PDFBox, three artifacts) to watch in OSV-Scanner; a new advisory is bumped or, with a reason,
+- Two new libraries (PDFBox, three artifacts; ZXing core, one artifact) to watch in OSV-Scanner; a new advisory is bumped or, with a reason,
   accepted in `osv-scanner.toml`.
 - The layout layer is ours to maintain: wrapping, tables and page breaks are tested in `PdfDocumentTests`; a richer
   layout need (for example free-form templates) would be a new decision.

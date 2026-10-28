@@ -10,5 +10,10 @@ public enum IndexKind {
     /** A phone in international form ({@code PhoneNumber}). */
     PHONE,
     /** The last four digits of a normalised phone. */
-    PHONE_LAST4
+    PHONE_LAST4,
+    /**
+     * The canonical content of a document (feature 016: an invoice snapshot with its names in plaintext), so a change
+     * is detected without a hash of plaintext names.
+     */
+    DOCUMENT_CONTENT
 }

@@ -45,7 +45,10 @@ class ProblemExceptionHandler extends ResponseEntityExceptionHandler {
             // A server-side failure with a code of its own (PERSONAL_DATA_UNREADABLE): the code only, never values
             log.error("Answered {} with problem code {}", ex.status().value(), ex.code());
         }
-        return problem(ex.status(), ex.code(), ex.getMessage(), ex.errors(), null);
+        Problem body = ProblemWriter.body(ex.status(), ex.code(), ex.getMessage(), ex.errors(), ex.missing());
+        HttpHeaders out = new HttpHeaders();
+        out.setContentType(MediaType.APPLICATION_PROBLEM_JSON);
+        return new ResponseEntity<>(body, out, ex.status());
     }
 
     @ExceptionHandler(AccessDeniedException.class)

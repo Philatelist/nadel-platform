@@ -54,11 +54,21 @@ cooperative that is not reversed, and a reversal never target an adjustment or a
 | `PaymentsChanged(tenantId, plotIds)` | Published inside the transaction of every change of payments or allocations of plots (feature 015: a payment entered, one event with every plot of a split; later slices a reversal, a reallocation, a prepayment allocation by hand or automatically), never empty, at most 500 plots. `PlotStatusRefresher` recomputes the debt and prepayment of those plots. Ids only |
 | `PaymentSource` (`CASH`, `BANK`) | Where the money of a payment came from (feature 015; column `payment.source`, V27); 016 adds the bank statement import |
 | `PaymentNotes` | The payer notes of payments for the payments report (feature 015 §6), implemented by `internal.PaymentNotesReader`: `@PreAuthorize(MEMBERS_VIEW)`, `Propagation.MANDATORY`, opened with `PaymentNoteCipher`. The one documented way personal data leaves the ledger for the reports |
-| `LedgerReadModel` (with `MonthTypeTotals`, `MonthGrouping`, `MonthStatus`, `PlotDebts`, `PaymentRow`, `PaymentFilter`, `CorrectionRow`, `CorrectionKind`, `CorrectionSource`, `CorrectionCause`, `ChargedRow`, `ChargedRowKind`, `ChargedSource` (with `TARIFF` for the water rows), `ChargedPart`, `LossesRunNodeRow`, `LossesRunNodeOutcome`, `CommonConsumerRunLineRow`, `CommonConsumerRunLineOutcome`, `RunStatus`, `CashReceiptData`) | The read facade of the reports (feature 013) and of the documents (feature 016: `cashReceipt`), implemented by `internal.LedgerReportQueries`; see The read model of the reports |
+| `LedgerReadModel` (with `MonthTypeTotals`, `MonthGrouping`, `MonthStatus`, `PlotDebts`, `PaymentRow`, `PaymentFilter`, `CorrectionRow`, `CorrectionKind`, `CorrectionSource`, `CorrectionCause`, `ChargedRow`, `ChargedRowKind`, `ChargedSource` (with `TARIFF` for the water rows), `ChargedPart`, `LossesRunNodeRow`, `LossesRunNodeOutcome`, `CommonConsumerRunLineRow`, `CommonConsumerRunLineOutcome`, `RunStatus`, `CashReceiptData`, `InvoiceLedger`) | The read facade of the reports (feature 013) and of the documents (feature 016: `cashReceipt`, `invoiceLedgers`), implemented by `internal.LedgerReportQueries`; see The read model of the reports |
 
 Everything else is in `internal`.
 
 ## Rules (pure, unit-tested)
+
+- `MonthMovements.of(month, asOf, closedMonths, charges, allocations, payments)` (feature 016, money rules 13): the
+  booking-month rule of an invoice. A charge and a payment count in their own billing month; an allocation or a
+  release in `GREATEST(payment month, charge month, openMonthAt(created_at))` (`countedIn`), `openMonthAt(t)` being the
+  month after the last month closed at or before `t` (none: no bound); rows created after `asOf` never count. Per
+  charge type start (before the month), charged (in it), paid (allocations counted in it) and end; the prepayment at
+  the end (payments booked by then − allocations counted by then, never below 0.00); the later payments (booked after,
+  created by `asOf`, not reversed by then, by day received). A closed month never changes. Tests:
+  `MonthMovementsTests` (worked examples 1-5 of feature 016, the open month, rows after `asOf`, a reversed later
+  payment).
 
 - `BillingCalendar.bookingMonth(date, months, today)`: the month of `date`, never after the current month. Open (or not
   existing yet after the last closed month) -> that month. Closed (months close in order, so a missing month before the
@@ -540,6 +550,22 @@ Methods:
   billing month and service period) and `unallocated` (`amount` minus the placements, `0.00` once reversed). Empty for
   an unknown id, another cooperative's payment and a reversal row. No payer note (`PaymentNotes`). Implemented by
   `internal.CashReceiptQueries` (four small reads). Tests: `documents` `CashReceiptTests`, `ReceiptAccessTests`.
+- `invoiceLedgers(plotIds, month, asOf)` (the invoice of a plot for a billing month, feature 016 §2.3, read by
+  `documents`): per plot one `InvoiceLedger` by the **booking-month rule** (money rules 13, `MonthMovements` below):
+  the month's status as of `asOf` (`CLOSED` only when it was closed by then; null when the month has no row) and its
+  closing time; per charge type with any movement up to the month (`TypeMovement`: start, charged, paid, end); every
+  charge booked in the month (`Line`: kind, the source of the charge or, for a correction, of the charge it corrects,
+  amount, service period, `corrects` = the billing month of the charge a reversal or an adjustment corrects when it is
+  earlier, and the stored `calculation` copied as codes and plain decimals: the parts' basis, frequency, quantity,
+  unit, rate, days and dates, the readings' meter, day and value, `lossesPercent`, `consumption`, `consumerName`); the
+  prepayment at the end of the month; and the payments booked after it, created by `asOf` and not reversed by then
+  (`LaterPayment`). Only rows created at or before `asOf` count, so a caller reading every plot of a build with one
+  `asOf` inside one `REPEATABLE READ` transaction gets one consistent picture. Implemented by
+  `internal.InvoiceLedgerQueries`: three parameterised native queries per call (the billing months; the plots' charges
+  booked in or before the month with the target of each correction; the plots' payments and allocations as one
+  `UNION ALL` with the billing months of each allocation's payment and charge), plots 500 per `IN` list; the caller
+  passes a bounded number of plots (a chunk of a build). Tests: `MonthMovementsTests` (pure, the worked examples 1-5),
+  `documents` `InvoiceOnRequestTests` (example 5 end to end, a closed month against `debtsAsOf` of its last day).
 - `lossesRunsInRange(from, to)` and `commonConsumerRunsInRange(from, to)` (money rules 6.6, 6.7): the nodes of every
   losses run (`LossesRunNodeRow`) and the consumers of every common consumer run (`CommonConsumerRunLineRow`) whose
   range overlaps `from`..`to`, as booked (`losses_run_node`, `common_consumer_run_line`: outcome, consumption, children,

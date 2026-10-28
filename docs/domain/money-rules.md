@@ -791,3 +791,63 @@ expected and charged amount for the plot. If a second version of 40.00 starts on
 40.00 version for 169 days gives 10.32 + 5 x 20.00 = 110.32 (10.32 is 20.00 x 16/31 for 16-31 July). The expected amount
 is 113.47 + 110.32 = 223.79 over 365 days; the report shows the two shares as rows and no rate for the plot
 (`SEVERAL_RATES`).
+
+## 13. Invoices and certificates («Рахунки та довідки»)
+
+Feature 016. An invoice is one plot and one billing month; it adds no money rule of its own. Its figures come from the
+ledger through `ledger.LedgerReadModel#invoiceLedgers` and the **booking-month rule** (`ledger/internal/MonthMovements`,
+pure):
+
+- A charge (of any kind: regular, reversal, adjustment, opening balance) and a payment (or a payment reversal) count in
+  their own billing month (3.1).
+- An allocation or a release (7) counts in `GREATEST(payment's month, charge's month, openMonthAt(created_at))`, where
+  `openMonthAt(t)` is the month after the last month closed at or before `t` (no bound when nothing was closed by then).
+  A November payment placed on an October charge counts in November; an October payment placed on a September debt
+  counts in October; a placement made after October was closed counts in November at the earliest.
+- Only rows created at or before the moment of the invoice (`asOf`) count.
+
+Which balance each number of the invoice is, per charge type:
+
+| Number | Rule |
+|---|---|
+| Debt at the start of the month | charges booked before the month − allocations counted before it |
+| Charged in the month | charges booked in the month (regular charges, adjustments and reversals with their sign) |
+| Paid in the month | allocations counted in the month (releases negative) |
+| Debt at the end of the month | start + charged − paid |
+| Prepayment («Аванс») | payments booked in or before the month (reversals negative) − allocations counted in or before it, never below 0.00 |
+| Received after the month («Отримано після») | payments booked after the month, received before the invoice and not reversed by then |
+| **«До сплати»** | Σ end debts − Σ received after the month, never below 0.00; the prepayment does not lower it |
+
+A charge type whose four figures are 0.00 and that has no charge in the month is left out; the rows follow the
+cooperative's charge type order. The QR code (`docs/domain/nbu-qr.md`) carries «До сплати» and is printed only when it
+is above 0.00. Exact `Money` sums, nothing rounded (1).
+
+**A closed month never changes.** A charge or a payment is booked only in an open month, and a placement created after
+the month was closed counts in a later month, so every row a closed month counts was created before it was closed;
+the ledger is append-only (3). A correction made later shows up in the invoice of the month it is booked in, with the
+month it corrects. Re-issuing a closed month's invoice gives the same figures (only «Отримано після» can grow). Before
+any later correction, the end debt of a closed month equals the plot's debt (2) as of the month's last day.
+
+The worked examples (plot 9, charge types Membership then Electricity, October 2026, issued 05.11.2026;
+`MonthMovementsTests`, `InvoiceCalculatorTests`):
+
+1. Start 0.00; October membership 75.00 and electricity 338.26; no payments → start 0.00, charged 413.26, paid 0.00,
+   end 413.26, «До сплати» 413.26, QR amount 413.26.
+2. A September electricity debt of 1 135.08; an October payment of 1 500.00 placed on 1 135.08 (September electricity) +
+   75.00 (membership) + 289.92 (October electricity) → start 1 135.08, charged 413.26, paid 1 500.00, end 48.34
+   (electricity), «До сплати» 48.34.
+3. Example 1 and a payment of 413.26 on 03.11 (booked in November) → the end of October is 413.26, «Отримано після
+   жовтня» 413.26, «До сплати» 0.00, no QR block.
+4. No debt at the end of October and a prepayment of 100.00 → «До сплати» 0.00, «Аванс 100,00 ₴», no QR block.
+5. October is closed on 03.11. On 06.11 a recalculation lowers an October charge by 20.00 (an adjustment booked in
+   November, 5.4) and releases the 20.00 paid on it. The release is created after the closing, so it counts in
+   November: the October invoice issued on 05.11 and re-issued on 07.11 has the same numbers (electricity 0.00 /
+   338.26 / 338.26 / 0.00). The November invoice shows the −20.00 adjustment «за жовтень 2026» in its charged column
+   and the release −20.00 in its paid column; the 20.00 becomes the November prepayment.
+
+**Versions.** Every issued version is stored (`invoice`, append-only) with a snapshot of every number and name it
+prints; the PDF is rebuilt from the snapshot and never changes. An on-request invoice is always a new version; the
+number `{YYYY-MM}/{plot number}` is the same for every version.
+
+**Certificates** (feature 016, a later slice): the debt per charge type, the total and the prepayment as of a day are
+the plot balances of 12 (2, by debt date), not the booking-month rule.

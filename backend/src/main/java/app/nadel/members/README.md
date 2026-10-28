@@ -22,6 +22,11 @@ that does not open fails the call with 500 `PERSONAL_DATA_UNREADABLE`, never an 
 implementation is `JpaMemberDirectory` (internal); `plots` uses it for owners (feature 007). Feature 005 (import) will
 add more lookups here.
 
+`RoleHolders` (feature 016, implemented by `JpaRoleHolders`): `activeHolders(baseRoleCode)` returns the active (not
+archived) members who hold the base role with the code (`CHAIRMAN`, `TREASURER`, `MEMBER`) as `MemberRef`, in name
+order (last, first, middle name, then id); a custom role never counts. It runs in the caller's transaction
+(`MANDATORY`, RLS). The invoice prints the chairman's and the treasurer's names with it (sealed in its snapshot).
+
 `MemberImport` (feature 008) is what the Excel import may ask of this module: `plan(tenantId, importId, rows)` (the
 transaction is mandatory, nothing is saved) returns one `MemberImportItem` per `MemberImportRow` in the same order:
 `NEW` / `UPDATE` / `UNCHANGED`, the member id (an existing member, or for a new one

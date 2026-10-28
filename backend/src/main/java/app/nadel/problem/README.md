@@ -1,7 +1,9 @@
 # problem
 
 Every error the API returns is `application/problem+json` (RFC 9457) in the shape of the `Problem` schema of
-`api/openapi.yaml`: `type`, `title`, `status`, `detail`, a stable `code` and optional `errors[{field, code, message}]`.
+`api/openapi.yaml`: `type`, `title`, `status`, `detail`, a stable `code`, optional `errors[{field, code, message}]` and,
+only for `REQUISITES_MISSING` (feature 016), `missing` (the codes of the requisites that are not set: `IBAN`, `EDRPOU`;
+built with `ApiProblemException.requisitesMissing(missing)`).
 Texts are fixed English sentences and never contain personal data, exception messages or SQL.
 
 ## Public API

@@ -52,17 +52,17 @@ class RolesTests extends IntegrationTest {
     private record BaseRoleSeed(String code, String name, String description, List<String> permissions) {
     }
 
-    /** What {@code seed_base_roles} (V2, V7, V10, V12, V13, V19, V20, V27) writes for the demo cooperative. */
+    /** What {@code seed_base_roles} (V2, V7, V10, V12, V13, V19, V20, V27, V28) writes for the demo cooperative. */
     private static final List<BaseRoleSeed> SEEDED_BASE_ROLES = List.of(
             new BaseRoleSeed("CHAIRMAN", "Chairman", "Full access", List.of("MEMBERS_VIEW", "MEMBERS_EDIT",
                     "ROLES_MANAGE", "AUDIT_VIEW", "PLOTS_VIEW", "PLOTS_EDIT", "OWNERSHIP_EDIT", "IMPORT_RUN",
                     "SETTINGS_MANAGE", "TARIFFS_VIEW", "TARIFFS_MANAGE", "METERS_VIEW", "METERS_MANAGE",
                     "READINGS_ENTER", "READINGS_APPROVE", "CHARGES_VIEW", "CHARGES_RUN", "CHARGES_REVERSE",
                     "PERIODS_CLOSE", "RECALCULATION_RUN", "REPORTS_VIEW", "REPORT_TEMPLATES_MANAGE", "PAYMENTS_VIEW",
-                    "PAYMENTS_ENTER", "PAYMENTS_REVERSE")),
+                    "PAYMENTS_ENTER", "PAYMENTS_REVERSE", "INVOICES_ISSUE", "CERTIFICATES_ISSUE")),
             new BaseRoleSeed("TREASURER", "Treasurer", "Read access to members, plots and audit",
                     List.of("MEMBERS_VIEW", "PLOTS_VIEW", "AUDIT_VIEW", "TARIFFS_VIEW", "METERS_VIEW",
-                            "CHARGES_VIEW", "REPORTS_VIEW", "PAYMENTS_VIEW", "PAYMENTS_ENTER")),
+                            "CHARGES_VIEW", "REPORTS_VIEW", "PAYMENTS_VIEW", "PAYMENTS_ENTER", "INVOICES_ISSUE")),
             new BaseRoleSeed("MEMBER", "Member", "Own data only", List.of()));
 
     private final List<UUID> createdRoles = new ArrayList<>();
@@ -122,17 +122,17 @@ class RolesTests extends IntegrationTest {
     // ---- permission: allowed, denied, 401 -----------------------------------------------------------------------
 
     @Test
-    void holderOfRolesManageListsTheTwentyFivePermissionsInOrder() throws Exception {
+    void holderOfRolesManageListsTheTwentySevenPermissionsInOrder() throws Exception {
         send(chairman(), get("/api/v1/permissions"), null)
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$", hasSize(25)))
+                .andExpect(jsonPath("$", hasSize(27)))
                 .andExpect(jsonPath("$[*].code", contains("MEMBERS_VIEW", "MEMBERS_EDIT", "ROLES_MANAGE", "AUDIT_VIEW",
                         "PLOTS_VIEW", "PLOTS_EDIT", "OWNERSHIP_EDIT", "IMPORT_RUN", "SETTINGS_MANAGE", "TARIFFS_VIEW",
                         "TARIFFS_MANAGE", "METERS_VIEW", "METERS_MANAGE", "READINGS_ENTER", "READINGS_APPROVE",
                         "CHARGES_VIEW", "CHARGES_RUN", "CHARGES_REVERSE", "PERIODS_CLOSE", "RECALCULATION_RUN",
                         "REPORTS_VIEW", "REPORT_TEMPLATES_MANAGE", "PAYMENTS_VIEW", "PAYMENTS_ENTER",
-                        "PAYMENTS_REVERSE")))
+                        "PAYMENTS_REVERSE", "INVOICES_ISSUE", "CERTIFICATES_ISSUE")))
                 .andExpect(jsonPath("$[0].name").value("View members"))
                 .andExpect(jsonPath("$[0].description").isNotEmpty());
     }
@@ -191,10 +191,11 @@ class RolesTests extends IntegrationTest {
 
         assertThat(roles.get(0).get("name").asString()).isEqualTo("Chairman");
         assertThat(roles.get(0).get("baseCode").asString()).isEqualTo("CHAIRMAN");
-        assertThat(roles.get(0).get("permissions")).hasSize(25);
+        assertThat(roles.get(0).get("permissions")).hasSize(27);
         assertThat(roles.get(1).get("baseCode").asString()).isEqualTo("TREASURER");
         assertThat(texts(roles.get(1).get("permissions"))).containsExactly("MEMBERS_VIEW", "AUDIT_VIEW", "PLOTS_VIEW",
-                "TARIFFS_VIEW", "METERS_VIEW", "CHARGES_VIEW", "REPORTS_VIEW", "PAYMENTS_VIEW", "PAYMENTS_ENTER");
+                "TARIFFS_VIEW", "METERS_VIEW", "CHARGES_VIEW", "REPORTS_VIEW", "PAYMENTS_VIEW", "PAYMENTS_ENTER",
+                "INVOICES_ISSUE");
         assertThat(roles.get(2).get("baseCode").asString()).isEqualTo("MEMBER");
         assertThat(roles.get(2).get("permissions")).isEmpty();
         assertThat(roles.get(0).get("memberCount").asInt()).isGreaterThanOrEqualTo(1);
@@ -979,18 +980,18 @@ class RolesTests extends IntegrationTest {
         send(chairman(), put("/api/v1/roles/" + chairman), roleBody("Голова", "MEMBERS_VIEW"))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("BASE_ROLE_IMMUTABLE"));
         assertThat(roleName(chairman)).isEqualTo("Chairman");
-        assertThat(storedPermissions(chairman)).hasSize(25);
+        assertThat(storedPermissions(chairman)).hasSize(27);
 
         send(chairman(), put("/api/v1/roles/" + chairman), seedBody("CHAIRMAN", "Голова"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("Голова"))
                 .andExpect(jsonPath("$.nameCustomized").value(true))
-                .andExpect(jsonPath("$.permissions", hasSize(25)));
+                .andExpect(jsonPath("$.permissions", hasSize(27)));
 
         assertThat(roleName(chairman)).isEqualTo("Голова");
-        assertThat(storedPermissions(chairman)).hasSize(25);
+        assertThat(storedPermissions(chairman)).hasSize(27);
         send(chairman(), get("/api/v1/me"), null)
-                .andExpect(jsonPath("$.permissions", hasSize(25))); // the system logic keeps using baseCode
+                .andExpect(jsonPath("$.permissions", hasSize(27))); // the system logic keeps using baseCode
     }
 
     @Test
@@ -1004,9 +1005,9 @@ class RolesTests extends IntegrationTest {
         send(chairman(), put("/api/v1/roles/" + chairman), unchanged)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.baseCode").value("CHAIRMAN"))
-                .andExpect(jsonPath("$.permissions", hasSize(25)));
+                .andExpect(jsonPath("$.permissions", hasSize(27)));
 
-        assertThat(storedPermissions(chairman)).hasSize(25);
+        assertThat(storedPermissions(chairman)).hasSize(27);
         Thread.sleep(500); // an event, if one were published, would be written within this time
         assertThat(auditCountForRole(chairman)).isEqualTo(before);
     }
@@ -1177,7 +1178,7 @@ class RolesTests extends IntegrationTest {
         send(token, get("/api/v1/me"), null).andExpect(status().isOk())
                 .andExpect(jsonPath("$.permissions", containsInAnyOrder("MEMBERS_VIEW", "PLOTS_VIEW", "AUDIT_VIEW",
                         "TARIFFS_VIEW", "METERS_VIEW", "CHARGES_VIEW", "REPORTS_VIEW", "PAYMENTS_VIEW",
-                        "PAYMENTS_ENTER", "MEMBERS_EDIT")));
+                        "PAYMENTS_ENTER", "INVOICES_ISSUE", "MEMBERS_EDIT")));
         send(token, get("/api/v1/audit?size=1"), null).andExpect(status().isOk());          // from Treasurer
         send(token, post("/api/v1/members/" + member + "/restore"), null).andExpect(status().isOk()); // from Editor
         send(token, get("/api/v1/roles"), null).andExpect(status().isForbidden());           // neither has it
@@ -1263,7 +1264,7 @@ class RolesTests extends IntegrationTest {
                 "OWNERSHIP_EDIT", "IMPORT_RUN", "SETTINGS_MANAGE", "TARIFFS_VIEW", "TARIFFS_MANAGE", "METERS_VIEW",
                 "METERS_MANAGE", "READINGS_ENTER", "READINGS_APPROVE", "CHARGES_VIEW", "CHARGES_RUN", "CHARGES_REVERSE",
                 "PERIODS_CLOSE", "RECALCULATION_RUN", "REPORTS_VIEW", "REPORT_TEMPLATES_MANAGE", "PAYMENTS_VIEW",
-                "PAYMENTS_ENTER", "PAYMENTS_REVERSE"};
+                "PAYMENTS_ENTER", "PAYMENTS_REVERSE", "INVOICES_ISSUE", "CERTIFICATES_ISSUE"};
     }
 
     private static Map<String, Object> roleBody(String name, String... permissions) {

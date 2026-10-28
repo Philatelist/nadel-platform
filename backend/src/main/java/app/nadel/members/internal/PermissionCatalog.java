@@ -58,6 +58,10 @@ final class PermissionCatalog {
             case PAYMENTS_ENTER -> new String[] {"Enter payments",
                     "Enter cash and bank payments, split them over plots, reallocate them and allocate prepayment"};
             case PAYMENTS_REVERSE -> new String[] {"Reverse payments", "Reverse a payment with a reason"};
+            case INVOICES_ISSUE -> new String[] {"Issue invoices",
+                    "Build, re-issue and print the invoices of plots with the payment QR code"};
+            case CERTIFICATES_ISSUE -> new String[] {"Issue certificates",
+                    "Issue and annul debt certificates of plots"};
         };
         return new PermissionInfo(nadel.contract.model.Permission.fromValue(permission.name()), text[0], text[1]);
     }

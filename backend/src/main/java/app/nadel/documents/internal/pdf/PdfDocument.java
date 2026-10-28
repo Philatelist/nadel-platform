@@ -217,6 +217,45 @@ public final class PdfDocument implements AutoCloseable {
         y -= Math.min(fontSize * 0.4f, remaining());
     }
 
+    /**
+     * What a {@link #drawing} draws: shapes on the page's content stream in the box it is given (PDF points, the
+     * origin at the lower left of the page).
+     */
+    @FunctionalInterface
+    public interface Drawing {
+
+        /**
+         * Draws in the box.
+         *
+         * @param content the content stream of the page
+         * @param left    the left edge of the box (the left margin)
+         * @param bottom  the bottom edge of the box
+         * @param width   the width of the box (the width between the margins)
+         * @param height  the height of the box, as asked
+         */
+        void draw(PDPageContentStream content, float left, float bottom, float width, float height)
+                throws IOException;
+    }
+
+    /**
+     * A box of the given height across the page under the cursor, drawn by the caller (for example the payment QR
+     * code of an invoice); a box that does not fit goes to a new page. The cursor moves below it.
+     *
+     * @throws IllegalArgumentException when the height is not above zero or more than a page holds
+     */
+    public void drawing(float height, Drawing drawing) {
+        Objects.requireNonNull(drawing, "drawing");
+        if (height <= 0 || height > size.height() - 2 * size.margin) {
+            throw new IllegalArgumentException("A drawing is above zero and at most a page high");
+        }
+        if (height > remaining()) {
+            newPage();
+        }
+        float bottom = y - height;
+        io(() -> drawing.draw(content, size.margin, bottom, contentWidth(), height));
+        y = bottom;
+    }
+
     /** A table; a row that does not fit goes to a new page, where the header is repeated. */
     public void table(Table table) {
         float total = (float) table.columns().stream().mapToDouble(Column::weight).sum();

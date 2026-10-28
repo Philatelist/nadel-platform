@@ -12,7 +12,7 @@ Table `tenant_data_key` (V21). No endpoints. Depends on `tenancy` (`TenantContex
 |---|---|
 | `PersonalDataCipher` | Runtime use inside a cooperative's transaction: `encrypt(tenantId, FieldRef, plaintext)`, `decrypt(tenantId, FieldRef, sealed)`, `blindIndex(tenantId, IndexKind, normalised)`. Refuses (`IllegalStateException`) a `tenantId` that is not `TenantContext.currentTenantId()` |
 | `FieldRef(table, column, rowId)` | The place of a value, the associated data of its encryption. Names match `[a-z_.]+` (never `|`); a JSON path such as `changes.email.old` is a column name |
-| `IndexKind` | `EMAIL`, `PHONE`, `PHONE_LAST4`; part of the HMAC input, so kinds never collide |
+| `IndexKind` | `EMAIL`, `PHONE`, `PHONE_LAST4`, `DOCUMENT_CONTENT` (feature 016: the content hash of an invoice snapshot's canonical form, names in plaintext, so a change is detected without a hash of plaintext names); part of the HMAC input, so kinds never collide |
 | `OwnerKeyring` | Owner-side work on Flyway's connection (Java migrations, callbacks): `open(connection).forTenant(tenantId)` gives `encrypt`/`decrypt`/`blindIndex` with the same formats; creates a missing key on that connection, inside the caller's transaction. Depends only on the master keys, never on JPA |
 | `PersonalDataUnreadableException` | A value or key that does not open: 500 `PERSONAL_DATA_UNREADABLE`, message without values. Callers never turn it into an empty field, which a later save would write back |
 

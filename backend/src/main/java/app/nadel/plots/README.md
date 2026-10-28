@@ -58,6 +58,8 @@ checks its permissions; the member visibility rules of the plots endpoints are n
   `valid_to` null; ended ownerships are not counted) and `currentOwnerIds(plotIds)` (their member ids, the earliest
   start first, then member id). Every distinct id asked is a key (0 or an empty list when there is no current owner or
   the plot is unknown). No names: a report that may show names asks `members.MemberDirectory.contacts`.
+  `currentOwnerShares(plotIds)` (feature 016: the invoice prints the owners with their shares) gives the same current
+  owners in the same order as `OwnerShare(memberId, numerator, denominator)`, the share as stored.
 - `PlotStatuses` (`JpaPlotStatuses`) with the public enum `PlotStatus` (`RED`, `YELLOW`, `GREEN`, `GREY`; the
   internal `PlotStatusCode` maps to it by name): `current(plotIds)` is the status on the map today (the `plot_status`
   cache, current owners, current thresholds and today, see Status); `classify(debts, asOf)` applies the same

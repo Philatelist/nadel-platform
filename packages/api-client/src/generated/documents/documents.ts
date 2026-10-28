@@ -10,23 +10,34 @@
  * OpenAPI spec version: 0.1.0
  */
 import {
+  useMutation,
   useQuery
 } from '@tanstack/react-query';
 import type {
   DataTag,
   DefinedInitialDataOptions,
   DefinedUseQueryResult,
+  MutationFunction,
   QueryClient,
   QueryFunction,
   QueryKey,
   UndefinedInitialDataOptions,
+  UseMutationOptions,
+  UseMutationResult,
   UseQueryOptions,
   UseQueryResult
 } from '@tanstack/react-query';
 
 import type {
+  BadRequestResponse,
   ConflictResponse,
   ForbiddenResponse,
+  InvoicePage,
+  InvoiceReadiness,
+  InvoiceRow,
+  InvoiceSnapshot,
+  IssueInvoiceRequest,
+  ListInvoicesParams,
   NotFoundResponse,
   UnauthorizedResponse
 } from '../model';
@@ -151,6 +162,638 @@ export function useGetPaymentReceiptPdf<TData = Awaited<ReturnType<typeof getPay
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getGetPaymentReceiptPdfQueryOptions(id,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export const getIssuePlotInvoiceUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/plots/${id}/invoices`
+}
+
+/**
+ * Builds the invoice of one plot for one billing month as of now (feature 016 §2.6, «Рахунок на сьогодні») and
+ * stores it as a new version: the number is `{YYYY-MM}/{plot number}` (for example `2026-10/9`) and stays the
+ * same for every version of the plot and month; the version is one more than the latest one (1 for the first).
+ * An on-request invoice is always a new version, even when nothing changed. The figures follow the booking-month
+ * rule (`docs/domain/money-rules.md`, «Рахунки та довідки»): the debt at the start of the month, what was charged
+ * and paid in the month per charge type, the debt at the end of the month, the prepayment, the payments booked
+ * after the month and received by now, and «До сплати» (the end debt minus those payments, never below 0.00).
+ * A closed month always gives the same figures. The stored snapshot keeps every number and name the PDF shows
+ * (the owners' names, the chairman's and the treasurer's are sealed), so the PDF of a version never changes. The
+ * re-issue is written to the audit log as `INVOICE_REISSUED`.
+ *
+ * `month` defaults to the current month (today in Europe/Kyiv); a month after it is 400 `VALIDATION_FAILED`
+ * with `errors[{field: month, code: INVALID}]`. 404 `PLOT_NOT_FOUND` for an unknown plot or one of another
+ * cooperative; 409 `REQUISITES_MISSING` with `missing` (`IBAN`, `EDRPOU`) when the cooperative's IBAN or
+ * ЄДРПОУ is not set (nothing is built); 409 `PLOT_NOT_INVOICEABLE` for common land, an archived plot or a plot
+ * without a current owner. Requires `INVOICES_ISSUE`.
+ * @summary Issue the invoice of a plot for a billing month now (on request)
+ */
+export const issuePlotInvoice = async (id: string,
+    issueInvoiceRequest?: IssueInvoiceRequest, options?: Parameters<typeof nadelFetch>[1]): Promise<InvoiceRow> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return nadelFetch<InvoiceRow>(getIssuePlotInvoiceUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(issueInvoiceRequest)
+  }
+);}
+
+
+
+
+
+export const getIssuePlotInvoiceMutationKey = () => ['issuePlotInvoice'] as const;
+
+export const getIssuePlotInvoiceMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof issuePlotInvoice>>, TError,IssuePlotInvoiceMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof issuePlotInvoice>>, TError,IssuePlotInvoiceMutationVariables, TContext> => {
+
+const mutationKey = getIssuePlotInvoiceMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof issuePlotInvoice>>, IssuePlotInvoiceMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  issuePlotInvoice(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type IssuePlotInvoiceMutationResult = NonNullable<Awaited<ReturnType<typeof issuePlotInvoice>>>
+    export type IssuePlotInvoiceMutationBody = IssueInvoiceRequest | undefined
+    export type IssuePlotInvoiceMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse
+    export type IssuePlotInvoiceMutationVariables = {id: string;data?: IssueInvoiceRequest}
+
+    /**
+ * @summary Issue the invoice of a plot for a billing month now (on request)
+ */
+export const useIssuePlotInvoice = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof issuePlotInvoice>>, TError,IssuePlotInvoiceMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof issuePlotInvoice>>,
+        TError,
+        IssuePlotInvoiceMutationVariables,
+        TContext
+      > => {
+      return useMutation(getIssuePlotInvoiceMutationOptions(options), queryClient);
+    }
+    export const getListInvoicesUrl = (params?: ListInvoicesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/v1/invoices?${stringifiedParams}` : `/api/v1/invoices`
+}
+
+/**
+ * A page of issued invoice versions, every version listed (older versions stay readable), newest month first,
+ * then the newest issue, then the number, then the newest version. `latest` marks the latest version of each
+ * plot and month. Both filters are optional and combine. Requires `CHARGES_VIEW`.
+ * @summary The issued invoices of the cooperative
+ */
+export const listInvoices = async (params?: ListInvoicesParams, options?: Parameters<typeof nadelFetch>[1]): Promise<InvoicePage> => {
+
+  return nadelFetch<InvoicePage>(getListInvoicesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListInvoicesQueryKey = (params?: ListInvoicesParams,) => {
+    return [
+    `/api/v1/invoices`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListInvoicesQueryOptions = <TData = Awaited<ReturnType<typeof listInvoices>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>(params?: ListInvoicesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listInvoices>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListInvoicesQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listInvoices>>> = ({ signal }) => listInvoices(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listInvoices>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListInvoicesQueryResult = NonNullable<Awaited<ReturnType<typeof listInvoices>>>
+export type ListInvoicesQueryError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse
+
+
+export function useListInvoices<TData = Awaited<ReturnType<typeof listInvoices>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>(
+ params: undefined |  ListInvoicesParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listInvoices>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listInvoices>>,
+          TError,
+          Awaited<ReturnType<typeof listInvoices>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListInvoices<TData = Awaited<ReturnType<typeof listInvoices>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>(
+ params?: ListInvoicesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listInvoices>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listInvoices>>,
+          TError,
+          Awaited<ReturnType<typeof listInvoices>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListInvoices<TData = Awaited<ReturnType<typeof listInvoices>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>(
+ params?: ListInvoicesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listInvoices>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary The issued invoices of the cooperative
+ */
+
+export function useListInvoices<TData = Awaited<ReturnType<typeof listInvoices>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>(
+ params?: ListInvoicesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listInvoices>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListInvoicesQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export const getGetInvoiceReadinessUrl = () => {
+
+
+
+
+  return `/api/v1/invoices/readiness`
+}
+
+/**
+ * The requisites an invoice needs that are not set yet (feature 016 §2.2): `IBAN` (Settings → Requisites) and
+ * `EDRPOU` (set by the platform operator). An empty list means invoices can be built. The web shows a warning
+ * banner on the invoice screens and on Settings → Requisites while the list is not empty. Requires
+ * `CHARGES_VIEW`.
+ * @summary Whether invoices can be built
+ */
+export const getInvoiceReadiness = async ( options?: Parameters<typeof nadelFetch>[1]): Promise<InvoiceReadiness> => {
+
+  return nadelFetch<InvoiceReadiness>(getGetInvoiceReadinessUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetInvoiceReadinessQueryKey = () => {
+    return [
+    `/api/v1/invoices/readiness`
+    ] as const;
+    }
+
+
+export const getGetInvoiceReadinessQueryOptions = <TData = Awaited<ReturnType<typeof getInvoiceReadiness>>, TError = UnauthorizedResponse | ForbiddenResponse>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getInvoiceReadiness>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetInvoiceReadinessQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getInvoiceReadiness>>> = ({ signal }) => getInvoiceReadiness({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getInvoiceReadiness>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetInvoiceReadinessQueryResult = NonNullable<Awaited<ReturnType<typeof getInvoiceReadiness>>>
+export type GetInvoiceReadinessQueryError = UnauthorizedResponse | ForbiddenResponse
+
+
+export function useGetInvoiceReadiness<TData = Awaited<ReturnType<typeof getInvoiceReadiness>>, TError = UnauthorizedResponse | ForbiddenResponse>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getInvoiceReadiness>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getInvoiceReadiness>>,
+          TError,
+          Awaited<ReturnType<typeof getInvoiceReadiness>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetInvoiceReadiness<TData = Awaited<ReturnType<typeof getInvoiceReadiness>>, TError = UnauthorizedResponse | ForbiddenResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getInvoiceReadiness>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getInvoiceReadiness>>,
+          TError,
+          Awaited<ReturnType<typeof getInvoiceReadiness>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetInvoiceReadiness<TData = Awaited<ReturnType<typeof getInvoiceReadiness>>, TError = UnauthorizedResponse | ForbiddenResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getInvoiceReadiness>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Whether invoices can be built
+ */
+
+export function useGetInvoiceReadiness<TData = Awaited<ReturnType<typeof getInvoiceReadiness>>, TError = UnauthorizedResponse | ForbiddenResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getInvoiceReadiness>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetInvoiceReadinessQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export const getGetInvoiceUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/invoices/${id}`
+}
+
+/**
+ * The snapshot of an invoice version: every number and name its PDF shows, as stored when it was issued (the
+ * owners as they were then, even after a change of owner). Amounts are strings with two decimals. Requires
+ * `CHARGES_VIEW`, or the caller is a current owner of the invoice's plot and the version is the latest one of
+ * its plot and month. Anything else (an unknown id, another cooperative's invoice, another plot's invoice, an
+ * older version for a member) is the same 404 `NOT_FOUND`; a caller with neither the permission nor a plot of
+ * their own is 403.
+ * @summary One invoice version as stored
+ */
+export const getInvoice = async (id: string, options?: Parameters<typeof nadelFetch>[1]): Promise<InvoiceSnapshot> => {
+
+  return nadelFetch<InvoiceSnapshot>(getGetInvoiceUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetInvoiceQueryKey = (id: string,) => {
+    return [
+    `/api/v1/invoices/${id}`
+    ] as const;
+    }
+
+
+export const getGetInvoiceQueryOptions = <TData = Awaited<ReturnType<typeof getInvoice>>, TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getInvoice>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetInvoiceQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getInvoice>>> = ({ signal }) => getInvoice(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getInvoice>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetInvoiceQueryResult = NonNullable<Awaited<ReturnType<typeof getInvoice>>>
+export type GetInvoiceQueryError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse
+
+
+export function useGetInvoice<TData = Awaited<ReturnType<typeof getInvoice>>, TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getInvoice>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getInvoice>>,
+          TError,
+          Awaited<ReturnType<typeof getInvoice>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetInvoice<TData = Awaited<ReturnType<typeof getInvoice>>, TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getInvoice>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getInvoice>>,
+          TError,
+          Awaited<ReturnType<typeof getInvoice>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetInvoice<TData = Awaited<ReturnType<typeof getInvoice>>, TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getInvoice>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary One invoice version as stored
+ */
+
+export function useGetInvoice<TData = Awaited<ReturnType<typeof getInvoice>>, TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getInvoice>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetInvoiceQueryOptions(id,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export const getGetInvoicePdfUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/invoices/${id}/pdf`
+}
+
+/**
+ * The invoice (A4, Ukrainian) rendered from its stored snapshot: the requisites, «Рахунок № {number}» with
+ * «(версія N)» from the second version on, the plot and its owners with their shares, the table per charge type
+ * (start, charged, paid, end) with the details of the charges, «Отримано після {місяць}», the totals with
+ * «До сплати», the NBU payment QR code (only when something is due) and the footer. The file is not stored: the
+ * same version always gives the same bytes. Who may download it: as `getInvoice` (404 `NOT_FOUND` otherwise).
+ * @summary One invoice version as a PDF file
+ */
+export const getInvoicePdf = async (id: string, options?: Parameters<typeof nadelFetch>[1]): Promise<Blob> => {
+
+  return nadelFetch<Blob>(getGetInvoicePdfUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetInvoicePdfQueryKey = (id: string,) => {
+    return [
+    `/api/v1/invoices/${id}/pdf`
+    ] as const;
+    }
+
+
+export const getGetInvoicePdfQueryOptions = <TData = Awaited<ReturnType<typeof getInvoicePdf>>, TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getInvoicePdf>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetInvoicePdfQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getInvoicePdf>>> = ({ signal }) => getInvoicePdf(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getInvoicePdf>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetInvoicePdfQueryResult = NonNullable<Awaited<ReturnType<typeof getInvoicePdf>>>
+export type GetInvoicePdfQueryError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse
+
+
+export function useGetInvoicePdf<TData = Awaited<ReturnType<typeof getInvoicePdf>>, TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getInvoicePdf>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getInvoicePdf>>,
+          TError,
+          Awaited<ReturnType<typeof getInvoicePdf>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetInvoicePdf<TData = Awaited<ReturnType<typeof getInvoicePdf>>, TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getInvoicePdf>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getInvoicePdf>>,
+          TError,
+          Awaited<ReturnType<typeof getInvoicePdf>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetInvoicePdf<TData = Awaited<ReturnType<typeof getInvoicePdf>>, TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getInvoicePdf>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary One invoice version as a PDF file
+ */
+
+export function useGetInvoicePdf<TData = Awaited<ReturnType<typeof getInvoicePdf>>, TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getInvoicePdf>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetInvoicePdfQueryOptions(id,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export const getGetInvoiceQrPngUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/invoices/${id}/qr.png`
+}
+
+/**
+ * The QR code of the stored link of the invoice version (NBU Resolution No. 97, format 003; 8 pixels per
+ * module, the quiet zone, the background circle and the hryvnia sign). An invoice with nothing due has no QR
+ * code: 404 `NOT_FOUND`. Who may download it: as `getInvoice`.
+ * @summary The NBU payment QR code of an invoice version as a PNG image
+ */
+export const getInvoiceQrPng = async (id: string, options?: Parameters<typeof nadelFetch>[1]): Promise<Blob> => {
+
+  return nadelFetch<Blob>(getGetInvoiceQrPngUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetInvoiceQrPngQueryKey = (id: string,) => {
+    return [
+    `/api/v1/invoices/${id}/qr.png`
+    ] as const;
+    }
+
+
+export const getGetInvoiceQrPngQueryOptions = <TData = Awaited<ReturnType<typeof getInvoiceQrPng>>, TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getInvoiceQrPng>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetInvoiceQrPngQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getInvoiceQrPng>>> = ({ signal }) => getInvoiceQrPng(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getInvoiceQrPng>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetInvoiceQrPngQueryResult = NonNullable<Awaited<ReturnType<typeof getInvoiceQrPng>>>
+export type GetInvoiceQrPngQueryError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse
+
+
+export function useGetInvoiceQrPng<TData = Awaited<ReturnType<typeof getInvoiceQrPng>>, TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getInvoiceQrPng>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getInvoiceQrPng>>,
+          TError,
+          Awaited<ReturnType<typeof getInvoiceQrPng>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetInvoiceQrPng<TData = Awaited<ReturnType<typeof getInvoiceQrPng>>, TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getInvoiceQrPng>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getInvoiceQrPng>>,
+          TError,
+          Awaited<ReturnType<typeof getInvoiceQrPng>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetInvoiceQrPng<TData = Awaited<ReturnType<typeof getInvoiceQrPng>>, TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getInvoiceQrPng>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary The NBU payment QR code of an invoice version as a PNG image
+ */
+
+export function useGetInvoiceQrPng<TData = Awaited<ReturnType<typeof getInvoiceQrPng>>, TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getInvoiceQrPng>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetInvoiceQrPngQueryOptions(id,options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 

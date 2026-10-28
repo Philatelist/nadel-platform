@@ -72,8 +72,8 @@ tags:
       slot, their versions and their archive
   - name: documents
     description: >-
-      Documents the app prints as PDF files from what it has booked (cash receipts; later invoices and debt
-      certificates)
+      Documents the app prints as PDF files from what it has booked: cash receipts and invoices with the NBU payment
+      QR code (debt certificates follow)
 
 paths:
   /me:
@@ -3233,6 +3233,234 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
 
+  /plots/{id}/invoices:
+    post:
+      tags: [documents]
+      operationId: issuePlotInvoice
+      summary: Issue the invoice of a plot for a billing month now (on request)
+      description: |
+        Builds the invoice of one plot for one billing month as of now (feature 016 §2.6, «Рахунок на сьогодні») and
+        stores it as a new version: the number is `{YYYY-MM}/{plot number}` (for example `2026-10/9`) and stays the
+        same for every version of the plot and month; the version is one more than the latest one (1 for the first).
+        An on-request invoice is always a new version, even when nothing changed. The figures follow the booking-month
+        rule (`docs/domain/money-rules.md`, «Рахунки та довідки»): the debt at the start of the month, what was charged
+        and paid in the month per charge type, the debt at the end of the month, the prepayment, the payments booked
+        after the month and received by now, and «До сплати» (the end debt minus those payments, never below 0.00).
+        A closed month always gives the same figures. The stored snapshot keeps every number and name the PDF shows
+        (the owners' names, the chairman's and the treasurer's are sealed), so the PDF of a version never changes. The
+        re-issue is written to the audit log as `INVOICE_REISSUED`.
+
+        `month` defaults to the current month (today in Europe/Kyiv); a month after it is 400 `VALIDATION_FAILED`
+        with `errors[{field: month, code: INVALID}]`. 404 `PLOT_NOT_FOUND` for an unknown plot or one of another
+        cooperative; 409 `REQUISITES_MISSING` with `missing` (`IBAN`, `EDRPOU`) when the cooperative's IBAN or
+        ЄДРПОУ is not set (nothing is built); 409 `PLOT_NOT_INVOICEABLE` for common land, an archived plot or a plot
+        without a current owner. Requires `INVOICES_ISSUE`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IssueInvoiceRequest'
+      responses:
+        '201':
+          description: The new invoice version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceRow'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /invoices:
+    get:
+      tags: [documents]
+      operationId: listInvoices
+      summary: The issued invoices of the cooperative
+      description: |
+        A page of issued invoice versions, every version listed (older versions stay readable), newest month first,
+        then the newest issue, then the number, then the newest version. `latest` marks the latest version of each
+        plot and month. Both filters are optional and combine. Requires `CHARGES_VIEW`.
+      parameters:
+        - name: month
+          in: query
+          required: false
+          description: Only the invoices of this billing month, `YYYY-MM`
+          schema:
+            type: string
+            pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+        - name: plotId
+          in: query
+          required: false
+          description: Only the invoices of this plot
+          schema:
+            type: string
+            format: uuid
+        - name: page
+          in: query
+          required: false
+          description: Zero-based page index
+          schema:
+            type: integer
+            format: int32
+            minimum: 0
+            default: 0
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoicePage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /invoices/readiness:
+    get:
+      tags: [documents]
+      operationId: getInvoiceReadiness
+      summary: Whether invoices can be built
+      description: |
+        The requisites an invoice needs that are not set yet (feature 016 §2.2): `IBAN` (Settings → Requisites) and
+        `EDRPOU` (set by the platform operator). An empty list means invoices can be built. The web shows a warning
+        banner on the invoice screens and on Settings → Requisites while the list is not empty. Requires
+        `CHARGES_VIEW`.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceReadiness'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /invoices/{id}:
+    get:
+      tags: [documents]
+      operationId: getInvoice
+      summary: One invoice version as stored
+      description: |
+        The snapshot of an invoice version: every number and name its PDF shows, as stored when it was issued (the
+        owners as they were then, even after a change of owner). Amounts are strings with two decimals. Requires
+        `CHARGES_VIEW`, or the caller is a current owner of the invoice's plot and the version is the latest one of
+        its plot and month. Anything else (an unknown id, another cooperative's invoice, another plot's invoice, an
+        older version for a member) is the same 404 `NOT_FOUND`; a caller with neither the permission nor a plot of
+        their own is 403.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceSnapshot'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /invoices/{id}/pdf:
+    get:
+      tags: [documents]
+      operationId: getInvoicePdf
+      summary: One invoice version as a PDF file
+      description: |
+        The invoice (A4, Ukrainian) rendered from its stored snapshot: the requisites, «Рахунок № {number}» with
+        «(версія N)» from the second version on, the plot and its owners with their shares, the table per charge type
+        (start, charged, paid, end) with the details of the charges, «Отримано після {місяць}», the totals with
+        «До сплати», the NBU payment QR code (only when something is due) and the footer. The file is not stored: the
+        same version always gives the same bytes. Who may download it: as `getInvoice` (404 `NOT_FOUND` otherwise).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The invoice, sent as an attachment
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /invoices/{id}/qr.png:
+    get:
+      tags: [documents]
+      operationId: getInvoiceQrPng
+      summary: The NBU payment QR code of an invoice version as a PNG image
+      description: |
+        The QR code of the stored link of the invoice version (NBU Resolution No. 97, format 003; 8 pixels per
+        module, the quiet zone, the background circle and the hryvnia sign). An invoice with nothing due has no QR
+        code: 404 `NOT_FOUND`. Who may download it: as `getInvoice`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The QR code image
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
   /payments/{id}/reverse:
     post:
       tags: [payments]
@@ -5067,7 +5295,8 @@ components:
         The resource does not exist or is not visible to the caller (code `NOT_FOUND`; `PLOT_NOT_FOUND` from the
         plot-scoped meter operations `listPlotMeters` and `submitPlotReading` and the ledger operations
         `getPlotAccount` and `enterOpeningBalance` and the payment operations `enterPayment` and `allocatePrepayment`
-        when the plot is unknown, of another cooperative or not the caller's)
+        and the document operation `issuePlotInvoice` when the plot is unknown, of another cooperative or not the
+        caller's)
       content:
         application/problem+json:
           schema:
@@ -5152,7 +5381,10 @@ components:
         entered for common land (code `PLOT_COMMON_LAND`) or an archived plot (code `PLOT_ARCHIVED`), or a plot that
         has payments is deleted (code `PLOT_HAS_PAYMENTS`), or a payment that was reversed (or a reversal row) is
         reversed or reallocated (code `PAYMENT_ALREADY_REVERSED`), or a plot's prepayment is allocated while it has no
-        prepayment or no open charge (code `NOTHING_TO_ALLOCATE`)
+        prepayment or no open charge (code `NOTHING_TO_ALLOCATE`), or a receipt is asked for a bank payment (code
+        `RECEIPT_NOT_AVAILABLE`), or an invoice is built while the cooperative's IBAN or ЄДРПОУ is not set (code
+        `REQUISITES_MISSING`, with `missing` naming `IBAN` and/or `EDRPOU`), or an invoice is built for common land, an
+        archived plot or a plot without a current owner (code `PLOT_NOT_INVOICEABLE`)
       content:
         application/problem+json:
           schema:
@@ -5401,6 +5633,8 @@ components:
         - PAYMENTS_VIEW
         - PAYMENTS_ENTER
         - PAYMENTS_REVERSE
+        - INVOICES_ISSUE
+        - CERTIFICATES_ISSUE
 
     PlotStatusVisibility:
       type: string
@@ -5880,6 +6114,7 @@ components:
         - REPORT_GENERATED
         - REPORT_TEMPLATE_UPLOADED
         - REPORT_TEMPLATE_ARCHIVED
+        - INVOICE_REISSUED
 
     AuditEntityType:
       type: string
@@ -5907,7 +6142,10 @@ components:
         contents. A `REPORT_TEMPLATE` entry (`REPORT_TEMPLATE_UPLOADED`, `REPORT_TEMPLATE_ARCHIVED`, and
         `REPORT_GENERATED` for a file generated from the template) is about a report template: its entity id is the
         template, its label the template's name and its fields name the version; a generated file adds `template`,
-        `filters` (`from`, `to`), `rows`, `personalData` and `output` (`XLSX`), never the contents.
+        `filters` (`from`, `to`), `rows`, `personalData` and `output` (`XLSX`), never the contents. An `INVOICE`
+        entry (`INVOICE_REISSUED`, an invoice issued on request) is about the plot whose invoice it is: its `entityId`
+        is the plot id and its label the plot number; its fields (new values only) are `number` (`YYYY-MM/plot`),
+        `month` (`YYYY-MM`), `version` and `due` (two decimals).
       enum:
         [
           MEMBER,
@@ -5928,6 +6166,7 @@ components:
           PAYMENT,
           REPORT,
           REPORT_TEMPLATE,
+          INVOICE,
         ]
 
     AuditFieldChange:
@@ -6674,6 +6913,348 @@ components:
           description: Field-level validation errors
           items:
             $ref: '#/components/schemas/ProblemFieldError'
+        missing:
+          type: [array, 'null']
+          description: >-
+            The requisites that are not set, for `REQUISITES_MISSING` (an invoice needs the IBAN and the ЄДРПОУ);
+            absent on every other problem
+          items:
+            $ref: '#/components/schemas/RequisiteField'
+
+    RequisiteField:
+      type: string
+      description: >-
+        A requisite an invoice needs: `IBAN` the cooperative's account (Settings → Requisites), `EDRPOU` the
+        cooperative's ЄДРПОУ code (set by the platform operator)
+      enum: [IBAN, EDRPOU]
+
+    InvoiceReadiness:
+      type: object
+      required: [missing]
+      properties:
+        missing:
+          type: array
+          description: The requisites that are not set yet, in this order; empty when invoices can be built
+          items:
+            $ref: '#/components/schemas/RequisiteField'
+
+    IssueInvoiceRequest:
+      type: object
+      properties:
+        month:
+          type: string
+          pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+          description: The billing month, `YYYY-MM`; absent means the current month (today in Europe/Kyiv)
+
+    InvoiceRow:
+      type: object
+      description: One issued invoice version
+      required: [id, plotId, plotNumber, month, number, version, due, issuedAt, latest]
+      properties:
+        id:
+          type: string
+          format: uuid
+        plotId:
+          type: string
+          format: uuid
+        plotNumber:
+          type: string
+          description: The plot number as printed on the invoice (user content)
+        month:
+          type: string
+          description: The billing month, `YYYY-MM`
+        number:
+          type: string
+          description: The invoice number `{YYYY-MM}/{plot number}`, the same for every version
+        version:
+          type: integer
+          format: int32
+          minimum: 1
+        due:
+          $ref: '#/components/schemas/Money'
+        issuedAt:
+          type: string
+          format: date-time
+        latest:
+          type: boolean
+          description: Whether this is the latest version of its plot and month
+
+    InvoicePage:
+      type: object
+      required: [items, page, size, totalItems, totalPages]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/InvoiceRow'
+        page:
+          type: integer
+          format: int32
+          description: Zero-based page index
+        size:
+          type: integer
+          format: int32
+        totalItems:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+
+    InvoiceLineKind:
+      type: string
+      description: >-
+        The kind of a charge booked in the month: `REGULAR` an accrual, `REVERSAL` a cancellation, `OPENING` an
+        opening balance, `ADJUSTMENT` a correction of a charge of a closed month
+      enum: [REGULAR, REVERSAL, OPENING, ADJUSTMENT]
+
+    InvoiceLineSource:
+      type: string
+      description: >-
+        What produced the charge (for a reversal or an adjustment: the charge it corrects): `TARIFF` a tariff of the
+        month run, `CONSUMPTION` a meter reading interval, `LOSSES` losses in the network, `COMMON_CONSUMER` a share of
+        a common consumer, `OPENING` an opening balance
+      enum: [TARIFF, CONSUMPTION, LOSSES, COMMON_CONSUMER, OPENING]
+
+    InvoiceSnapshot:
+      type: object
+      description: >-
+        An invoice version as stored when it was issued (schema 1). Every amount is a string with two decimals.
+        Texts are what the PDF prints (Ukrainian document texts, names and user content as stored then).
+      required:
+        [
+          id,
+          schema,
+          number,
+          version,
+          month,
+          monthStatus,
+          asOf,
+          issuedAt,
+          issuedOn,
+          cooperative,
+          plot,
+          owners,
+          chairmen,
+          treasurers,
+          types,
+          lines,
+          receivedAfter,
+          totals,
+        ]
+      properties:
+        id:
+          type: string
+          format: uuid
+        schema:
+          type: integer
+          format: int32
+          description: The version of the snapshot format (1)
+        number:
+          type: string
+        version:
+          type: integer
+          format: int32
+        month:
+          type: string
+          description: The billing month, `YYYY-MM`
+        monthStatus:
+          $ref: '#/components/schemas/BillingMonthStatus'
+        asOf:
+          type: string
+          format: date-time
+          description: The moment the figures were read; an open month's invoice states «станом на» this day
+        issuedAt:
+          type: string
+          format: date-time
+        issuedOn:
+          type: string
+          format: date
+          description: The day of issue in Europe/Kyiv
+        cooperative:
+          $ref: '#/components/schemas/InvoiceCooperative'
+        plot:
+          $ref: '#/components/schemas/InvoicePlot'
+        owners:
+          type: array
+          description: The current owners when the invoice was issued, the earliest owner first
+          items:
+            $ref: '#/components/schemas/InvoiceOwner'
+        chairmen:
+          type: array
+          description: The names of the active chairmen when the invoice was issued (personal data)
+          items:
+            type: string
+        treasurers:
+          type: array
+          description: The names of the active treasurers when the invoice was issued (personal data)
+          items:
+            type: string
+        types:
+          type: array
+          description: One row per charge type in the cooperative's charge type order
+          items:
+            $ref: '#/components/schemas/InvoiceTypeRow'
+        lines:
+          type: array
+          description: The charges booked in the month, in the charge type order, then by service period
+          items:
+            $ref: '#/components/schemas/InvoiceLine'
+        receivedAfter:
+          type: array
+          description: The payments booked after the month and received before the issue
+          items:
+            $ref: '#/components/schemas/InvoiceLaterPayment'
+        totals:
+          $ref: '#/components/schemas/InvoiceTotals'
+        qr:
+          $ref: '#/components/schemas/InvoiceQr'
+
+    InvoiceCooperative:
+      type: object
+      required: [officialName]
+      properties:
+        officialName:
+          type: string
+          description: The official name, or the cooperative's name when none was entered
+        edrpou:
+          type: string
+        address:
+          type: string
+        bankName:
+          type: string
+        iban:
+          type: string
+
+    InvoicePlot:
+      type: object
+      required: [id, number]
+      properties:
+        id:
+          type: string
+          format: uuid
+        number:
+          type: string
+        street:
+          type: string
+
+    InvoiceOwner:
+      type: object
+      required: [memberId, name, share]
+      properties:
+        memberId:
+          type: string
+          format: uuid
+        name:
+          type: string
+          description: The full name when the invoice was issued (personal data)
+        share:
+          type: string
+          description: The share as a fraction, `1/2`
+          pattern: '^\d+/\d+$'
+
+    InvoiceTypeRow:
+      type: object
+      required: [chargeTypeId, name, start, charged, paid, end]
+      properties:
+        chargeTypeId:
+          type: string
+          format: uuid
+        code:
+          type: string
+          description: The code of a seeded charge type
+        name:
+          type: string
+          description: The name printed on the invoice
+        start:
+          $ref: '#/components/schemas/Money'
+        charged:
+          $ref: '#/components/schemas/Money'
+        paid:
+          $ref: '#/components/schemas/Money'
+        end:
+          $ref: '#/components/schemas/Money'
+
+    InvoiceLine:
+      type: object
+      required: [chargeId, chargeTypeId, kind, source, amount, serviceFrom, serviceTo, parts, readings]
+      properties:
+        chargeId:
+          type: string
+          format: uuid
+        chargeTypeId:
+          type: string
+          format: uuid
+        kind:
+          $ref: '#/components/schemas/InvoiceLineKind'
+        source:
+          $ref: '#/components/schemas/InvoiceLineSource'
+        amount:
+          $ref: '#/components/schemas/Money'
+        serviceFrom:
+          type: string
+          format: date
+        serviceTo:
+          type: string
+          format: date
+        corrects:
+          type: string
+          description: The billing month (`YYYY-MM`) of the charge a reversal or an adjustment corrects, when earlier
+        parts:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChargeCalculationPart'
+        readings:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChargeCalculationReading'
+        lossesPercent:
+          type: string
+        consumption:
+          type: string
+        consumerName:
+          type: string
+
+    InvoiceLaterPayment:
+      type: object
+      required: [paymentId, receivedOn, bookedIn, amount]
+      properties:
+        paymentId:
+          type: string
+          format: uuid
+        receivedOn:
+          type: string
+          format: date
+        bookedIn:
+          type: string
+          description: The billing month the payment is booked in, `YYYY-MM`
+        amount:
+          $ref: '#/components/schemas/Money'
+
+    InvoiceTotals:
+      type: object
+      required: [endDebt, prepayment, receivedAfter, due]
+      properties:
+        endDebt:
+          $ref: '#/components/schemas/Money'
+        prepayment:
+          $ref: '#/components/schemas/Money'
+        receivedAfter:
+          $ref: '#/components/schemas/Money'
+        due:
+          $ref: '#/components/schemas/Money'
+
+    InvoiceQr:
+      type: object
+      description: The NBU payment QR code of the invoice; absent when nothing is due
+      required: [link, purpose]
+      properties:
+        link:
+          type: string
+          description: '`https://qr.bank.gov.ua/` and the Base64URL payload (format 003)'
+        purpose:
+          type: string
+          description: The purpose of payment the code carries
 
     ProblemFieldError:
       type: object

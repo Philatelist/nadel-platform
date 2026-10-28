@@ -1,6 +1,7 @@
 package app.nadel.ledger;
 
 import app.nadel.money.Money;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.Collection;
@@ -192,6 +193,22 @@ public interface LedgerReadModel {
      * @return empty for an unknown id, a payment of another cooperative (RLS) and the id of a payment reversal row
      */
     Optional<CashReceiptData> cashReceipt(UUID paymentId);
+
+    /**
+     * What the invoices of the plots for a billing month need (feature 016 §2.3): per plot the figures of each charge
+     * type by the booking-month rule ({@link InvoiceLedger}: start, charged, paid and end), every charge booked in the
+     * month with what its stored calculation says, the prepayment at the end of the month and the payments booked after
+     * it and received by {@code asOf}. Only rows created at or before {@code asOf} count, so a caller that reads every
+     * plot of a build with the same {@code asOf} in one {@code REPEATABLE READ} transaction gets one consistent picture.
+     * A closed month gives the same figures whatever {@code asOf} after its closing (only {@code receivedAfter} grows).
+     * Three queries per call; the caller passes a bounded number of plots (a chunk of a build).
+     *
+     * @param plotIds the plots; every distinct id is a key of the result, in the order of first appearance (a plot
+     *                without rows, or unknown in the cooperative, gets empty figures)
+     * @param month   the billing month
+     * @param asOf    the moment of the invoice
+     */
+    Map<UUID, InvoiceLedger> invoiceLedgers(Collection<UUID> plotIds, YearMonth month, Instant asOf);
 
     /**
      * The electricity charges whose service period overlaps a range of days (the "Charged" sheet of the electricity

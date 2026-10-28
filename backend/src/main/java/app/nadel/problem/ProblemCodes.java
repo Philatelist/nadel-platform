@@ -121,6 +121,13 @@ public final class ProblemCodes {
     public static final String PAYMENT_ALREADY_REVERSED = "PAYMENT_ALREADY_REVERSED";
     /** 409: a bank payment has no printed cash receipt (feature 016 §2.8). */
     public static final String RECEIPT_NOT_AVAILABLE = "RECEIPT_NOT_AVAILABLE";
+    /**
+     * 409: an invoice is built while requisites it needs are not set (feature 016 §2.2); the problem names them in
+     * {@code missing} ({@code IBAN}, {@code EDRPOU}).
+     */
+    public static final String REQUISITES_MISSING = "REQUISITES_MISSING";
+    /** 409: an invoice is built for common land, an archived plot or a plot without a current owner (feature 016). */
+    public static final String PLOT_NOT_INVOICEABLE = "PLOT_NOT_INVOICEABLE";
     /** 409: the plot's prepayment is allocated by hand while it has no prepayment or no open charge. */
     public static final String NOTHING_TO_ALLOCATE = "NOTHING_TO_ALLOCATE";
     /** 409: the charge was reversed before; a charge is reversed at most once. */
