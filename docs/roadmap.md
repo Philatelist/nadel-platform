@@ -14,3 +14,8 @@ The map comes late on purpose: plots exist as data from phase 1 (number, street,
 | 6a. Deployment | Staging and production servers, release and rollback workflows, backups, monitoring, runbook (`docs/features/backlog/deployment.md`, ADR 0010). Done last: the product is finished locally first | — |
 | 7. SaaS | Cooperative onboarding, subscriptions and billing, privacy policy (backups and monitoring arrive with 6a) | — |
 | 8. Automation | Bank API and auto-matching, online payment, debtor reminders, Telegram bot, meter photo OCR, smart meters, meeting reports and voting, AI treasurer assistant | — |
+
+**Order from 28.10.2026 (owner's decision).** The cooperative «Надія» starts real use first, so phase 4 comes before
+the rest of phase 3: `015 Payments` (done) → `016 Invoices, debt certificates and cash receipts` → `017 Delivery by
+e-mail and Telegram` → `018 Cash book and reconciliation` → phase 5 (member account and mobile) → the bank statement
+import (rest of phase 3) → phases 7 and 8 → phase 6 (map) last. Deployment (6a) is done by hand for now.
