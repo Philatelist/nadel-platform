@@ -2,6 +2,7 @@ import { PaymentSource, useListPayments, type PaymentSummary } from '@nadel/api-
 import { format, formatDay } from '@nadel/shared';
 import { keepPreviousData } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router';
+import { BillingMonthSelect } from '../components/charges/BillingMonthSelect';
 import { Pagination } from '../components/Pagination';
 import { PlotSelect } from '../components/payments/PlotSelect';
 import { QueryBoundary } from '../components/QueryBoundary';
@@ -10,7 +11,6 @@ import {
   Badge,
   DataTable,
   Money,
-  MonthField,
   PageHeader,
   Panel,
   Select,
@@ -129,8 +129,9 @@ export function PaymentsPage() {
             value={to ?? ''}
             onChange={(e) => setFilter('to', e.target.value)}
           />
-          <MonthField
+          <BillingMonthSelect
             label={t.payments.filters.month}
+            emptyLabel={t.payments.filters.allMonths}
             value={month ?? ''}
             onChange={(value) => setFilter('month', value)}
           />
@@ -146,7 +147,7 @@ export function PaymentsPage() {
               </option>
             ))}
           </Select>
-          <div className="min-w-56">
+          <div className="w-full min-w-56 sm:w-64">
             <PlotSelect
               label={t.payments.filters.plot}
               plotId={plotId}

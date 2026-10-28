@@ -95,7 +95,8 @@ describe('ScopeEditor', () => {
     const user = userEvent.setup();
     renderEditor();
     await user.click(screen.getByRole('button', { name: 'Change' }));
-    await user.click(screen.getByRole('button', { name: '5' }));
+    await user.type(screen.getByRole('combobox'), '{ArrowDown}');
+    await user.click(screen.getByRole('option', { name: '5' }));
     await user.click(screen.getByRole('button', { name: 'Save' }));
     expect(mutate).not.toHaveBeenCalled();
     expect(screen.getByText('Enter a reason')).toBeInTheDocument();
@@ -106,7 +107,8 @@ describe('ScopeEditor', () => {
     renderEditor();
     await user.click(screen.getByRole('button', { name: 'Change' }));
     await user.click(screen.getByRole('button', { name: 'Remove plot 2' }));
-    await user.click(screen.getByRole('button', { name: '5' }));
+    await user.type(screen.getByRole('combobox'), '{ArrowDown}');
+    await user.click(screen.getByRole('option', { name: '5' }));
     const reasons = screen.getAllByLabelText('Reason');
     await user.type(reasons[1]!, ' Empty ');
     await user.click(screen.getByRole('button', { name: 'Save' }));
@@ -128,7 +130,8 @@ describe('ScopeEditor', () => {
     await user.click(screen.getByRole('button', { name: 'Change' }));
     await user.click(screen.getByRole('radio', { name: 'Selected plots' }));
     expect(screen.getByText('Exclusions will be removed when you save.')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: '6' }));
+    await user.type(screen.getByRole('combobox'), '{ArrowDown}');
+    await user.click(screen.getByRole('option', { name: '6' }));
     await user.click(screen.getByRole('button', { name: 'Save' }));
     expect(mutate).toHaveBeenCalledWith({ id: 't1', data: { kind: 'SELECTED_PLOTS', plotIds: ['p6'] } });
   });

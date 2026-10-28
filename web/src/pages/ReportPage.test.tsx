@@ -24,6 +24,7 @@ vi.mock('@nadel/api-client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@nadel/api-client')>()),
   useListReports: () => queryResult(reports),
   useListChargeTypes: () => queryResult([electricity]),
+  useListBillingMonths: () => queryResult([]),
   useGetReport: (...args: unknown[]) => {
     getReportHook(...args);
     return report;
@@ -110,6 +111,9 @@ describe('ReportPage', () => {
     renderReport();
     expect(screen.getByLabelText('From month')).toHaveValue('2026-01');
     expect(screen.getByLabelText('To month')).toHaveValue('2026-03');
+    // A month filter is a select of billing months, never the browser's empty month mask.
+    expect(screen.getByLabelText('From month').tagName).toBe('SELECT');
+    expect(screen.getByLabelText('From month')).not.toHaveAttribute('type', 'month');
     expect(screen.getByLabelText('Street')).toHaveValue('');
     expect(screen.getByRole('checkbox', { name: 'Electricity' })).not.toBeChecked();
     expect(screen.getByText('The period is counted in billing months.')).toBeInTheDocument();

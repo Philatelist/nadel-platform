@@ -7,6 +7,11 @@ import { renderWithApp } from '../test/render';
 import { PaymentsPage } from './PaymentsPage';
 
 const useListPayments = vi.fn();
+const useListPlots = vi.fn();
+const months = [
+  { month: '2026-10', status: 'OPEN' },
+  { month: '2026-09', status: 'CLOSED' },
+];
 let canEnter = true;
 
 vi.mock('../me', () => ({
@@ -18,7 +23,8 @@ vi.mock('@nadel/api-client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@nadel/api-client')>()),
   useListPayments: (...args: unknown[]) => useListPayments(...args),
   useGetPlot: () => ({ data: { id: 'p9', number: '9' } }),
-  useListPlots: () => ({ data: { items: [] } }),
+  useListPlots: (...args: unknown[]) => useListPlots(...args),
+  useListBillingMonths: () => queryResult(months),
 }));
 
 const cash = {
@@ -66,6 +72,15 @@ describe('PaymentsPage', () => {
   beforeEach(() => {
     window.localStorage.setItem('nadel.locale', 'uk');
     canEnter = true;
+    useListPlots.mockReset();
+    useListPlots.mockReturnValue({
+      data: {
+        items: [
+          { id: 'p1', number: '1', kind: 'PLOT', archived: false, street: 'Садова' },
+          { id: 'p2', number: '2', kind: 'PLOT', archived: false },
+        ],
+      },
+    });
     useListPayments.mockReset();
     useListPayments.mockReturnValue(
       queryResult({ items: [cash, bankReversed], page: 0, size: 20, totalItems: 2, totalPages: 1 }),
@@ -135,6 +150,54 @@ describe('PaymentsPage', () => {
     expect(useListPayments).toHaveBeenLastCalledWith(
       expect.objectContaining({ source: undefined, from: undefined }),
       expect.anything(),
+    );
+  });
+
+  it('offers the billing months, newest first, with an empty option, and keeps the choice in the address', async () => {
+    const user = userEvent.setup();
+    renderList('/payments?month=2026-10');
+    const select = screen.getByLabelText('Місяць обліку');
+    expect(select.tagName).toBe('SELECT');
+    expect(select).toHaveValue('2026-10');
+    expect(
+      within(select)
+        .getAllByRole('option')
+        .map((o) => o.textContent),
+    ).toEqual(['Усі місяці', 'Жовтень 2026 · Відкритий', 'Вересень 2026 · Закритий']);
+
+    await user.selectOptions(select, '2026-09');
+    expect(new URL(screen.getByTestId('where').textContent, 'http://x').searchParams.get('month')).toBe(
+      '2026-09',
+    );
+
+    await user.selectOptions(select, '');
+    expect(new URL(screen.getByTestId('where').textContent, 'http://x').searchParams.has('month')).toBe(
+      false,
+    );
+  });
+
+  it('shows the plot suggestions as a popover that is closed until typing or ArrowDown', async () => {
+    const user = userEvent.setup();
+    renderList();
+    const box = screen.getByRole('combobox', { name: 'Ділянка' });
+    expect(box).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+
+    await user.type(box, '{ArrowDown}');
+    expect(box).toHaveAttribute('aria-expanded', 'true');
+    const list = screen.getByRole('listbox');
+    expect(box).toHaveAttribute('aria-controls', list.id);
+    expect(list).toHaveClass('absolute');
+    expect(screen.getByRole('option', { name: '1 · Садова' })).toBeInTheDocument();
+
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+
+    await user.type(box, '2');
+    expect(screen.getByRole('listbox')).toBeInTheDocument();
+    await user.keyboard('{ArrowDown}{Enter}');
+    expect(new URL(screen.getByTestId('where').textContent, 'http://x').searchParams.get('plotId')).toBe(
+      'p1',
     );
   });
 });
