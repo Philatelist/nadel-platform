@@ -1,7 +1,7 @@
 # Pipeline log — 016 invoices and documents
 
 - Status: running
-- Phase: 3 (implement, Slice 1)
+- Phase: 4 (verify, full suite)
 - Branch: 016-invoices-and-documents · Base: main @ 5287657
 - Requirement: document docs/features/016-invoices-and-documents.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
@@ -192,3 +192,4 @@ introduction (tables via Flyway, RLS-free job storage), Supply-chain CI job with
 - Verify tasks of Slices 1–6 ticked: verify run 1 + fixes (backend fixed classes 30/30 green; clients 853/853 green). AUTO: the two verify fixes are test-only (plus one i18n key removal) and were not sent to a separate fix review; Slice 7 and the full suite cover them.
 - Phase 3: Slice 7 (Feature Testing & Regression) started on testing-expert.
 - Slice 7 (testing-expert): InvoicesAcceptanceTests (5/5 green), web/e2e/invoices.spec.ts (5/5 green; @smoke set 18/18 on a fresh nadel_e2e DB), acceptance-coverage.md (AC → tests), context/qa/list-of-tests.md (+7 rows); RED shown (permission, problem status, receipt button). GAP: demo member's plots 7/15 have nothing due → DemoDocuments builds none → member account empty (FS 2.12, flow 4). Fix attempt 1 → spring-backend (includeNothingDue=true in the demo build). Manual: real-bank QR scan.
+- Gap fix committed (see next line): DemoDocuments builds with includeNothingDue=true; DemoDocumentsTests + MemberInvoicesTests 11/11 green, RED shown. Slice 7 ticked. Guide shot account-invoices is stale (empty state) → retaken in Phase 4. Phase 3 done; Phase 4 started.

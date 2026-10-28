@@ -239,8 +239,10 @@ which turn the placeholder off). The demo ledger block of `R__demo_data.sql` wip
 write them); on start-up the runner, under `TenantContext.runAs` for the demo cooperative:
 
 - finds the closed month: the first billing month (the demo ledger books nothing before it) while it is `CLOSED`;
-- builds its invoices with `InvoiceBuilder.forMonth` (no preview, without `includeNothingDue`) as the system (no
-  member, subject `system:documents`), unless the month already has an invoice;
+- builds its invoices with `InvoiceBuilder.forMonth` (no preview, with `includeNothingDue`, so every invoiceable plot
+  gets one and a plot with nothing due shows 0,00 without a QR code; the demo member's plots 7 and 15 have nothing due
+  in that month, and `member@demo.local` needs an invoice in the account) as the system (no member, subject
+  `system:documents`), unless the month already has an invoice;
 - issues one certificate of plot 9 with `Certificates.issue` as of the last day of the closed month, in the name of the
   demo chairman (the first active holder of the chairman's base role, so it prints «Голова» and a name), unless plot 9
   already has a certificate.
@@ -409,7 +411,8 @@ hryvnia sign U+20B4. SHA-256: Regular `975dcda37d80f038dcd143c22e33ca2d97a0cc5a9
   another plot's is 404; a caller without a plot (also the treasurer) and another cooperative's member get an empty
   list; the operator 403; no token 401.
 - `DemoDocumentsTests` (Testcontainers, the demo ledger loaded): the runner is not registered in the tests; a run builds
-  the closed month's invoices (version 1, no member) and plot 9's certificate as of the month's last day by the demo
+  the closed month's invoices (version 1, no member; also the demo member's nothing-due plots 7 and 15, due 0) and
+  plot 9's certificate as of the month's last day by the demo
   chairman; a second run writes nothing and the rows and the counter stay the same; without a closed month nothing is
   built.
 - `ReceiptAccessTests` (Testcontainers): treasurer, chairman, a custom role with `PAYMENTS_VIEW`, a member with their

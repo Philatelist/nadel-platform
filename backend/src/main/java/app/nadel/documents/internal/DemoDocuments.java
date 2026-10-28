@@ -43,9 +43,11 @@ import org.springframework.transaction.support.TransactionTemplate;
  * <ul>
  *   <li>the closed month is the demo cooperative's first billing month (the demo ledger books nothing before it), and
  *       only while it is {@code CLOSED};</li>
- *   <li>its invoices with {@link InvoiceBuilder#forMonth} (not a preview, without {@code includeNothingDue}), issued
- *       by the system (no member, subject {@value DocumentsFacadeService#SYSTEM}), as the board's build would; skipped
- *       when the month already has an invoice;</li>
+ *   <li>its invoices with {@link InvoiceBuilder#forMonth} (not a preview, with {@code includeNothingDue}, so every
+ *       invoiceable plot gets one, a plot with nothing due shows 0,00 without a QR code: the demo member's plots 7 and
+ *       15 have nothing due in that month, and their member account needs an invoice to show), issued by the system
+ *       (no member, subject {@value DocumentsFacadeService#SYSTEM}), as the board's build would; skipped when the
+ *       month already has an invoice;</li>
  *   <li>the certificate of plot 9 with {@link Certificates#issue} as of the last day of the closed month (a fixed day,
  *       so it shows «Станом на» a day before the issue), in the name of the demo chairman (the first active holder of
  *       the chairman's base role), so it prints «Голова» and a name; skipped when plot 9 has any certificate, or when
@@ -135,7 +137,7 @@ class DemoDocuments implements ApplicationRunner {
                 List.of(), false);
         int built = 0;
         if (!state.monthHasInvoices()) {
-            InvoiceBuilder.MonthBuild build = builder.forMonth(month, false, false, system);
+            InvoiceBuilder.MonthBuild build = builder.forMonth(month, true, false, system);
             built = build.built() + build.newVersions();
         }
         boolean issued = false;

@@ -1,6 +1,7 @@
 package app.nadel.documents.internal;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.awaitility.Awaitility.await;
 
 import app.nadel.DemoLedgerData;
@@ -26,7 +27,8 @@ import org.springframework.transaction.PlatformTransactionManager;
 
 /**
  * The demo documents (feature 016, technical considerations 2.9): with the demo ledger loaded, {@link DemoDocuments}
- * builds the invoices of the demo closed month (by the system, no member) and one certificate of plot 9 as of the
+ * builds the invoices of the demo closed month (by the system, no member; with nothing due included, so the demo
+ * member's plots 7 and 15 get one at 0,00) and one certificate of plot 9 as of the
  * month's last day in the demo chairman's name; a second run writes nothing, so the rows stay the same. The runner is
  * not registered in the tests (the demo ledger placeholder is off), so it is built here from the module's beans.
  */
@@ -113,6 +115,10 @@ class DemoDocumentsTests extends IntegrationTest {
             assertThat(row.get("version")).isEqualTo(1);
             assertThat(row.get("issued_by")).isNull();
         });
+        assertThat(owner.queryForList("select p.number, i.due from invoice i join plot p on p.id = i.plot_id "
+                + "where i.tenant_id = ? and p.number in ('7', '15') order by p.number", DEMO_TENANT))
+                .extracting(row -> row.get("number"), row -> row.get("due").toString())
+                .containsExactly(tuple("15", "0.00"), tuple("7", "0.00"));
         List<Map<String, Object>> certificateRows = certificateRows();
         assertThat(certificateRows).hasSize(1);
         Map<String, Object> certificate = certificateRows.getFirst();
