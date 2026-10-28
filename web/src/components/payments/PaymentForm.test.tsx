@@ -44,6 +44,8 @@ function line(chargeId: string, type: typeof chargeType, month: string, open: st
 function result(proposedMembership: string, proposedElectricity: string, digest = 'd1'): PaymentEntryResult {
   return {
     preview: true,
+    valid: true,
+    problems: [],
     amount: '700.00',
     digest,
     payments: [],
@@ -56,7 +58,9 @@ function result(proposedMembership: string, proposedElectricity: string, digest 
           line('c1', chargeType, '2026-01', '600.00', proposedMembership),
           line('c2', electricityType, '2026-02', '250.00', proposedElectricity),
         ],
+        resultLines: [],
         allocatedTotal: '700.00',
+        automaticTotal: '0.00',
         prepayment: '0.00',
       },
     ],
@@ -198,19 +202,92 @@ describe('PaymentForm', () => {
     expect((mutate.mock.calls[0]?.[0] as { data: PaymentEntryRequest }).data.digest).toBe('d-new');
   });
 
-  it('warns about a date that is not today and shows a server problem of the preview inline', async () => {
+  it('warns about a date that is not today', async () => {
     const user = userEvent.setup();
-    enterPayment.mockRejectedValue(new ApiError(400, { code: 'ALLOCATION_EXCEEDS_PAYMENT' }));
     renderForm();
     expect(screen.queryByText('Дата відрізняється від сьогоднішньої')).not.toBeInTheDocument();
     await user.clear(screen.getByLabelText('Дата надходження'));
     await user.type(screen.getByLabelText('Дата надходження'), '2020-01-15');
     expect(screen.getByText('Дата відрізняється від сьогоднішньої')).toBeInTheDocument();
+  });
 
+  it('keeps the table while an intermediate value exceeds the payment or a charge, then saves once corrected', async () => {
+    const user = userEvent.setup();
+    renderForm();
     await typeAmount(user, '700');
+    const membership = await screen.findByRole(
+      'textbox',
+      { name: /Сума до зарахування: Членський внесок/ },
+      wait,
+    );
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Зберегти' })).toBeEnabled(), wait);
+
+    const exceeding = result('900.00', '100.00');
+    delete exceeding.digest;
+    exceeding.valid = false;
+    exceeding.problems = [
+      { code: 'ALLOCATION_EXCEEDS_CHARGE', plotId: 'p9', line: 0, chargeId: 'c1' },
+      { code: 'ALLOCATION_EXCEEDS_PAYMENT', plotId: 'p9' },
+    ];
+    exceeding.parts[0]!.allocatedTotal = '1000.00';
+    enterPayment.mockResolvedValue(exceeding);
+    await user.clear(membership);
+    await user.type(membership, '900');
+
+    expect(await screen.findByText('Сума перевищує залишок за нарахуванням', {}, wait)).toBeInTheDocument();
+    expect(screen.getByText('Розподілено більше, ніж сума платежу')).toBeInTheDocument();
+    expect(screen.getByRole('rowheader', { name: 'Розподілено' }).closest('tr')).toHaveTextContent(
+      /1\s000,00 ₴ з 700,00 ₴/,
+    );
+    expect(screen.getByRole('textbox', { name: /Сума до зарахування: Членський внесок/ })).toHaveValue('900');
+    expect(screen.getByRole('button', { name: 'Зберегти' })).toBeDisabled();
+    await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument(), wait);
+
+    enterPayment.mockResolvedValue(result('600.00', '100.00', 'd2'));
+    await user.clear(membership);
+    await user.type(membership, '600');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Зберегти' })).toBeEnabled(), wait);
+    expect(screen.queryByText('Сума перевищує залишок за нарахуванням')).not.toBeInTheDocument();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('shows an unparseable line as a problem of that line, not as an endless calculation', async () => {
+    const user = userEvent.setup();
+    renderForm();
+    await typeAmount(user, '700');
+    const membership = await screen.findByRole(
+      'textbox',
+      { name: /Сума до зарахування: Членський внесок/ },
+      wait,
+    );
+    await user.clear(membership);
+    await user.type(membership, 'abc');
+
+    expect(await screen.findByText('Вкажіть суму числом, наприклад 250,00', {}, wait)).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument(), wait);
+    expect(screen.queryByText('Розраховуємо розподіл…')).not.toBeInTheDocument();
     expect(
-      await screen.findByText('Розподілено більше, ніж сума платежу', undefined, wait),
+      screen.getByRole('textbox', { name: /Сума до зарахування: Членський внесок/ }),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Зберегти' })).toBeDisabled();
+  });
+
+  it('shows the automatic rows and the note when the server places the remainder', async () => {
+    const user = userEvent.setup();
+    const automatic = result('600.00', '0.00');
+    automatic.parts[0]!.resultLines = [
+      { chargeId: 'c1', amount: '600.00', automatic: false },
+      { chargeId: 'c2', amount: '100.00', automatic: true },
+    ];
+    automatic.parts[0]!.automaticTotal = '100.00';
+    enterPayment.mockResolvedValue(automatic);
+    renderForm();
+    await typeAmount(user, '700');
+    await screen.findByRole('textbox', { name: /Сума до зарахування: Членський внесок/ }, wait);
+    expect(screen.getByText('Залишок буде зараховано автоматично на найстаріші борги')).toBeInTheDocument();
+    expect(screen.getByText('автоматично')).toBeInTheDocument();
+    expect(screen.getByText('автоматично').closest('tr')).toHaveTextContent(
+      /Електро.*250,00 ₴.*100,00 ₴автоматично/,
+    );
   });
 });

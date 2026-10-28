@@ -11,6 +11,7 @@ import app.nadel.plots.PlotCatalog.PlotFacts;
 import app.nadel.problem.ApiProblemException;
 import app.nadel.problem.FieldProblem;
 import app.nadel.problem.ProblemCodes;
+import app.nadel.settings.CooperativeSettings;
 import jakarta.persistence.EntityManager;
 import java.time.LocalDate;
 import java.time.YearMonth;
@@ -28,6 +29,7 @@ import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import nadel.contract.model.PaymentAllocation;
 import nadel.contract.model.PaymentDetails;
 import nadel.contract.model.PaymentGroupPart;
 import nadel.contract.model.PaymentPage;
@@ -64,6 +66,14 @@ class PaymentQueries {
     private static final String COUNT = "select count(*) " + FILTER;
     private static final LocalDate NO_DATE = LocalDate.of(2000, 1, 1);
     private static final UUID NO_ID = new UUID(0, 0);
+    /**
+     * The history of a payment's allocation: oldest first; among rows written together a release after the
+     * allocations and the system's rows (the automatic placement of a remainder) after a member's; then the id.
+     */
+    static final Comparator<AllocationRecord> HISTORY_ORDER = Comparator.comparing(AllocationRecord::getCreatedAt)
+            .thenComparing(row -> row.getAmount().signum() < 0)
+            .thenComparing(row -> row.getCreatedBy() == null)
+            .thenComparing(row -> row.getId().toString());
 
     private final EntityManager entityManager;
     private final PaymentRepository payments;
@@ -73,10 +83,12 @@ class PaymentQueries {
     private final ActorNames actorNames;
     private final PaymentNoteCipher notes;
     private final PaymentViews views;
+    private final PlotLedgerQueries ledgers;
+    private final CooperativeSettings settings;
 
     PaymentQueries(EntityManager entityManager, PaymentRepository payments, AllocationRepository allocations,
             PlotCatalog plots, MemberDirectory members, ActorNames actorNames, PaymentNoteCipher notes,
-            PaymentViews views) {
+            PaymentViews views, PlotLedgerQueries ledgers, CooperativeSettings settings) {
         this.entityManager = entityManager;
         this.payments = payments;
         this.allocations = allocations;
@@ -85,6 +97,8 @@ class PaymentQueries {
         this.actorNames = actorNames;
         this.notes = notes;
         this.views = views;
+        this.ledgers = ledgers;
+        this.settings = settings;
     }
 
     /** A page of the payments matching the filters (each optional), newest first. */
@@ -156,22 +170,21 @@ class PaymentQueries {
     }
 
     /**
-     * The payment with its allocations and releases (oldest first), the other parts of its group, its reversal, the
-     * author's current name, whether the viewer may reverse it ({@code PAYMENTS_REVERSE}) or reallocate it
-     * ({@code PAYMENTS_ENTER}) now (both only while it is not reversed) and, for a viewer with {@code MEMBERS_VIEW},
-     * the payer note. An unknown payment, one of
-     * another cooperative and the id of a reversal row are 404 {@code NOT_FOUND}.
+     * The payment with where its money is now (per charge the net of its rows above {@code 0.00}, in planner order),
+     * its allocations and releases (oldest first; among rows of one time a release after the allocations and the
+     * system's rows after a member's, each with its author's current name), the other parts of its group, its
+     * reversal, the author's current name, whether the viewer may reverse it ({@code PAYMENTS_REVERSE}) or reallocate
+     * it ({@code PAYMENTS_ENTER}) now (both only while it is not reversed), whether the viewer may allocate the
+     * prepayment of its plot by hand now ({@link LedgerAccess#prepaymentAllocatable}) and, for a viewer with
+     * {@code MEMBERS_VIEW}, the payer note. An unknown payment, one of another cooperative and the id of a reversal row
+     * are 404 {@code NOT_FOUND}.
      */
     @Transactional(readOnly = true)
     PaymentDetails details(UUID id, AccessProfile viewer) {
         PaymentRecord payment = payments.findById(id).filter(p -> p.getKind() == PaymentKind.PAYMENT)
                 .orElseThrow(ApiProblemException::notFound);
         UUID tenantId = Objects.requireNonNull(viewer.tenantId());
-        List<AllocationRecord> rows = allocations.findByPaymentId(id).stream()
-                .sorted(Comparator.comparing(AllocationRecord::getCreatedAt)
-                        .thenComparing(row -> row.getAmount().signum() < 0)
-                        .thenComparing(row -> row.getId().toString()))
-                .toList();
+        List<AllocationRecord> rows = allocations.findByPaymentId(id).stream().sorted(HISTORY_ORDER).toList();
         List<PaymentRecord> group = payments.findByGroupId(payment.getGroupId());
         Set<UUID> reversedInGroup = group.stream().map(PaymentRecord::getReversesPaymentId).filter(Objects::nonNull)
                 .collect(Collectors.toSet());
@@ -185,26 +198,38 @@ class PaymentQueries {
         plotIds.add(payment.getPlotId());
         parts.forEach(part -> plotIds.add(part.getPlotId()));
         Map<UUID, PlotFacts> plotFacts = plots.findAll(plotIds);
-        List<UUID> authors = Stream.of(payment.getCreatedBy(), reversal == null ? null : reversal.getCreatedBy())
+        List<UUID> authors = Stream.concat(
+                Stream.of(payment.getCreatedBy(), reversal == null ? null : reversal.getCreatedBy()),
+                rows.stream().map(AllocationRecord::getCreatedBy))
                 .filter(Objects::nonNull).distinct().toList();
         Map<UUID, String> names = authors.isEmpty() ? Map.of() : actorNames.displayNames(authors);
         PaymentViews.Context context = views.context(rows.stream().map(AllocationRecord::getChargeId).distinct()
                 .toList());
 
+        PlotLedgerState state = ledgers.load(Set.of(payment.getPlotId())).get(payment.getPlotId()).state();
+
         boolean isReversed = reversal != null;
         Money net = rows.stream().map(AllocationRecord::getAmount).reduce(Money.ZERO, Money::plus);
+        List<PaymentAllocation> history = rows.stream().map(row -> {
+            PaymentAllocation dto = PaymentViews.allocation(row, context);
+            if (row.getCreatedBy() != null) {
+                dto.setCreatedByName(names.get(row.getCreatedBy()));
+            }
+            return dto;
+        }).toList();
         PaymentDetails dto = new PaymentDetails(id, payment.getGroupId(), payment.getPlotId(),
                 plotFacts.get(payment.getPlotId()).number(), PaymentSource.fromValue(payment.getSource().name()),
                 payment.getAmount().toString(), payment.getReceivedOn(),
                 PaymentViews.month(context, payment.getBillingMonthId()), net.toString(),
-                left(payment, net, isReversed).toString(), isReversed,
-                rows.stream().map(row -> PaymentViews.allocation(row, context)).toList(),
+                left(payment, net, isReversed).toString(), isReversed, PaymentViews.net(rows, state, context),
+                history,
                 parts.stream().map(part -> new PaymentGroupPart(part.getId(), part.getPlotId(),
                         plotFacts.get(part.getPlotId()).number(), part.getAmount().toString(),
                         reversedInGroup.contains(part.getId()))).toList(),
                 payment.getCreatedAt().atOffset(ZoneOffset.UTC),
                 !isReversed && viewer.can(Permission.PAYMENTS_REVERSE),
-                !isReversed && viewer.can(Permission.PAYMENTS_ENTER));
+                !isReversed && viewer.can(Permission.PAYMENTS_ENTER),
+                LedgerAccess.prepaymentAllocatable(viewer, settings::autoAllocatePrepayment, state));
         dto.setReceiptNumber(payment.getReceiptNumber());
         dto.setBankReference(payment.getBankReference());
         dto.setPayer(PaymentViews.payer(payment.getPayerMemberId(), payers(List.of(payment))));

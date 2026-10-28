@@ -14,7 +14,7 @@ Settings (V7, and V14 for the ledger, feature 011):
 | `lossesMode` | `losses_mode`, CHECK | `FIXED_PERCENT` | `FIXED_PERCENT` or `PROPORTIONAL` losses; with `FIXED_PERCENT` every electricity interval also gets a losses charge (ledger, spec 011 slice 4) |
 | `lossesPercent` | `losses_percent numeric(5,2)`, CHECK `0..100` | `0.00` | The fixed losses percentage (`0.00` charges no losses) |
 | `commonConsumerDefaultSplit` | `common_consumer_default_split`, CHECK | `CONNECTED_PLOTS` | `CONNECTED_PLOTS`, `EQUAL_PER_PLOT`, `SERVICE_USERS` or `NOT_CHARGED` (used from slice 7) |
-| `autoAllocatePrepayment` | `auto_allocate_prepayment boolean` (V27, feature 015) | `true` | Allocate prepayment automatically: a plot's prepayment is placed on its open charges whenever charges are booked for the plot or money is taken back from its charges (the ledger's `PrepaymentAllocator`); off, it waits until the treasurer allocates it by hand |
+| `autoAllocatePrepayment` | `auto_allocate_prepayment boolean` (V27, feature 015) | `true` | Allocate prepayment automatically: a plot's prepayment is placed on its open charges whenever charges are booked for the plot or money is taken back from its charges (the ledger's `PrepaymentAllocator`), and the remainder of a payment entered or reallocated is placed at once on the charges still open (owner decision of 28.10.2026), so no prepayment waits while the plot owes; off, it waits until the treasurer allocates it by hand |
 
 A change of the red threshold applies to every status read from then on: `plots` derives the colour at read time.
 Turning `autoAllocatePrepayment` on places no existing prepayment at once: a plot's prepayment is placed at its next

@@ -9,6 +9,8 @@ import static app.nadel.ledger.internal.PaymentLedger.money;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import app.nadel.identity.AccessProfile;
+import app.nadel.identity.Permission;
 import app.nadel.ledger.internal.AllocationPlanner.Line;
 import app.nadel.ledger.internal.AllocationPlanner.Paired;
 import app.nadel.ledger.internal.AllocationPlanner.Problem;
@@ -20,15 +22,21 @@ import app.nadel.money.Money;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 /**
  * The allocation proposal, the check of the treasurer's lines and the pairing of prepayment lines with payments
- * (feature 015 §2.2, §2.4, §3 examples 1, 2, 3, 10, 11 and 18; technical considerations 2.3). Charge type order:
+ * (feature 015 §2.2, §2.4, §3 examples 1, 2, 3, 10, 11, 18, 19 and 20; technical considerations 2.3) and the automatic
+ * placement of what the lines leave (owner decision of 28.10.2026). Charge type order:
  * Membership, Electricity, Land tax.
  */
 class AllocationPlannerTests {
+
+    /** A viewer with {@code PAYMENTS_ENTER}, to whom "Allocate prepayment" can be offered. */
+    private static final AccessProfile TREASURER = new AccessProfile(UUID.randomUUID(), UUID.randomUUID(), "sub",
+            "Treasurer", Set.of(Permission.PAYMENTS_ENTER), List.of(), false);
 
     private final PaymentLedger ledger = new PaymentLedger();
 
@@ -76,17 +84,38 @@ class AllocationPlannerTests {
     }
 
     @Test
-    void example10_treasurersLines_areSavedAsChosen_andMembershipStaysOpen200() {
+    void example10_treasurersLines_areSavedAsChosen_andWithAutomaticAllocationOffTheRest50WaitsAsPrepayment() {
         ChargeEntry membership = ledger.charge(MEMBERSHIP, "600.00", "2026-01-01");
         ChargeEntry electricity = ledger.charge(ELECTRICITY, "250.00", "2026-02-01");
         List<Line> lines = List.of(line(electricity, "250.00"), line(membership, "400.00"));
 
         assertThat(AllocationPlanner.validate(money("700.00"), lines, ledger.state().charges())).isEmpty();
 
+        // automatic allocation off: only the treasurer's lines are written
         ledger.apply(ledger.pay("700.00", "2026-10-28"), lines);
         assertThat(ledger.open(membership)).isEqualTo(money("200.00"));
         assertThat(ledger.open(electricity)).isEqualTo(Money.ZERO);
         assertThat(ledger.state().prepayment()).isEqualTo(money("50.00"));
+    }
+
+    @Test
+    void example10_treasurersLines_areSavedAsChosen_andWithAutomaticAllocationOnTheRest50GoesOnMembership() {
+        // owner decision of 28.10.2026
+        ChargeEntry membership = ledger.charge(MEMBERSHIP, "600.00", "2026-01-01");
+        ChargeEntry electricity = ledger.charge(ELECTRICITY, "250.00", "2026-02-01");
+        List<Line> lines = List.of(line(electricity, "250.00"), line(membership, "400.00"));
+
+        assertThat(AllocationPlanner.validate(money("700.00"), lines, ledger.state().charges())).isEmpty();
+        List<Line> automatic = AllocationPlanner.completeWithRemainder(lines, money("700.00"),
+                ledger.state().charges());
+
+        assertThat(automatic).containsExactly(line(membership, "50.00"));
+        PaymentEntry payment = ledger.pay("700.00", "2026-10-28");
+        ledger.apply(payment, lines);
+        ledger.apply(payment, automatic);
+        assertThat(ledger.open(membership)).isEqualTo(money("150.00"));
+        assertThat(ledger.open(electricity)).isEqualTo(Money.ZERO);
+        assertThat(ledger.state().prepayment()).isEqualTo(Money.ZERO);
     }
 
     @Test
@@ -111,6 +140,105 @@ class AllocationPlannerTests {
         assertThat(proposal.lines()).containsExactly(line(opening, "500.00"));
         ledger.apply(ledger.pay("500.00", "2026-10-28"), proposal.lines());
         assertThat(ledger.open(opening)).isEqualTo(money("700.00"));
+    }
+
+    @Test
+    void example19_treasurerAllocatesElectricityOnly_automaticAllocationPlacesTheRemainder450OnMembership() {
+        ChargeEntry membership = ledger.charge(MEMBERSHIP, "600.00", "2026-01-01");
+        ChargeEntry electricity = ledger.charge(ELECTRICITY, "250.00", "2026-02-01");
+        List<Line> lines = List.of(line(electricity, "250.00"));
+
+        assertThat(AllocationPlanner.validate(money("700.00"), lines, ledger.state().charges())).isEmpty();
+        List<Line> automatic = AllocationPlanner.completeWithRemainder(lines, money("700.00"),
+                ledger.state().charges());
+
+        assertThat(automatic).containsExactly(line(membership, "450.00"));
+        PaymentEntry payment = ledger.pay("700.00", "2026-10-28");
+        ledger.apply(payment, lines);
+        ledger.apply(payment, automatic);
+        assertThat(ledger.open(electricity)).isEqualTo(Money.ZERO);
+        assertThat(ledger.open(membership)).isEqualTo(money("150.00"));
+        assertThat(ledger.state().prepayment()).isEqualTo(Money.ZERO);
+        assertThat(LedgerAccess.prepaymentAllocatable(TREASURER, () -> true, ledger.state())).isFalse();
+    }
+
+    @Test
+    void example20_example19WithAutomaticAllocationOff_theRemainder450StaysAsPrepaymentAndCanBeAllocated() {
+        ChargeEntry membership = ledger.charge(MEMBERSHIP, "600.00", "2026-01-01");
+        ChargeEntry electricity = ledger.charge(ELECTRICITY, "250.00", "2026-02-01");
+        List<Line> lines = List.of(line(electricity, "250.00"));
+
+        assertThat(AllocationPlanner.validate(money("700.00"), lines, ledger.state().charges())).isEmpty();
+
+        // automatic allocation off: only the treasurer's line is written
+        ledger.apply(ledger.pay("700.00", "2026-10-28"), lines);
+        assertThat(ledger.open(electricity)).isEqualTo(Money.ZERO);
+        assertThat(ledger.open(membership)).isEqualTo(money("600.00"));
+        assertThat(ledger.state().prepayment()).isEqualTo(money("450.00"));
+        // "Allocate prepayment" is offered
+        assertThat(LedgerAccess.prepaymentAllocatable(TREASURER, () -> false, ledger.state())).isTrue();
+    }
+
+    // ---- the automatic placement of the remainder
+
+    @Test
+    void aRemainderAboveTheOpenDebtsStaysAsPrepaymentForNewCharges() {
+        ChargeEntry membership = ledger.charge(MEMBERSHIP, "600.00", "2026-01-01");
+        ChargeEntry electricity = ledger.charge(ELECTRICITY, "250.00", "2026-02-01");
+        ChargeEntry land = ledger.charge(LAND_TAX, "120.00", "2026-02-01");
+        // the treasurer pays electricity only: 750.00 are left, membership then land tax take 720.00 in the order
+        List<Line> lines = List.of(line(electricity, "250.00"));
+
+        List<Line> automatic = AllocationPlanner.completeWithRemainder(lines, money("1000.00"),
+                ledger.state().charges());
+
+        assertThat(automatic).containsExactly(line(membership, "600.00"), line(land, "120.00"));
+        PaymentEntry payment = ledger.pay("1000.00", "2026-10-28");
+        ledger.apply(payment, lines);
+        ledger.apply(payment, automatic);
+        assertThat(ledger.state().prepayment()).isEqualTo(money("30.00"));
+        assertThat(AllocationPlanner.openInOrder(ledger.state().charges())).isEmpty();
+    }
+
+    @Test
+    void theRemainderFillsWhatALineLeftOpenOnItsCharge_inThePlannerOrder() {
+        ChargeEntry membership = ledger.charge(MEMBERSHIP, "600.00", "2026-01-01");
+        ChargeEntry electricity = ledger.charge(ELECTRICITY, "250.00", "2026-02-01");
+
+        // 100.00 on electricity, 100.00 on membership: membership (older) takes the next 400.00, electricity 100.00
+        List<Line> automatic = AllocationPlanner.completeWithRemainder(
+                List.of(line(electricity, "100.00"), line(membership, "100.00")), money("700.00"),
+                ledger.state().charges());
+
+        assertThat(automatic).containsExactly(line(membership, "500.00"));
+        assertThat(AllocationPlanner.completeWithRemainder(List.of(line(electricity, "100.00")), money("800.00"),
+                ledger.state().charges())).containsExactly(line(membership, "600.00"), line(electricity, "100.00"));
+    }
+
+    @Test
+    void nothingIsAddedWhenTheLinesPlaceEverythingOrNothingIsOpen() {
+        ChargeEntry membership = ledger.charge(MEMBERSHIP, "600.00", "2026-01-01");
+        List<ChargeState> charges = ledger.state().charges();
+
+        assertThat(AllocationPlanner.completeWithRemainder(List.of(line(membership, "300.00")), money("300.00"),
+                charges)).isEmpty();
+        assertThat(AllocationPlanner.completeWithRemainder(List.of(line(membership, "600.00")), money("650.00"),
+                charges)).isEmpty();
+        assertThat(AllocationPlanner.completeWithRemainder(List.of(), money("50.00"), List.of())).isEmpty();
+        // no lines at all: the same as the proposal
+        assertThat(AllocationPlanner.completeWithRemainder(List.of(), money("700.00"), charges))
+                .isEqualTo(AllocationPlanner.propose(money("700.00"), charges).lines());
+    }
+
+    @Test
+    void linesAboveTheAmountOrAboveACharge_areNeverCompleted() {
+        ChargeEntry membership = ledger.charge(MEMBERSHIP, "600.00", "2026-01-01");
+        List<ChargeState> charges = ledger.state().charges();
+
+        assertThatThrownBy(() -> AllocationPlanner.completeWithRemainder(List.of(line(membership, "300.00")),
+                money("200.00"), charges)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> AllocationPlanner.completeWithRemainder(List.of(line(membership, "600.01")),
+                money("700.00"), charges)).isInstanceOf(IllegalArgumentException.class);
     }
 
     // ---- the order and its tiebreaks

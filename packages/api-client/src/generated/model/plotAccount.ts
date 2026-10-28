@@ -26,6 +26,8 @@ export interface PlotAccount {
   total: Money;
   /** The money paid for the plot that is on no charge: its payments (reversals negative) minus what they pay on charges; never below `0.00` */
   prepayment: Money;
+  /** True when the caller may allocate the plot's prepayment by hand now ("Allocate prepayment"): `PAYMENTS_ENTER`, automatic allocation off, `prepayment` above `0.00` and an open charge */
+  prepaymentAllocatable: boolean;
   /** Newest first, limited by `from`, `to` and `kind` */
   charges: Charge[];
   /** The payments of the plot and their reversals, newest first, limited by `from`, `to` and `kind`; empty for a caller who neither has `PAYMENTS_VIEW` nor owns the plot now */

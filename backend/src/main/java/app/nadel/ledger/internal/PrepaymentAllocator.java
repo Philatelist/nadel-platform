@@ -47,8 +47,10 @@ import org.springframework.transaction.support.TransactionTemplate;
  * <p>
  * Idempotent: only the prepayment found under the plot ledger locks is placed, so a redelivered or late event writes
  * nothing more. It never publishes {@link ChargesBooked}, so it never triggers itself. Payment entry, reallocation and
- * manual allocation publish only {@link PaymentsChanged} and never trigger it: the remainder of a payment waits for new
- * charges. Automatic allocations are ledger rows, not audit entries. Logs counts only.
+ * manual allocation publish only {@link PaymentsChanged} and never trigger it: entry and reallocation place their own
+ * remainder in their transaction while the setting is on ({@code PaymentService}, {@code PaymentCorrections}, origin
+ * {@code PREPAYMENT_AUTO} too), so what a payment leaves waits here only when the plot owed nothing more. Automatic
+ * allocations are ledger rows, not audit entries. Logs counts only.
  */
 @Component
 class PrepaymentAllocator {

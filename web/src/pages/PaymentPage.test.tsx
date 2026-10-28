@@ -1,4 +1,5 @@
 import { screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { queryResult } from '../test/meterFixtures';
@@ -11,6 +12,9 @@ vi.mock('../me', () => ({
   useCan: () => true,
   useMe: () => ({ permissions: [] }),
   useOptionalMe: () => null,
+}));
+vi.mock('../components/payments/AllocatePrepaymentDialog', () => ({
+  AllocatePrepaymentDialog: () => <div role="dialog" aria-label="Розподіл авансу" />,
 }));
 vi.mock('@nadel/api-client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@nadel/api-client')>()),
@@ -33,6 +37,18 @@ function base(): Record<string, unknown> {
     allocated: '600.00',
     prepayment: '100.00',
     reversed: false,
+    currentAllocations: [
+      {
+        chargeId: 'c1',
+        kind: 'REGULAR',
+        chargeType: type,
+        billingMonth: '2026-01',
+        serviceFrom: '2026-01-01',
+        serviceTo: '2026-01-31',
+        accruedOn: '2026-01-01',
+        amount: '400.00',
+      },
+    ],
     allocations: [
       {
         id: 'a1',
@@ -42,8 +58,10 @@ function base(): Record<string, unknown> {
         serviceTo: '2026-01-31',
         accruedOn: '2026-01-01',
         amount: '400.00',
+        origin: 'ENTRY',
         system: false,
         createdAt: '2026-10-21T10:00:00Z',
+        createdByName: 'Іваненко Петро',
       },
       {
         id: 'a2',
@@ -79,14 +97,32 @@ describe('PaymentPage', () => {
     payment = base();
   });
 
-  it('shows the receipt, allocations with the system row, author and no note when absent', () => {
+  it('shows the receipt, what is allocated now, and no note when absent', () => {
     renderCard();
     expect(screen.getByRole('heading', { level: 1, name: 'Квитанція № 42' })).toBeInTheDocument();
-    const table = screen.getByRole('table');
-    expect(within(table).getByText('Зараховано з авансу')).toBeInTheDocument();
-    expect(within(table).getAllByText('Членський внесок')).toHaveLength(2);
-    expect(screen.getByText(/Іваненко Петро/)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Зараз зараховано' })).toBeInTheDocument();
+    const now = screen.getByRole('table', { name: 'Нарахування, на які платіж зараховано зараз' });
+    expect(within(now).getByText('Членський внесок')).toBeInTheDocument();
+    expect(screen.getByText(/Внесено:/)).toHaveTextContent('Іваненко Петро');
     expect(screen.queryByText('Примітка про платника')).not.toBeInTheDocument();
+  });
+
+  it('says so when the payment is not allocated anywhere now', () => {
+    payment = { ...base(), currentAllocations: [] };
+    renderCard();
+    expect(screen.getByText('Платіж ще нікуди не зараховано')).toBeInTheDocument();
+  });
+
+  it('keeps the allocation history closed, with date, author and cause of every row once opened', async () => {
+    renderCard();
+    const history = screen.getByText('Історія розподілу').closest('details') as HTMLDetailsElement;
+    expect(history.open).toBe(false);
+    await userEvent.click(screen.getByText('Історія розподілу'));
+    expect(history.open).toBe(true);
+    const table = within(history).getByRole('table');
+    const rows = within(table).getAllByRole('row');
+    expect(rows[1]).toHaveTextContent(/21\.10\.2026.*Членський внесок.*Іваненко Петро.*Внесення/);
+    expect(rows[2]).toHaveTextContent(/Система.*Автоматично з авансу/);
   });
 
   it('shows the payer note when the response carries it, and the reversed badge', () => {
@@ -131,6 +167,19 @@ describe('PaymentPage', () => {
     expect(screen.getByRole('button', { name: 'Перерозподілити' })).toBeInTheDocument();
   });
 
+  it('offers the prepayment allocation only when the server flag is true', () => {
+    payment = { ...base(), prepaymentAllocatable: false };
+    renderCard();
+    expect(screen.queryByRole('button', { name: 'Розподілити аванс' })).not.toBeInTheDocument();
+  });
+
+  it('opens the prepayment allocation from the card when the server flag is true', async () => {
+    payment = { ...base(), prepaymentAllocatable: true };
+    renderCard();
+    await userEvent.click(screen.getByRole('button', { name: 'Розподілити аванс' }));
+    expect(screen.getByRole('dialog', { name: 'Розподіл авансу' })).toBeInTheDocument();
+  });
+
   it('lists releases with their cause and shows the reversal', () => {
     payment = {
       ...base(),
@@ -156,7 +205,7 @@ describe('PaymentPage', () => {
       createdAt: '2026-11-02T10:00:00Z',
     });
     renderCard();
-    expect(screen.getByText('Повернено: платіж сторновано')).toBeInTheDocument();
+    expect(screen.getByRole('row', { name: /Система.*Сторно платежу/ })).toBeInTheDocument();
     expect(screen.getByText('Помилка касира')).toBeInTheDocument();
     expect(screen.getByText('Причина сторнування')).toBeInTheDocument();
     expect(screen.getAllByText('Сторновано').length).toBeGreaterThan(0);

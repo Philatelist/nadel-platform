@@ -787,10 +787,11 @@ class LedgerAccountTests extends PaymentApiSupport {
     @Test
     void placementsOfThePrepaymentAreListedAsAllocatedFromPrepayment() throws Exception {
         UUID plot = newPlot();
+        // paid before the charges were booked (as the owner, no event): all of it waits as prepayment
+        UUID payment = saved(treasurer(), payment(plot, "CASH", "120.00", "2026-01-10", List.of()));
         UUID membership = tariffCharge(plot, "MEMBERSHIP", "60.00", "2026-01");
         UUID electricity = tariffCharge(plot, "ELECTRICITY", "40.00", "2026-02");
         UUID land = tariffCharge(plot, "LAND_TAX", "30.00", "2026-03");
-        UUID payment = saved(treasurer(), payment(plot, "CASH", "120.00", "2026-01-10", List.of()));
         // by hand: «Розподілити аванс» places 60.00 on the membership
         allocatePrepayment(treasurer(), plot, false, lines(List.of(line(membership, "60.00")), null))
                 .andExpect(status().isCreated());

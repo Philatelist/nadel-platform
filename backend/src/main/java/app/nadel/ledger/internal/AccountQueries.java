@@ -13,6 +13,7 @@ import app.nadel.plots.PlotCatalog;
 import app.nadel.problem.ApiProblemException;
 import app.nadel.problem.FieldProblem;
 import app.nadel.problem.ProblemCodes;
+import app.nadel.settings.CooperativeSettings;
 import app.nadel.tariffs.ChargeTypeCatalog.ChargeTypeFacts;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -103,11 +104,8 @@ class AccountQueries {
     private static final Comparator<PaymentRecord> PAYMENTS_NEWEST_FIRST = Comparator
             .comparing(PaymentRecord::getReceivedOn).thenComparing(PaymentRecord::getCreatedAt)
             .thenComparing(PaymentRecord::getId).reversed();
-    /** Allocations and releases of one payment as the card lists them: oldest first, a release after its peers. */
-    private static final Comparator<AllocationRecord> ROWS_OLDEST_FIRST = Comparator
-            .comparing(AllocationRecord::getCreatedAt)
-            .thenComparing(row -> row.getAmount().signum() < 0)
-            .thenComparing(row -> row.getId().toString());
+    /** Allocations and releases of one payment as the card lists them ({@link PaymentQueries#HISTORY_ORDER}). */
+    private static final Comparator<AllocationRecord> ROWS_OLDEST_FIRST = PaymentQueries.HISTORY_ORDER;
 
     private final PlotCatalog plots;
     private final ChargeRepository charges;
@@ -117,10 +115,11 @@ class AccountQueries {
     private final ChargeViews views;
     private final ActorNames actorNames;
     private final PaymentNoteCipher notes;
+    private final CooperativeSettings settings;
 
     AccountQueries(PlotCatalog plots, ChargeRepository charges, PaymentRepository payments,
             AllocationRepository allocations, LedgerAccess access, ChargeViews views, ActorNames actorNames,
-            PaymentNoteCipher notes) {
+            PaymentNoteCipher notes, CooperativeSettings settings) {
         this.plots = plots;
         this.charges = charges;
         this.payments = payments;
@@ -129,6 +128,7 @@ class AccountQueries {
         this.views = views;
         this.actorNames = actorNames;
         this.notes = notes;
+        this.settings = settings;
     }
 
     /**
@@ -153,8 +153,8 @@ class AccountQueries {
         List<PaymentEntry> paymentEntries = paymentRows.stream().map(OpenAmounts::entry).toList();
         Debts debts = DebtCalculator.of(chargeEntries, allocationEntries, paymentEntries);
         Map<UUID, ChargeState> chargeStates = new HashMap<>();
-        OpenAmounts.of(chargeEntries, allocationEntries, paymentEntries, Map.of()).charges()
-                .forEach(state -> chargeStates.put(state.id(), state));
+        PlotLedgerState ledger = OpenAmounts.of(chargeEntries, allocationEntries, paymentEntries, Map.of());
+        ledger.charges().forEach(state -> chargeStates.put(state.id(), state));
 
         Map<UUID, ChargeRecord> byId = all.stream().collect(Collectors.toMap(ChargeRecord::getId, Function.identity()));
         Map<UUID, UUID> reversedBy = new HashMap<>();
@@ -191,7 +191,9 @@ class AccountQueries {
             placements = filter.listsPlacements() ? placements(allocationRows, filter, paymentContext) : List.of();
         }
         return new PlotAccount(plotId, debtsInTypeOrder(debts, context.types()), debts.total().toString(),
-                debts.prepayment().toString(), listed, listedPayments, placements);
+                debts.prepayment().toString(),
+                LedgerAccess.prepaymentAllocatable(viewer, settings::autoAllocatePrepayment, ledger), listed,
+                listedPayments, placements);
     }
 
     /** The payments and reversals within the filter, newest first, as the viewer may see them. */

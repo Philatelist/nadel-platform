@@ -1,4 +1,4 @@
-import { ApiError, useGetPlotAccount, useGetSettings, type Charge } from '@nadel/api-client';
+import { ApiError, useGetPlotAccount, type Charge } from '@nadel/api-client';
 import { useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router';
 import { useT } from '../../i18n';
@@ -31,11 +31,6 @@ export function PlotAccountPanel({
   const canReverse = useCan('CHARGES_REVERSE') && !readOnly;
   const canRun = useCan('CHARGES_RUN') && !readOnly;
   const canViewPayments = useCan('PAYMENTS_VIEW');
-  const canEnterPayments = useCan('PAYMENTS_ENTER') && !readOnly;
-  // GET /settings is open to every member of the cooperative. The button is offered only once the setting is known
-  // to be off; with automatic allocation on, the server places the prepayment itself.
-  const settings = useGetSettings({ query: { enabled: canEnterPayments } });
-  const canAllocate = canEnterPayments && settings.data?.autoAllocatePrepayment === false;
   const [allocating, setAllocating] = useState(false);
   const [paymentsOnly, setPaymentsOnly] = useState(false);
   const [from, setFrom] = useState('');
@@ -92,7 +87,9 @@ export function PlotAccountPanel({
             <>
               <DebtByType
                 account={data}
-                onAllocatePrepayment={canAllocate ? () => setAllocating(true) : undefined}
+                onAllocatePrepayment={
+                  data.prepaymentAllocatable && !readOnly ? () => setAllocating(true) : undefined
+                }
               />
               {canRun && (
                 <div>

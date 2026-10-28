@@ -13,6 +13,7 @@ import app.nadel.problem.ApiProblemException;
 import app.nadel.problem.ConstraintViolations;
 import app.nadel.problem.FieldProblem;
 import app.nadel.problem.ProblemCodes;
+import app.nadel.settings.CooperativeSettings;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceException;
 import java.time.Clock;
@@ -24,6 +25,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import nadel.contract.model.AllocationLinesRequest;
+import nadel.contract.model.AllocationProblem;
 import nadel.contract.model.PaymentCurrentAllocation;
 import nadel.contract.model.PaymentPartProposal;
 import nadel.contract.model.PaymentReallocationResult;
@@ -60,16 +62,23 @@ import org.springframework.transaction.annotation.Transactional;
  * <li><b>Reallocate</b>: the payment (404; 409 {@code PAYMENT_ALREADY_REVERSED} for a reversed payment or a reversal
  * row); the plot's state as if every live allocation of the payment were released; the digest
  * ({@link PaymentDigest#reallocation}, 409 {@code PREVIEW_OUTDATED}); the proposal or the caller's lines checked
- * against that state and the payment's amount, as at entry; a save releases ({@code REALLOCATED}) and writes the new
- * lines (origin {@code REALLOCATION}). Audit {@code PAYMENT_REALLOCATED} with the old and new lines.</li>
+ * against that state and the payment's amount, as at entry; while automatic allocation is on, the remainder is placed
+ * on the charges still open after the lines ({@link AllocationPlanner#completeWithRemainder}, as at entry); a save
+ * releases ({@code REALLOCATED}) and writes the new lines (origin {@code REALLOCATION}, by the actor) and the automatic
+ * ones (origin {@code PREPAYMENT_AUTO}, by the system). Audit {@code PAYMENT_REALLOCATED} with the old and the caller's
+ * new lines (the automatic ones are ledger rows only).</li>
  * <li><b>Allocate prepayment</b>: the plot of the cooperative (404 {@code PLOT_NOT_FOUND}; archived plots and common
  * land too: the money is already there); an empty list of lines is 400 {@code lines} {@code REQUIRED}; no prepayment or
  * no open charge is 409 {@code NOTHING_TO_ALLOCATE}; the digest ({@link PaymentDigest#prepayment}); the proposal or the
  * caller's lines checked against the prepayment (400 {@code ALLOCATION_EXCEEDS_PAYMENT} when they exceed it); each
  * line's money taken from the payments with money left, oldest first ({@link AllocationPlanner#pairWithPayments}),
- * origin {@code PREPAYMENT_MANUAL}, by the actor. Works whether automatic allocation is on or off. Audit
+ * origin {@code PREPAYMENT_MANUAL}, by the actor. Works whether automatic allocation is on or off and places nothing
+ * automatically (the web offers it only while it is off: {@code prepaymentAllocatable}). Audit
  * {@code PREPAYMENT_ALLOCATED}.</li>
  * </ul>
+ * A preview of a reallocation or a prepayment allocation answers the problems of the caller's lines in the result
+ * ({@code valid: false}, {@code problems}, no digest, no automatic placement); a save refuses them with 400
+ * ({@link LinePlacement#requireValid}).
  */
 @Service
 class PaymentCorrections {
@@ -87,11 +96,13 @@ class PaymentCorrections {
     private final LedgerAuditPublisher audit;
     private final ApplicationEventPublisher events;
     private final EntityManager entityManager;
+    private final CooperativeSettings settings;
     private final Clock clock;
 
     PaymentCorrections(PaymentRepository payments, PlotCatalog plots, PlotLedgerLock plotLocks,
             PlotLedgerQueries ledgers, BillingMonths billingMonths, AllocationReleaser releaser, PaymentViews views,
-            LedgerAuditPublisher audit, ApplicationEventPublisher events, EntityManager entityManager, Clock clock) {
+            LedgerAuditPublisher audit, ApplicationEventPublisher events, EntityManager entityManager,
+            CooperativeSettings settings, Clock clock) {
         this.payments = payments;
         this.plots = plots;
         this.plotLocks = plotLocks;
@@ -102,6 +113,7 @@ class PaymentCorrections {
         this.audit = audit;
         this.events = events;
         this.entityManager = entityManager;
+        this.settings = settings;
         this.clock = clock;
     }
 
@@ -165,23 +177,34 @@ class PaymentCorrections {
         }
         List<Release> planned = ReleasePlanner.forPayment(paymentId, state.allocations(), ReleaseCause.REALLOCATED);
         PlotLedgerState released = state.afterReleases(planned);
-        String digest = PaymentDigest.reallocation(paymentId, state.allocations(), released.charges());
-        checkDigest(request.getDigest(), digest, preview);
         Money amount = payment.getAmount();
-        List<Line> lines = requested == null ? AllocationPlanner.propose(amount, released.charges()).lines()
-                : PaymentService.checked("", amount, requested, released);
+        LinePlacement placement = LinePlacement.of(plot.id(), amount, requested, released.charges());
+        if (!preview) {
+            placement.requireValid("");
+        }
+        placement = placement.completed(settings.autoAllocatePrepayment(), released.charges());
+        String digest = placement.valid() ? PaymentDigest.reallocation(paymentId, state.allocations(),
+                released.charges(), placement.lines(), placement.automatic()) : null;
+        checkDigest(request.getDigest(), digest, preview);
         List<PaymentCurrentAllocation> current = views.current(paymentId, state);
-        PaymentPartProposal proposal = views.part(plot.id(), plot.number(), amount, released, lines);
+        PaymentPartProposal proposal = views.part(plot.number(), released, placement);
+        List<AllocationProblem> problems = PaymentViews.problems(placement);
         if (preview) {
-            return new PaymentReallocationResult(true, paymentId, current, proposal, digest);
+            return reallocation(true, paymentId, current, proposal, digest, problems);
         }
 
+        List<Line> lines = placement.lines();
         List<Release> releases = releaser.releasePayment(tenantId, plot.id(), paymentId, ReleaseCause.REALLOCATED,
                 actor.memberId());
         Instant now = clock.instant();
         for (Line line : lines) {
             entityManager.persist(AllocationRecord.allocate(tenantId, plot.id(), paymentId, line.chargeId(),
                     line.amount(), AllocationOrigin.REALLOCATION, actor.memberId(), now));
+        }
+        // the remainder placed automatically: ledger rows of the system, not part of the audit entry
+        for (Line line : placement.automatic()) {
+            entityManager.persist(AllocationRecord.allocate(tenantId, plot.id(), paymentId, line.chargeId(),
+                    line.amount(), AllocationOrigin.PREPAYMENT_AUTO, null, now));
         }
         entityManager.flush();
         List<FieldChange> changes = new ArrayList<>();
@@ -196,9 +219,18 @@ class PaymentCorrections {
         audit.publishPayment(actor, LedgerAuditPublisher.Action.PAYMENT_REALLOCATED, plot.id(), plot.number(),
                 changes, null);
         events.publishEvent(new PaymentsChanged(tenantId, Set.of(plot.id())));
-        log.debug("Payment {} reallocated: {} allocations released, {} written", paymentId, releases.size(),
-                lines.size());
-        return new PaymentReallocationResult(false, paymentId, current, proposal, digest);
+        log.debug("Payment {} reallocated: {} allocations released, {} written, {} automatically", paymentId,
+                releases.size(), lines.size(), placement.automatic().size());
+        return reallocation(false, paymentId, current, proposal, digest, problems);
+    }
+
+    private static PaymentReallocationResult reallocation(boolean preview, UUID paymentId,
+            List<PaymentCurrentAllocation> current, PaymentPartProposal proposal, @Nullable String digest,
+            List<AllocationProblem> problems) {
+        PaymentReallocationResult result = new PaymentReallocationResult(preview, problems.isEmpty(), problems,
+                paymentId, current, proposal);
+        result.setDigest(digest);
+        return result;
     }
 
     /** Previews ({@code preview}) or saves an allocation of the plot's prepayment by hand. */
@@ -220,15 +252,19 @@ class PaymentCorrections {
             throw new ApiProblemException(HttpStatus.CONFLICT, ProblemCodes.NOTHING_TO_ALLOCATE,
                     "The plot has no prepayment or no open charge.");
         }
-        String digest = PaymentDigest.prepayment(plot.id(), prepayment, state.charges());
+        LinePlacement placement = LinePlacement.of(plot.id(), prepayment, requested, state.charges());
+        if (!preview) {
+            placement.requireValid("");
+        }
+        String digest = placement.valid() ? PaymentDigest.prepayment(plot.id(), prepayment, state.charges()) : null;
         checkDigest(request.getDigest(), digest, preview);
-        List<Line> lines = requested == null ? AllocationPlanner.propose(prepayment, state.charges()).lines()
-                : PaymentService.checked("", prepayment, requested, state);
-        PaymentPartProposal proposal = views.part(plot.id(), plot.number(), prepayment, state, lines);
+        PaymentPartProposal proposal = views.part(plot.number(), state, placement);
+        List<AllocationProblem> problems = PaymentViews.problems(placement);
         if (preview) {
-            return new PrepaymentAllocationResult(true, proposal, digest);
+            return prepaymentResult(true, proposal, digest, problems);
         }
 
+        List<Line> lines = placement.lines();
         List<Paired> paired = AllocationPlanner.pairWithPayments(lines, state.payments());
         Instant now = clock.instant();
         for (Paired part : paired) {
@@ -244,7 +280,15 @@ class PaymentCorrections {
         events.publishEvent(new PaymentsChanged(tenantId, Set.of(plot.id())));
         log.debug("Prepayment of plot {} allocated: {} allocations from {} lines", plot.id(), paired.size(),
                 lines.size());
-        return new PrepaymentAllocationResult(false, proposal, digest);
+        return prepaymentResult(false, proposal, digest, problems);
+    }
+
+    private static PrepaymentAllocationResult prepaymentResult(boolean preview, PaymentPartProposal proposal,
+            @Nullable String digest, List<AllocationProblem> problems) {
+        PrepaymentAllocationResult result = new PrepaymentAllocationResult(preview, problems.isEmpty(), problems,
+                proposal);
+        result.setDigest(digest);
+        return result;
     }
 
     /**
@@ -265,7 +309,7 @@ class PaymentCorrections {
     }
 
     /** 409 {@code PREVIEW_OUTDATED} when a save carries the digest of a preview that no longer matches. */
-    private static void checkDigest(@Nullable String given, String digest, boolean preview) {
+    private static void checkDigest(@Nullable String given, @Nullable String digest, boolean preview) {
         if (!preview && given != null && !given.equals(digest)) {
             throw new ApiProblemException(HttpStatus.CONFLICT, ProblemCodes.PREVIEW_OUTDATED,
                     "The payments or charges of the plot changed since the preview. Preview again before saving.");

@@ -7,7 +7,6 @@ import app.nadel.identity.OwnedPlotsSource;
 import app.nadel.ledger.PaymentSource;
 import app.nadel.ledger.PaymentsChanged;
 import app.nadel.ledger.internal.AllocationPlanner.Line;
-import app.nadel.ledger.internal.AllocationPlanner.Violation;
 import app.nadel.ledger.internal.PlotLedgerQueries.PlotLedger;
 import app.nadel.members.MemberDirectory;
 import app.nadel.money.Money;
@@ -16,6 +15,7 @@ import app.nadel.plots.PlotCatalog.PlotFacts;
 import app.nadel.problem.ApiProblemException;
 import app.nadel.problem.FieldProblem;
 import app.nadel.problem.ProblemCodes;
+import app.nadel.settings.CooperativeSettings;
 import jakarta.persistence.EntityManager;
 import java.time.Clock;
 import java.time.Instant;
@@ -31,6 +31,8 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import nadel.contract.model.AllocationProblem;
+import nadel.contract.model.AllocationProblemCode;
 import nadel.contract.model.PaymentEntryRequest;
 import nadel.contract.model.PaymentEntryResult;
 import nadel.contract.model.PaymentLineInput;
@@ -52,7 +54,12 @@ import org.springframework.transaction.annotation.Transactional;
  * Enters payments ({@code POST /payments?preview=}, feature 015 §2.1, technical considerations 2.3-2.6): money received
  * for one plot, as cash (with the cooperative's next receipt number) or a bank transfer entered by hand, placed on the
  * plot's open charges by the proposal ({@link AllocationPlanner#propose}) or by the caller's lines
- * ({@link AllocationPlanner#validate}); what is not placed stays as the plot's prepayment.
+ * ({@link AllocationPlanner#validate}). The remainder (what the lines leave of the amount) is placed at once while the
+ * cooperative's setting {@link CooperativeSettings#autoAllocatePrepayment()} is on (owner decision of 28.10.2026: no
+ * prepayment waits while the plot has an open charge): {@link AllocationPlanner#completeWithRemainder} over the charges
+ * still open after the lines, written as allocations of origin {@code PREPAYMENT_AUTO} by the system in the same
+ * transaction (ledger rows, not audit entries). Only what is left after that, or all of it while the setting is off,
+ * stays as the plot's prepayment.
  * <p>
  * In this order: the values ({@link PaymentRules}: 400 {@code VALIDATION_FAILED}); the plot exists in the cooperative
  * (404 {@code PLOT_NOT_FOUND}), is not archived (409 {@code PLOT_ARCHIVED}) and not common land (409
@@ -62,11 +69,14 @@ import org.springframework.transaction.annotation.Transactional;
  * ledger lock ({@link PlotLedgerLock}), the billing month {@code FOR SHARE} ({@link BillingMonths#openForBooking}: the
  * month of the received day, or the earliest open month after it) and, for cash, the receipt counter row
  * ({@link ReceiptCounter}). The ledger of the plot is read under the plot ledger lock; a save sent with the digest of
- * a preview that no longer matches ({@link PaymentDigest#entry}) is 409 {@code PREVIEW_OUTDATED} and writes nothing.
- * The lines are checked next (400 {@code VALIDATION_FAILED}, {@code ALLOCATION_EXCEEDS_PAYMENT},
- * {@code ALLOCATION_EXCEEDS_CHARGE}). A preview takes no lock and writes nothing.
+ * a preview that no longer matches ({@link PaymentDigest#entry}, which covers the lines a save writes) is 409
+ * {@code PREVIEW_OUTDATED} and writes nothing; the lines are checked before it (400 {@code VALIDATION_FAILED},
+ * {@code ALLOCATION_EXCEEDS_PAYMENT}, {@code ALLOCATION_EXCEEDS_CHARGE}, {@link LinePlacement#requireValid}). A preview
+ * takes no lock and writes nothing; its line problems (and {@code SPLIT_TOTAL_MISMATCH}) are answered in the result
+ * ({@code valid: false}, {@code problems}, no digest, no automatic placement), never as 400.
  * <p>
- * A save writes the payment (its own group) and its allocations (origin {@code ENTRY}, by the actor), publishes the
+ * A save writes the payment (its own group) and its allocations (origin {@code ENTRY}, by the actor; the automatic
+ * ones {@code PREPAYMENT_AUTO}, by the system), publishes the
  * audit entry {@code PAYMENT_RECORDED} with the payer note sealed, and {@link PaymentsChanged} for the plot status. The
  * payer note and the bank reference are user content; the note is personal data and is stored sealed
  * ({@link PaymentNoteCipher}). Logs ids and counts only.
@@ -76,9 +86,10 @@ import org.springframework.transaction.annotation.Transactional;
  * ({@link PlotCatalog#inNaturalOrder}); without parts the {@link PaymentSplitter} proposal over their debts is used,
  * otherwise the caller's parts (each a plot of the payer at most once, {@code 0.00} or more: a part of {@code 0.00} is
  * shown but not saved; an absent amount takes the proposed part), which must add up to the amount (400
- * {@code SPLIT_TOTAL_MISMATCH}). Each part's lines are checked as for one plot, under {@code split.parts[i].}. A save
- * locks every plot of the parts {@code FOR SHARE}, then all their ledger locks in one call, books one month, takes
- * one receipt number for a cash group, and writes one payment per part above zero with a shared group, the payer
+ * {@code SPLIT_TOTAL_MISMATCH}). Each part's lines are checked as for one plot, under {@code split.parts[i].}; each
+ * part's remainder is placed automatically on its plot. A save locks every plot of the parts {@code FOR SHARE}, then
+ * all their ledger locks in one call, books one month, takes one receipt number for a cash group, and writes one
+ * payment per part above zero with a shared group, the payer
  * {@code split.payerMemberId} and the note sealed per payment; one {@code PAYMENT_RECORDED} per part and one
  * {@link PaymentsChanged} with every plot.
  */
@@ -99,12 +110,13 @@ class PaymentService {
     private final LedgerAuditPublisher audit;
     private final ApplicationEventPublisher events;
     private final EntityManager entityManager;
+    private final CooperativeSettings settings;
     private final Clock clock;
 
     PaymentService(PlotCatalog plots, OwnedPlotsSource ownedPlots, MemberDirectory members, PlotLedgerLock plotLocks,
             PlotLedgerQueries ledgers, BillingMonths billingMonths, ReceiptCounter receipts, PaymentNoteCipher notes,
             PaymentViews views, LedgerAuditPublisher audit, ApplicationEventPublisher events,
-            EntityManager entityManager, Clock clock) {
+            EntityManager entityManager, CooperativeSettings settings, Clock clock) {
         this.plots = plots;
         this.ownedPlots = ownedPlots;
         this.members = members;
@@ -117,6 +129,7 @@ class PaymentService {
         this.audit = audit;
         this.events = events;
         this.entityManager = entityManager;
+        this.settings = settings;
         this.clock = clock;
     }
 
@@ -174,27 +187,46 @@ class PaymentService {
             plotLocks.lockAll(tenantId, Set.of(plot.id()));
         }
         PlotLedgerState state = ledgers.load(Set.of(plot.id())).get(plot.id()).state();
-        String digest = PaymentDigest.entry(entry.amount(),
-                List.of(new PaymentDigest.Part(plot.id(), entry.amount(), state.charges())));
+        LinePlacement placement = LinePlacement.of(plot.id(), entry.amount(), entry.lines(), state.charges());
+        if (!preview) {
+            placement.requireValid("");
+        }
+        placement = placement.completed(settings.autoAllocatePrepayment(), state.charges());
+        String digest = placement.valid()
+                ? PaymentDigest.entry(entry.amount(), List.of(digestPart(placement, state)))
+                : null;
         if (!preview && entry.digest() != null && !entry.digest().equals(digest)) {
             throw new ApiProblemException(HttpStatus.CONFLICT, ProblemCodes.PREVIEW_OUTDATED,
                     "The charges of the plot changed since the preview. Preview again before saving.");
         }
-        List<Line> lines = entry.lines() == null
-                ? AllocationPlanner.propose(entry.amount(), state.charges()).lines()
-                : checked("", entry.amount(), entry.lines(), state);
-        PaymentPartProposal part = views.part(plot.id(), plot.number(), entry.amount(), state, lines);
+        PaymentPartProposal part = views.part(plot.number(), state, placement);
+        List<AllocationProblem> problems = PaymentViews.problems(placement);
         if (preview) {
-            return new PaymentEntryResult(true, entry.amount().toString(), List.of(part), digest, List.of());
+            return result(true, entry.amount(), List.of(part), digest, problems, List.of());
         }
 
-        List<SavedPayment> saved = book(entry, entry.payerMemberId(), List.of(new Booking(plot, entry.amount(), lines)),
-                actor, tenantId);
-        return new PaymentEntryResult(false, entry.amount().toString(), List.of(part), digest, saved);
+        List<SavedPayment> saved = book(entry, entry.payerMemberId(), List.of(new Booking(plot, placement)), actor,
+                tenantId);
+        return result(false, entry.amount(), List.of(part), digest, problems, saved);
     }
 
-    /** A payment to write: the plot, its amount (above zero) and its allocation lines. */
-    private record Booking(PlotFacts plot, Money amount, List<Line> lines) {
+    /** The answer: valid when there is no problem; the digest only then. */
+    private static PaymentEntryResult result(boolean preview, Money amount, List<PaymentPartProposal> parts,
+            @Nullable String digest, List<AllocationProblem> problems, List<SavedPayment> saved) {
+        PaymentEntryResult result = new PaymentEntryResult(preview, problems.isEmpty(), problems, amount.toString(),
+                parts, saved);
+        result.setDigest(digest);
+        return result;
+    }
+
+    /** The digest's view of a valid placement: the plot, the amount, its charges and the lines a save writes. */
+    private static PaymentDigest.Part digestPart(LinePlacement placement, PlotLedgerState state) {
+        return new PaymentDigest.Part(placement.plotId(), placement.amount(), state.charges(), placement.lines(),
+                placement.automatic());
+    }
+
+    /** A payment to write: the plot and its valid placement (amount above zero, lines and automatic lines). */
+    private record Booking(PlotFacts plot, LinePlacement placement) {
     }
 
     /**
@@ -214,7 +246,7 @@ class PaymentService {
             UUID paymentId = UUID.randomUUID();
             groupId = groupId == null ? paymentId : groupId;
             PaymentRecord payment = PaymentRecord.payment(paymentId, tenantId, booking.plot().id(), entry.source(),
-                    booking.amount(), entry.receivedOn(), month.getId(), groupId, receipt, entry.bankReference(),
+                    booking.placement().amount(), entry.receivedOn(), month.getId(), groupId, receipt, entry.bankReference(),
                     payerMemberId, notes.seal(tenantId, paymentId, entry.payerNote()), actor.memberId(), now);
             entityManager.persist(payment);
             payments.add(payment);
@@ -224,9 +256,15 @@ class PaymentService {
         int allocations = 0;
         for (int i = 0; i < bookings.size(); i++) {
             Booking booking = bookings.get(i);
-            for (Line line : booking.lines()) {
+            for (Line line : booking.placement().lines()) {
                 entityManager.persist(AllocationRecord.allocate(tenantId, booking.plot().id(), payments.get(i).getId(),
                         line.chargeId(), line.amount(), AllocationOrigin.ENTRY, actor.memberId(), now));
+                allocations++;
+            }
+            // the remainder placed automatically: ledger rows of the system, not audit entries
+            for (Line line : booking.placement().automatic()) {
+                entityManager.persist(AllocationRecord.allocate(tenantId, booking.plot().id(), payments.get(i).getId(),
+                        line.chargeId(), line.amount(), AllocationOrigin.PREPAYMENT_AUTO, null, now));
                 allocations++;
             }
         }
@@ -287,30 +325,49 @@ class PaymentService {
 
         List<Part> parts = parts(split, payerPlots, proposed);
         Money total = parts.stream().map(Part::amount).reduce(Money.ZERO, Money::plus);
-        if (total.value().compareTo(entry.amount().value()) != 0) {
+        boolean totalMismatch = total.value().compareTo(entry.amount().value()) != 0;
+        if (totalMismatch && !preview) {
             throw new ApiProblemException(HttpStatus.BAD_REQUEST, ProblemCodes.SPLIT_TOTAL_MISMATCH,
                     "The parts do not add up to the payment amount.",
                     List.of(new FieldProblem("split.parts", ProblemCodes.SPLIT_TOTAL_MISMATCH)));
         }
-        String digest = PaymentDigest.entry(entry.amount(), payer, parts.stream()
-                .map(part -> new PaymentDigest.Part(part.plot().id(), part.amount(),
-                        ledgerOf.get(part.plot().id()).state().charges()))
-                .toList());
+        List<LinePlacement> placements = new ArrayList<>();
+        for (Part part : parts) {
+            LinePlacement placement = LinePlacement.of(part.plot().id(), part.amount(), part.lines(),
+                    ledgerOf.get(part.plot().id()).state().charges());
+            if (!preview) {
+                placement.requireValid(part.prefix());
+            }
+            placements.add(placement);
+        }
+        // the remainders are placed only when the whole split is valid
+        boolean valid = !totalMismatch && placements.stream().allMatch(LinePlacement::valid);
+        if (valid) {
+            boolean autoAllocate = settings.autoAllocatePrepayment();
+            placements.replaceAll(placement -> placement.completed(autoAllocate,
+                    ledgerOf.get(placement.plotId()).state().charges()));
+        }
+        String digest = valid ? PaymentDigest.entry(entry.amount(), payer, placements.stream()
+                .map(placement -> digestPart(placement, ledgerOf.get(placement.plotId()).state()))
+                .toList()) : null;
         if (!preview && entry.digest() != null && !entry.digest().equals(digest)) {
             throw new ApiProblemException(HttpStatus.CONFLICT, ProblemCodes.PREVIEW_OUTDATED,
                     "The charges of the plots changed since the preview. Preview again before saving.");
         }
 
+        List<AllocationProblem> problems = new ArrayList<>();
+        if (totalMismatch) {
+            problems.add(new AllocationProblem(AllocationProblemCode.SPLIT_TOTAL_MISMATCH));
+        }
         List<PaymentPartProposal> partViews = new ArrayList<>();
         List<Booking> bookings = new ArrayList<>();
-        for (Part part : parts) {
-            PlotLedgerState state = ledgerOf.get(part.plot().id()).state();
-            List<Line> lines = part.lines() == null
-                    ? AllocationPlanner.propose(part.amount(), state.charges()).lines()
-                    : checked(part.prefix(), part.amount(), part.lines(), state);
-            partViews.add(views.part(part.plot().id(), part.plot().number(), part.amount(), state, lines));
+        for (int i = 0; i < parts.size(); i++) {
+            Part part = parts.get(i);
+            LinePlacement placement = placements.get(i);
+            partViews.add(views.part(part.plot().number(), ledgerOf.get(part.plot().id()).state(), placement));
+            problems.addAll(PaymentViews.problems(placement));
             if (part.amount().signum() > 0) {
-                bookings.add(new Booking(part.plot(), part.amount(), lines));
+                bookings.add(new Booking(part.plot(), placement));
             }
         }
         PaymentSplitPreview splitView = new PaymentSplitPreview(payer, debts.stream()
@@ -318,8 +375,7 @@ class PaymentService {
                         debt.debt().toString(), proposed.get(debt.plotId()).toString()))
                 .toList());
         List<SavedPayment> saved = preview ? List.of() : book(entry, payer, bookings, actor, tenantId);
-        PaymentEntryResult result = new PaymentEntryResult(preview, entry.amount().toString(), partViews, digest,
-                saved);
+        PaymentEntryResult result = result(preview, entry.amount(), partViews, digest, problems, saved);
         result.setSplit(splitView);
         return result;
     }
@@ -466,47 +522,6 @@ class PaymentService {
             lines.add(new Line(line.getChargeId(), Money.parse(line.getAmount())));
         }
         return lines;
-    }
-
-    /**
-     * The caller's lines when they are valid against the plot's open charges: 400 {@code VALIDATION_FAILED} for a
-     * charge that is not open on the plot, named twice or a line not above zero; otherwise 400
-     * {@code ALLOCATION_EXCEEDS_PAYMENT} when the lines together exceed the payment, then 400
-     * {@code ALLOCATION_EXCEEDS_CHARGE} for the lines that exceed what is open on their charge. The field names start
-     * with {@code prefix} ({@code ""} for one plot, {@code split.parts[i].} for a part of a split).
-     */
-    static List<Line> checked(String prefix, Money amount, List<Line> lines, PlotLedgerState state) {
-        List<Violation> violations = AllocationPlanner.validate(amount, lines, state.charges());
-        if (violations.isEmpty()) {
-            return lines;
-        }
-        List<FieldProblem> fields = new ArrayList<>();
-        List<FieldProblem> exceedsCharge = new ArrayList<>();
-        boolean exceedsPayment = false;
-        for (Violation violation : violations) {
-            Integer i = violation.line();
-            switch (violation.problem()) {
-                case ALLOCATION_EXCEEDS_PAYMENT -> exceedsPayment = true;
-                case ALLOCATION_EXCEEDS_CHARGE -> exceedsCharge.add(new FieldProblem(
-                        prefix + "lines[" + i + "].amount", ProblemCodes.ALLOCATION_EXCEEDS_CHARGE));
-                case NOT_FOUND -> fields.add(new FieldProblem(prefix + "lines[" + i + "].chargeId",
-                        ProblemCodes.NOT_FOUND));
-                case DUPLICATE -> fields.add(new FieldProblem(prefix + "lines[" + i + "].chargeId",
-                        ProblemCodes.DUPLICATE));
-                case AMOUNT_NOT_POSITIVE -> fields.add(new FieldProblem(prefix + "lines[" + i + "].amount",
-                        ProblemCodes.AMOUNT_NOT_POSITIVE));
-            }
-        }
-        if (!fields.isEmpty()) {
-            throw invalid(fields);
-        }
-        if (exceedsPayment) {
-            throw new ApiProblemException(HttpStatus.BAD_REQUEST, ProblemCodes.ALLOCATION_EXCEEDS_PAYMENT,
-                    "More is allocated than the payment amount.",
-                    List.of(new FieldProblem(prefix + "lines", ProblemCodes.ALLOCATION_EXCEEDS_PAYMENT)));
-        }
-        throw new ApiProblemException(HttpStatus.BAD_REQUEST, ProblemCodes.ALLOCATION_EXCEEDS_CHARGE,
-                "An amount exceeds what is open on the charge.", exceedsCharge);
     }
 
     /**

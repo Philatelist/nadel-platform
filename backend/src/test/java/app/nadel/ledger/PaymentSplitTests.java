@@ -20,7 +20,9 @@ import tools.jackson.databind.JsonNode;
  * One payment split over several plots of one payer end to end ({@code POST /payments?preview=} with {@code split},
  * feature 015 §2.2 and §2.6, worked examples 12, 13, 14 and 15): the payer's current plots in natural order with their
  * debts, the proposed split, the caller's parts and their lines, the total that must match, plots that are not the
- * payer's, the whole amount to the first plot when nothing is owed, one group and one receipt number for a cash split,
+ * payer's, the remainder of each part placed at once on its plot while automatic allocation is on, the problems of
+ * the parts answered by a preview, the whole amount to the first plot when nothing is owed, one group and one receipt
+ * number for a cash split,
  * no receipt for a bank split, the card and the list showing the group, and a stale digest.
  */
 class PaymentSplitTests extends PaymentApiSupport {
@@ -259,9 +261,15 @@ class PaymentSplitTests extends PaymentApiSupport {
                 .andExpect(jsonPath("$.code").value("SPLIT_TOTAL_MISMATCH"))
                 .andExpect(jsonPath("$.errors[0].field").value("split.parts"))
                 .andExpect(jsonPath("$.errors[0].code").value("SPLIT_TOTAL_MISMATCH"));
-        preview(treasurer(), split("CASH", "200.00", plots.payer(), List.of(part(plots.seven(), "150.00", null))))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("SPLIT_TOTAL_MISMATCH"));
+        // a preview shows the parts as typed with the problem instead (no digest: it cannot be saved)
+        JsonNode preview = body(preview(treasurer(), split("CASH", "200.00", plots.payer(),
+                List.of(part(plots.seven(), "150.00", null)))).andExpect(status().isOk()));
+        assertThat(preview.get("valid").asBoolean()).isFalse();
+        assertThat(preview.has("digest")).isFalse();
+        assertThat(values(preview.get("problems"), "code")).containsExactly("SPLIT_TOTAL_MISMATCH");
+        assertThat(preview.get("problems").get(0).has("plotId")).isFalse();
+        assertThat(values(preview.get("parts"), "amount")).containsExactly("150.00");
+        assertThat(values(preview.get("parts"), "automaticTotal")).containsExactly("0.00");
 
         assertThat(paymentsOf(plots.seven(), plots.fifteen())).isEmpty();
         assertThat(lastReceipt()).isEqualTo(before);
@@ -350,15 +358,41 @@ class PaymentSplitTests extends PaymentApiSupport {
                 .andExpect(jsonPath("$.errors[0].field").value("split.parts[1].lines[0].chargeId"))
                 .andExpect(jsonPath("$.errors[0].code").value("NOT_FOUND"));
         assertThat(paymentsOf(plots.seven(), plots.fifteen())).isEmpty();
+        // a preview names the plot of the part with the problem
+        JsonNode problems = body(preview(treasurer(), split("CASH", "400.00", plots.payer(), List.of(
+                part(plots.seven(), "350.00", null),
+                part(plots.fifteen(), "50.00", List.of(line(plots.fifteenCharge(), "100.01"))))))
+                .andExpect(status().isOk())).get("problems");
+        assertThat(values(problems, "code")).containsExactly("ALLOCATION_EXCEEDS_PAYMENT", "ALLOCATION_EXCEEDS_CHARGE");
+        assertThat(values(problems, "plotId")).containsOnly(plots.fifteen().toString());
+
+        // the part of plot 7 places nothing by its lines: its 350.00 go on its 300.00 at once, 50.00 stay
+        JsonNode parts = body(save(treasurer(), split("CASH", "400.00", plots.payer(), List.of(
+                part(plots.seven(), "350.00", List.of()),
+                part(plots.fifteen(), "50.00", List.of(line(plots.fifteenCharge(), "50.00"))))))
+                .andExpect(status().isCreated())).get("parts");
+        assertThat(values(parts, "allocatedTotal")).containsExactly("300.00", "50.00");
+        assertThat(values(parts, "automaticTotal")).containsExactly("300.00", "0.00");
+        assertThat(values(parts, "prepayment")).containsExactly("50.00", "0.00");
+        assertThat(allocated(plots.sevenCharge())).isEqualByComparingTo("300.00");
+        assertThat(allocated(plots.fifteenCharge())).isEqualByComparingTo("50.00");
+        assertThat(ownerJdbc().queryForObject("select origin from allocation where charge_id = ?", String.class,
+                plots.sevenCharge())).isEqualTo("PREPAYMENT_AUTO");
+    }
+
+    @Test
+    void withAutomaticAllocationOffTheRemainderOfAPartWaitsAsPrepayment() throws Exception {
+        autoAllocation(false);
+        TwoPlots plots = twoPlots();
 
         JsonNode parts = body(save(treasurer(), split("CASH", "400.00", plots.payer(), List.of(
                 part(plots.seven(), "350.00", List.of()),
                 part(plots.fifteen(), "50.00", List.of(line(plots.fifteenCharge(), "50.00"))))))
                 .andExpect(status().isCreated())).get("parts");
+
         assertThat(values(parts, "allocatedTotal")).containsExactly("0.00", "50.00");
         assertThat(values(parts, "prepayment")).containsExactly("350.00", "0.00");
         assertThat(allocated(plots.sevenCharge())).isEqualByComparingTo("0.00");
-        assertThat(allocated(plots.fifteenCharge())).isEqualByComparingTo("50.00");
     }
 
     @Test

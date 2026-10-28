@@ -9,6 +9,7 @@
  *
  * OpenAPI spec version: 0.1.0
  */
+import type { AllocationProblem } from './allocationProblem';
 import type { PaymentCurrentAllocation } from './paymentCurrentAllocation';
 import type { PaymentPartProposal } from './paymentPartProposal';
 
@@ -17,9 +18,12 @@ import type { PaymentPartProposal } from './paymentPartProposal';
  */
 export interface PaymentReallocationResult {
   preview: boolean;
+  /** False when `problems` is not empty; only a valid preview can be saved */
+  valid: boolean;
+  problems: AllocationProblem[];
   paymentId: string;
   current: PaymentCurrentAllocation[];
   proposal: PaymentPartProposal;
-  /** Send it back with the save to refuse it when the payment or the open charges changed since */
-  digest: string;
+  /** Send it back with the save to refuse it when the payment, the open charges or the lines changed since; absent in a preview with problems */
+  digest?: string;
 }

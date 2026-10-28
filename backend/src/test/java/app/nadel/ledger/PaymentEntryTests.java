@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -16,14 +17,16 @@ import tools.jackson.databind.JsonNode;
 
 /**
  * Entering a payment for one plot end to end ({@code POST /payments?preview=}, feature 015 §2.1, worked examples 1, 2,
- * 10, 11, 16 and 18): the proposal over every open charge, the treasurer's own lines, the booking month of a payment
+ * 10, 11, 16, 18, 19 and 20): the proposal over every open charge, the treasurer's own lines and, while automatic
+ * allocation is on, the remainder they leave placed at once (owner decision of 28.10.2026), the problems of the lines
+ * answered by a preview (200) and refused by a save (400), the booking month of a payment
  * received in a closed month, the refusals (common land, archived, future date, zero amount, too long texts, a bank
  * reference on cash, an unknown or foreign plot) and the stale digest. A preview writes nothing. The list and the card
  * show what was saved.
  */
 class PaymentEntryTests extends PaymentApiSupport {
 
-    /** The debts of examples 1, 2 and 10: membership 600.00 (January) and electricity 250.00 (February). */
+    /** The debts of examples 1, 2, 10, 19 and 20: membership 600.00 (January) and electricity 250.00 (February). */
     private record Debts(UUID plot, UUID membership, UUID electricity) {
     }
 
@@ -36,6 +39,10 @@ class PaymentEntryTests extends PaymentApiSupport {
     private BigDecimal allocated(UUID charge) {
         return ownerJdbc().queryForObject("select coalesce(sum(amount), 0) from allocation where charge_id = ?",
                 BigDecimal.class, charge);
+    }
+
+    private JsonNode account(String bearer, UUID plot) throws Exception {
+        return body(send(bearer, get(ACCOUNT.formatted(plot)), null).andExpect(status().isOk()));
     }
 
     private static JsonNode line(JsonNode part, UUID charge) {
@@ -107,10 +114,15 @@ class PaymentEntryTests extends PaymentApiSupport {
         assertThat(ownerJdbc().queryForObject("select amount - (select sum(amount) from allocation a "
                 + "where a.payment_id = p.id) from payment p where plot_id = ?", BigDecimal.class, debts.plot()))
                 .isEqualByComparingTo("150.00");
+        // the plot owes nothing more: the 150.00 wait as prepayment although automatic allocation is on
+        assertThat(allocationCount(debts.plot())).isEqualTo(2);
+        assertThat(ledgerPrepayment(debts.plot())).isEqualByComparingTo("150.00");
     }
 
     @Test
-    void example10TheTreasurersLinesAreSavedAsChosen() throws Exception {
+    void example10WithAutomaticAllocationOffTheTreasurersLinesAreSavedAsChosenAndTheRestWaits() throws Exception {
+        // automatic allocation off: the 50.00 the lines leave wait as prepayment
+        autoAllocation(false);
         Debts debts = example1Debts();
         List<Map<String, Object>> lines = List.of(line(debts.electricity(), "250.00"),
                 line(debts.membership(), "400.00"));
@@ -127,10 +139,126 @@ class PaymentEntryTests extends PaymentApiSupport {
         assertThat(allocated(debts.electricity())).isEqualByComparingTo("250.00");
         JsonNode next = body(preview(treasurer(), cash(debts.plot(), "1.00")).andExpect(status().isOk()));
         assertThat(line(next.get("parts").get(0), debts.membership()).get("open").asString()).isEqualTo("200.00");
+        assertThat(ledgerPrepayment(debts.plot())).isEqualByComparingTo("50.00");
+    }
+
+    @Test
+    void example10WithAutomaticAllocationOnTheRemainderOfTheTreasurersLinesIsPlacedAtOnce() throws Exception {
+        Debts debts = example1Debts();
+        List<Map<String, Object>> lines = List.of(line(debts.electricity(), "250.00"),
+                line(debts.membership(), "400.00"));
+        Map<String, Object> body = payment(debts.plot(), "CASH", "700.00", kyivToday().toString(), lines);
+
+        JsonNode preview = body(preview(treasurer(), body).andExpect(status().isOk()));
+        JsonNode part = preview.get("parts").get(0);
+        assertThat(preview.get("valid").asBoolean()).isTrue();
+        assertThat(preview.get("problems")).isEmpty();
+        // the treasurer's lines as chosen, then the 50.00 they leave on the oldest charge still open
+        assertThat(line(part, debts.membership()).get("proposed").asString()).isEqualTo("400.00");
+        assertThat(part.get("resultLines").findValuesAsString("chargeId")).containsExactly(
+                debts.electricity().toString(), debts.membership().toString(), debts.membership().toString());
+        assertThat(part.get("resultLines").findValuesAsString("amount")).containsExactly("250.00", "400.00", "50.00");
+        assertThat(part.get("resultLines").get(2).get("automatic").asBoolean()).isTrue();
+        assertThat(part.get("resultLines").get(0).get("automatic").asBoolean()).isFalse();
+        assertThat(part.get("allocatedTotal").asString()).isEqualTo("700.00");
+        assertThat(part.get("automaticTotal").asString()).isEqualTo("50.00");
+        assertThat(part.get("prepayment").asString()).isEqualTo("0.00");
+
+        UUID payment = UUID.fromString(body(save(treasurer(), with(body, "digest", preview.get("digest").asString()))
+                .andExpect(status().isCreated())).get("payments").get(0).get("id").asString());
+
+        assertThat(allocated(debts.membership())).isEqualByComparingTo("450.00");
+        assertThat(allocated(debts.electricity())).isEqualByComparingTo("250.00");
+        assertThat(ledgerPrepayment(debts.plot())).isEqualByComparingTo("0.00");
+        assertThat(ownerJdbc().queryForList("select origin || ' ' || amount || ' ' || coalesce(created_by::text, "
+                + "'system') from allocation where payment_id = ?", String.class, payment))
+                .containsExactlyInAnyOrder("ENTRY 250.00 " + demoMember("treasurer@demo.local"),
+                        "ENTRY 400.00 " + demoMember("treasurer@demo.local"), "PREPAYMENT_AUTO 50.00 system");
+        // the card: 450.00 on the membership now, the automatic row last in the history
+        JsonNode card = body(card(treasurer(), payment).andExpect(status().isOk()));
+        assertThat(card.get("currentAllocations").findValuesAsString("amount")).containsExactly("450.00", "250.00");
+        assertThat(card.get("allocations").get(2).get("origin").asString()).isEqualTo("PREPAYMENT_AUTO");
+        assertThat(card.get("prepayment").asString()).isEqualTo("0.00");
+    }
+
+    @Test
+    void example19TheTreasurerAllocatesElectricityOnlyAndAutomaticAllocationPlacesTheRemainderOnMembership()
+            throws Exception {
+        Debts debts = example1Debts();
+        Map<String, Object> body = payment(debts.plot(), "CASH", "700.00", kyivToday().toString(),
+                List.of(line(debts.electricity(), "250.00")));
+
+        JsonNode preview = body(preview(treasurer(), body).andExpect(status().isOk()));
+        JsonNode part = preview.get("parts").get(0);
+        assertThat(preview.get("valid").asBoolean()).isTrue();
+        assertThat(part.get("resultLines").findValuesAsString("chargeId"))
+                .containsExactly(debts.electricity().toString(), debts.membership().toString());
+        assertThat(part.get("resultLines").findValuesAsString("amount")).containsExactly("250.00", "450.00");
+        assertThat(part.get("resultLines").get(0).get("automatic").asBoolean()).isFalse();
+        assertThat(part.get("resultLines").get(1).get("automatic").asBoolean()).isTrue();
+        assertThat(part.get("allocatedTotal").asString()).isEqualTo("700.00");
+        assertThat(part.get("automaticTotal").asString()).isEqualTo("450.00");
+        assertThat(part.get("prepayment").asString()).isEqualTo("0.00");
+
+        save(treasurer(), with(body, "digest", preview.get("digest").asString())).andExpect(status().isCreated());
+
+        assertThat(allocated(debts.electricity())).isEqualByComparingTo("250.00");
+        assertThat(allocated(debts.membership())).isEqualByComparingTo("450.00");
+        assertThat(ledgerPrepayment(debts.plot())).isEqualByComparingTo("0.00");
+        JsonNode next = body(preview(treasurer(), cash(debts.plot(), "1.00")).andExpect(status().isOk()));
+        assertThat(next.get("parts").get(0).get("lines")).hasSize(1);
+        assertThat(line(next.get("parts").get(0), debts.membership()).get("open").asString()).isEqualTo("150.00");
+        assertThat(account(treasurer(), debts.plot()).get("prepaymentAllocatable").asBoolean()).isFalse();
+    }
+
+    @Test
+    void example20WithAutomaticAllocationOffTheRemainderOfExample19StaysAsPrepaymentAndAllocatingItIsOffered()
+            throws Exception {
+        autoAllocation(false);
+        Debts debts = example1Debts();
+        Map<String, Object> body = payment(debts.plot(), "CASH", "700.00", kyivToday().toString(),
+                List.of(line(debts.electricity(), "250.00")));
+
+        JsonNode preview = body(preview(treasurer(), body).andExpect(status().isOk()));
+        JsonNode part = preview.get("parts").get(0);
+        assertThat(preview.get("valid").asBoolean()).isTrue();
+        assertThat(part.get("resultLines").findValuesAsString("chargeId"))
+                .containsExactly(debts.electricity().toString());
+        assertThat(part.get("resultLines").findValuesAsString("amount")).containsExactly("250.00");
+        assertThat(part.get("allocatedTotal").asString()).isEqualTo("250.00");
+        assertThat(part.get("prepayment").asString()).isEqualTo("450.00");
+
+        UUID payment = UUID.fromString(body(save(treasurer(), with(body, "digest", preview.get("digest").asString()))
+                .andExpect(status().isCreated())).get("payments").get(0).get("id").asString());
+
+        assertThat(allocated(debts.electricity())).isEqualByComparingTo("250.00");
+        assertThat(allocated(debts.membership())).isEqualByComparingTo("0.00");
+        assertThat(ledgerPrepayment(debts.plot())).isEqualByComparingTo("450.00");
+        JsonNode next = body(preview(treasurer(), cash(debts.plot(), "1.00")).andExpect(status().isOk()));
+        assertThat(next.get("parts").get(0).get("lines")).hasSize(1);
+        assertThat(line(next.get("parts").get(0), debts.membership()).get("open").asString()).isEqualTo("600.00");
+        // "Розподілити аванс" is offered on the account and the card
+        assertThat(account(treasurer(), debts.plot()).get("prepaymentAllocatable").asBoolean()).isTrue();
+        assertThat(body(card(treasurer(), payment).andExpect(status().isOk())).get("prepaymentAllocatable")
+                .asBoolean()).isTrue();
+    }
+
+    @Test
+    void aSplitOfTheSameMoneyBetweenLinesAndTheAutomaticPlacementIsAnotherPreview() throws Exception {
+        // the digest covers the lines a save writes: a save with other lines than its preview is stale
+        Debts debts = example1Debts();
+        String digest = body(preview(treasurer(), cash(debts.plot(), "700.00"))).get("digest").asString();
+
+        save(treasurer(), with(payment(debts.plot(), "CASH", "700.00", kyivToday().toString(),
+                List.of(line(debts.electricity(), "250.00"))), "digest", digest))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("PREVIEW_OUTDATED"));
+        assertThat(paymentCount(debts.plot())).isZero();
     }
 
     @Test
     void anEmptyListOfLinesPlacesNothing() throws Exception {
+        autoAllocation(false);
         Debts debts = example1Debts();
 
         save(treasurer(), payment(debts.plot(), "CASH", "50.00", kyivToday().toString(), List.of()))
@@ -161,11 +289,55 @@ class PaymentEntryTests extends PaymentApiSupport {
     void aLineAboveWhatIsOpenOnItsChargeIsRefused() throws Exception {
         Debts debts = example1Debts();
 
-        preview(treasurer(), payment(debts.plot(), "CASH", "700.00", kyivToday().toString(),
+        save(treasurer(), payment(debts.plot(), "CASH", "700.00", kyivToday().toString(),
                 List.of(line(debts.electricity(), "250.01"))))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("ALLOCATION_EXCEEDS_CHARGE"))
                 .andExpect(jsonPath("$.errors[0].field").value("lines[0].amount"));
+        assertThat(paymentCount(debts.plot())).isZero();
+    }
+
+    @Test
+    void aPreviewWithProblemsAnswersTheWholeTableTheTotalsAndEveryProblem() throws Exception {
+        Debts debts = example1Debts();
+        Debts other = example1Debts();
+        // what a treasurer has typed so far: too much on electricity, membership twice, a zero, a foreign charge
+        List<Map<String, Object>> typed = List.of(line(debts.electricity(), "250.01"),
+                line(debts.membership(), "500.00"), line(debts.membership(), "10.00"),
+                line(other.electricity(), "0.00"), line(other.membership(), "5.00"));
+
+        JsonNode preview = body(preview(treasurer(), payment(debts.plot(), "CASH", "700.00", kyivToday().toString(),
+                typed)).andExpect(status().isOk()));
+
+        assertThat(preview.get("valid").asBoolean()).isFalse();
+        assertThat(preview.has("digest")).isFalse();
+        List<String> problems = new ArrayList<>();
+        preview.get("problems").forEach(problem -> problems.add(problem.get("code").asString() + " "
+                + (problem.has("line") ? problem.get("line").asInt() : "-") + " "
+                + (problem.has("chargeId") ? problem.get("chargeId").asString() : "-") + " "
+                + problem.get("plotId").asString()));
+        assertThat(problems).containsExactly(
+                "ALLOCATION_EXCEEDS_PAYMENT - - " + debts.plot(),
+                "ALLOCATION_EXCEEDS_CHARGE 0 " + debts.electricity() + " " + debts.plot(),
+                "DUPLICATE 2 " + debts.membership() + " " + debts.plot(),
+                "AMOUNT_NOT_POSITIVE 3 " + other.electricity() + " " + debts.plot(),
+                "NOT_FOUND 4 " + other.membership() + " " + debts.plot());
+        // the whole table with the amounts as requested, the server's total and the amount for «X з Y»
+        JsonNode part = preview.get("parts").get(0);
+        assertThat(part.get("lines").findValuesAsString("chargeId"))
+                .containsExactly(debts.membership().toString(), debts.electricity().toString());
+        assertThat(line(part, debts.electricity()).get("proposed").asString()).isEqualTo("250.01");
+        assertThat(line(part, debts.membership()).get("proposed").asString()).isEqualTo("510.00");
+        assertThat(part.get("amount").asString()).isEqualTo("700.00");
+        assertThat(part.get("allocatedTotal").asString()).isEqualTo("765.01");
+        assertThat(part.get("automaticTotal").asString()).isEqualTo("0.00");
+        assertThat(part.get("prepayment").asString()).isEqualTo("0.00");
+        assertThat(part.get("resultLines")).isEmpty();
+        assertThat(paymentCount(debts.plot())).isZero();
+
+        // the shape of the request is still checked at the boundary: 400
+        preview(treasurer(), payment(debts.plot(), "CASH", "700.00", kyivToday().toString(),
+                List.of(line(debts.electricity(), "25.5")))).andExpect(status().isBadRequest());
     }
 
     @Test

@@ -11,7 +11,7 @@
  */
 
 /**
- * Who placed an allocation: `ENTRY` when the payment was entered, `REALLOCATION` when the payment was reallocated, `PREPAYMENT_MANUAL` the plot's prepayment placed by hand, `PREPAYMENT_AUTO` the prepayment placed by the system after new charges were booked
+ * Who placed an allocation: `ENTRY` when the payment was entered, `REALLOCATION` when the payment was reallocated, `PREPAYMENT_MANUAL` the plot's prepayment placed by hand, `PREPAYMENT_AUTO` placed by the system: the prepayment after new charges were booked, or the remainder of a payment placed at once when it was entered or reallocated (automatic allocation on)
  */
 export type AllocationOrigin = typeof AllocationOrigin[keyof typeof AllocationOrigin];
 

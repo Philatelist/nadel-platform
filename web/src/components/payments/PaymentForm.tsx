@@ -23,7 +23,7 @@ import { SplitParts, type SplitEdits } from './SplitParts';
 import { SplitPayerStep } from './SplitPayerStep';
 import { linesOf, type Edits } from './paymentLines';
 import { invalidateAfterPayment } from './paymentInvalidation';
-import { paymentErrors } from './paymentProblems';
+import { allocationProblemTexts, paymentErrors } from './paymentProblems';
 import { usePaymentPreview } from './usePaymentPreview';
 
 const MAX_NOTE = 200;
@@ -118,11 +118,12 @@ export function PaymentForm({ initialPlotId }: { initialPlotId?: string }) {
   const preview = usePaymentPreview(request, owner);
   const enter = useEnterPayment();
   const errors = paymentErrors(t, saveError ?? preview.error);
+  const problems = allocationProblemTexts(t, preview.shown?.problems, isSplit ? undefined : plotId);
   const ready = (isSplit ? splitPayer !== null : plotId !== undefined) && common;
   const part: PaymentPartProposal | undefined = ready && !isSplit ? preview.shown?.parts[0] : undefined;
   const splitShown = ready && isSplit ? preview.shown : undefined;
 
-  const lineErrors: Record<string, string> = {};
+  const lineErrors: Record<string, string> = { ...problems.lines[plotId ?? ''] };
   for (const [index, text] of Object.entries(errors.lines)) {
     const id = typed.ids[Number(index)];
     if (id !== undefined) lineErrors[id] = text;
@@ -139,6 +140,9 @@ export function PaymentForm({ initialPlotId }: { initialPlotId?: string }) {
         const [plot = '', charge = ''] = key.split('/');
         (partLineErrors[plot] ??= {})[charge] = t.payments.proposal.amountInvalid;
       }
+    }
+    for (const [plot, byCharge] of Object.entries(problems.lines)) {
+      partLineErrors[plot] = { ...byCharge, ...partLineErrors[plot] };
     }
     const order = splitEdits?.order ?? [];
     for (const [index, text] of Object.entries(errors.parts.amount)) {
@@ -230,7 +234,12 @@ export function PaymentForm({ initialPlotId }: { initialPlotId?: string }) {
   }
 
   const canSave =
-    request !== undefined && preview.current !== undefined && !preview.pending && !enter.isPending;
+    request !== undefined &&
+    preview.current !== undefined &&
+    preview.current.valid &&
+    preview.current.digest !== undefined &&
+    !preview.pending &&
+    !enter.isPending;
 
   function save() {
     if (request === undefined || preview.current === undefined) return;
@@ -417,8 +426,11 @@ export function PaymentForm({ initialPlotId }: { initialPlotId?: string }) {
             ) : null
           ) : (
             <div aria-busy={preview.pending}>
+              {preview.pending && <PendingNote text={f.previewing} />}
               <SplitParts
                 result={splitShown}
+                splitError={problems.split}
+                totalErrors={problems.payment}
                 edits={splitEdits}
                 amountErrors={partAmountErrors}
                 lineErrors={partLineErrors}
@@ -433,12 +445,14 @@ export function PaymentForm({ initialPlotId }: { initialPlotId?: string }) {
           ) : null
         ) : (
           <div aria-busy={preview.pending}>
+            {preview.pending && <PendingNote text={f.previewing} />}
             <ProposalTable
               part={part}
               values={edits}
               touched={touched}
               lineErrors={lineErrors}
               amountError={amountErrors}
+              totalError={problems.payment[plotId ?? '']}
               onEdit={edit}
               onAdd={add}
             />
@@ -451,5 +465,14 @@ export function PaymentForm({ initialPlotId }: { initialPlotId?: string }) {
         </Button>
       </div>
     </form>
+  );
+}
+
+/** The table stays; this only says that a newer answer is on its way. */
+function PendingNote({ text }: { text: string }) {
+  return (
+    <p role="status" className="mb-2 text-sm text-ink-muted">
+      {text}
+    </p>
   );
 }

@@ -49,6 +49,21 @@ abstract class PaymentApiSupport extends LedgerApiSupport {
         ownerJdbc().update("delete from receipt_counter where tenant_id in (?, ?)", DEMO_TENANT, OTHER_TENANT);
     }
 
+    /**
+     * Switches the demo cooperative's automatic allocation of prepayment on or off (as the database owner); every test
+     * ends with it on again, the default ({@link #automaticAllocationOn}).
+     */
+    void autoAllocation(boolean on) {
+        ownerJdbc().update("insert into cooperative_settings (tenant_id, auto_allocate_prepayment) values (?, ?) "
+                + "on conflict (tenant_id) do update set auto_allocate_prepayment = excluded.auto_allocate_prepayment",
+                DEMO_TENANT, on);
+    }
+
+    @AfterEach
+    void automaticAllocationOn() {
+        autoAllocation(true);
+    }
+
     /** A request body for one plot; {@code lines} null saves the proposal. */
     static Map<String, Object> payment(UUID plot, String source, String amount, String receivedOn,
             List<Map<String, Object>> lines) {

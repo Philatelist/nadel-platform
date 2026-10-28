@@ -25,14 +25,17 @@ import tools.jackson.databind.JsonNode;
  */
 class PaymentsPermissionTests extends PaymentApiSupport {
 
-    /** A plot with membership 100.00 (January) and a cash payment of 30.00 placed on nothing (prepayment 30.00). */
+    /**
+     * A plot with membership 100.00 (January) and a cash payment of 30.00 placed on nothing (prepayment 30.00): paid
+     * before the charge was booked (as the owner, no event), so the automatic allocation left it waiting.
+     */
     private record Given(UUID plot, UUID charge, UUID payment) {
     }
 
     private Given given() throws Exception {
         UUID plot = newPlot();
-        UUID charge = tariffCharge(plot, "MEMBERSHIP", "100.00", "2026-01");
         UUID payment = saved(treasurer(), payment(plot, "CASH", "30.00", kyivToday().toString(), List.of()));
+        UUID charge = tariffCharge(plot, "MEMBERSHIP", "100.00", "2026-01");
         return new Given(plot, charge, payment);
     }
 

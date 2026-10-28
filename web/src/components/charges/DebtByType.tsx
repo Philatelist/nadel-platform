@@ -9,7 +9,7 @@ export function DebtByType({
   onAllocatePrepayment,
 }: {
   account: Pick<PlotAccount, 'debts' | 'total' | 'prepayment'>;
-  /** Given only when the caller may allocate and the cooperative does not allocate automatically. */
+  /** Given only when the server says the caller may allocate the prepayment by hand now (`prepaymentAllocatable`). */
   onAllocatePrepayment?: () => void;
 }) {
   const t = useT();

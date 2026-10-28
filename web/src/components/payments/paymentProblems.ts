@@ -1,4 +1,4 @@
-import { ApiError } from '@nadel/api-client';
+import { ApiError, type AllocationProblem } from '@nadel/api-client';
 import type { Messages } from '@nadel/shared';
 import { problemCode, problemFieldErrors, problemMessage, type FieldErrors } from '../../problem';
 
@@ -129,4 +129,48 @@ export function paymentErrors(t: Messages, error: unknown): PaymentErrors {
         ? undefined
         : paymentProblemMessage(t, error);
   return { notice, fields, lines, parts };
+}
+
+/** The problems of a preview (`valid: false`) as texts, placed by where they belong. */
+export interface ProblemTexts {
+  /** Line problems by plot id, then by charge id. */
+  lines: Readonly<Record<string, Readonly<Record<string, string>>>>;
+  /** Problems of the payment of a plot as a whole (the lines together exceed it), by plot id. */
+  payment: Readonly<Record<string, string>>;
+  /** The parts of a split do not add up to the amount. */
+  split?: string;
+}
+
+/**
+ * Maps the server's problems to texts. Nothing is checked here: the server decided what is wrong. `plotId` is the
+ * plot of a single payment, a reallocation or a prepayment allocation, whose problems may come without it.
+ */
+export function allocationProblemTexts(
+  t: Messages,
+  problems: readonly AllocationProblem[] | undefined,
+  plotId?: string,
+): ProblemTexts {
+  const lines: Record<string, Record<string, string>> = {};
+  const payment: Record<string, string> = {};
+  let split: string | undefined;
+  for (const problem of problems ?? []) {
+    const key = problem.plotId ?? plotId ?? '';
+    if (problem.code === 'SPLIT_TOTAL_MISMATCH') {
+      split = t.problem.SPLIT_TOTAL_MISMATCH;
+    } else if (problem.code === 'ALLOCATION_EXCEEDS_PAYMENT') {
+      payment[key] = t.problem.ALLOCATION_EXCEEDS_PAYMENT;
+    } else {
+      const text =
+        problem.code === 'NOT_FOUND'
+          ? t.payments.problem.lineNotFound
+          : problem.code === 'DUPLICATE'
+            ? t.payments.problem.lineDuplicate
+            : problem.code === 'AMOUNT_NOT_POSITIVE'
+              ? t.problem.AMOUNT_NOT_POSITIVE
+              : t.problem.ALLOCATION_EXCEEDS_CHARGE;
+      if (problem.chargeId !== undefined) (lines[key] ??= {})[problem.chargeId] = text;
+      else payment[key] = text;
+    }
+  }
+  return { lines, payment, split };
 }

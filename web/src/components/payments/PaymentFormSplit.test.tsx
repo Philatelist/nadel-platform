@@ -1,6 +1,6 @@
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { ApiError, type PaymentEntryRequest, type PaymentEntryResult } from '@nadel/api-client';
+import { type PaymentEntryRequest, type PaymentEntryResult } from '@nadel/api-client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderWithApp } from '../../test/render';
@@ -62,7 +62,9 @@ function part(plotId: string, plotNumber: string, amount: string, debt: string) 
         proposed: amount,
       },
     ],
+    resultLines: [],
     allocatedTotal: amount,
+    automaticTotal: '0.00',
     prepayment: '0.00',
   };
 }
@@ -70,6 +72,8 @@ function part(plotId: string, plotNumber: string, amount: string, debt: string) 
 function split(a7: string, a15: string, digest = 'd1'): PaymentEntryResult {
   return {
     preview: true,
+    valid: true,
+    problems: [],
     amount: '1000.00',
     digest,
     payments: [],
@@ -139,21 +143,53 @@ describe('PaymentForm split mode', () => {
     }, wait);
   });
 
-  it('shows the mismatch inline and keeps Save disabled', async () => {
+  it('keeps the table, shows the mismatch and a line problem inline and keeps Save disabled until corrected', async () => {
     const user = userEvent.setup();
     await startSplit(user);
     const seven = await screen.findByRole('textbox', { name: 'Частина платежу для ділянки 7' }, wait);
     const save = screen.getByRole('button', { name: 'Зберегти' });
     await waitFor(() => expect(save).toBeEnabled(), wait);
+    await user.click(screen.getByRole('button', { name: 'Показати розподіл: 7' }));
 
-    enterPayment.mockRejectedValue(new ApiError(400, { code: 'SPLIT_TOTAL_MISMATCH' }));
+    const mismatch = split('1.00', '400.00');
+    delete mismatch.digest;
+    mismatch.valid = false;
+    mismatch.problems = [
+      { code: 'SPLIT_TOTAL_MISMATCH' },
+      { code: 'ALLOCATION_EXCEEDS_CHARGE', plotId: 'p7', line: 0, chargeId: 'c-p7' },
+    ];
+    enterPayment.mockResolvedValue(mismatch);
     await user.clear(seven);
     await user.type(seven, '1');
 
     expect(
       await screen.findByText('Сума частин не дорівнює сумі платежу', undefined, wait),
     ).toBeInTheDocument();
+    expect(screen.getByText('Сума перевищує залишок за нарахуванням')).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Частина платежу для ділянки 7' })).toHaveValue('1');
     expect(save).toBeDisabled();
+    await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument(), wait);
+
+    enterPayment.mockResolvedValue(split('600.00', '400.00', 'd2'));
+    await user.clear(seven);
+    await user.type(seven, '600');
+    await waitFor(() => expect(save).toBeEnabled(), wait);
+    expect(screen.queryByText('Сума частин не дорівнює сумі платежу')).not.toBeInTheDocument();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('shows an unparseable part as a problem of that part, not as an endless calculation', async () => {
+    const user = userEvent.setup();
+    await startSplit(user);
+    const seven = await screen.findByRole('textbox', { name: 'Частина платежу для ділянки 7' }, wait);
+    await user.clear(seven);
+    await user.type(seven, 'abc');
+
+    expect(await screen.findByText('Вкажіть суму числом, наприклад 250,00', {}, wait)).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument(), wait);
+    expect(screen.queryByText('Розраховуємо розподіл…')).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Частина платежу для ділянки 7' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Зберегти' })).toBeDisabled();
   });
 
   it('shows one cash receipt and a link to every part after the save', async () => {

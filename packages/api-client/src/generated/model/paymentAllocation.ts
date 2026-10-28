@@ -31,4 +31,6 @@ export interface PaymentAllocation {
   /** True when the system wrote the row (an automatic allocation or release), not a member */
   system: boolean;
   createdAt: string;
+  /** The current name of the member who wrote the row; absent for a row of the system. Given on the payment card only */
+  createdByName?: string;
 }

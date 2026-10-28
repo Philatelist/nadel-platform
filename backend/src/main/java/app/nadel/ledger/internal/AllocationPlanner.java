@@ -24,6 +24,8 @@ import org.jspecify.annotations.Nullable;
  * <li>{@link #propose}: each charge in that order receives {@code min(remaining, open)}; what is left is the
  * remainder (the prepayment the payment leaves).</li>
  * <li>{@link #validate}: the treasurer's lines.</li>
+ * <li>{@link #completeWithRemainder}: what the lines leave placed on the charges still open after them, in the same
+ * order (the automatic placement of a payment's remainder while automatic allocation is on).</li>
  * <li>{@link #pairWithPayments}: the lines of a prepayment allocation named after the payments that still have money,
  * oldest first, since every allocation row names its payment.</li>
  * </ul>
@@ -122,6 +124,44 @@ final class AllocationPlanner {
             remaining = remaining.minus(part);
         }
         return new Proposal(lines, amount.minus(remaining), remaining);
+    }
+
+    /**
+     * The automatic placement of what valid lines leave of {@code amount} (feature 015 §2.4 as decided on 28.10.2026:
+     * with automatic allocation on, no prepayment waits while the plot has an open charge): the remainder
+     * {@code amount − Σ lines} is placed on the charges still open after the lines, in {@link #ORDER}, each receiving
+     * at most what the lines left open on it. What does not fit (no open charge left) is not placed. The lines may name
+     * a charge partly; their own order does not matter. Empty when the lines place the whole amount or nothing is open.
+     *
+     * @param lines   the lines already chosen (the proposal's or the treasurer's), {@linkplain #validate valid}
+     * @param amount  the payment, its part, or the prepayment being allocated
+     * @param charges the plot's charges before the lines
+     * @throws IllegalArgumentException when the lines exceed the amount or a charge's open amount
+     */
+    static List<Line> completeWithRemainder(List<Line> lines, Money amount, Collection<ChargeState> charges) {
+        Map<UUID, Money> placed = new HashMap<>();
+        Money remaining = amount;
+        for (Line line : lines) {
+            placed.merge(line.chargeId(), line.amount(), Money::plus);
+            remaining = remaining.minus(line.amount());
+        }
+        if (remaining.signum() < 0) {
+            throw new IllegalArgumentException("The lines exceed the amount");
+        }
+        List<Line> automatic = new ArrayList<>();
+        for (ChargeState charge : openInOrder(charges)) {
+            Money left = charge.open().minus(placed.getOrDefault(charge.id(), Money.ZERO));
+            if (left.signum() < 0) {
+                throw new IllegalArgumentException("A line exceeds what is open on its charge");
+            }
+            if (remaining.signum() == 0 || left.signum() == 0) {
+                continue;
+            }
+            Money part = min(remaining, left);
+            automatic.add(new Line(charge.id(), part));
+            remaining = remaining.minus(part);
+        }
+        return List.copyOf(automatic);
     }
 
     /**

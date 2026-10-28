@@ -45,6 +45,7 @@ const account = (charges: Charge[]): PlotAccount => ({
   ],
   total: '403.06',
   prepayment: '0.00',
+  prepaymentAllocatable: false,
   charges,
   payments: [],
   prepaymentAllocations: [],

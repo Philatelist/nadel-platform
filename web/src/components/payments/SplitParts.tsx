@@ -28,6 +28,8 @@ export function SplitParts({
   edits,
   amountErrors,
   lineErrors,
+  splitError,
+  totalErrors,
   onAmount,
   onLine,
 }: {
@@ -37,6 +39,10 @@ export function SplitParts({
   amountErrors: Readonly<Record<string, string>>;
   /** Problems with a part's lines, by plot id then charge id. */
   lineErrors: Readonly<Record<string, Readonly<Record<string, string>>>>;
+  /** The parts do not add up to the amount (the server's verdict). */
+  splitError?: string;
+  /** Problems of the lines of a part together, by plot id. */
+  totalErrors: Readonly<Record<string, string>>;
   onAmount: (plotId: string, text: string) => void;
   onLine: (plotId: string, chargeId: string, text: string) => void;
 }) {
@@ -55,6 +61,11 @@ export function SplitParts({
 
   return (
     <div className="overflow-x-auto">
+      {splitError && (
+        <p role="alert" className="mb-2 text-sm text-danger">
+          {splitError}
+        </p>
+      )}
       <table className="w-full border-collapse text-[15px]">
         <caption className="sr-only">{s.caption}</caption>
         <thead>
@@ -125,6 +136,7 @@ export function SplitParts({
                     touched={edits?.touched[part.plotId] ?? new Set()}
                     lineErrors={lineErrors[part.plotId] ?? {}}
                     amountError={{}}
+                    totalError={totalErrors[part.plotId]}
                     onEdit={(chargeId, text) => onLine(part.plotId, chargeId, text)}
                     onAdd={(chargeId) => onLine(part.plotId, chargeId, '0.00')}
                   />

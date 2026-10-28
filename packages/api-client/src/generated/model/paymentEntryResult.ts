@@ -9,20 +9,24 @@
  *
  * OpenAPI spec version: 0.1.0
  */
+import type { AllocationProblem } from './allocationProblem';
 import type { Money } from './money';
 import type { PaymentPartProposal } from './paymentPartProposal';
 import type { PaymentSplitPreview } from './paymentSplitPreview';
 import type { SavedPayment } from './savedPayment';
 
 /**
- * The proposal of a payment (preview) or the payments saved with it (save). `parts` has one part per plot: one for a payment of one plot, one per plot of the split (in natural plot order, parts of `0.00` included) for a split payment, which also has `split`. `payments` is empty for a preview; a save lists one payment per part above zero, all of one group.
+ * The proposal of a payment (preview) or the payments saved with it (save). `parts` has one part per plot: one for a payment of one plot, one per plot of the split (in natural plot order, parts of `0.00` included) for a split payment, which also has `split`. `payments` is empty for a preview; a save lists one payment per part above zero, all of one group. A preview whose lines have a problem has `valid: false`, the problems and no `digest`; a save is always valid.
  */
 export interface PaymentEntryResult {
   preview: boolean;
+  /** False when `problems` is not empty; only a valid preview can be saved */
+  valid: boolean;
+  problems: AllocationProblem[];
   amount: Money;
   parts: PaymentPartProposal[];
   split?: PaymentSplitPreview;
-  /** Send it back with the save to refuse it when the open charges changed since */
-  digest: string;
+  /** Send it back with the save to refuse it when the open charges or the lines changed since; absent in a preview with problems */
+  digest?: string;
   payments: SavedPayment[];
 }

@@ -3065,16 +3065,24 @@ paths:
         adjustments) minus what payments already placed on them. The proposal fills the open charges oldest debt date
         (`accruedOn`) first, then by the cooperative's order of charge types, then by the start of the service period,
         then in booking order; each receives at most what is open on it. Without `lines` the proposal is saved; with
-        `lines` the caller's choice is (an empty list places nothing). What is not placed stays as the plot's
-        prepayment.
+        `lines` the caller's choice is (an empty list places nothing). The remainder (the amount minus the lines) is
+        placed at once while the cooperative's setting `autoAllocatePrepayment` is on: on the charges still open after
+        the lines, in the same order, as allocations of origin `PREPAYMENT_AUTO` by the system (`resultLines` with
+        `automatic: true`), so no prepayment waits while the plot has an open charge. Only what is left after that (the
+        plot owes nothing more), or the whole remainder while the setting is off, stays as the plot's prepayment.
 
-        With `preview=true` nothing is written: the answer (200) lists every open charge of the plot in that order
-        (`proposed` `0.00` for a charge that receives nothing), the total placed, the prepayment the payment leaves and
-        a `digest`. With `preview=false` the payment and its allocations are saved together (201) and `payments` names
-        the saved payment; a cash payment gets the cooperative's next receipt number (no gaps, no duplicates). The
-        payment is booked in the billing month of `receivedOn` when that month is open, otherwise in the earliest open
-        month after it; it keeps its `receivedOn`. Sent with the `digest` of a preview whose open charges no longer
-        match, the save is 409 `PREVIEW_OUTDATED` and writes nothing.
+        With `preview=true` nothing is written and no lock is taken: the answer (200) lists every open charge of the
+        plot in that order (`proposed`: what the proposal or the caller's lines place on it, `0.00` for nothing), the
+        lines a save would write (`resultLines`), the total placed (`allocatedTotal`, the automatic part in
+        `automaticTotal`), the prepayment the payment leaves and a `digest`. A preview whose lines have a problem is
+        still 200, with `valid: false`, every problem in `problems` (see `AllocationProblem`), the table with the
+        requested amounts and their total, no `resultLines`, no automatic placement and no `digest`. With
+        `preview=false` the payment and its allocations are saved together (201) and `payments` names the saved
+        payment; a cash payment gets the cooperative's next receipt number (no gaps, no duplicates). The payment is
+        booked in the billing month of `receivedOn` when that month is open, otherwise in the earliest open month after
+        it; it keeps its `receivedOn`. The `digest` covers the open charges and the lines a save writes (the automatic
+        ones included); sent with the `digest` of a preview that no longer matches, the save is 409 `PREVIEW_OUTDATED`
+        and writes nothing.
 
         **Split** (`split`, feature 015 §2.6): the payer's current plots (owned now, not common land, not archived) in
         natural plot order are the plots of the split; the preview lists them in `split.plots` with their debt (the
@@ -3083,11 +3091,13 @@ paths:
         amount of at least the total debt gives each plot its debt and the excess to the first plot as prepayment (also
         when the plots owe nothing). Without `split.parts` the proposal is used; with them, each part names a plot of
         the payer at most once, its `amount` (`0.00` allowed: such a part is shown but not saved; absent takes the
-        proposed part of the plot) and its `lines` as for one plot. The parts must add up to `amount` (400
-        `SPLIT_TOTAL_MISMATCH`, `errors[{field: split.parts}]`). `parts` of the answer has one part per plot of the
-        split, in natural plot order. A save writes one payment per part above zero, all with one `groupId` and the
-        payer `split.payerMemberId`; a cash group takes one receipt number, stored on every part. The `digest` covers
-        the amount, the payer, the parts (plot, amount) and each part's open charges.
+        proposed part of the plot) and its `lines` as for one plot; the remainder of each part is placed automatically
+        on its plot as for one plot. The parts must add up to `amount` (a save: 400 `SPLIT_TOTAL_MISMATCH`,
+        `errors[{field: split.parts}]`; a preview: 200 with the problem `SPLIT_TOTAL_MISMATCH`). `parts` of the answer
+        has one part per plot of the split, in natural plot order. A save writes one payment per part above zero, all
+        with one `groupId` and the payer `split.payerMemberId`; a cash group takes one receipt number, stored on every
+        part. The `digest` covers the amount, the payer, the parts (plot, amount), each part's open charges and the
+        lines a save writes.
 
         400 `VALIDATION_FAILED`: `amount` not above zero (`AMOUNT_NOT_POSITIVE`) or with more than 12 integer digits
         (`INVALID`), `receivedOn` after today in Europe/Kyiv (`DATE_IN_FUTURE`), `plotId` missing without `split`
@@ -3103,7 +3113,8 @@ paths:
         `lines[j].amount` not above zero (`AMOUNT_NOT_POSITIVE`). 400 `ALLOCATION_EXCEEDS_PAYMENT` when the lines
         together exceed `amount` (`errors[{field: lines}]`, of a part: its amount, `split.parts[i].lines`); 400
         `ALLOCATION_EXCEEDS_CHARGE` when a line exceeds what is open on its charge (`errors[{field: lines[j].amount}]`,
-        of a part `split.parts[i].lines[j].amount`). An unknown plot, or one of another cooperative, is
+        of a part `split.parts[i].lines[j].amount`). The problems of the lines (and `SPLIT_TOTAL_MISMATCH`) are 400 for
+        a save only; a preview answers them in `problems`. An unknown plot, or one of another cooperative, is
         404 `PLOT_NOT_FOUND`; common land is 409 `PLOT_COMMON_LAND` and an archived plot 409 `PLOT_ARCHIVED`.
 
         The payer note is personal data: it is stored encrypted and is never logged. Requires `PAYMENTS_ENTER`; a save
@@ -3153,9 +3164,10 @@ paths:
       operationId: getPayment
       summary: One payment with its allocations and its group
       description: |
-        The payment as saved, with every allocation and release of it (oldest first), the other parts of its group
-        (a payment split over several plots of one payer) and its reversal. `payerNote` is returned only to a caller
-        who may also view members (`MEMBERS_VIEW`). An unknown payment, a payment of another cooperative or the id of
+        The payment as saved, with what it pays on each charge now (`currentAllocations`), every allocation and
+        release of it (oldest first, with the author's current name), the other parts of its group (a payment split
+        over several plots of one payer) and its reversal. `payerNote` is returned only to a caller who may also view
+        members (`MEMBERS_VIEW`). An unknown payment, a payment of another cooperative or the id of
         a reversal row is 404 `NOT_FOUND`. Requires `PAYMENTS_VIEW`.
       parameters:
         - name: id
@@ -3238,21 +3250,26 @@ paths:
         Moves the money of a payment between the plot's charges (feature 015 §2.6): every allocation of the payment
         still on a charge is taken back (a release with the cause `REALLOCATED`) and the new lines are written (origin
         `REALLOCATION`) in one transaction. The new lines are checked against the plot's open charges as if the
-        payment's allocations were already taken back, and together may not exceed the payment's amount; what is not
-        placed stays as prepayment. Without `lines` the proposal is saved (the plot's open charges as if released,
-        filled in the order of `enterPayment`); with `lines` the caller's choice is (an empty list places nothing).
+        payment's allocations were already taken back, and together may not exceed the payment's amount. Without
+        `lines` the proposal is saved (the plot's open charges as if released, filled in the order of `enterPayment`);
+        with `lines` the caller's choice is (an empty list places nothing). The remainder is placed automatically as at
+        `enterPayment` while `autoAllocatePrepayment` is on (origin `PREPAYMENT_AUTO`, by the system); only what is left
+        after that, or all of it while the setting is off, stays as prepayment.
 
-        With `preview=true` nothing is written (200): `current` lists what the payment places on charges now, and
-        `proposal` every open charge of the plot as if released with `proposed` (`0.00` for a charge that receives
-        nothing), the total placed and what stays as prepayment, with a `digest`. With `preview=false` the releases and
-        the new allocations are saved (201), with the same answer. The `digest` covers the payment, what is left of
-        each of its allocations and the open charges as if released; sent with the `digest` of a preview that no
-        longer matches, the save is 409 `PREVIEW_OUTDATED` and writes nothing.
+        With `preview=true` nothing is written and no lock is taken (200): `current` lists what the payment places on
+        charges now, and `proposal` every open charge of the plot as if released with `proposed` (`0.00` for a charge
+        that receives nothing), the lines a save writes (`resultLines`), the total placed and what stays as
+        prepayment, with a `digest`. Lines with a problem are still 200 in a preview, with `valid: false` and
+        `problems`, as at `enterPayment`. With `preview=false` the releases and the new allocations are saved (201),
+        with the same answer. The `digest` covers the payment, what is left of each of its allocations, the open
+        charges as if released and the lines a save writes; sent with the `digest` of a preview that no longer
+        matches, the save is 409 `PREVIEW_OUTDATED` and writes nothing.
 
         400 `VALIDATION_FAILED`: `lines[j].chargeId` not an open charge of the plot (`NOT_FOUND`) or named twice
         (`DUPLICATE`), `lines[j].amount` not above zero (`AMOUNT_NOT_POSITIVE`); 400 `ALLOCATION_EXCEEDS_PAYMENT` when
         the lines together exceed the payment (`errors[{field: lines}]`); 400 `ALLOCATION_EXCEEDS_CHARGE` when a line
-        exceeds what is open on its charge (`errors[{field: lines[j].amount}]`). 409 `PAYMENT_ALREADY_REVERSED` for a
+        exceeds what is open on its charge (`errors[{field: lines[j].amount}]`); these are 400 for a save only, a
+        preview answers them in `problems`. 409 `PAYMENT_ALREADY_REVERSED` for a
         reversed payment or the id of a reversal row. An unknown payment, or one of another cooperative, is 404
         `NOT_FOUND`. Requires `PAYMENTS_ENTER`; a save is written to the audit log (`PAYMENT_REALLOCATED`, entity type
         `PAYMENT` about the plot, with the payment's amount, `receivedOn`, receipt number of a cash payment, and
@@ -3311,17 +3328,20 @@ paths:
         the proposal is saved (the open charges filled in the order of `enterPayment` up to the prepayment); with
         `lines` the caller's choice is. Each line's money is taken from the plot's payments that still have money left,
         the oldest first (`receivedOn`, then the time they were entered), so a line may become several allocations
-        (origin `PREPAYMENT_MANUAL`).
+        (origin `PREPAYMENT_MANUAL`). Nothing is placed automatically here. With `autoAllocatePrepayment` on, a plot
+        with an open charge normally has no prepayment waiting; the action is offered where `prepaymentAllocatable`
+        says so (the setting off).
 
-        With `preview=true` nothing is written (200): `proposal` lists every open charge of the plot with `proposed`,
-        its `amount` is the prepayment, `allocatedTotal` the total placed and `prepayment` what stays, with a `digest`
-        (the plot, its prepayment and its open charges). With `preview=false` the allocations are saved (201), with the
+        With `preview=true` nothing is written and no lock is taken (200): `proposal` lists every open charge of the
+        plot with `proposed`, its `amount` is the prepayment, `allocatedTotal` the total placed and `prepayment` what
+        stays, with a `digest` (the plot, its prepayment and its open charges). Lines with a problem are still 200 in a
+        preview, with `valid: false` and `problems`, as at `enterPayment`. With `preview=false` the allocations are saved (201), with the
         same answer; a `digest` of a preview that no longer matches is 409 `PREVIEW_OUTDATED` and writes nothing.
 
         409 `NOTHING_TO_ALLOCATE` when the plot has no prepayment or no open charge. 400 `VALIDATION_FAILED`: an empty
         `lines` (`REQUIRED`), the lines as in `reallocatePayment`; 400 `ALLOCATION_EXCEEDS_PAYMENT` when the lines
         together exceed the prepayment (`errors[{field: lines}]`); 400 `ALLOCATION_EXCEEDS_CHARGE` as in
-        `reallocatePayment`. An unknown plot, or one of another cooperative, is 404 `PLOT_NOT_FOUND`. Requires
+        `reallocatePayment`; the problems of the lines are 400 for a save only. An unknown plot, or one of another cooperative, is 404 `PLOT_NOT_FOUND`. Requires
         `PAYMENTS_ENTER`; a save is written to the audit log (`PREPAYMENT_ALLOCATED`, entity type `PAYMENT` about the
         plot, with `lines` as in `PAYMENT_REALLOCATED` and their `total`).
       parameters:
@@ -8044,7 +8064,8 @@ components:
     PlotAccount:
       type: object
       description: The account of a plot
-      required: [plotId, debts, total, prepayment, charges, payments, prepaymentAllocations]
+      required:
+        [plotId, debts, total, prepayment, prepaymentAllocatable, charges, payments, prepaymentAllocations]
       properties:
         plotId:
           type: string
@@ -8062,6 +8083,11 @@ components:
           description: >-
             The money paid for the plot that is on no charge: its payments (reversals negative) minus what they pay on
             charges; never below `0.00`
+        prepaymentAllocatable:
+          type: boolean
+          description: >-
+            True when the caller may allocate the plot's prepayment by hand now ("Allocate prepayment"):
+            `PAYMENTS_ENTER`, automatic allocation off, `prepayment` above `0.00` and an open charge
         charges:
           type: array
           description: Newest first, limited by `from`, `to` and `kind`
@@ -9764,8 +9790,9 @@ components:
       type: string
       description: >-
         Who placed an allocation: `ENTRY` when the payment was entered, `REALLOCATION` when the payment was reallocated,
-        `PREPAYMENT_MANUAL` the plot's prepayment placed by hand, `PREPAYMENT_AUTO` the prepayment placed by the system
-        after new charges were booked
+        `PREPAYMENT_MANUAL` the plot's prepayment placed by hand, `PREPAYMENT_AUTO` placed by the system: the prepayment
+        after new charges were booked, or the remainder of a payment placed at once when it was entered or reallocated
+        (automatic allocation on)
       enum: [ENTRY, REALLOCATION, PREPAYMENT_MANUAL, PREPAYMENT_AUTO]
 
     AllocationReleaseCause:
@@ -9915,8 +9942,9 @@ components:
       type: object
       description: >-
         What a payment places on the open charges of one plot: every open charge in the order of the proposal (oldest
-        debt date first), the total placed and what is left as prepayment
-      required: [plotId, plotNumber, amount, lines, allocatedTotal, prepayment]
+        debt date first) with what the proposal or the caller's lines place on it, the lines a save writes (the
+        automatic placement of the remainder included), the total placed and what is left as prepayment
+      required: [plotId, plotNumber, amount, lines, resultLines, allocatedTotal, automaticTotal, prepayment]
       properties:
         plotId:
           type: string
@@ -9925,18 +9953,93 @@ components:
           type: string
         amount:
           $ref: '#/components/schemas/Money'
+          description: The payment, its part of a split, or the prepayment being allocated
         lines:
           type: array
+          description: >-
+            Every open charge of the plot; `proposed` is what the proposal or the caller's lines place on it (in a
+            preview with problems: the amounts requested, as sent)
           items:
             $ref: '#/components/schemas/PaymentProposalLine'
+        resultLines:
+          type: array
+          description: >-
+            The allocations a save writes: the proposal's or the caller's lines in their order (`automatic: false`),
+            then the remainder placed automatically in the order of the proposal (`automatic: true`). Empty in a
+            preview with problems
+          items:
+            $ref: '#/components/schemas/PaymentResultLine'
         allocatedTotal:
           $ref: '#/components/schemas/Money'
+          description: >-
+            The total placed, the automatic placement included; in a preview with problems the sum of the requested
+            amounts above zero
+        automaticTotal:
+          $ref: '#/components/schemas/Money'
+          description: What the automatic placement of the remainder places (`0.00` when nothing or switched off)
         prepayment:
           $ref: '#/components/schemas/Money'
-          description: What the payment leaves unplaced (the amount minus `allocatedTotal`)
+          description: >-
+            What the payment leaves unplaced (the amount minus `allocatedTotal`, never below `0.00`); `0.00` while the
+            plot still has an open charge and automatic allocation is on
         debt:
           $ref: '#/components/schemas/Money'
           description: What the plot owes before the payment (the sum of `open` of its open charges)
+
+    PaymentResultLine:
+      type: object
+      description: One allocation a save writes
+      required: [chargeId, amount, automatic]
+      properties:
+        chargeId:
+          type: string
+          format: uuid
+        amount:
+          $ref: '#/components/schemas/Money'
+        automatic:
+          type: boolean
+          description: >-
+            True for the remainder placed by the system (origin `PREPAYMENT_AUTO`); false for the proposal's or the
+            caller's line
+
+    AllocationProblemCode:
+      type: string
+      description: >-
+        What is wrong with the lines of a preview: `ALLOCATION_EXCEEDS_CHARGE` a line exceeds what is open on its
+        charge, `ALLOCATION_EXCEEDS_PAYMENT` the lines together exceed the amount (no line), `AMOUNT_NOT_POSITIVE` a
+        line not above zero, `NOT_FOUND` a line names no open charge of the plot, `DUPLICATE` a charge named on an
+        earlier line again, `SPLIT_TOTAL_MISMATCH` the parts of a split do not add up to the amount (no plot, no line)
+      enum:
+        [
+          ALLOCATION_EXCEEDS_CHARGE,
+          ALLOCATION_EXCEEDS_PAYMENT,
+          AMOUNT_NOT_POSITIVE,
+          NOT_FOUND,
+          DUPLICATE,
+          SPLIT_TOTAL_MISMATCH,
+        ]
+
+    AllocationProblem:
+      type: object
+      description: >-
+        A problem of the lines of a preview. A problem of one line names its plot, its index in the lines sent (of the
+        part of the plot for a split) and the charge it names; `ALLOCATION_EXCEEDS_PAYMENT` names only the plot,
+        `SPLIT_TOTAL_MISMATCH` nothing
+      required: [code]
+      properties:
+        code:
+          $ref: '#/components/schemas/AllocationProblemCode'
+        plotId:
+          type: string
+          format: uuid
+        line:
+          type: integer
+          format: int32
+          description: The index of the line in the `lines` sent
+        chargeId:
+          type: string
+          format: uuid
+          description: The charge the line names
 
     PaymentSplitPlot:
       type: object
@@ -10004,11 +10107,19 @@ components:
         The proposal of a payment (preview) or the payments saved with it (save). `parts` has one part per plot: one
         for a payment of one plot, one per plot of the split (in natural plot order, parts of `0.00` included) for a
         split payment, which also has `split`. `payments` is empty for a preview; a save lists one payment per part
-        above zero, all of one group.
-      required: [preview, amount, parts, digest, payments]
+        above zero, all of one group. A preview whose lines have a problem has `valid: false`, the problems and no
+        `digest`; a save is always valid.
+      required: [preview, valid, amount, parts, problems, payments]
       properties:
         preview:
           type: boolean
+        valid:
+          type: boolean
+          description: False when `problems` is not empty; only a valid preview can be saved
+        problems:
+          type: array
+          items:
+            $ref: '#/components/schemas/AllocationProblem'
         amount:
           $ref: '#/components/schemas/Money'
         parts:
@@ -10019,7 +10130,9 @@ components:
           $ref: '#/components/schemas/PaymentSplitPreview'
         digest:
           type: string
-          description: Send it back with the save to refuse it when the open charges changed since
+          description: >-
+            Send it back with the save to refuse it when the open charges or the lines changed since; absent in a
+            preview with problems
         payments:
           type: array
           items:
@@ -10159,6 +10272,11 @@ components:
         createdAt:
           type: string
           format: date-time
+        createdByName:
+          type: string
+          description: >-
+            The current name of the member who wrote the row; absent for a row of the system. Given on the payment
+            card only
 
     PaymentGroupPart:
       type: object
@@ -10214,11 +10332,13 @@ components:
           allocated,
           prepayment,
           reversed,
+          currentAllocations,
           allocations,
           groupParts,
           createdAt,
           reversible,
           reallocatable,
+          prepaymentAllocatable,
         ]
       properties:
         id:
@@ -10261,9 +10381,16 @@ components:
           type: boolean
         reversedBy:
           $ref: '#/components/schemas/PaymentReversalInfo'
+        currentAllocations:
+          type: array
+          description: >-
+            Where the payment's money is now: per charge the net of its allocations and releases, only charges with
+            more than `0.00`, in the order of the proposal (oldest debt date first); empty once reversed
+          items:
+            $ref: '#/components/schemas/PaymentChargeAmount'
         allocations:
           type: array
-          description: Allocations and releases, oldest first
+          description: The history of the allocation, every allocation and release, oldest first
           items:
             $ref: '#/components/schemas/PaymentAllocation'
         groupParts:
@@ -10283,6 +10410,39 @@ components:
         reallocatable:
           type: boolean
           description: True when the caller may reallocate the payment now (`PAYMENTS_ENTER`, the payment not reversed)
+        prepaymentAllocatable:
+          type: boolean
+          description: >-
+            True when the caller may allocate the prepayment of the payment's plot by hand now: `PAYMENTS_ENTER`,
+            automatic allocation off, the plot has a prepayment above `0.00` and an open charge
+
+    PaymentChargeAmount:
+      type: object
+      description: What a payment pays on one charge now (its allocations to the charge minus their releases)
+      required: [chargeId, kind, chargeType, billingMonth, serviceFrom, serviceTo, accruedOn, amount]
+      properties:
+        chargeId:
+          type: string
+          format: uuid
+        kind:
+          $ref: '#/components/schemas/ChargeKind'
+        chargeType:
+          $ref: '#/components/schemas/ChargeTypeRef'
+        billingMonth:
+          type: string
+          pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+          description: The billing month the charge is booked in, `YYYY-MM`
+        serviceFrom:
+          type: string
+          format: date
+        serviceTo:
+          type: string
+          format: date
+        accruedOn:
+          type: string
+          format: date
+        amount:
+          $ref: '#/components/schemas/Money'
 
     PaymentReversal:
       type: object
@@ -10351,10 +10511,17 @@ components:
         A reallocation of a payment: what the payment places on charges before it (`current`), the new allocation over
         the plot's open charges as if `current` were taken back (`proposal`, its `amount` the payment's amount) and the
         digest
-      required: [preview, paymentId, current, proposal, digest]
+      required: [preview, valid, problems, paymentId, current, proposal]
       properties:
         preview:
           type: boolean
+        valid:
+          type: boolean
+          description: False when `problems` is not empty; only a valid preview can be saved
+        problems:
+          type: array
+          items:
+            $ref: '#/components/schemas/AllocationProblem'
         paymentId:
           type: string
           format: uuid
@@ -10366,22 +10533,33 @@ components:
           $ref: '#/components/schemas/PaymentPartProposal'
         digest:
           type: string
-          description: Send it back with the save to refuse it when the payment or the open charges changed since
+          description: >-
+            Send it back with the save to refuse it when the payment, the open charges or the lines changed since;
+            absent in a preview with problems
 
     PrepaymentAllocationResult:
       type: object
       description: >-
         An allocation of a plot's prepayment: the proposal over the plot's open charges (its `amount` the prepayment,
         its `prepayment` what stays) and the digest
-      required: [preview, proposal, digest]
+      required: [preview, valid, problems, proposal]
       properties:
         preview:
           type: boolean
+        valid:
+          type: boolean
+          description: False when `problems` is not empty; only a valid preview can be saved
+        problems:
+          type: array
+          items:
+            $ref: '#/components/schemas/AllocationProblem'
         proposal:
           $ref: '#/components/schemas/PaymentPartProposal'
         digest:
           type: string
-          description: Send it back with the save to refuse it when the prepayment or the open charges changed since
+          description: >-
+            Send it back with the save to refuse it when the prepayment or the open charges changed since; absent in a
+            preview with problems
 
     ReportCode:
       type: string

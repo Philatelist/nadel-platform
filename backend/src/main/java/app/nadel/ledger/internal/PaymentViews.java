@@ -6,6 +6,7 @@ import app.nadel.tariffs.ChargeTypeCatalog;
 import app.nadel.tariffs.ChargeTypeCatalog.ChargeTypeFacts;
 import java.time.YearMonth;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -14,12 +15,16 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import nadel.contract.model.AllocationProblem;
+import nadel.contract.model.AllocationProblemCode;
 import nadel.contract.model.AllocationReleaseCause;
 import nadel.contract.model.PaymentAllocation;
+import nadel.contract.model.PaymentChargeAmount;
 import nadel.contract.model.PaymentCurrentAllocation;
 import nadel.contract.model.PaymentPartProposal;
 import nadel.contract.model.PaymentPayer;
 import nadel.contract.model.PaymentProposalLine;
+import nadel.contract.model.PaymentResultLine;
 import nadel.contract.model.PaymentSource;
 import nadel.contract.model.SavedPayment;
 import org.jspecify.annotations.Nullable;
@@ -65,18 +70,26 @@ class PaymentViews {
     }
 
     /**
-     * The proposal of {@code amount} on the plot: every open charge of the plot in planner order with what the lines
-     * place on it ({@code 0.00} when nothing), the total placed, what the payment leaves as prepayment and what the
-     * plot owes before the payment. The lines are valid (each an open charge of the plot).
+     * The proposal of the placement's amount on the plot: every open charge of the plot in planner order with what
+     * the proposal's or the caller's lines place on it ({@code 0.00} when nothing; lines with problems as sent), the
+     * lines a save writes (the automatic ones after them; none while there is a problem), the total placed (the
+     * automatic part too; with problems the requested amounts above zero), what the payment leaves as prepayment
+     * (never below {@code 0.00}) and what the plot owes before the payment.
      */
-    PaymentPartProposal part(UUID plotId, String plotNumber, Money amount, PlotLedgerState state,
-            List<AllocationPlanner.Line> lines) {
+    PaymentPartProposal part(String plotNumber, PlotLedgerState state, LinePlacement placement) {
         Map<UUID, Money> placed = new HashMap<>();
-        Money total = Money.ZERO;
-        for (AllocationPlanner.Line line : lines) {
+        for (AllocationPlanner.Line line : placement.lines()) {
             placed.merge(line.chargeId(), line.amount(), Money::plus);
-            total = total.plus(line.amount());
         }
+        List<PaymentResultLine> result = new ArrayList<>();
+        if (placement.valid()) {
+            placement.lines().forEach(line -> result.add(
+                    new PaymentResultLine(line.chargeId(), line.amount().toString(), false)));
+            placement.automatic().forEach(line -> result.add(
+                    new PaymentResultLine(line.chargeId(), line.amount().toString(), true)));
+        }
+        Money total = placement.allocated();
+        Money left = placement.amount().minus(total);
         List<ChargeState> open = AllocationPlanner.openInOrder(state.charges());
         Context context = context(open.stream().map(ChargeState::id).toList());
         List<PaymentProposalLine> rows = open.stream().map(charge -> {
@@ -88,10 +101,54 @@ class PaymentViews {
                     charge.accruedOn(), charge.open().toString(),
                     placed.getOrDefault(charge.id(), Money.ZERO).toString());
         }).toList();
-        PaymentPartProposal proposal = new PaymentPartProposal(plotId, plotNumber, amount.toString(), rows,
-                total.toString(), amount.minus(total).toString());
+        PaymentPartProposal proposal = new PaymentPartProposal(placement.plotId(), plotNumber,
+                placement.amount().toString(), rows, result, total.toString(),
+                placement.automaticTotal().toString(), (left.signum() < 0 ? Money.ZERO : left).toString());
         proposal.setDebt(debt(state).toString());
         return proposal;
+    }
+
+    /**
+     * The problems of a placement as a preview answers them: per line its plot, index and charge; the problem of all
+     * lines ({@code ALLOCATION_EXCEEDS_PAYMENT}) with its plot only.
+     */
+    static List<AllocationProblem> problems(LinePlacement placement) {
+        List<AllocationProblem> problems = new ArrayList<>();
+        for (AllocationPlanner.Violation violation : placement.violations()) {
+            AllocationProblem problem = new AllocationProblem(
+                    AllocationProblemCode.fromValue(violation.problem().name()));
+            problem.setPlotId(placement.plotId());
+            Integer line = violation.line();
+            if (line != null) {
+                problem.setLine(line);
+                problem.setChargeId(placement.lines().get(line).chargeId());
+            }
+            problems.add(problem);
+        }
+        return problems;
+    }
+
+    /**
+     * Where the payment's money is now: per charge the net of its allocation rows (allocations minus releases), only
+     * charges with more than {@code 0.00}, in planner order (a charge the state does not know last, by id).
+     */
+    static List<PaymentChargeAmount> net(Collection<AllocationRecord> rows, PlotLedgerState state, Context context) {
+        Map<UUID, Money> byCharge = new HashMap<>();
+        rows.forEach(row -> byCharge.merge(row.getChargeId(), row.getAmount(), Money::plus));
+        Map<UUID, ChargeState> charges = new HashMap<>();
+        state.charges().forEach(charge -> charges.put(charge.id(), charge));
+        return byCharge.entrySet().stream().filter(entry -> entry.getValue().signum() > 0)
+                .sorted(Comparator.comparing((Map.Entry<UUID, Money> entry) -> charges.get(entry.getKey()),
+                        Comparator.nullsLast(AllocationPlanner.ORDER))
+                        .thenComparing(entry -> entry.getKey().toString()))
+                .map(entry -> {
+                    ChargeRecord charge = context.charges().get(entry.getKey());
+                    return new PaymentChargeAmount(entry.getKey(),
+                            nadel.contract.model.ChargeKind.fromValue(charge.getKind().name()),
+                            ChargeViews.typeRef(context.types().get(charge.getChargeTypeId())),
+                            month(context, charge.getBillingMonthId()), charge.getServiceFrom(),
+                            charge.getServiceTo(), charge.getAccruedOn(), entry.getValue().toString());
+                }).toList();
     }
 
     /**

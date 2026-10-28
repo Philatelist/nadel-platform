@@ -10,11 +10,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.YearMonth;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.JsonNode;
 
 /**
  * Money paid on a charge is taken back automatically when the charge is reversed or lowered (feature 015 §2.3, FS 2.8,
@@ -69,6 +71,23 @@ class AutoReleaseTests extends FreshPaymentSupport {
         assertThat(owner().queryForObject("select prepayment from plot_status where plot_id = ?", BigDecimal.class,
                 plot)).isEqualByComparingTo("450.00");
         invariantsHold(plot);
+
+        // the card: the payment's money is on the electricity now (100.00 at entry + 150.00 from the prepayment), the
+        // reversed membership is gone from it; the history keeps every row with its author (none for the system)
+        JsonNode card = body(send(treasurer, get(PAYMENTS + "/" + payment), null).andExpect(status().isOk()));
+        assertThat(card.get("currentAllocations")).singleElement().satisfies(net -> {
+            assertThat(net.get("chargeId").asString()).isEqualTo(electricity.toString());
+            assertThat(net.get("amount").asString()).isEqualTo("250.00");
+            assertThat(net.get("chargeType").get("code").asString()).isEqualTo("ELECTRICITY");
+        });
+        List<String> history = new ArrayList<>();
+        card.get("allocations").forEach(row -> history.add((row.has("origin") ? row.get("origin").asString()
+                : row.get("releaseCause").asString()) + " " + row.get("amount").asString() + " "
+                + (row.has("createdByName") ? "member" : "system")));
+        assertThat(history).hasSize(4);
+        assertThat(history.subList(0, 2)).containsExactlyInAnyOrder("ENTRY 600.00 member", "ENTRY 100.00 member");
+        assertThat(history.subList(2, 4)).containsExactly("CHARGE_REVERSED -600.00 member",
+                "PREPAYMENT_AUTO 150.00 system");
     }
 
     @Test

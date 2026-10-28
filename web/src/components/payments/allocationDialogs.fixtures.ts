@@ -24,6 +24,8 @@ export function proposalLine(
 export function proposalOf(first: string, second: string, digest: string) {
   return {
     preview: true,
+    valid: true,
+    problems: [],
     paymentId: 'pay1',
     digest,
     current: [
@@ -47,8 +49,23 @@ export function proposalOf(first: string, second: string, digest: string) {
         proposalLine('c1', membership, '2026-01', '600.00', first),
         proposalLine('c2', electricity, '2026-02', '250.00', second),
       ],
+      resultLines: [],
       allocatedTotal: '300.00',
+      automaticTotal: '0.00',
       prepayment: '0.00',
     },
+  };
+}
+
+/** A preview the server answers with 200 and a problem: the table is there, `valid` is false and there is no digest. */
+export function exceedingProposalOf(requested: string) {
+  const ok = proposalOf(requested, '0.00', 'unused');
+  const { digest, ...withoutDigest } = ok;
+  void digest;
+  return {
+    ...withoutDigest,
+    valid: false,
+    problems: [{ code: 'ALLOCATION_EXCEEDS_CHARGE', plotId: 'p9', line: 0, chargeId: 'c1' }],
+    proposal: { ...ok.proposal, allocatedTotal: requested },
   };
 }

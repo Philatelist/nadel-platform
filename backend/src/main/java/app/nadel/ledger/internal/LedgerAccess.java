@@ -7,6 +7,7 @@ import app.nadel.identity.Permission;
 import app.nadel.problem.ApiProblemException;
 import app.nadel.problem.ProblemCodes;
 import java.util.UUID;
+import java.util.function.BooleanSupplier;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
@@ -45,6 +46,16 @@ class LedgerAccess {
      */
     boolean maySeePayments(AccessProfile viewer, UUID plotId) {
         return viewer.can(Permission.PAYMENTS_VIEW) || ownsNow(viewer, plotId);
+    }
+
+    /**
+     * Whether "Allocate prepayment" is offered to the viewer for a plot now (owner decision of 28.10.2026): the viewer
+     * has {@code PAYMENTS_ENTER}, automatic allocation is off (while it is on no prepayment waits for an open charge),
+     * the plot has a prepayment above {@code 0.00} and an open charge. The setting is asked only for such a viewer.
+     */
+    static boolean prepaymentAllocatable(AccessProfile viewer, BooleanSupplier autoAllocate, PlotLedgerState state) {
+        return viewer.can(Permission.PAYMENTS_ENTER) && !autoAllocate.getAsBoolean()
+                && state.prepayment().signum() > 0 && !AllocationPlanner.openInOrder(state.charges()).isEmpty();
     }
 
     /** Whether the viewer is a member who owns the plot today (any share). */

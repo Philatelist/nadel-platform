@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -15,8 +16,10 @@ import tools.jackson.databind.JsonNode;
  * Reallocating a saved payment end to end ({@code POST /payments/{id}/reallocate?preview=}, feature 015 §2.6): the
  * preview shows what the payment places now and a proposal over the open charges as if that were taken back; a save
  * releases every live allocation of the payment ({@code REALLOCATED}) and writes the new lines (origin
- * {@code REALLOCATION}) in one transaction; the card lists both. A stale digest, a reversed payment and lines that
- * exceed the payment or a charge are refused and write nothing.
+ * {@code REALLOCATION}) in one transaction; the card lists both. While automatic allocation is on, what the new
+ * lines leave is placed at once on the charges still open (origin {@code PREPAYMENT_AUTO}, by the system), so no
+ * prepayment waits while the plot owes. A stale digest, a reversed payment and lines that exceed the payment or a
+ * charge are refused by a save and write nothing; a preview answers them as problems.
  */
 class ReallocationTests extends PaymentApiSupport {
 
@@ -38,6 +41,11 @@ class ReallocationTests extends PaymentApiSupport {
             }
         }
         throw new AssertionError("The charge is not open");
+    }
+
+    /** The treasurer's current name as the card shows authors. */
+    private String treasurerName() throws Exception {
+        return body(card(treasurer(), saved(treasurer(), cash(newPlot(), "1.00")))).get("createdByName").asString();
     }
 
     private static List<String> values(JsonNode array, String field) {
@@ -97,6 +105,8 @@ class ReallocationTests extends PaymentApiSupport {
 
     @Test
     void withoutLinesTheProposalAsIfReleasedIsSaved() throws Exception {
+        // off, so the first reallocation leaves 450.00 waiting as prepayment
+        autoAllocation(false);
         Paid paid = example1Paid();
         reallocate(treasurer(), paid.payment(), false, lines(List.of(line(paid.electricity(), "250.00")), null))
                 .andExpect(status().isCreated())
@@ -133,9 +143,17 @@ class ReallocationTests extends PaymentApiSupport {
         String fresh = body(reallocate(treasurer(), paid.payment(), true, lines(null, null))).get("digest")
                 .asString();
         assertThat(fresh).isNotEqualTo(digest);
+        // the digest covers the lines too: a save with other lines than its preview is stale as well
         reallocate(treasurer(), paid.payment(), false, lines(List.of(line(paid.electricity(), "200.00")), fresh))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("PREVIEW_OUTDATED"));
+        String withLines = body(reallocate(treasurer(), paid.payment(), true,
+                lines(List.of(line(paid.electricity(), "200.00")), null))).get("digest").asString();
+        reallocate(treasurer(), paid.payment(), false, lines(List.of(line(paid.electricity(), "200.00")), withLines))
                 .andExpect(status().isCreated());
         assertThat(netAllocated(paid.electricity())).isEqualByComparingTo("250.00");
+        // the 500.00 the line leaves are placed on the membership at once
+        assertThat(netAllocated(paid.membership())).isEqualByComparingTo("500.00");
     }
 
     @Test
@@ -167,7 +185,7 @@ class ReallocationTests extends PaymentApiSupport {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("ALLOCATION_EXCEEDS_PAYMENT"))
                 .andExpect(jsonPath("$.errors[0].field").value("lines"));
-        reallocate(treasurer(), paid.payment(), true, lines(List.of(line(paid.electricity(), "250.01")), null))
+        reallocate(treasurer(), paid.payment(), false, lines(List.of(line(paid.electricity(), "250.01")), null))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("ALLOCATION_EXCEEDS_CHARGE"))
                 .andExpect(jsonPath("$.errors[0].field").value("lines[0].amount"));
@@ -185,7 +203,82 @@ class ReallocationTests extends PaymentApiSupport {
     }
 
     @Test
+    void aPreviewAnswersTheProblemsOfTheLinesWithTheWholeTable() throws Exception {
+        Paid paid = example1Paid();
+
+        JsonNode preview = body(reallocate(treasurer(), paid.payment(), true, lines(List.of(
+                line(paid.electricity(), "250.01"), line(paid.membership(), "600.00")), null))
+                .andExpect(status().isOk()));
+
+        assertThat(preview.get("valid").asBoolean()).isFalse();
+        assertThat(preview.has("digest")).isFalse();
+        assertThat(values(preview.get("problems"), "code"))
+                .containsExactly("ALLOCATION_EXCEEDS_PAYMENT", "ALLOCATION_EXCEEDS_CHARGE");
+        assertThat(preview.get("problems").get(1).get("line").asInt()).isZero();
+        assertThat(preview.get("problems").get(1).get("chargeId").asString())
+                .isEqualTo(paid.electricity().toString());
+        JsonNode proposal = preview.get("proposal");
+        // every open charge as if released, with the requested amounts and their total
+        assertThat(line(proposal, paid.electricity()).get("proposed").asString()).isEqualTo("250.01");
+        assertThat(line(proposal, paid.membership()).get("proposed").asString()).isEqualTo("600.00");
+        assertThat(proposal.get("amount").asString()).isEqualTo("700.00");
+        assertThat(proposal.get("allocatedTotal").asString()).isEqualTo("850.01");
+        assertThat(proposal.get("automaticTotal").asString()).isEqualTo("0.00");
+        assertThat(proposal.get("resultLines")).isEmpty();
+        assertThat(allocationCount(paid.plot())).isEqualTo(2);
+    }
+
+    @Test
+    void linesThatLeaveARemainderArePlacedInFullWhileAutomaticAllocationIsOn() throws Exception {
+        Paid paid = example1Paid();
+        // the treasurer moves everything to electricity and leaves the membership at 0.00 (no line)
+        List<Map<String, Object>> lines = List.of(line(paid.electricity(), "250.00"));
+
+        JsonNode preview = body(reallocate(treasurer(), paid.payment(), true, lines(lines, null))
+                .andExpect(status().isOk()));
+
+        JsonNode proposal = preview.get("proposal");
+        assertThat(preview.get("valid").asBoolean()).isTrue();
+        assertThat(values(proposal.get("resultLines"), "chargeId"))
+                .containsExactly(paid.electricity().toString(), paid.membership().toString());
+        assertThat(values(proposal.get("resultLines"), "amount")).containsExactly("250.00", "450.00");
+        assertThat(values(proposal.get("resultLines"), "automatic")).containsExactly("false", "true");
+        assertThat(proposal.get("allocatedTotal").asString()).isEqualTo("700.00");
+        assertThat(proposal.get("automaticTotal").asString()).isEqualTo("450.00");
+        assertThat(proposal.get("prepayment").asString()).isEqualTo("0.00");
+
+        reallocate(treasurer(), paid.payment(), false, lines(lines, preview.get("digest").asString()))
+                .andExpect(status().isCreated());
+
+        assertThat(netAllocated(paid.electricity())).isEqualByComparingTo("250.00");
+        assertThat(netAllocated(paid.membership())).isEqualByComparingTo("450.00");
+        assertThat(ledgerPrepayment(paid.plot())).isEqualByComparingTo("0.00");
+        assertThat(ownerJdbc().queryForMap("select amount, created_by from allocation where plot_id = ? "
+                + "and origin = 'PREPAYMENT_AUTO'", paid.plot()))
+                .satisfies(row -> assertThat(row.get("created_by")).isNull())
+                .satisfies(row -> assertThat((BigDecimal) row.get("amount")).isEqualByComparingTo("450.00"));
+        // the card: where the money is now, net per charge, and the whole history with authors
+        JsonNode card = body(card(treasurer(), paid.payment()).andExpect(status().isOk()));
+        assertThat(values(card.get("currentAllocations"), "chargeId"))
+                .containsExactly(paid.membership().toString(), paid.electricity().toString());
+        assertThat(values(card.get("currentAllocations"), "amount")).containsExactly("450.00", "250.00");
+        assertThat(card.get("allocations")).hasSize(6);
+        assertThat(values(card.get("allocations"), "origin")).containsSubsequence("REALLOCATION", "PREPAYMENT_AUTO");
+        for (JsonNode row : card.get("allocations")) {
+            assertThat(row.get("createdAt").asString()).isNotBlank();
+            if (row.has("origin") && row.get("origin").asString().equals("PREPAYMENT_AUTO")) {
+                // a row of the system has no author
+                assertThat(row.get("system").asBoolean()).isTrue();
+                assertThat(row.has("createdByName")).isFalse();
+            } else {
+                assertThat(row.get("createdByName").asString()).isEqualTo(treasurerName());
+            }
+        }
+    }
+
+    @Test
     void anEmptyListTakesEverythingBackAsPrepaymentOfThePayment() throws Exception {
+        autoAllocation(false);
         Paid paid = example1Paid();
 
         reallocate(treasurer(), paid.payment(), false, lines(List.of(), null)).andExpect(status().isCreated())
@@ -195,6 +288,20 @@ class ReallocationTests extends PaymentApiSupport {
         assertThat(netAllocated(paid.membership())).isEqualByComparingTo("0.00");
         assertThat(netAllocated(paid.electricity())).isEqualByComparingTo("0.00");
         assertThat(ledgerPrepayment(paid.plot())).isEqualByComparingTo("700.00");
+    }
+
+    @Test
+    void anEmptyListWhileAutomaticAllocationIsOnPlacesEverythingAgainInTheOrder() throws Exception {
+        Paid paid = example1Paid();
+
+        reallocate(treasurer(), paid.payment(), false, lines(List.of(), null)).andExpect(status().isCreated())
+                .andExpect(jsonPath("$.proposal.allocatedTotal").value("700.00"))
+                .andExpect(jsonPath("$.proposal.automaticTotal").value("700.00"))
+                .andExpect(jsonPath("$.proposal.prepayment").value("0.00"));
+
+        assertThat(netAllocated(paid.membership())).isEqualByComparingTo("600.00");
+        assertThat(netAllocated(paid.electricity())).isEqualByComparingTo("100.00");
+        assertThat(ledgerPrepayment(paid.plot())).isEqualByComparingTo("0.00");
     }
 
     @Test

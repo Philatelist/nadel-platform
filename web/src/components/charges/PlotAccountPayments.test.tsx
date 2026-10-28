@@ -9,7 +9,6 @@ import { PlotAccountPanel } from './PlotAccountPanel';
 
 const useGetPlotAccount = vi.fn();
 let permissions: Permission[];
-let autoAllocate = false;
 
 vi.mock('../../me', () => ({
   useCan: (p: Permission) => permissions.includes(p),
@@ -25,7 +24,6 @@ vi.mock('../payments/AllocatePrepaymentDialog', () => ({
 vi.mock('@nadel/api-client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@nadel/api-client')>()),
   useGetPlotAccount: (...args: unknown[]): unknown => useGetPlotAccount(...args),
-  useGetSettings: () => queryResult({ autoAllocatePrepayment: autoAllocate }),
   useReverseCharge: () => ({ mutate: vi.fn(), isPending: false }),
   useListChargeTypes: () => queryResult([]),
 }));
@@ -61,6 +59,7 @@ const account = (over: Partial<PlotAccount> = {}): PlotAccount => ({
   debts: [],
   total: '103.06',
   prepayment: '0.00',
+  prepaymentAllocatable: false,
   charges: [
     { ...charge, id: 'c-new', accruedOn: '2026-10-20', paid: '0.00', open: '50.00' },
     { ...charge, paid: '300.00', open: '103.06' },
@@ -86,7 +85,6 @@ describe('PlotAccountPanel with payments', () => {
   beforeEach(() => {
     window.localStorage.setItem('nadel.locale', 'en');
     permissions = ['CHARGES_VIEW'];
-    autoAllocate = false;
     useGetPlotAccount.mockReset();
     useGetPlotAccount.mockReturnValue(queryResult(account()));
   });
@@ -132,23 +130,21 @@ describe('PlotAccountPanel with payments', () => {
     expect(within(row).getByText('₴50.00')).toBeInTheDocument();
   });
 
-  it('shows the prepayment row, and the allocate button only with PAYMENTS_ENTER and automatic allocation off', async () => {
-    useGetPlotAccount.mockReturnValue(queryResult(account({ prepayment: '75.00' })));
+  it('shows the prepayment row, and the allocate button only when the server flag is true and the view is not read-only', async () => {
+    useGetPlotAccount.mockReturnValue(
+      queryResult(account({ prepayment: '75.00', prepaymentAllocatable: false })),
+    );
     const first = render();
     expect(screen.getByText('Prepayment')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Allocate prepayment' })).toBeNull();
     first.unmount();
 
-    permissions = ['CHARGES_VIEW', 'PAYMENTS_ENTER'];
-    autoAllocate = true;
-    const second = render();
+    useGetPlotAccount.mockReturnValue(
+      queryResult(account({ prepayment: '75.00', prepaymentAllocatable: true })),
+    );
+    const readOnly = render(true);
     expect(screen.queryByRole('button', { name: 'Allocate prepayment' })).toBeNull();
-    second.unmount();
-
-    autoAllocate = false;
-    const third = render(true);
-    expect(screen.queryByRole('button', { name: 'Allocate prepayment' })).toBeNull();
-    third.unmount();
+    readOnly.unmount();
 
     render();
     await userEvent.click(screen.getByRole('button', { name: 'Allocate prepayment' }));

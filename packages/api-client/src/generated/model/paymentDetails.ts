@@ -11,6 +11,7 @@
  */
 import type { Money } from './money';
 import type { PaymentAllocation } from './paymentAllocation';
+import type { PaymentChargeAmount } from './paymentChargeAmount';
 import type { PaymentGroupPart } from './paymentGroupPart';
 import type { PaymentPayer } from './paymentPayer';
 import type { PaymentReversalInfo } from './paymentReversalInfo';
@@ -39,7 +40,9 @@ export interface PaymentDetails {
   prepayment: Money;
   reversed: boolean;
   reversedBy?: PaymentReversalInfo;
-  /** Allocations and releases, oldest first */
+  /** Where the payment's money is now: per charge the net of its allocations and releases, only charges with more than `0.00`, in the order of the proposal (oldest debt date first); empty once reversed */
+  currentAllocations: PaymentChargeAmount[];
+  /** The history of the allocation, every allocation and release, oldest first */
   allocations: PaymentAllocation[];
   /** The other parts of the payment's group; empty for a payment of one plot */
   groupParts: PaymentGroupPart[];
@@ -50,4 +53,6 @@ export interface PaymentDetails {
   reversible: boolean;
   /** True when the caller may reallocate the payment now (`PAYMENTS_ENTER`, the payment not reversed) */
   reallocatable: boolean;
+  /** True when the caller may allocate the prepayment of the payment's plot by hand now: `PAYMENTS_ENTER`, automatic allocation off, the plot has a prepayment above `0.00` and an open charge */
+  prepaymentAllocatable: boolean;
 }

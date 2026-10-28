@@ -20,8 +20,9 @@ import org.springframework.transaction.support.TransactionTemplate;
  * for a plot (a month run, an opening balance, ...: {@link ChargesBooked}), its prepayment is placed on its open charges
  * in the planner's order, after the commit and in a transaction of its own, as allocations of origin
  * {@code PREPAYMENT_AUTO} by the system, taken from the payments with money left, oldest first; only while the
- * cooperative's setting {@code autoAllocatePrepayment} is on. A redelivered event writes nothing; the remainder of a
- * payment entry waits for new charges. Each test runs in a cooperative of its own and waits for the listeners.
+ * cooperative's setting {@code autoAllocatePrepayment} is on. A redelivered event writes nothing. A payment entry
+ * places its own remainder at once while the setting is on (owner decision of 28.10.2026); only what no open charge
+ * can take waits for new charges. Each test runs in a cooperative of its own and waits for the listeners.
  */
 class AutoAllocationTests extends FreshPaymentSupport {
 
@@ -149,11 +150,32 @@ class AutoAllocationTests extends FreshPaymentSupport {
     }
 
     @Test
-    void aPaymentEntryWithARemainderDoesNotTriggerIt() throws Exception {
+    void aPaymentEntryPlacesItsOwnRemainderAtOnceAndOnlyWhatTheDebtsCannotTakeWaits() throws Exception {
         UUID plot = plot("9", "600");
         UUID membership = charge(plot, "MEMBERSHIP", "600.00", "2026-01");
 
-        // the treasurer places 300.00 of 700.00: 400.00 stays prepayment although membership is still open
+        // the treasurer places 300.00 of 700.00: the next 300.00 go on the membership at once, by the system, in the
+        // entry's transaction; 100.00 are left with nothing open and wait for new charges
+        UUID payment = pay(plot, "700.00", List.of(line(membership, "300.00")));
+        awaitListeners();
+
+        assertThat(allocations(plot, "PREPAYMENT_AUTO")).singleElement().satisfies(row -> {
+            assertThat((BigDecimal) row.get("amount")).isEqualByComparingTo("300.00");
+            assertThat(row).containsEntry("payment_id", payment).containsEntry("charge_id", membership);
+            assertThat(row.get("created_by")).isNull();
+        });
+        assertThat(allocationCount(plot)).isEqualTo(2);
+        assertThat(open(membership)).isEqualByComparingTo("0.00");
+        assertThat(prepayment(plot)).isEqualByComparingTo("100.00");
+        invariantsHold(plot);
+    }
+
+    @Test
+    void withTheSettingOffTheRemainderOfAPaymentEntryWaitsAsPrepayment() throws Exception {
+        autoAllocation(false);
+        UUID plot = plot("9", "600");
+        UUID membership = charge(plot, "MEMBERSHIP", "600.00", "2026-01");
+
         pay(plot, "700.00", List.of(line(membership, "300.00")));
         awaitListeners();
 

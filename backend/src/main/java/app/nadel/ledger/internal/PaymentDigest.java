@@ -1,5 +1,6 @@
 package app.nadel.ledger.internal;
 
+import app.nadel.ledger.internal.AllocationPlanner.Line;
 import app.nadel.money.Money;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -20,9 +21,10 @@ import org.jspecify.annotations.Nullable;
  * <ul>
  * <li>{@link #entry}: the amount, the payer of a split, the parts in their order (plot, amount: the order matters,
  * the first plot takes the excess of a split), and per part the plot's open charges in planner order as
- * {@code chargeId:open}.</li>
- * <li>{@link #reallocation}: the payment, its live allocations as {@code id:remaining} (sorted by id), and the plot's
- * open charges as if those were released, in planner order.</li>
+ * {@code chargeId:open}, then the lines a save writes: the proposal's or the caller's lines in their order, then the
+ * automatic placement of the remainder (so a preview and a save agree on the automatic lines too).</li>
+ * <li>{@link #reallocation}: the payment, its live allocations as {@code id:remaining} (sorted by id), the plot's open
+ * charges as if those were released, in planner order, and the lines a save writes as for an entry.</li>
  * <li>{@link #prepayment}: the plot, its prepayment and its open charges in planner order.</li>
  * </ul>
  * The open charges are put in {@link AllocationPlanner#ORDER} by the digest itself, so the order the caller loads them
@@ -31,13 +33,20 @@ import org.jspecify.annotations.Nullable;
  */
 final class PaymentDigest {
 
-    /** A part of an entry: its plot, its amount and the plot's charges (any order). */
-    record Part(UUID plotId, Money amount, Collection<ChargeState> charges) {
+    /**
+     * A part of an entry: its plot, its amount, the plot's charges (any order) and the lines a save writes.
+     *
+     * @param lines     the proposal's or the caller's lines, in their order
+     * @param automatic the automatic placement of the remainder, in planner order
+     */
+    record Part(UUID plotId, Money amount, Collection<ChargeState> charges, List<Line> lines, List<Line> automatic) {
 
         Part {
             Objects.requireNonNull(plotId, "plotId");
             Objects.requireNonNull(amount, "amount");
             charges = List.copyOf(charges);
+            lines = List.copyOf(lines);
+            automatic = List.copyOf(automatic);
         }
     }
 
@@ -62,19 +71,26 @@ final class PaymentDigest {
         for (Part part : parts) {
             text.add("P|" + part.plotId() + "|" + part.amount());
             open(text, part.charges());
+            lines(text, part.lines(), part.automatic());
         }
         return sha256(text);
     }
 
-    /** The digest of the preview of a reallocation of the payment. */
+    /**
+     * The digest of the preview of a reallocation of the payment.
+     *
+     * @param lines     the proposal's or the caller's lines, in their order
+     * @param automatic the automatic placement of the remainder, in planner order
+     */
     static String reallocation(UUID paymentId, Collection<AllocationState> allocations,
-            Collection<ChargeState> chargesAsIfReleased) {
+            Collection<ChargeState> chargesAsIfReleased, List<Line> lines, List<Line> automatic) {
         List<String> text = new ArrayList<>();
         text.add("R|" + paymentId);
         allocations.stream().filter(allocation -> allocation.paymentId().equals(paymentId) && allocation.live())
                 .sorted(Comparator.comparing(allocation -> allocation.id().toString()))
                 .forEach(allocation -> text.add("A|" + allocation.id() + ":" + allocation.remaining()));
         open(text, chargesAsIfReleased);
+        lines(text, lines, automatic);
         return sha256(text);
     }
 
@@ -90,6 +106,11 @@ final class PaymentDigest {
         for (ChargeState charge : AllocationPlanner.openInOrder(charges)) {
             text.add("O|" + charge.plotId() + "|" + charge.id() + ":" + charge.open());
         }
+    }
+
+    private static void lines(List<String> text, List<Line> lines, List<Line> automatic) {
+        lines.forEach(line -> text.add("L|" + line.chargeId() + ":" + line.amount()));
+        automatic.forEach(line -> text.add("U|" + line.chargeId() + ":" + line.amount()));
     }
 
     private static String sha256(List<String> text) {

@@ -250,6 +250,52 @@ test.describe('payments', () => {
     }
   });
 
+  test('the treasurer reallocates a payment: an intermediate exceeding value keeps the table and the problem, a corrected one saves', async ({
+    page,
+    browser,
+  }) => {
+    const chairman = await signedInPage(browser, 'chairman@demo.local');
+    const plot: CreatedPlot = { id: '', number: `E2E-P-L${Date.now().toString(36)}` };
+    try {
+      Object.assign(plot, await plotWithDebt(chairman, plot.number, '500.00'));
+      const payment = await cashPayment(chairman, plot.id, '200.00');
+
+      await loginAs(page, 'treasurer@demo.local');
+      await page.goto(`/payments/${payment.id}`);
+      await expect(main(page).getByRole('heading', { name: 'Allocated now' })).toBeVisible();
+      await expect(main(page).getByText('Allocation history')).toBeVisible();
+      await main(page).getByRole('button', { name: 'Reallocate', exact: true }).click();
+
+      const dialog = page.getByRole('dialog');
+      const table = dialog.getByRole('table', { name: 'Allocation of the payment to charges' });
+      const line = table.getByLabel(/^Amount to allocate:/);
+      const submit = dialog.getByRole('button', { name: 'Reallocate', exact: true });
+      await expect(line).toHaveValue('200.00');
+      await expect(submit).toBeEnabled();
+
+      // an intermediate value above the open amount: the table stays, the problem shows by the line, no save
+      await line.fill('9999');
+      await expect(dialog.getByText('The amount exceeds what is open on the charge')).toBeVisible();
+      await expect(table).toBeVisible();
+      await expect(line).toHaveValue('9999');
+      await expect(submit).toBeDisabled();
+      await expect(dialog.getByRole('status')).toHaveCount(0);
+
+      // corrected: the problem goes, the button is back, and the reallocation saves
+      await line.fill('150');
+      await expect(dialog.getByText('The amount exceeds what is open on the charge')).toHaveCount(0);
+      await expect(submit).toBeEnabled();
+      await submit.click();
+      await expect(dialog).toHaveCount(0);
+      await expect(main(page).getByRole('heading', { name: 'Allocated now' })).toBeVisible();
+      await main(page).getByText('Allocation history').click();
+      await expect(main(page).getByRole('cell', { name: 'Reallocation' }).first()).toBeVisible();
+    } finally {
+      await tidy(chairman, [plot], []);
+      await chairman.context().close();
+    }
+  });
+
   test('a member sees a payment of their plot on the account with its receipt number', async ({
     page,
     browser,

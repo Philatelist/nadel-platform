@@ -11,17 +11,25 @@
  */
 import type { Money } from './money';
 import type { PaymentProposalLine } from './paymentProposalLine';
+import type { PaymentResultLine } from './paymentResultLine';
 
 /**
- * What a payment places on the open charges of one plot: every open charge in the order of the proposal (oldest debt date first), the total placed and what is left as prepayment
+ * What a payment places on the open charges of one plot: every open charge in the order of the proposal (oldest debt date first) with what the proposal or the caller's lines place on it, the lines a save writes (the automatic placement of the remainder included), the total placed and what is left as prepayment
  */
 export interface PaymentPartProposal {
   plotId: string;
   plotNumber: string;
+  /** The payment, its part of a split, or the prepayment being allocated */
   amount: Money;
+  /** Every open charge of the plot; `proposed` is what the proposal or the caller's lines place on it (in a preview with problems: the amounts requested, as sent) */
   lines: PaymentProposalLine[];
+  /** The allocations a save writes: the proposal's or the caller's lines in their order (`automatic: false`), then the remainder placed automatically in the order of the proposal (`automatic: true`). Empty in a preview with problems */
+  resultLines: PaymentResultLine[];
+  /** The total placed, the automatic placement included; in a preview with problems the sum of the requested amounts above zero */
   allocatedTotal: Money;
-  /** What the payment leaves unplaced (the amount minus `allocatedTotal`) */
+  /** What the automatic placement of the remainder places (`0.00` when nothing or switched off) */
+  automaticTotal: Money;
+  /** What the payment leaves unplaced (the amount minus `allocatedTotal`, never below `0.00`); `0.00` while the plot still has an open charge and automatic allocation is on */
   prepayment: Money;
   /** What the plot owes before the payment (the sum of `open` of its open charges) */
   debt?: Money;

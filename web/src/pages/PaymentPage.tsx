@@ -1,9 +1,15 @@
-import { useGetPayment, type PaymentAllocation, type PaymentGroupPart } from '@nadel/api-client';
+import {
+  useGetPayment,
+  type PaymentAllocation,
+  type PaymentChargeAmount,
+  type PaymentGroupPart,
+} from '@nadel/api-client';
 import { format, formatDateTime, formatDay } from '@nadel/shared';
 import { useState, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router';
 import { ChargeTypeName } from '../components/ChargeTypeName';
 import { billingMonthLabel } from '../components/charges/billingMonth';
+import { AllocatePrepaymentDialog } from '../components/payments/AllocatePrepaymentDialog';
 import { ReallocateDialog } from '../components/payments/ReallocateDialog';
 import { ReversePaymentDialog } from '../components/payments/ReversePaymentDialog';
 import { servicePeriodLabel } from '../components/payments/paymentLabels';
@@ -24,35 +30,38 @@ export function PaymentPage() {
   useDocumentTitle(c.title);
   const canReverse = useCan('PAYMENTS_REVERSE');
   const canEnter = useCan('PAYMENTS_ENTER');
-  const [dialog, setDialog] = useState<'reverse' | 'reallocate'>();
+  const [dialog, setDialog] = useState<'reverse' | 'reallocate' | 'prepayment'>();
 
-  const columns: Column<PaymentAllocation>[] = [
-    {
-      key: 'charge',
-      header: c.charge,
-      cell: (a) =>
-        a.system && a.origin === 'PREPAYMENT_AUTO' ? (
-          <span>
-            <ChargeTypeName type={a.chargeType} />
-            <span className="block text-sm text-ink-muted">{c.fromPrepayment}</span>
-          </span>
-        ) : a.releaseCause ? (
-          <span>
-            <ChargeTypeName type={a.chargeType} />
-            <span className="block text-sm text-ink-muted">
-              {c.releaseCause[a.releaseCause] ?? c.released}
-            </span>
-          </span>
-        ) : (
-          <ChargeTypeName type={a.chargeType} />
-        ),
-    },
+  const currentColumns: Column<PaymentChargeAmount>[] = [
+    { key: 'charge', header: c.charge, cell: (a) => <ChargeTypeName type={a.chargeType} /> },
     {
       key: 'period',
       header: c.period,
       cell: (a) => servicePeriodLabel(a.serviceFrom, a.serviceTo, t, locale),
     },
     { key: 'amount', header: c.amountColumn, numeric: true, cell: (a) => <Money amount={a.amount} /> },
+  ];
+
+  const historyColumns: Column<PaymentAllocation>[] = [
+    { key: 'date', header: c.historyDate, cell: (a) => formatDateTime(a.createdAt, locale) },
+    { key: 'charge', header: c.charge, cell: (a) => <ChargeTypeName type={a.chargeType} /> },
+    {
+      key: 'period',
+      header: c.period,
+      cell: (a) => servicePeriodLabel(a.serviceFrom, a.serviceTo, t, locale),
+    },
+    { key: 'amount', header: c.amountColumn, numeric: true, cell: (a) => <Money amount={a.amount} signed /> },
+    {
+      key: 'author',
+      header: c.historyAuthor,
+      cell: (a) =>
+        a.system || a.createdByName === undefined ? c.system : <UserContent>{a.createdByName}</UserContent>,
+    },
+    {
+      key: 'cause',
+      header: c.historyCause,
+      cell: (a) => (a.releaseCause ? c.releaseCause[a.releaseCause] : a.origin ? c.origin[a.origin] : ''),
+    },
   ];
 
   const groupColumns: Column<PaymentGroupPart>[] = [
@@ -124,6 +133,11 @@ export function PaymentPage() {
                         {t.payments.reallocate.action}
                       </Button>
                     )}
+                    {p.prepaymentAllocatable && canEnter && (
+                      <Button variant="secondary" onClick={() => setDialog('prepayment')}>
+                        {t.charges.allocatePrepayment}
+                      </Button>
+                    )}
                     {p.reversible && canReverse && (
                       <Button variant="danger" onClick={() => setDialog('reverse')}>
                         {t.payments.reverse.action}
@@ -147,14 +161,26 @@ export function PaymentPage() {
                   ))}
                 </dl>
               </Panel>
-              <Panel title={c.allocationsTitle}>
+              <Panel title={c.currentTitle}>
                 <DataTable
-                  columns={columns}
-                  rows={p.allocations}
-                  rowKey={(a) => a.id}
-                  caption={c.allocationsCaption}
-                  emptyMessage={c.noAllocations}
+                  columns={currentColumns}
+                  rows={p.currentAllocations}
+                  rowKey={(a) => a.chargeId}
+                  caption={c.currentCaption}
+                  emptyMessage={c.nothingNow}
                 />
+                <details className="mt-2">
+                  <summary className="min-h-11 cursor-pointer py-2 font-medium text-accent">
+                    {c.historyTitle}
+                  </summary>
+                  <DataTable
+                    columns={historyColumns}
+                    rows={p.allocations}
+                    rowKey={(a) => a.id}
+                    caption={c.historyCaption}
+                    emptyMessage={c.nothingNow}
+                  />
+                </details>
               </Panel>
               {p.groupParts.length > 0 && (
                 <Panel title={c.groupTitle}>
@@ -180,6 +206,9 @@ export function PaymentPage() {
                   onDone={() => setDialog(undefined)}
                   onClose={() => setDialog(undefined)}
                 />
+              )}
+              {dialog === 'prepayment' && (
+                <AllocatePrepaymentDialog plotId={p.plotId} onDone={() => setDialog(undefined)} />
               )}
               <p className="text-sm text-ink-muted">
                 {c.entered}{' '}

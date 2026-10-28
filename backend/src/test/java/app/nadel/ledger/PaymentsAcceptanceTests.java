@@ -235,6 +235,8 @@ class PaymentsAcceptanceTests extends FreshPaymentSupport {
 
     @Test
     void fs2_1_theTreasurersOwnLinesAreSavedAsChosen() throws Exception {
+        // automatic allocation off: the 50.00 the lines leave wait as prepayment (example 10)
+        setting(false);
         Debts debts = example1();
 
         api().save(treasurer, request(debts.plot(), "CASH", "700.00", today().toString(),
@@ -244,6 +246,33 @@ class PaymentsAcceptanceTests extends FreshPaymentSupport {
         assertThat(netAllocated(debts.membership())).isEqualByComparingTo("400.00");
         assertThat(lineOf(api().previewPart(treasurer, cash(debts.plot(), "1.00")), debts.membership())
                 .get("open").asString()).isEqualTo("200.00");
+        assertThat(prepayment(debts.plot())).isEqualByComparingTo("50.00");
+    }
+
+    @Test
+    void fs2_4_withAutomaticAllocationOnNoPrepaymentWaitsWhileThePlotOwes() throws Exception {
+        // example 19 (owner decision of 28.10.2026): the treasurer's lines as chosen, the 50.00 they leave at once
+        Debts debts = example1();
+
+        api().save(treasurer, request(debts.plot(), "CASH", "700.00", today().toString(),
+                List.of(line(debts.electricity(), "250.00"), line(debts.membership(), "400.00"))));
+        awaitListeners();
+
+        assertThat(netAllocated(debts.electricity())).isEqualByComparingTo("250.00");
+        assertThat(netAllocated(debts.membership())).isEqualByComparingTo("450.00");
+        assertThat(allocations(debts.plot(), "PREPAYMENT_AUTO")).singleElement().satisfies(row -> {
+            assertThat((BigDecimal) row.get("amount")).isEqualByComparingTo("50.00");
+            assertThat(row.get("charge_id")).isEqualTo(debts.membership());
+            assertThat(row.get("created_by")).isNull();
+        });
+        assertThat(prepayment(debts.plot())).isEqualByComparingTo("0.00");
+        // the plot status agrees: 150.00 still owed, no prepayment
+        assertThat(owner().queryForMap("select debt, prepayment from plot_status where plot_id = ?", debts.plot()))
+                .satisfies(row -> {
+                    assertThat((BigDecimal) row.get("debt")).isEqualByComparingTo("150.00");
+                    assertThat((BigDecimal) row.get("prepayment")).isEqualByComparingTo("0.00");
+                });
+        invariantsHold(debts.plot());
     }
 
     @Test

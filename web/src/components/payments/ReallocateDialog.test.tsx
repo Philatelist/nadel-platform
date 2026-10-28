@@ -5,7 +5,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderWithApp } from '../../test/render';
 import { ReallocateDialog } from './ReallocateDialog';
-import { proposalOf } from './allocationDialogs.fixtures';
+import { exceedingProposalOf, proposalOf } from './allocationDialogs.fixtures';
 
 const reallocatePayment = vi.fn();
 
@@ -85,5 +85,60 @@ describe('ReallocateDialog', () => {
     ).toBeInTheDocument();
     expect(await screen.findByRole('textbox', membershipField)).toHaveValue('250.00');
     expect(onDone).not.toHaveBeenCalled();
+  });
+
+  it('keeps the table while an intermediate value exceeds the charge, shows the problem, and saves once corrected', async () => {
+    const user = userEvent.setup();
+    open();
+    const field = await screen.findByRole('textbox', membershipField, wait);
+    reallocatePayment.mockResolvedValue(exceedingProposalOf('999.00'));
+    await user.clear(field);
+    await user.type(field, '999');
+
+    // the table is not replaced; the problem stands next to its line, the server's totals are shown, Save is off
+    expect(await screen.findByText('Сума перевищує залишок за нарахуванням', {}, wait)).toBeInTheDocument();
+    expect(screen.getByRole('textbox', membershipField)).toHaveValue('999');
+    const totals = screen.getByRole('rowheader', { name: 'Розподілено' }).closest('tr');
+    expect(totals).toHaveTextContent('999,00 ₴ з 300,00 ₴');
+    expect(screen.getByRole('button', { name: 'Перерозподілити' })).toBeDisabled();
+    await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument(), wait);
+
+    reallocatePayment.mockResolvedValue(proposalOf('100.00', '200.00', 'd2'));
+    await user.clear(screen.getByRole('textbox', membershipField));
+    await user.type(screen.getByRole('textbox', membershipField), '100');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Перерозподілити' })).toBeEnabled(), wait);
+    expect(screen.queryByText('Сума перевищує залишок за нарахуванням')).not.toBeInTheDocument();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Перерозподілити' }));
+    await waitFor(() => expect(onDone).toHaveBeenCalled());
+  });
+
+  it('shows an unparseable input as a problem of its line, not as an endless calculation', async () => {
+    const user = userEvent.setup();
+    open();
+    const field = await screen.findByRole('textbox', membershipField, wait);
+    await user.clear(field);
+    await user.type(field, 'abc');
+
+    expect(await screen.findByText('Вкажіть суму числом, наприклад 250,00', {}, wait)).toBeInTheDocument();
+    expect(screen.getByRole('textbox', membershipField)).toHaveValue('abc');
+    await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument(), wait);
+    expect(screen.queryByText('Розраховуємо розподіл…')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Перерозподілити' })).toBeDisabled();
+    expect(reallocatePayment).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a server error above the table, never instead of it', async () => {
+    const user = userEvent.setup();
+    open();
+    const field = await screen.findByRole('textbox', membershipField, wait);
+    reallocatePayment.mockRejectedValue(new ApiError(500, { code: 'INTERNAL_ERROR' }));
+    await user.clear(field);
+    await user.type(field, '100');
+
+    await waitFor(() => expect(reallocatePayment).toHaveBeenCalledTimes(2), wait);
+    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument(), wait);
+    expect(screen.getByRole('textbox', membershipField)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Перерозподілити' })).toBeDisabled();
   });
 });

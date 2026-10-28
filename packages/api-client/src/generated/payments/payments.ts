@@ -206,16 +206,24 @@ export const getEnterPaymentUrl = (params: EnterPaymentParams,) => {
  * adjustments) minus what payments already placed on them. The proposal fills the open charges oldest debt date
  * (`accruedOn`) first, then by the cooperative's order of charge types, then by the start of the service period,
  * then in booking order; each receives at most what is open on it. Without `lines` the proposal is saved; with
- * `lines` the caller's choice is (an empty list places nothing). What is not placed stays as the plot's
- * prepayment.
+ * `lines` the caller's choice is (an empty list places nothing). The remainder (the amount minus the lines) is
+ * placed at once while the cooperative's setting `autoAllocatePrepayment` is on: on the charges still open after
+ * the lines, in the same order, as allocations of origin `PREPAYMENT_AUTO` by the system (`resultLines` with
+ * `automatic: true`), so no prepayment waits while the plot has an open charge. Only what is left after that (the
+ * plot owes nothing more), or the whole remainder while the setting is off, stays as the plot's prepayment.
  *
- * With `preview=true` nothing is written: the answer (200) lists every open charge of the plot in that order
- * (`proposed` `0.00` for a charge that receives nothing), the total placed, the prepayment the payment leaves and
- * a `digest`. With `preview=false` the payment and its allocations are saved together (201) and `payments` names
- * the saved payment; a cash payment gets the cooperative's next receipt number (no gaps, no duplicates). The
- * payment is booked in the billing month of `receivedOn` when that month is open, otherwise in the earliest open
- * month after it; it keeps its `receivedOn`. Sent with the `digest` of a preview whose open charges no longer
- * match, the save is 409 `PREVIEW_OUTDATED` and writes nothing.
+ * With `preview=true` nothing is written and no lock is taken: the answer (200) lists every open charge of the
+ * plot in that order (`proposed`: what the proposal or the caller's lines place on it, `0.00` for nothing), the
+ * lines a save would write (`resultLines`), the total placed (`allocatedTotal`, the automatic part in
+ * `automaticTotal`), the prepayment the payment leaves and a `digest`. A preview whose lines have a problem is
+ * still 200, with `valid: false`, every problem in `problems` (see `AllocationProblem`), the table with the
+ * requested amounts and their total, no `resultLines`, no automatic placement and no `digest`. With
+ * `preview=false` the payment and its allocations are saved together (201) and `payments` names the saved
+ * payment; a cash payment gets the cooperative's next receipt number (no gaps, no duplicates). The payment is
+ * booked in the billing month of `receivedOn` when that month is open, otherwise in the earliest open month after
+ * it; it keeps its `receivedOn`. The `digest` covers the open charges and the lines a save writes (the automatic
+ * ones included); sent with the `digest` of a preview that no longer matches, the save is 409 `PREVIEW_OUTDATED`
+ * and writes nothing.
  *
  * **Split** (`split`, feature 015 §2.6): the payer's current plots (owned now, not common land, not archived) in
  * natural plot order are the plots of the split; the preview lists them in `split.plots` with their debt (the
@@ -224,11 +232,13 @@ export const getEnterPaymentUrl = (params: EnterPaymentParams,) => {
  * amount of at least the total debt gives each plot its debt and the excess to the first plot as prepayment (also
  * when the plots owe nothing). Without `split.parts` the proposal is used; with them, each part names a plot of
  * the payer at most once, its `amount` (`0.00` allowed: such a part is shown but not saved; absent takes the
- * proposed part of the plot) and its `lines` as for one plot. The parts must add up to `amount` (400
- * `SPLIT_TOTAL_MISMATCH`, `errors[{field: split.parts}]`). `parts` of the answer has one part per plot of the
- * split, in natural plot order. A save writes one payment per part above zero, all with one `groupId` and the
- * payer `split.payerMemberId`; a cash group takes one receipt number, stored on every part. The `digest` covers
- * the amount, the payer, the parts (plot, amount) and each part's open charges.
+ * proposed part of the plot) and its `lines` as for one plot; the remainder of each part is placed automatically
+ * on its plot as for one plot. The parts must add up to `amount` (a save: 400 `SPLIT_TOTAL_MISMATCH`,
+ * `errors[{field: split.parts}]`; a preview: 200 with the problem `SPLIT_TOTAL_MISMATCH`). `parts` of the answer
+ * has one part per plot of the split, in natural plot order. A save writes one payment per part above zero, all
+ * with one `groupId` and the payer `split.payerMemberId`; a cash group takes one receipt number, stored on every
+ * part. The `digest` covers the amount, the payer, the parts (plot, amount), each part's open charges and the
+ * lines a save writes.
  *
  * 400 `VALIDATION_FAILED`: `amount` not above zero (`AMOUNT_NOT_POSITIVE`) or with more than 12 integer digits
  * (`INVALID`), `receivedOn` after today in Europe/Kyiv (`DATE_IN_FUTURE`), `plotId` missing without `split`
@@ -244,7 +254,8 @@ export const getEnterPaymentUrl = (params: EnterPaymentParams,) => {
  * `lines[j].amount` not above zero (`AMOUNT_NOT_POSITIVE`). 400 `ALLOCATION_EXCEEDS_PAYMENT` when the lines
  * together exceed `amount` (`errors[{field: lines}]`, of a part: its amount, `split.parts[i].lines`); 400
  * `ALLOCATION_EXCEEDS_CHARGE` when a line exceeds what is open on its charge (`errors[{field: lines[j].amount}]`,
- * of a part `split.parts[i].lines[j].amount`). An unknown plot, or one of another cooperative, is
+ * of a part `split.parts[i].lines[j].amount`). The problems of the lines (and `SPLIT_TOTAL_MISMATCH`) are 400 for
+ * a save only; a preview answers them in `problems`. An unknown plot, or one of another cooperative, is
  * 404 `PLOT_NOT_FOUND`; common land is 409 `PLOT_COMMON_LAND` and an archived plot 409 `PLOT_ARCHIVED`.
  *
  * The payer note is personal data: it is stored encrypted and is never logged. Requires `PAYMENTS_ENTER`; a save
@@ -339,9 +350,10 @@ export const useEnterPayment = <TError = BadRequestResponse | UnauthorizedRespon
 }
 
 /**
- * The payment as saved, with every allocation and release of it (oldest first), the other parts of its group
- * (a payment split over several plots of one payer) and its reversal. `payerNote` is returned only to a caller
- * who may also view members (`MEMBERS_VIEW`). An unknown payment, a payment of another cooperative or the id of
+ * The payment as saved, with what it pays on each charge now (`currentAllocations`), every allocation and
+ * release of it (oldest first, with the author's current name), the other parts of its group (a payment split
+ * over several plots of one payer) and its reversal. `payerNote` is returned only to a caller who may also view
+ * members (`MEMBERS_VIEW`). An unknown payment, a payment of another cooperative or the id of
  * a reversal row is 404 `NOT_FOUND`. Requires `PAYMENTS_VIEW`.
  * @summary One payment with its allocations and its group
  */
@@ -556,21 +568,26 @@ export const useReversePayment = <TError = BadRequestResponse | UnauthorizedResp
  * Moves the money of a payment between the plot's charges (feature 015 §2.6): every allocation of the payment
  * still on a charge is taken back (a release with the cause `REALLOCATED`) and the new lines are written (origin
  * `REALLOCATION`) in one transaction. The new lines are checked against the plot's open charges as if the
- * payment's allocations were already taken back, and together may not exceed the payment's amount; what is not
- * placed stays as prepayment. Without `lines` the proposal is saved (the plot's open charges as if released,
- * filled in the order of `enterPayment`); with `lines` the caller's choice is (an empty list places nothing).
+ * payment's allocations were already taken back, and together may not exceed the payment's amount. Without
+ * `lines` the proposal is saved (the plot's open charges as if released, filled in the order of `enterPayment`);
+ * with `lines` the caller's choice is (an empty list places nothing). The remainder is placed automatically as at
+ * `enterPayment` while `autoAllocatePrepayment` is on (origin `PREPAYMENT_AUTO`, by the system); only what is left
+ * after that, or all of it while the setting is off, stays as prepayment.
  *
- * With `preview=true` nothing is written (200): `current` lists what the payment places on charges now, and
- * `proposal` every open charge of the plot as if released with `proposed` (`0.00` for a charge that receives
- * nothing), the total placed and what stays as prepayment, with a `digest`. With `preview=false` the releases and
- * the new allocations are saved (201), with the same answer. The `digest` covers the payment, what is left of
- * each of its allocations and the open charges as if released; sent with the `digest` of a preview that no
- * longer matches, the save is 409 `PREVIEW_OUTDATED` and writes nothing.
+ * With `preview=true` nothing is written and no lock is taken (200): `current` lists what the payment places on
+ * charges now, and `proposal` every open charge of the plot as if released with `proposed` (`0.00` for a charge
+ * that receives nothing), the lines a save writes (`resultLines`), the total placed and what stays as
+ * prepayment, with a `digest`. Lines with a problem are still 200 in a preview, with `valid: false` and
+ * `problems`, as at `enterPayment`. With `preview=false` the releases and the new allocations are saved (201),
+ * with the same answer. The `digest` covers the payment, what is left of each of its allocations, the open
+ * charges as if released and the lines a save writes; sent with the `digest` of a preview that no longer
+ * matches, the save is 409 `PREVIEW_OUTDATED` and writes nothing.
  *
  * 400 `VALIDATION_FAILED`: `lines[j].chargeId` not an open charge of the plot (`NOT_FOUND`) or named twice
  * (`DUPLICATE`), `lines[j].amount` not above zero (`AMOUNT_NOT_POSITIVE`); 400 `ALLOCATION_EXCEEDS_PAYMENT` when
  * the lines together exceed the payment (`errors[{field: lines}]`); 400 `ALLOCATION_EXCEEDS_CHARGE` when a line
- * exceeds what is open on its charge (`errors[{field: lines[j].amount}]`). 409 `PAYMENT_ALREADY_REVERSED` for a
+ * exceeds what is open on its charge (`errors[{field: lines[j].amount}]`); these are 400 for a save only, a
+ * preview answers them in `problems`. 409 `PAYMENT_ALREADY_REVERSED` for a
  * reversed payment or the id of a reversal row. An unknown payment, or one of another cooperative, is 404
  * `NOT_FOUND`. Requires `PAYMENTS_ENTER`; a save is written to the audit log (`PAYMENT_REALLOCATED`, entity type
  * `PAYMENT` about the plot, with the payment's amount, `receivedOn`, receipt number of a cash payment, and
@@ -677,17 +694,20 @@ export const useReallocatePayment = <TError = BadRequestResponse | UnauthorizedR
  * the proposal is saved (the open charges filled in the order of `enterPayment` up to the prepayment); with
  * `lines` the caller's choice is. Each line's money is taken from the plot's payments that still have money left,
  * the oldest first (`receivedOn`, then the time they were entered), so a line may become several allocations
- * (origin `PREPAYMENT_MANUAL`).
+ * (origin `PREPAYMENT_MANUAL`). Nothing is placed automatically here. With `autoAllocatePrepayment` on, a plot
+ * with an open charge normally has no prepayment waiting; the action is offered where `prepaymentAllocatable`
+ * says so (the setting off).
  *
- * With `preview=true` nothing is written (200): `proposal` lists every open charge of the plot with `proposed`,
- * its `amount` is the prepayment, `allocatedTotal` the total placed and `prepayment` what stays, with a `digest`
- * (the plot, its prepayment and its open charges). With `preview=false` the allocations are saved (201), with the
+ * With `preview=true` nothing is written and no lock is taken (200): `proposal` lists every open charge of the
+ * plot with `proposed`, its `amount` is the prepayment, `allocatedTotal` the total placed and `prepayment` what
+ * stays, with a `digest` (the plot, its prepayment and its open charges). Lines with a problem are still 200 in a
+ * preview, with `valid: false` and `problems`, as at `enterPayment`. With `preview=false` the allocations are saved (201), with the
  * same answer; a `digest` of a preview that no longer matches is 409 `PREVIEW_OUTDATED` and writes nothing.
  *
  * 409 `NOTHING_TO_ALLOCATE` when the plot has no prepayment or no open charge. 400 `VALIDATION_FAILED`: an empty
  * `lines` (`REQUIRED`), the lines as in `reallocatePayment`; 400 `ALLOCATION_EXCEEDS_PAYMENT` when the lines
  * together exceed the prepayment (`errors[{field: lines}]`); 400 `ALLOCATION_EXCEEDS_CHARGE` as in
- * `reallocatePayment`. An unknown plot, or one of another cooperative, is 404 `PLOT_NOT_FOUND`. Requires
+ * `reallocatePayment`; the problems of the lines are 400 for a save only. An unknown plot, or one of another cooperative, is 404 `PLOT_NOT_FOUND`. Requires
  * `PAYMENTS_ENTER`; a save is written to the audit log (`PREPAYMENT_ALLOCATED`, entity type `PAYMENT` about the
  * plot, with `lines` as in `PAYMENT_REALLOCATED` and their `total`).
  * @summary Preview or save an allocation of the plot's prepayment by hand

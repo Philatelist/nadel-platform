@@ -22,6 +22,7 @@ export function ProposalTable({
   touched,
   lineErrors,
   amountError,
+  totalError,
   onEdit,
   onAdd,
 }: {
@@ -33,6 +34,8 @@ export function ProposalTable({
   lineErrors: Readonly<Record<string, string>>;
   /** Text of a typed amount that is not an amount, by charge id. */
   amountError: Readonly<Record<string, string>>;
+  /** A problem of the lines together (they exceed the payment), shown next to the totals. */
+  totalError?: string;
   onEdit: (chargeId: string, text: string) => void;
   onAdd: (chargeId: string) => void;
 }) {
@@ -41,6 +44,10 @@ export function ProposalTable({
   const p = t.payments.proposal;
   const listed = part.lines.filter((line) => isListed(line, touched));
   const addable = part.lines.filter((line) => !isListed(line, touched));
+  // The server places the remainder itself; its rows are shown as it answered, read-only.
+  const automatic = part.resultLines.filter((line) => line.automatic);
+  // The server writes "0.00" for nothing placed automatically; any other digit means something is.
+  const hasAutomatic = /[1-9]/.test(part.automaticTotal);
 
   return (
     <div className="flex flex-col gap-3">
@@ -64,7 +71,7 @@ export function ProposalTable({
             </tr>
           </thead>
           <tbody>
-            {listed.length === 0 ? (
+            {listed.length === 0 && automatic.length === 0 ? (
               <tr>
                 <td colSpan={4} className="px-3 py-4 text-center text-ink-muted">
                   {p.empty}
@@ -106,6 +113,29 @@ export function ProposalTable({
                 );
               })
             )}
+            {automatic.map((placed) => {
+              const line = part.lines.find((x) => x.chargeId === placed.chargeId);
+              if (line === undefined) return null;
+              const period = servicePeriodLabel(line.serviceFrom, line.serviceTo, t, locale);
+              return (
+                <tr
+                  key={`auto-${placed.chargeId}`}
+                  className="border-b border-line-subtle align-top last:border-b-0"
+                >
+                  <td className="px-3 py-2">
+                    <ChargeTypeName type={line.chargeType} />
+                  </td>
+                  <td className="px-3 py-2">{period}</td>
+                  <td className="px-3 py-2 text-right">
+                    <Money amount={line.open} />
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <Money amount={placed.amount} />
+                    <span className="block text-sm text-ink-muted">{p.automatic}</span>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
           <tfoot>
             <tr className="border-t border-line font-medium">
@@ -113,9 +143,18 @@ export function ProposalTable({
                 {p.allocatedTotal}
               </th>
               <td className="px-3 py-2 text-right">
-                <Money amount={part.allocatedTotal} />
+                <Money amount={part.allocatedTotal} /> {p.of} <Money amount={part.amount} />
               </td>
             </tr>
+            {totalError && (
+              <tr>
+                <td colSpan={4} className="px-3 pb-2 text-right">
+                  <p role="alert" className="text-sm text-danger">
+                    {totalError}
+                  </p>
+                </td>
+              </tr>
+            )}
             <tr className="font-medium">
               <th scope="row" colSpan={3} className="px-3 py-2 text-right">
                 {p.prepayment}
@@ -124,6 +163,13 @@ export function ProposalTable({
                 <Money amount={part.prepayment} />
               </td>
             </tr>
+            {hasAutomatic && (
+              <tr>
+                <td colSpan={4} className="px-3 pb-2 text-right text-sm font-normal text-ink-muted">
+                  {p.automaticNote}
+                </td>
+              </tr>
+            )}
           </tfoot>
         </table>
       </div>

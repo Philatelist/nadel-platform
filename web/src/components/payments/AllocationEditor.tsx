@@ -1,4 +1,4 @@
-import type { AllocationLinesRequest, PaymentPartProposal } from '@nadel/api-client';
+import type { AllocationLinesRequest, AllocationProblem, PaymentPartProposal } from '@nadel/api-client';
 import { isZeroMoney } from '@nadel/shared';
 import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
@@ -8,13 +8,17 @@ import { problemCode } from '../../problem';
 import { Button, LoadingState, Notice } from '../ui';
 import { ProposalTable } from './ProposalTable';
 import { linesOf, type Edits } from './paymentLines';
-import { paymentErrors } from './paymentProblems';
+import { allocationProblemTexts, paymentErrors } from './paymentProblems';
 import { PREVIEW_DEBOUNCE_MS } from './usePaymentPreview';
 
 /** What a reallocation or a prepayment allocation preview answers with: the proposal and its digest. */
 export interface AllocationPreview {
   proposal: PaymentPartProposal;
-  digest: string;
+  /** False when `problems` is not empty; only a valid preview can be saved. */
+  valid: boolean;
+  problems: AllocationProblem[];
+  /** Absent when the preview has problems (`valid: false`). */
+  digest?: string;
 }
 
 /**
@@ -69,13 +73,21 @@ export function AllocationEditor<TResult extends AllocationPreview>({
   });
   const saveMutation = useMutation({ mutationFn: save });
 
-  const waiting = key !== settledKey || query.isFetching;
+  // Waiting means a request is on its way or about to be sent. An unparseable input sends nothing, so it never waits.
+  const waiting = request !== undefined && (key !== settledKey || query.isFetching);
   const current =
     request !== undefined && !waiting && !query.isError && !query.isPlaceholderData ? query.data : undefined;
-  const shown = query.data;
+  // The last answer stays on screen while a newer one is awaited, has failed or the input is not an amount.
+  const [lastShown, setLastShown] = useState<TResult>();
+  if (query.data !== undefined && !query.isPlaceholderData && query.data !== lastShown) {
+    setLastShown(query.data);
+  }
+  const shown = lastShown ?? query.data;
   const errors = paymentErrors(t, saveError ?? (waiting ? undefined : query.error));
+  const problems = allocationProblemTexts(t, shown?.problems, shown?.proposal.plotId);
+  const plotKey = shown?.proposal.plotId ?? '';
 
-  const lineErrors: Record<string, string> = {};
+  const lineErrors: Record<string, string> = { ...problems.lines[plotKey] };
   for (const [index, text] of Object.entries(errors.lines)) {
     const id = typed.ids[Number(index)];
     if (id !== undefined) lineErrors[id] = text;
@@ -99,7 +111,7 @@ export function AllocationEditor<TResult extends AllocationPreview>({
   }
 
   function submit() {
-    if (current === undefined || request === undefined) return;
+    if (current === undefined || request === undefined || !current.valid) return;
     setOutdated(false);
     setSaveError(undefined);
     saveMutation.mutate(
@@ -118,16 +130,22 @@ export function AllocationEditor<TResult extends AllocationPreview>({
     );
   }
 
-  const canSave = current !== undefined && !saveMutation.isPending;
+  const canSave =
+    current !== undefined && current.valid && current.digest !== undefined && !saveMutation.isPending;
   return (
     <div className="mt-3 flex flex-col gap-4">
       {outdated && <Notice tone="warning">{t.payments.proposal.outdated}</Notice>}
       {errors.notice !== undefined && !outdated && <Notice tone="danger">{errors.notice}</Notice>}
       {shown === undefined ? (
-        errors.notice === undefined && <LoadingState message={t.payments.form.previewing} />
+        waiting && <LoadingState message={t.payments.form.previewing} />
       ) : (
         <>
           {intro?.(shown)}
+          {waiting && (
+            <p role="status" className="text-sm text-ink-muted">
+              {t.payments.form.previewing}
+            </p>
+          )}
           <div aria-busy={waiting}>
             <ProposalTable
               part={shown.proposal}
@@ -135,6 +153,7 @@ export function AllocationEditor<TResult extends AllocationPreview>({
               touched={touched}
               lineErrors={lineErrors}
               amountError={amountErrors}
+              totalError={problems.payment[plotKey]}
               onEdit={edit}
               onAdd={(chargeId) => edit(chargeId, '0.00')}
             />
