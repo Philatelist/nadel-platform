@@ -47,3 +47,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `f6b5f41..592d62a` | PASS | — | minor: payments report street filter binds one large `IN (:plotIds)` (other queries chunk by 500); `PREPAYMENT_AS_OF` with all plots runs once per chunk; `TemplateField` javadoc wrapping |
+
+## Slice 8 — demo payments, end-to-end flows, docs and guides
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `592d62a..9d2b59b` | MAJOR_ISSUES | M1 `web/e2e/role-names.spec.ts:71-72` still expects 22 permission checkboxes (now 25) | minor: guide images and PDFs not committed (owner follow-up before merge); member e2e leaves a net-zero payment+reversal on plot 7; `DemoLedgerData` javadoc line length; `payment-card` shot relies on the newest payment being reversible |
