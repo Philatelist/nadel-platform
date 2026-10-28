@@ -29,3 +29,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `ec792e9..2bf814c` | PASS | — | minor: `LedgerAuditPublisher` Javadoc line over wrap width; reallocate preview resolves the plot without a lock (save re-reads under the lock) |
+
+## Slice 5 — automatic release on charge corrections and automatic allocation of prepayment
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `2bf814c..08e3d1d` | PASS | — | deadlock analysis: no cycle (only `MonthClosing.close` takes month FOR UPDATE and holds no other ledger lock; a FOR SHARE on an already share-locked row does not queue behind it). Optional hardening: take plot ledger locks in `book` before the plan's month locks. minor: settings README line over wrap width; RecalculationService javadoc could name the `MonthClosing` argument |

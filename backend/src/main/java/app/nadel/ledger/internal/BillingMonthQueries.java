@@ -39,7 +39,9 @@ import org.springframework.transaction.annotation.Transactional;
  * §2.2). The listed months run from the first month row (the month of the first booking) to the current month in
  * Europe/Kyiv, or to the last row when one is later; a month without a row is listed {@code OPEN} with no totals and is
  * not created by a read. Totals are the sums of the charges booked in the month per charge type, reversals negative,
- * added exactly in the database ({@code numeric(14,2)}), nothing rounded.
+ * added exactly in the database ({@code numeric(14,2)}), nothing rounded; {@code received} is the sum of the payments
+ * booked in the month, reversals of payments negative (feature 015 §6: a payment received in a closed month is booked
+ * in, and counts in, the earliest open month).
  * <p>
  * The check list of one month: the month run is done ({@code run_at}), the open "not charged" items of the month
  * ({@link #notChargedCount}) and the stale plot meters
@@ -54,6 +56,7 @@ class BillingMonthQueries {
 
     private final BillingMonthRepository months;
     private final ChargeRepository charges;
+    private final PaymentRepository payments;
     private final ChargeTypeCatalog chargeTypes;
     private final MeterNetwork meterNetwork;
     private final PlotCatalog plots;
@@ -61,11 +64,12 @@ class BillingMonthQueries {
     private final NotChargedItemRepository items;
     private final Clock clock;
 
-    BillingMonthQueries(BillingMonthRepository months, ChargeRepository charges, ChargeTypeCatalog chargeTypes,
-            MeterNetwork meterNetwork, PlotCatalog plots, ActorNames actorNames, NotChargedItemRepository items,
-            Clock clock) {
+    BillingMonthQueries(BillingMonthRepository months, ChargeRepository charges, PaymentRepository payments,
+            ChargeTypeCatalog chargeTypes, MeterNetwork meterNetwork, PlotCatalog plots, ActorNames actorNames,
+            NotChargedItemRepository items, Clock clock) {
         this.months = months;
         this.charges = charges;
+        this.payments = payments;
         this.chargeTypes = chargeTypes;
         this.meterNetwork = meterNetwork;
         this.plots = plots;
@@ -85,13 +89,16 @@ class BillingMonthQueries {
                 .collect(Collectors.toMap(BillingMonthRecord::yearMonth, Function.identity()));
         Map<UUID, List<MonthTypeTotal>> totals = charges.totalsPerMonthAndType().stream()
                 .collect(Collectors.groupingBy(MonthTypeTotal::billingMonthId));
+        Map<UUID, Money> received = new HashMap<>();
+        payments.receivedPerMonth().forEach(r -> received.put(r.billingMonthId(), Money.of(r.amount())));
         List<ChargeTypeFacts> types = typesInOrder();
         List<BillingMonthSummary> listed = new ArrayList<>();
         YearMonth first = rows.getFirst().yearMonth();
         for (YearMonth month = last(rows); !month.isBefore(first); month = month.minusMonths(1)) {
             BillingMonthRecord row = byMonth.get(month);
             List<MonthTypeTotal> ofMonth = row == null ? List.of() : totals.getOrDefault(row.getId(), List.of());
-            listed.add(summary(month, row, ofMonth, types));
+            Money ofMonthReceived = row == null ? Money.ZERO : received.getOrDefault(row.getId(), Money.ZERO);
+            listed.add(summary(month, row, ofMonth, ofMonthReceived, types));
         }
         return listed;
     }
@@ -109,7 +116,8 @@ class BillingMonthQueries {
         }
         Optional<BillingMonthRecord> row = rows.stream().filter(m -> m.yearMonth().equals(month)).findFirst();
         List<MonthTypeTotal> ofMonth = row.map(m -> charges.totalsOfMonth(m.getId())).orElse(List.of());
-        BillingMonthSummary summary = summary(month, row.orElse(null), ofMonth, typesInOrder());
+        Money received = row.map(m -> Money.of(payments.receivedInMonth(m.getId()))).orElse(Money.ZERO);
+        BillingMonthSummary summary = summary(month, row.orElse(null), ofMonth, received, typesInOrder());
         boolean runDone = row.map(BillingMonthRecord::isRunDone).orElse(false);
 
         LocalDate today = LocalDate.now(clock);
@@ -117,7 +125,7 @@ class BillingMonthQueries {
         BillingMonthChecklist checklist = new BillingMonthChecklist(runDone, notChargedCount(month),
                 staleMeters(asOf));
         BillingMonthDetails details = new BillingMonthDetails(summary.getMonth(), summary.getStatus(), runDone,
-                summary.getTotals(), summary.getTotal(), checklist);
+                summary.getTotals(), summary.getTotal(), summary.getReceived(), checklist);
         details.setClosedAt(summary.getClosedAt());
         UUID closedBy = row.map(BillingMonthRecord::getClosedBy).orElse(null);
         if (closedBy != null) {
@@ -148,7 +156,7 @@ class BillingMonthQueries {
     }
 
     private static BillingMonthSummary summary(YearMonth month, @Nullable BillingMonthRecord row,
-            List<MonthTypeTotal> totals, List<ChargeTypeFacts> types) {
+            List<MonthTypeTotal> totals, Money received, List<ChargeTypeFacts> types) {
         Map<UUID, Money> byType = new HashMap<>();
         totals.forEach(t -> byType.put(t.chargeTypeId(), Money.of(t.amount())));
         List<ChargeTypeTotal> listed = types.stream().filter(type -> byType.containsKey(type.id()))
@@ -157,7 +165,7 @@ class BillingMonthQueries {
         boolean closed = row != null && row.isClosed();
         BillingMonthSummary summary = new BillingMonthSummary(month.toString(),
                 closed ? BillingMonthStatus.CLOSED : BillingMonthStatus.OPEN, row != null && row.isRunDone(), listed,
-                total.toString());
+                total.toString(), received.toString());
         if (row != null && row.getClosedAt() != null) {
             summary.setClosedAt(row.getClosedAt().atOffset(ZoneOffset.UTC));
         }

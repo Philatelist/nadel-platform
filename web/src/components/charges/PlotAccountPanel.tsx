@@ -1,9 +1,10 @@
-import { ApiError, useGetPlotAccount, type Charge } from '@nadel/api-client';
+import { ApiError, useGetPlotAccount, useGetSettings, type Charge } from '@nadel/api-client';
 import { useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router';
 import { useT } from '../../i18n';
 import { useCan } from '../../me';
 import { QueryBoundary } from '../QueryBoundary';
+import { AllocatePrepaymentDialog } from '../payments/AllocatePrepaymentDialog';
 import { Button, Notice, Panel, TextField } from '../ui';
 import { isAdjustment } from './chargeLabels';
 import { ChargeDetailDialog } from './ChargeDetailDialog';
@@ -29,6 +30,14 @@ export function PlotAccountPanel({
   const c = t.charges;
   const canReverse = useCan('CHARGES_REVERSE') && !readOnly;
   const canRun = useCan('CHARGES_RUN') && !readOnly;
+  const canViewPayments = useCan('PAYMENTS_VIEW');
+  const canEnterPayments = useCan('PAYMENTS_ENTER') && !readOnly;
+  // GET /settings is open to every member of the cooperative. The button is offered only once the setting is known
+  // to be off; with automatic allocation on, the server places the prepayment itself.
+  const settings = useGetSettings({ query: { enabled: canEnterPayments } });
+  const canAllocate = canEnterPayments && settings.data?.autoAllocatePrepayment === false;
+  const [allocating, setAllocating] = useState(false);
+  const [paymentsOnly, setPaymentsOnly] = useState(false);
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [searchParams, setSearchParams] = useSearchParams();
@@ -40,7 +49,10 @@ export function PlotAccountPanel({
   const [done, setDone] = useState<string>();
 
   const rangeInvalid = from !== '' && to !== '' && from > to;
-  const params = rangeInvalid ? {} : { ...(from ? { from } : {}), ...(to ? { to } : {}) };
+  const params = {
+    ...(rangeInvalid ? {} : { ...(from ? { from } : {}), ...(to ? { to } : {}) }),
+    ...(paymentsOnly ? { kind: 'PAYMENTS' as const } : {}),
+  };
   const filtered = !rangeInvalid && (from !== '' || to !== '');
   const account = useGetPlotAccount(plotId, params);
 
@@ -74,9 +86,14 @@ export function PlotAccountPanel({
         {(data) => {
           // The filter is applied to the loaded list so an adjustment still finds its original charge.
           const shown = adjustmentsOnly ? data.charges.filter(isAdjustment) : data.charges;
+          const payments = adjustmentsOnly ? [] : data.payments;
+          const placements = adjustmentsOnly ? [] : data.prepaymentAllocations;
           return (
             <>
-              <DebtByType account={data} />
+              <DebtByType
+                account={data}
+                onAllocatePrepayment={canAllocate ? () => setAllocating(true) : undefined}
+              />
               {canRun && (
                 <div>
                   <Button
@@ -112,6 +129,14 @@ export function PlotAccountPanel({
                   />
                   {c.adjustment.only}
                 </label>
+                <label className="flex min-h-11 items-center gap-2 self-end text-[15px]">
+                  <input
+                    type="checkbox"
+                    checked={paymentsOnly}
+                    onChange={(e) => setPaymentsOnly(e.target.checked)}
+                  />
+                  {c.paymentsOnly}
+                </label>
                 {(from !== '' || to !== '') && (
                   <Button
                     variant="secondary"
@@ -125,11 +150,16 @@ export function PlotAccountPanel({
                   </Button>
                 )}
               </div>
-              {shown.length === 0 ? (
-                <p className="text-ink-muted">{filtered || adjustmentsOnly ? c.nothingFound : c.empty}</p>
+              {shown.length === 0 && payments.length === 0 && placements.length === 0 ? (
+                <p className="text-ink-muted">
+                  {paymentsOnly ? c.paymentsEmpty : filtered || adjustmentsOnly ? c.nothingFound : c.empty}
+                </p>
               ) : (
                 <ChargeList
                   charges={shown}
+                  payments={payments}
+                  placements={placements}
+                  canOpenPayments={canViewPayments}
                   findCharge={(id) => data.charges.find((x) => x.id === id)}
                   canReverse={canReverse}
                   onOpen={setOpened}
@@ -164,6 +194,7 @@ export function PlotAccountPanel({
           }}
         />
       )}
+      {allocating && <AllocatePrepaymentDialog plotId={plotId} onDone={() => setAllocating(false)} />}
       {enteringBalance && (
         <OpeningBalanceForm
           plotId={plotId}

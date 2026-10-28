@@ -123,3 +123,6 @@ red plots; guide PDFs.
 - Slice 4 committed 2bf814c; review round 1: PASS (minor notes in review-log).
 - Slice 5 backend: releases wired into Reversals, run reversals, RecalculationService; PrepaymentAllocator; setting (785 tests in ledger/settings green). Note: in recalculation the plot ledger locks come after the plan's month FOR SHARE locks (builder's argument: shared month locks only) — flagged for review.
 - Slice 5 verify: backend 785 tests 0 failures; pnpm typecheck/lint/test green. Settings switch shown only with SETTINGS_MANAGE (whole settings block is gated).
+- Slice 5 committed 08e3d1d; review round 1: PASS (deadlock analysis: no cycle; minor notes in review-log).
+- Slice 6 backend: account + member account (same endpoint) + received (506 tests green). Builder choices: prepayment placements as a separate account list grouped per run; lists returned separately, client merges by date; CHARGES_VIEW-only custom role sees no payment rows.
+- Slice 6 verify: backend 504 tests 0 failures; pnpm typecheck/lint/test green.

@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -18,9 +19,12 @@ import tools.jackson.databind.JsonNode;
  * who may do what per endpoint (chairman, treasurer, a custom role with one permission, a member for their own plot and
  * another plot, the other cooperative, the platform operator). Adjustments (feature 012 §2.3, written through the test
  * support until the booking arrives): they count in the debt, link to the charge they adjust and to their
- * recalculation (only for {@code CHARGES_VIEW}), the kind filter, and they are never reversed.
+ * recalculation (only for {@code CHARGES_VIEW}), the kind filter, and they are never reversed. Payments (feature 015
+ * §2.9, §2.10): the payments and their reversals next to the charges with their dates, paid and open per charge, the
+ * debt after payments and the prepayment, the placements of the prepayment, the "payments only" filter, and what a
+ * member, a custom role and the board see of them.
  */
-class LedgerAccountTests extends LedgerApiSupport {
+class LedgerAccountTests extends PaymentApiSupport {
 
     private static final String OCTOBER = "2026-10";
 
@@ -618,5 +622,297 @@ class LedgerAccountTests extends LedgerApiSupport {
         send(customRoleToken("METERS_VIEW"), get(ACCOUNT.formatted(plot)), null)
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("PLOT_NOT_FOUND"));
+    }
+
+    // ---- payments on the account (feature 015 §2.9, §2.10)
+
+    private static JsonNode payment(JsonNode account, UUID id) {
+        for (JsonNode payment : account.get("payments")) {
+            if (payment.get("id").asString().equals(id.toString())) {
+                return payment;
+            }
+        }
+        throw new AssertionError("No payment " + id + " in " + account);
+    }
+
+    private static List<String> ids(JsonNode list) {
+        return list.valueStream().map(item -> item.get("id").asString()).toList();
+    }
+
+    /** Membership 600.00 (January) and electricity 250.00 (February), paid 100.00 by bank on 15 January. */
+    private record Paid(UUID plot, UUID membership, UUID electricity, UUID bank) {
+    }
+
+    private Paid paidPlot() throws Exception {
+        UUID plot = newPlot();
+        UUID membership = tariffCharge(plot, "MEMBERSHIP", "600.00", "2026-01");
+        UUID electricity = tariffCharge(plot, "ELECTRICITY", "250.00", "2026-02");
+        UUID bank = saved(treasurer(), with(payment(plot, "BANK", "100.00", "2026-01-15", null), "bankReference",
+                "ПД-5"));
+        return new Paid(plot, membership, electricity, bank);
+    }
+
+    @Test
+    void paymentsAreListedWithTheirDatesNextToTheChargesAndEachChargeShowsPaidAndOpen() throws Exception {
+        Paid given = paidPlot();
+        JsonNode saved = body(save(treasurer(), with(cash(given.plot(), "700.00"), "payerNote", "Принесла дочка"))
+                .andExpect(status().isCreated())).get("payments").get(0);
+        UUID cash = UUID.fromString(saved.get("id").asString());
+
+        JsonNode account = account(chairman(), given.plot());
+
+        // the debt after payments: membership 600.00 paid in full, electricity 250.00 - 200.00
+        assertThat(account.get("debts").get(0).get("chargeTypeCode").asString()).isEqualTo("MEMBERSHIP");
+        assertThat(account.get("debts").get(0).get("debt").asString()).isEqualTo("0.00");
+        assertThat(account.get("debts").get(1).get("chargeTypeCode").asString()).isEqualTo("ELECTRICITY");
+        assertThat(account.get("debts").get(1).get("debt").asString()).isEqualTo("50.00");
+        assertThat(account.get("total").asString()).isEqualTo("50.00");
+        assertThat(account.get("prepayment").asString()).isEqualTo("0.00");
+        JsonNode membership = charge(account, given.membership());
+        assertThat(membership.get("amount").asString()).isEqualTo("600.00");
+        assertThat(membership.get("paid").asString()).isEqualTo("600.00");
+        assertThat(membership.get("open").asString()).isEqualTo("0.00");
+        JsonNode electricity = charge(account, given.electricity());
+        assertThat(electricity.get("paid").asString()).isEqualTo("200.00");
+        assertThat(electricity.get("open").asString()).isEqualTo("50.00");
+
+        // both lists newest first, each with the date the client interleaves them by: today's cash, the February
+        // charge, the bank payment of 15 January, the January charge
+        assertThat(ids(account.get("charges"))).containsExactly(given.electricity().toString(),
+                given.membership().toString());
+        assertThat(ids(account.get("payments"))).containsExactly(cash.toString(), given.bank().toString());
+        assertThat(account.get("charges").get(0).get("accruedOn").asString()).isEqualTo("2026-02-01");
+        assertThat(account.get("charges").get(1).get("accruedOn").asString()).isEqualTo("2026-01-01");
+        JsonNode bank = payment(account, given.bank());
+        assertThat(bank.get("receivedOn").asString()).isEqualTo("2026-01-15");
+        assertThat(bank.get("kind").asString()).isEqualTo("PAYMENT");
+        assertThat(bank.get("source").asString()).isEqualTo("BANK");
+        assertThat(bank.get("billingMonth").asString()).isEqualTo("2026-01");
+        assertThat(bank.get("bankReference").asString()).isEqualTo("ПД-5");
+        assertThat(bank.has("receiptNumber")).isFalse();
+        assertThat(bank.get("amount").asString()).isEqualTo("100.00");
+        assertThat(bank.get("allocations")).hasSize(1);
+        assertThat(bank.get("allocations").get(0).get("chargeId").asString()).isEqualTo(given.membership().toString());
+        assertThat(bank.get("allocations").get(0).get("amount").asString()).isEqualTo("100.00");
+
+        JsonNode paidCash = payment(account, cash);
+        assertThat(paidCash.get("receivedOn").asString()).isEqualTo(kyivToday().toString());
+        assertThat(paidCash.get("source").asString()).isEqualTo("CASH");
+        assertThat(paidCash.get("receiptNumber").asLong()).isEqualTo(saved.get("receiptNumber").asLong());
+        assertThat(paidCash.get("groupId").asString()).isEqualTo(cash.toString());
+        assertThat(paidCash.get("reversed").asBoolean()).isFalse();
+        assertThat(paidCash.has("reversedBy")).isFalse();
+        // what the cash paid: 500.00 of membership (January), then 200.00 of electricity
+        JsonNode lines = paidCash.get("allocations");
+        assertThat(lines).hasSize(2);
+        assertThat(lines.findValuesAsString("chargeId")).containsExactlyInAnyOrder(given.membership().toString(),
+                given.electricity().toString());
+        assertThat(lines.findValuesAsString("amount")).containsExactlyInAnyOrder("500.00", "200.00");
+        assertThat(lines.findValuesAsString("origin")).containsOnly("ENTRY");
+        lines.forEach(line -> {
+            assertThat(line.get("system").asBoolean()).isFalse();
+            assertThat(line.get("chargeType").get("code").asString()).isIn("MEMBERSHIP", "ELECTRICITY");
+            assertThat(line.has("serviceFrom")).isTrue();
+        });
+        // the board: the payer note (PAYMENTS_VIEW and MEMBERS_VIEW) and the author (CHARGES_VIEW)
+        assertThat(paidCash.get("payerNote").asString()).isEqualTo("Принесла дочка");
+        assertThat(paidCash.get("createdByName").asString()).isNotBlank();
+        assertThat(account.get("prepaymentAllocations")).isEmpty();
+    }
+
+    @Test
+    void moneyAboveTheDebtIsThePrepaymentAndThePlotOwesNothing() throws Exception {
+        UUID plot = newPlot();
+        UUID membership = tariffCharge(plot, "MEMBERSHIP", "100.00", OCTOBER);
+        saved(treasurer(), cash(plot, "150.00"));
+
+        JsonNode account = account(chairman(), plot);
+
+        assertThat(account.get("debts").get(0).get("debt").asString()).isEqualTo("0.00");
+        assertThat(account.get("total").asString()).isEqualTo("0.00");
+        assertThat(account.get("prepayment").asString()).isEqualTo("50.00");
+        assertThat(charge(account, membership).get("paid").asString()).isEqualTo("100.00");
+        assertThat(charge(account, membership).get("open").asString()).isEqualTo("0.00");
+    }
+
+    @Test
+    void reversalsAndAdjustmentsCarryNoPaidOrOpenAndAnAdjustmentChangesWhatIsOpen() throws Exception {
+        Adjusted given = adjustedPlot();
+        saved(treasurer(), payment(given.plot(), "CASH", "10.00", kyivToday().toString(),
+                List.of(line(given.original(), "10.00"))));
+
+        JsonNode account = account(chairman(), given.plot());
+
+        // March 30.00 adjusted by -5.00: 25.00 effective, 10.00 paid, 15.00 open; April 25.00 open
+        assertThat(charge(account, given.original()).get("paid").asString()).isEqualTo("10.00");
+        assertThat(charge(account, given.original()).get("open").asString()).isEqualTo("15.00");
+        assertThat(charge(account, given.april()).get("open").asString()).isEqualTo("25.00");
+        assertThat(charge(account, given.adjustment()).has("paid")).isFalse();
+        assertThat(charge(account, given.adjustment()).has("open")).isFalse();
+        assertThat(account.get("total").asString()).isEqualTo("40.00");
+    }
+
+    @Test
+    void aReversedPaymentIsShownReversedNextToItsReversalAndItsMoneyIsTakenBack() throws Exception {
+        Paid given = paidPlot();
+        JsonNode reversed = body(reverse(chairman(), given.bank(), "Помилковий платіж").andExpect(status().isCreated()));
+        UUID reversal = UUID.fromString(reversed.get("reversedBy").get("id").asString());
+
+        JsonNode account = account(chairman(), given.plot());
+
+        assertThat(account.get("total").asString()).isEqualTo("850.00");
+        assertThat(account.get("prepayment").asString()).isEqualTo("0.00");
+        assertThat(charge(account, given.membership()).get("paid").asString()).isEqualTo("0.00");
+        assertThat(charge(account, given.membership()).get("open").asString()).isEqualTo("600.00");
+        // the reversal keeps the day of its payment and was entered later: listed first
+        assertThat(ids(account.get("payments"))).containsExactly(reversal.toString(), given.bank().toString());
+        JsonNode original = payment(account, given.bank());
+        assertThat(original.get("reversed").asBoolean()).isTrue();
+        assertThat(original.get("reversedBy").asString()).isEqualTo(reversal.toString());
+        assertThat(original.get("amount").asString()).isEqualTo("100.00"); // the payment is never changed
+        assertThat(original.get("allocations")).hasSize(2);
+        assertThat(original.get("allocations").get(0).get("amount").asString()).isEqualTo("100.00");
+        assertThat(original.get("allocations").get(1).get("amount").asString()).isEqualTo("-100.00");
+        assertThat(original.get("allocations").get(1).get("releaseCause").asString()).isEqualTo("PAYMENT_REVERSED");
+        JsonNode reversalRow = payment(account, reversal);
+        assertThat(reversalRow.get("kind").asString()).isEqualTo("PAYMENT_REVERSAL");
+        assertThat(reversalRow.get("amount").asString()).isEqualTo("-100.00");
+        assertThat(reversalRow.get("receivedOn").asString()).isEqualTo("2026-01-15");
+        assertThat(reversalRow.get("reverses").asString()).isEqualTo(given.bank().toString());
+        assertThat(reversalRow.get("reason").asString()).isEqualTo("Помилковий платіж");
+        assertThat(reversalRow.get("reversed").asBoolean()).isFalse();
+        assertThat(reversalRow.get("allocations")).isEmpty();
+    }
+
+    @Test
+    void placementsOfThePrepaymentAreListedAsAllocatedFromPrepayment() throws Exception {
+        UUID plot = newPlot();
+        UUID membership = tariffCharge(plot, "MEMBERSHIP", "60.00", "2026-01");
+        UUID electricity = tariffCharge(plot, "ELECTRICITY", "40.00", "2026-02");
+        UUID land = tariffCharge(plot, "LAND_TAX", "30.00", "2026-03");
+        UUID payment = saved(treasurer(), payment(plot, "CASH", "120.00", "2026-01-10", List.of()));
+        // by hand: «Розподілити аванс» places 60.00 on the membership
+        allocatePrepayment(treasurer(), plot, false, lines(List.of(line(membership, "60.00")), null))
+                .andExpect(status().isCreated());
+        // by the system: an automatic allocation, as the allocator writes it (two rows of one run, no author)
+        ownerJdbc().update("insert into allocation (id, tenant_id, payment_id, charge_id, plot_id, amount, origin) "
+                + "values (?, ?, ?, ?, ?, 40.00, 'PREPAYMENT_AUTO'), (?, ?, ?, ?, ?, 20.00, 'PREPAYMENT_AUTO')",
+                UUID.randomUUID(), DEMO_TENANT, payment, electricity, plot, UUID.randomUUID(), DEMO_TENANT, payment,
+                land, plot);
+
+        JsonNode account = account(member(plot), plot);
+
+        assertThat(account.get("total").asString()).isEqualTo("10.00");
+        assertThat(account.get("prepayment").asString()).isEqualTo("0.00");
+        JsonNode placements = account.get("prepaymentAllocations");
+        assertThat(placements).hasSize(2);
+        JsonNode automatic = placements.get(0); // newest first
+        assertThat(automatic.get("origin").asString()).isEqualTo("PREPAYMENT_AUTO");
+        assertThat(automatic.get("system").asBoolean()).isTrue();
+        assertThat(automatic.get("amount").asString()).isEqualTo("60.00");
+        assertThat(automatic.get("allocatedOn").asString()).isEqualTo(kyivToday().toString());
+        assertThat(ids(automatic.get("lines"))).hasSize(2);
+        assertThat(automatic.get("lines").get(0).get("chargeId").asString()).isEqualTo(electricity.toString());
+        assertThat(automatic.get("lines").get(1).get("chargeId").asString()).isEqualTo(land.toString());
+        assertThat(automatic.get("lines").findValuesAsString("origin")).containsOnly("PREPAYMENT_AUTO");
+        JsonNode manual = placements.get(1);
+        assertThat(manual.get("origin").asString()).isEqualTo("PREPAYMENT_MANUAL");
+        assertThat(manual.get("system").asBoolean()).isFalse();
+        assertThat(manual.get("amount").asString()).isEqualTo("60.00");
+        assertThat(manual.get("lines").get(0).get("chargeId").asString()).isEqualTo(membership.toString());
+        // the payment lists everything it paid, the placements included
+        assertThat(payment(account, payment).get("allocations").findValuesAsString("origin"))
+                .containsExactlyInAnyOrder("PREPAYMENT_MANUAL", "PREPAYMENT_AUTO", "PREPAYMENT_AUTO");
+    }
+
+    @Test
+    void thePaymentsOnlyFilterListsOnlyPaymentsAndTheirReversalsAndNeverChangesTheDebts() throws Exception {
+        Paid given = paidPlot();
+        UUID cash = saved(treasurer(), cash(given.plot(), "50.00"));
+        reverse(chairman(), cash, "Помилка").andExpect(status().isCreated());
+        JsonNode all = account(chairman(), given.plot());
+
+        JsonNode payments = body(send(chairman(), get(ACCOUNT.formatted(given.plot())).param("kind", "PAYMENTS"),
+                null).andExpect(status().isOk()));
+
+        assertThat(payments.get("charges")).isEmpty();
+        assertThat(payments.get("prepaymentAllocations")).isEmpty();
+        assertThat(payments.get("payments")).hasSize(3);
+        assertThat(payments.get("payments").findValuesAsString("kind")).containsExactlyInAnyOrder("PAYMENT", "PAYMENT",
+                "PAYMENT_REVERSAL");
+        assertThat(payments.get("total").asString()).isEqualTo(all.get("total").asString()).isEqualTo("750.00");
+        assertThat(payments.get("debts")).isEqualTo(all.get("debts"));
+        assertThat(payments.get("prepayment").asString()).isEqualTo(all.get("prepayment").asString());
+        // with the range: only the payments received in it
+        JsonNode january = body(send(chairman(), get(ACCOUNT.formatted(given.plot())).param("kind", "PAYMENTS")
+                .param("from", "2026-01-01").param("to", "2026-01-31"), null).andExpect(status().isOk()));
+        assertThat(ids(january.get("payments"))).containsExactly(given.bank().toString());
+        assertThat(january.get("total").asString()).isEqualTo("750.00");
+        // a charge kind lists no payments
+        JsonNode regular = body(send(chairman(), get(ACCOUNT.formatted(given.plot())).param("kind", "REGULAR"), null)
+                .andExpect(status().isOk()));
+        assertThat(regular.get("charges")).hasSize(2);
+        assertThat(regular.get("payments")).isEmpty();
+        assertThat(regular.get("total").asString()).isEqualTo("750.00");
+    }
+
+    @Test
+    void aMemberSeesThePaymentsOfTheirOwnPlotWithReceiptNumbersButNeverTheNoteOrTheAuthor() throws Exception {
+        Paid given = paidPlot();
+        own(demoMember("member@demo.local"), given.plot());
+        JsonNode saved = body(save(treasurer(), with(cash(given.plot(), "700.00"), "payerNote", "Принесла дочка"))
+                .andExpect(status().isCreated())).get("payments").get(0);
+        UUID cash = UUID.fromString(saved.get("id").asString());
+
+        JsonNode account = account(member(), given.plot());
+
+        assertThat(account.get("total").asString()).isEqualTo("50.00");
+        assertThat(account.get("prepayment").asString()).isEqualTo("0.00");
+        assertThat(charge(account, given.electricity()).get("open").asString()).isEqualTo("50.00");
+        assertThat(account.get("payments")).hasSize(2);
+        JsonNode paid = payment(account, cash);
+        assertThat(paid.get("receiptNumber").asLong()).isEqualTo(saved.get("receiptNumber").asLong());
+        assertThat(paid.get("amount").asString()).isEqualTo("700.00");
+        assertThat(paid.get("allocations").findValuesAsString("amount")).containsExactlyInAnyOrder("500.00", "200.00");
+        assertThat(payment(account, given.bank()).get("bankReference").asString()).isEqualTo("ПД-5");
+        account.get("payments").forEach(payment -> {
+            assertThat(payment.has("payerNote")).as("the payer note").isFalse();
+            assertThat(payment.has("createdByName")).as("the author").isFalse();
+        });
+
+        // a plot that is not theirs: the same 404 as an unknown one, no amount
+        UUID other = newPlot();
+        saved(treasurer(), cash(other, "10.00"));
+        send(member(), get(ACCOUNT.formatted(other)), null).andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("PLOT_NOT_FOUND"))
+                .andExpect(jsonPath("$.payments").doesNotExist());
+    }
+
+    @Test
+    void theBoardSeesPaymentsAsTheirPermissionsAllow() throws Exception {
+        Paid given = paidPlot();
+        saved(treasurer(), with(cash(given.plot(), "10.00"), "payerNote", "Сусід"));
+
+        // PAYMENTS_VIEW without MEMBERS_VIEW: no payer note; CHARGES_VIEW: the author
+        JsonNode noMembers = account(customRoleToken("CHARGES_VIEW", "PAYMENTS_VIEW"), given.plot());
+        assertThat(noMembers.get("payments")).hasSize(2);
+        noMembers.get("payments").forEach(payment -> {
+            assertThat(payment.has("payerNote")).isFalse();
+            assertThat(payment.get("createdByName").asString()).isNotBlank();
+        });
+        // the treasurer views members too
+        assertThat(account(treasurer(), given.plot()).get("payments").findValuesAsString("payerNote"))
+                .containsExactly("Сусід");
+        // CHARGES_VIEW without PAYMENTS_VIEW: the debts after payments, but no payment
+        JsonNode chargesOnly = account(customRoleToken("CHARGES_VIEW"), given.plot());
+        assertThat(chargesOnly.get("total").asString()).isEqualTo("740.00");
+        assertThat(chargesOnly.get("payments")).isEmpty();
+        assertThat(chargesOnly.get("prepaymentAllocations")).isEmpty();
+    }
+
+    /** The member's token after making them an owner of the plot. */
+    private String member(UUID plot) {
+        own(demoMember("member@demo.local"), plot);
+        return member();
     }
 }

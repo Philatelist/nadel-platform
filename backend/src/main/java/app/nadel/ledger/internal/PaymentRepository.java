@@ -1,5 +1,6 @@
 package app.nadel.ledger.internal;
 
+import java.math.BigDecimal;
 import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
@@ -10,6 +11,19 @@ import org.springframework.data.repository.query.Param;
 
 // no tenant_id filter needed: RLS hides other cooperatives' rows
 interface PaymentRepository extends JpaRepository<PaymentRecord, UUID> {
+
+    /** The sum of the payments booked in one billing month (reversals of payments count negative). */
+    record MonthReceived(UUID billingMonthId, BigDecimal amount) {
+    }
+
+    /** What every billing month received; months without a payment row are absent. */
+    @Query("select new app.nadel.ledger.internal.PaymentRepository$MonthReceived(p.billingMonthId, sum(p.amount)) "
+            + "from PaymentRecord p group by p.billingMonthId")
+    List<MonthReceived> receivedPerMonth();
+
+    /** What one billing month received: its payments minus its reversals of payments; zero without a row. */
+    @Query("select coalesce(sum(p.amount), 0) from PaymentRecord p where p.billingMonthId = :monthId")
+    BigDecimal receivedInMonth(@Param("monthId") UUID monthId);
 
     /** Every payment and payment reversal of the plots, in no particular order. */
     List<PaymentRecord> findByPlotIdIn(Collection<UUID> plotIds);

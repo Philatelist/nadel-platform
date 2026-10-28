@@ -10,6 +10,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './accountPayment';
+export * from './accountPrepaymentAllocation';
 export * from './allocatePrepaymentParams';
 export * from './allocationLinesRequest';
 export * from './allocationOrigin';
@@ -162,6 +164,7 @@ export * from './paymentDetails';
 export * from './paymentEntryRequest';
 export * from './paymentEntryResult';
 export * from './paymentGroupPart';
+export * from './paymentKind';
 export * from './paymentLineInput';
 export * from './paymentPage';
 export * from './paymentPartProposal';
@@ -180,6 +183,7 @@ export * from './pendingReading';
 export * from './permission';
 export * from './permissionInfo';
 export * from './plotAccount';
+export * from './plotAccountKind';
 export * from './plotDetails';
 export * from './plotFeature';
 export * from './plotFeatureCollection';

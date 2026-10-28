@@ -2812,18 +2812,30 @@ paths:
     get:
       tags: [charges]
       operationId: getPlotAccount
-      summary: The account of a plot with its charges and the debt per charge type
+      summary: The account of a plot with its charges, payments and the debt per charge type
       description: |
-        The ledger of one plot. `debts` lists every charge type the plot has a charge of, in the order of the charge
-        types, with the sum of its charges (a reversal counts negative); `total` is their sum. Until payments exist
-        the debt is the sum of the charges, adjustments included. `charges` lists the charges newest first (by
-        `accruedOn`, then by the time they were booked); `from` and `to` (both optional, inclusive) limit the list by
-        `accruedOn`, and `kind` limits it to one kind (for example `ADJUSTMENT`), never the debts. `from` after `to` is
-        400 `VALIDATION_FAILED` (`errors[{field: from, code: INVALID}]`). An adjustment names the charge it adjusts
-        (`adjusts`), an adjusted charge its adjustments (`adjustedBy`); `recalculationId` is shown only to callers with
-        `CHARGES_VIEW`. Every amount is calculated by the server. No permission annotation: a caller with `CHARGES_VIEW` may ask for any plot of the
-        cooperative, anyone else only for a plot they currently own. Any other plot, an unknown id and a plot of
+        The ledger of one plot (feature 011 §2.1, feature 015 §2.9). `debts` lists every charge type the plot has a
+        charge of, in the order of the charge types, with its debt after payments: the sum of its charges (a reversal
+        counts negative, adjustments with their sign) minus what payments pay on them (allocations minus releases);
+        `total` is their sum and `prepayment` the money paid for the plot that is on no charge. `charges` lists the
+        charges newest first (by `accruedOn`, then by the time they were booked); a regular charge or an opening
+        balance carries `paid` and `open`. `payments` lists the payments of the plot and their reversals newest first
+        (by `receivedOn`, then by the time they were entered), each payment with its allocations and releases;
+        `prepaymentAllocations` lists the times the plot's prepayment was placed on its charges ("allocated from
+        prepayment", by hand or by the system), newest first. The client interleaves the lists by date. `from` and `to`
+        (both optional, inclusive) limit the lists (charges by `accruedOn`, payments by `receivedOn`, prepayment
+        allocations by `allocatedOn`); `kind` limits them to one kind of charge (for example `ADJUSTMENT`: no payments
+        then) or, with `PAYMENTS`, to the payments and their reversals (no charges, no prepayment allocations); neither
+        ever changes `debts`, `total` or `prepayment`. `from` after `to` is 400 `VALIDATION_FAILED`
+        (`errors[{field: from, code: INVALID}]`). An adjustment names the charge it adjusts (`adjusts`), an adjusted
+        charge its adjustments (`adjustedBy`); `recalculationId` is shown only to callers with `CHARGES_VIEW`. Every
+        amount is calculated by the server. No permission annotation: a caller with `CHARGES_VIEW` may ask for any plot
+        of the cooperative, anyone else only for a plot they currently own. Any other plot, an unknown id and a plot of
         another cooperative are the same 404 `PLOT_NOT_FOUND`; the platform operator has no cooperative data: 403.
+        `payments` and `prepaymentAllocations` are listed for a caller with `PAYMENTS_VIEW` and for a current owner of
+        the plot, and are empty for anyone else. A payment's `payerNote` is shown only to callers with both
+        `PAYMENTS_VIEW` and `MEMBERS_VIEW`, its `createdByName` only to callers with `CHARGES_VIEW`; a member never sees
+        either.
       parameters:
         - name: id
           in: path
@@ -2834,23 +2846,27 @@ paths:
         - name: from
           in: query
           required: false
-          description: The first day of the list (by `accruedOn`), inclusive
+          description: >-
+            The first day of the lists (charges by `accruedOn`, payments by `receivedOn`, prepayment allocations by
+            `allocatedOn`), inclusive
           schema:
             type: string
             format: date
         - name: to
           in: query
           required: false
-          description: The last day of the list (by `accruedOn`), inclusive
+          description: >-
+            The last day of the lists (charges by `accruedOn`, payments by `receivedOn`, prepayment allocations by
+            `allocatedOn`), inclusive
           schema:
             type: string
             format: date
         - name: kind
           in: query
           required: false
-          description: Only charges of this kind
+          description: Only charges of this kind, or with `PAYMENTS` only the payments and their reversals
           schema:
-            $ref: '#/components/schemas/ChargeKind'
+            $ref: '#/components/schemas/PlotAccountKind'
       responses:
         '200':
           description: OK
@@ -3361,7 +3377,9 @@ paths:
         first charge) to the current month in Europe/Kyiv, including months that have no row or no charge yet (they
         are listed `OPEN` with empty totals; a row is created when the month is closed or a charge is booked in it).
         `totals` holds the sum of the charges booked in the month per charge type (a reversal counts negative), in the
-        order of the charge types; `total` is their sum. A cooperative without any month gets an empty list.
+        order of the charge types; `total` is their sum. `received` is the sum of the payments booked in the month, a
+        reversal of a payment negative (a payment received in a closed month is booked in the earliest open month and
+        counts there). A cooperative without any month gets an empty list.
         Requires `CHARGES_VIEW`.
       responses:
         '200':
@@ -7947,6 +7965,17 @@ components:
           description: >-
             The current name of the member who booked the charge; only for callers with `CHARGES_VIEW`, absent for
             charges booked by the system or by a member who no longer exists
+        paid:
+          $ref: '#/components/schemas/Money'
+          description: >-
+            On the plot account, for a regular charge or an opening balance: what payments pay on it now (allocations
+            minus releases); absent for reversals, adjustments and outside the plot account
+        open:
+          $ref: '#/components/schemas/Money'
+          description: >-
+            On the plot account, for a regular charge or an opening balance: what is still owed on it, its amount plus
+            its adjustments (`0.00` once reversed) minus `paid`; absent for reversals, adjustments and outside the plot
+            account
 
     ChargeAdjustmentTarget:
       type: object
@@ -7969,7 +7998,9 @@ components:
 
     ChargeTypeDebt:
       type: object
-      description: The debt of a plot for one charge type (its charges, reversals and adjustments)
+      description: >-
+        The debt of a plot for one charge type after payments: its charges, reversals and adjustments minus what
+        payments pay on them
       required: [chargeTypeId, name, nameCustomized, debt]
       properties:
         chargeTypeId:
@@ -7988,22 +8019,157 @@ components:
     PlotAccount:
       type: object
       description: The account of a plot
-      required: [plotId, debts, total, charges]
+      required: [plotId, debts, total, prepayment, charges, payments, prepaymentAllocations]
       properties:
         plotId:
           type: string
           format: uuid
         debts:
           type: array
+          description: The debt per charge type after payments
           items:
             $ref: '#/components/schemas/ChargeTypeDebt'
         total:
           $ref: '#/components/schemas/Money'
+          description: The debt of the plot after payments, the sum of `debts`
+        prepayment:
+          $ref: '#/components/schemas/Money'
+          description: >-
+            The money paid for the plot that is on no charge: its payments (reversals negative) minus what they pay on
+            charges; never below `0.00`
         charges:
           type: array
-          description: Newest first, limited by `from` and `to`
+          description: Newest first, limited by `from`, `to` and `kind`
           items:
             $ref: '#/components/schemas/Charge'
+        payments:
+          type: array
+          description: >-
+            The payments of the plot and their reversals, newest first, limited by `from`, `to` and `kind`; empty for a
+            caller who neither has `PAYMENTS_VIEW` nor owns the plot now
+          items:
+            $ref: '#/components/schemas/AccountPayment'
+        prepaymentAllocations:
+          type: array
+          description: >-
+            The times the plot's prepayment was placed on its charges, newest first, limited by `from`, `to` and
+            `kind`; empty for a caller who neither has `PAYMENTS_VIEW` nor owns the plot now
+          items:
+            $ref: '#/components/schemas/AccountPrepaymentAllocation'
+
+    PlotAccountKind:
+      type: string
+      description: >-
+        What the plot account lists: a charge kind (`REGULAR`, `REVERSAL`, `OPENING`, `ADJUSTMENT`) only the charges of
+        that kind; `PAYMENTS` only the payments of the plot and their reversals
+      enum: [REGULAR, REVERSAL, OPENING, ADJUSTMENT, PAYMENTS]
+
+    PaymentKind:
+      type: string
+      description: >-
+        `PAYMENT` money received for the plot; `PAYMENT_REVERSAL` cancels one payment with the opposite amount (see
+        `reverses`, `reason`)
+      enum: [PAYMENT, PAYMENT_REVERSAL]
+
+    AccountPayment:
+      type: object
+      description: >-
+        A payment of the plot or the reversal of one, as the plot account shows it. Never changed or deleted. A member
+        sees the payments of the plots they own now, with the receipt or bank document number and what each payment
+        paid, never the payer note or who entered it
+      required:
+        [id, kind, groupId, source, amount, receivedOn, billingMonth, reversed, allocations, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          $ref: '#/components/schemas/PaymentKind'
+        groupId:
+          type: string
+          format: uuid
+          description: The group of the payment (the parts of a payment split over several plots share it)
+        source:
+          $ref: '#/components/schemas/PaymentSource'
+        amount:
+          $ref: '#/components/schemas/Money'
+          description: Above zero for a payment, below zero for a reversal
+        receivedOn:
+          type: string
+          format: date
+          description: The day the money was received; a reversal keeps the day of its payment
+        billingMonth:
+          type: string
+          pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+          description: The billing month the row is booked in, `YYYY-MM`
+        receiptNumber:
+          type: integer
+          format: int64
+          description: The receipt number of a cash payment; absent for a bank payment and for a reversal
+        bankReference:
+          type: string
+          description: The bank document number of a bank payment, when given (user content)
+        reversed:
+          type: boolean
+          description: True for a payment that a reversal cancels; false for a reversal row
+        reversedBy:
+          type: string
+          format: uuid
+          description: The reversal that cancelled this payment
+        reverses:
+          type: string
+          format: uuid
+          description: The payment a reversal cancels
+        reason:
+          type: string
+          description: The reason of a reversal (user content)
+        allocations:
+          type: array
+          description: >-
+            What the payment paid: its allocations and releases, oldest first, each with its charge (also those placed
+            later from the prepayment); empty for a reversal
+          items:
+            $ref: '#/components/schemas/PaymentAllocation'
+        payerNote:
+          type: string
+          description: The payer note (personal data); only for callers with `PAYMENTS_VIEW` and `MEMBERS_VIEW`
+        createdAt:
+          type: string
+          format: date-time
+        createdByName:
+          type: string
+          description: >-
+            The current name of the member who entered the row; only for callers with `CHARGES_VIEW`, absent when
+            unknown
+
+    AccountPrepaymentAllocation:
+      type: object
+      description: >-
+        One placement of the plot's prepayment on its charges ("allocated from prepayment"): the allocation rows of
+        origin `PREPAYMENT_AUTO` or `PREPAYMENT_MANUAL` written together. The same rows also appear among the
+        allocations of the payments whose money they place
+      required: [allocatedOn, createdAt, origin, system, amount, lines]
+      properties:
+        allocatedOn:
+          type: string
+          format: date
+          description: The day the prepayment was placed, in Europe/Kyiv
+        createdAt:
+          type: string
+          format: date-time
+        origin:
+          $ref: '#/components/schemas/AllocationOrigin'
+        system:
+          type: boolean
+          description: True when the system placed it (automatic allocation), false when a member did
+        amount:
+          $ref: '#/components/schemas/Money'
+          description: The sum of the lines
+        lines:
+          type: array
+          description: The allocation rows, in the order of their charges (oldest first)
+          items:
+            $ref: '#/components/schemas/PaymentAllocation'
 
     ChargeReversal:
       type: object
@@ -8062,8 +8228,8 @@ components:
 
     BillingMonthSummary:
       type: object
-      description: A billing month with the totals of the charges booked in it
-      required: [month, status, runDone, totals, total]
+      description: A billing month with the totals of the charges and the payments booked in it
+      required: [month, status, runDone, totals, total, received]
       properties:
         month:
           type: string
@@ -8085,6 +8251,11 @@ components:
             $ref: '#/components/schemas/ChargeTypeTotal'
         total:
           $ref: '#/components/schemas/Money'
+        received:
+          $ref: '#/components/schemas/Money'
+          description: >-
+            The sum of the payments booked in the month, reversals of payments negative (a payment received in a
+            closed month counts in the open month it is booked in)
 
     StaleMeter:
       type: object
@@ -8130,7 +8301,7 @@ components:
     BillingMonthDetails:
       type: object
       description: A billing month with its totals and the closing check list
-      required: [month, status, runDone, totals, total, checklist]
+      required: [month, status, runDone, totals, total, received, checklist]
       properties:
         month:
           type: string
@@ -8152,6 +8323,9 @@ components:
             $ref: '#/components/schemas/ChargeTypeTotal'
         total:
           $ref: '#/components/schemas/Money'
+        received:
+          $ref: '#/components/schemas/Money'
+          description: The sum of the payments booked in the month, reversals of payments negative
         checklist:
           $ref: '#/components/schemas/BillingMonthChecklist'
 

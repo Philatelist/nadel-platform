@@ -1,10 +1,12 @@
-import type { Charge } from '@nadel/api-client';
+import type { AccountPayment, AccountPrepaymentAllocation, Charge } from '@nadel/api-client';
 import { chargePeriodNote, formatDay } from '@nadel/shared';
 import { useLocale, useT } from '../../i18n';
 import { ChargeTypeName } from '../ChargeTypeName';
 import { Badge, Button, Money } from '../ui';
 import { AdjustmentLine } from './AdjustmentLine';
+import { mergeAccountEntries } from './accountEntries';
 import { chargeEntryLabel, isAdjustment } from './chargeLabels';
+import { PaymentRow, PlacementRow } from './PaymentEntryRow';
 
 /** Charges as the server orders them (newest first). Rows wrap on a phone; a reversal is offered only when allowed. */
 export function ChargeList({
@@ -13,8 +15,16 @@ export function ChargeList({
   onOpen,
   onReverse,
   findCharge,
+  payments = [],
+  placements = [],
+  canOpenPayments = false,
 }: {
   charges: readonly Charge[];
+  /** Payments and prepayment placements are interleaved with the charges by date. */
+  payments?: readonly AccountPayment[];
+  placements?: readonly AccountPrepaymentAllocation[];
+  /** The payment card is linked only for a caller with `PAYMENTS_VIEW`. */
+  canOpenPayments?: boolean;
   canReverse: boolean;
   onOpen: (charge: Charge) => void;
   onReverse: (charge: Charge) => void;
@@ -26,7 +36,12 @@ export function ChargeList({
   const c = t.charges;
   return (
     <ul aria-label={c.listCaption} className="divide-y divide-line-subtle">
-      {charges.map((charge) => {
+      {mergeAccountEntries(charges, payments, placements).map((entry) => {
+        if (entry.type === 'payment') {
+          return <PaymentRow key={entry.key} payment={entry.payment} canOpen={canOpenPayments} />;
+        }
+        if (entry.type === 'placement') return <PlacementRow key={entry.key} placement={entry.placement} />;
+        const charge = entry.charge;
         const adjustment = isAdjustment(charge);
         const note = adjustment ? undefined : chargePeriodNote(charge, t, locale);
         return (
@@ -50,7 +65,31 @@ export function ChargeList({
               )}
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <Money amount={charge.amount} tone={adjustment ? 'default' : 'auto'} />
+              {charge.paid !== undefined && charge.open !== undefined && (
+                <dl className="flex flex-wrap gap-x-3 text-sm text-ink-muted">
+                  <div className="flex gap-1">
+                    <dt>{c.charged}</dt>
+                    <dd>
+                      <Money amount={charge.amount} />
+                    </dd>
+                  </div>
+                  <div className="flex gap-1">
+                    <dt>{c.paid}</dt>
+                    <dd>
+                      <Money amount={charge.paid} />
+                    </dd>
+                  </div>
+                  <div className="flex gap-1">
+                    <dt>{c.open}</dt>
+                    <dd>
+                      <Money amount={charge.open} tone="auto" />
+                    </dd>
+                  </div>
+                </dl>
+              )}
+              {charge.paid === undefined && (
+                <Money amount={charge.amount} tone={adjustment ? 'default' : 'auto'} />
+              )}
               <Button variant="secondary" onClick={() => onOpen(charge)}>
                 {c.details}
               </Button>

@@ -76,7 +76,9 @@ export const getListBillingMonthsUrl = () => {
  * first charge) to the current month in Europe/Kyiv, including months that have no row or no charge yet (they
  * are listed `OPEN` with empty totals; a row is created when the month is closed or a charge is booked in it).
  * `totals` holds the sum of the charges booked in the month per charge type (a reversal counts negative), in the
- * order of the charge types; `total` is their sum. A cooperative without any month gets an empty list.
+ * order of the charge types; `total` is their sum. `received` is the sum of the payments booked in the month, a
+ * reversal of a payment negative (a payment received in a closed month is booked in the earliest open month and
+ * counts there). A cooperative without any month gets an empty list.
  * Requires `CHARGES_VIEW`.
  * @summary The billing months with their totals
  */

@@ -65,6 +65,8 @@ describe('ChargesMonthPage', () => {
     expect(screen.getByRole('link', { name: '7' })).toHaveAttribute('href', '/plots/p7');
     expect(screen.getByText('Meters without a recent reading')).toBeInTheDocument();
     expect(screen.getByText(/1[\s ,]?653\.56/)).toBeInTheDocument();
+    expect(screen.getByText('Received')).toBeInTheDocument();
+    expect(screen.getByText(/1[\s ,]?200\.00/)).toBeInTheDocument();
   });
 
   it('offers the close button only with PERIODS_CLOSE', () => {

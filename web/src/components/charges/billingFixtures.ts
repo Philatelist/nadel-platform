@@ -21,6 +21,7 @@ export const openMonth: BillingMonthDetails = {
     },
   ],
   total: '1653.56',
+  received: '1200.00',
   checklist: {
     runDone: false,
     notChargedCount: 3,
@@ -39,6 +40,13 @@ export const closedMonth: BillingMonthDetails = {
 };
 
 export const summaries: BillingMonthSummary[] = [
-  { month: '2026-09', status: 'OPEN', runDone: false, totals: openMonth.totals, total: openMonth.total },
-  { month: '2026-08', status: 'CLOSED', runDone: true, totals: [], total: '0.00' },
+  {
+    month: '2026-09',
+    status: 'OPEN',
+    runDone: false,
+    totals: openMonth.totals,
+    total: openMonth.total,
+    received: openMonth.received,
+  },
+  { month: '2026-08', status: 'CLOSED', runDone: true, totals: [], total: '0.00', received: '0.00' },
 ];

@@ -9,6 +9,8 @@
  *
  * OpenAPI spec version: 0.1.0
  */
+import type { AccountPayment } from './accountPayment';
+import type { AccountPrepaymentAllocation } from './accountPrepaymentAllocation';
 import type { Charge } from './charge';
 import type { ChargeTypeDebt } from './chargeTypeDebt';
 import type { Money } from './money';
@@ -18,8 +20,16 @@ import type { Money } from './money';
  */
 export interface PlotAccount {
   plotId: string;
+  /** The debt per charge type after payments */
   debts: ChargeTypeDebt[];
+  /** The debt of the plot after payments, the sum of `debts` */
   total: Money;
-  /** Newest first, limited by `from` and `to` */
+  /** The money paid for the plot that is on no charge: its payments (reversals negative) minus what they pay on charges; never below `0.00` */
+  prepayment: Money;
+  /** Newest first, limited by `from`, `to` and `kind` */
   charges: Charge[];
+  /** The payments of the plot and their reversals, newest first, limited by `from`, `to` and `kind`; empty for a caller who neither has `PAYMENTS_VIEW` nor owns the plot now */
+  payments: AccountPayment[];
+  /** The times the plot's prepayment was placed on its charges, newest first, limited by `from`, `to` and `kind`; empty for a caller who neither has `PAYMENTS_VIEW` nor owns the plot now */
+  prepaymentAllocations: AccountPrepaymentAllocation[];
 }

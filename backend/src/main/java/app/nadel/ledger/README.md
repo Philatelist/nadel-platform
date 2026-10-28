@@ -137,17 +137,25 @@ Everything else is in `internal`.
 
 | Endpoint | Operation | Who |
 |---|---|---|
-| `GET /plots/{id}/account?from&to&kind` | `getPlotAccount` | `CHARGES_VIEW` for any plot, otherwise a current owner of the plot; anyone else, an unknown plot and one of another cooperative the same 404 `PLOT_NOT_FOUND`; the platform operator 403 |
+| `GET /plots/{id}/account?from&to&kind` | `getPlotAccount` | `CHARGES_VIEW` for any plot, otherwise a current owner of the plot; anyone else, an unknown plot and one of another cooperative the same 404 `PLOT_NOT_FOUND`; the platform operator 403. Payments on it: `PAYMENTS_VIEW` or a current owner |
 | `POST /charges/{id}/reverse` | `reverseCharge` | `CHARGES_REVERSE` |
 | `POST /plots/{id}/opening-balances` | `enterOpeningBalance` | `CHARGES_RUN` |
 | `GET /recalculations?page&size` | `listRecalculations` (tag `recalculations`) | `CHARGES_VIEW` |
 | `GET /recalculations/{id}` | `getRecalculation` | `CHARGES_VIEW`; unknown or another cooperative's 404 `NOT_FOUND` |
 | `POST /recalculations?preview` | `runRecalculation` | `RECALCULATION_RUN` (preview and booking, see Recalculations) |
 
-- **Account** (`AccountQueries`, one read-only transaction): `debts[]` lists every charge type the plot has a charge of,
-  in the order of the charge types, with its debt (also `0.00` after a reversal); `total`; `charges[]` newest first by
-  `accrued_on`, then booking time; `from`/`to` (inclusive, on `accrued_on`) limit the list, never the debts; `from`
-  after `to` is 400 `INVALID` on `from`. Each charge carries its billing month (`YYYY-MM`) and whether it is closed,
+- **Account** (`AccountQueries`, one read-only transaction; feature 015 §2.9, §2.10): the plot's charges, allocations
+  and payments are read once each, and `DebtCalculator.of(charges, allocations, payments)` / `OpenAmounts` give the
+  debt after payments. `debts[]` lists every charge type the plot has a charge of, in the order of the charge types,
+  with its debt after payments (its charges minus what payments pay on them; also `0.00` after a reversal or when paid);
+  `total` their sum; `prepayment` the money on no charge (`PlotLedgerState.prepayment`, never below `0.00`);
+  `charges[]` newest first by `accrued_on`, then booking time; `payments[]` (the payments and their reversals) newest
+  first by `received_on`, then entry time; `prepaymentAllocations[]` newest first. The client interleaves the lists by
+  date (`accruedOn`, `receivedOn`, `allocatedOn`). `from`/`to` (inclusive) limit the lists (charges on `accrued_on`,
+  payments on `received_on`, placements on their day in Europe/Kyiv), never the debts or the prepayment; `from` after
+  `to` is 400 `INVALID` on `from`. `kind` (`PlotAccountKind`): a charge kind lists only those charges (no payments, no
+  placements); `PAYMENTS` ("Лише платежі") only the payments and their reversals (no charges, no placements); neither
+  changes the debts. Each charge carries its billing month (`YYYY-MM`) and whether it is closed,
   `reverses`/`reversedBy`, `reason`, the stored `calculation` (a charge stored without one shows its amount with no
   parts), `createdAt`, `createdByName` (the author's current name through `audit.ActorNames`, only for `CHARGES_VIEW`)
   and `reversible` (the viewer has `CHARGES_REVERSE`, the charge is neither a reversal nor an adjustment, not reversed
@@ -155,7 +163,25 @@ Everything else is in `internal`.
   within the plot's ledger: an adjustment has `adjusts {chargeId, billingMonth, serviceFrom, serviceTo}` (the charge it
   corrects, also when that charge is outside the range), an adjusted charge `adjustedBy[]` (its adjustments, oldest
   first; absent when none), and a row of a recalculation `recalculationId`, only for a viewer with `CHARGES_VIEW` (a
-  member sees their adjustments without it).
+  member sees their adjustments without it). A regular charge or an opening balance also carries `paid` (net
+  allocations) and `open` (its effective amount, `0.00` once reversed, minus `paid`); reversals and adjustments carry
+  neither (they change the open amount of their charge).
+- **Payments on the account**: each `AccountPayment` has `kind` (`PAYMENT`/`PAYMENT_REVERSAL`), `groupId`, `source`,
+  `amount` (negative for a reversal), `receivedOn`, `billingMonth`, `receiptNumber` (cash), `bankReference`,
+  `reversed`/`reversedBy` (a payment), `reverses`/`reason` (a reversal), `createdAt` and `allocations[]`: what the
+  payment paid, every allocation and release of it oldest first as on the card (`PaymentAllocation`: charge, charge
+  type, service period, amount, `origin` or `releaseCause`, `system`), the placements of its money from the prepayment
+  included; a reversal has none. `prepaymentAllocations[]` ("Зараховано з авансу") are the allocation rows of origin
+  `PREPAYMENT_AUTO` or `PREPAYMENT_MANUAL` grouped by their time, origin and author (one run of the allocator or one
+  "Розподілити аванс"), with `allocatedOn` (the day in Europe/Kyiv), `createdAt`, `origin`, `system` (no author),
+  `amount` (their sum) and `lines` in the order of their charges. The same rows are listed among the allocations of
+  their payments: the placements are the dated view of them, so the account shows when the prepayment was placed as
+  well as what each payment paid. Who sees what: the lists are filled for a viewer with `PAYMENTS_VIEW` and for a
+  current owner of the plot (`LedgerAccess.maySeePayments`), and empty for anyone else who may see the account (a
+  custom role with `CHARGES_VIEW` only still sees the debts after payments, `paid`, `open` and `prepayment`);
+  `payerNote` only with `PAYMENTS_VIEW` and `MEMBERS_VIEW` (opened by `PaymentNoteCipher`), `createdByName` only with
+  `CHARGES_VIEW`, so a member never sees either; the payer's name is not on the account. A member's other plots stay
+  the 404 above.
 - **Reversal** (`Reversals`): reason trimmed and required (400 `REQUIRED`, `TOO_LONG` over 500); unknown charge 404
   `NOT_FOUND`; a reversal 409 `REVERSAL_NOT_REVERSIBLE`; an adjustment 409 `ADJUSTMENT_NOT_REVERSIBLE` (a later
   recalculation adjusts the original again; `charge_target_guard` refuses it in the database too); the original's month
@@ -378,12 +404,14 @@ Methods:
   of the given types (empty = every type): `byChargeType` is the signed sum per type (reversals negative, adjustments
   with their sign, opening balances included; a type that sums to `0.00` is kept), `total` their sum, `oldestUnpaid`
   the oldest `accrued_on` among the counted charges that are neither a reversal nor an adjustment, are not reversed by a
-  counted reversal and whose amount plus their counted adjustments is above `0.00` (no payments yet), and
+  counted reversal and whose amount plus their counted adjustments is above `0.00` (payments are not counted by this
+  read; the reports gain their paid columns in feature 015 §6), and
   `daysOverdue` = `asOf - oldestUnpaid` in days, computed here (null without a date). A reversal and an adjustment keep
   the debt date and charge type of their charge, so both filters keep or drop a charge with its corrections, and the
   per-type answer folds into `DebtCalculator`'s per-plot one. The day is the debt date, not the booking time: an
   adjustment booked in March for a January charge counts as of any day from the charge's date, as on the account. As
-  of today with every type it equals the plot account and the `plot_status` cache. One query per 500 plots
+  of today with every type it equals the plot account and the `plot_status` cache for a plot without payments (both
+  subtract what payments pay on the charges). One query per 500 plots
   (`charge_plot_type_idx`). Test: `LedgerDebtsAsOfTests` (a worked ledger with a reversal, an opening balance,
   later-month adjustments, a fully adjusted and a reversed oldest charge, past days, the type filter, reconciliation
   with `GET /plots/{id}/account` and the status cache, another cooperative, the caller's transaction).
@@ -487,8 +515,11 @@ Methods:
   Europe/Kyiv (or to the last row when a late booking opened a later one), newest first, also months without a row
   (`OPEN`, no totals; a read never creates a row). Per month: `status`, `runDone` (`run_at` set), `closedAt`, `totals`
   per charge type in the order of the charge types (`SUM(amount)` of the charges booked in the month, reversals
-  negative; code, stored name and `nameCustomized` like the account) and `total`. No month at all: `[]`.
-- **Month** (`details`): the same plus `closedByName` (through `audit.ActorNames`) and `checklist{runDone,
+  negative; code, stored name and `nameCustomized` like the account), `total` and `received` (feature 015 §6:
+  `SUM(amount)` of the payment rows booked in the month, `PaymentRepository.receivedPerMonth`, reversals of payments
+  negative; a payment received in a closed month is booked in the earliest open month and counts there, its reversal
+  in the month the reversal is booked in; `0.00` for a month without a row or a payment). No month at all: `[]`.
+- **Month** (`details`): the same (`received` by `PaymentRepository.receivedInMonth`) plus `closedByName` (through `audit.ActorNames`) and `checklist{runDone,
   notChargedCount, staleMeters[]}`: `notChargedCount` is 0 until the queue of slice 3 fills `notChargedCount(month)`;
   `staleMeters` are `meters.MeterNetwork.staleMeters(asOf, 60)` with `asOf` = the month's last day or today, whichever is
   earlier, with plot numbers, in the natural order of the numbers, electricity before water. A month that is not listed
@@ -1148,7 +1179,7 @@ payment), `privacy` (`PersonalDataCipher`, `FieldRef`: the payer note), `problem
 `CHARGES_VIEW` (Chairman, Treasurer): every plot's account, the months, the queue, the losses runs and the common
 consumer runs. `CHARGES_RUN` (Chairman): opening balances, the month run (and its preview), retries, losses runs and
 common consumer runs (and their previews). `CHARGES_REVERSE` (Chairman): reversing a charge, a losses run or a common
-consumer run. `SETTINGS_MANAGE`: reading and changing the split and service users of a common consumer. `PERIODS_CLOSE` (Chairman): closing a month. `RECALCULATION_RUN` (Chairman, V19): previewing and booking a recalculation; reading the recalculations needs `CHARGES_VIEW`. `PAYMENTS_VIEW` (Chairman, Treasurer, V27): the payments, their allocations and the payments report. `PAYMENTS_ENTER` (Chairman, Treasurer, V27): entering, splitting and reallocating payments, allocating prepayment. `PAYMENTS_REVERSE` (Chairman, V27): reversing a payment. Defined in
+consumer run. `SETTINGS_MANAGE`: reading and changing the split and service users of a common consumer. `PERIODS_CLOSE` (Chairman): closing a month. `RECALCULATION_RUN` (Chairman, V19): previewing and booking a recalculation; reading the recalculations needs `CHARGES_VIEW`. `PAYMENTS_VIEW` (Chairman, Treasurer, V27): the payments, their allocations and the payments report, and the payments on every plot account (a member sees those of the plots they own now without it). `PAYMENTS_ENTER` (Chairman, Treasurer, V27): entering, splitting and reallocating payments, allocating prepayment. `PAYMENTS_REVERSE` (Chairman, V27): reversing a payment. Defined in
 `identity.Permission`, seeded by `seed_base_roles` (V13, V19, V27; existing cooperatives by targeted inserts).
 
 ## Tests
@@ -1203,13 +1234,22 @@ connected days only),
 `TariffConflictWarningTests` (the tariffs page), `NotChargedTenantIsolationTests` (V15) - these run in a cooperative of
 their own (`FreshCooperativeSupport`); `DemoLedgerDataTests` (the demo ledger, see Demo data); `BillingMonthsTests` (the list and totals, the month page and its
 check list, closing in order, a closed month that gets nothing more, late bookings, future months, permissions, audit,
-the `billing_month_guard` trigger); `PlotStatusRefreshTests`; `LedgerAccountTests` (the account, debts per type, the reversal
+the `billing_month_guard` trigger; `received` netting a payment reversal, and a late payment of a closed month received
+in the open month it is booked in); `PlotStatusRefreshTests`; `LedgerAccountTests` (the account, debts per type, the reversal
 rules of §3, opening balances, booking after a closed month, the plot guard, allowed and denied per endpoint for the
 chairman, the treasurer, custom roles, a member for their own and another plot, the other cooperative and the platform
 operator; adjustments: the debt, `adjusts`/`adjustedBy`, `recalculationId` only with `CHARGES_VIEW`, the `kind` filter,
-409 `ADJUSTMENT_NOT_REVERSIBLE`); `LedgerAuditTests` (entries and `ChargesBooked`); `LedgerTenantIsolationTests` and `LedgerAppendOnlyTests`
+409 `ADJUSTMENT_NOT_REVERSIBLE`; payments (feature 015): payments and charges with their dates newest first, `paid` and
+`open` per charge, the debt after payments, the prepayment, an adjustment's effect on what is open, a reversed payment
+next to its reversal with its release, the placements of the prepayment by hand and by the system, the `PAYMENTS`
+filter keeping the debts, a member's own plot with receipt numbers but no payer note or author, the board as its
+permissions allow); `PaymentsPermissionTests` (every payments endpoint - list, card, entry preview and save, reversal,
+reallocation preview and save, prepayment allocation preview and save - for the chairman, the treasurer (no reversal),
+a member with their own and another plot, the electrician, a chairman and a member of another cooperative (404 and
+403), the operator and no token, nothing written when refused; the payments on the account per viewer); `LedgerAuditTests` (entries and `ChargesBooked`); `LedgerTenantIsolationTests` and `LedgerAppendOnlyTests`
 (the tables); `LedgerMigrationTests` (V13 on existing cooperatives); `ChargesBookedTests`. Payments (feature 015):
-`PaymentEntryTests` (examples 1, 2, 10, 11, 16 and 18 end to end, an empty allocation, line errors, common land,
+`PaymentQueriesTests` (the list newest first without reversal rows, each filter alone and together, pagination; in a
+cooperative of its own), `PaymentEntryTests` (examples 1, 2, 10, 11, 16 and 18 end to end, an empty allocation, line errors, common land,
 archived, the values, unknown and foreign plots, a stale digest writing nothing, a preview writing nothing, the list
 and the card with the payer note only for `MEMBERS_VIEW`, permissions, the plot guard),
 `ReceiptNumberConcurrencyTests` (example 17 with both saves waiting on the counter row, a failed save leaves no gap, a

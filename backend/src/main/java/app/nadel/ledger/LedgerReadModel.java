@@ -53,14 +53,15 @@ public interface LedgerReadModel {
      * balances included;</li>
      * <li>the oldest unpaid date is the oldest debt date among those charges that are neither a reversal nor an
      * adjustment, were not reversed by one of those charges, and whose amount plus its adjustments among those charges is
-     * above zero (until payments exist nothing is paid);</li>
+     * above zero (payments are not counted here: see below);</li>
      * <li>the days overdue are {@code asOf} minus that date.</li>
      * </ul>
      * A reversal and an adjustment keep the debt date and the charge type of the charge they correct, so the day and
      * type filters keep or drop a charge together with its corrections. The day is the debt date, not the booking time:
-     * an adjustment booked later for a charge dated before {@code asOf} counts, as on the plot account. With
-     * {@code asOf} today or later and every type, the totals and the oldest date are those of the plot account and of
-     * the {@code plot_status} cache.
+     * an adjustment booked later for a charge dated before {@code asOf} counts, as on the plot account. This is the
+     * charged debt: the plot account and the {@code plot_status} cache subtract what payments pay on the charges
+     * (feature 015 §2.5), so they equal these totals and this oldest date only for a plot without payments (with
+     * {@code asOf} today or later and every type).
      *
      * @param asOf          the last debt date counted
      * @param chargeTypeIds the charge types to count; empty means every type

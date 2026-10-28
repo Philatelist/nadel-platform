@@ -43,9 +43,9 @@ final class PlotStatusPolicy {
     /**
      * The status of a plot today. GREY for common land and for a plot without a current owner; RED when the debt is
      * above the red amount, or when there is a debt and its oldest unpaid charge is more than the red days old (today
-     * minus that date); YELLOW for any other debt; GREEN without a debt (zero or less).
+     * minus that date); YELLOW for any other debt; GREEN without a debt (zero or less), also with a prepayment.
      *
-     * @param debt           the cached debt of the plot (the sum of its charges, later minus payments)
+     * @param debt           the cached debt of the plot after payments (what is open on its charges)
      * @param oldestDebtDate the day the oldest unpaid charge counts from; null when nothing is unpaid
      */
     static PlotStatusCode statusOf(PlotKind kind, boolean hasOwner, Money debt, @Nullable LocalDate oldestDebtDate,
