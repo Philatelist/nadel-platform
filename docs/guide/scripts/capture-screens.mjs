@@ -358,9 +358,10 @@ try {
                   .click({ timeout: 10000 });
                 await page.waitForLoadState('networkidle');
               } else if (step.table) {
-                await page
-                  .getByRole('table', { name: step.table[lang], exact: true })
-                  .waitFor({ timeout: 15000 });
+                // Wait for the table, then bring it into the viewport so the shot shows it.
+                const table = page.getByRole('table', { name: step.table[lang], exact: true });
+                await table.waitFor({ timeout: 15000 });
+                await table.scrollIntoViewIfNeeded();
               } else if (step.check) {
                 await page.getByLabel(step.check[lang], { exact: true }).click();
                 await page.waitForLoadState('networkidle');
