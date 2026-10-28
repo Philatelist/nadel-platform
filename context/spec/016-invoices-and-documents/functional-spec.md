@@ -3,7 +3,7 @@
 - **Topic:** The board gives members printable documents built from the cooperative's own accounts: a monthly invoice
   per plot with the bank details and a payment QR code that a banking app scans, a debt certificate for a plot as of a
   date, and a receipt for a cash payment. Members download their own invoices and receipts.
-- **Status:** Draft
+- **Status:** Implemented — pending manual check
 - **Author:** Alex Usov
 - **Source:** `docs/features/016-invoices-and-documents.md` (roadmap phase 4, feature 1 of 2)
 
@@ -66,15 +66,15 @@ What the code carries:
   link text printed under that.
 
 **Acceptance Criteria:**
-- [ ] When the treasurer opens the QR image of a demo invoice and it is decoded with a QR reader, then it shows a link
+- [x] When the treasurer opens the QR image of a demo invoice and it is decoded with a QR reader, then it shows a link
       starting with `https://qr.bank.gov.ua/` whose content, field by field, matches the official field table: the
       service mark, version 003, the cooperative's name, IBAN, the amount, the ЄДРПОУ, the purpose with the plot number
       and the invoice number, and the lock of every field except the amount.
-- [ ] Given an invoice with «До сплати» 413,26 ₴, when its QR code is decoded, then the amount reads 413.26 hryvnias.
-- [ ] Given a street name so long that the purpose would exceed the allowed length, when the invoice is built, then the
+- [x] Given an invoice with «До сплати» 413,26 ₴, when its QR code is decoded, then the amount reads 413.26 hryvnias.
+- [x] Given a street name so long that the purpose would exceed the allowed length, when the invoice is built, then the
       purpose in the QR code is shortened and still contains the plot number and the invoice number.
-- [ ] Given an invoice with nothing due, when it is opened, then it has no QR block.
-- [ ] When the owner scans the demo invoice's QR code with two real banking apps before merging, then the transfer form
+- [x] Given an invoice with nothing due, when it is opened, then it has no QR block.
+- [?] When the owner scans the demo invoice's QR code with two real banking apps before merging, then the transfer form
       opens with recipient, IBAN, purpose and amount filled in and the locked fields not editable (manual check, the
       result is written in the pull request).
 
@@ -83,10 +83,10 @@ What the code carries:
 Invoices need the cooperative's IBAN (Settings → Requisites) and ЄДРПОУ (set by the platform operator).
 
 **Acceptance Criteria:**
-- [ ] Given the cooperative has no IBAN, when the treasurer tries to build invoices (for a month or for one plot), then
+- [x] Given the cooperative has no IBAN, when the treasurer tries to build invoices (for a month or for one plot), then
       nothing is built and they see a message naming the missing IBAN with a link to Settings → Requisites.
-- [ ] Given the ЄДРПОУ is missing, when the treasurer tries to build invoices, then the message names the missing ЄДРПОУ.
-- [ ] Given IBAN or ЄДРПОУ is missing, when the chairman opens Settings → Requisites or an invoices screen, then a warning
+- [x] Given the ЄДРПОУ is missing, when the treasurer tries to build invoices, then the message names the missing ЄДРПОУ.
+- [?] Given IBAN or ЄДРПОУ is missing, when the chairman opens Settings → Requisites or an invoices screen, then a warning
       banner says invoices cannot be built until they are filled in.
 
 ### 2.3 The invoice
@@ -126,20 +126,20 @@ is booked in, with the month it corrects; the closed month's invoice and its re-
 
 **Acceptance Criteria (worked examples; plot 9, charge types Membership then Electricity; October 2026; issued
 05.11.2026):**
-- [ ] Given start debt 0,00, October membership 75,00 and electricity 338,26, and no payments, when the October invoice
+- [x] Given start debt 0,00, October membership 75,00 and electricity 338,26, and no payments, when the October invoice
       is built, then it shows start 0,00; charged 413,26; paid 0,00; end 413,26; «До сплати» 413,26; QR amount 413,26.
-- [ ] Given a September electricity debt of 1 135,08 and an October payment of 1 500,00 placed on 1 135,08 (September
+- [x] Given a September electricity debt of 1 135,08 and an October payment of 1 500,00 placed on 1 135,08 (September
       electricity) + 75,00 (membership) + 289,92 (October electricity), when the October invoice is built, then it shows
       start 1 135,08; charged 413,26; paid 1 500,00; end 48,34 (electricity); «До сплати» 48,34.
-- [ ] Given example 1 plus a payment of 413,26 on 03.11, when the October invoice is built on 05.11, then the end of
+- [x] Given example 1 plus a payment of 413,26 on 03.11, when the October invoice is built on 05.11, then the end of
       October is 413,26, «Отримано після жовтня» 413,26, «До сплати» 0,00 and there is no QR block.
-- [ ] Given the plot has no debt at the end of October and a prepayment of 100,00, when the invoice is built, then
+- [x] Given the plot has no debt at the end of October and a prepayment of 100,00, when the invoice is built, then
       «До сплати» is 0,00, «Аванс 100,00 ₴» is shown and there is no QR block.
-- [ ] Given October was closed on 03.11 and on 06.11 a recalculation lowered an October charge by 20,00 (booked in
+- [x] Given October was closed on 03.11 and on 06.11 a recalculation lowered an October charge by 20,00 (booked in
       November), when the October invoice is re-issued, then its numbers are the same as before, and when the November
       invoice is built, then it shows the −20,00 adjustment with «за жовтень 2026».
-- [ ] Given the IBAN is missing, when any invoice is built, then the message names the missing IBAN (2.2).
-- [ ] When an invoice PDF is opened, then all Ukrainian text (names, «До сплати», «Ділянка») is readable, with no missing
+- [x] Given the IBAN is missing, when any invoice is built, then the message names the missing IBAN (2.2).
+- [x] When an invoice PDF is opened, then all Ukrainian text (names, «До сплати», «Ділянка») is readable, with no missing
       or replaced characters.
 
 ### 2.4 Versions
@@ -152,11 +152,11 @@ is booked in, with the month it corrects; the closed month's invoice and its re-
 - An invoice is never deleted.
 
 **Acceptance Criteria:**
-- [ ] Given the October invoice of plot 9 (version 1), when a payment is entered and the treasurer re-issues it, then a
+- [x] Given the October invoice of plot 9 (version 1), when a payment is entered and the treasurer re-issues it, then a
       version 2 with the new numbers appears, version 1 still opens with its old numbers, and the member sees version 2.
-- [ ] Given an invoice was built and the plot's owner then changed, when the invoice is opened again, then it shows the
+- [x] Given an invoice was built and the plot's owner then changed, when the invoice is opened again, then it shows the
       owners as they were when it was built.
-- [ ] When the same invoice version is downloaded twice, then the two PDFs are identical apart from the file's technical
+- [x] When the same invoice version is downloaded twice, then the two PDFs are identical apart from the file's technical
       creation date.
 
 ### 2.5 Building the month's invoices
@@ -177,19 +177,19 @@ On the billing month screen, a «Рахунки» section.
   with a switch), one invoice per A4 page, ordered by street and plot.
 
 **Acceptance Criteria:**
-- [ ] Given October has 20 invoiceable plots of which 5 have nothing due, when the treasurer opens the preview, then it
+- [x] Given October has 20 invoiceable plots of which 5 have nothing due, when the treasurer opens the preview, then it
       shows 15 to build and 5 skipped.
-- [ ] When the treasurer starts the build, then a spinner shows until the result appears, and the list shows one invoice
+- [x] When the treasurer starts the build, then a spinner shows until the result appears, and the list shows one invoice
       per built plot.
-- [ ] Given a build of the month is under way, when another user starts a build of the same month, then they see that a
+- [x] Given a build of the month is under way, when another user starts a build of the same month, then they see that a
       build is already running and nothing is built twice.
-- [ ] Given October invoices exist and nothing changed, when the treasurer builds again, then the result says no new
+- [x] Given October invoices exist and nothing changed, when the treasurer builds again, then the result says no new
       invoices or versions were created.
-- [ ] Given one plot got a payment after the first build, when the treasurer builds again, then only that plot gets a
+- [x] Given one plot got a payment after the first build, when the treasurer builds again, then only that plot gets a
       version 2.
-- [ ] Given «Включити рахунки без боргу» is on, when the treasurer builds, then plots with nothing due also get an
+- [x] Given «Включити рахунки без боргу» is on, when the treasurer builds, then plots with nothing due also get an
       invoice (without a QR block).
-- [ ] When the treasurer clicks «PDF для друку», then one PDF downloads with one page per paper-delivery member's
+- [x] When the treasurer clicks «PDF для друку», then one PDF downloads with one page per paper-delivery member's
       invoice in street and plot order; with the switch for all, every latest invoice of the month is included.
 
 ### 2.6 An invoice on request
@@ -199,7 +199,7 @@ On the plot card, a «Рахунки» tab lists the plot's invoices (month, ver
 a new version.
 
 **Acceptance Criteria:**
-- [ ] When the treasurer clicks «Рахунок на сьогодні» on plot 9, then a new invoice (or a new version of this month's
+- [x] When the treasurer clicks «Рахунок на сьогодні» on plot 9, then a new invoice (or a new version of this month's
       invoice) appears in the list and its PDF opens with today's date as the issue date.
 
 ### 2.7 The debt certificate
@@ -218,17 +218,17 @@ the plot balances report for that date.
   annul with a reason.
 
 **Acceptance Criteria:**
-- [ ] Given plot 9 owes 413,26 as of today, when the chairman issues a certificate, then it gets the next number of the
+- [x] Given plot 9 owes 413,26 as of today, when the chairman issues a certificate, then it gets the next number of the
       year (for example `Д-2026-1`), its PDF says «Заборгованість становить 413,26 ₴» with the per-type amounts, and it
       appears in the register.
-- [ ] Given a plot with no debt, when a certificate is issued, then it says «Заборгованість відсутня».
-- [ ] Given two certificates are issued at the same moment by two people, when the register is opened, then they have two
+- [x] Given a plot with no debt, when a certificate is issued, then it says «Заборгованість відсутня».
+- [x] Given two certificates are issued at the same moment by two people, when the register is opened, then they have two
       different consecutive numbers with no gap.
-- [ ] When the chairman annuls a certificate with a reason, then the register shows it as «анульовано» with the reason,
+- [x] When the chairman annuls a certificate with a reason, then the register shows it as «анульовано» with the reason,
       its PDF is marked «АНУЛЬОВАНО», and the next certificate still gets the next number.
-- [ ] When the chairman tries to annul without a reason, then the annulment is refused with a message that the reason is
+- [x] When the chairman tries to annul without a reason, then the annulment is refused with a message that the reason is
       required.
-- [ ] Given a certificate was annulled, when the chairman tries to annul it again, then they see that it is already
+- [x] Given a certificate was annulled, when the chairman tries to annul it again, then they see that it is already
       annulled.
 
 ### 2.8 The cash receipt
@@ -245,13 +245,13 @@ signature line.
   it too. A bank payment has no receipt.
 
 **Acceptance Criteria:**
-- [ ] When the treasurer saves a cash payment of 100,00 and clicks «Друкувати квитанцію», then a PDF opens with the
+- [x] When the treasurer saves a cash payment of 100,00 and clicks «Друкувати квитанцію», then a PDF opens with the
       receipt number, «сто гривень 00 копійок», the charges it was placed on and the treasurer's name.
-- [ ] Given a cash payment split over plots 7 and 15, when its receipt is printed, then one receipt lists both plots with
+- [x] Given a cash payment split over plots 7 and 15, when its receipt is printed, then one receipt lists both plots with
       their amounts.
-- [ ] Given a reversed cash payment, when its receipt is printed, then it carries «СТОРНОВАНО» and the reversal date.
-- [ ] Given a bank payment, when its card is opened, then there is no «Друкувати квитанцію».
-- [ ] When amounts are written in words, then 0,05 is «нуль гривень 05 копійок», 1,00 «одна гривня 00 копійок», 21,00
+- [x] Given a reversed cash payment, when its receipt is printed, then it carries «СТОРНОВАНО» and the reversal date.
+- [x] Given a bank payment, when its card is opened, then there is no «Друкувати квитанцію».
+- [x] When amounts are written in words, then 0,05 is «нуль гривень 05 копійок», 1,00 «одна гривня 00 копійок», 21,00
       «двадцять одна гривня 00 копійок», 101,50 «сто одна гривня 50 копійок» and 1 234 567,89 «один мільйон двісті
       тридцять чотири тисячі п'ятсот шістдесят сім гривень 89 копійок» (and at least 30 cases in all).
 
@@ -263,11 +263,11 @@ signature line.
 - A member never sees certificates, nor any document of a plot they do not own.
 
 **Acceptance Criteria:**
-- [ ] Given the member owns plot 9 with an October invoice, when they open «Рахунки», then they see it first and can
+- [x] Given the member owns plot 9 with an October invoice, when they open «Рахунки», then they see it first and can
       download its PDF.
-- [ ] When a member tries to open another plot's invoice or receipt, then they get the same "not found" answer as for a
+- [x] When a member tries to open another plot's invoice or receipt, then they get the same "not found" answer as for a
       plot that does not exist.
-- [ ] When a member looks for certificates, then there is no such menu item and the register is refused.
+- [x] When a member looks for certificates, then there is no such menu item and the register is refused.
 
 ### 2.10 Permissions
 
@@ -279,11 +279,11 @@ signature line.
 - Custom roles can be given the two new permissions on the roles screen.
 
 **Acceptance Criteria:**
-- [ ] Given a user without «Формування рахунків», when they open a billing month, then they see the invoices list but no
+- [?] Given a user without «Формування рахунків», when they open a billing month, then they see the invoices list but no
       build or print buttons, and a direct attempt is refused.
-- [ ] Given the treasurer, when they open a plot card, then «Видати довідку» is not offered and a direct attempt is
+- [x] Given the treasurer, when they open a plot card, then «Видати довідку» is not offered and a direct attempt is
       refused; the chairman can issue.
-- [ ] When the roles screen is opened, then the two new permissions are listed with their names in the user's language.
+- [x] When the roles screen is opened, then the two new permissions are listed with their names in the user's language.
 
 ### 2.11 Audit
 
@@ -291,7 +291,7 @@ The audit log records: invoices built for a month (month, count, skipped); an in
 (plot, number, as-of date, total debt); a certificate annulled (the reason). Downloads are not recorded.
 
 **Acceptance Criteria:**
-- [ ] When the treasurer builds October invoices and the chairman issues and annuls a certificate, then the audit log
+- [x] When the treasurer builds October invoices and the chairman issues and annuls a certificate, then the audit log
       shows these three actions with their details in the user's language.
 
 ### 2.12 Demo data, docs and guides
@@ -304,9 +304,9 @@ The audit log records: invoices built for a month (month, count, skipped); an in
   says documents are always in Ukrainian.
 
 **Acceptance Criteria:**
-- [ ] When a demo user signs in, then the demo closed month has invoices, the register has one certificate and a cash
+- [x] When a demo user signs in, then the demo closed month has invoices, the register has one certificate and a cash
       payment's receipt can be printed.
-- [ ] When the guides are opened, then both languages describe the new screens and link the sample invoice PDF.
+- [x] When the guides are opened, then both languages describe the new screens and link the sample invoice PDF.
 
 ### 2.13 Small fixes carried over from payments (015)
 
@@ -314,8 +314,8 @@ The audit log records: invoices built for a month (month, count, skipped); an in
 - The line hint for an amount above the remaining money shows the amount: «Більше, ніж залишок 1 425,00 ₴».
 
 **Acceptance Criteria:**
-- [ ] When the treasurer enters a payment of 1 500,00 ₴, then «1 500,00 ₴ з 1 500,00 ₴» shows on one line.
-- [ ] When a line amount exceeds the remaining money, then the hint names the remaining amount.
+- [?] When the treasurer enters a payment of 1 500,00 ₴, then «1 500,00 ₴ з 1 500,00 ₴» shows on one line.
+- [?] When a line amount exceeds the remaining money, then the hint names the remaining amount.
 
 ---
 
@@ -380,6 +380,26 @@ Decided by the pipeline (autonomy `minimal`, no blocking questions; recommended 
 - References that still call 016 "bank statement import" are corrected to the new feature order.
 
 ---
+
+## Verification (2026-10-29)
+
+Evidence per criterion: `acceptance-coverage.md` (every criterion → tests; all green in the full suite of
+7f2636d: 3,618 backend tests, 0 failures; clients 853 web tests green; `web/e2e/invoices.spec.ts` 5/5 and the smoke set
+18/18) and the rendered app (`make up`, claude-in-chrome), screenshots in `docs/screenshots/`:
+`016-invoices-and-documents-month-panel.png`, `-build-result.png`, `-plot-invoices.png`, `-certificate-issued.png`,
+`-register.png`, `-register-annulled.png`, `-receipt-button.png`, `-member-invoices.png`. Observed: preview 25 / 17 / 8 /
+17 and with «Включити рахунки без боргу» 25 / 0; build «Built: 8. New versions: 0. Unchanged: 17. Skipped: 0.»; print
+PDFs PAPER and ALL downloaded; «Рахунок на сьогодні» added 2026-10/9; certificate Д-2026-2 issued, annul without a
+reason refused, annulled row with who/when/reason; cash receipt № 9 downloaded, a bank payment has no button; the member
+sees plots 7 and 15 with «Завантажити PDF» and no register menu item; the UI language switch changes the screen texts.
+
+Marked `[?]` (manual check by the owner):
+- the real-bank QR scan with two banking apps (no local tool; result goes into the PR);
+- the requisites warning banner as rendered (not rendered, to avoid changing the shared dev database's IBAN; covered by
+  `RequisitesWarning` / `MonthInvoicesPanel` component tests and the readiness API test in `InvoicesAcceptanceTests`);
+- build/print buttons hidden for a user without «Формування рахунків» (no demo login has «Перегляд нарахувань» without
+  it; covered by `MonthInvoicesPanel.test.tsx` and the 403 checks of `InvoiceAccessTests`);
+- the two 015 screen fixes (2.13) as rendered (covered by the payment component tests).
 
 ## Change Log
 
