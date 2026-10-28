@@ -84,3 +84,9 @@
 | Round | Commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `fa5356b`, `83b3bc4`, `e3b668e` | PASS | — | minor: `LedgerAccountTests:811` order depends on host vs DB clock (fixed separately); PlotPicker `aria-controls` target absent while closed, stale results during debounce, active index not clamped; a typed line and its automatic top-up show as two rows; one long line in `PaymentService.book` |
+
+## Fix — CI run 40737374368: plot combobox selectors in meters, recalculation and tariffs specs; privacy race
+
+| Round | Commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `6db0891` | PASS | — | minor: `plotSuggestions` key lives under `tariffs.scope` though PlotPicker is shared |
