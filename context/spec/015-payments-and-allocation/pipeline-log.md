@@ -188,3 +188,4 @@ red plots; guide PDFs.
 - CI fix attempt 1 for the owner round (6db0891): fix review PASS. Review run restarted on 6db0891 (make up PID 58666). Pushing.
 - CI run 40745784297 on ae8a02c: all five checks green (full e2e).
 - Finish 4: make guide-shots (108) and make guide (4 PDFs) on the review run at 6db0891; 24 screenshots and the PDFs changed (payment card, list filters, form, account). Note: the local dev DB contains the review test payments № 10–13, visible in the payments list and card shots.
+- Finish 5: /awos:architecture — context/product/architecture.md records payments and allocations in the ledger module (V27 tables, PlotLedgerLock, AllocationReleaser, PrepaymentAllocator and the owner rule, PaymentsChanged, PaymentNotes, permissions); reports: nine incl. payments; payments removed from the planned modules. Drift found: maplibre-gl is a web dependency with no use in web/src — kept as recorded (default), reported to the owner.
