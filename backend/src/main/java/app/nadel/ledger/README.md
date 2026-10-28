@@ -811,13 +811,16 @@ no interval, so it publishes nothing). `ReadingCharges` listens with the ADR 000
   every tariff `FOR SHARE` -> the billing month `FOR SHARE`. The month run takes the meters of its retries before its
   tariffs.
 
-## Payments (tag `payments`, feature 015 slices 2 and 3)
+## Payments (tag `payments`, feature 015 slices 2 to 4)
 
 | Endpoint | Operation | Who |
 |---|---|---|
 | `GET /payments?from&to&source&plotId&month&page&size` | The payments (kind `PAYMENT`; a reversal marks its payment `reversed`), newest first (`received_on`, then `created_at`, then id), filtered by `received_on`, source, plot and the billing month they are booked in; each with its receipt number or bank reference, the payer's short name, `allocated` (net allocations), `prepayment` (what is left, `0.00` once reversed) and `groupSize` (the payments of its group: the parts of a split, reversed ones included; 1 for a payment of one plot). `from` after `to` is 400 (`from` `INVALID`) | `PAYMENTS_VIEW` |
 | `GET /payments/{id}` | The card: the payment, its allocations and releases (oldest first, with the charge type, period, origin or release cause and `system` for rows written by the system), the other parts of its group, the reversal, the author's current name, and `payerNote` only for a viewer with `MEMBERS_VIEW`. Unknown, another cooperative's or a reversal's id: 404 `NOT_FOUND` | `PAYMENTS_VIEW` |
 | `POST /payments?preview=true\|false` | One plot (`plotId`) or a split over the plots of one payer (`split`, see Split below), exactly one of them. For one plot, `lines` absent (or null) saves the proposal, an empty list places nothing. Preview (200): per part every open charge of the plot in planner order with `open` and `proposed` (`0.00` when nothing), `allocatedTotal`, the prepayment the payment leaves, the plot's `debt` (the sum of its open amounts), for a split also `split` (the payer and every plot of the split with its `debt` and `proposedAmount`), and the `digest`; nothing written, no lock. Save (201): the same plus `payments` (id, group, receipt number of a cash payment; one per part above zero) | `PAYMENTS_ENTER` |
+| `POST /payments/{id}/reverse` | `{reason}` (1-500, trimmed). Releases every live allocation of the payment (`PAYMENT_REVERSED`), then writes the `PAYMENT_REVERSAL` row; 201 with the card. 409 `PAYMENT_ALREADY_REVERSED` (reversed before, also two at once, or a reversal row's id); 404 `NOT_FOUND` | `PAYMENTS_REVERSE` |
+| `POST /payments/{id}/reallocate?preview=true\|false` | `{lines?, digest?}`. Preview (200): `current` (what each live allocation of the payment holds now), `proposal` over the open charges as if they were released (`amount` the payment's), `digest`. Save (201): releases (`REALLOCATED`) and new allocations (origin `REALLOCATION`) in one transaction. 409 `PAYMENT_ALREADY_REVERSED` for a reversed payment or a reversal row | `PAYMENTS_ENTER` |
+| `POST /plots/{id}/prepayment/allocate?preview=true\|false` | `{lines?, digest?}`. Preview (200): `proposal` over the plot's open charges, its `amount` the prepayment, `prepayment` what stays; `digest`. Save (201): allocations origin `PREPAYMENT_MANUAL` by the actor. 409 `NOTHING_TO_ALLOCATE` (no prepayment or no open charge); 404 `PLOT_NOT_FOUND` | `PAYMENTS_ENTER` |
 
 `PaymentService.enter`, in this order: the values (`PaymentRules`: `amount` `AMOUNT_NOT_POSITIVE`/`INVALID`,
 `receivedOn` `DATE_IN_FUTURE`, `plotId` `REQUIRED`, `payerNote` `TOO_LONG`, `bankReference` `TOO_LONG` or `INVALID` on
@@ -858,6 +861,51 @@ of the first part), the receipt number on every part, the payer `split.payerMemb
 note sealed per payment (its own `FieldRef`). One `PAYMENT_RECORDED` per part (about its plot) and one
 `PaymentsChanged` with every plot of the group. The card of a part lists the other parts (`groupParts`: id, plot,
 amount, reversed).
+
+**Reversal, reallocation and prepayment allocation** (feature 015 §2.5, §2.6, slice 4; `PaymentCorrections`). Each
+write locks the plot `FOR SHARE` (`PlotCatalog.findAndLockShared`), then its plot ledger lock, and reads the plot's
+ledger under it; a preview takes no lock and writes nothing.
+
+- **Reverse**: the reason (`PaymentRules.reasonProblem`: 400 `reason` `REQUIRED`/`TOO_LONG`); the payment of the
+  cooperative (404 `NOT_FOUND`); a reversal row or a payment reversed before is 409 `PAYMENT_ALREADY_REVERSED` (checked
+  under the plot ledger lock; two reversals that still meet hit `payment_reversed_once_uq`, mapped to the same 409). An
+  archived plot (or one turned into common land since) still has its payment reversed. The month is
+  `BillingMonths.openForBooking(original.received_on)`: the payment's own month while it is open, otherwise the
+  earliest open month (the 011 rule for charge reversals). `AllocationReleaser.releasePayment(..., PAYMENT_REVERSED,
+  actor)` writes the releases, then `PaymentRecord.reversalOf` the reversal row (negated amount, same plot, source,
+  group and `received_on`, the reason, no receipt number: the original keeps its own). A part of a split group is
+  reversed alone. The released money is gone with the payment (no prepayment). Audit `PAYMENT_REVERSED`;
+  `PaymentsChanged`. The controller answers with the card read after the commit.
+- **Reallocate**: the payment (404; 409 `PAYMENT_ALREADY_REVERSED` for a reversal row or a reversed payment); the
+  releases `ReleasePlanner.forPayment(..., REALLOCATED)` are planned and the state taken as if they were written
+  (`PlotLedgerState.afterReleases`, pure); the digest is `PaymentDigest.reallocation` (the payment, its live
+  allocations `id:remaining`, the open charges as if released; 409 `PREVIEW_OUTDATED`); the lines are the proposal of
+  the payment's amount or the caller's, checked as at entry against that state (`PaymentService.checked`: an empty list
+  takes everything back as the payment's prepayment). A save calls `AllocationReleaser.releasePayment(...,
+  REALLOCATED, actor)` and writes the lines with origin `REALLOCATION`. Audit `PAYMENT_REALLOCATED`;
+  `PaymentsChanged`.
+- **Allocate prepayment** ("Розподілити аванс", whether automatic allocation is on or off): the plot of the cooperative
+  (404 `PLOT_NOT_FOUND`; archived plots and common land are not refused: the money is already there); an empty list of
+  lines is 400 `lines` `REQUIRED`; a plot without prepayment (`PlotLedgerState.prepayment`) or without an open charge
+  is 409 `NOTHING_TO_ALLOCATE` (a state, like `NOTHING_TO_RECALCULATE`, not a field of the request); the digest is
+  `PaymentDigest.prepayment`; the lines are the proposal of the prepayment or the caller's, checked against the
+  prepayment (`ALLOCATION_EXCEEDS_PAYMENT` when they exceed it). Each line's money comes from the payments that still
+  have money left, oldest first (`AllocationPlanner.pairWithPayments`), so a line may become several allocation rows
+  (origin `PREPAYMENT_MANUAL`, `created_by` the actor). Audit `PREPAYMENT_ALLOCATED`; `PaymentsChanged`.
+
+The card (`GET /payments/{id}`) says what the viewer may do now: `reversible` (`PAYMENTS_REVERSE` and not reversed)
+and `reallocatable` (`PAYMENTS_ENTER` and not reversed).
+
+**Releases** (`AllocationReleaser`, `MANDATORY`): the one writer of release rows. `settleCharges(tenantId, plotIds,
+createdBy)` releases what the charges of the plots no longer hold after a reversal or adjustment written in the same
+transaction (`ReleasePlanner.forCharges`: all of a reversed charge, `CHARGE_REVERSED`; the excess of a lowered one from
+its latest allocations, `CHARGE_ADJUSTED`); `releasePayment(tenantId, plotId, paymentId, cause, createdBy)` every live
+allocation of one payment. Both assert the plot ledger locks (`PlotLedgerLock.assertHeld`: a missing lock is a bug and
+an `IllegalStateException`), flush, read the plots' ledger again, write and flush the releases (so the caller's next
+row comes after them) and return them. Rule: **a path that reverses or lowers a charge, or reverses or reallocates a
+payment, locks the plots and calls the releaser before it commits**; the deferred backstops of V27
+(`allocation_charge_cap`, `allocation_payment_cap`) refuse a commit that forgot it. The charge paths (`Reversals`,
+the run reversals, `RecalculationService`) call `settleCharges` from slice 5.
 
 **Lock order** (technical considerations 2.4): charging lock (paths that charge) -> network / queue / charge type /
 tariff `FOR SHARE` -> plot `FOR SHARE` (`PlotCatalog.findAndLockShared`) -> **plot ledger locks** (`PlotLedgerLock`:
@@ -974,6 +1022,14 @@ label the plot number):
   `bankReference` (bank, when given), and `payerNote` sealed by the publisher at `FieldChange.newValueRef(eventId,
   "payerNote")` before the event exists (the 014 mechanism), so neither the outbox nor `audit_entry` holds it in the
   clear; the audit listing opens it only for a reader with `MEMBERS_VIEW`.
+- `PAYMENT_REVERSED`: `amount` (the reversal, `-700.00`), `receiptNumber` (cash), `billingMonth` (where the reversal
+  is booked), `reason`.
+- `PAYMENT_REALLOCATED`: `amount`, `receivedOn`, `receiptNumber` (cash) and `lines` with the old and the new value,
+  each line `<charge type code> <YYYY-MM of the service start> <amount>` (the stored name, user content, for a type
+  without a code), joined by `; ` (`PaymentViews.auditLines`); a side without lines is absent.
+- `PREPAYMENT_ALLOCATED`: `lines` (as above) and `total`.
+
+Automatic allocations and releases are ledger rows, not audit entries.
 
 Every action is a constant of `LedgerAuditPublisher.Action` and must also be a value of `AuditAction` in
 `api/openapi.yaml`: the audit listing maps stored entries with `AuditAction.fromValue`, so a missing value breaks it
@@ -1123,7 +1179,20 @@ permissions), `AllocationConcurrencyTests` (two entries on one plot, and a split
 real concurrent transactions: the second waits on the plot ledger lock while the first holds the receipt counter, then
 reads the ledger afresh, so no charge and no payment is ever over-allocated; without the lock the deferred backstop
 refuses one at commit), `PaymentAuditTests` (`PAYMENT_RECORDED` values, the
-sealed note: not readable in `payment`, `audit_entry`, the outbox or the debug log), the payment cases of
+sealed note: not readable in `payment`, `audit_entry`, the outbox or the debug log; `PAYMENT_REALLOCATED` with the old
+and new lines, `PAYMENT_REVERSED` with the reason, `PREPAYMENT_ALLOCATED` with lines and total, all read back by the
+audit listing), `PaymentReversalTests` (example 9: releases then the reversal row, the debts back; the card's
+`reversible`/`reallocatable`; reversed once, a reversal row refused; the reason; `PAYMENTS_REVERSE` only, another
+cooperative 404; a reversed cash payment keeps its receipt in list and card and the next one takes the next number; a
+split part alone; the payment's month while open, otherwise the earliest open month; an archived plot; the prepayment
+down by what was left of the payment, never below zero), `ReallocationTests` (the FS 2.6 example with releases and new
+allocations on the card; the proposal as if released; an empty list; a stale digest writing nothing; a reversed payment
+and a reversal row; lines above the payment or a charge or not of the plot; permissions),
+`PrepaymentAllocationTests` (example 5 with automatic allocation off, then land tax paid and 30.00 left; a prepayment
+of two payments taken oldest first; `NOTHING_TO_ALLOCATE`, an empty list, lines above the prepayment; a stale digest;
+permissions and plots of another cooperative), `AllocationReleaserTests` (`settleCharges` after a charge reversal in
+the same transaction, by the system; a path without it refused at commit by `allocation_charge_cap`; no plot ledger
+lock -> `IllegalStateException`), the payment cases of
 `PlotStatusRefreshTests` (red to yellow, green with a prepayment, the oldest unpaid charge, a redelivered
 `PaymentsChanged`, the cache equal to an SQL rebuild); `PaymentTenantIsolationTests`, `PaymentAppendOnlyTests` (V27) and
 the pure payment tests listed under Rules. Test helpers clear ledger rows

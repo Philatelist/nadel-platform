@@ -3,7 +3,6 @@ import {
   type PaymentSplitPartInput,
   useEnterPayment,
   type PaymentEntryRequest,
-  type PaymentLineInput,
   type PaymentPartProposal,
   type SavedPayment,
 } from '@nadel/api-client';
@@ -22,6 +21,7 @@ import { PlotSelect } from './PlotSelect';
 import { ProposalTable } from './ProposalTable';
 import { SplitParts, type SplitEdits } from './SplitParts';
 import { SplitPayerStep } from './SplitPayerStep';
+import { linesOf, type Edits } from './paymentLines';
 import { invalidateAfterPayment } from './paymentInvalidation';
 import { paymentErrors } from './paymentProblems';
 import { usePaymentPreview } from './usePaymentPreview';
@@ -29,34 +29,6 @@ import { usePaymentPreview } from './usePaymentPreview';
 const MAX_NOTE = 200;
 const MAX_REFERENCE = 64;
 const SOURCES = Object.values(PaymentSource);
-
-/** The typed amounts per charge once the treasurer has changed the proposal; null while the proposal stands. */
-type Edits = Readonly<Record<string, string>> | null;
-
-interface Lines {
-  /** Absent while the server's proposal stands. */
-  lines: PaymentLineInput[] | undefined;
-  /** Charge ids in the order of `lines` as they were sent. */
-  ids: string[];
-  /** Typed texts that are not an amount, by charge id. */
-  invalid: Set<string>;
-}
-
-function linesOf(edits: Edits): Lines {
-  if (edits === null) return { lines: undefined, ids: [], invalid: new Set() };
-  const lines: PaymentLineInput[] = [];
-  const ids: string[] = [];
-  const invalid = new Set<string>();
-  for (const [chargeId, text] of Object.entries(edits)) {
-    const amount = normalizeMoneyInput(text);
-    if (amount === undefined) invalid.add(chargeId);
-    else if (!isZeroMoney(amount)) {
-      lines.push({ chargeId, amount });
-      ids.push(chargeId);
-    }
-  }
-  return { lines, ids, invalid };
-}
 
 type Mode = 'single' | 'split';
 

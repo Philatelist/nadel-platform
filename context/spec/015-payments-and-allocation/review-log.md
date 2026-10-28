@@ -17,3 +17,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `23557e8..faf6564` | PASS | — | minor: Javadoc over 120 columns in `PlotDebtCache`/`PlotStatusEntry`; `Money.parse` and `YearMonth.parse` rely on the contract pattern (a bypass would be 500, not 400) |
+
+## Slice 3 — one payment split over several plots of one payer
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `faf6564..ec792e9` | PASS | — | minor: split proposal reads unlocked non-part plots (protected by digest and sum check); `PaymentQueries` javadoc over 120 columns; payer without plots gets `NOT_FOUND` on `split.payerMemberId` |

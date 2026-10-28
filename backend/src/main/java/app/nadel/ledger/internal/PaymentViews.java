@@ -4,8 +4,10 @@ import app.nadel.members.MemberRef;
 import app.nadel.money.Money;
 import app.nadel.tariffs.ChargeTypeCatalog;
 import app.nadel.tariffs.ChargeTypeCatalog.ChargeTypeFacts;
+import java.time.YearMonth;
 import java.time.ZoneOffset;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -14,6 +16,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import nadel.contract.model.AllocationReleaseCause;
 import nadel.contract.model.PaymentAllocation;
+import nadel.contract.model.PaymentCurrentAllocation;
 import nadel.contract.model.PaymentPartProposal;
 import nadel.contract.model.PaymentPayer;
 import nadel.contract.model.PaymentProposalLine;
@@ -89,6 +92,49 @@ class PaymentViews {
                 total.toString(), amount.minus(total).toString());
         proposal.setDebt(debt(state).toString());
         return proposal;
+    }
+
+    /**
+     * What the live allocations of the payment place on their charges now (what is left of each), oldest first and,
+     * among those written together, in the planner order of their charges, with their charges.
+     */
+    List<PaymentCurrentAllocation> current(UUID paymentId, PlotLedgerState state) {
+        Map<UUID, ChargeState> charges = new HashMap<>();
+        state.charges().forEach(charge -> charges.put(charge.id(), charge));
+        List<AllocationState> live = state.allocations().stream()
+                .filter(allocation -> allocation.paymentId().equals(paymentId) && allocation.live())
+                .sorted(Comparator.comparing(AllocationState::createdAt)
+                        .thenComparing(allocation -> charges.get(allocation.chargeId()),
+                                Comparator.nullsLast(AllocationPlanner.ORDER))
+                        .thenComparing(allocation -> allocation.id().toString()))
+                .toList();
+        Context context = context(live.stream().map(AllocationState::chargeId).distinct().toList());
+        return live.stream().map(allocation -> {
+            ChargeRecord charge = context.charges().get(allocation.chargeId());
+            return new PaymentCurrentAllocation(allocation.id(), allocation.chargeId(),
+                    nadel.contract.model.ChargeKind.fromValue(charge.getKind().name()),
+                    ChargeViews.typeRef(context.types().get(charge.getChargeTypeId())),
+                    month(context, charge.getBillingMonthId()), charge.getServiceFrom(), charge.getServiceTo(),
+                    charge.getAccruedOn(), allocation.remaining().toString());
+        }).toList();
+    }
+
+    /**
+     * Lines of money on charges as the audit log stores them: {@code <code> <YYYY-MM> <amount>} per line, joined by
+     * {@code "; "}, where the code is the charge type's code (its stored name, user content, for a type without one)
+     * and the month the start of the charge's service period; null when there is no line.
+     */
+    @Nullable String auditLines(List<AllocationPlanner.Line> lines) {
+        if (lines.isEmpty()) {
+            return null;
+        }
+        Context context = context(lines.stream().map(AllocationPlanner.Line::chargeId).distinct().toList());
+        return String.join("; ", lines.stream().map(line -> {
+            ChargeRecord charge = context.charges().get(line.chargeId());
+            ChargeTypeFacts type = context.types().get(charge.getChargeTypeId());
+            return (type.code() != null ? type.code() : type.name()) + " "
+                    + YearMonth.from(charge.getServiceFrom()) + " " + line.amount();
+        }).toList());
     }
 
     /** What the plot owes: the sum of what is open on its charges that money can be placed on. */

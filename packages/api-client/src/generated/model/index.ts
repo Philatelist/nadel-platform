@@ -10,6 +10,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './allocatePrepaymentParams';
+export * from './allocationLinesRequest';
 export * from './allocationOrigin';
 export * from './allocationReleaseCause';
 export * from './auditAction';
@@ -155,6 +157,7 @@ export * from './ownershipCorrectionCoOwner';
 export * from './ownershipShare';
 export * from './payloadTooLargeResponse';
 export * from './paymentAllocation';
+export * from './paymentCurrentAllocation';
 export * from './paymentDetails';
 export * from './paymentEntryRequest';
 export * from './paymentEntryResult';
@@ -164,6 +167,8 @@ export * from './paymentPage';
 export * from './paymentPartProposal';
 export * from './paymentPayer';
 export * from './paymentProposalLine';
+export * from './paymentReallocationResult';
+export * from './paymentReversal';
 export * from './paymentReversalInfo';
 export * from './paymentSource';
 export * from './paymentSplitInput';
@@ -194,6 +199,7 @@ export * from './plotTariffs';
 export * from './plotWaterConnections';
 export * from './polygonGeometry';
 export * from './polygonGeometryType';
+export * from './prepaymentAllocationResult';
 export * from './problem';
 export * from './problemFieldError';
 export * from './rate';
@@ -212,6 +218,7 @@ export * from './readingSource';
 export * from './readingStatus';
 export * from './readingSubmission';
 export * from './readingWarning';
+export * from './reallocatePaymentParams';
 export * from './recalculation';
 export * from './recalculationAction';
 export * from './recalculationCause';

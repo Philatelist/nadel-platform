@@ -21,7 +21,8 @@ import tools.jackson.databind.JsonNode;
 /**
  * The audit of a payment (feature 015 §2.12, technical considerations 2.8): one {@code PAYMENT_RECORDED} entry about
  * the plot (entity type {@code PAYMENT}) with the amount, source, date, billing month and receipt number or bank
- * reference, and the payer note sealed with the 014 mechanism. The note is never readable outside the app: not in
+ * reference, and the payer note sealed with the 014 mechanism; {@code PAYMENT_REALLOCATED} with the old and new lines,
+ * {@code PAYMENT_REVERSED} with the reason and {@code PREPAYMENT_ALLOCATED} with the lines and their total. The note is never readable outside the app: not in
  * {@code payment}, not in {@code audit_entry}, not in the outbox ({@code event_publication}) and not in the log, even
  * at debug level. The audit listing opens it only for a reader who may view members.
  */
@@ -134,6 +135,65 @@ class PaymentAuditTests extends PaymentApiSupport {
             ownerJdbc().execute("drop function if exists outbox_copy()");
             ownerJdbc().execute("drop table if exists outbox_copy");
         }
+    }
+
+    @Test
+    void enteredReallocatedAndReversedAreThreeEntries() throws Exception {
+        UUID plot = newPlot();
+        UUID membership = tariffCharge(plot, "MEMBERSHIP", "600.00", "2026-01");
+        UUID electricity = tariffCharge(plot, "ELECTRICITY", "250.00", "2026-02");
+        UUID payment = UUID.fromString(body(save(treasurer(), cash(plot, "700.00")).andExpect(status().isCreated()))
+                .get("payments").get(0).get("id").asString());
+        long receipt = ownerJdbc().queryForObject("select receipt_number from payment where id = ?", Long.class,
+                payment);
+
+        reallocate(treasurer(), payment, false, lines(List.of(line(electricity, "250.00"),
+                line(membership, "450.00")), null)).andExpect(status().isCreated());
+        reverse(chairman(), payment, "Помилкова ділянка").andExpect(status().isCreated());
+
+        awaitEntries(plot, "PAYMENT_RECORDED", 1);
+        Map<String, Object> reallocated = awaitEntries(plot, "PAYMENT_REALLOCATED", 1).get(0);
+        assertThat(reallocated).containsEntry("entity_type", "PAYMENT").containsEntry("entity_label", plotNumber(plot))
+                .containsEntry("actor_member_id", demoMember("treasurer@demo.local"));
+        assertThat(changes(reallocated)).containsExactly(new Change("amount", null, "700.00"),
+                new Change("receivedOn", null, kyivToday().toString()),
+                new Change("receiptNumber", null, Long.toString(receipt)),
+                new Change("lines", "MEMBERSHIP 2026-01 600.00; ELECTRICITY 2026-02 100.00",
+                        "ELECTRICITY 2026-02 250.00; MEMBERSHIP 2026-01 450.00"));
+        Map<String, Object> reversed = awaitEntries(plot, "PAYMENT_REVERSED", 1).get(0);
+        assertThat(reversed).containsEntry("entity_type", "PAYMENT")
+                .containsEntry("actor_member_id", demoMember("chairman@demo.local"));
+        assertThat(changes(reversed)).containsExactly(new Change("amount", null, "-700.00"),
+                new Change("receiptNumber", null, Long.toString(receipt)),
+                new Change("billingMonth", null, kyivToday().toString().substring(0, 7)),
+                new Change("reason", null, "Помилкова ділянка"));
+
+        // the audit listing reads every action back (the contract knows them)
+        JsonNode page = body(send(chairman(), get(AUDIT).param("entityType", "PAYMENT").param("entityId",
+                plot.toString()), null).andExpect(status().isOk()));
+        List<String> actions = new ArrayList<>();
+        page.get("items").forEach(item -> actions.add(item.get("action").asString()));
+        assertThat(actions).containsExactlyInAnyOrder("PAYMENT_RECORDED", "PAYMENT_REALLOCATED", "PAYMENT_REVERSED");
+    }
+
+    @Test
+    void aPrepaymentAllocatedByHandIsAuditedWithItsLinesAndTotal() throws Exception {
+        UUID plot = newPlot();
+        save(treasurer(), payment(plot, "BANK", "150.00", kyivToday().toString(), null))
+                .andExpect(status().isCreated());
+        UUID landTax = tariffCharge(plot, "LAND_TAX", "120.00", "2026-03");
+
+        allocatePrepayment(treasurer(), plot, false, lines(List.of(line(landTax, "100.00")), null))
+                .andExpect(status().isCreated());
+
+        Map<String, Object> entry = awaitEntries(plot, "PREPAYMENT_ALLOCATED", 1).get(0);
+        assertThat(entry).containsEntry("entity_type", "PAYMENT").containsEntry("entity_label", plotNumber(plot))
+                .containsEntry("actor_member_id", demoMember("treasurer@demo.local"));
+        assertThat(changes(entry)).containsExactly(new Change("lines", null, "LAND_TAX 2026-03 100.00"),
+                new Change("total", null, "100.00"));
+        JsonNode page = body(send(chairman(), get(AUDIT).param("entityType", "PAYMENT").param("entityId",
+                plot.toString()), null).andExpect(status().isOk()));
+        assertThat(page.get("items").findValuesAsString("action")).contains("PREPAYMENT_ALLOCATED");
     }
 
     /** The stored changes whose values are plain text (a sealed value is an object {@code {"enc": ...}}). */

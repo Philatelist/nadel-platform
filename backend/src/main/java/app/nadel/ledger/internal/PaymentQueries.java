@@ -157,7 +157,9 @@ class PaymentQueries {
 
     /**
      * The payment with its allocations and releases (oldest first), the other parts of its group, its reversal, the
-     * author's current name and, for a viewer with {@code MEMBERS_VIEW}, the payer note. An unknown payment, one of
+     * author's current name, whether the viewer may reverse it ({@code PAYMENTS_REVERSE}) or reallocate it
+     * ({@code PAYMENTS_ENTER}) now (both only while it is not reversed) and, for a viewer with {@code MEMBERS_VIEW},
+     * the payer note. An unknown payment, one of
      * another cooperative and the id of a reversal row are 404 {@code NOT_FOUND}.
      */
     @Transactional(readOnly = true)
@@ -200,7 +202,9 @@ class PaymentQueries {
                 parts.stream().map(part -> new PaymentGroupPart(part.getId(), part.getPlotId(),
                         plotFacts.get(part.getPlotId()).number(), part.getAmount().toString(),
                         reversedInGroup.contains(part.getId()))).toList(),
-                payment.getCreatedAt().atOffset(ZoneOffset.UTC));
+                payment.getCreatedAt().atOffset(ZoneOffset.UTC),
+                !isReversed && viewer.can(Permission.PAYMENTS_REVERSE),
+                !isReversed && viewer.can(Permission.PAYMENTS_ENTER));
         dto.setReceiptNumber(payment.getReceiptNumber());
         dto.setBankReference(payment.getBankReference());
         dto.setPayer(PaymentViews.payer(payment.getPayerMemberId(), payers(List.of(payment))));

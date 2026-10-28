@@ -3,6 +3,7 @@ package app.nadel.ledger;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -87,6 +88,56 @@ abstract class PaymentApiSupport extends LedgerApiSupport {
 
     ResultActions card(String bearer, UUID payment) throws Exception {
         return send(bearer, get(PAYMENTS + "/" + payment), null);
+    }
+
+    ResultActions reverse(String bearer, UUID payment, Object body) throws Exception {
+        return send(bearer, post(PAYMENTS + "/" + payment + "/reverse"), body);
+    }
+
+    ResultActions reverse(String bearer, UUID payment, String reason) throws Exception {
+        return reverse(bearer, payment, Map.of("reason", reason));
+    }
+
+    ResultActions reallocate(String bearer, UUID payment, boolean preview, Map<String, Object> body)
+            throws Exception {
+        return send(bearer, post(PAYMENTS + "/" + payment + "/reallocate?preview=" + preview), body);
+    }
+
+    ResultActions allocatePrepayment(String bearer, UUID plot, boolean preview, Map<String, Object> body)
+            throws Exception {
+        return send(bearer, post("/api/v1/plots/" + plot + "/prepayment/allocate?preview=" + preview), body);
+    }
+
+    /** A body of a reallocation or prepayment allocation: {@code lines} null uses the proposal. */
+    static Map<String, Object> lines(List<Map<String, Object>> lines, String digest) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        if (lines != null) {
+            body.put("lines", lines);
+        }
+        if (digest != null) {
+            body.put("digest", digest);
+        }
+        return body;
+    }
+
+    /** Saves the payment and returns the id of its (first) payment. */
+    UUID saved(String bearer, Map<String, Object> body) throws Exception {
+        return UUID.fromString(body(save(bearer, body).andExpect(
+                org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isCreated()))
+                .get("payments").get(0).get("id").asString());
+    }
+
+    /** The net allocations to the charge (allocations minus releases). */
+    BigDecimal netAllocated(UUID charge) {
+        return ownerJdbc().queryForObject("select coalesce(sum(amount), 0) from allocation where charge_id = ?",
+                BigDecimal.class, charge);
+    }
+
+    /** The plot's prepayment from the ledger: payments (reversals negative) minus net allocations. */
+    BigDecimal ledgerPrepayment(UUID plot) {
+        return ownerJdbc().queryForObject("select (select coalesce(sum(amount), 0) from payment where plot_id = ?) "
+                + "- (select coalesce(sum(amount), 0) from allocation where plot_id = ?)", BigDecimal.class, plot,
+                plot);
     }
 
     int paymentCount(UUID plot) {

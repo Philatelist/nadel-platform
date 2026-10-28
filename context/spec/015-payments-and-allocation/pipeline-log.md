@@ -117,3 +117,6 @@ red plots; guide PDFs.
   a part without an amount takes the proposal; payer with no eligible plot → 400 `split.payerMemberId` NOT_FOUND; group id =
   first part's id; split weights = open amounts (prepayment not subtracted); only part plots are locked.
 - Slice 3 verify: backend 43 tests 0 failures; pnpm typecheck/lint/test green.
+- Slice 3 committed ec792e9; review round 1: PASS (minor notes in review-log).
+- Slice 4 backend: reverse/reallocate/prepayment in new PaymentCorrections (76 narrow tests green). Builder choice: 409 NOTHING_TO_ALLOCATE when no prepayment or no open charge.
+- Slice 4 verify: backend 29 tests 0 failures; pnpm typecheck/lint/test green.

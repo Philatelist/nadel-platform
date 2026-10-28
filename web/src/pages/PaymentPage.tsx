@@ -1,14 +1,17 @@
 import { useGetPayment, type PaymentAllocation, type PaymentGroupPart } from '@nadel/api-client';
 import { format, formatDateTime, formatDay } from '@nadel/shared';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router';
 import { ChargeTypeName } from '../components/ChargeTypeName';
 import { billingMonthLabel } from '../components/charges/billingMonth';
+import { ReallocateDialog } from '../components/payments/ReallocateDialog';
+import { ReversePaymentDialog } from '../components/payments/ReversePaymentDialog';
 import { servicePeriodLabel } from '../components/payments/paymentLabels';
 import { QueryBoundary } from '../components/QueryBoundary';
 import { UserContent } from '../components/UserContent';
-import { Badge, DataTable, Money, PageHeader, Panel, type Column } from '../components/ui';
+import { Badge, Button, DataTable, Money, PageHeader, Panel, type Column } from '../components/ui';
 import { useLocale, useT } from '../i18n';
+import { useCan } from '../me';
 import { useDocumentTitle } from '../useDocumentTitle';
 
 /** One payment, read-only: its details, what it was allocated to, who entered it and when. */
@@ -19,6 +22,9 @@ export function PaymentPage() {
   const query = useGetPayment(id);
   const c = t.payments.card;
   useDocumentTitle(c.title);
+  const canReverse = useCan('PAYMENTS_REVERSE');
+  const canEnter = useCan('PAYMENTS_ENTER');
+  const [dialog, setDialog] = useState<'reverse' | 'reallocate'>();
 
   const columns: Column<PaymentAllocation>[] = [
     {
@@ -33,7 +39,9 @@ export function PaymentPage() {
         ) : a.releaseCause ? (
           <span>
             <ChargeTypeName type={a.chargeType} />
-            <span className="block text-sm text-ink-muted">{c.released}</span>
+            <span className="block text-sm text-ink-muted">
+              {c.releaseCause[a.releaseCause] ?? c.released}
+            </span>
           </span>
         ) : (
           <ChargeTypeName type={a.chargeType} />
@@ -88,6 +96,13 @@ export function PaymentPage() {
             [c.allocated, <Money key="allocated" amount={p.allocated} />],
             [c.prepayment, <Money key="prepayment" amount={p.prepayment} />],
           );
+          if (p.reversedBy) {
+            rows.push(
+              [c.reversalDate, formatDateTime(p.reversedBy.createdAt, locale)],
+              [c.reversalMonth, billingMonthLabel(p.reversedBy.billingMonth, t)],
+              [c.reversalReason, <UserContent key="reason">{p.reversedBy.reason}</UserContent>],
+            );
+          }
           const entered = formatDateTime(p.createdAt, locale);
           return (
             <>
@@ -103,9 +118,21 @@ export function PaymentPage() {
                 }
                 badge={p.reversed && <Badge tone="neutral">{t.payments.reversed}</Badge>}
                 actions={
-                  <Link to="/payments" className="text-accent underline">
-                    {t.payments.back}
-                  </Link>
+                  <>
+                    {p.reallocatable && canEnter && (
+                      <Button variant="secondary" onClick={() => setDialog('reallocate')}>
+                        {t.payments.reallocate.action}
+                      </Button>
+                    )}
+                    {p.reversible && canReverse && (
+                      <Button variant="danger" onClick={() => setDialog('reverse')}>
+                        {t.payments.reverse.action}
+                      </Button>
+                    )}
+                    <Link to="/payments" className="text-accent underline">
+                      {t.payments.back}
+                    </Link>
+                  </>
                 }
               />
               <Panel>
@@ -139,6 +166,20 @@ export function PaymentPage() {
                     emptyMessage=""
                   />
                 </Panel>
+              )}
+              {dialog === 'reverse' && (
+                <ReversePaymentDialog
+                  payment={p}
+                  onDone={() => setDialog(undefined)}
+                  onClose={() => setDialog(undefined)}
+                />
+              )}
+              {dialog === 'reallocate' && (
+                <ReallocateDialog
+                  payment={p}
+                  onDone={() => setDialog(undefined)}
+                  onClose={() => setDialog(undefined)}
+                />
               )}
               <p className="text-sm text-ink-muted">
                 {c.entered}{' '}

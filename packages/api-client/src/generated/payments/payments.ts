@@ -29,6 +29,8 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AllocatePrepaymentParams,
+  AllocationLinesRequest,
   BadRequestResponse,
   ConflictResponse,
   EnterPaymentParams,
@@ -39,6 +41,10 @@ import type {
   PaymentEntryRequest,
   PaymentEntryResult,
   PaymentPage,
+  PaymentReallocationResult,
+  PaymentReversal,
+  PrepaymentAllocationResult,
+  ReallocatePaymentParams,
   UnauthorizedResponse
 } from '../model';
 
@@ -428,3 +434,339 @@ export function useGetPayment<TData = Awaited<ReturnType<typeof getPayment>>, TE
 
 
 
+export const getReversePaymentUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/payments/${id}/reverse`
+}
+
+/**
+ * Cancels a payment by a new payment row of kind `PAYMENT_REVERSAL` (feature 015 §2.5): the negated amount, the
+ * same plot, source, group and `receivedOn`, the reason, pointing at the payment. Every allocation of the payment
+ * still on a charge is taken back first (a release with the cause `PAYMENT_REVERSED`), so the charges it paid are
+ * owed again; the money is gone with the payment and does not become a prepayment. The reversal is booked in the
+ * billing month of `receivedOn` while that month is open, otherwise in the earliest open month. A cash payment
+ * keeps its receipt number and is shown reversed. A part of a split payment is reversed on its own; the other
+ * parts stay. A payment of an archived plot can still be reversed. Nothing is changed or deleted (the ledger is
+ * append-only). The answer (201) is the card of the reversed payment.
+ *
+ * 400 `VALIDATION_FAILED` with `reason` `REQUIRED` (absent or blank) or `TOO_LONG` (over 500 characters). 409
+ * `PAYMENT_ALREADY_REVERSED` when the payment was reversed before (also when two reversals meet) or the id is
+ * the id of a reversal row. An unknown payment, or one of another cooperative, is 404 `NOT_FOUND`. Requires
+ * `PAYMENTS_REVERSE`; written to the audit log (`PAYMENT_REVERSED`, entity type `PAYMENT` about the plot, with
+ * the amount of the reversal, the receipt number of a cash payment, the billing month and the reason).
+ * @summary Reverse a payment
+ */
+export const reversePayment = async (id: string,
+    paymentReversal: PaymentReversal, options?: Parameters<typeof nadelFetch>[1]): Promise<PaymentDetails> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return nadelFetch<PaymentDetails>(getReversePaymentUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(paymentReversal)
+  }
+);}
+
+
+
+
+
+export const getReversePaymentMutationKey = () => ['reversePayment'] as const;
+
+export const getReversePaymentMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reversePayment>>, TError,ReversePaymentMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reversePayment>>, TError,ReversePaymentMutationVariables, TContext> => {
+
+const mutationKey = getReversePaymentMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reversePayment>>, ReversePaymentMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  reversePayment(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReversePaymentMutationResult = NonNullable<Awaited<ReturnType<typeof reversePayment>>>
+    export type ReversePaymentMutationBody = PaymentReversal
+    export type ReversePaymentMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse
+    export type ReversePaymentMutationVariables = {id: string;data: PaymentReversal}
+
+    /**
+ * @summary Reverse a payment
+ */
+export const useReversePayment = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reversePayment>>, TError,ReversePaymentMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof reversePayment>>,
+        TError,
+        ReversePaymentMutationVariables,
+        TContext
+      > => {
+      return useMutation(getReversePaymentMutationOptions(options), queryClient);
+    }
+    export const getReallocatePaymentUrl = (id: string,
+    params: ReallocatePaymentParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/v1/payments/${id}/reallocate?${stringifiedParams}` : `/api/v1/payments/${id}/reallocate`
+}
+
+/**
+ * Moves the money of a payment between the plot's charges (feature 015 §2.6): every allocation of the payment
+ * still on a charge is taken back (a release with the cause `REALLOCATED`) and the new lines are written (origin
+ * `REALLOCATION`) in one transaction. The new lines are checked against the plot's open charges as if the
+ * payment's allocations were already taken back, and together may not exceed the payment's amount; what is not
+ * placed stays as prepayment. Without `lines` the proposal is saved (the plot's open charges as if released,
+ * filled in the order of `enterPayment`); with `lines` the caller's choice is (an empty list places nothing).
+ *
+ * With `preview=true` nothing is written (200): `current` lists what the payment places on charges now, and
+ * `proposal` every open charge of the plot as if released with `proposed` (`0.00` for a charge that receives
+ * nothing), the total placed and what stays as prepayment, with a `digest`. With `preview=false` the releases and
+ * the new allocations are saved (201), with the same answer. The `digest` covers the payment, what is left of
+ * each of its allocations and the open charges as if released; sent with the `digest` of a preview that no
+ * longer matches, the save is 409 `PREVIEW_OUTDATED` and writes nothing.
+ *
+ * 400 `VALIDATION_FAILED`: `lines[j].chargeId` not an open charge of the plot (`NOT_FOUND`) or named twice
+ * (`DUPLICATE`), `lines[j].amount` not above zero (`AMOUNT_NOT_POSITIVE`); 400 `ALLOCATION_EXCEEDS_PAYMENT` when
+ * the lines together exceed the payment (`errors[{field: lines}]`); 400 `ALLOCATION_EXCEEDS_CHARGE` when a line
+ * exceeds what is open on its charge (`errors[{field: lines[j].amount}]`). 409 `PAYMENT_ALREADY_REVERSED` for a
+ * reversed payment or the id of a reversal row. An unknown payment, or one of another cooperative, is 404
+ * `NOT_FOUND`. Requires `PAYMENTS_ENTER`; a save is written to the audit log (`PAYMENT_REALLOCATED`, entity type
+ * `PAYMENT` about the plot, with the payment's amount, `receivedOn`, receipt number of a cash payment, and
+ * `lines` old and new, each line as `<charge type code or name> <YYYY-MM of the service start> <amount>`).
+ * @summary Preview or save a new allocation of a saved payment
+ */
+export const reallocatePayment = async (id: string,
+    allocationLinesRequest: AllocationLinesRequest,
+    params: ReallocatePaymentParams, options?: Parameters<typeof nadelFetch>[1]): Promise<PaymentReallocationResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return nadelFetch<PaymentReallocationResult>(getReallocatePaymentUrl(id,params),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(allocationLinesRequest)
+  }
+);}
+
+
+
+
+
+export const getReallocatePaymentMutationKey = () => ['reallocatePayment'] as const;
+
+export const getReallocatePaymentMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reallocatePayment>>, TError,ReallocatePaymentMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reallocatePayment>>, TError,ReallocatePaymentMutationVariables, TContext> => {
+
+const mutationKey = getReallocatePaymentMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reallocatePayment>>, ReallocatePaymentMutationVariables> = (props) => {
+          const {id,data,params} = props ?? {};
+
+          return  reallocatePayment(id,data,params,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReallocatePaymentMutationResult = NonNullable<Awaited<ReturnType<typeof reallocatePayment>>>
+    export type ReallocatePaymentMutationBody = AllocationLinesRequest
+    export type ReallocatePaymentMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse
+    export type ReallocatePaymentMutationVariables = {id: string;data: AllocationLinesRequest;params: ReallocatePaymentParams}
+
+    /**
+ * @summary Preview or save a new allocation of a saved payment
+ */
+export const useReallocatePayment = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reallocatePayment>>, TError,ReallocatePaymentMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof reallocatePayment>>,
+        TError,
+        ReallocatePaymentMutationVariables,
+        TContext
+      > => {
+      return useMutation(getReallocatePaymentMutationOptions(options), queryClient);
+    }
+    export const getAllocatePrepaymentUrl = (id: string,
+    params: AllocatePrepaymentParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/v1/plots/${id}/prepayment/allocate?${stringifiedParams}` : `/api/v1/plots/${id}/prepayment/allocate`
+}
+
+/**
+ * Places the plot's prepayment (its payments, reversals negative, minus what they place on charges) on its open
+ * charges (feature 015 §2.6, "Allocate prepayment"), whether or not automatic allocation is on. Without `lines`
+ * the proposal is saved (the open charges filled in the order of `enterPayment` up to the prepayment); with
+ * `lines` the caller's choice is. Each line's money is taken from the plot's payments that still have money left,
+ * the oldest first (`receivedOn`, then the time they were entered), so a line may become several allocations
+ * (origin `PREPAYMENT_MANUAL`).
+ *
+ * With `preview=true` nothing is written (200): `proposal` lists every open charge of the plot with `proposed`,
+ * its `amount` is the prepayment, `allocatedTotal` the total placed and `prepayment` what stays, with a `digest`
+ * (the plot, its prepayment and its open charges). With `preview=false` the allocations are saved (201), with the
+ * same answer; a `digest` of a preview that no longer matches is 409 `PREVIEW_OUTDATED` and writes nothing.
+ *
+ * 409 `NOTHING_TO_ALLOCATE` when the plot has no prepayment or no open charge. 400 `VALIDATION_FAILED`: an empty
+ * `lines` (`REQUIRED`), the lines as in `reallocatePayment`; 400 `ALLOCATION_EXCEEDS_PAYMENT` when the lines
+ * together exceed the prepayment (`errors[{field: lines}]`); 400 `ALLOCATION_EXCEEDS_CHARGE` as in
+ * `reallocatePayment`. An unknown plot, or one of another cooperative, is 404 `PLOT_NOT_FOUND`. Requires
+ * `PAYMENTS_ENTER`; a save is written to the audit log (`PREPAYMENT_ALLOCATED`, entity type `PAYMENT` about the
+ * plot, with `lines` as in `PAYMENT_REALLOCATED` and their `total`).
+ * @summary Preview or save an allocation of the plot's prepayment by hand
+ */
+export const allocatePrepayment = async (id: string,
+    allocationLinesRequest: AllocationLinesRequest,
+    params: AllocatePrepaymentParams, options?: Parameters<typeof nadelFetch>[1]): Promise<PrepaymentAllocationResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return nadelFetch<PrepaymentAllocationResult>(getAllocatePrepaymentUrl(id,params),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(allocationLinesRequest)
+  }
+);}
+
+
+
+
+
+export const getAllocatePrepaymentMutationKey = () => ['allocatePrepayment'] as const;
+
+export const getAllocatePrepaymentMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof allocatePrepayment>>, TError,AllocatePrepaymentMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof allocatePrepayment>>, TError,AllocatePrepaymentMutationVariables, TContext> => {
+
+const mutationKey = getAllocatePrepaymentMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof allocatePrepayment>>, AllocatePrepaymentMutationVariables> = (props) => {
+          const {id,data,params} = props ?? {};
+
+          return  allocatePrepayment(id,data,params,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AllocatePrepaymentMutationResult = NonNullable<Awaited<ReturnType<typeof allocatePrepayment>>>
+    export type AllocatePrepaymentMutationBody = AllocationLinesRequest
+    export type AllocatePrepaymentMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse
+    export type AllocatePrepaymentMutationVariables = {id: string;data: AllocationLinesRequest;params: AllocatePrepaymentParams}
+
+    /**
+ * @summary Preview or save an allocation of the plot's prepayment by hand
+ */
+export const useAllocatePrepayment = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof allocatePrepayment>>, TError,AllocatePrepaymentMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof allocatePrepayment>>,
+        TError,
+        AllocatePrepaymentMutationVariables,
+        TContext
+      > => {
+      return useMutation(getAllocatePrepaymentMutationOptions(options), queryClient);
+    }

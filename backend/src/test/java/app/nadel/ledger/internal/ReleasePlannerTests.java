@@ -141,6 +141,30 @@ class ReleasePlannerTests {
     }
 
     @Test
+    void theStateAfterThePlannedReleasesEqualsTheStateAfterWritingThem() {
+        // the FS 2.6 reallocation: the preview reads the open amounts as if the payment's allocations were released
+        ChargeEntry membership = ledger.charge(MEMBERSHIP, "600.00", "2026-01-01");
+        ChargeEntry electricity = ledger.charge(ELECTRICITY, "250.00", "2026-02-01");
+        PaymentEntry payment = ledger.pay("700.00", "2026-10-28");
+        ledger.allocate(payment, membership, "600.00");
+        ledger.allocate(payment, electricity, "100.00");
+        ledger.allocate(ledger.pay("50.00", "2026-10-28"), electricity, "50.00");
+        PlotLedgerState before = ledger.state();
+        List<Release> releases = ReleasePlanner.forPayment(payment.id(), before.allocations(),
+                ReleaseCause.REALLOCATED);
+
+        PlotLedgerState asIf = before.afterReleases(releases);
+
+        ledger.release(releases);
+        assertThat(asIf).isEqualTo(ledger.state());
+        assertThat(asIf.charge(membership.id()).orElseThrow().open()).isEqualTo(money("600.00"));
+        assertThat(asIf.charge(electricity.id()).orElseThrow().open()).isEqualTo(money("200.00"));
+        assertThat(asIf.payment(payment.id()).orElseThrow().left()).isEqualTo(money("700.00"));
+        assertThat(asIf.prepayment()).isEqualTo(money("700.00"));
+        assertThat(before.afterReleases(List.of())).isSameAs(before);
+    }
+
+    @Test
     void aFullyReleasedAllocationIsNotReleasedAgain() {
         ChargeEntry membership = ledger.charge(MEMBERSHIP, "600.00", "2026-01-01");
         PaymentEntry payment = ledger.pay("600.00", "2026-10-28");

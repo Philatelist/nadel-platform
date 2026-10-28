@@ -22,9 +22,15 @@ class LedgerAuditActionsTests {
     }
 
     @Test
-    void thePaymentActionIsAnAuditActionOfTheContract() {
+    void thePaymentActionsAreAuditActionsOfTheContract() {
         assertThat(AuditAction.fromValue(LedgerAuditPublisher.Action.PAYMENT_RECORDED.name()))
                 .isEqualTo(AuditAction.PAYMENT_RECORDED);
+        assertThat(AuditAction.fromValue(LedgerAuditPublisher.Action.PAYMENT_REVERSED.name()))
+                .isEqualTo(AuditAction.PAYMENT_REVERSED);
+        assertThat(AuditAction.fromValue(LedgerAuditPublisher.Action.PAYMENT_REALLOCATED.name()))
+                .isEqualTo(AuditAction.PAYMENT_REALLOCATED);
+        assertThat(AuditAction.fromValue(LedgerAuditPublisher.Action.PREPAYMENT_ALLOCATED.name()))
+                .isEqualTo(AuditAction.PREPAYMENT_ALLOCATED);
         assertThat(AuditEntityType.fromValue(LedgerAuditPublisher.PAYMENT)).isEqualTo(AuditEntityType.PAYMENT);
     }
 

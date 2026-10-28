@@ -457,7 +457,7 @@ class PaymentService {
         return new Split(input.getPayerMemberId(), parts);
     }
 
-    private static @Nullable List<Line> lines(@Nullable List<PaymentLineInput> input) {
+    static @Nullable List<Line> lines(@Nullable List<PaymentLineInput> input) {
         if (input == null) {
             return null;
         }
@@ -475,7 +475,7 @@ class PaymentService {
      * {@code ALLOCATION_EXCEEDS_CHARGE} for the lines that exceed what is open on their charge. The field names start
      * with {@code prefix} ({@code ""} for one plot, {@code split.parts[i].} for a part of a split).
      */
-    private static List<Line> checked(String prefix, Money amount, List<Line> lines, PlotLedgerState state) {
+    static List<Line> checked(String prefix, Money amount, List<Line> lines, PlotLedgerState state) {
         List<Violation> violations = AllocationPlanner.validate(amount, lines, state.charges());
         if (violations.isEmpty()) {
             return lines;
@@ -528,7 +528,7 @@ class PaymentService {
         return changes;
     }
 
-    private static ApiProblemException invalid(List<FieldProblem> errors) {
+    static ApiProblemException invalid(List<FieldProblem> errors) {
         return new ApiProblemException(HttpStatus.BAD_REQUEST, ProblemCodes.VALIDATION_FAILED,
                 "The request is not valid.", errors);
     }

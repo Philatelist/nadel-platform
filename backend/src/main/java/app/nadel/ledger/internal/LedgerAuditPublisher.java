@@ -23,8 +23,8 @@ import org.springframework.stereotype.Component;
  * reversed (entity type {@code COMMON_CONSUMER_RUN}, label {@code from/to}), or the retry of a losses node or common
  * consumer item and a change of how a common consumer is shared (entity type {@code METER} about the meter, label its
  * name), or a booked recalculation (entity type {@code RECALCULATION}, label its months {@code from/to}, published in
- * one {@code AuditBatch} with the change that caused it, feature 012), or a payment entered (entity type
- * {@code PAYMENT}, feature 015; the payer note sealed). A {@code CHARGE} or {@code PAYMENT} entry is about the plot whose
+ * one {@code AuditBatch} with the change that caused it, feature 012), or a payment entered, reversed or reallocated
+ * or a plot's prepayment allocated by hand (entity type {@code PAYMENT}, feature 015; the payer note sealed). A {@code CHARGE} or {@code PAYMENT} entry is about the plot whose
  * account changed: the entity id is the plot's id, so the log links to the plot card, and the label its number (user
  * content). Values are codes and parameters: the charge type as
  * {@code base:<CODE>} or its stored name, amounts with two decimals, ISO dates, the billing month as {@code YYYY-MM},
@@ -60,7 +60,10 @@ class LedgerAuditPublisher {
         COMMON_CONSUMER_RUN_REVERSED,
         COMMON_CONSUMER_BILLING_CHANGED,
         RECALCULATION_BOOKED,
-        PAYMENT_RECORDED
+        PAYMENT_RECORDED,
+        PAYMENT_REVERSED,
+        PAYMENT_REALLOCATED,
+        PREPAYMENT_ALLOCATED
     }
 
     private final ApplicationEventPublisher events;

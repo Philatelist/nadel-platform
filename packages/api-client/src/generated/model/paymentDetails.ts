@@ -46,4 +46,8 @@ export interface PaymentDetails {
   createdAt: string;
   /** The current name of the member who entered the payment; absent when unknown */
   createdByName?: string;
+  /** True when the caller may reverse the payment now (`PAYMENTS_REVERSE`, the payment not reversed) */
+  reversible: boolean;
+  /** True when the caller may reallocate the payment now (`PAYMENTS_ENTER`, the payment not reversed) */
+  reallocatable: boolean;
 }

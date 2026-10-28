@@ -116,4 +116,49 @@ describe('PaymentPage', () => {
     renderCard();
     expect(screen.queryByText('Інші частини цього платежу')).not.toBeInTheDocument();
   });
+
+  it('hides the actions when the server flags are false', () => {
+    payment = { ...base(), reversible: false, reallocatable: false };
+    renderCard();
+    expect(screen.queryByRole('button', { name: 'Сторнувати' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Перерозподілити' })).not.toBeInTheDocument();
+  });
+
+  it('shows the actions when the server flags are true', () => {
+    payment = { ...base(), reversible: true, reallocatable: true };
+    renderCard();
+    expect(screen.getByRole('button', { name: 'Сторнувати' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Перерозподілити' })).toBeInTheDocument();
+  });
+
+  it('lists releases with their cause and shows the reversal', () => {
+    payment = {
+      ...base(),
+      reversed: true,
+      reversedBy: {
+        id: 'r1',
+        reason: 'Помилка касира',
+        billingMonth: '2026-11',
+        createdAt: '2026-11-02T10:00:00Z',
+        createdByName: 'Іваненко Петро',
+      },
+    };
+    (payment.allocations as unknown[]).push({
+      id: 'a3',
+      chargeId: 'c1',
+      chargeType: type,
+      serviceFrom: '2026-01-01',
+      serviceTo: '2026-01-31',
+      accruedOn: '2026-01-01',
+      amount: '-400.00',
+      releaseCause: 'PAYMENT_REVERSED',
+      system: true,
+      createdAt: '2026-11-02T10:00:00Z',
+    });
+    renderCard();
+    expect(screen.getByText('Повернено: платіж сторновано')).toBeInTheDocument();
+    expect(screen.getByText('Помилка касира')).toBeInTheDocument();
+    expect(screen.getByText('Причина сторнування')).toBeInTheDocument();
+    expect(screen.getAllByText('Сторновано').length).toBeGreaterThan(0);
+  });
 });
