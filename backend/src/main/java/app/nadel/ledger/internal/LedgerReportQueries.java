@@ -1,5 +1,6 @@
 package app.nadel.ledger.internal;
 
+import app.nadel.ledger.CashReceiptData;
 import app.nadel.ledger.ChargedPart;
 import app.nadel.ledger.ChargedRow;
 import app.nadel.ledger.ChargedRowKind;
@@ -107,6 +108,8 @@ import org.springframework.transaction.annotation.Transactional;
  * {@link #lossesRunsInRange} and {@link #commonConsumerRunsInRange}: the nodes or consumers of the runs overlapping the
  * range as stored, booked and reversed, with the distinct plots that have a regular charge of the run for the node (a
  * part with its {@code node_meter_id}) or the consumer (its calculation's {@code consumerMeterId}).
+ * <p>
+ * {@link #cashReceipt}: the payment group of a printed cash receipt, read by {@link CashReceiptQueries}.
  */
 @Component
 class LedgerReportQueries implements LedgerReadModel {
@@ -452,11 +455,20 @@ class LedgerReportQueries implements LedgerReadModel {
     private final EntityManager entityManager;
     private final ChargeTypeCatalog chargeTypes;
     private final Clock clock;
+    private final CashReceiptQueries cashReceipts;
 
-    LedgerReportQueries(EntityManager entityManager, ChargeTypeCatalog chargeTypes, Clock clock) {
+    LedgerReportQueries(EntityManager entityManager, ChargeTypeCatalog chargeTypes, Clock clock,
+            CashReceiptQueries cashReceipts) {
         this.entityManager = entityManager;
         this.chargeTypes = chargeTypes;
         this.clock = clock;
+        this.cashReceipts = cashReceipts;
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<CashReceiptData> cashReceipt(UUID paymentId) {
+        return cashReceipts.find(Objects.requireNonNull(paymentId, "paymentId"));
     }
 
     @Override

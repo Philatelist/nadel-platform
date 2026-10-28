@@ -19,7 +19,8 @@
  * reversal and adjustment of a range of days and of every water charge of the plots asked, the open reading interval
  * items of the "not charged" queue per meter, and the booked losses and common consumer runs of a range as
  * {@link app.nadel.ledger.LossesRunNodeRow} and {@link app.nadel.ledger.CommonConsumerRunLineRow}; after payments, the
- * paid amounts and prepayment as of a day and the {@link app.nadel.ledger.PaymentRow} of the payments report), and the
+ * paid amounts and prepayment as of a day and the {@link app.nadel.ledger.PaymentRow} of the payments report; for the
+ * documents of feature 016 the {@link app.nadel.ledger.CashReceiptData} of a printed cash receipt), and the
  * port {@link app.nadel.ledger.PaymentNotes} (the payer notes for the payments report, only with {@code MEMBERS_VIEW}:
  * the one documented exception to "no personal data"). Everything else is
  * internal: the entities, the pure
@@ -51,7 +52,7 @@
  * {@code settings} ({@code CooperativeSettings}), {@code members} ({@code MemberDirectory}: the payer of a payment),
  * {@code privacy} ({@code PersonalDataCipher}: the payer note), {@code money}, {@code identity}, {@code audit},
  * {@code problem} and {@code tenancy}; {@code imports} depends on it (the opening balances sheet) and {@code reports}
- * reads it through {@code LedgerReadModel}.
+ * and {@code documents} read it through {@code LedgerReadModel}.
  */
 @org.springframework.modulith.ApplicationModule(displayName = "Ledger and charges")
 package app.nadel.ledger;

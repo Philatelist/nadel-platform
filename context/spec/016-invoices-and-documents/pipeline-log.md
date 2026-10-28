@@ -137,3 +137,15 @@ introduction (tables via Flyway, RLS-free job storage), Supply-chain CI job with
     `general-purpose`; no Open Questions section kept; noted for the final report.
   - AUTO: `<!-- not-user-reviewed -->` marker not kept (Phase 1 decisions and the owner's mid-run decisions stand in for the plan review); plan listed in the final report.
 - Phase 2 done.
+- Phase 3 started. Delegation rules: scratchpad/delegation-rules.md (shared by every builder).
+- Slice 1 web task done (react-frontend): contract GET /payments/{id}/receipt.pdf (tag documents), ReceiptButton, usePdfAction, i18n; pnpm typecheck/lint/test green (web 828 tests), RED shown.
+- User decision (28.10.2026): slices 1–6 "without tests" = builders write the listed tests but run none (compile check only:
+  `./mvnw -q test-compile`, `pnpm -r typecheck && pnpm -r lint`); each slice committed without review; after Slice 6 the Verify
+  commands of slices 1–6 run (failures fixed), then each slice is reviewed with its verify run (deferred Slice Review Loop), then
+  Slice 7. Overrides the per-slice Verify-before-commit and the review gate for slices 1–6.
+- Slice 2 task 1 done (postgres-database, started early in parallel): V28__documents.sql (invoice, certificate, document_counter, permissions), DocumentsTenantIsolationTests, DocumentsAppendOnlyTests, DocumentTableTestSupport, SeedBaseRolesTests; test-compile only. Extra index certificate_plot_idx. Demo wipe left for Slice 5.
+- Stopped the previous 015 review run (pids file add1cc85-…/review-run.pids: make up 67153, mvn 67175, node 67318, java 67458): it was rebuilding backend/target while builders compiled (rule: a later run stops a previous review run). Ports 8080/5173 free.
+- Slice 1 backend task done (spring-backend): documents module, PDF layer, AmountInWords, CashReceipts, ReceiptController (implements
+  the whole generated DocumentsApi), LedgerReadModel.cashReceipt, PDFBox 3.0.8 (+fontbox, pdfbox-io, commons-logging 1.3.6), IBM Plex
+  Sans 1.1.0 TTF (₴ present) + OFL, ADR 0017 draft. Builder decisions: no-permission non-owner 403 before lookup, owner of part of a
+  group 404; number words in the bundle. Orchestrator: `./mvnw -q test-compile` exit 0. Tests written, not run (owner rule).

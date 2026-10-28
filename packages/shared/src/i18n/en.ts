@@ -1894,6 +1894,10 @@ export const en = {
       },
     },
   },
+  receipts: {
+    print: 'Print receipt',
+    printing: 'Preparing the receipt…',
+  },
   reports: {
     title: 'Reports',
     intro: 'Build a report on screen and download it as an Excel file.',
@@ -2663,6 +2667,7 @@ export const en = {
     PERIOD_IN_FUTURE: 'A future month cannot be charged',
     PREVIEW_OUTDATED: 'The charges changed since the preview. Preview again before booking.',
     PAYMENT_ALREADY_REVERSED: 'The payment has already been reversed',
+    RECEIPT_NOT_AVAILABLE: 'A receipt is printed only for a cash payment',
     NOTHING_TO_ALLOCATE: 'There is no prepayment to allocate',
     CHARGE_IN_CLOSED_MONTH: 'The billing month is closed: the correction is made by an adjustment',
     PLOT_HAS_CHARGES: 'The plot has charges, so it cannot be deleted',

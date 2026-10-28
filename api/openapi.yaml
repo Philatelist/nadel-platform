@@ -70,6 +70,10 @@ tags:
     description: >-
       Report templates of the cooperative: Excel forms with placeholders that the app fills in, the fixed tax report
       slot, their versions and their archive
+  - name: documents
+    description: >-
+      Documents the app prints as PDF files from what it has booked (cash receipts; later invoices and debt
+      certificates)
 
 paths:
   /me:
@@ -3189,6 +3193,45 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+
+  /payments/{id}/receipt.pdf:
+    get:
+      tags: [documents]
+      operationId: getPaymentReceiptPdf
+      summary: The cash receipt of a payment as a PDF file
+      description: |
+        The printed receipt (A5) of a cash payment (feature 016): the cooperative's requisites, the receipt number and
+        date, the plots, the payer's name (and the note) only for a caller who may also view members (`MEMBERS_VIEW`),
+        the amount in figures and words and how it was placed on the charges. A split payment (a group of parts of one
+        payer) gives one receipt with every part. A reversed payment is printed with the mark "reversed". The file is
+        made on request from the ledger and is not stored; the same payment gives the same bytes.
+
+        A bank payment has no receipt: 409 `RECEIPT_NOT_AVAILABLE`. An unknown payment, one of another cooperative and
+        the id of a reversal row are 404 `NOT_FOUND`. Requires `PAYMENTS_VIEW`, or the caller is a member who owns
+        every plot of the payment's group (otherwise 404, as for any plot that is not theirs).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The receipt, sent as an attachment
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
 
   /payments/{id}/reverse:
     post:

@@ -5,6 +5,7 @@ import { useLocale, useT } from '../../i18n';
 import { useCan } from '../../me';
 import { UserContent } from '../UserContent';
 import { Button, Money, Notice, Panel, buttonClass } from '../ui';
+import { ReceiptButton } from './ReceiptButton';
 
 /**
  * What the treasurer sees after a save: for cash the receipt number, large; for a bank payment the saved payment.
@@ -56,6 +57,7 @@ export function PaymentSaved({
             {s.openCard}
           </Link>
         )}
+        <ReceiptButton payment={payment} />
         <Button onClick={onAnother}>{s.another}</Button>
       </div>
     </Panel>

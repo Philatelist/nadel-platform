@@ -4,6 +4,7 @@ export * from './generated/billing/billing';
 export * from './generated/charges/charges';
 export * from './generated/common-consumer-runs/common-consumer-runs';
 export * from './generated/charge-types/charge-types';
+export * from './generated/documents/documents';
 export * from './generated/imports/imports';
 export * from './generated/losses-runs/losses-runs';
 export * from './generated/me/me';

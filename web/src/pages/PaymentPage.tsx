@@ -11,6 +11,7 @@ import { ChargeTypeName } from '../components/ChargeTypeName';
 import { billingMonthLabel } from '../components/charges/billingMonth';
 import { AllocatePrepaymentDialog } from '../components/payments/AllocatePrepaymentDialog';
 import { ReallocateDialog } from '../components/payments/ReallocateDialog';
+import { ReceiptButton } from '../components/payments/ReceiptButton';
 import { ReversePaymentDialog } from '../components/payments/ReversePaymentDialog';
 import { servicePeriodLabel } from '../components/payments/paymentLabels';
 import { QueryBoundary } from '../components/QueryBoundary';
@@ -128,6 +129,7 @@ export function PaymentPage() {
                 badge={p.reversed && <Badge tone="neutral">{t.payments.reversed}</Badge>}
                 actions={
                   <>
+                    <ReceiptButton payment={p} />
                     {p.reallocatable && canEnter && (
                       <Button variant="secondary" onClick={() => setDialog('reallocate')}>
                         {t.payments.reallocate.action}

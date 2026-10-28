@@ -54,7 +54,7 @@ cooperative that is not reversed, and a reversal never target an adjustment or a
 | `PaymentsChanged(tenantId, plotIds)` | Published inside the transaction of every change of payments or allocations of plots (feature 015: a payment entered, one event with every plot of a split; later slices a reversal, a reallocation, a prepayment allocation by hand or automatically), never empty, at most 500 plots. `PlotStatusRefresher` recomputes the debt and prepayment of those plots. Ids only |
 | `PaymentSource` (`CASH`, `BANK`) | Where the money of a payment came from (feature 015; column `payment.source`, V27); 016 adds the bank statement import |
 | `PaymentNotes` | The payer notes of payments for the payments report (feature 015 §6), implemented by `internal.PaymentNotesReader`: `@PreAuthorize(MEMBERS_VIEW)`, `Propagation.MANDATORY`, opened with `PaymentNoteCipher`. The one documented way personal data leaves the ledger for the reports |
-| `LedgerReadModel` (with `MonthTypeTotals`, `MonthGrouping`, `MonthStatus`, `PlotDebts`, `PaymentRow`, `PaymentFilter`, `CorrectionRow`, `CorrectionKind`, `CorrectionSource`, `CorrectionCause`, `ChargedRow`, `ChargedRowKind`, `ChargedSource` (with `TARIFF` for the water rows), `ChargedPart`, `LossesRunNodeRow`, `LossesRunNodeOutcome`, `CommonConsumerRunLineRow`, `CommonConsumerRunLineOutcome`, `RunStatus`) | The read facade of the reports (feature 013), implemented by `internal.LedgerReportQueries`; see The read model of the reports |
+| `LedgerReadModel` (with `MonthTypeTotals`, `MonthGrouping`, `MonthStatus`, `PlotDebts`, `PaymentRow`, `PaymentFilter`, `CorrectionRow`, `CorrectionKind`, `CorrectionSource`, `CorrectionCause`, `ChargedRow`, `ChargedRowKind`, `ChargedSource` (with `TARIFF` for the water rows), `ChargedPart`, `LossesRunNodeRow`, `LossesRunNodeOutcome`, `CommonConsumerRunLineRow`, `CommonConsumerRunLineOutcome`, `RunStatus`, `CashReceiptData`) | The read facade of the reports (feature 013) and of the documents (feature 016: `cashReceipt`), implemented by `internal.LedgerReportQueries`; see The read model of the reports |
 
 Everything else is in `internal`.
 
@@ -531,6 +531,15 @@ Methods:
   accrual basis; `prepaymentAsOf`; `monthTotals` paid as of two days while `effective` equals `GET /billing-months`;
   `payments` by months, days, source, plot and limit; `PaymentNotes` with and without `MEMBERS_VIEW`; the caller's
   transaction).
+- `cashReceipt(paymentId)` (the printed cash receipt, feature 016 §2.8, read by `documents`): the payment group of
+  any of its parts as one `CashReceiptData`: group, receipt number (null for a bank payment, which is answered too, with
+  its source, so the caller refuses it), source, day received, the member who entered it (`created_by`), the payer
+  member and every `PAYMENT` part in the order entered with its plot, amount, `reversedAt` (the `created_at` of its
+  reversal), its `placements` now (per charge the net of its allocations and releases above `0.00`, in the planner's
+  order: debt date, charge type position, service start, booking time, id; with the charge's type, opening flag,
+  billing month and service period) and `unallocated` (`amount` minus the placements, `0.00` once reversed). Empty for
+  an unknown id, another cooperative's payment and a reversal row. No payer note (`PaymentNotes`). Implemented by
+  `internal.CashReceiptQueries` (four small reads). Tests: `documents` `CashReceiptTests`, `ReceiptAccessTests`.
 - `lossesRunsInRange(from, to)` and `commonConsumerRunsInRange(from, to)` (money rules 6.6, 6.7): the nodes of every
   losses run (`LossesRunNodeRow`) and the consumers of every common consumer run (`CommonConsumerRunLineRow`) whose
   range overlaps `from`..`to`, as booked (`losses_run_node`, `common_consumer_run_line`: outcome, consumption, children,
