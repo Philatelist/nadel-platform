@@ -1,12 +1,12 @@
 # Pipeline log — 014 personal data encryption
 
-- Status: running
-- Phase: 5 (publish)
-- Branch: 014-personal-data-encryption (planned) · Base: main @ 67e3916
+- Status: finished
+- Phase: 6 (review run after the merge-of-main CI run)
+- Branch: 014-personal-data-encryption · Base: main @ 67e3916
 - Requirement: document docs/features/014-personal-data-encryption.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
-- Publish: pr+checks · PR: https://github.com/Philatelist/nadel-platform/pull/53 · Checks: red: security (OSV, owner decision), e2e (fix attempt 1)
-- Review run: on (pending)
+- Publish: pr+checks · PR: https://github.com/Philatelist/nadel-platform/pull/53 · Checks: green (run 40605763935 on 019e1b9); re-run after merging main
+- Review run: on (starts once the merge-of-main run is green)
 
 ## Project facts
 
@@ -130,3 +130,7 @@ wiring vs protected `.github/`.
   - End-to-end: 6 failed, 1 flaky of 138 (acceptance members list, language-purity uk/en, meters-acceptance §2.10 #1 and plot 9 replacement chain, plots-acceptance §2.3 #6 and §2.2). CI fix attempt 1 delegated to react-frontend (root cause from the CI artefact).
 - CI fix attempt 1: debounce hook no longer navigates when the URL already holds the value (cancelled pending lazy-route link clicks: meters §2.10 #1, plots §2.3 #6, plots §2.2 flaky, language-purity retries); uk search hint without Latin («точна адреса ел. пошти», spec change log); acceptance.spec members search updated to the new rule; meters plot 9 chain date read from the API (UTC vs Kyiv day, pre-existing). Local: typecheck, lint, format, vitest 764/764.
 - Owner decision (2026-10-28): accept GHSA-gcqx-w48m-w2h4 (deepmerge 4.3.1 via @expo/config, mobile build tooling only) in osv-scanner.toml and pnpm-workspace.yaml auditConfig.ignoreGhsas, reason as given by the owner; revisit in phase 5.
+- deepmerge accepted in 019e1b9 (chore(security)).
+- CI run 40605763935 on 019e1b9: Backend, Clients, End-to-end (full), SAST and Security green.
+- PR #54 (plot 9 e2e wait) merged to main after PR #53 opened; GitHub marked #53 conflicting in `ownership.spec.ts` and `ownership-acceptance.spec.ts` (same lines, comment wording only).
+- Owner decision (2026-10-28): merge main into the spec branch, keep main's comment in both files, push, wait for CI, then start the review run.

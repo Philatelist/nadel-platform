@@ -40,7 +40,7 @@ async function openPlot(page: Page, plot: CreatedPlot): Promise<void> {
 async function openDemoPlot(page: Page, number: string, search: string): Promise<void> {
   await page.goto('/plots');
   await main(page).getByLabel(search, { exact: true }).fill(number);
-  // the search reaches the URL after its debounce: wait for it, so no late write can undo the navigation below
+  // the search reaches the URL after its debounce: wait for it, so a late write cannot cancel the click below
   await expect(page).toHaveURL(new RegExp(`[?&]q=${number}(&|$)`));
   await rows(page).getByRole('link', { name: number, exact: true }).first().click();
   await expect(page.getByRole('heading', { level: 1, name: `Plot ${number}` })).toBeVisible();
