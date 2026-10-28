@@ -133,7 +133,14 @@ function columnHeader(
 ): ReactNode {
   if (column.chargeTypeId !== undefined) {
     const type = chargeTypes.find((candidate) => candidate.id === column.chargeTypeId);
-    if (type) return chargeTypeName(type, t);
+    if (type) {
+      const family = column.key.split('.')[0] ?? '';
+      const columns: Readonly<Record<string, string>> = t.reports.chargeTypeColumns;
+      const text = columns[family];
+      return text === undefined
+        ? chargeTypeName(type, t)
+        : format(text, { chargeType: chargeTypeName(type, t) });
+    }
   }
   return texts[column.key] ?? column.key;
 }

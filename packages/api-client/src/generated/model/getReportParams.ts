@@ -18,6 +18,7 @@ import type { ReportMeterKindsParameter } from './reportMeterKindsParameter';
 import type { ReportMinDebtParameter } from './reportMinDebtParameter';
 import type { ReportOlderThanDaysParameter } from './reportOlderThanDaysParameter';
 import type { ReportResourceParameter } from './reportResourceParameter';
+import type { ReportSourceParameter } from './reportSourceParameter';
 import type { ReportStatusesParameter } from './reportStatusesParameter';
 import type { ReportStreetParameter } from './reportStreetParameter';
 import type { ReportToMonthParameter } from './reportToMonthParameter';
@@ -98,4 +99,8 @@ waterSource?: ReportWaterSourceParameter;
  * @maxItems 2
  */
 correctionKinds?: ReportCorrectionKindsParameter;
+/**
+ * Where the money of a payment came from: `CASH` taken at the cooperative's cash desk (the payment carries a receipt number), `BANK` a bank transfer entered by hand (no receipt number, an optional bank document number)
+ */
+source?: ReportSourceParameter;
 };

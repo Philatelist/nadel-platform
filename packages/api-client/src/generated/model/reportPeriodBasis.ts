@@ -11,7 +11,7 @@
  */
 
 /**
- * What the period of a report means; the filter label says so. `BILLING_MONTHS`: the billing months the entries were booked in. `SERVICE_DAYS`: the days a service was provided (the service period of a charge). `READING_DATES`: the dates of meter readings.
+ * What the period of a report means; the filter label says so. `BILLING_MONTHS`: the billing months the entries were booked in. `SERVICE_DAYS`: the days a service was provided (the service period of a charge). `READING_DATES`: the dates of meter readings. `PAYMENT_DATES`: the days payments were received.
  */
 export type ReportPeriodBasis = typeof ReportPeriodBasis[keyof typeof ReportPeriodBasis];
 
@@ -20,4 +20,5 @@ export const ReportPeriodBasis = {
   BILLING_MONTHS: 'BILLING_MONTHS',
   SERVICE_DAYS: 'SERVICE_DAYS',
   READING_DATES: 'READING_DATES',
+  PAYMENT_DATES: 'PAYMENT_DATES',
 } as const;

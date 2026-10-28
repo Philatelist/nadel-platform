@@ -16,6 +16,9 @@ import app.nadel.ledger.LossesRunNodeRow;
 import app.nadel.ledger.MonthGrouping;
 import app.nadel.ledger.MonthStatus;
 import app.nadel.ledger.MonthTypeTotals;
+import app.nadel.ledger.PaymentFilter;
+import app.nadel.ledger.PaymentRow;
+import app.nadel.ledger.PaymentSource;
 import app.nadel.ledger.PlotDebts;
 import app.nadel.ledger.RunStatus;
 import app.nadel.meters.MeterKind;
@@ -50,19 +53,30 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * The ledger's read facade for the reports ({@link LedgerReadModel}, feature 013). Native queries over {@code charge}
- * (and {@code billing_month}), aggregated in the database, in the caller's transaction and under RLS like every ledger
- * query.
+ * The ledger's read facade for the reports ({@link LedgerReadModel}, feature 013 and 015). Native queries over
+ * {@code charge}, {@code allocation} and {@code payment} (and {@code billing_month}), aggregated in the database, in
+ * the caller's transaction and under RLS like every ledger query. An allocation counts as of a day from its value date,
+ * {@code GREATEST(payment.received_on, charge.accrued_on)} (technical considerations 2.3): a release names the payment
+ * and charge of its allocation, so it shares the date without a column of its own.
  * <p>
  * {@link #monthTotals}: the billing month grouping uses the predicate of the billing months screen
  * ({@code ChargeRepository.totalsPerMonthAndType}: every row booked in the month, of every kind, {@code SUM(amount)}),
  * so the effective total of a month and type is the screen's figure cent for cent; the split by kind uses
- * {@code FILTER} clauses over the same rows. The service month grouping takes the month of {@code service_from}.
+ * {@code FILTER} clauses over the same rows, and the paid amount a lateral sum of the allocations of each row counted
+ * as of the day ({@code allocation_charge_idx}). The service month grouping takes the month of {@code service_from}.
  * <p>
- * {@link #debtsAsOf}: {@code DebtCalculator}'s rule in SQL over the charges dated on or before the day, one row per plot
- * and charge type (the signed sum and the oldest unpaid debt date of the type); the plot's total is the sum of its types
- * and its oldest date the earliest of theirs, which is {@code DebtCalculator}'s answer because a reversal and an
- * adjustment always share the plot and charge type of the charge they correct. Plots go 500 per {@code IN} list.
+ * {@link #debtsAsOf}: {@code DebtCalculator}'s rule after payments in SQL over the charges dated on or before the day
+ * and their allocations counted as of the day, one row per plot and charge type (charged, paid and the oldest unpaid
+ * debt date of the type); the plot's totals are the sums of its types and its oldest date the earliest of theirs, which
+ * is {@code DebtCalculator}'s answer because a reversal and an adjustment always share the plot and charge type of the
+ * charge they correct. The prepayment is a second query per chunk (payments received by the day minus allocations
+ * counted as of the day, per plot, never below zero; {@code payment_plot_received_idx}, {@code allocation_plot_idx}).
+ * Plots go 500 per {@code IN} list. {@link #prepaymentAsOf} is that query over every plot, summed.
+ * <p>
+ * {@link #paidByType}: the allocations counted as of {@code to} to the regular charges whose {@code service_from} lies
+ * in the range, per charge type. {@link #payments}: the {@code PAYMENT} rows of the billing months or of the days
+ * received, with their net allocations and whether a reversal points at them ({@code payment_received_idx},
+ * {@code payment_month_idx}).
  * <p>
  * {@link #corrections}: the {@code REVERSAL} and {@code ADJUSTMENT} rows of the billing months, each joined to the charge
  * it corrects ({@code reverses_charge_id} or {@code adjusts_charge_id}) and to its {@code recalculation}; the source is
@@ -109,9 +123,17 @@ class LedgerReportQueries implements LedgerReadModel {
                    coalesce(sum(c.amount) filter (where c.kind = 'OPENING'), 0) as opening,
                    coalesce(sum(c.amount) filter (where c.kind = 'REVERSAL'), 0) as reversals,
                    coalesce(sum(c.amount) filter (where c.kind = 'ADJUSTMENT'), 0) as adjustments,
-                   sum(c.amount) as effective
+                   sum(c.amount) as effective,
+                   coalesce(sum(pd.paid), 0) as paid
             from charge c
             %3$s
+            left join lateral (
+                select sum(a.amount) as paid
+                from allocation a
+                join payment p on p.id = a.payment_id
+                where a.charge_id = c.id
+                  and greatest(p.received_on, c.accrued_on) <= :asOf
+            ) pd on true
             where %4$s between :from and :to
               and (:allTypes = true or c.charge_type_id in (:typeIds))
               and (:allPlots = true or c.plot_id in (:plotIds))
@@ -131,9 +153,12 @@ class LedgerReportQueries implements LedgerReadModel {
     private static final int CHUNK = 500;
 
     /**
-     * Per plot and charge type: the signed sum of the counted charges, and the oldest debt date among the counted charges
-     * that are neither a reversal nor an adjustment, are not reversed by a counted reversal, and whose amount plus their
-     * counted adjustments is above zero ({@code DebtCalculator.of} over the same lines).
+     * Per plot and charge type: the signed sum of the counted charges, the net allocations to them counted as of the
+     * day (value date {@code GREATEST(received_on, accrued_on)}; every counted charge is dated on or before the day, so
+     * this is the day the payment was received), and the oldest debt date among the counted charges that are neither a
+     * reversal nor an adjustment, are not reversed by a counted reversal, and whose amount plus their counted
+     * adjustments minus what is paid on them is above zero ({@code DebtCalculator.of} after payments over the same
+     * lines).
      */
     private static final String DEBTS_AS_OF = """
             with lines as (
@@ -150,22 +175,98 @@ class LedgerReportQueries implements LedgerReadModel {
                 where a.adjusts_charge_id is not null
                 group by a.adjusts_charge_id
             ),
+            paid as (
+                select l.id, sum(a.amount) as amount
+                from lines l
+                join allocation a on a.charge_id = l.id
+                join payment p on p.id = a.payment_id
+                where greatest(p.received_on, l.accrued_on) <= :asOf
+                group by l.id
+            ),
             unpaid as (
                 select l.plot_id, l.charge_type_id, min(l.accrued_on) as oldest
                 from lines l
                 left join adjusted a on a.id = l.id
+                left join paid p on p.id = l.id
                 where l.reverses_charge_id is null
                   and l.adjusts_charge_id is null
                   and not exists (select 1 from lines r where r.reverses_charge_id = l.id)
-                  and l.amount + coalesce(a.amount, 0) > 0
+                  and l.amount + coalesce(a.amount, 0) - coalesce(p.amount, 0) > 0
                 group by l.plot_id, l.charge_type_id
+            ),
+            types as (
+                select t.plot_id, t.charge_type_id, sum(t.amount) as charged, coalesce(sum(p.amount), 0) as paid
+                from lines t
+                left join paid p on p.id = t.id
+                group by t.plot_id, t.charge_type_id
             )
-            select t.plot_id, t.charge_type_id, sum(t.amount) as debt, u.oldest
-            from lines t
+            select t.plot_id, t.charge_type_id, t.charged, t.paid, u.oldest
+            from types t
             left join unpaid u on u.plot_id = t.plot_id and u.charge_type_id = t.charge_type_id
-            group by t.plot_id, t.charge_type_id, u.oldest
             order by t.plot_id, t.charge_type_id
             """;
+
+    /**
+     * Per plot with a payment received on or before the day: the payments received by then (a reversal keeps the day of
+     * its original and counts negative) minus the allocations of the plot counted as of the day, never below zero.
+     */
+    private static final String PREPAYMENT_AS_OF = """
+            with received as (
+                select p.plot_id, sum(p.amount) as amount
+                from payment p
+                where (:allPlots = true or p.plot_id in (:plotIds))
+                  and p.received_on <= :asOf
+                group by p.plot_id
+            ),
+            placed as (
+                select a.plot_id, sum(a.amount) as amount
+                from allocation a
+                join payment p on p.id = a.payment_id
+                join charge c on c.id = a.charge_id
+                where (:allPlots = true or a.plot_id in (:plotIds))
+                  and greatest(p.received_on, c.accrued_on) <= :asOf
+                group by a.plot_id
+            )
+            select r.plot_id, greatest(r.amount - coalesce(d.amount, 0), 0) as prepayment
+            from received r
+            left join placed d on d.plot_id = r.plot_id
+            """;
+
+    /** Per charge type, the allocations counted as of {@code :to} to the regular charges starting in the range. */
+    private static final String PAID_BY_TYPE = """
+            select c.charge_type_id, sum(a.amount) as paid
+            from allocation a
+            join charge c on c.id = a.charge_id
+            join payment p on p.id = a.payment_id
+            where c.kind <> 'OPENING'
+              and c.service_from between :from and :to
+              and greatest(p.received_on, c.accrued_on) <= :to
+            group by c.charge_type_id
+            """;
+
+    /**
+     * The payments (never a reversal row) of the billing months or of the days received, of one source or both and of
+     * some plots or all, with their net allocations and whether a reversal points at them.
+     */
+    private static final String PAYMENTS = """
+            select p.id, p.receipt_number, p.bank_reference, p.received_on,
+                   to_char(cast(bm.month as timestamp), 'YYYY-MM') as month, p.plot_id, p.payer_member_id, p.source,
+                   p.amount,
+                   coalesce((select sum(a.amount) from allocation a where a.payment_id = p.id), 0) as allocated,
+                   exists (select 1 from payment r where r.reverses_payment_id = p.id) as reversed, p.group_id
+            from payment p
+            join billing_month bm on bm.id = p.billing_month_id
+            where p.kind = 'PAYMENT'
+              and ((:byDays = true and p.received_on between :from and :to)
+                   or (:byDays = false and bm.month between :fromMonth and :toMonth))
+              and (:allSources = true or p.source = :source)
+              and (:allPlots = true or p.plot_id in (:plotIds))
+            order by p.received_on, p.created_at, p.id
+            limit :limit
+            """;
+
+    /** Bound to a date parameter that a flag switches off. */
+    private static final LocalDate NO_DATE = LocalDate.of(2000, 1, 1);
 
     /**
      * The reversals and adjustments booked in the billing months, with the charge each corrects and its recalculation.
@@ -361,11 +462,12 @@ class LedgerReportQueries implements LedgerReadModel {
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public List<MonthTypeTotals> monthTotals(YearMonth fromMonth, YearMonth toMonth, Set<UUID> chargeTypeIds,
-            @Nullable Set<UUID> plotIds, MonthGrouping grouping) {
+            @Nullable Set<UUID> plotIds, MonthGrouping grouping, LocalDate asOf) {
         Objects.requireNonNull(fromMonth, "fromMonth");
         Objects.requireNonNull(toMonth, "toMonth");
         Objects.requireNonNull(chargeTypeIds, "chargeTypeIds");
         Objects.requireNonNull(grouping, "grouping");
+        Objects.requireNonNull(asOf, "asOf");
         if (toMonth.isBefore(fromMonth)) {
             throw new IllegalArgumentException("toMonth is before fromMonth");
         }
@@ -382,6 +484,7 @@ class LedgerReportQueries implements LedgerReadModel {
                 .setParameter("typeIds", orNone(chargeTypeIds))
                 .setParameter("allPlots", plotIds == null)
                 .setParameter("plotIds", plotIds == null ? NONE : List.copyOf(plotIds))
+                .setParameter("asOf", asOf)
                 .getResultList();
         return rows.stream().map(row -> totals((Object[]) row)).toList();
     }
@@ -403,8 +506,11 @@ class LedgerReportQueries implements LedgerReadModel {
                     .getResultList();
             for (Object row : rows) {
                 Object[] values = (Object[]) row;
-                byPlot.get((UUID) values[0]).add((UUID) values[1], money(values[2]), date(values[3]));
+                byPlot.get((UUID) values[0]).add((UUID) values[1], money(values[2]), money(values[3]),
+                        date(values[4]));
             }
+            prepayments(asOf, ids.subList(from, Math.min(ids.size(), from + CHUNK)))
+                    .forEach((plotId, prepayment) -> byPlot.get(plotId).prepayment = prepayment);
         }
         Map<UUID, PlotDebts> debts = new LinkedHashMap<>();
         byPlot.forEach((plotId, sum) -> debts.put(plotId, sum.debts(plotId, asOf)));
@@ -476,6 +582,83 @@ class LedgerReportQueries implements LedgerReadModel {
             charged.put((UUID) values[0], money(values[1]));
         }
         return charged;
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Map<UUID, Money> paidByType(LocalDate from, LocalDate to) {
+        requireRange(from, to);
+        Map<UUID, Money> paid = new LinkedHashMap<>();
+        for (Object row : entityManager.createNativeQuery(PAID_BY_TYPE)
+                .setParameter("from", from)
+                .setParameter("to", to)
+                .getResultList()) {
+            Object[] values = (Object[]) row;
+            paid.put((UUID) values[0], money(values[1]));
+        }
+        return paid;
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Money prepaymentAsOf(LocalDate asOf) {
+        Objects.requireNonNull(asOf, "asOf");
+        return prepayments(asOf, null).values().stream().reduce(Money.ZERO, Money::plus);
+    }
+
+    /** The prepayment as of the day of each plot that has one above zero; {@code plotIds} null means every plot. */
+    private Map<UUID, Money> prepayments(LocalDate asOf, @Nullable List<UUID> plotIds) {
+        Map<UUID, Money> prepayments = new LinkedHashMap<>();
+        for (Object row : entityManager.createNativeQuery(PREPAYMENT_AS_OF)
+                .setParameter("allPlots", plotIds == null)
+                .setParameter("plotIds", plotIds == null ? NONE : plotIds)
+                .setParameter("asOf", asOf)
+                .getResultList()) {
+            Object[] values = (Object[]) row;
+            Money prepayment = money(values[1]);
+            if (prepayment.signum() > 0) {
+                prepayments.put((UUID) values[0], prepayment);
+            }
+        }
+        return prepayments;
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public List<PaymentRow> payments(PaymentFilter filter, int limit) {
+        Objects.requireNonNull(filter, "filter");
+        if (limit < 1) {
+            throw new IllegalArgumentException("limit is below 1");
+        }
+        Set<UUID> plotIds = filter.plotIds();
+        if (plotIds != null && plotIds.isEmpty()) {
+            return List.of();
+        }
+        boolean byDays = filter.from() != null;
+        PaymentSource source = filter.source();
+        List<?> rows = entityManager.createNativeQuery(PAYMENTS)
+                .setParameter("byDays", byDays)
+                .setParameter("from", byDays ? filter.from() : NO_DATE)
+                .setParameter("to", byDays ? filter.to() : NO_DATE)
+                .setParameter("fromMonth", byDays ? NO_DATE : Objects.requireNonNull(filter.fromMonth()).atDay(1))
+                .setParameter("toMonth", byDays ? NO_DATE : Objects.requireNonNull(filter.toMonth()).atDay(1))
+                .setParameter("allSources", source == null)
+                .setParameter("source", source == null ? "" : source.name())
+                .setParameter("allPlots", plotIds == null)
+                .setParameter("plotIds", plotIds == null ? NONE : List.copyOf(plotIds))
+                .setParameter("limit", limit)
+                .getResultList();
+        return rows.stream().map(row -> payment((Object[]) row)).toList();
+    }
+
+    private static PaymentRow payment(Object[] v) {
+        Money amount = money(v[8]);
+        Money allocated = money(v[9]);
+        boolean reversed = (Boolean) v[10];
+        return new PaymentRow((UUID) v[0], v[1] == null ? null : ((Number) v[1]).longValue(), (String) v[2],
+                Objects.requireNonNull(date(v[3])), YearMonth.parse((String) v[4]), (UUID) v[5], (UUID) v[6],
+                PaymentSource.valueOf((String) v[7]), amount, allocated,
+                reversed ? Money.ZERO : amount.minus(allocated), reversed, (UUID) v[11]);
     }
 
     @Override
@@ -686,16 +869,23 @@ class LedgerReportQueries implements LedgerReadModel {
                 row[13] == null ? null : CorrectionCause.valueOf((String) row[13]), (String) row[14], (UUID) row[15]);
     }
 
-    /** The types of one plot as they come from the query, folded into its debts. */
+    /** The types of one plot as they come from the query, and its prepayment, folded into its debts. */
     private static final class Accumulator {
 
-        private final Map<UUID, Money> byType = new LinkedHashMap<>();
-        private Money total = Money.ZERO;
+        private final Map<UUID, Money> chargedByType = new LinkedHashMap<>();
+        private final Map<UUID, Money> paidByType = new LinkedHashMap<>();
+        private final Map<UUID, Money> debtByType = new LinkedHashMap<>();
+        private Money charged = Money.ZERO;
+        private Money paid = Money.ZERO;
+        private Money prepayment = Money.ZERO;
         private @Nullable LocalDate oldest;
 
-        void add(UUID chargeTypeId, Money debt, @Nullable LocalDate oldestOfType) {
-            byType.put(chargeTypeId, debt);
-            total = total.plus(debt);
+        void add(UUID chargeTypeId, Money chargedOfType, Money paidOfType, @Nullable LocalDate oldestOfType) {
+            chargedByType.put(chargeTypeId, chargedOfType);
+            paidByType.put(chargeTypeId, paidOfType);
+            debtByType.put(chargeTypeId, chargedOfType.minus(paidOfType));
+            charged = charged.plus(chargedOfType);
+            paid = paid.plus(paidOfType);
             if (oldestOfType != null && (oldest == null || oldestOfType.isBefore(oldest))) {
                 oldest = oldestOfType;
             }
@@ -703,7 +893,8 @@ class LedgerReportQueries implements LedgerReadModel {
 
         PlotDebts debts(UUID plotId, LocalDate asOf) {
             Integer days = oldest == null ? null : Math.toIntExact(ChronoUnit.DAYS.between(oldest, asOf));
-            return new PlotDebts(plotId, byType, total, oldest, days);
+            return new PlotDebts(plotId, chargedByType, paidByType, debtByType, charged, paid, charged.minus(paid),
+                    prepayment, oldest, days);
         }
     }
 
@@ -728,7 +919,7 @@ class LedgerReportQueries implements LedgerReadModel {
         MonthStatus status = row[1] == null ? null : MonthStatus.valueOf((String) row[1]);
         return new MonthTypeTotals(YearMonth.parse((String) row[0]), status, (UUID) row[2],
                 Math.toIntExact(((Number) row[3]).longValue()), money(row[4]), money(row[5]), money(row[6]),
-                money(row[7]), money(row[8]));
+                money(row[7]), money(row[8]), money(row[9]));
     }
 
     /** The exact database sum ({@code numeric(14,2)} rows): {@code Money.of} only fixes the scale of a zero. */

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import app.nadel.identity.Permission;
 import app.nadel.money.Money;
 import app.nadel.problem.ApiProblemException;
 import app.nadel.tenancy.TenantContext;
@@ -18,6 +19,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import nadel.contract.model.ReportTemplateFieldType;
@@ -25,6 +27,7 @@ import nadel.contract.model.ReportTemplateValueReason;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 
@@ -210,7 +213,7 @@ class TemplateValuesTests extends ReportsTestSupport {
 
         LocalDate today = LocalDate.now(KYIV);
         LocalDate asOf = TenantContext.runAs(tenant, () -> tx.execute(status -> values.resolver(today.minusDays(3),
-                today.plusDays(30), ReportLanguage.UK, "x", Instant.now()).asOf()));
+                today.plusDays(30), ReportLanguage.UK, "x", Instant.now(), Set.of(Permission.REPORTS_VIEW)).asOf()));
         assertThat(asOf).isEqualTo(today);
     }
 
@@ -311,6 +314,78 @@ class TemplateValuesTests extends ReportsTestSupport {
         }
     }
 
+    /**
+     * Feature 015 §6: P1 pays 40.00 in cash on 10.02.2025 (25.00 on its January membership, the charge after its
+     * -5.00 adjustment; 15.00 left), P2 pays 20.00 in cash on 15.03.2025 that is reversed, and 52.50 by bank on
+     * 05.04.2025, after the period, on its electricity. Paid on the charges of the period as of its end: membership
+     * 25.00, electricity 0.00 (its charge starts in December and its payment came later); the prepayment at the end of
+     * the period: P1's 15.00. The payments rows are those of the payments report for the days of the period.
+     */
+    @Test
+    void thePaymentFieldsAreTheLedgersAsOfTheEndOfThePeriodAndThePaymentsReportsRows() throws Exception {
+        worked();
+        UUID januaryOfP1 = ownerJdbc().queryForObject("select id from charge where plot_id = ? and kind = 'REGULAR' "
+                + "and service_from = date '2025-01-01'", UUID.class, p1);
+        allocate(payment(p1, "CASH", "40.00", LocalDate.of(2025, 2, 10), 5L, null, null), januaryOfP1, "25.00");
+        reversePayment(payment(p2, "CASH", "20.00", LocalDate.of(2025, 3, 15), 6L, null, null));
+        UUID electricityOfP2 = ownerJdbc().queryForObject("select id from charge where plot_id = ? "
+                + "and charge_type_id = ?", UUID.class, p2, electricity);
+        allocate(payment(p2, "BANK", "52.50", LocalDate.of(2025, 4, 5), null, "ПД-3", null), electricityOfP2,
+                "52.50");
+
+        Map<String, TemplateValue> single = singles(ReportLanguage.UK, "totals.paid.MEMBERSHIP",
+                "totals.paid.ELECTRICITY", "totals.paid." + custom, "totals.prepayment");
+        assertThat(single.get("totals.paid.MEMBERSHIP")).isEqualTo(money("25.00"));
+        assertThat(single.get("totals.paid.ELECTRICITY")).isEqualTo(money("0.00"));
+        assertThat(single.get("totals.paid." + custom)).isEqualTo(money("0.00"));
+        assertThat(single.get("totals.prepayment")).isEqualTo(money("15.00"));
+
+        List<Map<String, TemplateValue>> payments = rows(TemplateRowSet.PAYMENTS, ReportLanguage.UK);
+        assertThat(payments).hasSize(2);
+        Map<String, TemplateValue> cash = payments.getFirst();
+        assertThat(cash.keySet()).noneMatch(key -> key.contains("payer") || key.contains("note"));
+        assertThat(cash.get("rows.payments.source")).isEqualTo(text("Готівка"));
+        assertThat(cash.get("rows.payments.document")).isEqualTo(text("5"));
+        assertThat(cash.get("rows.payments.reversed")).isEqualTo(text("Ні"));
+        assertThat(payments.getLast().get("rows.payments.reversed")).isEqualTo(text("Так"));
+        assertThat(rows(TemplateRowSet.PAYMENTS, ReportLanguage.EN).getLast().get("rows.payments.reversed"))
+                .isEqualTo(text("Yes"));
+
+        // the same values as the payments report for the days of the period
+        List<Map<String, String>> report = rows(sheet(preview("/api/v1/reports/payments?from=" + FROM + "&to=" + TO),
+                0));
+        assertThat(report).hasSize(2);
+        for (int index = 0; index < 2; index++) {
+            for (String column : List.of("receivedOn", "billingMonth", "document", "number", "street", "amount",
+                    "allocated", "prepayment")) {
+                assertThat(json(payments.get(index).get("rows.payments." + column))).as(column)
+                        .isEqualTo(report.get(index).get(column));
+            }
+        }
+    }
+
+    @Test
+    void aPaymentFieldIsRefusedWithoutPaymentsViewAndTheOtherFieldsAreNot() {
+        worked();
+
+        boolean checked = TenantContext.runAs(tenant, () -> tx.execute(status -> {
+            TemplateValues.Resolver resolver = values.resolver(FROM, TO, ReportLanguage.UK, "Звітний", NOW,
+                    Set.of(Permission.REPORTS_VIEW, Permission.MEMBERS_VIEW));
+            assertThat(resolver.single("totals.debt")).isPresent();
+            assertThat(resolver.rows(TemplateRowSet.PLOTS)).hasSize(2);
+            assertThatThrownBy(() -> resolver.single("totals.paid.MEMBERSHIP"))
+                    .isInstanceOf(AccessDeniedException.class);
+            assertThatThrownBy(() -> resolver.single("totals.prepayment")).isInstanceOf(AccessDeniedException.class);
+            assertThatThrownBy(() -> resolver.rows(TemplateRowSet.PAYMENTS)).isInstanceOf(AccessDeniedException.class);
+            // nothing at all without the base permission
+            TemplateValues.Resolver none = values.resolver(FROM, TO, ReportLanguage.UK, "Звітний", NOW,
+                    Set.of(Permission.PAYMENTS_VIEW));
+            assertThatThrownBy(() -> none.single("totals.debt")).isInstanceOf(AccessDeniedException.class);
+            return true;
+        }));
+        assertThat(checked).isTrue();
+    }
+
     @Test
     void aRowSetOverTheRowCapIsTooLarge() {
         worked();
@@ -374,7 +449,7 @@ class TemplateValuesTests extends ReportsTestSupport {
     /** What a test reads from the resolver, inside one transaction of the cooperative. */
     private <T> T fill(ReportLanguage language, Function<TemplateValues.Resolver, T> read) {
         return TenantContext.runAs(tenant, () -> tx.execute(status -> read.apply(values.resolver(FROM, TO, language,
-                "Звітний CHAIRMAN", NOW))));
+                "Звітний CHAIRMAN", NOW, Set.of(Permission.REPORTS_VIEW, Permission.PAYMENTS_VIEW)))));
     }
 
     private Map<String, TemplateValue> singles(ReportLanguage language, String... keys) {

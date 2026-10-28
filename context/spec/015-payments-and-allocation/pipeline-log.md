@@ -126,3 +126,6 @@ red plots; guide PDFs.
 - Slice 5 committed 08e3d1d; review round 1: PASS (deadlock analysis: no cycle; minor notes in review-log).
 - Slice 6 backend: account + member account (same endpoint) + received (506 tests green). Builder choices: prepayment placements as a separate account list grouped per run; lists returned separately, client merges by date; CHARGES_VIEW-only custom role sees no payment rows.
 - Slice 6 verify: backend 504 tests 0 failures; pnpm typecheck/lint/test green.
+- Slice 6 committed f6b5f41; review round 1: PASS (minor notes in review-log).
+- Slice 7 backend: reports after payments, payments report, templates (467 tests green). Builder choices: payments report = month range + optional received-day range (days win); reversed payments listed but not in per-source totals; payments report counts as personal data; template payments row set has no payer; per-type column headers '<type>: <family>'.
+- Slice 7 verify: backend 444 tests 0 failures; pnpm typecheck/lint/test green.

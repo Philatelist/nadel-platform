@@ -53,7 +53,8 @@ cooperative that is not reversed, and a reversal never target an adjustment or a
 | `OpeningBalanceImport` (with `Row`, `Item`, `Plan`, `Problem`, `Action`) | The "Opening balances" sheet of the Excel import (slice 8), `plan`/`lock`/`apply` like `meters.MeterImport`; implemented by `internal.OpeningBalanceImportService`, see Opening balances from the import |
 | `PaymentsChanged(tenantId, plotIds)` | Published inside the transaction of every change of payments or allocations of plots (feature 015: a payment entered, one event with every plot of a split; later slices a reversal, a reallocation, a prepayment allocation by hand or automatically), never empty, at most 500 plots. `PlotStatusRefresher` recomputes the debt and prepayment of those plots. Ids only |
 | `PaymentSource` (`CASH`, `BANK`) | Where the money of a payment came from (feature 015; column `payment.source`, V27); 016 adds the bank statement import |
-| `LedgerReadModel` (with `MonthTypeTotals`, `MonthGrouping`, `MonthStatus`, `PlotDebts`, `CorrectionRow`, `CorrectionKind`, `CorrectionSource`, `CorrectionCause`, `ChargedRow`, `ChargedRowKind`, `ChargedSource` (with `TARIFF` for the water rows), `ChargedPart`, `LossesRunNodeRow`, `LossesRunNodeOutcome`, `CommonConsumerRunLineRow`, `CommonConsumerRunLineOutcome`, `RunStatus`) | The read facade of the reports (feature 013), implemented by `internal.LedgerReportQueries`; see The read model of the reports |
+| `PaymentNotes` | The payer notes of payments for the payments report (feature 015 §6), implemented by `internal.PaymentNotesReader`: `@PreAuthorize(MEMBERS_VIEW)`, `Propagation.MANDATORY`, opened with `PaymentNoteCipher`. The one documented way personal data leaves the ledger for the reports |
+| `LedgerReadModel` (with `MonthTypeTotals`, `MonthGrouping`, `MonthStatus`, `PlotDebts`, `PaymentRow`, `PaymentFilter`, `CorrectionRow`, `CorrectionKind`, `CorrectionSource`, `CorrectionCause`, `ChargedRow`, `ChargedRowKind`, `ChargedSource` (with `TARIFF` for the water rows), `ChargedPart`, `LossesRunNodeRow`, `LossesRunNodeOutcome`, `CommonConsumerRunLineRow`, `CommonConsumerRunLineOutcome`, `RunStatus`) | The read facade of the reports (feature 013), implemented by `internal.LedgerReportQueries`; see The read model of the reports |
 
 Everything else is in `internal`.
 
@@ -377,15 +378,23 @@ reading the ledger tables. Rules for every method:
   not read-only, transaction.
 - It aggregates in the database (parameterised native queries, no N+1) and answers ids, codes and `Money` only: **no
   personal data**, no names. The caller orders and names charge types (`tariffs.ChargeTypeCatalog`) and plots
-  (`plots.PlotCatalog`).
+  (`plots.PlotCatalog`). The one exception is the separate port `PaymentNotes` (feature 015 §6): the payer notes of
+  payments, opened only for a caller with `MEMBERS_VIEW` (`@PreAuthorize`), in the caller's transaction.
+- **Paid as of a day** (feature 015, technical considerations 2.3): an allocation counts from its **value date**,
+  `GREATEST(payment.received_on, charge.accrued_on)`; a release names the payment and the charge of the allocation it
+  takes back, so it shares that date and needs no column of its own (an allocation and its later release cancel out on
+  every day). A payment counts from the day it was received; a payment reversal keeps the day of its original
+  (`PaymentRecord.reversalOf`), so a reversed payment is never prepayment on any day.
 - Aggregates are bounded by their filters (months x charge types, or the plots asked for), so no row limit applies to
   them; `corrections` and `electricityCharged`, lists of single rows, take a `limit` (the caller passes its cap plus
   one); the runs of a range are bounded by the runs times the nodes or consumers of the tree.
 
 Methods:
 
-- `monthTotals(fromMonth, toMonth, chargeTypeIds, plotIds, grouping)` (charges by month, 013 §3.1): one
-  `MonthTypeTotals` per month and charge type that has a row: `status` (`OPEN`/`CLOSED` of the billing month; `null`
+- `monthTotals(fromMonth, toMonth, chargeTypeIds, plotIds, grouping, asOf)` (charges by month, 013 §3.1): one
+  `MonthTypeTotals` per month and charge type that has a row, with `paid` (feature 015 §6: the net allocations to the
+  charges of the group whose value date is on or before `asOf`, a lateral sum per charge row over
+  `allocation_charge_idx`; `effective` does not depend on `asOf`): `status` (`OPEN`/`CLOSED` of the billing month; `null`
   by service month), `plotCount` (distinct plots with any row of any kind in the group), the sums of `regular`,
   `opening`, `reversals` (negative) and `adjustments` (either sign), and `effective` = `SUM(amount)` of every row
   (money rules 5.4: charges plus adjustments minus reversals). `BILLING_MONTH` groups by `charge.billing_month_id`
@@ -398,20 +407,23 @@ Methods:
   `IllegalArgumentException`. Test: `LedgerReadModelTests` (a worked ledger with a reversal, an opening balance and
   later-month adjustments in both groupings, reconciliation with `GET /billing-months` for every listed month, the
   filters, another cooperative, the caller's transaction).
-- `debtsAsOf(asOf, chargeTypeIds, plotIds)` (plot balances and debtors, 013 §3.2 and §3.3): one `PlotDebts` per
-  distinct plot asked (a plot without counted charges, or an unknown id, is `PlotDebts.none`: no types, `0.00`, no
-  date), with `DebtCalculator`'s rule (money rules 2, 5.4, 9) applied in SQL to the charges with `accrued_on <= asOf`
-  of the given types (empty = every type): `byChargeType` is the signed sum per type (reversals negative, adjustments
-  with their sign, opening balances included; a type that sums to `0.00` is kept), `total` their sum, `oldestUnpaid`
-  the oldest `accrued_on` among the counted charges that are neither a reversal nor an adjustment, are not reversed by a
-  counted reversal and whose amount plus their counted adjustments is above `0.00` (payments are not counted by this
-  read; the reports gain their paid columns in feature 015 §6), and
-  `daysOverdue` = `asOf - oldestUnpaid` in days, computed here (null without a date). A reversal and an adjustment keep
+- `debtsAsOf(asOf, chargeTypeIds, plotIds)` (plot balances and debtors, 013 §3.2 and §3.3, 015 §6): one `PlotDebts` per
+  distinct plot asked (a plot without counted charges and without prepayment, or an unknown id, is `PlotDebts.none`:
+  no types, `0.00`, no date), with `DebtCalculator`'s rule after payments (money rules 2, 5.4, 9, feature 015 §2.5)
+  applied in SQL to the charges with `accrued_on <= asOf` of the given types (empty = every type) and to the
+  allocations counted as of `asOf`: `chargedByType` is the signed sum per type (reversals negative, adjustments with
+  their sign, opening balances included; a type that sums to `0.00` is kept), `paidByType` the net allocations to those
+  charges, `byChargeType` the debt (charged − paid), `charged`, `paid` and `total` their sums, `prepayment` the plot's
+  payments received on or before `asOf` minus all its allocations counted by then, never below zero (every type,
+  whatever the filter; a second query per chunk), `oldestUnpaid` the oldest `accrued_on` among the counted charges that
+  are neither a reversal nor an adjustment, are not reversed by a counted reversal and whose amount plus their counted
+  adjustments minus what is paid on them is above `0.00`, and `daysOverdue` = `asOf - oldestUnpaid` in days, computed
+  here (null without a date). The 5-argument `PlotDebts` constructor is the same for a plot without payments. A reversal and an adjustment keep
   the debt date and charge type of their charge, so both filters keep or drop a charge with its corrections, and the
   per-type answer folds into `DebtCalculator`'s per-plot one. The day is the debt date, not the booking time: an
   adjustment booked in March for a January charge counts as of any day from the charge's date, as on the account. As
-  of today with every type it equals the plot account and the `plot_status` cache for a plot without payments (both
-  subtract what payments pay on the charges). One query per 500 plots
+  of today with every type it equals the plot account and the `plot_status` cache, prepayment included. One query per
+  500 plots
   (`charge_plot_type_idx`). Test: `LedgerDebtsAsOfTests` (a worked ledger with a reversal, an opening balance,
   later-month adjustments, a fully adjusted and a reversed oldest charge, past days, the type filter, reconciliation
   with `GET /plots/{id}/account` and the status cache, another cooperative, the caller's transaction).
@@ -489,6 +501,23 @@ Methods:
   `0` without items or for an unknown id) the number of `not_charged_item` rows of kind `INTERVAL` and status `OPEN`
   (the items `GET /not-charged` lists) whose `meter_id` it is, 500 meters per query. Test:
   `LedgerOpenIntervalItemsTests` (open, resolved and other-kind items, another cooperative, the caller's
+  transaction).
+- `paidByType(from, to)` (report templates, `totals.paid.<type>`, 015 §6): per charge type the net allocations, counted
+  as of `to`, to the `REGULAR` charges whose `service_from` is from `from` to `to`: the charges `chargedByType` counts
+  for the same range (opening balances have no service period of the range), so paid and charged share the accrual
+  basis. A type without such allocations is absent (`0.00`). `to` before `from` is an `IllegalArgumentException`.
+- `prepaymentAsOf(asOf)` (report templates, `totals.prepayment`): the prepayment of every plot of the cooperative as of
+  the day (as in `debtsAsOf`), summed.
+- `payments(filter, limit)` (payments report, 015 §6): one `PaymentRow` per `PAYMENT` row of the `PaymentFilter`
+  (billing months **or** days received, optionally a source and some plots; null plots = every plot, empty = no rows):
+  receipt number, bank reference, day received, billing month, plot, payer member id, source, amount, `allocated` (its
+  net allocations now), `remaining` (`amount - allocated`, `0.00` once reversed), `reversed` (a `PAYMENT_REVERSAL`
+  points at it; the reversal row itself is never listed) and group. **Never the payer note** (`PaymentNotes`). Rows by
+  day received, time booked and id; at most `limit` (>= 1) rows. Test: `LedgerPaymentsReadModelTests` (the as-of rule
+  with a payment after the day, a release, an allocation to a later charge and a reversed payment; the type filter and
+  the prepayment; reconciliation with `GET /plots/{id}/account` as of today; `paidByType` and `chargedByType` on the same
+  accrual basis; `prepaymentAsOf`; `monthTotals` paid as of two days while `effective` equals `GET /billing-months`;
+  `payments` by months, days, source, plot and limit; `PaymentNotes` with and without `MEMBERS_VIEW`; the caller's
   transaction).
 - `lossesRunsInRange(from, to)` and `commonConsumerRunsInRange(from, to)` (money rules 6.6, 6.7): the nodes of every
   losses run (`LossesRunNodeRow`) and the consumers of every common consumer run (`CommonConsumerRunLineRow`) whose

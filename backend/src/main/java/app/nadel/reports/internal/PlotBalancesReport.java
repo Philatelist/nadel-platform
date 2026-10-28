@@ -29,21 +29,23 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 
 /**
- * Plot balances ({@code plot-balances}, functional spec 2.4, feature 013 §3.2): the debt of every active plot on a day,
- * without names. Filters: as of (default today, Kyiv), charge types (default all), street, statuses.
+ * Plot balances ({@code plot-balances}, functional spec 2.4, feature 013 §3.2, feature 015 §6): what every active plot
+ * was charged, what it paid, what it owes and its prepayment on a day, without names. Filters: as of (default today,
+ * Kyiv), charge types (default all), street, statuses.
  * <p>
  * Sheet {@code main}, one row per active plot that is not common land ({@code PlotCatalog.findActive}, natural order of
- * the number): {@code number}, {@code street}, {@code owners} (the number of current owners, never their names), one
- * debt column per charge type ({@link DebtColumns}), {@code total}, {@code oldestUnpaid}, {@code daysOverdue} and
- * {@code status}; the totals {@code all} sum the money columns of the rows listed. The debts are
- * {@code LedgerReadModel.debtsAsOf} on the day for the chosen types.
+ * the number): {@code number}, {@code street}, {@code owners} (the number of current owners, never their names), per
+ * charge type its charged, paid and debt columns ({@link DebtColumns}), {@code charged}, {@code paid}, {@code total}
+ * (the debt), {@code prepayment}, {@code oldestUnpaid}, {@code daysOverdue} and {@code status}; the totals {@code all}
+ * sum the money columns of the rows listed. The amounts are {@code LedgerReadModel.debtsAsOf} on the day for the chosen
+ * types (paid counts the allocations whose value date is on or before the day; the prepayment counts every type).
  * <p>
  * The status always counts every charge type. As of today it is the status on the map ({@code PlotStatuses.current},
  * the {@code plot_status} cache); for a past day it is worked out from the ledger on that day with today's thresholds
  * ({@code PlotStatuses.classify}) and the header note {@code PAST_DATE_STATUS} says so. With a charge type filter that
  * leaves out some type the note {@code STATUS_ALL_CHARGE_TYPES} says that the status still counts every type. The
  * status filter applies after the status is worked out. The note {@code OLDEST_UNPAID_IS_OLDEST_CHARGE} explains the
- * oldest unpaid date until payments exist.
+ * oldest unpaid date: the oldest charge that still has a debt after what payments pay on it.
  */
 @Component
 class PlotBalancesReport implements ReportDefinition {
@@ -52,6 +54,10 @@ class PlotBalancesReport implements ReportDefinition {
 
     private static final List<ReportFilterDefinition> FILTERS = List.of(new AsOfFilter(), new ChargeTypesFilter(),
             new StreetFilter(), new StatusesFilter());
+
+    /** The columns per charge type: charged, paid and debt side by side. */
+    static final List<DebtColumns.Family> FAMILIES = List.of(DebtColumns.Family.CHARGED, DebtColumns.Family.PAID,
+            DebtColumns.Family.DEBT);
 
     private final PlotCatalog plots;
     private final PlotOwners owners;
@@ -116,8 +122,11 @@ class PlotBalancesReport implements ReportDefinition {
         columns.add(Column.of("number", ReportColumnType.TEXT));
         columns.add(Column.of("street", ReportColumnType.TEXT));
         columns.add(Column.of("owners", ReportColumnType.INTEGER));
-        columns.addAll(DebtColumns.columns(types));
+        columns.addAll(DebtColumns.columns(types, FAMILIES));
+        columns.add(Column.of("charged", ReportColumnType.MONEY));
+        columns.add(Column.of("paid", ReportColumnType.MONEY));
         columns.add(Column.of("total", ReportColumnType.MONEY));
+        columns.add(Column.of("prepayment", ReportColumnType.MONEY));
         columns.add(Column.of("oldestUnpaid", ReportColumnType.DATE));
         columns.add(Column.of("daysOverdue", ReportColumnType.INTEGER));
         columns.add(Column.codes("status", "reports.filters.options.statuses"));
@@ -134,8 +143,11 @@ class PlotBalancesReport implements ReportDefinition {
             cells.add(Cell.of(plot.number()));
             cells.add(Cell.of(plot.street()));
             cells.add(Cell.of(balance.owners()));
-            cells.addAll(DebtColumns.cells(types, debt));
+            cells.addAll(DebtColumns.cells(types, FAMILIES, debt));
+            cells.add(Cell.of(debt.charged()));
+            cells.add(Cell.of(debt.paid()));
             cells.add(Cell.of(debt.total()));
+            cells.add(Cell.of(debt.prepayment()));
             cells.add(Cell.of(debt.oldestUnpaid()));
             cells.add(Cell.of(debt.daysOverdue()));
             cells.add(Cell.of(plotStatus == null ? null : plotStatus.name()));

@@ -17,7 +17,7 @@ import type { ReportFilter } from './reportFilter';
  */
 export interface ReportInfo {
   code: ReportCode;
-  /** True when the report holds names and contacts of people (only `debtors`) */
+  /** True when the report holds names of people (`debtors` with their contacts, `payments`) */
   personalData: boolean;
   /** The filters in the order the form shows them; the period comes first */
   filters: ReportFilter[];

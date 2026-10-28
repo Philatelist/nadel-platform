@@ -35,3 +35,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `2bf814c..08e3d1d` | PASS | — | deadlock analysis: no cycle (only `MonthClosing.close` takes month FOR UPDATE and holds no other ledger lock; a FOR SHARE on an already share-locked row does not queue behind it). Optional hardening: take plot ledger locks in `book` before the plan's month locks. minor: settings README line over wrap width; RecalculationService javadoc could name the `MonthClosing` argument |
+
+## Slice 6 — plot account, member account, billing months received and the permission matrix
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `08e3d1d..f6b5f41` | PASS | — | minor: a member receives the free-text reversal reason (not forbidden by the spec; could be gated by `PAYMENTS_VIEW`); account merge sorts by day only (same-day order by kind) |

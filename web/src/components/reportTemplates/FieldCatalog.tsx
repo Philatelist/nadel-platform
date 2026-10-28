@@ -6,8 +6,8 @@ import { Badge, Button, SearchField } from '../ui';
 import { useT } from '../../i18n';
 import { fieldDescription } from '../../reportTemplateFields';
 
-type Group = 'SINGLE' | 'PLOTS' | 'MONTHS' | 'METERS' | 'WATER';
-const groupOrder: readonly Group[] = ['SINGLE', 'PLOTS', 'MONTHS', 'METERS', 'WATER'];
+type Group = 'SINGLE' | 'PLOTS' | 'MONTHS' | 'METERS' | 'WATER' | 'PAYMENTS';
+const groupOrder: readonly Group[] = ['SINGLE', 'PLOTS', 'MONTHS', 'METERS', 'WATER', 'PAYMENTS'];
 
 /** Copies text; true when it worked. The legacy path covers a browser or page without the Clipboard API. */
 async function copyText(text: string): Promise<boolean> {

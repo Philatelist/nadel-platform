@@ -34,8 +34,9 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Component;
 
 /**
- * Debtors ({@code debtors}, functional spec 2.5, feature 013 §3.3): the plots whose debt today is over an amount or
- * older than a number of days, with the current owners' names and contacts, so the treasurer can call or write to them.
+ * Debtors ({@code debtors}, functional spec 2.5, feature 013 §3.3, feature 015 §6): the plots whose debt today, after
+ * what payments pay on their charges, is over an amount or older than a number of days, with the current owners' names
+ * and contacts, so the treasurer can call or write to them. A plot whose debt is fully paid is not listed.
  * It holds personal data: it needs {@code MEMBERS_VIEW} besides {@code REPORTS_VIEW} (the catalog hides it and the
  * endpoints answer 403 without it; {@link #load} checks it again), its audit entry says {@code personalData=true}, and
  * nothing here logs a name, phone or e-mail or puts one in an exception or the audit entry.
@@ -49,7 +50,8 @@ import org.springframework.stereotype.Component;
  * separated by {@code "; "}), {@code phones} (per owner its phones joined by {@code ", "}, the owners in the same order
  * separated by {@code "; "}, an owner without a phone left out), {@code emails} (the owners' e-mail addresses in the
  * same order separated by {@code "; "}, an owner without one left out), one debt column per charge type
- * ({@link DebtColumns}), {@code total}, {@code oldestUnpaid} and {@code daysOverdue}; the totals {@code all} sum the
+ * ({@link DebtColumns}, family {@code debt}), {@code total}, {@code oldestUnpaid} and {@code daysOverdue} (the oldest
+ * charge that still has a debt after payments); the totals {@code all} sum the
  * money columns of the rows listed. A plot without a current owner that matches is listed with empty owner cells: its
  * debt is still owed.
  */
@@ -115,7 +117,7 @@ class DebtorsReport implements ReportDefinition {
         columns.add(Column.of("owners", ReportColumnType.TEXT));
         columns.add(Column.of("phones", ReportColumnType.TEXT));
         columns.add(Column.of("emails", ReportColumnType.TEXT));
-        columns.addAll(DebtColumns.columns(types));
+        columns.addAll(DebtColumns.columns(types, List.of(DebtColumns.Family.DEBT)));
         columns.add(Column.of("total", ReportColumnType.MONEY));
         columns.add(Column.of("oldestUnpaid", ReportColumnType.DATE));
         columns.add(Column.of("daysOverdue", ReportColumnType.INTEGER));
@@ -131,7 +133,7 @@ class DebtorsReport implements ReportDefinition {
             cells.add(joined(people, MemberContacts::fullName));
             cells.add(joined(people, person -> person.phones().isEmpty() ? null : String.join(", ", person.phones())));
             cells.add(joined(people, MemberContacts::email));
-            cells.addAll(DebtColumns.cells(types, debt));
+            cells.addAll(DebtColumns.cells(types, List.of(DebtColumns.Family.DEBT), debt));
             cells.add(Cell.of(debt.total()));
             cells.add(Cell.of(debt.oldestUnpaid()));
             cells.add(Cell.of(debt.daysOverdue()));

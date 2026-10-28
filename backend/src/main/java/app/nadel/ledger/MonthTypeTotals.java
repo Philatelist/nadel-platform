@@ -7,9 +7,9 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
 /**
- * The charges of one month and one charge type ({@link LedgerReadModel#monthTotals}), split by kind. Every amount is
- * the exact database sum of the rows ({@code numeric(14,2)}), signed as booked: reversals are negative, adjustments
- * carry their own sign. Nothing is rounded.
+ * The charges of one month and one charge type ({@link LedgerReadModel#monthTotals}), split by kind, and what is paid
+ * on them. Every amount is the exact database sum of the rows ({@code numeric(14,2)}), signed as booked: reversals are
+ * negative, adjustments carry their own sign. Nothing is rounded.
  *
  * @param month        the billing month or the service month, as the grouping says
  * @param status       the status of the billing month; {@code null} when grouped by service month
@@ -21,9 +21,14 @@ import org.jspecify.annotations.Nullable;
  * @param adjustments  the sum of the {@code ADJUSTMENT} rows (either sign)
  * @param effective    the effective total (money rules 5.4): the sum of every row, charges plus adjustments minus
  *                     reversals; the amount the billing months screen shows for the type and month
+ * @param paid         what payments pay on the charges of the group as of the day asked (the net allocations to them
+ *                     whose value date, the later of the day the payment was received and the debt date of the
+ *                     charge, is on or before that day). The allocations go to the {@code REGULAR} and
+ *                     {@code OPENING} charges of the group; their corrections may be booked in other months, so a
+ *                     month's paid amount is not bounded by its own effective total
  */
 public record MonthTypeTotals(YearMonth month, @Nullable MonthStatus status, UUID chargeTypeId, int plotCount,
-        Money regular, Money opening, Money reversals, Money adjustments, Money effective) {
+        Money regular, Money opening, Money reversals, Money adjustments, Money effective, Money paid) {
 
     public MonthTypeTotals {
         Objects.requireNonNull(month, "month");
@@ -33,5 +38,6 @@ public record MonthTypeTotals(YearMonth month, @Nullable MonthStatus status, UUI
         Objects.requireNonNull(reversals, "reversals");
         Objects.requireNonNull(adjustments, "adjustments");
         Objects.requireNonNull(effective, "effective");
+        Objects.requireNonNull(paid, "paid");
     }
 }

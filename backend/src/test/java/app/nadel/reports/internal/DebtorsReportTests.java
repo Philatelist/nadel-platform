@@ -16,6 +16,7 @@ import app.nadel.reports.internal.PlotBalancesReportTests.Rows;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -68,6 +69,30 @@ class DebtorsReportTests extends ReportsTestSupport {
         assertThat(notes(preview)).containsExactly("OLDEST_UNPAID_IS_OLDEST_CHARGE");
         // the owner of 2019 no longer owns plot 1
         assertThat(sheet.toString()).doesNotContain("Колишній").doesNotContain("+380991112233");
+    }
+
+    /**
+     * Functional spec 2.11, feature 015 §6: the debt and its age are counted after payments. Plot 2 pays its 1 500.00
+     * and is no longer listed; plot 1 pays its 600.00 membership fee (120 days old), so what is left, 52.50 of
+     * electricity 30 days old, is neither above the amount nor older than the days.
+     */
+    @Test
+    void aPlotWhoseDebtIsPaidIsNotListedAndTheAgeIsThatOfTheOldestChargeLeftUnpaid() throws Exception {
+        UUID membershipOf2 = ownerJdbc().queryForObject("select id from charge where plot_id = ?", UUID.class, b2);
+        allocate(payment(b2, "CASH", "1500.00", today.minusDays(5), 1L, null, null), membershipOf2, "1500.00");
+        UUID membershipOf1 = ownerJdbc().queryForObject("select id from charge where plot_id = ? "
+                + "and charge_type_id = ?", UUID.class, b1, membership);
+        allocate(payment(b1, "BANK", "600.00", today.minusDays(3), null, "ПД-9", null), membershipOf1, "600.00");
+
+        JsonNode preview = body(send(treasurer, get(REPORT)).andExpect(status().isOk()));
+        assertThat(numbers(preview)).isEmpty();
+
+        // with any debt and any age, plot 1 is listed with what is left and the age of the electricity
+        JsonNode anyDebt = body(send(treasurer, get(REPORT).param("minDebt", "0.00").param("olderThanDays", "0"))
+                .andExpect(status().isOk()));
+        assertThat(numbers(anyDebt)).containsExactly("1", "3", "11");
+        assertThat(lines(anyDebt.get("sheets").get(0)).getFirst()).endsWith(
+                "| 0.00 52.50 52.50 " + daysAgo(30) + " 30");
     }
 
     @Test
@@ -182,7 +207,7 @@ class DebtorsReportTests extends ReportsTestSupport {
         assertThat(rows.text(7, 2)).isEqualTo("Власники");
         assertThat(rows.text(7, 3)).isEqualTo("Телефони");
         assertThat(rows.text(7, 4)).isEqualTo("Ел. пошта");
-        assertThat(rows.text(7, 5)).isEqualTo("Членський внесок");
+        assertThat(rows.text(7, 5)).isEqualTo("Членський внесок: борг");
         assertThat(rows.text(8, 2)).isEqualTo("Шевченко Тарас Григорович; Коваль Марія");
         assertThat(rows.text(8, 3)).isEqualTo("+380501112233, +380671112233; +380631112233");
         assertThat(rows.text(10, 0)).isEqualTo("Усього");

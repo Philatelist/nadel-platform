@@ -13,21 +13,21 @@ The module adds no money rule. It reads only through the public read facades tha
 
 | Endpoint | Operation | Who |
 |---|---|---|
-| `GET /reports` | `listReports` | `REPORTS_VIEW`; the reports the caller may run with their filter definitions (`debtors` only with `MEMBERS_VIEW` too) |
-| `GET /reports/{code}` | `getReport` | `REPORTS_VIEW` (`debtors` also `MEMBERS_VIEW`); the preview: per sheet the columns, the first 200 rows, the totals and the row count |
+| `GET /reports` | `listReports` | `REPORTS_VIEW`; the reports the caller may run with their filter definitions (`debtors` only with `MEMBERS_VIEW` too, `payments` only with `PAYMENTS_VIEW` too) |
+| `GET /reports/{code}` | `getReport` | `REPORTS_VIEW` (`debtors` also `MEMBERS_VIEW`, `payments` also `PAYMENTS_VIEW`); the preview: per sheet the columns, the first 200 rows, the totals and the row count |
 | `GET /reports/{code}.xlsx` | `downloadReport` | as `getReport`; the workbook with every row, texts in `lang` (`uk`/`en`), else `Accept-Language`, else `uk` |
 
 Every endpoint is guarded with `@PreAuthorize("hasAuthority('PERM_REPORTS_VIEW')")`, so a member, the electrician and
 the platform operator get 403 for every code, defined or not, before anything else is checked. `{code}` is a
 `ReportCode` (`charges-by-month`, `plot-balances`, `debtors`, `electricity-tree`, `water`, `missing-readings`,
-`land-tax`, `corrections`); `ReportCodeConverter` reads the kebab-case value, and an unknown code is 400
+`land-tax`, `corrections`, `payments`); `ReportCodeConverter` reads the kebab-case value, and an unknown code is 400
 `MALFORMED_REQUEST` (as every unknown enum value). A code without a definition yet is 404 `NOT_FOUND`; a defined report
 that needs a permission the caller lacks is 403 `PERMISSION_DENIED` (`ReportCatalog.require`) and is not listed.
 `/reports/{code}.xlsx` wins over `/reports/{code}`: its pattern is the more specific one
 (`ChargesByMonthReportTests.theXlsxPathWinsOverTheCodePath`).
 
 Every code of `ReportCode` has its definition: `charges-by-month`, `plot-balances`, `debtors`, `electricity-tree`,
-`water`, `missing-readings`, `land-tax` and `corrections`. `GET /reports` runs in a read-only transaction: the debtors' defaults are settings of
+`water`, `missing-readings`, `land-tax`, `corrections` and `payments` (feature 015). `GET /reports` runs in a read-only transaction: the debtors' defaults are settings of
 the cooperative.
 
 ### Report templates (tag `report-templates`, generated `ReportTemplatesApi`)
@@ -62,7 +62,7 @@ key's backstop) is 409 `TEMPLATE_VERSION_CONFLICT`.
 | `ReportTemplateVersionRecord` | Table `report_template_version`, `@Immutable`, used only to insert a version (file, size and SHA-256 of the stored bytes, uploader, time) |
 | `TemplateVersionRow`, `TemplateFile` | Projections: a version without its file (every list), and the file name with the bytes (the download only) |
 | `ReportTemplateRepository`, `ReportTemplateVersionRepository` | Queries that name the cooperative on top of RLS. The version repository is a plain `Repository` without `findAll`/`findById`, so nothing can load a version entity with its file by accident |
-| `TemplateUploadChecks`, `TemplateXml`, `ExternalLinkStripper`, `TemplateRowSet` | Upload checks (below), the safe StAX reader, link stripping and the row sets `plots`, `months`, `meters`, `water` |
+| `TemplateUploadChecks`, `TemplateXml`, `ExternalLinkStripper`, `TemplateRowSet` | Upload checks (below), the safe StAX reader, link stripping and the row sets `plots`, `months`, `meters`, `water`, `payments` |
 | `ReportTemplateService` | List, upload, new version, versions, archive, download, the field catalog |
 | `ReportTemplatesController` | The endpoints, generated `ReportTemplatesApi` |
 | `TemplateField`, `TemplateValue`, `TemplateValues` | The field catalog, one placeholder's value, the values of one fill (sections below) |
@@ -161,10 +161,12 @@ zips; `SampleTemplates` builds the sample "land tax statement" (also written to 
 `GET /report-templates/catalog` lists every placeholder `${key}` the app fills, in the order of the enum, each with its
 `type` (`ReportTemplateFieldType`: `TEXT`, `NUMBER`, `MONEY`, `QUANTITY`, `INT`, `DATE`, `MONTH`, `DATE_TIME`), its
 `rowSet` (absent for a single value), a language-neutral `example` (absent for text that depends on the language or on
-what the cooperative entered) and the `permission` (`REPORTS_VIEW` for every one). The server returns codes only: the
-description is `reportTemplates.fields.<field>` in the web catalogs, a nested path. `field` is the key itself for a
-fixed placeholder; the two families that depend on the charge types, `totals.charged.<type>` and
-`rows.plots.debt.<type>`, have the description codes `totals.charged.byChargeType` and `rows.plots.debt.byChargeType`
+what the cooperative entered) and the `permission` it needs besides `REPORTS_VIEW` (`TemplateField.permission`:
+`REPORTS_VIEW` itself, or `PAYMENTS_VIEW` for the payment fields `totals.paid.<type>`, `totals.prepayment` and the row
+set `payments`, feature 015 §6). The server returns codes only: the description is `reportTemplates.fields.<field>` in
+the web catalogs, a nested path. `field` is the key itself for a fixed placeholder; the three families that depend on
+the charge types, `totals.charged.<type>`, `totals.paid.<type>` and `rows.plots.debt.<type>`, have the description
+codes `totals.charged.byChargeType`, `totals.paid.byChargeType` and `rows.plots.debt.byChargeType`
 (texts with `{chargeType}`, which the client fills with the type's name; `byChargeType` is lower case, so it never
 meets a code or an id). They are listed once per charge type of the cooperative, archived ones included, in the
 configured order, with `pattern` and `chargeTypeId`; `<type>` is the code of a seeded type and the id of a custom one,
@@ -175,19 +177,20 @@ catalog, a type the cooperative lacks) resolves to nothing: the filler leaves it
 |---|---|
 | Cooperative | `cooperative.name`, `cooperative.officialName`, `cooperative.edrpou`, `cooperative.address` (legal address), `cooperative.bankName`, `cooperative.iban` |
 | Period and file | `period.from`, `period.to`, `period.year`, `generatedAt`, `generatedBy` |
-| Totals | `totals.landTax.expected`, `totals.landTax.charged`, `totals.charged.<type>`, `totals.debt`, `totals.plots.count`, `totals.plots.areaSotka` |
+| Totals | `totals.landTax.expected`, `totals.landTax.charged`, `totals.charged.<type>`, `totals.paid.<type>` (`PAYMENTS_VIEW`), `totals.prepayment` (`PAYMENTS_VIEW`), `totals.debt`, `totals.plots.count`, `totals.plots.areaSotka` |
 | `plots` | `rows.plots.number`, `.street`, `.area` (m²), `.areaSotka`, `.ownersCount`, `.debt.total`, `.debt.<type>`, `.status`, `.oldestUnpaid`, `.daysOverdue`, `.landTax.rate`, `.landTax.expected`, `.landTax.charged` |
 | `months` | `rows.months.month`, `.status`, `.regular`, `.opening`, `.reversals`, `.adjustments`, `.effective` |
 | `meters` | `rows.meters.level`, `.name`, `.serial`, `.kind`, `.startValue`, `.endValue`, `.consumption`, `.childrenConsumption`, `.lossesKwh`, `.lossesPercent`, `.plotsFed` |
 | `water` | `rows.water.number`, `.street`, `.source`, `.connectedDays`, `.serial`, `.cubicMetres`, `.total` |
+| `payments` (`PAYMENTS_VIEW`) | `rows.payments.receivedOn`, `.billingMonth`, `.source`, `.document`, `.number`, `.street`, `.amount`, `.allocated`, `.prepayment`, `.reversed` |
 
 No name, phone or e-mail of a person is a placeholder (spec 4.2): the plots carry the number of owners, never who they
-are. `generatedBy` is the person making the file, as in the header block of every report file.
+are, and the payments row set has neither the payer nor the payer note. `generatedBy` is the person making the file, as in the header block of every report file.
 
 ## Template values (`TemplateValues`)
 
-`TemplateValues.resolver(from, to, language, generatedBy, generatedAt)`, inside the caller's transaction, gives
-`single(key)` (a `TemplateValue`, or empty for an unknown key; a row set's key is filled per row) and `rows(set)` (per
+`TemplateValues.resolver(from, to, language, generatedBy, generatedAt, permissions)`, inside the caller's transaction,
+gives `single(key)` (a `TemplateValue`, or empty for an unknown key; a row set's key is filled per row) and `rows(set)` (per
 row the value of every placeholder of the set by key; the families under the code and under the id). A `TemplateValue`
 is a typed value, empty (written empty, no warning) or not known with a `ReportTemplateValueReason` (written empty and
 listed as `VALUE_UNKNOWN`, never `0`). Everything is read when first asked for and kept for the fill. No money rule is
@@ -217,6 +220,18 @@ Kyiv days), means:
 - `meters`: the consumption sheet of the electricity report for the service days (in the order of the tree, `level`
   its depth); a value without a reading and everything worked out from it stay not known with their reasons.
 - `water`: the main sheet of the water report for the service days, every source and street.
+- `totals.paid.<type>` (feature 015 §6): `ledger.LedgerReadModel.paidByType(from, to)`, what payments pay as of `to`
+  on the charges `totals.charged.<type>` counts (the same accrual basis; an allocation counts from its value date, the
+  later of the day received and the debt date).
+- `totals.prepayment`: `ledger.LedgerReadModel.prepaymentAsOf` on the day of the balances (`to`, or today when later):
+  the money received that is on no charge, summed over every plot.
+- `payments`: `PaymentsReport.sheet` for the days received from `from` to `to`, every source and street, without the
+  payer and the payer note; `source` in the file's language, `reversed` as `reports.yes` / `reports.no`.
+
+**Permissions.** The resolver gets the caller's permissions (`TemplateGenerator` passes `AccessProfile.permissions`):
+`single(key)` of a field, and `rows(set)` of a set, whose `TemplateField.permission` the caller lacks throws
+`AccessDeniedException` (403 `PERMISSION_DENIED`) before anything of it is read, so the generation leaves no audit
+entry; a template without payment fields is filled for a caller with `REPORTS_VIEW` alone.
 
 A row set of more than the reports' row cap (20 000) is 422 `REPORT_TOO_LARGE`. Texts of codes (statuses, meter
 kinds, water sources, month statuses) come from the report bundles in the file's language. The bundles also hold the
@@ -230,7 +245,9 @@ of their type, the families by code and id, resolving, descriptions and warning 
 `TemplateCatalogTests` (the endpoint with a custom and an archived charge type, who may read it), `TemplateValuesTests`
 (a worked ledger, requisites, land tax, water and a tree with an unknown quarter: the single values, every total and
 row set equal to the built-in report of the same period through the API, an unknown value, two rates, the as-of day,
-the row cap), `ledger.LedgerChargedInYearTests` (`chargedByType`).
+the row cap, the payment fields and their refusal without `PAYMENTS_VIEW`), `TemplateGenerateTests` (a template with a
+payment field refused over HTTP without `PAYMENTS_VIEW`, no audit entry), `ledger.LedgerChargedInYearTests`
+(`chargedByType`), `ledger.LedgerPaymentsReadModelTests` (`paidByType`, `prepaymentAsOf`).
 
 ## Template filler (`TemplateFiller`, ADR 0015)
 
@@ -382,10 +399,13 @@ kinds, `reports.filters.options.resource.*`, which also name the missing reading
 (`reports.corrections.sources.*`), the electricity report's codes (`reports.electricity-tree.valueKinds.*`,
 `.sources.*`, `.rowKinds.*`, `.runStatuses.*`, `.outcomes.*`, `.splits.*`), and the shared `billing.status.*`, `chargeTypes.defaultNames.*` and
 `recalculation.causeKind.*` (the corrections' recalculation causes). On the web `ReportPreviewTable.codeLabels` maps a
-`CODE` column (`<report>/<column key>`) to the same catalog. A column per charge type (`debt.<chargeTypeId>`,
-`chargeTypeId` set) has no key of its own: its header is the charge type's name, in the file
-`chargeTypes.defaultNames.<CODE>` for a seeded type that was not renamed and the stored name otherwise (the runner's
-`chargeTypeNames`), on the web `chargeTypeName`. `ReportTextsTests` checks that both bundles have the same keys and every key a
+`CODE` column (`<report>/<column key>`) to the same catalog. A column per charge type (`<family>.<chargeTypeId>`,
+family `charged`, `paid` or `debt`, `chargeTypeId` set) has no key of its own: its header is
+`reports.chargeTypeColumns.<family>` with `{chargeType}` the charge type's name ("Членський внесок: сплачено"), in the
+file `chargeTypes.defaultNames.<CODE>` for a seeded type that was not renamed and the stored name otherwise (the
+runner's `chargeTypeNames`), on the web `chargeTypeName`. The payments report adds `reports.filters.params.source`,
+`reports.filters.options.source.*` (its `source` column and filter), `reports.filters.period.PAYMENT_DATES`,
+`reports.totals.CASH`/`BANK` and, for its booleans in a template, `reports.yes`/`reports.no`. `ReportTextsTests` checks that both bundles have the same keys and every key a
 definition asks for; the web side checks the texts against its catalogs.
 
 ### Row cap
@@ -407,25 +427,31 @@ days and the street as typed), `rows` (all sheets) and `personalData`. Never the
 ## How to add a report
 
 1. Give the owning modules the read facades it needs (public, `Propagation.MANDATORY` or caller's transaction, ids,
-   codes and `Money` only, a `limit` for anything that can grow with the plots).
+   codes and `Money` only, a `limit` for anything that can grow with the plots). Personal data leaves a module only
+   through a separate port gated by its permission (as `ledger.PaymentNotes` for the payer notes, `MEMBERS_VIEW`).
 2. Add a `@Component` implementing `ReportDefinition` in `internal` with its filters (add a
    `ReportFilterDefinition` for a new filter type and a typed field to `ReportFilters`), its sheets and columns
    (keys of the contract), totals as `Money` sums of the listed rows and its header notes.
 3. Add `reports.<code>.title`, `.sheets.*`, `.columns.*` and any new notes, codes and filter labels to both bundles
    and to both web catalogs with the same texts.
-4. Tests: the definition on a fixture with worked numbers through the API (preview and file), its filters, its
-   permission (a definition with `MEMBERS_VIEW` is 403 and not listed without it), and `ReportTextsTests` picks up the
-   keys when the definition is added to its list.
+4. Add the code to `ReportCode` in `api/openapi.yaml` (and a new filter's `ReportFilterType`, `ReportFilterParam`,
+   query parameter and `RawFilters` field; the web's `PARAM_CONTROLS` must name every param), then `pnpm gen:api`.
+5. Tests: the definition on a fixture with worked numbers through the API (preview and file), its filters, its
+   permission (a definition with `MEMBERS_VIEW` or `PAYMENTS_VIEW` is 403 and not listed without it), and
+   `ReportTextsTests` picks up the keys when the definition is added to its list; `ReportsAcceptanceTests` lists every
+   code.
 
 ## Report: charges by month (`charges-by-month`, functional spec 2.3)
 
 Filters: billing months (`period`, `MONTH_RANGE`, basis `BILLING_MONTHS`, default the previous month in Kyiv), charge
 types (default all), street (optional; `plots.PlotCatalog.idsOnStreet`, archived plots included; no plot on the street
-gives no rows). Reads `ledger.LedgerReadModel.monthTotals` twice.
+gives no rows). Reads `ledger.LedgerReadModel.monthTotals` twice, as of today (Kyiv).
 
 - Sheet `byBillingMonth`: per billing month and charge type with charges: `month`, `status` (`OPEN`/`CLOSED`),
   `chargeType` (configured order), `plots` (distinct plots with a row), `regular`, `opening`, `reversals`,
-  `adjustments`, `effective`; a `SUBTOTAL` row after each month (no type, no plot count: a plot can have several
+  `adjustments`, `effective`, `paid` (feature 015 §6: the net allocations to the charges of the row whose value date,
+  the later of the day received and the debt date, is today or earlier; `effective` does not depend on it, so it still
+  equals the billing months screen); a `SUBTOTAL` row after each month (no type, no plot count: a plot can have several
   types) and the totals `all`. The effective total of a month equals the billing months screen cent for cent (same
   predicate).
 - Sheet `byServicePeriod` ("За період послуг" / "By service period"): the same columns without `status`, grouped by the
@@ -434,30 +460,37 @@ gives no rows). Reads `ledger.LedgerReadModel.monthTotals` twice.
   from the previous month) is outside this sheet.
 
 Tests: `ChargesByMonthReportTests` (worked ledger in a cooperative of its own, `ReportsTestSupport`: reconciliation with
-`GET /billing-months` for every month, reversal, later-month adjustment on both sheets, street and charge type filters,
-defaults, the list, the workbook in both languages, route precedence, filter errors, the cap, the audit entries),
+`GET /billing-months` for every month, also with payments and their paid column, reversal, later-month adjustment on
+both sheets, street and charge type filters, defaults, the list, the workbook in both languages, route precedence, filter errors, the cap, the audit entries),
 `ReportsAccessTests` (401/403 matrix on the demo cooperative), unit tests `ReportFiltersTests`, `ReportCatalogTests`,
 `ReportRunnerTests` (preview of 200 of 250 rows, file with all, no audit on a write failure, the cap or bad filters),
 `XlsxReportWriterTests`, `ReportLanguageTests`, `ReportTextsTests`.
 
 ## Debt per charge type (plot balances and debtors)
 
-`DebtColumns`: one `MONEY` column per charge type in the configured order, key `debt.<chargeTypeId>` with
-`chargeTypeId` set, headed by the charge type's name (see Bundles). With a charge type filter the columns are the chosen
-types; without one every type that is not archived, plus an archived type some listed plot still has a counted charge
-of. A plot without a counted charge of a type shows `0.00`. The debts are `ledger.LedgerReadModel.debtsAsOf` (the
-rule of the plot account and the status cache: charges dated on or before the day, reversals negative, adjustments
-with their sign; the oldest unpaid date and the days overdue on that day). The totals line `all` sums every money column
-of the rows listed (`Money.plus`, no rounding of its own); other columns are empty. Both reports add the header note
-`OLDEST_UNPAID_IS_OLDEST_CHARGE` (until payments exist the oldest unpaid charge is the oldest charge with a debt) and
-read the plots from `plots.PlotCatalog.findActive(street)`: active plots without common land, natural order.
+`DebtColumns`: per charge type in the configured order one `MONEY` column per `DebtColumns.Family` the report asks for
+(`charged`, `paid`, `debt`), key `<family>.<chargeTypeId>` with `chargeTypeId` set, headed by
+`reports.chargeTypeColumns.<family>` with the type's name (see Bundles). With a charge type filter the columns are the
+chosen types; without one every type that is not archived, plus an archived type some listed plot still has a counted
+charge of. A plot without a counted charge of a type shows `0.00`. The amounts are `ledger.LedgerReadModel.debtsAsOf`
+(the rule of the plot account and the status cache after payments, feature 015 §2.5 and §6: charges dated on or before
+the day, reversals negative, adjustments with their sign; paid = the net allocations to them whose value date, the
+later of the day received and the debt date, is on or before the day; debt = charged − paid; the oldest charge with an
+open amount after those payments and the days overdue on that day; the prepayment = payments received by the day minus
+allocations counted by then, every type). The totals line `all` sums every money column of the rows listed
+(`Money.plus`, no rounding of its own); other columns are empty. Both reports add the header note
+`OLDEST_UNPAID_IS_OLDEST_CHARGE` (the oldest unpaid charge is the oldest charge that still has a debt after what
+payments pay on it) and read the plots from `plots.PlotCatalog.findActive(street)`: active plots without common land,
+natural order.
 
 ## Report: plot balances (`plot-balances`, functional spec 2.4)
 
 Filters: as of (`asOf`, default today in Kyiv, not after today), charge types, street, statuses (`RED`, `YELLOW`,
 `GREEN`, `GREY`). Needs `REPORTS_VIEW` only and holds no personal data. Sheet `main`, one row per active plot:
-`number`, `street`, `owners` (the **number** of current owners, `plots.PlotOwners.ownerCounts`; never a name), the debt
-columns, `total`, `oldestUnpaid`, `daysOverdue`, `status` (`CODE`, in the file `reports.filters.options.statuses.*`).
+`number`, `street`, `owners` (the **number** of current owners, `plots.PlotOwners.ownerCounts`; never a name), per charge
+type its `charged`, `paid` and `debt` columns side by side, then `charged`, `paid`, `total` (the debt), `prepayment`,
+`oldestUnpaid`, `daysOverdue`, `status` (`CODE`, in the file `reports.filters.options.statuses.*`). Functional spec 2.11:
+a plot charged 850.00 that paid 700.00 shows charged 850.00, paid 700.00, debt 150.00, prepayment 0.00.
 
 - The status always counts every charge type. As of today it is the status on the map (`plots.PlotStatuses.current`,
   the `plot_status` cache, the current thresholds). For a past day it is `PlotStatuses.classify` of every type's debt
@@ -476,7 +509,8 @@ Needs `REPORTS_VIEW` **and** `MEMBERS_VIEW` (`requiredPermissions`): without the
 and the row count only, never a name, phone or e-mail. Nothing logs them.
 
 Filters: `minDebt` (default the cooperative's red amount) and `olderThanDays` (default its red days), charge types,
-street; the day is today in Kyiv. A plot matches by the red rule of the map (money rules 9, `PlotStatusPolicy`) with the
+street; the day is today in Kyiv. Debt and age are after payments (feature 015 §6): a plot whose debt is paid is not
+listed. A plot matches by the red rule of the map (money rules 9, `PlotStatusPolicy`) with the
 filter's thresholds: no debt (zero or less) never matches; otherwise the debt is **above** `minDebt` **or** its oldest
 unpaid charge is **more than** `olderThanDays` days old. Debt and age count only the chosen charge types. A matching
 plot without a current owner is listed with empty owner cells (its debt is still owed), so with the defaults and every
@@ -486,15 +520,43 @@ Sheet `main`, one row per matching plot: `number`, `street`, `owners` (the full 
 current owners from `members.MemberDirectory.contacts`, the earliest ownership first, separated by `; `), `phones` (per
 owner its phones joined by `, `, the owners in the same order separated by `; `; an owner without a phone is left
 out), `emails` (the owners' e-mail addresses in the same order separated by `; `; an owner without one is left out),
-the debt columns, `total`, `oldestUnpaid`, `daysOverdue`. File name `debtors_<today>_<today>.xlsx`.
+the debt columns (family `debt` only), `total`, `oldestUnpaid`, `daysOverdue`. File name `debtors_<today>_<today>.xlsx`.
 
 Tests: `PlotBalancesReportTests` and `DebtorsReportTests` on the worked balances of
 `ReportsTestSupport.bookTheBalances` (five active plots, common land and an archived plot left out, two current owners
 and an ended one on plot 1, dates counted back from today): debts per type, totals, dates, days and every status; the
 map's status today; a past day without the later charges and with today's thresholds; status, street and charge type
-filters and their notes; no name in the plot balances preview or file; the debtors' OR rule, defaults from the
+filters and their notes; no name in the plot balances preview or file; the charged, paid, debt and prepayment columns
+with payments (FS 2.11: 850 / 700 / 150 / 0) and as of a day before the payment; a paid plot no longer a debtor; the debtors' OR rule, defaults from the
 settings, both owners with contacts, a lower amount listing more plots; 403 and no card for a custom role with
 `REPORTS_VIEW` but not `MEMBERS_VIEW` (allowed with both), the definition's own refusal; the audit entries.
+
+## Report: payments (`payments`, feature 015 §6, functional spec 2.11)
+
+Needs `REPORTS_VIEW` **and** `PAYMENTS_VIEW` (`requiredPermissions`; without the second it is not listed and both
+endpoints are 403; `load` carries the matching `@PreAuthorize`). `personalData` is true: it names payers. The payer
+note is a column only for a caller with `MEMBERS_VIEW` (`identity.CurrentUser`), read through `ledger.PaymentNotes`,
+which requires `MEMBERS_VIEW` itself; the audit entry holds the filters and the row count only.
+
+Filters: billing months (`period`, `MONTH_RANGE`, default the previous month), the days received (`received`,
+`DATE_RANGE`, basis `PAYMENT_DATES`, optional, no default: given, the days choose the payments instead of the months;
+one day without the other is `REQUIRED`, a range backwards or over a year `INVALID`), source (`source`, filter type
+`SOURCE`, `CASH`/`BANK`, default both) and street.
+
+Sheet `main`, one row per payment (`ledger.LedgerReadModel.payments`, by the day received, then the time booked; a
+reversed payment is listed once): `receivedOn`, `billingMonth`, `source` (`CODE`, `reports.filters.options.source.*`),
+`document` (the receipt number of a cash payment, the bank document number of a bank payment), `number` and `street`
+of the plot, `payer` (`members.MemberRef.shortName`, empty when none was named), `payerNote` (only with
+`MEMBERS_VIEW`), `amount`, `allocated` (what it pays on charges now), `prepayment` (what is left of it) and `reversed`
+(`BOOLEAN`). Totals: one line per source asked (`CASH`, `BANK`) and `all`, each summing the money columns of the
+payments of that source that are **not reversed** (a reversed payment is listed but brought no money). The file name
+is the months' days, or the days received when given. The template row set `payments` is this sheet for the days of
+the period, without `payer` and `payerNote`.
+
+Tests: `PaymentsReportTests` (FS 2.11: the cash payments of October one row each and their total; totals per source and
+a reversed payment; the days instead of the months, street, filter errors; the note column only with `MEMBERS_VIEW`;
+not listed and 403 without `PAYMENTS_VIEW`; the file in both languages and the audit entry),
+`ledger.LedgerPaymentsReadModelTests` (`payments`, `PaymentNotes`).
 
 ## Report: land tax (`land-tax`, functional spec 2.9)
 

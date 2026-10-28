@@ -16,7 +16,11 @@ import app.nadel.ledger.CorrectionKind;
 import app.nadel.ledger.CorrectionSource;
 import app.nadel.ledger.LedgerReadModel;
 import app.nadel.ledger.LossesRunNodeOutcome;
+import app.nadel.identity.CurrentUser;
+import app.nadel.identity.Permission;
 import app.nadel.ledger.MonthStatus;
+import app.nadel.ledger.PaymentNotes;
+import app.nadel.ledger.PaymentSource;
 import app.nadel.ledger.RunStatus;
 import app.nadel.members.MemberDirectory;
 import app.nadel.meters.MeterKind;
@@ -127,6 +131,14 @@ class ReportTextsTests {
         for (PlotStatus status : PlotStatus.values()) {
             keys.add("reports.filters.options.statuses." + status.getValue());
         }
+        // the payments report's source filter and column, its booleans in a template, the payer note column
+        keys.add("reports.filters.params.source");
+        for (PaymentSource source : PaymentSource.values()) {
+            keys.add(PaymentsReport.SOURCES + "." + source.name());
+        }
+        keys.add("reports.yes");
+        keys.add("reports.no");
+        keys.add("reports.payments.columns.payerNote");
         // the corrections' code columns and their filter
         keys.add("reports.filters.params.year");
         keys.add("reports.filters.params.correctionKinds");
@@ -188,9 +200,11 @@ class ReportTextsTests {
             for (Sheet sheet : result.sheets()) {
                 keys.add("reports." + code + ".sheets." + sheet.key());
                 for (Column column : sheet.columns()) {
-                    // a column per charge type is headed by the charge type's name, not by a key
+                    // a column per charge type is headed by the charge type's name and its family
                     if (column.chargeTypeId() == null) {
                         keys.add("reports." + code + ".columns." + column.key());
+                    } else {
+                        keys.add(DebtColumns.HEADER_PREFIX + DebtColumns.Family.ofColumn(column.key()).key());
                     }
                 }
                 sheet.totals().forEach(total -> keys.add("reports.totals." + total.key()));
@@ -239,6 +253,9 @@ class ReportTextsTests {
         RawFilters waterMeters = new RawFilters(null, null, null, null, null, null, null, null, null, null, null,
                 nadel.contract.model.MeterResource.WATER, List.of(nadel.contract.model.MeterKind.PLOT,
                         nadel.contract.model.MeterKind.QUARTER), null, null);
+        ReportDefinition payments = paymentsWithMembersView();
+        RawFilters receivedCashOnAStreet = new RawFilters(null, null, TODAY.minusDays(10), TODAY, null, null, null,
+                "Лісова", null, null, null, null, null, null, null, nadel.contract.model.PaymentSource.CASH);
         ReportDefinition fixedLosses = electricityTree(LossesMode.FIXED_PERCENT);
         ReportDefinition proportionalLosses = electricityTree(LossesMode.PROPORTIONAL);
         return List.of(new Run(fixedLosses, ReportFilters.parse(fixedLosses.filters(), RawFilters.NONE, CONTEXT)),
@@ -252,7 +269,17 @@ class ReportTextsTests {
                 new Run(water, ReportFilters.parse(water.filters(), wellsOnAStreet, CONTEXT)),
                 new Run(water, ReportFilters.parse(water.filters(), RawFilters.NONE, CONTEXT)),
                 new Run(missingReadings, ReportFilters.parse(missingReadings.filters(), waterMeters, CONTEXT)),
-                new Run(missingReadings, ReportFilters.parse(missingReadings.filters(), RawFilters.NONE, CONTEXT)));
+                new Run(missingReadings, ReportFilters.parse(missingReadings.filters(), RawFilters.NONE, CONTEXT)),
+                new Run(payments, ReportFilters.parse(payments.filters(), RawFilters.NONE, CONTEXT)),
+                new Run(payments, ReportFilters.parse(payments.filters(), receivedCashOnAStreet, CONTEXT)));
+    }
+
+    /** The payments report for a caller who may view members, so it has the payer note column too. */
+    private static ReportDefinition paymentsWithMembersView() {
+        CurrentUser currentUser = mock(CurrentUser.class);
+        when(currentUser.can(Permission.MEMBERS_VIEW)).thenReturn(true);
+        return new PaymentsReport(mock(LedgerReadModel.class), mock(PaymentNotes.class), mock(PlotCatalog.class),
+                mock(MemberDirectory.class), currentUser);
     }
 
     /** One plot meter without a reading that has an open "not charged" item, so the report says its note. */

@@ -4379,8 +4379,8 @@ paths:
         The built-in reports the caller may run, in the order of `ReportCode`, each with its filters: what the filter
         is (`key`, `type`), which query parameters of `getReport` and `downloadReport` it fills (`params`), whether
         it must be given, the values it starts with (`defaults`) and, for a period, whether it means billing months,
-        service days or reading dates (`basis`). A report that needs a permission the caller lacks is not listed:
-        `debtors` also needs `MEMBERS_VIEW`. A cooperative that has booked nothing still gets every report it may run.
+        service days, reading dates or the days payments were received (`basis`). A report that needs a permission the
+        caller lacks is not listed: `debtors` also needs `MEMBERS_VIEW`, `payments` also needs `PAYMENTS_VIEW`. A cooperative that has booked nothing still gets every report it may run.
 
         The server returns codes only: the name and description of a report and the label of a filter come from the
         client's catalogs by the report code and the filter key, in the user's language. Defaults that depend on the
@@ -4416,8 +4416,10 @@ paths:
         (`YYYY-MM`, both included); `from` and `to` are calendar days in Europe/Kyiv, both included, meaning service
         days or reading dates as the filter's `basis` says; `chargeTypeIds`, `statuses`, `meterKinds` and
         `correctionKinds` left out mean all; `street` is compared with the plot's street as stored, ignoring case and
-        surrounding spaces; `resource` and `waterSource` left out mean all. In `debtors`, `minDebt` and
-        `olderThanDays` combine with OR, as in the red status.
+        surrounding spaces; `resource`, `waterSource` and `source` left out mean all. In `debtors`, `minDebt` and
+        `olderThanDays` combine with OR, as in the red status. In `payments` the billing months choose the payments
+        by the month they are booked in; when `from` and `to` are given (its optional filter `received`, basis
+        `PAYMENT_DATES`), the days the payments were received choose them instead and the months are not used.
 
         A malformed parameter (a wrong format, a number out of range) is 400 `VALIDATION_FAILED`, an unknown enum
         value 400 `MALFORMED_REQUEST`. Filters that do not fit the report are 400 `REPORT_FILTER_INVALID` with
@@ -4430,14 +4432,18 @@ paths:
         (`"1250.50"`), kWh and m³ with three (`"152.400"`), ISO dates, `YYYY-MM` months and codes. A value that is not
         known is absent with a `reason`, never `0`. Totals are the sums of the rows as listed, with no separate
         rounding. "Charged" is always the effective amount (charges plus their adjustments, reversals counting
-        negative); columns that split it show regular charges, reversals and adjustments separately. Plots are listed in
-        the natural order of their numbers, meters in the order of the meter tree, charge types in their configured
-        order. No report has a "paid" column until payments exist.
+        negative); columns that split it show regular charges, reversals and adjustments separately. "Paid" is what
+        payments pay on the charges (net allocations) as of the report's day: an allocation counts from its value date,
+        the later of the day the payment was received and the debt date of the charge; "debt" is charged minus paid;
+        "prepayment" is what was received and is on no charge yet. Plots are listed in the natural order of their
+        numbers, meters in the order of the meter tree, charge types in their configured order.
 
         Every run is written to the audit log (`REPORT_GENERATED`, entity type `REPORT`, `output` `PREVIEW`) with the
         filters as ids, codes and dates, the row count and whether the report holds personal data, never its contents.
-        Requires `REPORTS_VIEW`; `debtors` also needs `MEMBERS_VIEW` (403 `PERMISSION_DENIED` otherwise). An unknown
-        code is 400 `MALFORMED_REQUEST`; a code of `ReportCode` this server does not produce yet is 404 `NOT_FOUND`.
+        Requires `REPORTS_VIEW`; `debtors` also needs `MEMBERS_VIEW`, `payments` also needs `PAYMENTS_VIEW` (403
+        `PERMISSION_DENIED` otherwise); the payer note column of `payments` is there only for a caller with
+        `MEMBERS_VIEW`. An unknown code is 400 `MALFORMED_REQUEST`; a code of `ReportCode` this server does not produce
+        yet is 404 `NOT_FOUND`.
       parameters:
         - $ref: '#/components/parameters/ReportCodePath'
         - $ref: '#/components/parameters/ReportFromMonth'
@@ -4455,6 +4461,7 @@ paths:
         - $ref: '#/components/parameters/ReportMeterKinds'
         - $ref: '#/components/parameters/ReportWaterSource'
         - $ref: '#/components/parameters/ReportCorrectionKinds'
+        - $ref: '#/components/parameters/ReportSource'
       responses:
         '200':
           description: OK
@@ -4512,6 +4519,7 @@ paths:
         - $ref: '#/components/parameters/ReportMeterKinds'
         - $ref: '#/components/parameters/ReportWaterSource'
         - $ref: '#/components/parameters/ReportCorrectionKinds'
+        - $ref: '#/components/parameters/ReportSource'
         - name: lang
           in: query
           required: false
@@ -4662,13 +4670,15 @@ paths:
       summary: Every placeholder a template can use
       description: |
         The field catalog (feature 013 §4.2): every placeholder `${key}` the app fills, in a fixed order (the
-        cooperative, the period, when and by whom, the totals, then the row sets `plots`, `months`, `meters`, `water`),
-        each with its value type, its row set (absent for a single value), a language-neutral example where one exists
-        and the permission it needs. The server returns codes, never text: the description of an entry is
+        cooperative, the period, when and by whom, the totals, then the row sets `plots`, `months`, `meters`, `water`,
+        `payments`), each with its value type, its row set (absent for a single value), a language-neutral example where
+        one exists and the permission it needs: `REPORTS_VIEW`, or `PAYMENTS_VIEW` for the payment fields
+        (`totals.paid.<type>`, `totals.prepayment` and the row set `payments`). The server returns codes, never text: the description of an entry is
         `reportTemplates.fields.<field>` in the client's catalogs.
 
-        Two families depend on the cooperative's charge types and are listed once per charge type, archived ones
-        included, in the configured order: `totals.charged.<type>` and `rows.plots.debt.<type>`, where `<type>` is the
+        Three families depend on the cooperative's charge types and are listed once per charge type, archived ones
+        included, in the configured order: `totals.charged.<type>`, `totals.paid.<type>` and `rows.plots.debt.<type>`,
+        where `<type>` is the
         code of a seeded type (`MEMBERSHIP`, `ELECTRICITY`, `LAND_TAX`, `WATER`, `COMMON_CONSUMERS`) and the id of a
         custom type. Such an entry carries the family in `pattern`, the description code of the family in `field` and
         the type in `chargeTypeId` (the client names it). Names, phones and e-mails of people are never placeholders.
@@ -4824,12 +4834,18 @@ paths:
         - `totals.landTax.*` and `rows.plots.landTax.*`: the land tax report for the year of `to`;
         - `totals.charged.<type>`: the effective amount (charges plus adjustments minus reversals, opening balances
           left out) of the type's charges whose first service day is from `from` to `to`, booked whenever;
+        - `totals.paid.<type>`: what payments pay, as of `to`, on the charges counted by `totals.charged.<type>` (an
+          allocation counts from the later of the day its payment was received and the debt date of its charge);
+        - `totals.prepayment`: the money received that is on no charge, summed over every plot, as of `to`, or as of
+          today when `to` is later (the day of the plot balances);
         - `totals.debt`, `totals.plots.*` and the row set `plots`: the plot balances of the active plots (common land
           left out) as of `to`, or as of today when `to` is later;
         - the row set `months`: per billing month from the month of `from` to the month of `to` that has charges, the
           cooperative's totals as on the charges by month report;
         - the row sets `meters` (the electricity tree's consumption) and `water` (the water report's plots): the
-          service days from `from` to `to`.
+          service days from `from` to `to`;
+        - the row set `payments`: the payments received from `from` to `to`, as on the payments report, without the
+          payer and the payer note.
 
         Warnings, never errors, are listed in a sheet added at the end of the file when there is at least one
         ("Попередження" or "Warnings", made unique if the template has a sheet of that name) and in the response
@@ -4851,7 +4867,9 @@ paths:
         rows, or the file would unpack to more than 256 MB. Every generated file is written to the audit log as `REPORT_GENERATED` (entity type
         `REPORT_TEMPLATE`, entity id the template, label its name) with the fields `template` (the id), `version`,
         `filters` (`from`, `to`), `rows` (the rows written for row sets), `personalData` (`false`) and `output`
-        (`XLSX`), never the contents. Requires `REPORTS_VIEW`; the platform operator has no cooperative data: 403.
+        (`XLSX`), never the contents. Requires `REPORTS_VIEW`; a template that uses a payment field (`totals.paid.<type>`,
+        `totals.prepayment` or the row set `payments`) also needs `PAYMENTS_VIEW` (403 `PERMISSION_DENIED`, nothing
+        written to the audit log); the platform operator has no cooperative data: 403.
       parameters:
         - $ref: '#/components/parameters/ReportTemplateIdPath'
       requestBody:
@@ -5276,6 +5294,13 @@ components:
         maxItems: 2
         items:
           $ref: '#/components/schemas/ReportCorrectionKind'
+    ReportSource:
+      name: source
+      in: query
+      required: false
+      description: Only payments of this source (`CASH` or `BANK`); left out means both (filter type `SOURCE`)
+      schema:
+        $ref: '#/components/schemas/PaymentSource'
 
   schemas:
     Money:
@@ -10361,14 +10386,16 @@ components:
     ReportCode:
       type: string
       description: >-
-        A built-in report. `charges-by-month`: what was charged per billing month and charge type, with a second sheet
-        by service period. `plot-balances`: the debt of every active plot per charge type on a day, without names.
+        A built-in report. `charges-by-month`: what was charged per billing month and charge type and what is paid on it,
+        with a second sheet by service period. `plot-balances`: charged, paid, debt and prepayment of every active plot
+        per charge type on a day, without names.
         `debtors`: the plots over the red amount or older than the red days, with the owners' names and contacts
         (also needs `MEMBERS_VIEW`). `electricity-tree`: electricity from the substation down to the plots, with a
         consumption sheet and a charged sheet. `water`: water use and water charges of the connected plots.
         `missing-readings`: active meters without an approved reading in a range. `land-tax`: the expected and the
         charged land tax per plot for a year. `corrections`: every reversal and adjustment booked in a range of
-        billing months.
+        billing months. `payments`: the payments of a range of billing months or of days, one row per payment, with
+        totals per source (also needs `PAYMENTS_VIEW`; the payer note only with `MEMBERS_VIEW`).
       enum:
         - charges-by-month
         - plot-balances
@@ -10378,6 +10405,7 @@ components:
         - missing-readings
         - land-tax
         - corrections
+        - payments
 
     ReportFilterType:
       type: string
@@ -10387,7 +10415,7 @@ components:
         (`minDebt`). `INT`: a whole number (`olderThanDays`). `CHARGE_TYPES`: charge types `chargeTypeIds`, several.
         `STREET`: one street `street`. `STATUS`: status colours `statuses`, several. `RESOURCE`: `resource`.
         `METER_KIND`: meter kinds `meterKinds`, several. `WATER_SOURCE`: the kind of water source `waterSource`.
-        `CORRECTION_KIND`: `correctionKinds`, several.
+        `CORRECTION_KIND`: `correctionKinds`, several. `SOURCE`: the source of a payment `source`.
       enum:
         - MONTH_RANGE
         - DATE_RANGE
@@ -10402,6 +10430,7 @@ components:
         - METER_KIND
         - WATER_SOURCE
         - CORRECTION_KIND
+        - SOURCE
 
     ReportFilterParam:
       type: string
@@ -10422,14 +10451,15 @@ components:
         - meterKinds
         - waterSource
         - correctionKinds
+        - source
 
     ReportPeriodBasis:
       type: string
       description: >-
         What the period of a report means; the filter label says so. `BILLING_MONTHS`: the billing months the entries
         were booked in. `SERVICE_DAYS`: the days a service was provided (the service period of a charge).
-        `READING_DATES`: the dates of meter readings.
-      enum: [BILLING_MONTHS, SERVICE_DAYS, READING_DATES]
+        `READING_DATES`: the dates of meter readings. `PAYMENT_DATES`: the days payments were received.
+      enum: [BILLING_MONTHS, SERVICE_DAYS, READING_DATES, PAYMENT_DATES]
 
     ReportCorrectionKind:
       type: string
@@ -10458,8 +10488,9 @@ components:
           type: string
           pattern: '^[a-z][A-Za-z]*$'
           description: >-
-            Names the filter in the client's catalogs: `period`, `asOf`, `year`, `chargeTypes`, `street`, `statuses`,
-            `minDebt`, `olderThanDays`, `resource`, `meterKinds`, `waterSource` or `correctionKinds`
+            Names the filter in the client's catalogs: `period`, `received`, `asOf`, `year`, `chargeTypes`, `street`,
+            `statuses`, `minDebt`, `olderThanDays`, `resource`, `meterKinds`, `waterSource`, `correctionKinds` or
+            `source`
         type:
           $ref: '#/components/schemas/ReportFilterType'
         params:
@@ -10489,7 +10520,7 @@ components:
           $ref: '#/components/schemas/ReportCode'
         personalData:
           type: boolean
-          description: True when the report holds names and contacts of people (only `debtors`)
+          description: True when the report holds names of people (`debtors` with their contacts, `payments`)
         filters:
           type: array
           description: The filters in the order the form shows them; the period comes first
@@ -10520,7 +10551,8 @@ components:
           pattern: '^[a-z][A-Za-z0-9]*(\.[A-Za-z0-9-]+)?$'
           description: >-
             Stable within the report, for example `month`, `effective` or, for a column per charge type,
-            `debt.<chargeTypeId>`
+            `<family>.<chargeTypeId>` with the family `charged`, `paid` or `debt` (the client heads it with the charge
+            type's name and the family)
         type:
           $ref: '#/components/schemas/ReportColumnType'
         chargeTypeId:
@@ -10628,8 +10660,8 @@ components:
         A sentence of the report header. `SERVICE_PERIOD_SHEET`: the second sheet groups the charges by the month of
         the service, so an adjustment booked later shows under the month it is for. `PAST_DATE_STATUS`: for a past day
         the status is worked out as of that day with today's thresholds. `STATUS_ALL_CHARGE_TYPES`: with a charge type
-        filter, today's status still counts every charge type. `OLDEST_UNPAID_IS_OLDEST_CHARGE`: until payments exist,
-        the oldest unpaid charge is the oldest charge with a debt. `LOSSES_FIXED_PERCENT`: the cooperative charges losses
+        filter, today's status still counts every charge type. `OLDEST_UNPAID_IS_OLDEST_CHARGE`: the oldest unpaid
+        charge is the oldest charge that still has a debt after what payments pay on it. `LOSSES_FIXED_PERCENT`: the cooperative charges losses
         now as a fixed percentage of each interval (param `percent`, two decimals); `LOSSES_PROPORTIONAL`: it charges
         losses now by proportional runs; with either, a charge or a run booked under another mode shows what it booked.
         `RECALCULATION_SUGGESTED`: some rows differ from the expected amount and a recalculation may be due (param
@@ -10833,8 +10865,9 @@ components:
       description: >-
         The rows a template row repeats over. `PLOTS`: the active plots with their balances and land tax. `MONTHS`:
         the billing months with charges. `METERS`: the nodes of the electricity meter tree. `WATER`: the plots
-        connected to water, one row per plot and source
-      enum: [PLOTS, MONTHS, METERS, WATER]
+        connected to water, one row per plot and source. `PAYMENTS`: the payments received in the period, one row per
+        payment, without the payer and the payer note (needs `PAYMENTS_VIEW`)
+      enum: [PLOTS, MONTHS, METERS, WATER, PAYMENTS]
 
     ReportTemplateField:
       type: object
@@ -10850,13 +10883,13 @@ components:
           description: >-
             The description code: the description is `reportTemplates.fields.<field>` in the client's catalogs. The
             key itself for a fixed placeholder; for a placeholder of a charge type family the family's code,
-            `totals.charged.byChargeType` or `rows.plots.debt.byChargeType`, whose text names the type
-            (`{chargeType}`)
+            `totals.charged.byChargeType`, `totals.paid.byChargeType` or `rows.plots.debt.byChargeType`, whose text
+            names the type (`{chargeType}`)
         pattern:
           type: string
           description: >-
-            Only for a charge type family: the family's keys, `totals.charged.<type>` or `rows.plots.debt.<type>`
-            (`<type>` the code of a seeded type or the id of a custom type)
+            Only for a charge type family: the family's keys, `totals.charged.<type>`, `totals.paid.<type>` or
+            `rows.plots.debt.<type>` (`<type>` the code of a seeded type or the id of a custom type)
         chargeTypeId:
           type: string
           format: uuid

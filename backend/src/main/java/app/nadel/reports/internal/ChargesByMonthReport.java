@@ -32,9 +32,11 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 
 /**
- * Charges by month ({@code charges-by-month}, functional spec 2.3, feature 013 §3.1): what was charged per billing month
- * and charge type, split into regular charges, opening balances, reversals and adjustments, with the effective total
- * (money rules 5.4). Filters: billing months (default the previous month), charge types (default all), street.
+ * Charges by month ({@code charges-by-month}, functional spec 2.3, feature 013 §3.1, feature 015 §6): what was charged
+ * per billing month and charge type, split into regular charges, opening balances, reversals and adjustments, with the
+ * effective total (money rules 5.4), and what is paid on those charges as of the report's day (today, Kyiv): column
+ * {@code paid}, the net allocations to the charges of the row whose value date is on or before today. Filters: billing
+ * months (default the previous month), charge types (default all), street.
  * <p>
  * Sheet {@code byBillingMonth}: one row per billing month and charge type that has charges, with the month's status,
  * the charge types in their configured order; a subtotal row after each month and the totals of the range. Its
@@ -57,7 +59,7 @@ class ChargesByMonthReport implements ReportDefinition {
     /** The amount columns after the plot count, in order. */
     private static final List<Function<MonthTypeTotals, Money>> AMOUNTS = List.of(MonthTypeTotals::regular,
             MonthTypeTotals::opening, MonthTypeTotals::reversals, MonthTypeTotals::adjustments,
-            MonthTypeTotals::effective);
+            MonthTypeTotals::effective, MonthTypeTotals::paid);
 
     private final LedgerReadModel ledger;
     private final PlotCatalog plots;
@@ -87,9 +89,9 @@ class ChargesByMonthReport implements ReportDefinition {
             order.put(configured.get(index).id(), index);
         }
         List<MonthTypeTotals> byBillingMonth = ledger.monthTotals(filters.fromMonth(), filters.toMonth(), types,
-                plotIds, MonthGrouping.BILLING_MONTH);
+                plotIds, MonthGrouping.BILLING_MONTH, context.today());
         List<MonthTypeTotals> byServiceMonth = ledger.monthTotals(filters.fromMonth(), filters.toMonth(), types,
-                plotIds, MonthGrouping.SERVICE_MONTH);
+                plotIds, MonthGrouping.SERVICE_MONTH, context.today());
         return new ReportResult(List.of(sheet(BY_BILLING_MONTH, true, byBillingMonth, order),
                 sheet(BY_SERVICE_PERIOD, false, byServiceMonth, order)),
                 List.of(new Note(ReportNoteCode.SERVICE_PERIOD_SHEET, Map.of())));
@@ -104,7 +106,7 @@ class ChargesByMonthReport implements ReportDefinition {
         }
         columns.add(Column.of("chargeType", ReportColumnType.CHARGE_TYPE));
         columns.add(Column.of("plots", ReportColumnType.INTEGER));
-        for (String amount : List.of("regular", "opening", "reversals", "adjustments", "effective")) {
+        for (String amount : List.of("regular", "opening", "reversals", "adjustments", "effective", "paid")) {
             columns.add(Column.of(amount, ReportColumnType.MONEY));
         }
         Map<YearMonth, List<MonthTypeTotals>> byMonth = new LinkedHashMap<>();

@@ -29,6 +29,7 @@ export const PARAM_CONTROLS: Readonly<Record<ReportFilterParam, ParamControl>> =
   meterKinds: { kind: 'multi', options: ['PLOT', 'SUBSTATION', 'QUARTER', 'COMMON_CONSUMER'] },
   waterSource: { kind: 'select', options: ['COOPERATIVE_SUPPLY', 'METER'] },
   correctionKinds: { kind: 'multi', options: ['REVERSAL', 'ADJUSTMENT'] },
+  source: { kind: 'select', options: ['CASH', 'BANK'] },
 };
 
 const NUMERIC_PARAMS: ReadonlySet<string> = new Set([
@@ -99,15 +100,16 @@ function lastDayOf(month: string): string | undefined {
 /** The first and last day of the period the filters name, as ISO days, or undefined when they name none. */
 function periodDays(values: FilterValues): { from: string; to: string } | undefined {
   const one = (param: ReportFilterParam): string | undefined => values[param]?.[0];
+  // a report that takes both (payments) names the file by the received days
+  const from = one('from');
+  const to = one('to');
+  if (from !== undefined && to !== undefined) return { from, to };
   const fromMonth = one('fromMonth');
   const toMonth = one('toMonth');
   if (fromMonth !== undefined && toMonth !== undefined) {
     const to = lastDayOf(toMonth);
     return to === undefined ? undefined : { from: `${fromMonth}-01`, to };
   }
-  const from = one('from');
-  const to = one('to');
-  if (from !== undefined && to !== undefined) return { from, to };
   const year = one('year');
   if (year !== undefined) return { from: `${year}-01-01`, to: `${year}-12-31` };
   const asOf = one('asOf');

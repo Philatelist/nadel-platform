@@ -59,7 +59,34 @@ class TemplateCatalogTests extends ReportsTestSupport {
         assertThat(landTax.get("example").asString()).isEqualTo("12600.00");
         assertThat(entry(catalog, "rows.meters.endValue").get("type").asString()).isEqualTo("QUANTITY");
         assertThat(entry(catalog, "rows.months.month").get("type").asString()).isEqualTo("MONTH");
-        assertThat(catalog.size()).isEqualTo(TemplateField.values().length - 2 + 2 * 7);
+        // three families of seven charge types each
+        assertThat(catalog.size()).isEqualTo(TemplateField.values().length - 3 + 3 * 7);
+
+        // feature 015: the paid totals per type, the prepayment and the payments rows need PAYMENTS_VIEW
+        assertThat(keys(catalog, "totals.paid.")).containsExactly("totals.paid.MEMBERSHIP", "totals.paid.ELECTRICITY",
+                "totals.paid.LAND_TAX", "totals.paid.WATER", "totals.paid.COMMON_CONSUMERS", "totals.paid." + guard,
+                "totals.paid." + old);
+        JsonNode paid = entry(catalog, "totals.paid.MEMBERSHIP");
+        assertThat(paid.get("field").asString()).isEqualTo("totals.paid.byChargeType");
+        assertThat(paid.get("pattern").asString()).isEqualTo("totals.paid.<type>");
+        assertThat(paid.get("permission").asString()).isEqualTo("PAYMENTS_VIEW");
+        assertThat(entry(catalog, "totals.prepayment").get("permission").asString()).isEqualTo("PAYMENTS_VIEW");
+        assertThat(keys(catalog, "rows.payments.")).containsExactly("rows.payments.receivedOn",
+                "rows.payments.billingMonth", "rows.payments.source", "rows.payments.document",
+                "rows.payments.number", "rows.payments.street", "rows.payments.amount", "rows.payments.allocated",
+                "rows.payments.prepayment", "rows.payments.reversed");
+        catalog.forEach(entry -> {
+            String key = entry.get("key").asString();
+            boolean payment = key.startsWith("totals.paid.") || key.equals("totals.prepayment")
+                    || key.startsWith("rows.payments.");
+            assertThat(entry.get("permission").asString()).as(key)
+                    .isEqualTo(payment ? "PAYMENTS_VIEW" : "REPORTS_VIEW");
+            if (key.startsWith("rows.payments.")) {
+                assertThat(entry.get("rowSet").asString()).isEqualTo("PAYMENTS");
+            }
+        });
+        // the payer and the payer note are never placeholders
+        assertThat(keys(catalog, "rows.payments.")).noneMatch(key -> key.contains("payer") || key.contains("note"));
     }
 
     @Test

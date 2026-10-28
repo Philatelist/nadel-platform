@@ -266,6 +266,7 @@ export * from './reportResourceParameter';
 export * from './reportRow';
 export * from './reportRowKind';
 export * from './reportSheet';
+export * from './reportSourceParameter';
 export * from './reportStatusesParameter';
 export * from './reportStreetParameter';
 export * from './reportTemplate';

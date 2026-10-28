@@ -62,7 +62,8 @@ class XlsxReportWriterTests {
                     "Filters: Billing months: 01.2025 – 02.2025; Street: all");
             assertThat(rows.get(5).getCellText(0)).startsWith("The sheet “By service period” groups");
             assertThat(texts(rows.get(6))).containsExactly("Month", "Month status", "Charge type", "Plots",
-                    "Charged", "Opening balances", "Reversals", "Adjustments", "Effective total", "Security");
+                    "Charged", "Opening balances", "Reversals", "Adjustments", "Effective total",
+                    "Security: debt");
             org.dhatim.fastexcel.reader.Row detail = rows.get(7);
             assertFormat(detail, 0, "mm.yyyy");
             assertThat(detail.getCellText(1)).isEqualTo("Open");

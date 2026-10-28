@@ -11,7 +11,7 @@
  */
 
 /**
- * What a filter asks for and the query parameters it fills. `MONTH_RANGE`: billing months `fromMonth` and `toMonth`. `DATE_RANGE`: days `from` and `to`. `DATE`: one day `asOf`. `YEAR`: `year`. `MONEY`: an amount (`minDebt`). `INT`: a whole number (`olderThanDays`). `CHARGE_TYPES`: charge types `chargeTypeIds`, several. `STREET`: one street `street`. `STATUS`: status colours `statuses`, several. `RESOURCE`: `resource`. `METER_KIND`: meter kinds `meterKinds`, several. `WATER_SOURCE`: the kind of water source `waterSource`. `CORRECTION_KIND`: `correctionKinds`, several.
+ * What a filter asks for and the query parameters it fills. `MONTH_RANGE`: billing months `fromMonth` and `toMonth`. `DATE_RANGE`: days `from` and `to`. `DATE`: one day `asOf`. `YEAR`: `year`. `MONEY`: an amount (`minDebt`). `INT`: a whole number (`olderThanDays`). `CHARGE_TYPES`: charge types `chargeTypeIds`, several. `STREET`: one street `street`. `STATUS`: status colours `statuses`, several. `RESOURCE`: `resource`. `METER_KIND`: meter kinds `meterKinds`, several. `WATER_SOURCE`: the kind of water source `waterSource`. `CORRECTION_KIND`: `correctionKinds`, several. `SOURCE`: the source of a payment `source`.
  */
 export type ReportFilterType = typeof ReportFilterType[keyof typeof ReportFilterType];
 
@@ -30,4 +30,5 @@ export const ReportFilterType = {
   METER_KIND: 'METER_KIND',
   WATER_SOURCE: 'WATER_SOURCE',
   CORRECTION_KIND: 'CORRECTION_KIND',
+  SOURCE: 'SOURCE',
 } as const;

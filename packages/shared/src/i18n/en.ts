@@ -1771,6 +1771,7 @@ export const en = {
         MONTHS: 'Repeated row: billing months',
         METERS: 'Repeated row: electricity meters',
         WATER: 'Repeated row: water',
+        PAYMENTS: 'Repeated row: payments',
       },
       types: {
         TEXT: 'Text',
@@ -1814,6 +1815,12 @@ export const en = {
           byChargeType:
             'Charged for {chargeType} with service days in the period: charges, reversals and adjustments, without opening balances',
         },
+        paid: {
+          byChargeType:
+            'Paid by the end of the period on the “{chargeType}” charges that “charged” counts for the same period',
+        },
+        prepayment:
+          'Prepayment of all plots at the end of the period: money received and not yet allocated to charges',
         debt: 'Debt of all active plots at the end of the period',
         plots: {
           count: 'Number of active plots',
@@ -1871,6 +1878,18 @@ export const en = {
           cubicMetres: 'Water used, m³',
           total: 'Water charged in the period',
         },
+        payments: {
+          receivedOn: 'Day the payment was received',
+          billingMonth: 'Billing month of the payment',
+          source: 'Source of the payment (cash or bank)',
+          document: 'Receipt or bank document number',
+          number: 'Plot number',
+          street: 'Street',
+          amount: 'Amount of the payment',
+          allocated: 'Allocated to charges',
+          prepayment: 'What is left of the payment as prepayment',
+          reversed: 'Whether the payment was reversed (Yes / No)',
+        },
       },
     },
   },
@@ -1897,6 +1916,7 @@ export const en = {
       BILLING_MONTHS: 'The period is counted in billing months.',
       SERVICE_DAYS: 'The period is counted in service days.',
       READING_DATES: 'The period is counted by reading dates.',
+      PAYMENT_DATES: 'The period is counted by the days payments were received.',
     },
     errors: {
       REPORT_TOO_LARGE: 'The report has more than 20 000 rows on a sheet. Narrow the filters and try again.',
@@ -1913,6 +1933,7 @@ export const en = {
         BILLING_MONTHS: 'Billing months',
         SERVICE_DAYS: 'Service days',
         READING_DATES: 'Reading dates',
+        PAYMENT_DATES: 'Days received',
       },
       chargeTypes: 'Charge types',
       street: 'Street',
@@ -1930,6 +1951,7 @@ export const en = {
         meterKinds: 'Meter kinds',
         waterSource: 'Water source',
         correctionKinds: 'Kinds of correction',
+        source: 'Source',
       },
       options: {
         statuses: {
@@ -1952,6 +1974,10 @@ export const en = {
           COOPERATIVE_SUPPLY: 'Cooperative supply',
           METER: 'Well',
         },
+        source: {
+          CASH: 'Cash',
+          BANK: 'Bank',
+        },
         correctionKinds: {
           REVERSAL: 'Reversal',
           ADJUSTMENT: 'Adjustment',
@@ -1966,11 +1992,18 @@ export const en = {
       CONSUMPTION: 'Consumption of plots',
       LOSSES: 'Losses charged',
       COMMON_CONSUMER: 'Common consumers charged',
+      CASH: 'Total cash',
+      BANK: 'Total bank',
     },
     reasons: {
       NO_READING: 'No reading, so the value is not known',
       DERIVED_FROM_UNKNOWN: 'Worked out from a value that is not known',
       SEVERAL_RATES: 'Priced at more than one rate; the amount is exact',
+    },
+    chargeTypeColumns: {
+      charged: '{chargeType}: charged',
+      paid: '{chargeType}: paid',
+      debt: '{chargeType}: debt',
     },
     notes: {
       SERVICE_PERIOD_SHEET:
@@ -1978,7 +2011,7 @@ export const en = {
       PAST_DATE_STATUS: 'The status is worked out as of the chosen day with today’s thresholds.',
       STATUS_ALL_CHARGE_TYPES: 'The status counts every charge type, not only the chosen ones.',
       OLDEST_UNPAID_IS_OLDEST_CHARGE:
-        'Until payments are recorded, the oldest unpaid charge is the oldest charge that still has a debt.',
+        'The oldest unpaid charge is the oldest charge that still has a debt after payments are allocated.',
       RECALCULATION_SUGGESTED:
         'Plots charged another amount than expected: {count}. A recalculation may be due; the report books nothing.',
       LOSSES_FIXED_PERCENT:
@@ -2006,12 +2039,13 @@ export const en = {
         reversals: 'Reversals',
         adjustments: 'Adjustments',
         effective: 'Effective total',
+        paid: 'Paid',
       },
     },
     'plot-balances': {
       title: 'Plot balances',
       description:
-        'The debt of every plot on a day, by charge type, with its status colour and without owner names.',
+        'What every plot was charged and paid, its debt and prepayment on a day, by charge type, with its status colour and without owner names.',
       sheets: {
         main: 'Balances',
       },
@@ -2019,7 +2053,10 @@ export const en = {
         number: 'Plot',
         street: 'Street',
         owners: 'Owners',
+        charged: 'Total charged',
+        paid: 'Total paid',
         total: 'Total debt',
+        prepayment: 'Prepayment',
         oldestUnpaid: 'Oldest unpaid charge',
         daysOverdue: 'Days overdue',
         status: 'Status',
@@ -2041,6 +2078,28 @@ export const en = {
         total: 'Total debt',
         oldestUnpaid: 'Oldest unpaid charge',
         daysOverdue: 'Days overdue',
+      },
+    },
+    payments: {
+      title: 'Payments',
+      description:
+        'Payments of billing months or of days received: receipts, payers, what is allocated and the prepayment, with totals per source.',
+      sheets: {
+        main: 'Payments',
+      },
+      columns: {
+        receivedOn: 'Received on',
+        billingMonth: 'Billing month',
+        source: 'Source',
+        document: 'Receipt or document',
+        number: 'Plot',
+        street: 'Street',
+        payer: 'Payer',
+        payerNote: 'Payer note',
+        amount: 'Amount',
+        allocated: 'Allocated',
+        prepayment: 'Prepayment',
+        reversed: 'Reversed',
       },
     },
     'electricity-tree': {

@@ -110,6 +110,11 @@ abstract class ReportsTestSupport extends IntegrationTest {
         }
         asLedgerOwner(sql -> {
             sql.update("delete from report_template_version where tenant_id = ?", id);
+            // payments (feature 015): releases point at their allocation, reversals at their payment
+            sql.update("delete from allocation where tenant_id = ? and releases_allocation_id is not null", id);
+            sql.update("delete from allocation where tenant_id = ?", id);
+            sql.update("delete from payment where tenant_id = ? and reverses_payment_id is not null", id);
+            sql.update("delete from payment where tenant_id = ?", id);
             sql.update("delete from meter_value_use where tenant_id = ?", id);
             sql.update("delete from recalculation_line where tenant_id = ?", id);
             sql.update("delete from charge_part where tenant_id = ?", id);
@@ -397,6 +402,51 @@ abstract class ReportsTestSupport extends IntegrationTest {
                 + "service_from, service_to, accrued_on, ?, id, ?, 'Виправлено ставку' from charge where id = ?",
                 monthRow(bookedIn), new BigDecimal(amount), "ADJUSTMENT:" + recalculation + ":" + original,
                 recalculation, original);
+    }
+
+    // ---- payments (feature 015), written as the database owner
+
+    /**
+     * A payment of the plot received on the day and booked in the month of that day, its own group; a cash payment
+     * carries the receipt number, a bank one the bank reference (either may be null); {@code payer} may be null.
+     */
+    UUID payment(UUID plot, String source, String amount, LocalDate receivedOn, Long receipt, String bankReference,
+            UUID payer) {
+        return payment(plot, source, amount, receivedOn, receipt, bankReference, payer, null);
+    }
+
+    /** A payment as {@link #payment(UUID, String, String, LocalDate, Long, String, UUID)} with its sealed note. */
+    UUID payment(UUID plot, String source, String amount, LocalDate receivedOn, Long receipt, String bankReference,
+            UUID payer, byte[] sealedNote) {
+        return payment(UUID.randomUUID(), plot, source, amount, receivedOn, receipt, bankReference, payer,
+                sealedNote);
+    }
+
+    UUID payment(UUID id, UUID plot, String source, String amount, LocalDate receivedOn, Long receipt,
+            String bankReference, UUID payer, byte[] sealedNote) {
+        ownerJdbc().update("insert into payment (id, tenant_id, plot_id, kind, source, amount, received_on, "
+                + "billing_month_id, group_id, receipt_number, bank_reference, payer_member_id, payer_note_enc) "
+                + "values (?, ?, ?, 'PAYMENT', ?, ?, ?, ?, ?, ?, ?, ?, ?)", id, tenant, plot, source,
+                new BigDecimal(amount), receivedOn, monthRow(YearMonth.from(receivedOn).toString()),
+                UUID.randomUUID(), receipt, bankReference, payer, sealedNote);
+        return id;
+    }
+
+    /** An allocation of the payment to a charge of its plot. */
+    UUID allocate(UUID payment, UUID charge, String amount) {
+        UUID id = UUID.randomUUID();
+        ownerJdbc().update("insert into allocation (id, tenant_id, payment_id, charge_id, plot_id, amount, origin) "
+                + "select ?, tenant_id, id, ?, plot_id, ?, 'ENTRY' from payment where id = ?", id, charge,
+                new BigDecimal(amount), payment);
+        return id;
+    }
+
+    /** The reversal of a payment that has no allocation left, in the original's month and on its day. */
+    void reversePayment(UUID original) {
+        ownerJdbc().update("insert into payment (tenant_id, plot_id, kind, source, amount, received_on, "
+                + "billing_month_id, group_id, reverses_payment_id, reason) select tenant_id, plot_id, "
+                + "'PAYMENT_REVERSAL', source, -amount, received_on, billing_month_id, group_id, id, "
+                + "'Помилковий платіж' from payment where id = ?", original);
     }
 
     // ---- tariffs (land tax)

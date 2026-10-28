@@ -22,9 +22,9 @@ export interface ReportTemplateField {
      * @pattern ^[A-Za-z][A-Za-z0-9_.\-]*$
      */
   key: string;
-  /** The description code: the description is `reportTemplates.fields.<field>` in the client's catalogs. The key itself for a fixed placeholder; for a placeholder of a charge type family the family's code, `totals.charged.byChargeType` or `rows.plots.debt.byChargeType`, whose text names the type (`{chargeType}`) */
+  /** The description code: the description is `reportTemplates.fields.<field>` in the client's catalogs. The key itself for a fixed placeholder; for a placeholder of a charge type family the family's code, `totals.charged.byChargeType`, `totals.paid.byChargeType` or `rows.plots.debt.byChargeType`, whose text names the type (`{chargeType}`) */
   field: string;
-  /** Only for a charge type family: the family's keys, `totals.charged.<type>` or `rows.plots.debt.<type>` (`<type>` the code of a seeded type or the id of a custom type) */
+  /** Only for a charge type family: the family's keys, `totals.charged.<type>`, `totals.paid.<type>` or `rows.plots.debt.<type>` (`<type>` the code of a seeded type or the id of a custom type) */
   pattern?: string;
   /** Only for a charge type family, the charge type of this entry */
   chargeTypeId?: string;

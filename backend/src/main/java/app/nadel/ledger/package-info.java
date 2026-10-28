@@ -18,7 +18,10 @@
  * effective amount charged per plot for a year, the {@link app.nadel.ledger.ChargedRow} of every electricity charge,
  * reversal and adjustment of a range of days and of every water charge of the plots asked, the open reading interval
  * items of the "not charged" queue per meter, and the booked losses and common consumer runs of a range as
- * {@link app.nadel.ledger.LossesRunNodeRow} and {@link app.nadel.ledger.CommonConsumerRunLineRow}). Everything else is
+ * {@link app.nadel.ledger.LossesRunNodeRow} and {@link app.nadel.ledger.CommonConsumerRunLineRow}; after payments, the
+ * paid amounts and prepayment as of a day and the {@link app.nadel.ledger.PaymentRow} of the payments report), and the
+ * port {@link app.nadel.ledger.PaymentNotes} (the payer notes for the payments report, only with {@code MEMBERS_VIEW}:
+ * the one documented exception to "no personal data"). Everything else is
  * internal: the entities, the pure
  * rules {@code BillingCalendar} (which month a charge is booked in) and {@code DebtCalculator} (debt per charge
  * type and prepayment), the payment tables ({@code payment}, {@code allocation}, {@code receipt_counter}, V27; the

@@ -41,6 +41,30 @@ const balancesInfo = {
   ],
 };
 
+const paymentsInfo = {
+  code: 'payments',
+  personalData: false,
+  filters: [
+    {
+      key: 'period',
+      type: 'MONTH_RANGE',
+      params: ['fromMonth', 'toMonth'],
+      required: true,
+      defaults: [],
+      basis: 'BILLING_MONTHS',
+    },
+    {
+      key: 'days',
+      type: 'DATE_RANGE',
+      params: ['from', 'to'],
+      required: false,
+      defaults: [],
+      basis: 'PAYMENT_DATES',
+    },
+    { key: 'source', type: 'SOURCE', params: ['source'], required: false, defaults: [] },
+  ],
+};
+
 const electricityTreeInfo = {
   code: 'electricity-tree',
   personalData: false,
@@ -187,6 +211,29 @@ describe('ReportPage', () => {
     });
   });
 
+  it('keeps the source and the received days of the payments report in the URL and names the file by the days', async () => {
+    const blob = new Blob(['x']);
+    downloadReport.mockResolvedValue(blob);
+    reports = [paymentsInfo];
+    report = ok(preview({ code: 'payments', sheets: [] }));
+    renderReport(
+      '/reports/payments?fromMonth=2026-10&toMonth=2026-10&source=CASH&from=2026-10-05&to=2026-10-20',
+    );
+    expect(getReportHook.mock.calls[0]?.[1]).toEqual({
+      fromMonth: '2026-10',
+      toMonth: '2026-10',
+      source: 'CASH',
+      from: '2026-10-05',
+      to: '2026-10-20',
+    });
+    expect(screen.getByLabelText('Source')).toHaveValue('CASH');
+    expect(within(screen.getByLabelText('Source')).getAllByRole('option')).toHaveLength(3);
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Download Excel' }));
+    await vi.waitFor(() =>
+      expect(downloadBlob).toHaveBeenCalledWith(blob, 'payments_2026-10-05_2026-10-20.xlsx'),
+    );
+  });
+
   it('says the report is too large for REPORT_TOO_LARGE', () => {
     report = {
       data: undefined,
@@ -252,7 +299,7 @@ describe('ReportPage', () => {
     );
     renderReport('/reports/plot-balances');
     const table = screen.getByRole('table');
-    expect(within(table).getByRole('columnheader', { name: 'Electricity' })).toBeInTheDocument();
+    expect(within(table).getByRole('columnheader', { name: 'Electricity: debt' })).toBeInTheDocument();
     expect(within(table).getByText('Debt above threshold')).toBeInTheDocument();
     expect(within(table).queryByText('RED')).not.toBeInTheDocument();
     expect(screen.getByText(/worked out as of the chosen day/)).toBeInTheDocument();

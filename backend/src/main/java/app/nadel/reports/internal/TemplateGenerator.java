@@ -24,7 +24,8 @@ import tools.jackson.databind.json.JsonMapper;
  * {@link ReportRunner} runs a report: the period is checked, the template and its latest file are read, the values are
  * resolved ({@link TemplateValues}, whose facades need the transaction), the file is filled ({@link TemplateFiller}) and
  * the audit event is published last, so a refused or failed generation leaves no entry. The cooperative comes from the
- * caller's token; the controller has checked {@code REPORTS_VIEW}.
+ * caller's token; the controller has checked {@code REPORTS_VIEW}, and a payment field of the template needs
+ * {@code PAYMENTS_VIEW} too (the resolver refuses it with 403 before the audit event).
  */
 @Component
 class TemplateGenerator {
@@ -65,6 +66,8 @@ class TemplateGenerator {
      * @throws ApiProblemException 400 {@code REPORT_FILTER_INVALID} ({@code to} before {@code from}, or a year or
      *                             more), 404, 409 {@code TEMPLATE_ARCHIVED}, 400 {@code TEMPLATE_INVALID}, 422
      *                             {@code REPORT_TOO_LARGE}
+     * @throws org.springframework.security.access.AccessDeniedException (403) when the template uses a payment field
+     *                             and the caller lacks {@code PAYMENTS_VIEW}
      */
     @Transactional
     public Generated generate(UUID templateId, LocalDate from, LocalDate to, ReportLanguage language) {
@@ -84,7 +87,8 @@ class TemplateGenerator {
                 .orElseThrow(ApiProblemException::notFound);
         TemplateFile file = versions.findFile(tenant, templateId, latest.id())
                 .orElseThrow(ApiProblemException::notFound);
-        TemplateValues.Resolver resolver = values.resolver(from, to, language, caller.displayName(), clock.instant());
+        TemplateValues.Resolver resolver = values.resolver(from, to, language, caller.displayName(), clock.instant(),
+                caller.permissions());
         TemplateFiller.Filled filled = filler.fill(file.content(), template.getName(), latest.versionNo(), resolver,
                 ReportTexts.of(language), limits.rowCap());
         audit.templateGenerated(caller, templateId, template.getName(), latest.versionNo(), from, to,
