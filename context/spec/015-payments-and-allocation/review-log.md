@@ -41,3 +41,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `08e3d1d..f6b5f41` | PASS | — | minor: a member receives the free-text reversal reason (not forbidden by the spec; could be gated by `PAYMENTS_VIEW`); account merge sorts by day only (same-day order by kind) |
+
+## Slice 7 — reports and templates after payments
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `f6b5f41..592d62a` | PASS | — | minor: payments report street filter binds one large `IN (:plotIds)` (other queries chunk by 500); `PREPAYMENT_AS_OF` with all plots runs once per chunk; `TemplateField` javadoc wrapping |

@@ -22,6 +22,7 @@ import app.nadel.ledger.internal.ReadingChargePlanning.MeterInterval;
 import app.nadel.ledger.internal.ReadingChargePlanning.NewCharges;
 import app.nadel.ledger.internal.ReadingChargePlanning.PlannedReadingCharge;
 import app.nadel.ledger.internal.TariffMonthPlanning.NewCharge;
+import app.nadel.money.Money;
 import app.nadel.meters.MeterKind;
 import app.nadel.meters.MeterNetwork;
 import app.nadel.meters.MeterNetwork.MeterPoints;
@@ -33,6 +34,7 @@ import app.nadel.plots.PlotCatalog;
 import app.nadel.plots.PlotCatalog.PlotFacts;
 import app.nadel.settings.CommonConsumerSplit;
 import app.nadel.settings.CooperativeSettings;
+import app.nadel.tariffs.ChargeTypeCatalog;
 import app.nadel.tariffs.DaySet;
 import app.nadel.tariffs.TariffBook;
 import app.nadel.tariffs.TariffBook.ChargeTypeEntry;
@@ -106,6 +108,12 @@ class DemoLedgerDataTests extends IntegrationTest {
 
     @Autowired
     private ApplicationEventPublisher events;
+
+    @Autowired
+    private PlotLedgerQueries ledgers;
+
+    @Autowired
+    private ChargeTypeCatalog chargeTypes;
 
     private final JdbcTemplate owner = ownerJdbc();
 
@@ -421,8 +429,8 @@ class DemoLedgerDataTests extends IntegrationTest {
     @Test
     void thePlotDebtsAreWhatTheStatusRefresherRecords() {
         String snapshot = "select p.number || '|' || s.debt || '|' || coalesce(s.oldest_debt_date::text, '-') || '|' "
-                + "|| s.status from plot_status s join plot p on p.id = s.plot_id where p.tenant_id = ? "
-                + "order by p.number";
+                + "|| s.status || '|' || s.prepayment from plot_status s join plot p on p.id = s.plot_id "
+                + "where p.tenant_id = ? order by p.number";
         List<String> demo = owner.queryForList(snapshot, String.class, DEMO_TENANT);
         Set<UUID> plotIds = new HashSet<>(owner.queryForList("select id from plot where tenant_id = ?", UUID.class,
                 DEMO_TENANT));
@@ -578,22 +586,197 @@ class DemoLedgerDataTests extends IntegrationTest {
                 + "|| (select count(*) from billing_month where tenant_id = ?) || '|' "
                 + "|| (select count(*) from meter_reading where tenant_id = ?) || '|' "
                 + "|| (select count(*) from recalculation where tenant_id = ?) || '|' "
-                + "|| (select count(*) from recalculation_line where tenant_id = ?)";
+                + "|| (select count(*) from recalculation_line where tenant_id = ?) || '|' "
+                + "|| (select count(*) from payment where tenant_id = ?) || '|' "
+                + "|| (select coalesce(sum(amount), 0) from allocation where tenant_id = ?) || '|' "
+                + "|| (select coalesce(sum(last_number), 0) from receipt_counter where tenant_id = ?)";
         Object[] tenant = {DEMO_TENANT, DEMO_TENANT, DEMO_TENANT, DEMO_TENANT, DEMO_TENANT, DEMO_TENANT, DEMO_TENANT,
-            DEMO_TENANT, DEMO_TENANT, DEMO_TENANT};
+            DEMO_TENANT, DEMO_TENANT, DEMO_TENANT, DEMO_TENANT, DEMO_TENANT, DEMO_TENANT};
         String before = owner.queryForObject(counts, String.class, tenant);
 
         DemoLedgerData.restore(owner);
         assertThat(owner.queryForObject(counts, String.class, tenant)).isEqualTo(before);
 
         DemoLedgerData.clear(owner);
-        assertThat(owner.queryForObject(counts, String.class, tenant)).isEqualTo("0|0|0|0|0|0|0|186|0|0");
+        assertThat(owner.queryForObject(counts, String.class, tenant)).isEqualTo("0|0|0|0|0|0|0|186|0|0|0|0|0");
         assertThat(owner.queryForObject("select count(*) from meter where tenant_id = ?", Integer.class,
                 DEMO_TENANT)).isEqualTo(38);
         assertThat(owner.queryForObject("select count(*) from plot_status s join plot p on p.id = s.plot_id "
                 + "where p.tenant_id = ? and s.debt <> 0", Integer.class, DEMO_TENANT)).isZero();
         assertThat(owner.queryForObject("select count(*) from cooperative_settings where tenant_id = ?",
                 Integer.class, DEMO_TENANT)).isZero();
+    }
+
+    // ---- payments and allocations (spec 015)
+
+    /** Every demo payment is placed on the open charges of its plot as {@code AllocationPlanner} proposes. */
+    @Test
+    void theDemoAllocationsAreWhatThePlannerProposesForEachPayment() {
+        List<Map<String, Object>> payments = owner.queryForList("select id, plot_id, amount from payment "
+                + "where tenant_id = ? and kind = 'PAYMENT' order by created_at, id", DEMO_TENANT);
+        assertThat(payments).hasSizeGreaterThanOrEqualTo(10);
+        Set<UUID> plotsSeen = new HashSet<>();
+        inDemo(() -> {
+            Map<UUID, Integer> positions = OpenAmounts.positions(chargeTypes.all());
+            for (Map<String, Object> payment : payments) {
+                UUID plotId = (UUID) payment.get("plot_id");
+                // the demo enters one payment per plot, so the plot has no allocation before it
+                assertThat(plotsSeen.add(plotId)).as("one payment per plot").isTrue();
+                PlotLedgerQueries.PlotLedger ledger = ledgers.load(List.of(plotId)).get(plotId);
+                PlotLedgerState before = OpenAmounts.of(ledger.charges(), List.of(), List.of(), positions);
+                AllocationPlanner.Proposal proposal = AllocationPlanner.propose(
+                        Money.of((BigDecimal) payment.get("amount")), before.charges());
+
+                Map<UUID, BigDecimal> stored = new LinkedHashMap<>();
+                owner.queryForList("select a.charge_id, a.amount from allocation a join charge c on c.id = a.charge_id "
+                        + "where a.payment_id = ? and a.amount > 0 order by c.accrued_on, c.created_at, c.id::text "
+                        + "collate \"C\"", payment.get("id")).forEach(row ->
+                        stored.put((UUID) row.get("charge_id"), (BigDecimal) row.get("amount")));
+                Map<UUID, BigDecimal> planned = new LinkedHashMap<>();
+                proposal.lines().forEach(line -> planned.put(line.chargeId(), line.amount().value()));
+                assertThat(stored.keySet()).as("charges of the payment on plot " + plotId).isEqualTo(planned.keySet());
+                planned.forEach((charge, amount) -> assertThat(stored.get(charge)).isEqualByComparingTo(amount));
+            }
+            return null;
+        });
+        // the planner order itself: an earlier charge is filled before a later one gets money
+        assertThat(owner.queryForObject("select count(*) from allocation a join charge c on c.id = a.charge_id "
+                + "where a.tenant_id = ? and a.amount > 0 and exists (select 1 from charge e where e.plot_id = c.plot_id "
+                + "and e.kind in ('REGULAR', 'OPENING') and e.accrued_on < c.accrued_on and e.amount > 0 "
+                + "and not exists (select 1 from charge r where r.reverses_charge_id = e.id) "
+                + "and not exists (select 1 from allocation b where b.charge_id = e.id and b.payment_id = a.payment_id))",
+                Integer.class, DEMO_TENANT)).as("a later charge got money while an older one got none").isZero();
+    }
+
+    @Test
+    void theDemoPaymentsAndChargesKeepTheirCaps() {
+        assertThat(owner.queryForObject("select count(*) from payment p where p.tenant_id = ? and p.kind = 'PAYMENT' "
+                + "and (select coalesce(sum(a.amount), 0) from allocation a where a.payment_id = p.id) > p.amount",
+                Integer.class, DEMO_TENANT)).isZero();
+        assertThat(owner.queryForObject("select count(*) from charge c where c.tenant_id = ? "
+                + "and c.kind in ('REGULAR', 'OPENING') "
+                + "and (select coalesce(sum(a.amount), 0) from allocation a where a.charge_id = c.id) "
+                + "> case when exists (select 1 from charge r where r.reverses_charge_id = c.id) then 0 "
+                + "else c.amount + coalesce((select sum(j.amount) from charge j where j.adjusts_charge_id = c.id), 0) end",
+                Integer.class, DEMO_TENANT)).isZero();
+        assertThat(owner.queryForObject("select count(*) from payment where tenant_id = ? "
+                + "and received_on > (now() at time zone 'Europe/Kyiv')::date", Integer.class, DEMO_TENANT)).isZero();
+        // every row is booked in the open month (a payment received in the closed month counts in the earliest open one)
+        assertThat(owner.queryForObject("select count(*) from payment p join billing_month b on b.id = p.billing_month_id "
+                + "where p.tenant_id = ? and b.status <> 'OPEN'", Integer.class, DEMO_TENANT)).isZero();
+        assertThat(owner.queryForObject("select count(*) from payment p join billing_month b on b.id = p.billing_month_id "
+                + "where p.tenant_id = ? and p.received_on < b.month", Integer.class, DEMO_TENANT)).isPositive();
+        assertThat(owner.queryForObject("select count(*) from payment where tenant_id = ? and payer_note_enc is not null",
+                Integer.class, DEMO_TENANT)).isZero();
+        assertThat(owner.queryForObject("select last_number from receipt_counter where tenant_id = ?", Long.class,
+                DEMO_TENANT)).isEqualTo(owner.queryForObject("select max(receipt_number) from payment "
+                + "where tenant_id = ?", Long.class, DEMO_TENANT));
+    }
+
+    @Test
+    void thePlotStatusCacheIsWhatARebuildFromTheLedgerGives() {
+        List<UUID> plotIds = owner.queryForList("select id from plot where tenant_id = ?", UUID.class, DEMO_TENANT);
+        inDemo(() -> {
+            Map<UUID, PlotLedgerQueries.PlotLedger> all = ledgers.load(plotIds);
+            for (UUID plotId : plotIds) {
+                PlotLedgerQueries.PlotLedger ledger = all.get(plotId);
+                DebtCalculator.Debts debts = DebtCalculator.of(ledger.charges(), ledger.allocations(),
+                        ledger.payments());
+                Map<String, Object> cached = owner.queryForMap("select debt, oldest_debt_date, prepayment "
+                        + "from plot_status where plot_id = ?", plotId);
+                assertThat((BigDecimal) cached.get("debt")).as("debt of " + plotId)
+                        .isEqualByComparingTo(debts.total().value());
+                assertThat((BigDecimal) cached.get("prepayment")).as("prepayment of " + plotId)
+                        .isEqualByComparingTo(debts.prepayment().value());
+                assertThat(cached.get("oldest_debt_date") == null ? null
+                        : ((java.sql.Date) cached.get("oldest_debt_date")).toLocalDate())
+                        .as("oldest debt of " + plotId).isEqualTo(debts.oldestAccrual());
+            }
+            return null;
+        });
+    }
+
+    @Test
+    void theSplitPaymentSharesOneReceiptAndOneGroup() {
+        List<Map<String, Object>> parts = owner.queryForList("select p.number, y.group_id, y.receipt_number, y.source, "
+                + "y.payer_member_id, y.amount from payment y join plot p on p.id = y.plot_id "
+                + "where y.tenant_id = ? and y.kind = 'PAYMENT' and p.number in ('7', '15') order by p.number::int",
+                DEMO_TENANT);
+        assertThat(parts).hasSize(2);
+        assertThat(parts.get(0).get("group_id")).isEqualTo(parts.get(1).get("group_id"));
+        assertThat(parts.get(0).get("receipt_number")).isNotNull().isEqualTo(parts.get(1).get("receipt_number"));
+        assertThat(parts).allSatisfy(part -> {
+            assertThat(part.get("source")).isEqualTo("CASH");
+            assertThat(part.get("payer_member_id")).isEqualTo(UUID.fromString("aaaaaaaa-0000-0000-0000-000000000003"));
+        });
+        // no other payment is in that group or has that receipt
+        assertThat(owner.queryForObject("select count(*) from payment where tenant_id = ? and group_id = ?::uuid",
+                Integer.class, DEMO_TENANT, parts.get(0).get("group_id").toString())).isEqualTo(2);
+        // cash and bank: bank payments carry a payment order reference, cash ones a receipt number
+        assertThat(owner.queryForObject("select count(*) from payment where tenant_id = ? and source = 'BANK' "
+                + "and bank_reference like 'ПД-2026-%'", Integer.class, DEMO_TENANT)).isGreaterThanOrEqualTo(3);
+    }
+
+    @Test
+    void theReversedPaymentHasNoMoneyLeftOnAnyCharge() {
+        Map<String, Object> reversal = owner.queryForMap("select r.id, r.reverses_payment_id, r.plot_id, r.amount, "
+                + "r.reason, r.receipt_number, r.group_id from payment r where r.tenant_id = ? "
+                + "and r.kind = 'PAYMENT_REVERSAL'", DEMO_TENANT);
+        assertThat((String) reversal.get("reason")).isNotBlank();
+        assertThat(reversal.get("receipt_number")).isNull();
+        UUID payment = (UUID) reversal.get("reverses_payment_id");
+        assertThat(owner.queryForObject("select count(*) from allocation where payment_id = ? and amount > 0",
+                Integer.class, payment)).isPositive();
+        assertThat(owner.queryForObject("select coalesce(sum(amount), 0) from allocation where payment_id = ?",
+                BigDecimal.class, payment)).isEqualByComparingTo("0");
+        assertThat(owner.queryForObject("select count(*) from allocation where payment_id = ? and amount < 0 "
+                + "and release_cause = 'PAYMENT_REVERSED'", Integer.class, payment))
+                .isEqualTo(owner.queryForObject("select count(*) from allocation where payment_id = ? and amount > 0",
+                Integer.class, payment));
+        // the plot owes what it did before: the payment is gone from its prepayment and from its allocations
+        assertThat(owner.queryForObject("select s.prepayment from plot_status s where s.plot_id = ?", BigDecimal.class,
+                reversal.get("plot_id"))).isEqualByComparingTo("0");
+        assertThat(owner.queryForObject("select s.debt - (select coalesce(sum(c.amount), 0) from charge c "
+                + "where c.plot_id = s.plot_id) from plot_status s where s.plot_id = ?", BigDecimal.class,
+                reversal.get("plot_id"))).isEqualByComparingTo("0");
+    }
+
+    /**
+     * A plot holds either a prepayment or open charges, never both: otherwise the first booking (or the republished
+     * {@link ChargesBooked}) would place the prepayment automatically and the demo picture would move.
+     */
+    @Test
+    void noPlotHasAPrepaymentAndOpenChargesAtTheSameTime() {
+        List<UUID> plotIds = owner.queryForList("select id from plot where tenant_id = ?", UUID.class, DEMO_TENANT);
+        List<UUID> withPrepayment = new ArrayList<>();
+        inDemo(() -> {
+            ledgers.load(plotIds).forEach((plotId, ledger) -> {
+                PlotLedgerState state = ledger.state();
+                boolean open = state.charges().stream().anyMatch(c -> c.allocatable() && c.open().signum() > 0);
+                if (state.prepayment().signum() > 0) {
+                    withPrepayment.add(plotId);
+                    assertThat(open).as("plot " + plotId + " has a prepayment and an open charge").isFalse();
+                }
+            });
+            return null;
+        });
+        assertThat(withPrepayment).as("the plot with a prepayment").hasSize(1);
+    }
+
+    @Test
+    void thePaymentsLeaveAVariedMap() {
+        assertThat(owner.queryForObject("select count(*) from payment y join plot p on p.id = y.plot_id "
+                + "where y.tenant_id = ? and p.number = '1'", Integer.class, DEMO_TENANT)).isZero();
+        Map<String, String> statuses = expectedStatuses(false);
+        long red = statuses.values().stream().filter("RED"::equals).count();
+        long yellow = statuses.values().stream().filter("YELLOW"::equals).count();
+        long green = statuses.values().stream().filter("GREEN"::equals).count();
+        assertThat(red).isGreaterThanOrEqualTo(8);
+        assertThat(yellow).isGreaterThanOrEqualTo(4);
+        assertThat(green).isGreaterThanOrEqualTo(4);
+        assertThat(statuses).containsEntry("1", "RED");
+        assertThat(owner.queryForObject("select count(distinct plot_id) from payment where tenant_id = ?",
+                Integer.class, DEMO_TENANT)).isBetween(11, 14);
     }
 
     // ---- helpers

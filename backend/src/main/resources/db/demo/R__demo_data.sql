@@ -657,7 +657,10 @@ DROP TABLE pg_temp.demo_anchor;
 --    12th day before the anchor;
 --  - plot 25 gets a meter installed on 15.12.2025, before the first electricity tariff version (01.01.2026), read once,
 --    5 days before the anchor: its interval cannot be charged and is the "not charged" item "Немає тарифу на всі дні";
---  - settings: proportional losses, the red threshold at 2 000,00 or 90 days; plot_status holds every plot's debt.
+--  - payments and allocations (spec 015, see the payments part at the end of the block): cash and bank money for 14 owned
+--    plots, one prepayment, one split, one reversed payment;
+--  - settings: proportional losses, the red threshold at 2 000,00 or 90 days; plot_status holds every plot's debt,
+--    oldest unpaid charge and prepayment.
 -- Every amount is what the application calculates from the same rows (DemoLedgerDataTests recalculates them with the
 -- calculators and compares). The block assumes one version per demo tariff and real readings on the ends of the runs.
 -- Re-runnable: it first removes every ledger row of the demo cooperative (charges are append-only, so as nadel_owner
@@ -670,6 +673,8 @@ DECLARE
     demo         constant uuid := '11111111-1111-1111-1111-111111111111';
     chairman     constant uuid := 'aaaaaaaa-0000-0000-0000-000000000001';
     electrician  constant uuid := 'aaaaaaaa-0000-0000-0000-000000000004';
+    treasurer    constant uuid := 'aaaaaaaa-0000-0000-0000-000000000002';
+    demo_member  constant uuid := 'aaaaaaaa-0000-0000-0000-000000000003';
     quarter_a    constant uuid := '99999999-0000-0000-0001-000000000002';
     quarter_b    constant uuid := '99999999-0000-0000-0001-000000000003';
     well         constant uuid := '99999999-0000-0000-0001-000000000004';
@@ -705,13 +710,21 @@ DECLARE
     rec_reversal uuid := md5('demo-recalculation-reversal:11111111-1111-1111-1111-111111111111')::uuid;
     rec_new      uuid := md5('demo-recalculation-new:11111111-1111-1111-1111-111111111111')::uuid;
     rec_adjust   uuid := md5('demo-recalculation-adjustment:11111111-1111-1111-1111-111111111111')::uuid;
+    pay_base     date;
+    charges_at   timestamptz;
 BEGIN
     IF '${demoledger}' <> 'on' THEN
         RETURN;
     END IF;
     PERFORM set_config('app.ledger_maintenance', 'on', true);
 
-    -- Remove the ledger of the demo cooperative (reversals before what they reverse).
+    -- Remove the ledger of the demo cooperative (reversals before what they reverse; payments and allocations first,
+    -- they point at charges and billing months).
+    DELETE FROM allocation WHERE tenant_id = demo AND releases_allocation_id IS NOT NULL;
+    DELETE FROM allocation WHERE tenant_id = demo;
+    DELETE FROM payment WHERE tenant_id = demo AND reverses_payment_id IS NOT NULL;
+    DELETE FROM payment WHERE tenant_id = demo;
+    DELETE FROM receipt_counter WHERE tenant_id = demo;
     DELETE FROM meter_value_use WHERE tenant_id = demo;
     DELETE FROM charge_part WHERE tenant_id = demo;
     DELETE FROM recalculation_line WHERE tenant_id = demo;
@@ -1234,9 +1247,134 @@ BEGIN
            'REVERSE_AND_RECHARGE', ARRAY['TARIFF_VERSION'], rec_reversal, rec_new, NULL, 2
     FROM charge c WHERE c.id = rec_open;
 
-    -- The plot status cache: the debt, the day its oldest unreversed charge counts from, and the colour as of today.
+    -- Payments (spec 015): cash and bank money for 14 of the 25 owned plots, placed on the open charges the way the
+    -- application places a payment at entry (AllocationPlanner: accrued_on, charge type position, service_from, created_at,
+    -- id as text; a charge's open amount is the charge plus its adjustments minus its allocations; only REGULAR and
+    -- OPENING charges that are not reversed). One payment per plot, entered after every charge was booked, always in the
+    -- open month: a payment received in a closed month counts in the earliest open month (BillingCalendar.bookingMonth),
+    -- which is the open month for any received day of the two demo months. Plot 1 is never paid. The cases:
+    --  - paid in full: plots 7 (cash, part of the split), 8 (bank), 10, 14, 21 (cash);
+    --  - paid in part: plots 2, 4, 15, 19 (cash, received in the closed month), 5, 6, 9 (bank, payment orders);
+    --  - a prepayment: plot 20 pays 300,00 more than it owes, so it ends with the prepayment and no open charge (a state
+    --    automatic allocation leaves alone);
+    --  - one cash payment split over plots 7 and 15 of the demo member (one group, one receipt number on both parts);
+    --  - one reversed payment: plot 3 paid 1 000,00 in cash and the chairman reversed it (its allocation is released
+    --    first, then the PAYMENT_REVERSAL row; the plot owes what it did before).
+    -- Amounts "in part" are fixed, capped at 90 % of the debt so a plot always keeps something open.
+    SELECT coalesce(max(created_at), now()) INTO charges_at FROM charge WHERE tenant_id = demo;
+    pay_base := least(anchor, CURRENT_DATE);
+
+    -- The charges that can receive money, with the open amount before payments and the amount open ahead of each in
+    -- planner order.
+    DROP TABLE IF EXISTS pg_temp.demo_open;
+    CREATE TEMP TABLE demo_open AS
+    WITH type_pos AS (
+        SELECT t.id, row_number() OVER (ORDER BY t.position, t.id) AS pos FROM charge_type t WHERE t.tenant_id = demo
+    ), live AS (
+        SELECT c.id, c.plot_id, c.accrued_on, tp.pos, coalesce(c.service_from, c.accrued_on) AS service_start,
+               c.created_at,
+               c.amount + coalesce((SELECT sum(a.amount) FROM charge a
+                                    WHERE a.tenant_id = demo AND a.adjusts_charge_id = c.id), 0) AS open_amount
+        FROM charge c JOIN type_pos tp ON tp.id = c.charge_type_id
+        WHERE c.tenant_id = demo AND c.kind IN ('REGULAR', 'OPENING')
+          AND NOT EXISTS (SELECT 1 FROM charge r WHERE r.tenant_id = demo AND r.reverses_charge_id = c.id)
+    )
+    SELECT l.*,
+           coalesce(sum(l.open_amount) OVER (PARTITION BY l.plot_id
+                        ORDER BY l.accrued_on, l.pos, l.service_start, l.created_at, l.id::text COLLATE "C"
+                        ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING), 0) AS before_open
+    FROM live l
+    WHERE l.open_amount > 0;
+
+    -- The payments: k is the order of entry; mode FULL pays what the plot owes, PLUS pays that and amount_arg more,
+    -- PART pays amount_arg (at most 90 % of the debt); days_ago counts back from today (null: the closed month).
+    DROP TABLE IF EXISTS pg_temp.demo_payment;
+    CREATE TEMP TABLE demo_payment AS
+    SELECT x.*,
+           md5('demo-payment:' || demo || ':' || x.plot_number)::uuid AS id,
+           md5('demo-payment-group:' || demo || ':' || x.group_k)::uuid AS group_id,
+           dense_rank() OVER (PARTITION BY x.source ORDER BY x.group_k) AS group_rank
+    FROM (
+        SELECT s.k, s.group_k, s.plot_number, s.source, s.reference, s.reversed, s.payer, p.id AS plot_id,
+               o.total_open,
+               CASE s.mode WHEN 'FULL' THEN o.total_open WHEN 'PLUS' THEN o.total_open + s.amount_arg
+                           ELSE least(s.amount_arg, round(o.total_open * 0.9, 2)) END AS amount,
+               least(CURRENT_DATE, CASE WHEN s.days_ago IS NULL THEN closed_month + 20
+                                        ELSE greatest(pay_base - s.days_ago, open_month) END) AS received_on
+        FROM (VALUES
+            (1,  1,  '10',  'CASH', 'FULL', 0::numeric,   NULL::text,        18,   false, NULL::uuid),
+            (2,  2,  '8',   'BANK', 'FULL', 0,            'ПД-2026-0407',    17,   false, NULL),
+            (3,  3,  '2',   'CASH', 'PART', 800.00,       NULL,              15,   false, NULL),
+            (4,  4,  '4',   'CASH', 'PART', 1200.00,      NULL,              14,   false, NULL),
+            (5,  5,  '5',   'BANK', 'PART', 1000.00,      'ПД-2026-0411',    13,   false, NULL),
+            (6,  6,  '14',  'CASH', 'FULL', 0,            NULL,              12,   false, NULL),
+            (7,  7,  '9',   'BANK', 'PART', 1500.00,      'ПД-2026-0415',    10,   false, NULL),
+            (8,  8,  '19',  'CASH', 'PART', 1000.00,      NULL,              NULL, false, NULL),
+            (9,  9,  '21',  'CASH', 'FULL', 0,            NULL,              8,    false, NULL),
+            (10, 10, '7',   'CASH', 'FULL', 0,            NULL,              6,    false, demo_member),
+            (11, 10, '15',  'CASH', 'PART', 1000.00,      NULL,              6,    false, demo_member),
+            (12, 12, '3',   'CASH', 'PART', 1000.00,      NULL,              5,    true,  NULL),
+            (13, 13, '20',  'CASH', 'PLUS', 300.00,       NULL,              4,    false, NULL),
+            (14, 14, '6',   'BANK', 'PART', 1200.00,      'ПД-2026-0422',    3,    false, NULL)
+        ) AS s(k, group_k, plot_number, source, mode, amount_arg, reference, days_ago, reversed, payer)
+        JOIN plot p ON p.tenant_id = demo AND p.number = s.plot_number AND p.archived_at IS NULL
+        CROSS JOIN LATERAL (SELECT coalesce(sum(o.open_amount), 0) AS total_open
+                            FROM demo_open o WHERE o.plot_id = p.id) o
+    ) x;
+
+    IF EXISTS (SELECT 1 FROM demo_payment WHERE amount <= 0) THEN
+        RAISE EXCEPTION 'a demo payment has nothing to pay';
+    END IF;
+
+    INSERT INTO payment (id, tenant_id, plot_id, kind, source, amount, received_on, billing_month_id, group_id,
+                         receipt_number, bank_reference, payer_member_id, created_by, created_at)
+    SELECT p.id, demo, p.plot_id, 'PAYMENT', p.source, p.amount, p.received_on, open_id, p.group_id,
+           CASE WHEN p.source = 'CASH' THEN p.group_rank END, p.reference,
+           coalesce(p.payer, (SELECT (array_agg(o.member_id))[1] FROM ownership o
+                              WHERE o.plot_id = p.plot_id AND o.valid_to IS NULL HAVING count(*) = 1)),
+           treasurer,
+           least(greatest(p.received_on + time '10:00' + p.k * interval '1 minute',
+                          charges_at + p.k * interval '1 second'), now())
+    FROM demo_payment p;
+
+    -- Each payment fills the open charges of its plot in planner order.
+    DROP TABLE IF EXISTS pg_temp.demo_alloc;
+    CREATE TEMP TABLE demo_alloc AS
+    SELECT md5('demo-allocation:' || p.id || ':' || o.id)::uuid AS id, p.id AS payment_id, o.id AS charge_id,
+           o.plot_id, least(o.open_amount, p.amount - o.before_open) AS amount
+    FROM demo_payment p JOIN demo_open o ON o.plot_id = p.plot_id
+    WHERE p.amount - o.before_open > 0;
+
+    INSERT INTO allocation (id, tenant_id, payment_id, charge_id, plot_id, amount, origin, created_by, created_at)
+    SELECT a.id, demo, a.payment_id, a.charge_id, a.plot_id, a.amount, 'ENTRY', treasurer, pm.created_at
+    FROM demo_alloc a JOIN payment pm ON pm.id = a.payment_id;
+
+    -- The reversed payment: every allocation is released, then the reversal row is written (in the open month, which
+    -- is the earliest open month for any received day of the demo months).
+    INSERT INTO allocation (id, tenant_id, payment_id, charge_id, plot_id, amount, releases_allocation_id,
+                            release_cause, created_by, created_at)
+    SELECT md5('demo-allocation-release:' || a.id)::uuid, demo, a.payment_id, a.charge_id, a.plot_id, -a.amount, a.id,
+           'PAYMENT_REVERSED', chairman, least(pm.created_at + interval '30 minutes', now())
+    FROM demo_alloc a JOIN demo_payment dp ON dp.id = a.payment_id AND dp.reversed
+         JOIN payment pm ON pm.id = a.payment_id;
+
+    INSERT INTO payment (id, tenant_id, plot_id, kind, source, amount, received_on, billing_month_id, group_id,
+                         reverses_payment_id, reason, created_by, created_at)
+    SELECT md5('demo-payment-reversal:' || demo || ':' || dp.plot_number)::uuid, demo, pm.plot_id, 'PAYMENT_REVERSAL',
+           pm.source, -pm.amount, pm.received_on, open_id, pm.group_id, pm.id,
+           'Платіж внесено помилково, кошти повернуто платнику', chairman,
+           least(pm.created_at + interval '30 minutes', now())
+    FROM demo_payment dp JOIN payment pm ON pm.id = dp.id
+    WHERE dp.reversed;
+
+    INSERT INTO receipt_counter (tenant_id, last_number)
+    VALUES (demo, coalesce((SELECT max(receipt_number) FROM payment WHERE tenant_id = demo), 0));
+
+    -- The plot status cache after payments: the debt (charges with their reversals and adjustments minus the net
+    -- allocations), the day the oldest REGULAR or OPENING charge that is not reversed and still has an open amount
+    -- counts from, the prepayment (payments, reversals negative, minus the net allocations) and the colour as of today.
     UPDATE plot_status s
-    SET debt = d.debt, oldest_debt_date = d.oldest,
+    SET debt = d.debt, oldest_debt_date = d.oldest, prepayment = d.prepayment,
         status = CASE WHEN p.kind <> 'PLOT' OR NOT EXISTS (SELECT 1 FROM ownership o
                                                            WHERE o.plot_id = p.id AND o.valid_to IS NULL) THEN 'GREY'
                       WHEN d.debt <= 0 THEN 'GREEN'
@@ -1245,10 +1383,19 @@ BEGIN
         updated_at = now()
     FROM plot p
     CROSS JOIN LATERAL (
-        SELECT coalesce(sum(c.amount), 0) AS debt,
-               min(c.accrued_on) FILTER (WHERE c.amount > 0 AND NOT EXISTS (
-                   SELECT 1 FROM charge r WHERE r.reverses_charge_id = c.id)) AS oldest
-        FROM charge c WHERE c.plot_id = p.id
+        SELECT (SELECT coalesce(sum(c.amount), 0) FROM charge c WHERE c.tenant_id = demo AND c.plot_id = p.id)
+               - (SELECT coalesce(sum(a.amount), 0) FROM allocation a WHERE a.tenant_id = demo AND a.plot_id = p.id)
+                   AS debt,
+               (SELECT min(c.accrued_on) FROM charge c
+                WHERE c.tenant_id = demo AND c.plot_id = p.id AND c.kind IN ('REGULAR', 'OPENING')
+                  AND NOT EXISTS (SELECT 1 FROM charge r WHERE r.tenant_id = demo AND r.reverses_charge_id = c.id)
+                  AND c.amount + coalesce((SELECT sum(j.amount) FROM charge j
+                                           WHERE j.tenant_id = demo AND j.adjusts_charge_id = c.id), 0)
+                      - coalesce((SELECT sum(a.amount) FROM allocation a
+                                  WHERE a.tenant_id = demo AND a.charge_id = c.id), 0) > 0) AS oldest,
+               greatest(0, (SELECT coalesce(sum(y.amount), 0) FROM payment y WHERE y.tenant_id = demo AND y.plot_id = p.id)
+                           - (SELECT coalesce(sum(a.amount), 0) FROM allocation a
+                              WHERE a.tenant_id = demo AND a.plot_id = p.id)) AS prepayment
     ) d
     WHERE p.tenant_id = demo AND s.plot_id = p.id;
 

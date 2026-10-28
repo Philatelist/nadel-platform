@@ -11,15 +11,18 @@
       <h1>Board guide</h1>
       <p class="lead">
         How the chairman, the treasurer and the electrician work in the system, and the rules it calculates
-        by: tariffs, readings, charges, losses, water — with worked examples.
+        by: tariffs, readings, charges, payments, losses, water — with worked examples.
       </p>
       <dl class="meta">
         <dt>Reader</dt>
         <dd>Chairman, treasurer, electrician, other board members</dd>
         <dt>System state</dt>
-        <dd>Phases 1–2: part I — working in the system, part II — how the system calculates</dd>
+        <dd>
+          Phases 1–3 (payments and allocation): part I — working in the system, part II — how the system
+          calculates
+        </dd>
         <dt>Edition</dt>
-        <dd>27 October 2026</dd>
+        <dd>28 October 2026</dd>
       </dl>
     </div>
 
@@ -39,6 +42,7 @@
         <li><a href="#readings">Readings: the round and approvals</a><span class="tag done">works</span></li>
         <li><a href="#audit">Audit log</a><span class="tag done">works</span></li>
         <li><a href="#account">The member's account</a><span class="tag done">works</span></li>
+        <li><a href="#payments">Payments and cash desk</a><span class="tag done">works</span></li>
         <li class="toc-part"><a href="#part-2">Part II. How the system calculates</a></li>
         <li><a href="#r-principles">Core principles</a><span class="tag done">works</span></li>
         <li><a href="#r-tariffs">Tariffs and the expected amount</a><span class="tag done">works</span></li>
@@ -51,6 +55,7 @@
         <li><a href="#r-water">Water and connections</a><span class="tag done">works</span></li>
         <li><a href="#r-recalc">Corrections and recalculation</a><span class="tag done">works</span></li>
         <li><a href="#r-reports">Reports and templates</a><span class="tag done">works</span></li>
+        <li><a href="#r-payments">Payments and allocation</a><span class="tag done">works</span></li>
         <li><a href="#next">What comes next</a><span class="tag planned">planned</span></li>
       </ol>
     </nav>
@@ -59,8 +64,8 @@
       <h2><span class="num">1</span> The system, roles and signing in</h2>
       <p class="lead">
         Nadel keeps the cooperative's records: who the members are, which plots they own, what is charged and
-        at which tariffs, how much electricity and water was used. Charges, payments, invoices and the map
-        come next.
+        at which tariffs, how much electricity and water was used. Payments are entered at the cash desk and
+        allocated to charges; invoices and the map come next.
       </p>
 
       <h3>Who sees what</h3>
@@ -80,21 +85,24 @@
           <tr>
             <td><strong>Chairman</strong></td>
             <td>
-              Everything: members, roles, plots, owners, tariffs, meters, readings, import, settings, audit
-              log. The chairman's rights cannot be reduced, and a cooperative always keeps at least one
-              chairman.
+              Everything: members, roles, plots, owners, tariffs, meters, readings, charges, payments, import,
+              settings, audit log. The chairman's rights cannot be reduced, and a cooperative always keeps at
+              least one chairman.
             </td>
           </tr>
           <tr>
             <td><strong>Treasurer</strong></td>
             <td>
-              Views members, plots, tariffs, meters and the audit log. Changes nothing until the chairman adds
-              permissions.
+              Views members, plots, tariffs, meters, charges and the audit log; enters payments, splits them
+              over plots, reallocates them and allocates prepayment. Cannot reverse a payment - the chairman
+              does that.
             </td>
           </tr>
           <tr>
             <td><strong>Member</strong></td>
-            <td>Own data only: own plots and their tariffs, own meters, submitting readings.</td>
+            <td>
+              Own data only: own plots, their tariffs, charges and payments, own meters, submitting readings.
+            </td>
           </tr>
         </tbody>
       </table>
@@ -277,6 +285,18 @@
             <td>Manage report templates</td>
             <td>Upload, replace, download and archive report templates</td>
           </tr>
+          <tr>
+            <td>View payments</td>
+            <td>See payments, their allocation and the "Payments" report</td>
+          </tr>
+          <tr>
+            <td>Enter payments</td>
+            <td>Enter cash and bank payments, split them over plots, reallocate, allocate prepayment</td>
+          </tr>
+          <tr>
+            <td>Reverse payments</td>
+            <td>Reverse a payment with a reason (the chairman only by default)</td>
+          </tr>
         </tbody>
       </table>
     </section>
@@ -325,7 +345,7 @@
         <tbody>
           <tr>
             <td>Green</td>
-            <td>No debt</td>
+            <td>No debt (also when there is a prepayment)</td>
           </tr>
           <tr>
             <td>Yellow</td>
@@ -342,8 +362,8 @@
         </tbody>
       </table>
       <p class="muted small">
-        Until charges exist, a plot with an owner is green. Colours start to show debts with the charges
-        (chapter 17).
+        The colour follows the debt after payments: a charge that has been paid is not a debt (chapters 18 and
+        23).
       </p>
 
       <h3>The plot card</h3>
@@ -413,17 +433,23 @@
           plots" only after a general meeting decision. The change is written to the audit log.
         </p>
       </div>
+      <h3>Prepayment</h3>
+      <p>
+        The <strong>"Allocate prepayment automatically"</strong> switch (on by default; changed by whoever has
+        "Manage settings", read-only for the others) decides whether a plot's prepayment goes to new charges
+        by itself. See chapter 13.
+      </p>
       <h3>Meter tree</h3>
       <p>The meter tree is opened from here too — see chapter 9.</p>
       <h3>Charging settings</h3>
       <p>
         Below the colour choice: the red status threshold, how losses are charged, the split of common
-        consumers and the water supply of plots. They are described in chapters 17–19.
+        consumers and the water supply of plots. They are described in chapters 18–20.
       </p>
       <h3>Requisites</h3>
       <p>
         The "Requisites" block: official name, legal address, bank, IBAN; the EDRPOU code is read-only. Report
-        templates use them — see chapter 21.
+        templates use them — see chapter 22.
       </p>
     </section>
 
@@ -476,7 +502,7 @@
       <h2><span class="num">8</span> Tariffs</h2>
       <p>
         Here the chairman describes what the cooperative charges for and how much. The charges themselves come
-        later (chapter 17), but every plot card already shows what the plot will be charged.
+        later (chapter 18), but every plot card already shows what the plot will be charged.
       </p>
       <figure>
         <img src="../img/en/tariffs.png" alt="Tariffs" />
@@ -701,7 +727,7 @@
       <h3>Corrections</h3>
       <p>
         On the meter card every reading can be corrected or deleted <strong>while no charge uses it</strong>.
-        Once charged, a correction will go through recalculation (chapter 20).
+        Once charged, a correction will go through recalculation (chapter 21).
       </p>
     </section>
 
@@ -732,7 +758,7 @@
       <h2><span class="num">12</span> The member's account</h2>
       <p>
         After signing in a member sees "My account": own plots, what they will be charged by the tariffs, own
-        meters with their readings and "Submit a reading".
+        meters with their readings and "Submit a reading". The payments of their plots are in "My charges".
       </p>
       <div class="two-col">
         <figure>
@@ -751,12 +777,223 @@
       <h3>My charges</h3>
       <p>
         For each of their plots the member sees the debt per charge type and every charge with its
-        calculation, read-only. See chapter 17.
+        calculation, read-only. See chapter 18. The payments of the plot are there too: date, receipt or bank
+        document number, amount and what it paid, reversed payments with a mark, the prepayment and the debt
+        after payments. A member sees neither who entered a payment nor the note about the payer, and never
+        the payments of other plots.
       </p>
       <figure>
         <img src="../img/en/member-charges.png" alt="My charges" />
         <figcaption>"My charges" in the member account</figcaption>
       </figure>
+    </section>
+
+    <section class="chapter" id="payments">
+      <h2><span class="num">13</span> Payments and cash desk <span class="tag done">works</span></h2>
+      <p class="lead">
+        The treasurer enters money received - cash at the cooperative's cash desk or a bank transfer - and the
+        system allocates it to the plot's debts. From then on the debt, the plot colour and the reports
+        reflect payments. The "Payments" menu is for those with "View payments"; payments are entered by those
+        with "Enter payments" (chairman and treasurer); only the chairman reverses.
+      </p>
+      <figure>
+        <img src="../img/en/payments.png" alt="Payments" />
+        <figcaption>The list of payments</figcaption>
+      </figure>
+      <p>
+        The list shows payments from newest to oldest: receipt or bank document number, date received, plot,
+        payer, source, amount, how much is allocated and how much is left as prepayment. Filters: "From",
+        "To", "Source", "Plot", "Billing month". Reversed payments stay in the list marked "Reversed".
+      </p>
+
+      <h3>Enter a payment</h3>
+      <p>Press "Enter payment" in the "Payments" list or on a plot card (the plot is then already chosen).</p>
+      <figure>
+        <img src="../img/en/payment-form.png" alt="The payment form with the allocation proposal" />
+        <figcaption>The payment form: the allocation proposal</figcaption>
+      </figure>
+      <table>
+        <thead>
+          <tr>
+            <th>Field</th>
+            <th>What to enter</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Plot</td>
+            <td>The plot number. Common land and an archived plot take no payments</td>
+          </tr>
+          <tr>
+            <td>Source</td>
+            <td>"Cash" or "Bank"</td>
+          </tr>
+          <tr>
+            <td>Date received</td>
+            <td>
+              Today by default. Another date is allowed with the warning "The date is not today"; a future
+              date is not
+            </td>
+          </tr>
+          <tr>
+            <td>Amount</td>
+            <td>Above zero, at most two decimals</td>
+          </tr>
+          <tr>
+            <td>Payer</td>
+            <td>Optional: the plot's owners first, then any member</td>
+          </tr>
+          <tr>
+            <td>Note about the payer</td>
+            <td>
+              Optional, up to 200 characters, for example the name of a relative who brought the money. It is
+              personal data, so it is stored encrypted and shown only to someone who also has "View members"
+            </td>
+          </tr>
+          <tr>
+            <td>Bank document number</td>
+            <td>Bank payments only, optional, up to 64 characters</td>
+          </tr>
+        </tbody>
+      </table>
+      <h3>The allocation proposal</h3>
+      <p>
+        As soon as the plot and the amount are known, the form shows the <strong>proposal</strong>: a table of
+        the plot's unpaid charges (charge, period, open amount, "Allocate") and a "Prepayment" line - what is
+        left over the debts. The system pays the oldest debt first; for debts of the same day, in the order of
+        the cooperative's charge types. Examples are in chapter 23.
+      </p>
+      <ul>
+        <li>
+          You can change the amount on any line, or add another open charge of the plot with "Add a charge".
+          Whatever is not allocated becomes prepayment.
+        </li>
+        <li>
+          The total may not exceed the payment ("More is allocated than the payment amount"), and a line may
+          not exceed what is open on its charge ("The amount exceeds what is open on the charge"). Then
+          nothing is saved.
+        </li>
+        <li>
+          If someone changed the plot's account between the preview and saving, you see "The data changed
+          after the preview. Review it again before saving." - look at the allocation once more.
+        </li>
+      </ul>
+      <h3>Save and the receipt number</h3>
+      <p>
+        "Save" records the payment. For cash the screen shows <strong>"Receipt № 42"</strong> large and
+        <strong>"Another payment"</strong>; for a bank payment it shows the saved payment. Receipt numbers run
+        through the whole cooperative with no gaps and no repeats, even when two treasurers enter cash at the
+        same moment; a number is never changed or used twice. It is an internal receipt, not a fiscal one; the
+        printed cash receipt order comes later.
+      </p>
+      <div class="note">
+        <span class="callout-title">A payment for a past month</span>
+        <p>
+          If the money arrived on 31 January and you enter it on 3 February while January is closed, the
+          payment keeps the date 31.01 but counts in February; January's totals do not change.
+        </p>
+      </div>
+
+      <h3>One payment for several plots of one payer</h3>
+      <p>
+        If a member brought one sum for several of their plots, choose
+        <strong>"Several plots of one payer"</strong> in the form, then the payer and the amount. The form
+        lists the payer's current plots with their debts and proposes the parts
+        <strong>in proportion to the debts</strong>. Kopecks that do not divide go to the plots with the
+        largest remainders (a tie goes to the plot listed first); an amount above the whole debt goes to the
+        first plot as prepayment. Examples are in chapter 23.
+      </p>
+      <ul>
+        <li>
+          You can change any part, but together they must equal the payment ("The parts do not add up to the
+          payment amount"). Each part has its own allocation proposal, which can be changed too.
+        </li>
+        <li>
+          Each part is a payment of its own plot; all parts belong to one group. A cash group has
+          <strong>one</strong> receipt number. On each plot's account the part is shown with that number and a
+          link to the other parts.
+        </li>
+      </ul>
+
+      <h3>The payment card</h3>
+      <figure>
+        <img src="../img/en/payment-card.png" alt="The payment card" />
+        <figcaption>The payment card: allocation and buttons</figcaption>
+      </figure>
+      <p>
+        The card shows the payment's details, the note about the payer (only to those with "View members"),
+        every allocation to a charge with its period and amount, every amount
+        <strong>taken back from a charge</strong> (a release) with its cause, the other parts of the group,
+        and who entered the payment and when.
+      </p>
+
+      <h3>Reallocate</h3>
+      <p>
+        <strong>"Reallocate"</strong> ("Enter payments") shows the current allocation next to a new proposal
+        that can be changed as when entering. Saving takes back the old allocation and writes the new one in
+        one step and is written to the audit log. This is how money is moved between charges.
+      </p>
+
+      <h3>Reverse a payment</h3>
+      <figure>
+        <img src="../img/en/payment-reverse.png" alt="Reversing a payment" />
+        <figcaption>Reversing a payment with a reason</figcaption>
+      </figure>
+      <p>
+        Only the chairman sees <strong>"Reverse"</strong>. A reason is required (up to 500 characters, for
+        example "Wrong plot"); without it you see "Enter a reason". The system takes back the whole allocation
+        of the payment, so the charges it paid are owed again; the payment record itself is not deleted. A
+        payment is reversed once ("The payment has already been reversed"); a part of a group is reversed on
+        its own and the others stay. A reversed cash payment keeps its receipt number and is shown as
+        "Reversed". A treasurer who made a mistake asks the chairman, as for charges. A payment of an archived
+        plot can still be reversed.
+      </p>
+
+      <h3>Prepayment: automatic and by hand</h3>
+      <p>
+        A plot's <strong>prepayment</strong> is the money paid for it that is not placed on any charge. It is
+        never negative.
+      </p>
+      <ul>
+        <li>
+          While the <strong>"Allocate prepayment automatically"</strong> switch in the settings is on (the
+          default), the prepayment goes by itself to the plot's open charges, in the same order, as soon as
+          new charges are booked (a month, a reading, a run, an opening balance, a recalculation) or money is
+          taken back from a charge. On the account such lines are labelled "Allocated from prepayment".
+        </li>
+        <li>
+          When a payment is saved with a remainder, the remainder is not placed beyond what the treasurer
+          chose: it waits for new charges.
+        </li>
+        <li>
+          While the switch is off, the prepayment stays until the treasurer allocates it by hand: on the
+          plot's account, next to the "Prepayment" line, is the <strong>"Allocate prepayment"</strong> button
+          - a proposal over the open charges that can be changed.
+        </li>
+      </ul>
+      <p>
+        Switching the setting on does not place old prepayment at once; it goes to the plot's next charges.
+      </p>
+
+      <h3>The plot account after payments</h3>
+      <p>
+        On the account, payments are interleaved with charges by date; next to each charge are "Charged",
+        "Paid" and "Open". Above the list are the debt after payments per type and in total, and the
+        prepayment. The <strong>"Payments only"</strong> filter keeps only payments and their reversals; the
+        debts above the list do not change.
+      </p>
+      <p>
+        "Charges → Months" has a <strong>"Received"</strong> column next to "Charged". The "Plot balances",
+        "Debtors" and "Charges by month" reports take payments into account, and the new
+        <strong>"Payments"</strong> report lists every payment with totals per source (chapter 22).
+      </p>
+      <h3>What a member sees</h3>
+      <p>
+        In "My charges" a member sees the payments of their own plots only - the date, the receipt or bank
+        document number, the amount, what it paid, reversed payments with a mark, the prepayment and the debt
+        after payments. They do not see who entered a payment or the note about the payer, nor other plots.
+        The electrician sees no payments.
+      </p>
     </section>
 
     <section class="part" id="part-2">
@@ -769,7 +1006,7 @@
     </section>
 
     <section class="chapter" id="r-principles">
-      <h2><span class="num">13</span> Core principles</h2>
+      <h2><span class="num">14</span> Core principles</h2>
       <dl class="terms">
         <dt>Only the server counts money</dt>
         <dd>
@@ -795,7 +1032,7 @@
         <dd>
           A report only selects, groups and adds up amounts already booked under these same rules, so every
           amount in a report can be reconciled to the kopeck with a plot account or the month screen (chapter
-          21).
+          22).
         </dd>
         <dt>Audit log</dt>
         <dd>Every board action is recorded with old and new values.</dd>
@@ -817,7 +1054,7 @@
     </section>
 
     <section class="chapter" id="r-tariffs">
-      <h2><span class="num">14</span> Tariffs and the expected amount</h2>
+      <h2><span class="num">15</span> Tariffs and the expected amount</h2>
       <p>
         A charge type (membership fee, electricity, land tax, water, special-purpose fees) has one or more
         tariffs. A tariff has <strong>versions</strong>: each applies from its date until the day before the
@@ -889,13 +1126,13 @@ one-time fee    the whole rate in the month of its due date, 0.00 in other month
       <h3>Correcting a version</h3>
       <p>
         A version can be corrected or deleted <strong>while no charge uses it</strong>. After that a
-        correction goes through recalculation (chapter 20): charges already issued to people never change
+        correction goes through recalculation (chapter 21): charges already issued to people never change
         silently.
       </p>
     </section>
 
     <section class="chapter" id="r-meters">
-      <h2><span class="num">15</span> Meters and the tree</h2>
+      <h2><span class="num">16</span> Meters and the tree</h2>
       <p>
         A meter measures one resource: electricity (kWh) or water (m³). Meter values are not money: up to
         three decimals.
@@ -977,7 +1214,7 @@ one-time fee    the whole rate in the month of its due date, 0.00 in other month
     </section>
 
     <section class="chapter" id="r-readings">
-      <h2><span class="num">16</span> Readings and consumption</h2>
+      <h2><span class="num">17</span> Readings and consumption</h2>
       <p>
         <strong>A reading is a meter's value on a date</strong>, not "the reading for a month". The
         electrician comes when they can: after a few days or after a few months. The person enters the date;
@@ -1099,7 +1336,7 @@ one-time fee    the whole rate in the month of its due date, 0.00 in other month
     </section>
 
     <section class="chapter" id="r-charges">
-      <h2><span class="num">17</span> Charges and closing months <span class="tag done">works</span></h2>
+      <h2><span class="num">18</span> Charges and closing months <span class="tag done">works</span></h2>
       <p>
         A charge is an entry in the plot's account: charge type, amount, month, the days it pays for (service
         period) and how the amount was obtained (rates, units, kWh, the readings and tariff versions used).
@@ -1130,12 +1367,12 @@ one-time fee    the whole rate in the month of its due date, 0.00 in other month
             <td>Network losses</td>
             <td>
               Depending on the chairman's setting: a percentage on every electricity charge, or a board run
-              for a range (chapter 18).
+              for a range (chapter 19).
             </td>
           </tr>
           <tr>
             <td>Common consumers</td>
-            <td>A separate board run for a range, a separate line in the account (chapter 18).</td>
+            <td>A separate board run for a range, a separate line in the account (chapter 19).</td>
           </tr>
           <tr>
             <td>Opening balance</td>
@@ -1190,9 +1427,14 @@ one-time fee    the whole rate in the month of its due date, 0.00 in other month
       </ul>
       <h3>Debt</h3>
       <pre class="formula">
-debt per charge type = Σ charges of that type (reversals negative) − Σ allocated payments
-prepayment           = Σ payments − Σ allocated payments</pre>
-      <p>Payments arrive in the next phase. Until then a plot with charges shows a debt — that is correct.</p>
+open amount of a charge = the charge with its adjustments (reversed: 0.00) − Σ allocated to it
+debt per charge type   = Σ open amounts of the charges of that type
+plot debt              = Σ debts per charge type
+prepayment             = Σ payments (net of reversals) − Σ allocated</pre>
+      <p>
+        A payment pays specific charges, so the debt is what is still unpaid. How a payment is allocated and
+        what happens when a charge is reversed is in chapter 23.
+      </p>
 
       <h3>On the screen: "Charges"</h3>
       <p>
@@ -1334,7 +1576,7 @@ prepayment           = Σ payments − Σ allocated payments</pre>
 
     <section class="chapter" id="r-losses">
       <h2>
-        <span class="num">18</span> Network losses and common consumers
+        <span class="num">19</span> Network losses and common consumers
         <span class="tag done">works</span>
       </h2>
       <h3>Losses: two modes, the chairman chooses</h3>
@@ -1457,7 +1699,7 @@ prepayment           = Σ payments − Σ allocated payments</pre>
     </section>
 
     <section class="chapter" id="r-water">
-      <h2><span class="num">19</span> Water and connections <span class="tag done">works</span></h2>
+      <h2><span class="num">20</span> Water and connections <span class="tag done">works</span></h2>
       <p>
         Water works like electricity:
         <strong>a plot not connected to the well pays nothing for water</strong>.
@@ -1523,7 +1765,7 @@ prepayment           = Σ payments − Σ allocated payments</pre>
 
     <section class="chapter" id="r-recalc">
       <h2>
-        <span class="num">20</span> Corrections and recalculation
+        <span class="num">21</span> Corrections and recalculation
         <span class="tag done">works</span>
       </h2>
       <p>A back-dated tariff version, a correction of a used version or of a used reading — one mechanism:</p>
@@ -1659,19 +1901,19 @@ prepayment           = Σ payments − Σ allocated payments</pre>
     </section>
 
     <section class="chapter" id="r-reports">
-      <h2><span class="num">21</span> Reports and templates <span class="tag done">works</span></h2>
+      <h2><span class="num">22</span> Reports and templates <span class="tag done">works</span></h2>
       <p>
-        Reports put into one table what the system already knows: charges, debts, electricity, water,
-        corrections. Every report is shown on screen and can be downloaded as an Excel file. Besides the
-        built-in reports, the chairman can upload their own Excel form (a template) and the system fills it in
-        with the cooperative's data.
+        Reports put into one table what the system already knows: charges, payments, debts, electricity,
+        water, corrections. Every report is shown on screen and can be downloaded as an Excel file. Besides
+        the built-in reports, the chairman can upload their own Excel form (a template) and the system fills
+        it in with the cooperative's data.
       </p>
       <div class="note">
         <span class="callout-title">Reports introduce no new rules</span>
         <p>
           A report calculates nothing "its own way": it only selects, groups and adds up the amounts already
-          booked under the rules of chapters 13-20. So any amount in a report can be reconciled to the kopeck
-          with a plot account or the billing months screen. Amounts in reports are always
+          booked under the rules of chapters 14-21 and 23. So any amount in a report can be reconciled to the
+          kopeck with a plot account or the billing months screen. Amounts in reports are always
           <strong>effective</strong>
           amounts: charges plus adjustments minus reversals.
         </p>
@@ -1695,6 +1937,14 @@ prepayment           = Σ payments − Σ allocated payments</pre>
           <tr>
             <td>The "Debtors" report (this permission is needed as well)</td>
             <td>View members</td>
+            <td>Chairman, treasurer</td>
+          </tr>
+          <tr>
+            <td>
+              The "Payments" report (this permission is needed as well; the note about the payer is shown only
+              to someone who also has "View members")
+            </td>
+            <td>View payments</td>
             <td>Chairman, treasurer</td>
           </tr>
           <tr>
@@ -1744,8 +1994,9 @@ prepayment           = Σ payments − Σ allocated payments</pre>
         </li>
         <li>
           A value that is not known (for example a reading at the start of the period) is shown
-          <strong>empty</strong> with the reason, never as zero. There is no "Paid" column: payments will
-          appear with payments.
+          <strong>empty</strong> with the reason, never as zero. "Plot balances" and "Charges by month" have
+          "Paid" columns (the allocation of payments), "Plot balances" also "Prepayment"; the separate
+          "Payments" report lists the payments themselves.
         </li>
         <li>
           Every report that is made is recorded in the audit log: who, which report, the filters and the row
@@ -1837,7 +2088,7 @@ prepayment           = Σ payments − Σ allocated payments</pre>
       <div class="warn">
         <span class="callout-title">The same pump share in two reports</span>
         <p>
-          The electricity of a well pump is split among its plots as a common-consumer row (chapter 19). That
+          The electricity of a well pump is split among its plots as a common-consumer row (chapter 20). That
           row is on the "Charged" sheet of the electricity report <em>and</em> in the "Well pump share" column
           of the "Water" report. It is the same amount seen from two sides: do not add the two reports
           together.
@@ -2041,8 +2292,131 @@ prepayment           = Σ payments − Σ allocated payments</pre>
       </figure>
     </section>
 
+    <section class="chapter" id="r-payments">
+      <h2><span class="num">23</span> Payments and allocation <span class="tag done">works</span></h2>
+      <p>
+        A payment is a row in the ledger that erases nothing: a mistake is corrected by a reversal, and the
+        allocation to charges changes only by new rows. How to work with the screens is chapter 13; here are
+        the rules and the examples.
+      </p>
+      <dl class="terms">
+        <dt>The allocation order</dt>
+        <dd>
+          The oldest debt first (by the day it counts from); for the same day, in the order of the
+          cooperative's charge types (membership, electricity, land tax - as on the charge types page); then
+          by the start of the service period and the booking order. Each charge receives at most its open
+          amount; the rest is prepayment.
+        </dd>
+        <dt>The treasurer's change</dt>
+        <dd>
+          The proposal can be changed before saving: the lines may not add up to more than the payment, and a
+          line may not exceed the charge's open amount. Whatever is not allocated is prepayment.
+        </dd>
+        <dt>Taking money back from a charge</dt>
+        <dd>
+          When money is taken off a charge (it is reversed, an adjustment lowers it, or the payment is
+          reversed), this is a separate "release" record. The released sum becomes the plot's prepayment and,
+          if automatic allocation is on, goes to the other open charges.
+        </dd>
+        <dt>Reversing a payment</dt>
+        <dd>
+          The chairman only, with a reason. Counted in the payment's own month while it is open, otherwise in
+          the earliest open month. A payment is reversed once; a part of a group on its own.
+        </dd>
+        <dt>A payment of a closed month</dt>
+        <dd>
+          Counted in the earliest open month and keeps its date received; the closed month does not change.
+        </dd>
+        <dt>Splitting between plots</dt>
+        <dd>
+          In proportion to the debts, kopecks rounded down and the leftover kopecks to the largest remainders
+          (a tie goes to the plot listed first). This is the only place of rounding in allocation; the parts
+          always add up to the payment.
+        </dd>
+        <dt>One at a time</dt>
+        <dd>
+          Every change of a plot (payment, allocation, release) first locks the plot's ledger, so two
+          treasurers cannot allocate the same money twice; at the end the database checks it too and refuses
+          to allocate more than a payment holds or a charge is worth.
+        </dd>
+      </dl>
+
+      <h3>Worked examples</h3>
+      <p>Order of charge types: membership, electricity, land tax.</p>
+      <div class="example">
+        <span class="callout-title">Example 1. A payment smaller than the debt</span>
+        <p>
+          Debts: January membership 600.00, February electricity 250.00. Payment 700.00. The oldest first:
+          membership 600.00, then electricity 100.00. Electricity has 150.00 open, prepayment 0.00. The plot's
+          debt is 150.00.
+        </p>
+      </div>
+      <div class="example">
+        <span class="callout-title">Example 2. A payment larger than the debt</span>
+        <p>
+          The same debts, payment 1,000.00: membership 600.00 and electricity 250.00 are paid in full,
+          prepayment 150.00. There is no debt, so the plot is green although there is a prepayment.
+        </p>
+      </div>
+      <div class="example">
+        <span class="callout-title">Example 4. Prepayment goes to a new charge</span>
+        <p>
+          Example 2, then a land tax charge of 120.00 is booked. Automatic allocation is on: 120.00 goes from
+          the prepayment to the land tax and the prepayment becomes 30.00. With the switch off, the land tax
+          would stay a debt of 120.00 and the prepayment 150.00 until the treasurer presses "Allocate
+          prepayment".
+        </p>
+      </div>
+      <div class="example">
+        <span class="callout-title">Example 6. A charge is reversed</span>
+        <p>
+          Example 1 (payment 700.00: membership 600.00 and electricity 100.00), then the chairman reverses the
+          January membership. 600.00 is taken back from it - that is a prepayment of 600.00. Automatic
+          allocation moves 150.00 to the open electricity; the prepayment stays 450.00 and there is no debt.
+        </p>
+      </div>
+      <div class="example">
+        <span class="callout-title">Example 12. One payment for two plots</span>
+        <p>
+          A member has plot 7 with a debt of 300.00 and plot 15 with a debt of 100.00 and pays 200.00. The
+          parts in proportion to the debts: 200 × 300 / 400 = 150.00 for plot 7 and 50.00 for plot 15. These
+          are two payments of one group; cash has one receipt number. If the member paid 500.00, plot 7 would
+          get 300.00 and another 100.00 as prepayment (the excess goes to the first plot), and plot 15 would
+          get 100.00.
+        </p>
+      </div>
+
+      <h3>Debt and colour after payments</h3>
+      <ul>
+        <li>
+          <strong>The plot's debt</strong> is the sum of the open amounts of its charges, that is charged
+          minus allocated. A payment lowers the debt only by what is allocated to charges.
+        </li>
+        <li>
+          <strong>The oldest unpaid</strong> is the oldest debt day among charges with an open amount above
+          zero; a charge paid in full does not count, a partly paid one counts with its open part.
+        </li>
+        <li>
+          <strong>The colour</strong> uses the same thresholds as before, but over the debt after payments:
+          red if the debt exceeds the threshold or the oldest unpaid day is older than the threshold in days;
+          yellow for any other debt; green when there is no debt,
+          <strong>also when there is a prepayment</strong>.
+        </li>
+        <li>
+          The colour is refreshed after every payment, reversal, allocation and release - within seconds.
+          Example: a plot with a debt of 1,200.00 (red with a threshold of 1,000.00) after a payment of 900.00
+          has a debt of 300.00 and is yellow.
+        </li>
+        <li>
+          An adjustment upward (for example +50.00 to a paid membership) leaves 50.00 open, so the plot is no
+          longer green. An adjustment downward (−100.00 to a paid membership) takes 100.00 back from the
+          latest allocation and it becomes prepayment, not a "negative debt".
+        </li>
+      </ul>
+    </section>
+
     <section class="chapter" id="next">
-      <h2><span class="num">22</span> What comes next <span class="tag planned">planned</span></h2>
+      <h2><span class="num">24</span> What comes next <span class="tag planned">planned</span></h2>
       <table>
         <thead>
           <tr>
@@ -2052,9 +2426,10 @@ prepayment           = Σ payments − Σ allocated payments</pre>
         </thead>
         <tbody>
           <tr>
-            <td><strong>Payments</strong></td>
+            <td><strong>Bank and cash book</strong></td>
             <td>
-              Entering payments, a cash desk with receipts, bank statement import, allocation, prepayments.
+              Bank statement import with matching payments to plots; the cash book, handing cash over to the
+              bank and reconciliation; the printed cash receipt order.
             </td>
           </tr>
           <tr>

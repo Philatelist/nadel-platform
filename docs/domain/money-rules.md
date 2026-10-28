@@ -13,17 +13,24 @@ Any rule change is made here first.
 
 ## 2. Balance
 
-A plot's balance is never stored. It is calculated:
+A plot's balance is never stored as a figure of its own. It is calculated from the ledger (the cached copy in
+`plot_status` can be rebuilt at any time):
 
 ```
-debt per charge type = Σ charges of that type − Σ allocations to that type
-prepayment           = Σ payments − Σ allocations
+open amount of a charge = effective amount (the charge plus its adjustments, 5.4; 0.00 once reversed) − its allocations (net of releases)
+debt per charge type    = Σ open amounts of the plot's charges of that type
+plot debt               = Σ debts per charge type
+prepayment              = Σ payments (net of reversals) − Σ allocations (net of releases), never negative
 ```
 
-Until payments exist (phase 3) there are no allocations: the debt per charge type is the sum of the plot's charges of
-that type, reversals counting negative and adjustments with their sign (feature 012, 5.4), and the plot's debt is the
-sum over its charge types (feature 011, `DebtCalculator`). Example: membership 25.00 and land tax 17.50 → debts 25.00
-and 17.50, total 42.50; after the reversal of the 25.00 the membership debt is 0.00 and the total 17.50.
+- Only `REGULAR` and `OPENING` charges that are not reversed carry an open amount. Reversals and adjustments are not
+  allocated to; they change the effective amount of their original charge (feature 011, 012).
+- A plot with payments and allocations: the debt of a type falls by what is allocated to its charges, and the money not
+  allocated is the prepayment. A plot with no payments has no allocations, so its debt is the sum of its effective
+  amounts.
+- Example: membership 600.00 (January) and electricity 250.00 (February), a payment of 700.00 allocated as 600.00 and
+  100.00: open amounts 0.00 and 150.00, debts 0.00 (membership) and 150.00 (electricity), plot debt 150.00,
+  prepayment 0.00. With a payment of 1000.00: both charges are paid in full and the prepayment is 150.00.
 
 ## 3. Ledger
 
@@ -210,9 +217,9 @@ automatic.
   are always told apart.
 - **Closed months never change.** A closed month keeps its charges and totals; its corrections appear only as
   adjustments in an open month. A charge that adjustments brought to `0.00` stays in its closed month.
-- **Effective never below zero in this phase.** Without payments (phase 3) the expected amount is never negative, so a
-  recalculation brings an effective amount down to `0.00` at most. **Rule recorded for phase 3:** a correction that
-  lowers a debt already paid makes a prepayment of that plot (section 7), never a negative debt.
+- **Effective never below zero.** The expected amount is never negative, so a recalculation brings an effective amount
+  down to `0.00` at most. A correction that lowers a debt already paid releases the excess of the allocations and makes
+  a prepayment of that plot (section 7), never a negative debt.
 
 ### 5.2 Losses and common consumers runs
 
@@ -580,11 +587,99 @@ The board runs "Спільні споживачі" for any range of days, separa
 
 ## 7. Allocation
 
-- A payment is first saved as unallocated.
-- The system proposes an allocation: oldest debts first (FIFO by period); within a period, by the cooperative's charge type priority.
-- The treasurer can change the proposal before saving.
-- Cash received at the cooperative's cash desk is a payment with source `CASH` and a receipt number. Receipt numbers are sequential per cooperative, never reused and never changed; a mistaken cash payment is reversed like any other ledger entry, and its receipt stays in history marked as reversed.
-- The remainder of a payment is a prepayment. When a period is closed, prepayments are automatically allocated to new charges (by the same rules) if the cooperative enables it.
+Feature 015. Payments and allocations live in the `ledger` module, so that a payment, its allocations and the debt
+change in one transaction. The ledger is append-only (3): a payment, an allocation and every correction of them are
+new rows.
+
+**Payment.** Money received for one plot: an amount above 0.00, the day it was received (`received_on`, Kyiv time, not in
+the future), the source `CASH` or `BANK`, an optional payer (a member) and payer note, and for a bank payment an
+optional bank document number. A payment is booked in the billing month of `received_on` as charges are (3.1); a
+payment received in a closed month and entered late goes to the earliest open month and keeps its `received_on`, so the
+closed month's totals do not change. Common land and archived plots take no new payments.
+
+**Receipt numbers.** A cash payment gets a receipt number from one counter per cooperative, taken inside the saving
+transaction: no gaps (a rolled-back payment does not use a number), no duplicates, never reused or changed. A split cash
+payment takes one number for all its parts. A reversed cash payment keeps its number and is shown as reversed. A bank
+payment has no number.
+
+**The planner (the proposal).** `AllocationPlanner` is a pure calculator. Given an amount and the plot's charges with an
+open amount above 0.00, it fills them in this order:
+
+1. `accrued_on`, the oldest first;
+2. the cooperative's order of charge types (the order of the charge types page);
+3. the service period start;
+4. the booking order (then the charge id).
+
+Each charge receives at most its open amount. What is left is the prepayment.
+
+**The treasurer's change.** Before saving, the treasurer may change the amount of any line or add other open charges of
+the plot. The lines may not add up to more than the payment (`ALLOCATION_EXCEEDS_PAYMENT`) and no line may exceed the
+charge's open amount (`ALLOCATION_EXCEEDS_CHARGE`). What is not allocated stays as prepayment. The server checks the
+digest of the preview it showed; if the ledger changed meanwhile, saving is refused (`PREVIEW_OUTDATED`).
+
+**Reallocation.** A saved payment can be reallocated: its allocations are released and new ones written in one
+transaction, with the same checks. A prepayment can also be allocated by hand to the plot's open charges.
+
+**Release.** A release is a negative allocation row that points to the allocation it cancels. Allocations are released
+automatically, in the transaction that caused it, when the money they cover is no longer owed:
+
+- a charge is reversed (by hand, by reversing a run or by a recalculation): all its allocations are released;
+- a negative adjustment makes a charge's effective amount smaller than its allocations: the excess is released, starting
+  with the latest allocation;
+- a payment is reversed: all its allocations are released.
+
+The released money is the plot's prepayment again. Every booking path that reverses or lowers a charge calls the one
+`AllocationReleaser`.
+
+**Reversal of a payment.** A `PAYMENT_REVERSAL` row with the negated amount and a reason (chairman only). A payment is
+reversed once; a part of a split payment is reversed on its own; a payment of an archived plot can still be reversed. The
+reversal is booked in the payment's own month while that month is open, otherwise in the earliest open month.
+
+**Prepayment and automatic allocation.** The cooperative setting `autoAllocatePrepayment` (default on) replaces the old
+idea of allocating "when a period is closed". With it on, a plot's prepayment is allocated by the same order whenever
+charges are booked for the plot (a month run, a reading, a run, an opening balance, a recalculation) and whenever money is
+released from a charge. These allocations are written by the system and shown on the account as "Allocated from
+prepayment". A payment saved with a remainder does not place the remainder beyond what the treasurer chose: it waits for
+new charges. With the setting off, the prepayment stays until the treasurer allocates it by hand. Switching the setting
+on places no old prepayment at once.
+
+**One payment over several plots of one payer.** The treasurer chooses a payer; the form lists the payer's current
+plots (not common land, not archived). The proposed split is in proportion to the plots' debts, by `Money.allocate`
+(1): each part is rounded down to the kopeck and the leftover kopecks go to the largest remainders, ties to the plot
+listed first. An amount above the total debt: the excess goes to the first plot as prepayment; plots owing nothing: the
+whole amount goes to the first plot. The treasurer may change any part; the parts must add up to the amount
+(`SPLIT_TOTAL_MISMATCH`). Each part is a payment of its plot, all parts share one `group_id`, and a cash group has one
+receipt number.
+
+**Concurrency and backstops.** Every payment, allocation and release locks the plot's ledger first (a per-plot
+transaction lock, in sorted order for several plots), so two writers on one plot never both see the same open amount.
+The database backs this up at commit: deferred triggers fail the transaction if the allocations of a payment exceed it,
+the allocations of a charge exceed its effective amount, or a reversed payment keeps an allocation; `payment` and
+`allocation` are append-only like `charge`.
+
+**Worked examples** (charge type order: membership, electricity, land tax; each row is a unit test of the planner, the
+splitter or the release rules):
+
+| # | Situation | Result |
+|---|---|---|
+| 1 | Debts: membership 600.00 (Jan), electricity 250.00 (Feb). Payment 700.00 | membership 600.00, electricity 100.00; open electricity 150.00; prepayment 0.00 |
+| 2 | Same debts, payment 1000.00 | membership 600.00, electricity 250.00; prepayment 150.00 |
+| 3 | Membership 300.00 and electricity 200.00 both accrued on 01.03. Payment 400.00 | membership 300.00 (first in the type order), electricity 100.00 |
+| 4 | Example 2, then a land tax charge of 120.00 is booked, auto-allocation on | land tax 120.00 from the prepayment; prepayment 30.00 |
+| 5 | Example 4 with auto-allocation off | land tax open 120.00; prepayment 150.00 until the treasurer allocates it |
+| 6 | Example 1, then the January membership is reversed | release 600.00; prepayment 600.00; auto-allocation moves 150.00 to the open electricity; prepayment 450.00 |
+| 7 | Membership 600.00 fully paid; a recalculation adjusts it by −100.00 | release 100.00 of the latest allocation; prepayment 100.00 |
+| 8 | Membership 600.00 paid 600.00; an adjustment of +50.00 | open 50.00; debt 50.00; the plot is no longer GREEN |
+| 9 | The payment of 700.00 of example 1 is reversed | releases 600.00 and 100.00; debts back to 600.00 and 250.00 |
+| 10 | The treasurer allocates 700.00 as electricity 250.00 and membership 400.00 | saved as chosen; open membership 200.00 |
+| 11 | The treasurer allocates 900.00 of a 700.00 payment | refused: `ALLOCATION_EXCEEDS_PAYMENT` |
+| 12 | A member owns plots 7 (debt 300.00) and 15 (debt 100.00) and pays 200.00 | proposal 150.00 and 50.00 |
+| 13 | Three plots with debts 100.00, 100.00, 100.00; payment 100.00 | 33.34, 33.33, 33.33 (the first plot gets the extra kopeck) |
+| 14 | Plots 7 (300.00) and 15 (100.00); payment 500.00 | 300.00 and 100.00, plus 100.00 prepayment on plot 7 |
+| 15 | A cash payment split over two plots | two payments, one receipt number, the same `group_id` |
+| 16 | A cash payment of 31.01 entered on 03.02, January is closed | booked in February with `received_on` 31.01; January's totals unchanged |
+| 17 | Two treasurers save cash payments at the same time | receipts 41 and 42, no gap, no duplicate |
+| 18 | Opening balance membership 1200.00, payment 500.00 | allocated to the opening charge; open 700.00 |
 
 ## 8. Ownership and sale
 
@@ -607,14 +702,19 @@ GREY   common land, or a plot without an owner
 
 Visibility: A member always sees full details (status, amounts, owners) of the plots they own. Whether a member also sees the status color of other plots is a cooperative setting chosen by the chairman: `OWN_ONLY` (default; other plots show number, street and kind with a neutral color) or `ALL_PLOTS` (the status color of every plot, still without amounts, owners or personal data). Showing every plot's color should follow a general meeting decision; changing the setting is audited. Admins see what their permissions allow. This is enforced by the API, not only hidden in the UI.
 
-After every charge, reversal and recalculation (later also every allocation) the debt of the plot and the date of its
-oldest unpaid charge are rebuilt from the ledger and cached in `plot_status` (the cache can be rebuilt from the ledger
-at any time). Until payments exist, the debt is the sum of the charges, adjustments included, and the oldest unpaid
-charge is the oldest `accrued_on` among the charges that are neither a reversal nor an adjustment, were not reversed,
-and whose effective amount (the charge plus its adjustments, 5.4) is above 0.00. The colour itself is derived whenever
-it is read, from the cached debt and date, the current thresholds and today, so a change of the thresholds and the
-passing of days apply at once without rewriting the cache. "Debt age > red_days" means today minus that date is more
-than `red_days` days.
+The debt is the debt after payments (2): the sum of the open amounts of the plot's charges. The oldest unpaid charge is
+the one with the oldest `accrued_on` among the charges that have an open amount above 0.00, so a charge paid in full
+no longer counts and a partly paid one counts with its open part. A plot whose debt is 0.00 is GREEN, also when it has a
+prepayment. Examples: membership 600.00 (January) and electricity 250.00 (February) with a payment of 700.00 → debt
+150.00, oldest unpaid charge February; with a payment of 1000.00 → debt 0.00, GREEN, prepayment 150.00; the 700.00
+payment reversed → debt 850.00, oldest unpaid charge January.
+
+After every charge, reversal, recalculation, payment, payment reversal, allocation and release the debt of the plot,
+its prepayment and the date of its oldest unpaid charge are rebuilt from the ledger and cached in `plot_status` (the
+cache can be rebuilt from the ledger at any time; it equals a rebuild). The colour itself is derived whenever it is
+read, from the cached debt and date, the current thresholds and today, so a change of the thresholds and the passing of
+days apply at once without rewriting the cache. "Debt age > red_days" means today minus that date is more than
+`red_days` days.
 
 ## 10. Land tax
 
@@ -650,13 +750,14 @@ above, through the read facades of the modules that own it (ADR 0001); a report 
 
 | Report | Where its numbers come from |
 |---|---|
-| Charges by month | The effective amount of a charge (5.4: the charge plus its reversals and adjustments) grouped by billing month (3.1), per charge type |
-| Plot balances | The balance (2) per plot and charge type as of a day, and the plot status (9). A past day shows the status worked out with today's thresholds, because only today's thresholds exist |
+| Charges by month | The effective amount of a charge (5.4: the charge plus its reversals and adjustments) grouped by billing month (3.1), per charge type; the paid column is the allocations to the charges of that month (7), as of the report date |
+| Plot balances | The balance (2): charged, paid, debt and prepayment per plot and charge type as of a day, and the plot status (9). A past day shows the status worked out with today's thresholds, because only today's thresholds exist |
 | Debtors | The red rule of 9 (debt above `red_amount` for more than `red_days` days) over the same balances; nothing is added |
 | Electricity by meter tree | Consumption and losses from the meter tree (6.3: losses are a node's consumption minus its children's) and range consumption (6.4); the charged side from the charges by readings, losses runs and common consumer runs (6.5-6.7) at their effective amount (5.4) |
 | Water | Water tariffs and connected days only (7 and 11); the m3 of an interval keeps its connected days (6.5) |
 | Missing readings | The same missing-readings rule (6.4) and, for water, the connected days (11) |
 | Land tax | Expected against charged (4.1, 10). The expected amount is worked out month by month by the same rules the month run charges with (the tariff version valid in each month and `ChargeCalculator`, rounded once per month), so it equals what the month runs would charge; the charged amount is the effective amount (5.4) of the land tax charges of the year |
+| Payments | The payments of 7 (receipt or bank number, date, payer, amount, allocated, prepayment, reversed) grouped by source; the payer note only with the member-data permission |
 | Corrections | The reversals, adjustments and recalculation records of 5.4; the sources are those of the recalculation of feature 012 (5.3) |
 
 **Values of a report template.** A template is filled with the figures of the reports above and with these totals,
