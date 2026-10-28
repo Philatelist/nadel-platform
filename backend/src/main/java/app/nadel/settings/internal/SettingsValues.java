@@ -20,11 +20,12 @@ import org.jspecify.annotations.Nullable;
  * requisites were normalised before they got here (trimmed, blank as null, the IBAN checked).
  */
 record SettingsValues(PlotStatusVisibility memberPlotStatusVisibility, LossesMode lossesMode, BigDecimal lossesPercent,
-        CommonConsumerSplit commonConsumerDefaultSplit, BigDecimal redAmount, int redDays, Requisites requisites) {
+        CommonConsumerSplit commonConsumerDefaultSplit, BigDecimal redAmount, int redDays, Requisites requisites,
+        boolean autoAllocatePrepayment) {
 
     static final SettingsValues DEFAULTS = new SettingsValues(PlotStatusVisibility.OWN_ONLY, LossesMode.FIXED_PERCENT,
             new BigDecimal("0.00"), CommonConsumerSplit.CONNECTED_PLOTS, new BigDecimal("1000.00"), 90,
-            Requisites.NONE);
+            Requisites.NONE, true);
 
     SettingsValues {
         Objects.requireNonNull(memberPlotStatusVisibility, "memberPlotStatusVisibility");
@@ -54,6 +55,8 @@ record SettingsValues(PlotStatusVisibility memberPlotStatusVisibility, LossesMod
         add(changes, "legalAddress", before.requisites.legalAddress(), requisites.legalAddress());
         add(changes, "bankName", before.requisites.bankName(), requisites.bankName());
         add(changes, "iban", before.requisites.iban(), requisites.iban());
+        add(changes, "autoAllocatePrepayment", Boolean.toString(before.autoAllocatePrepayment),
+                Boolean.toString(autoAllocatePrepayment));
         return changes;
     }
 

@@ -164,7 +164,10 @@ Everything else is in `internal`.
   `CHARGE_ALREADY_REVERSED` (a pre-check, and the unique index for two reversals at once). The new row: kind `REVERSAL`,
   source `MANUAL_REVERSAL`, the negated amount (`Money.negate`), the same plot, charge type, service period and
   `accrued_on`, booked in the original's month (through `BillingMonths`), calculation `{amount, parts: [], readings: []}`.
-  Answer 201 with the reversal.
+  Money paid on the charge is taken back in the same transaction (feature 015 slice 5): the plot ledger lock of the
+  plot is taken after the charge is found and before the month `FOR SHARE`, and after the reversal row
+  `AllocationReleaser.settleCharges` releases every live allocation of the charge (`CHARGE_REVERSED`, by the actor; see
+  Payments). Answer 201 with the reversal.
 - **Opening balance** (`OpeningBalances`): amount > 0 (400 `AMOUNT_NOT_POSITIVE`), at most 12 integer digits (400
   `INVALID`), date not after today in Europe/Kyiv (400 `DATE_IN_FUTURE`); the plot locked `FOR SHARE` (404
   `PLOT_NOT_FOUND`, 409 `PLOT_ARCHIVED`, 409 `PLOT_COMMON_LAND`); the charge type locked `FOR SHARE` (404 `NOT_FOUND` with
@@ -214,7 +217,9 @@ Everything else is in `internal`.
   A booking with another digest is
   409 `PREVIEW_OUTDATED`; a plan without lines is 409 `NOTHING_TO_RECALCULATE` on booking and an answer with no lines
   on preview. A plan without lines books nothing at all, its queue outcomes included (a preview of it lists no
-  `notCharged`); the queue of such a scope is left to the month run and the retry. The booking writes, in order: the
+  `notCharged`); the queue of such a scope is left to the month run and the retry. The booking first takes the plot
+  ledger locks of the plots of the lines and of the runs it reverses as a whole (feature 015, see Payments), then
+  writes, in order: the
   `recalculation` row (cause, scope with `causeType`, `months`, the chosen `chargeTypeIds` and `plotIds` - empty means
   all -, reason, total, counts, digest, author); the reversals (`ChargeRecord.recalculationReversalOf`, source
   `RECALCULATION`, the reason, in the reversed charge's month); the new `REGULAR` charges with their parts
@@ -225,12 +230,15 @@ Everything else is in `internal`.
   the reason, booked in the earliest open month through `BillingMonths.openForBooking(original.accruedOn)`, calculation
   `{amount, parts: [], readings: []}` and one `charge_part` per version of the expected charge, so those versions count
   as used, and for an interval the two `meter_value_use` rows of the expected interval
-  (`IntervalCharging.writePartsAndUse`), so `ReadingUsage` keeps its readings used); the queue (an item that cannot be
+  (`IntervalCharging.writePartsAndUse`), so `ReadingUsage` keeps its readings used); the releases of the money its
+  reversals and lowering adjustments no longer leave on their charges (`AllocationReleaser.settleCharges`, by the
+  actor); the queue (an item that cannot be
   charged opened or refreshed with its tariffs - an `INTERVAL` item also with the first point and day of the interval
   now -, a charged one `RESOLVED`, one with nothing left `OBSOLETE`); the
   `recalculation_line` rows (by plot in natural order, service period, charge type; reasons as
   `RecalculationChangeReason` codes; the charge ids each line booked); one `AuditBatch` with `RECALCULATION_BOOKED`;
-  `ChargesBooked` for the plots of the lines. The answer is the contract's `Recalculation`: a preview without `id`,
+  `ChargesBooked` for the plots of the lines and of the runs reversed as a whole. The answer is the contract's
+  `Recalculation`: a preview without `id`,
   with the `digest`; a booking with `id`, `reason`, `createdAt`, `createdByName` and each line's created charge ids.
 - **Tariff version causes** (`TARIFF_VERSION_ADD`, `_UPDATE`, `_DELETE`, slice 6; functional spec §2.4): the change and
   its recalculation are one transaction, so the version changes only with the recalculation. 403
@@ -291,7 +299,8 @@ Everything else is in `internal`.
 The value rules (amount, date, reason) and the audit values live in `OpeningBalanceRules`, the booking itself in
 `OpeningBalances.book`; the import uses both, so the two ways of entering a balance cannot disagree.
 
-Lock order: plot `FOR SHARE` -> charge type `FOR SHARE` -> billing month `FOR SHARE`. The ledger never locks a `charge`
+Lock order: plot `FOR SHARE` -> charge type `FOR SHARE` -> (a path that reverses or lowers a charge, feature 015) the
+plot ledger locks -> billing month `FOR SHARE`; the full order is under Payments. The ledger never locks a `charge`
 row (`FOR SHARE` would need `UPDATE`, which `nadel_app` does not have); concurrency on charges is settled by unique
 indexes.
 
@@ -622,10 +631,12 @@ Lock order of the slice: plot `FOR SHARE` -> charge type `FOR SHARE` -> billing 
   (entity type `LOSSES_RUN`, label `from/to`, values `from`, `to`, `billingMonth`, `nodes`, `count`, `total`) and
   `ChargesBooked`.
 - **Reversal** (`reverse`): reason required (400 `REQUIRED`; `TOO_LONG` over 500); 404 `NOT_FOUND`; 409
-  `RUN_ALREADY_REVERSED`; the run's month `FOR SHARE`, a closed one 409 `RUN_IN_CLOSED_MONTH`. Every charge of the run
+  `RUN_ALREADY_REVERSED`; the plot ledger locks of every plot the run charged (one sorted call, feature 015), then the
+  run's month `FOR SHARE`, a closed one 409 `RUN_IN_CLOSED_MONTH`. Every charge of the run
   that is not reversed yet (one may have been reversed by hand) gets a `REVERSAL` row with the run's reason (source
   `MANUAL_REVERSAL`, the run's `run_id`, in the charge's month); the run becomes `REVERSED` with the time, person and
-  reason, its nodes `run_status = REVERSED` (their days are free again, and its value uses no longer count). Audit
+  reason, its nodes `run_status = REVERSED` (their days are free again, and its value uses no longer count). Money paid
+  on the reversed charges is released (`AllocationReleaser.settleCharges`, `CHARGE_REVERSED`, by the actor). Audit
   `LOSSES_RUN_REVERSED` (`from`, `to`, `count`, `total` of the reversals, `reason`); `ChargesBooked`. The ledger stays
   append-only; the run rows change only by `BOOKED` -> `REVERSED` (trigger `run_reversal_guard`, V17).
 - **History and details:** newest first, with `billingMonth`, `createdByName`, `total`, `plots` (charges),
@@ -698,7 +709,8 @@ Lock order of the slice: plot `FOR SHARE` -> charge type `FOR SHARE` -> billing 
   `NO_PLOTS` consumer for the same range (`OBSOLETE`); audit `COMMON_CONSUMER_RUN_BOOKED` (entity type `COMMON_CONSUMER_RUN`, label `from/to`, values `from`,
   `to`, `billingMonth`, `consumers`, `count`, `total`) and `ChargesBooked`.
 - **Reversal, history and details:** as for losses runs (`RUN_ALREADY_REVERSED`, `RUN_IN_CLOSED_MONTH`, reason
-  required; audit `COMMON_CONSUMER_RUN_REVERSED` with `from`, `to`, `count`, `total`, `reason`). The summary counts
+  required; the plot ledger locks of the run's plots before the month and the releases of what was paid on its
+  charges; audit `COMMON_CONSUMER_RUN_REVERSED` with `from`, `to`, `count`, `total`, `reason`). The summary counts
   `plots`, `charges`, `chargedConsumers` and `skippedConsumers`; the details give each plot share its `chargeId` and
   `reversed`.
 - **Retry** of a `COMMON_CONSUMER` item (`CommonConsumerRuns.retry`, under the locks of a booking, the item
@@ -811,7 +823,7 @@ no interval, so it publishes nothing). `ReadingCharges` listens with the ADR 000
   every tariff `FOR SHARE` -> the billing month `FOR SHARE`. The month run takes the meters of its retries before its
   tariffs.
 
-## Payments (tag `payments`, feature 015 slices 2 to 4)
+## Payments (tag `payments`, feature 015 slices 2 to 5)
 
 | Endpoint | Operation | Who |
 |---|---|---|
@@ -902,10 +914,22 @@ transaction (`ReleasePlanner.forCharges`: all of a reversed charge, `CHARGE_REVE
 its latest allocations, `CHARGE_ADJUSTED`); `releasePayment(tenantId, plotId, paymentId, cause, createdBy)` every live
 allocation of one payment. Both assert the plot ledger locks (`PlotLedgerLock.assertHeld`: a missing lock is a bug and
 an `IllegalStateException`), flush, read the plots' ledger again, write and flush the releases (so the caller's next
-row comes after them) and return them. Rule: **a path that reverses or lowers a charge, or reverses or reallocates a
-payment, locks the plots and calls the releaser before it commits**; the deferred backstops of V27
-(`allocation_charge_cap`, `allocation_payment_cap`) refuse a commit that forgot it. The charge paths (`Reversals`,
-the run reversals, `RecalculationService`) call `settleCharges` from slice 5.
+row comes after them) and return them. Rule: **a path that reverses or lowers a charge locks the plots and calls
+`settleCharges`, and a path that reverses or reallocates a payment locks the plot and calls `releasePayment`, in its own
+transaction before it commits**; the deferred backstops of V27 (`allocation_charge_cap`, `allocation_payment_cap`)
+refuse a commit that forgot it. The releases carry `created_by` = the actor of the path (null for the system). The
+charge paths (feature 015 slice 5), each releasing everything on a reversed charge (`CHARGE_REVERSED`) and the excess
+of a lowered one from its latest allocations (`CHARGE_ADJUSTED`):
+
+| Path | Plot ledger locks | `settleCharges` |
+|---|---|---|
+| `Reversals.reverse` (by hand) | the charge's plot, after the charging lock and the charge, before the month `FOR SHARE` | after the reversal row is flushed |
+| `LossesRuns.reverse`, `CommonConsumerRuns.reverse` | every plot the run charged (`ChargeRepository.plotIdsOfRuns`), after the run lock and the run `FOR UPDATE`, before the month `FOR SHARE` | after `reverseLocked`, over the plots of the reversed charges |
+| `RecalculationService.book` | step 0: the plots of the lines and every plot a run reversed as a whole charged, before the first month is booked in (the plan already holds every month `FOR SHARE`: those shared locks never conflict with the shared month locks of the paths that hold plot ledger locks, so the order cannot deadlock) | after the reversals, new charges and adjustments (step 4a) |
+
+Each of them then publishes `ChargesBooked` for the plots (a recalculation also for the plots of the runs it reversed
+as a whole), so the released money is placed again by the automatic allocation below when it is on. Paths that only
+add charges (the month run, retries, readings, runs, opening balances and their import) take no plot ledger lock.
 
 **Lock order** (technical considerations 2.4): charging lock (paths that charge) -> network / queue / charge type /
 tariff `FOR SHARE` -> plot `FOR SHARE` (`PlotCatalog.findAndLockShared`) -> **plot ledger locks** (`PlotLedgerLock`:
@@ -913,7 +937,26 @@ tariff `FOR SHARE` -> plot `FOR SHARE` (`PlotCatalog.findAndLockShared`) -> **pl
 sorted order, remembered in a transaction-bound set for `assertHeld`) -> billing month `FOR SHARE` -> the
 `receipt_counter` row. The plot ledger lock stands for "the plot locked `FOR UPDATE` in the ledger" without a row lock
 on the plots module's table (which booking paths hold `FOR SHARE`). Paths that place money on charges or take it back
-lock the plots; paths that only add charges do not.
+lock the plots (payments, reversals and reallocations of payments, manual and automatic allocation of prepayment, and
+the charge paths above); paths that only add charges do not. Writers that meet on a plot wait on its lock and then read
+its ledger afresh (`AllocationConcurrencyTests`).
+
+**Automatic allocation of prepayment** (`PrepaymentAllocator`, feature 015 §2.4, FS 2.7). With the cooperative's
+setting `autoAllocatePrepayment` on (`settings.CooperativeSettings.autoAllocatePrepayment()`, default on), a plot's
+prepayment is placed on its open charges whenever charges are booked for it: the allocator listens to `ChargesBooked`
+with the ADR 0007 pattern (`@Async @TransactionalEventListener` after the commit, `TenantContext.runAs`, its own
+transaction through a `TransactionTemplate`). In that transaction: the setting (off: nothing); the plots of the event
+with a prepayment and an open charge, read without a lock; their plot ledger locks in one sorted call; their ledgers
+read again; per plot `AllocationPlanner.propose` of the prepayment (never more than its payments have left) over the
+open charges in the planner's order, each line's money taken from the payments with money left, oldest first
+(`pairWithPayments`); allocations of origin `PREPAYMENT_AUTO` with `created_by` null (the account shows them as
+"allocated from prepayment"); `PaymentsChanged` for the plots that got allocations (the plot status). Idempotent: only
+the prepayment found under the lock is placed, so a redelivered event writes nothing. It never publishes
+`ChargesBooked` (no loop). Payment entry, reallocation and manual allocation publish only `PaymentsChanged` and never
+trigger it: the remainder of an entry waits for new charges. Money released by a charge path becomes prepayment and is
+placed by the `ChargesBooked` that path publishes (example 6: membership 600.00 reversed, 150.00 moves to the open
+electricity, 450.00 stays). Turning the setting on places nothing at once (no sweep): a plot's prepayment is placed at
+its next booking. Logs counts only; automatic allocations are ledger rows, not audit entries.
 
 **Receipt numbers** (`ReceiptCounter`, `MANDATORY`): inside the saving transaction, after the plot ledger lock and the
 month, `INSERT ... ON CONFLICT DO NOTHING` of `(tenant, 0)` and `UPDATE ... SET last_number = last_number + 1 RETURNING`.
@@ -1095,7 +1138,7 @@ cache writer `PlotDebtCache`; the import records `PlotImportRow`, `PlotImportPla
 `PlotMeterPointsChanged`, `ConsumptionCalculator`, `Quantity`, `MeterValue`, `WaterConnections.connectedDays` and
 `connectedToSource`, `MeterCatalog.find`, `chainOf` and `plotMeterIds`; the port `ReadingUsage`, implemented here;
 the facade `ReadingChanges`), `settings` (`CooperativeSettings.lossesMode`, `lossesPercent`,
-`commonConsumerDefaultSplit`; `LossesMode`, `CommonConsumerSplit`), `money` (`Money`), `identity` (`CurrentUser`, `AccessProfile`, `Permission`,
+`commonConsumerDefaultSplit`, `autoAllocatePrepayment`; `LossesMode`, `CommonConsumerSplit`), `money` (`Money`), `identity` (`CurrentUser`, `AccessProfile`, `Permission`,
 `OwnedPlotsSource`), `audit` (events, `ActorNames`, `FieldChange`), `members` (`MemberDirectory.find`: the payer of a
 payment), `privacy` (`PersonalDataCipher`, `FieldRef`: the payer note), `problem`, `tenancy` (`TenantContext`). `imports` depends on
 `ledger` (`OpeningBalanceImport`) and `reports` reads it through `LedgerReadModel`.
@@ -1178,7 +1221,18 @@ the first plot and a `0.00` part not saved, per-part line errors and lines, the 
 permissions), `AllocationConcurrencyTests` (two entries on one plot, and a split with a payment of one of its plots, in
 real concurrent transactions: the second waits on the plot ledger lock while the first holds the receipt counter, then
 reads the ledger afresh, so no charge and no payment is ever over-allocated; without the lock the deferred backstop
-refuses one at commit), `PaymentAuditTests` (`PAYMENT_RECORDED` values, the
+refuses one at commit; an entry and the automatic allocation on one plot, and an entry and a recalculation whose
+-100.00 adjustment lowers the paid charge: the allocator or the recalculation waits on the entry's plot ledger lock,
+then the allocator places only what is left open and the adjustment releases 100.00 of the entry's latest allocation;
+no deadlock), `AutoReleaseTests` (example 6 by hand with automatic allocation on, and off; an unpaid charge reversed
+without releases; the reversal of a losses run and of a common consumer run releasing what was paid on their charges;
+a recalculation that reverses and charges again in an open month, the prepayment then paying the new charge; example 7
+releasing 100.00 of the latest allocation, `CHARGE_ADJUSTED`; example 8 leaving 50.00 open and the plot no longer
+green; every path commits), `AutoAllocationTests` (examples 4 and 5 after a month run; a month run over plots with,
+partly with and without a prepayment, a prepayment of two payments taken oldest first; an opening balance; a
+redelivered `ChargesBooked` writing nothing; an entry with a remainder not triggering it; switching it on places nothing
+until the next booking; `PREPAYMENT_AUTO` by the system) - these run in a cooperative of their own
+(`FreshPaymentSupport`), `PaymentAuditTests` (`PAYMENT_RECORDED` values, the
 sealed note: not readable in `payment`, `audit_entry`, the outbox or the debug log; `PAYMENT_REALLOCATED` with the old
 and new lines, `PAYMENT_REVERSED` with the reason, `PREPAYMENT_ALLOCATED` with lines and total, all read back by the
 audit listing), `PaymentReversalTests` (example 9: releases then the reversal row, the debts back; the card's

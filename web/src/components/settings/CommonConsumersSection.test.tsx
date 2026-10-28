@@ -32,6 +32,7 @@ const settings: CooperativeSettings = {
   commonConsumerDefaultSplit: 'CONNECTED_PLOTS',
   redAmount: '1000.00',
   redDays: 90,
+  autoAllocatePrepayment: true,
 };
 
 vi.mock('../../me', () => ({

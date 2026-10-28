@@ -56,6 +56,7 @@ function CooperativeSettings() {
           <SettingsForm saved={data.memberPlotStatusVisibility} />
           <StatusThresholdSection saved={data} />
           <LossesSettingsSection saved={data} />
+          <PaymentsSettingsSection saved={data} />
           <CommonConsumersSection saved={data} />
           <RequisitesPanel saved={data} />
         </>
@@ -272,6 +273,61 @@ function LossesSettingsSection({ saved }: { saved: Settings }) {
         <div>
           <Button type="submit" disabled={!changed || update.isPending}>
             {s.losses.save}
+          </Button>
+        </div>
+      </form>
+    </Panel>
+  );
+}
+
+/** Whether a plot's prepayment is placed on new charges automatically (SETTINGS_MANAGE). */
+function PaymentsSettingsSection({ saved }: { saved: Settings }) {
+  const t = useT();
+  const s = t.settings;
+  const queryClient = useQueryClient();
+  const [auto, setAuto] = useState(saved.autoAllocatePrepayment);
+  const [result, setResult] = useState<'saved' | { error: string }>();
+
+  const update = useUpdateSettings({
+    mutation: {
+      onSuccess: (data) => {
+        queryClient.setQueryData(getGetSettingsQueryKey(), data);
+        setAuto(data.autoAllocatePrepayment);
+        setResult('saved');
+      },
+      onError: (error) => setResult({ error: problemMessage(t, error) }),
+    },
+  });
+
+  return (
+    <Panel title={s.payments.title}>
+      <form
+        className="flex max-w-xl flex-col gap-4"
+        onSubmit={(event) => {
+          event.preventDefault();
+          setResult(undefined);
+          update.mutate({ data: { autoAllocatePrepayment: auto } });
+        }}
+      >
+        <label className="flex items-center gap-3">
+          <input
+            type="checkbox"
+            role="switch"
+            className="size-5"
+            checked={auto}
+            onChange={(e) => {
+              setAuto(e.target.checked);
+              setResult(undefined);
+            }}
+          />
+          <span>{s.payments.autoAllocatePrepayment}</span>
+        </label>
+        <p className="text-sm text-ink-muted">{s.payments.autoAllocatePrepaymentHint}</p>
+        {result === 'saved' && <Notice tone="success">{s.saved}</Notice>}
+        {typeof result === 'object' && <Notice tone="danger">{result.error}</Notice>}
+        <div>
+          <Button type="submit" disabled={auto === saved.autoAllocatePrepayment || update.isPending}>
+            {s.payments.save}
           </Button>
         </div>
       </form>

@@ -14,8 +14,11 @@ Settings (V7, and V14 for the ledger, feature 011):
 | `lossesMode` | `losses_mode`, CHECK | `FIXED_PERCENT` | `FIXED_PERCENT` or `PROPORTIONAL` losses; with `FIXED_PERCENT` every electricity interval also gets a losses charge (ledger, spec 011 slice 4) |
 | `lossesPercent` | `losses_percent numeric(5,2)`, CHECK `0..100` | `0.00` | The fixed losses percentage (`0.00` charges no losses) |
 | `commonConsumerDefaultSplit` | `common_consumer_default_split`, CHECK | `CONNECTED_PLOTS` | `CONNECTED_PLOTS`, `EQUAL_PER_PLOT`, `SERVICE_USERS` or `NOT_CHARGED` (used from slice 7) |
+| `autoAllocatePrepayment` | `auto_allocate_prepayment boolean` (V27, feature 015) | `true` | Allocate prepayment automatically: a plot's prepayment is placed on its open charges whenever charges are booked for the plot or money is taken back from its charges (the ledger's `PrepaymentAllocator`); off, it waits until the treasurer allocates it by hand |
 
 A change of the red threshold applies to every status read from then on: `plots` derives the colour at read time.
+Turning `autoAllocatePrepayment` on places no existing prepayment at once: a plot's prepayment is placed at its next
+booking of charges.
 
 Requisites (V20, feature 013, functional spec 2.13): the legal details of the cooperative, printed on reports and filled
 into templates. They are public data of the legal entity, not personal data, so they are audited with their values. All
@@ -48,7 +51,7 @@ filter then matches only the member's own plots).
 
 | Type | Use |
 |---|---|
-| `CooperativeSettings` | `memberPlotStatusVisibility()`, `lossesMode()`, `lossesPercent()` (`BigDecimal`, two decimals), `commonConsumerDefaultSplit()`, `redAmount()` (`money.Money`), `redDays()`, `requisites()` for the cooperative of the current transaction or request (`TenantContext`); the defaults when never saved, and also when no cooperative is bound (RLS would show no row). Call it inside a transaction |
+| `CooperativeSettings` | `memberPlotStatusVisibility()`, `lossesMode()`, `lossesPercent()` (`BigDecimal`, two decimals), `commonConsumerDefaultSplit()`, `redAmount()` (`money.Money`), `redDays()`, `requisites()`, `autoAllocatePrepayment()` for the cooperative of the current transaction or request (`TenantContext`); the defaults when never saved, and also when no cooperative is bound (RLS would show no row). Call it inside a transaction |
 | `Requisites` | `officialName`, `legalAddress`, `bankName`, `iban` (each nullable); `Requisites.NONE` when never saved |
 | `PlotStatusVisibility` | `OWN_ONLY`, `ALL_PLOTS` |
 | `LossesMode` | `FIXED_PERCENT`, `PROPORTIONAL` |
@@ -78,7 +81,7 @@ anything differs it upserts the whole row (`insert ... on conflict (tenant_id) d
 collide) and publishes one `audit.AuditEvent` `SETTINGS_UPDATED` (entity `SETTINGS`, entity id = the cooperative id,
 label = the code `settings` (the client shows the name in the reader's language)) with one field change per changed
 setting, old and new as codes and plain numbers (`memberPlotStatusVisibility` `OWN_ONLY`, `redAmount` `1000.00`,
-`redDays` `90`, `lossesPercent` `0.00`, ...; the requisites `officialName`, `legalAddress`, `bankName` and `iban` as
+`redDays` `90`, `lossesPercent` `0.00`, `autoAllocatePrepayment` `true`/`false`, ...; the requisites `officialName`, `legalAddress`, `bankName` and `iban` as
 their text, `null` when not set or cleared; a never-saved cooperative reports the defaults as the old values). Saving the
 current values changes nothing and writes no audit entry.
 

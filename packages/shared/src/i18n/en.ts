@@ -606,6 +606,13 @@ export const en = {
       save: 'Save the threshold',
       daysInvalid: 'Enter a whole number of days',
     },
+    payments: {
+      title: 'Payments',
+      autoAllocatePrepayment: 'Allocate prepayment automatically',
+      autoAllocatePrepaymentHint:
+        "A plot's prepayment is placed on new charges as soon as they are booked. When off, the treasurer allocates it by hand.",
+      save: 'Save the payment settings',
+    },
     losses: {
       title: 'Losses',
       text: 'Losses of a meter tree node. With a fixed percentage, the percentage is added to the consumption charge of each plot; in proportional mode the losses run splits the losses of the node between its plots.',
@@ -914,6 +921,7 @@ export const en = {
       commonConsumerDefaultSplit: 'Common consumers split',
       redAmount: 'Red from the debt amount',
       redDays: 'Red from the debt age, days',
+      autoAllocatePrepayment: 'Allocate prepayment automatically',
       effectiveFrom: 'Owners from',
       owners: 'Owners',
       basis: 'Basis',

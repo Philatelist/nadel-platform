@@ -145,8 +145,17 @@ import org.springframework.transaction.support.TransactionTemplate;
  * run (key {@code LOSSES_RUN:{run}:{plot}} or {@code COMMON_CONSUMER_RUN:{run}:{consumer}:{plot}}); the queue (an item
  * that cannot be charged opened or refreshed, an interval item with the first point of its interval now, a charged one
  * {@code RESOLVED}, one with nothing left {@code OBSOLETE}); the {@code recalculation_line} rows; one
- * {@code AuditBatch} with {@code RECALCULATION_BOOKED}; {@code ChargesBooked} for the plots of the lines. The reason is
- * user content: never logged.
+ * {@code AuditBatch} with {@code RECALCULATION_BOOKED}; {@code ChargesBooked} for the plots of the lines (and of the
+ * runs reversed as a whole). The reason is user content: never logged.
+ * <p>
+ * Money paid on the charges a booking reverses or lowers is taken back in the same transaction (feature 015 §2.3,
+ * technical considerations 2.4): before it writes anything, the booking takes the plot ledger locks
+ * ({@link PlotLedgerLock}) of the plots of the lines and of every plot a run reversed as a whole charged, in one sorted
+ * call; after the reversals, new charges and adjustments, {@link AllocationReleaser#settleCharges} releases everything
+ * on a reversed charge ({@code CHARGE_REVERSED}) and the excess of a lowered one from its latest allocations
+ * ({@code CHARGE_ADJUSTED}), by the actor. The months are already held {@code FOR SHARE} by the plan (taken before the
+ * lines are known); every path that holds a plot ledger lock takes a month only {@code FOR SHARE}, which never waits on
+ * this booking's shared locks, so the order cannot deadlock. A preview takes no plot ledger lock.
  */
 @Service
 class RecalculationService {
@@ -191,6 +200,8 @@ class RecalculationService {
     private final TariffVersionChanges tariffVersions;
     private final ReadingChanges readingChanges;
     private final TariffBook tariffBook;
+    private final PlotLedgerLock plotLocks;
+    private final AllocationReleaser releaser;
     private final EntityManager entityManager;
     private final Clock clock;
 
@@ -202,7 +213,8 @@ class RecalculationService {
             ChargeRepository charges, BillingMonthRepository months, BillingMonths billingMonths,
             NotChargedItemRepository items, NotChargedViews itemViews, LedgerAuditPublisher audit,
             ActorNames actorNames, TariffVersionChanges tariffVersions, ReadingChanges readingChanges,
-            TariffBook tariffBook, EntityManager entityManager, Clock clock) {
+            TariffBook tariffBook, PlotLedgerLock plotLocks, AllocationReleaser releaser, EntityManager entityManager,
+            Clock clock) {
         this.transaction = new TransactionTemplate(transactionManager);
         this.chargingLock = chargingLock;
         this.writer = writer;
@@ -226,6 +238,8 @@ class RecalculationService {
         this.tariffVersions = tariffVersions;
         this.readingChanges = readingChanges;
         this.tariffBook = tariffBook;
+        this.plotLocks = plotLocks;
+        this.releaser = releaser;
         this.entityManager = entityManager;
         this.clock = clock;
     }
@@ -1126,6 +1140,17 @@ class RecalculationService {
         List<Line> lines = ordered(planned.plan().lines(), planned.plotById());
         Set<UUID> plotIds = lines.stream().map(Line::plotId).collect(Collectors.toCollection(LinkedHashSet::new));
 
+        // 0. the plot ledger locks of the plots of the lines and of every plot a run reversed as a whole charged, in
+        // one sorted call before the first month is booked in: the reversals and adjustments below may take back money
+        // paid on their charges (feature 015 §2.3), so a payment of these plots waits for this booking
+        Set<UUID> touched = new LinkedHashSet<>(plotIds);
+        List<UUID> wholeRuns = planned.plan().runs().stream().filter(run -> run.action() != RunAction.PER_LINE)
+                .map(RunOutcome::runId).toList();
+        if (!wholeRuns.isEmpty()) {
+            touched.addAll(charges.plotIdsOfRuns(wholeRuns));
+        }
+        plotLocks.lockAll(tenantId, touched);
+
         entityManager.persist(RecalculationRecord.booked(recalculationId, tenantId, target.kind(), causeRefId,
                 target.storedScope(), reason, planned.plan().total(), lines.size(), plotIds.size(), planned.digest(),
                 createdBy, now));
@@ -1225,6 +1250,10 @@ class RecalculationService {
         }
         entityManager.flush();
 
+        // 4a. the money the reversals and lowering adjustments no longer leave on their charges is taken back, by the
+        // actor: everything on a reversed charge, the excess of a lowered one from its latest allocations
+        releaser.settleCharges(tenantId, touched, createdBy);
+
         // 5. the queue
         List<NotChargedItem> notCharged = applyQueue(tenantId, planned, now);
 
@@ -1253,7 +1282,8 @@ class RecalculationService {
                 target.shownMonths().getFirst() + "/" + target.shownMonths().getLast(),
                 auditChanges(target, planned, lines, reason)));
         audit.publishBatch(tenantId, entries);
-        writer.publishBooked(tenantId, plotIds);
+        // every plot whose charges changed: the status is refreshed and released money is placed again
+        writer.publishBooked(tenantId, touched);
 
         Recalculation result = result(target, planned, false, !target.manual(), recalculationId, createdByLine,
                 notCharged);

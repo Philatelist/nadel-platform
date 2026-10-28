@@ -120,3 +120,6 @@ red plots; guide PDFs.
 - Slice 3 committed ec792e9; review round 1: PASS (minor notes in review-log).
 - Slice 4 backend: reverse/reallocate/prepayment in new PaymentCorrections (76 narrow tests green). Builder choice: 409 NOTHING_TO_ALLOCATE when no prepayment or no open charge.
 - Slice 4 verify: backend 29 tests 0 failures; pnpm typecheck/lint/test green.
+- Slice 4 committed 2bf814c; review round 1: PASS (minor notes in review-log).
+- Slice 5 backend: releases wired into Reversals, run reversals, RecalculationService; PrepaymentAllocator; setting (785 tests in ledger/settings green). Note: in recalculation the plot ledger locks come after the plan's month FOR SHARE locks (builder's argument: shared month locks only) — flagged for review.
+- Slice 5 verify: backend 785 tests 0 failures; pnpm typecheck/lint/test green. Settings switch shown only with SETTINGS_MANAGE (whole settings block is gated).

@@ -29,6 +29,8 @@ export interface CooperativeSettings {
      * @maximum 36500
      */
   redDays: number;
+  /** Allocate prepayment automatically (feature 015 §2.7): when on (the default), a plot's prepayment is placed on its open charges, oldest first, whenever charges are booked for the plot or money is taken back from its charges; when off, the prepayment waits until the treasurer allocates it by hand */
+  autoAllocatePrepayment: boolean;
   /**
      * The full official name of the cooperative; absent when not set
      * @maxLength 300

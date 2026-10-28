@@ -23,3 +23,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `faf6564..ec792e9` | PASS | — | minor: split proposal reads unlocked non-part plots (protected by digest and sum check); `PaymentQueries` javadoc over 120 columns; payer without plots gets `NOT_FOUND` on `split.payerMemberId` |
+
+## Slice 4 — reverse a payment, reallocate it, allocate prepayment by hand
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `ec792e9..2bf814c` | PASS | — | minor: `LedgerAuditPublisher` Javadoc line over wrap width; reallocate preview resolves the plot without a lock (save re-reads under the lock) |

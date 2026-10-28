@@ -46,6 +46,7 @@ const settings: CooperativeSettings = {
   commonConsumerDefaultSplit: 'CONNECTED_PLOTS',
   redAmount: '1000.00',
   redDays: 90,
+  autoAllocatePrepayment: true,
 };
 
 describe('SettingsPage', () => {
@@ -271,5 +272,22 @@ describe('SettingsPage', () => {
       renderPage();
       expect(screen.queryByLabelText(/Losses percentage/)).toBeNull();
     });
+  });
+
+  it('shows the prepayment switch with the server value and saves the flag', async () => {
+    renderPage();
+    const sw = screen.getByRole('switch', { name: 'Allocate prepayment automatically' });
+    expect(sw).toBeChecked();
+    expect(screen.getByText(/placed on new charges as soon as they are booked/)).toBeInTheDocument();
+    const user = userEvent.setup();
+    await user.click(sw);
+    await user.click(screen.getByRole('button', { name: 'Save the payment settings' }));
+    expect(mutate).toHaveBeenCalledWith({ data: { autoAllocatePrepayment: false } });
+  });
+
+  it('offers no prepayment switch without SETTINGS_MANAGE', () => {
+    permissions = ['METERS_VIEW'];
+    renderPage();
+    expect(screen.queryByRole('switch')).toBeNull();
   });
 });

@@ -30,4 +30,10 @@ public interface CooperativeSettings {
 
     /** The legal details of the cooperative; {@link Requisites#NONE} when never saved. */
     Requisites requisites();
+
+    /**
+     * Whether a plot's prepayment is placed on its open charges automatically when charges are booked for the plot or
+     * money is taken back from its charges (feature 015 §2.7); {@code true} when never saved.
+     */
+    boolean autoAllocatePrepayment();
 }

@@ -36,6 +36,12 @@ import org.springframework.transaction.annotation.Transactional;
  * before ({@code CHARGE_ALREADY_REVERSED}). Two reversals of the same charge at the same time meet at the unique index
  * {@code charge_reversed_once_uq}, whose violation is the same 409. The reason is user content: it goes to the ledger
  * and the audit entry, never to a log.
+ * <p>
+ * Money paid on the charge is taken back in the same transaction (feature 015 §2.3): the plot ledger lock of the plot
+ * ({@link PlotLedgerLock}) is taken after the charge is found and before the billing month {@code FOR SHARE} (the
+ * ledger's lock order), and after the reversal row is written {@link AllocationReleaser#settleCharges} releases every
+ * live allocation of the charge ({@code CHARGE_REVERSED}, by the actor); the money becomes the plot's prepayment, and
+ * the {@code ChargesBooked} that follows lets the automatic allocation place it on the plot's other open charges.
  */
 @Service
 class Reversals {
@@ -51,12 +57,15 @@ class Reversals {
     private final LedgerAuditPublisher audit;
     private final ApplicationEventPublisher events;
     private final ChargingLock chargingLock;
+    private final PlotLedgerLock plotLocks;
+    private final AllocationReleaser releaser;
     private final EntityManager entityManager;
     private final Clock clock;
 
     Reversals(ChargeRepository charges, BillingMonthRepository months, BillingMonths billingMonths,
             ChargeTypeCatalog chargeTypes, PlotCatalog plots, ChargeViews views, LedgerAuditPublisher audit,
-            ApplicationEventPublisher events, ChargingLock chargingLock, EntityManager entityManager, Clock clock) {
+            ApplicationEventPublisher events, ChargingLock chargingLock, PlotLedgerLock plotLocks,
+            AllocationReleaser releaser, EntityManager entityManager, Clock clock) {
         this.charges = charges;
         this.months = months;
         this.billingMonths = billingMonths;
@@ -66,6 +75,8 @@ class Reversals {
         this.audit = audit;
         this.events = events;
         this.chargingLock = chargingLock;
+        this.plotLocks = plotLocks;
+        this.releaser = releaser;
         this.entityManager = entityManager;
         this.clock = clock;
     }
@@ -77,8 +88,9 @@ class Reversals {
             throw new ApiProblemException(HttpStatus.BAD_REQUEST, ProblemCodes.VALIDATION_FAILED,
                     "The request is not valid.", List.of(new FieldProblem("reason", ProblemCodes.REQUIRED)));
         }
+        UUID tenantId = Objects.requireNonNull(actor.tenantId());
         // a recalculation reads the chains and books under this lock, so a reversal never slips in between
-        chargingLock.lock(Objects.requireNonNull(actor.tenantId()));
+        chargingLock.lock(tenantId);
         ChargeRecord original = charges.findById(chargeId).orElseThrow(ApiProblemException::notFound);
         if (original.getKind() == ChargeKind.REVERSAL) {
             throw conflict(ProblemCodes.REVERSAL_NOT_REVERSIBLE, "A reversal cannot be reversed.");
@@ -87,6 +99,8 @@ class Reversals {
             throw conflict(ProblemCodes.ADJUSTMENT_NOT_REVERSIBLE,
                     "An adjustment cannot be reversed; a later recalculation adjusts the original charge again.");
         }
+        // the plot ledger lock before the month: a payment of the plot waits, and the releases below read what it left
+        plotLocks.lockAll(tenantId, Set.of(original.getPlotId()));
         BillingMonthRecord month = months.findByIdForShare(original.getBillingMonthId()).orElseThrow();
         if (month.isClosed()) {
             throw conflict(ProblemCodes.CHARGE_IN_CLOSED_MONTH,
@@ -95,7 +109,6 @@ class Reversals {
         if (charges.existsByReversesChargeId(chargeId)) {
             throw alreadyReversed();
         }
-        UUID tenantId = Objects.requireNonNull(actor.tenantId());
         BillingMonthRecord booking = billingMonths.openForBooking(tenantId, month.yearMonth().atDay(1));
         ChargeRecord reversal = ChargeRecord.reversalOf(original, booking.getId(), reason,
                 ChargeViews.plainCalculation(original.getAmount().negate()), actor.memberId(), clock.instant());
@@ -108,6 +121,7 @@ class Reversals {
             }
             throw e;
         }
+        releaser.settleCharges(tenantId, Set.of(original.getPlotId()), actor.memberId());
         String plotNumber = plots.find(original.getPlotId()).orElseThrow().number();
         String chargeType = chargeTypes.find(original.getChargeTypeId()).orElseThrow().auditName();
         audit.publish(actor, LedgerAuditPublisher.Action.CHARGE_REVERSED, original.getPlotId(), plotNumber, List.of(

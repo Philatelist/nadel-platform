@@ -1100,7 +1100,8 @@ paths:
         Returns the settings of the current cooperative. Every member of the cooperative may call it; the platform
         operator has no cooperative data: 403. A cooperative that never saved its settings has the defaults
         (`memberPlotStatusVisibility` `OWN_ONLY`, `lossesMode` `FIXED_PERCENT`, `lossesPercent` `0.00`,
-        `commonConsumerDefaultSplit` `CONNECTED_PLOTS`, `redAmount` `1000.00`, `redDays` 90) and no requisites. The
+        `commonConsumerDefaultSplit` `CONNECTED_PLOTS`, `redAmount` `1000.00`, `redDays` 90,
+        `autoAllocatePrepayment` true) and no requisites. The
         requisites (`officialName`, `legalAddress`, `bankName`, `iban`) and the read-only ЄДРПОУ code (`edrpou`, set by
         the platform operator) are public data of the legal entity, not personal data; a requisite that is not set is
         absent.
@@ -1131,7 +1132,8 @@ paths:
         not a valid Ukrainian IBAN (`UA` and 27 digits with a correct mod-97 check) is 400 `IBAN_INVALID` with the field
         error `iban` `IBAN_INVALID`, and nothing is saved. `edrpou` is read-only: it is changed only by the platform
         operator, and a value sent here is ignored. A change of the red threshold applies to every plot status shown
-        from then on (the status is derived when it is read).
+        from then on (the status is derived when it is read). Turning `autoAllocatePrepayment` on places no existing
+        prepayment at once: a plot's prepayment is placed at its next booking of charges.
       requestBody:
         required: true
         content:
@@ -5341,6 +5343,7 @@ components:
           commonConsumerDefaultSplit,
           redAmount,
           redDays,
+          autoAllocatePrepayment,
         ]
       properties:
         memberPlotStatusVisibility:
@@ -5358,6 +5361,12 @@ components:
           format: int32
           minimum: 0
           maximum: 36500
+        autoAllocatePrepayment:
+          type: boolean
+          description: >-
+            Allocate prepayment automatically (feature 015 §2.7): when on (the default), a plot's prepayment is
+            placed on its open charges, oldest first, whenever charges are booked for the plot or money is taken back
+            from its charges; when off, the prepayment waits until the treasurer allocates it by hand
         officialName:
           type: string
           maxLength: 300
@@ -5403,6 +5412,9 @@ components:
           format: int32
           minimum: 0
           maximum: 36500
+        autoAllocatePrepayment:
+          type: boolean
+          description: Allocate prepayment automatically; see `CooperativeSettings.autoAllocatePrepayment`
         officialName:
           type: string
           maxLength: 300
