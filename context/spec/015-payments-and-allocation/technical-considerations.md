@@ -2,7 +2,7 @@
 
 - **Functional Specification:** [functional-spec.md](functional-spec.md) (requirement
   `docs/features/015-payments-and-allocation.md`)
-- **Status:** Implemented — pending manual check
+- **Status:** Completed
 - **Author(s):** Alex Usov
 
 ---

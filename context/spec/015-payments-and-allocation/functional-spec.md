@@ -4,7 +4,7 @@
   transfer entered by hand. The app places each payment on the plot's debts (oldest first), keeps what is left as a
   prepayment, places prepayments on later charges, and from then on every debt, plot colour, report and member account
   reflects the payments.
-- **Status:** Implemented — pending manual check
+- **Status:** Completed
 - **Author:** Alex Usov
 - **Source:** `docs/features/015-payments-and-allocation.md` (roadmap phase 3, feature 1 of 3)
 
@@ -88,9 +88,9 @@ Charge type order used in the examples: Membership, Electricity, Land tax.
   - [x] When the treasurer puts more on a line than is open on that charge, then they see "Сума перевищує залишок за
         нарахуванням" / "The amount exceeds what is open on the charge" and nothing is saved.
         *Verified:* PaymentsAcceptanceTests.fs2_1_everyRefusal… (400 ALLOCATION_EXCEEDS_CHARGE); screen text from the i18n catalogs; rendering covered by Vitest, real-browser rendering by `web/e2e/payments.spec.ts` in CI (Playwright could not run locally: ports 8080/5173 held by the owner's own app)
-  - [?] When the treasurer saves a cash payment, then the next receipt number of the cooperative is shown large with
+  - [x] When the treasurer saves a cash payment, then the next receipt number of the cooperative is shown large with
         "Ще один платіж".
-        *Pending manual check:* Server side verified (PaymentsAcceptanceTests.fs2_1_700… returns the receipt number; PaymentForm.test.tsx renders «Квитанція № 42» and «Ще один платіж»), but the large receipt screen was not seen in a real browser: Playwright and the app could not run locally (ports 8080/5173 held by the owner's own app); covered by the `@smoke` flow of `web/e2e/payments.spec.ts` in CI.
+        *Verified:* rendered on the review run (`make up` on the spec branch, 28.10.2026): treasurer saved a 100,00 ₴ cash payment for plot 9 (proposal electricity 72,96 + land tax 27,04), the screen shows «Receipt № 10» large with «Another payment», see `docs/screenshots/015-payments-and-allocation-receipt.png`; server side: PaymentsAcceptanceTests.fs2_1_700…; CI `@smoke` flow of `web/e2e/payments.spec.ts` green (run 40715246536).
   - [x] When the treasurer enters an amount of 0,00 ₴, then they see "Сума має бути більшою за нуль" / "The amount
         must be above zero".
         *Verified:* PaymentsAcceptanceTests.fs2_1_everyRefusal… (AMOUNT_NOT_POSITIVE); screen text from the i18n catalogs; rendering covered by Vitest, real-browser rendering by `web/e2e/payments.spec.ts` in CI (Playwright could not run locally: ports 8080/5173 held by the owner's own app)
@@ -226,9 +226,9 @@ Charge type order used in the examples: Membership, Electricity, Land tax.
   - [x] Given the same plot with automatic allocation off, when the land tax charge is booked, then land tax stays
         open 120,00 ₴ and the prepayment stays 150,00 ₴.
         *Verified:* PaymentsAcceptanceTests.fs2_7_withTheSettingOffTheNewChargeStaysOpenAndThePrepaymentStays; AutoAllocationTests example 5
-  - [?] When the chairman switches "Автоматично зараховувати аванс" off and saves the settings, then the switch stays
+  - [x] When the chairman switches "Автоматично зараховувати аванс" off and saves the settings, then the switch stays
         off after reloading the page, and a treasurer does not see the switch as changeable.
-        *Pending manual check:* Server side verified (PaymentsAcceptanceTests.fs2_7_theChairmanSwitchesTheSettingOff…: the setting stays off, a treasurer's PUT gets 403; SettingsPage.test.tsx: no switch without SETTINGS_MANAGE); the page reload in a real browser was not checked locally (ports held by the owner's app).
+        *Verified:* rendered on the review run: the chairman switched «Allocate prepayment automatically» off and saved («Settings saved»); after a page reload the switch is still off and the database stores false, see `docs/screenshots/015-payments-and-allocation-auto-allocation-off.png` (switched back on afterwards); a treasurer opening Settings gets «You don't have access to this page»; server side: PaymentsAcceptanceTests.fs2_7_theChairmanSwitchesTheSettingOff….
 
 ### 2.8 When paid money is taken back automatically
 
@@ -323,9 +323,9 @@ Charge type order used in the examples: Membership, Electricity, Land tax.
   audit log (the payer note hidden from those not allowed to see member data). Automatic allocations and take-backs are
   ledger lines, not audit entries.
 - **Acceptance Criteria:**
-  - [?] When the demo electrician signs in, then "Платежі" is not in the menu and opening its address shows "no
+  - [x] When the demo electrician signs in, then "Платежі" is not in the menu and opening its address shows "no
         access".
-        *Pending manual check:* Server side verified (PaymentsAcceptanceTests.fs2_12_theElectrician…: 403 on every payments endpoint; Layout.test.tsx: no «Платежі» item without PAYMENTS_VIEW); the rendered menu and the no-access page were not seen in a real browser locally (ports held by the owner's app).
+        *Verified:* rendered on the review run: the demo electrician's menu is Readings, Meters, Reports, Audit log — no «Payments» (`docs/screenshots/015-payments-and-allocation-electrician-menu.png`), and opening /payments shows «You don't have access to this page» (`docs/screenshots/015-payments-and-allocation-electrician-no-access.png`); server side: PaymentsAcceptanceTests.fs2_12_theElectrician….
   - [x] When the treasurer reverses a payment through any route, then it is refused with "no access".
         *Verified:* PaymentsPermissionTests (treasurer reverse 403 on the endpoint); PaymentsAcceptanceTests.fs2_5_…
   - [x] When the chairman opens the audit log after a payment was entered, reallocated and reversed, then three entries

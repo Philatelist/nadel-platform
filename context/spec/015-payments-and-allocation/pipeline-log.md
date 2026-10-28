@@ -1,12 +1,12 @@
 # Pipeline log — 015 payments and allocation
 
 - Status: finished
-- Phase: 6 (review run not started)
+- Phase: 6 (review run running)
 - Branch: 015-payments-and-allocation (planned) · Base: main @ 75db154
 - Requirement: document docs/features/015-payments-and-allocation.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
 - Publish: pr+checks · PR: https://github.com/Philatelist/nadel-platform/pull/56 · Checks: green (run 40715246536 on 03b0e4d)
-- Review run: not started: ports 8080/5173 held by the owner's own `make up` (PIDs 2267 vite, 2383 java), which the pipeline does not stop
+- Review run: running at http://localhost:5173 (web), http://localhost:8080 (API), http://localhost:8180 (Keycloak); make up PID 4980 (pids in the session scratchpad review-run.pids)
 
 ## Project facts
 
@@ -172,3 +172,7 @@ red plots; guide PDFs.
   - No re-runs of infrastructure failures; privacy.spec:37 was flaky once (passed on retry), unchanged.
 - Review run (Phase 6): not started — ports 8080/5173 held by the owner's own app.
 - Left for the owner: review and merge the PR; `make guide-shots` + `make guide` on this branch (screenshots and PDFs); check the 3 [?] criteria in a browser; `/awos:architecture` follow-up; optional hardening of the recalculation lock order.
+- Owner decision (2026-10-28): stop the owner's own `make up` and run again to verify. Stopped it (TERM to the recipe shell, then the two Java processes); ports freed.
+- Phase 6: `make up` started detached from the spec branch (PID 4980; backend 5293, web 5155); Flyway migrated the dev DB to V27 and reapplied the demo data. Ready at :8080 and :5173.
+- Browser checks of the 3 [?] criteria (claude-in-chrome, demo users): receipt screen «Receipt № 10» after a 100,00 cash payment on plot 9; auto-allocation switch stays off after reload (DB false; switched back on); electrician has no «Payments» item and gets the no-access page on /payments. Screenshots in docs/screenshots/015-payments-and-allocation-*.png. All 50 criteria [x]; status Completed.
+- Note: the review run left a real 100,00 cash payment (receipt № 10) on plot 9 in the local dev DB.
