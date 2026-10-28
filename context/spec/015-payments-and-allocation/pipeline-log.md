@@ -186,3 +186,5 @@ red plots; guide PDFs.
 - Full make check after the owner review fixes: backend 3301 tests, 0 failures, JaCoCo floor met; web 825, shared 130; contract, format, lint green. LedgerAccountTests order fix (explicit created_at) added.
 - CI run 40737374368 on cbc2a04: Backend, Clients, SAST, Security green; End-to-end 143 passed, 4 failed — meters-acceptance:290, recalculation:279, tariffs-acceptance:275 broken by the shared PlotPicker combobox change (item 2; specs clicked suggestion buttons / duplicate label), privacy.spec:37 audit log stuck on Loading (flaky earlier, failed twice now). CI fix attempt 1 delegated (react-frontend). The new reallocation e2e step passed.
 - CI fix attempt 1 for the owner round (6db0891): fix review PASS. Review run restarted on 6db0891 (make up PID 58666). Pushing.
+- CI run 40745784297 on ae8a02c: all five checks green (full e2e).
+- Finish 4: make guide-shots (108) and make guide (4 PDFs) on the review run at 6db0891; 24 screenshots and the PDFs changed (payment card, list filters, form, account). Note: the local dev DB contains the review test payments № 10–13, visible in the payments list and card shots.
