@@ -103,6 +103,12 @@ public final class ProblemCodes {
     public static final String READING_STATUS_INVALID = "READING_STATUS_INVALID";
     /** 409: a plot that has charges (any kind, reversed or not) is never deleted; the ledger keeps them. */
     public static final String PLOT_HAS_CHARGES = "PLOT_HAS_CHARGES";
+    /** 409: a plot that has payments is never deleted; the ledger keeps them (asked after {@link #PLOT_HAS_CHARGES}). */
+    public static final String PLOT_HAS_PAYMENTS = "PLOT_HAS_PAYMENTS";
+    /** 400: the allocation lines of a payment together exceed the payment ({@code errors[{field: lines}]}). */
+    public static final String ALLOCATION_EXCEEDS_PAYMENT = "ALLOCATION_EXCEEDS_PAYMENT";
+    /** 400: an allocation line exceeds what is open on its charge ({@code errors[{field: lines[j].amount}]}). */
+    public static final String ALLOCATION_EXCEEDS_CHARGE = "ALLOCATION_EXCEEDS_CHARGE";
     /** 409: the charge was reversed before; a charge is reversed at most once. */
     public static final String CHARGE_ALREADY_REVERSED = "CHARGE_ALREADY_REVERSED";
     /** 409: the charge is a reversal, which cannot itself be reversed. */

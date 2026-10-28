@@ -27,16 +27,22 @@ class LedgerPlotGuard implements PlotChangeGuard {
     private static final Refusal HAS_CHARGES = new Refusal(ProblemCodes.PLOT_HAS_CHARGES,
             "The plot has charges; the ledger keeps them.");
 
-    private final ChargeRepository charges;
+    private static final Refusal HAS_PAYMENTS = new Refusal(ProblemCodes.PLOT_HAS_PAYMENTS,
+            "The plot has payments; the ledger keeps them.");
 
-    LedgerPlotGuard(ChargeRepository charges) {
+    private final ChargeRepository charges;
+    private final PaymentRepository payments;
+
+    LedgerPlotGuard(ChargeRepository charges, PaymentRepository payments) {
         this.charges = charges;
+        this.payments = payments;
     }
 
     @Override
     public Map<UUID, Refusal> refusals(Change change, Collection<UUID> plotIds) {
         Map<UUID, Refusal> refusals = new HashMap<>();
         if (change == Change.DELETE && !plotIds.isEmpty()) {
+            payments.plotIdsWithPayments(plotIds).forEach(plotId -> refusals.put(plotId, HAS_PAYMENTS));
             charges.plotIdsWithCharges(plotIds).forEach(plotId -> refusals.put(plotId, HAS_CHARGES));
         }
         return refusals;

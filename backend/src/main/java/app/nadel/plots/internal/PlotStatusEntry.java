@@ -12,8 +12,8 @@ import java.time.LocalDate;
 import java.util.UUID;
 
 /**
- * The debt cache of a plot for its status (table {@code plot_status}): the debt and the day its oldest unpaid charge
- * counts from, rebuilt from the ledger after every booking ({@code PlotDebtCache}), so it can be overwritten at any time
+ * The debt cache of a plot for its status (table {@code plot_status}): the debt, the day its oldest unpaid charge
+ * counts from and the prepayment (feature 015), rebuilt from the ledger after every booking ({@code PlotDebtCache}), so it can be overwritten at any time
  * (unlike ledger entries). The colour is derived from them when it is read ({@link PlotStatusPolicy#statusOf}); the
  * {@code status} column is a snapshot written with every change for the previous release and never read by this one.
  */
@@ -38,6 +38,9 @@ class PlotStatusEntry {
     @Column(name = "oldest_debt_date")
     private LocalDate oldestDebtDate;
 
+    @Column(nullable = false)
+    private BigDecimal prepayment;
+
     // set by the database on insert; written when the cached status changes
     @Column(name = "updated_at", insertable = false)
     private Instant updatedAt;
@@ -52,6 +55,7 @@ class PlotStatusEntry {
         entry.tenantId = tenantId;
         entry.status = PlotStatusCode.GREY;
         entry.debt = BigDecimal.ZERO.setScale(2);
+        entry.prepayment = BigDecimal.ZERO.setScale(2);
         return entry;
     }
 
@@ -62,12 +66,14 @@ class PlotStatusEntry {
     }
 
     /**
-     * Records the debt rebuilt from the ledger and the status it gives today (the snapshot of the {@code status}
-     * column).
+     * Records the debt and prepayment rebuilt from the ledger and the status it gives today (the snapshot of the
+     * {@code status} column).
      */
-    void recordDebt(BigDecimal newDebt, LocalDate newOldestDebtDate, PlotStatusCode snapshot, Instant now) {
+    void recordDebt(BigDecimal newDebt, LocalDate newOldestDebtDate, BigDecimal newPrepayment,
+            PlotStatusCode snapshot, Instant now) {
         debt = newDebt;
         oldestDebtDate = newOldestDebtDate;
+        prepayment = newPrepayment;
         status = snapshot;
         updatedAt = now;
     }
@@ -90,5 +96,10 @@ class PlotStatusEntry {
 
     LocalDate getOldestDebtDate() {
         return oldestDebtDate;
+    }
+
+    /** Money paid for the plot that is on no charge (feature 015), never below zero. */
+    BigDecimal getPrepayment() {
+        return prepayment;
     }
 }

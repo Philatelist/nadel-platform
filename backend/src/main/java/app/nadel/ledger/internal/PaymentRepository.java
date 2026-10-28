@@ -3,7 +3,10 @@ package app.nadel.ledger.internal;
 import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
+import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 // no tenant_id filter needed: RLS hides other cooperatives' rows
 interface PaymentRepository extends JpaRepository<PaymentRecord, UUID> {
@@ -16,4 +19,14 @@ interface PaymentRepository extends JpaRepository<PaymentRecord, UUID> {
 
     /** Whether the payment has been reversed. */
     boolean existsByReversesPaymentId(UUID paymentId);
+
+    /** The reversal of the payment, if it was reversed. */
+    Optional<PaymentRecord> findByReversesPaymentId(UUID paymentId);
+
+    /** The reversals of any of the payments. */
+    List<PaymentRecord> findByReversesPaymentIdIn(Collection<UUID> paymentIds);
+
+    /** The plots among {@code plotIds} that have at least one payment (or payment reversal). */
+    @Query("select distinct p.plotId from PaymentRecord p where p.plotId in :plotIds")
+    List<UUID> plotIdsWithPayments(@Param("plotIds") Collection<UUID> plotIds);
 }

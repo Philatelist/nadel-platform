@@ -84,9 +84,9 @@ Personal data in a change never reaches `event_publication` or `audit_entry` in 
   `privacy.PersonalDataCipher` at `FieldRef("audit_entry", "changes.<field>.old" | "changes.<field>.new", eventId)`,
   the field name in snake case (`FieldChange.oldValueRef` / `newValueRef`: `postalAddress` is
   `changes.postal_address.old`). The event carries the base64 text with `sealed = true`, so the outbox holds only
-  ciphertext. Today only `members` does this (`MemberAuditPublisher`, used by both the endpoints and the Excel import),
-  for `phones`, `email`, `postalAddress`, `telegramUsername`, `viberPhone` and `notes` of `MEMBER` entries; phase 3
-  reuses the same mechanism.
+  ciphertext. `members` does this (`MemberAuditPublisher`, used by both the endpoints and the Excel import), for
+  `phones`, `email`, `postalAddress`, `telegramUsername`, `viberPhone` and `notes` of `MEMBER` entries, and `ledger`
+  for the `payerNote` of `PAYMENT_RECORDED` (`LedgerAuditPublisher.publishPayment`, feature 015).
 - **Stored format.** `AuditWriter` writes each sealed value as `{"enc": "<base64>"}`. The entry id is the event id, so
   the place the value was sealed for is the place it is stored at; copied to another entry, field, side (old/new) or
   cooperative it does not open.

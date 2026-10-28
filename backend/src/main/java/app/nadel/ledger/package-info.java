@@ -10,7 +10,8 @@
  * consumer run changes only by its reversal (trigger {@code run_reversal_guard}).
  * <p>
  * Public API: the event {@link app.nadel.ledger.ChargesBooked}, published after every booking or reversal so that the
- * plot status can follow the debt, the import facade {@link app.nadel.ledger.OpeningBalanceImport} (the "Opening
+ * plot status can follow the debt, the event {@link app.nadel.ledger.PaymentsChanged}, published after every change of
+ * payments or allocations (feature 015), the import facade {@link app.nadel.ledger.OpeningBalanceImport} (the "Opening
  * balances" sheet of the Excel import) and the read facade of the reports {@link app.nadel.ledger.LedgerReadModel}
  * (aggregates in the caller's transaction, no personal data: month totals, {@link app.nadel.ledger.PlotDebts} as
  * of a day, the {@link app.nadel.ledger.CorrectionRow} of every reversal and adjustment of the billing months, the
@@ -23,7 +24,9 @@
  * type and prepayment), the payment tables ({@code payment}, {@code allocation}, {@code receipt_counter}, V27; the
  * public {@link app.nadel.ledger.PaymentSource}) with the pure allocation rules ({@code OpenAmounts},
  * {@code AllocationPlanner}, {@code PaymentSplitter}, {@code ReleasePlanner}, {@code PaymentDigest},
- * {@code PaymentRules}), the reversal and opening balance commands, the account query, the billing months (list, check list, closing
+ * {@code PaymentRules}) and the payment services ({@code PaymentService}: entry with preview and digest,
+ * {@code PaymentQueries}, {@code PlotLedgerLock}, {@code PlotLedgerQueries}, {@code ReceiptCounter},
+ * {@code PaymentNoteCipher}), the reversal and opening balance commands, the account query, the billing months (list, check list, closing
  * in order), the month run ({@code MonthRun}, {@code TariffMonthPlanning}), the charges of plot meter intervals
  * ({@code ReadingCharges}, the listener of {@link app.nadel.meters.PlotMeterPointsChanged}; {@code IntervalCharging};
  * the pure {@code ReadingChargePlanning} and {@code ReadingChargeCalculator}), the losses runs ({@code LossesRuns}; the
@@ -34,15 +37,16 @@
  * {@link app.nadel.meters.ReadingUsage} ({@code LedgerReadingUsage}), the listener
  * {@code PlotStatusRefresher} (the debt behind the plot status, through {@link app.nadel.plots.PlotDebtCache}), the
  * plot guard {@code LedgerPlotGuard} (an implementation of {@link app.nadel.plots.PlotChangeGuard}: a plot with charges
- * is never deleted) and the endpoints of tags {@code charges}, {@code billing}, {@code not-charged},
- * {@code losses-runs} and {@code common-consumer-runs}. It depends on
+ * is never deleted, nor one with payments) and the endpoints of tags {@code charges}, {@code billing},
+ * {@code not-charged}, {@code losses-runs}, {@code common-consumer-runs} and {@code payments}. It depends on
  * {@code tariffs} (the public {@code ChargeTypeCatalog}, {@code TariffBook}, {@code TariffResolver},
  * {@code ChargeCalculator}, {@code DaySet}), {@code plots} (the public {@code PlotCatalog}, {@code PlotChangeGuard} and
  * {@code PlotDebtCache}), {@code meters} ({@code MeterNetwork}, {@code MeterCatalog}, {@code ConsumptionCalculator},
  * {@code PlotMeterPointsChanged}, {@code ReadingUsage},
  * {@code WaterConnections}: water tariffs charge only the days a plot is connected, a well pump is shared among the
  * plots connected to it),
- * {@code settings} ({@code CooperativeSettings}), {@code money}, {@code identity}, {@code audit},
+ * {@code settings} ({@code CooperativeSettings}), {@code members} ({@code MemberDirectory}: the payer of a payment),
+ * {@code privacy} ({@code PersonalDataCipher}: the payer note), {@code money}, {@code identity}, {@code audit},
  * {@code problem} and {@code tenancy}; {@code imports} depends on it (the opening balances sheet) and {@code reports}
  * reads it through {@code LedgerReadModel}.
  */

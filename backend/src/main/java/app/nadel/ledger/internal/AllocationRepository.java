@@ -13,4 +13,7 @@ interface AllocationRepository extends JpaRepository<AllocationRecord, UUID> {
 
     /** Every allocation and release of the payment, in no particular order. */
     List<AllocationRecord> findByPaymentId(UUID paymentId);
+
+    /** Every allocation and release of any of the payments, in no particular order. */
+    List<AllocationRecord> findByPaymentIdIn(Collection<UUID> paymentIds);
 }

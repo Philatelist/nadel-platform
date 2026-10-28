@@ -29,6 +29,9 @@ Tables (V13, all under RLS `tenant_isolation`, an index leading with `tenant_id`
 | `common_consumer_user` (V18) | Settings: the plots marked as using a common consumer (`SERVICE_USERS`); PK `(tenant_id, consumer_meter_id, plot_id)`; goes with its meter and its plot |
 | `recalculation` (V19) | A booked recalculation (feature 012): `cause` `MANUAL`/`TARIFF_VERSION`/`READING`, `cause_ref_id` (no foreign key), `scope jsonb` (ids and codes under the keys of the contract's `RecalculationScope`, plus `causeType`), `reason` (1-500, user content), `total`, `line_count`, `plot_count`, `digest`, `created_by`, `created_at`. Append-only like `charge` |
 | `recalculation_line` (V19) | A line of a recalculation: `plot_id`, `charge_type_id`, the service period, `original_charge_id`, `booked_amount`, `adjusted_so_far`, `expected_amount`, `difference`, `action` `REVERSE_AND_RECHARGE`/`ADJUST`/`NEW`/`REVERSE`, `reasons text[]` (codes of `RecalculationChangeReason`), `run_id`, the charges it booked (`reversal_charge_id`, `new_charge_id`, `adjustment_charge_id`), `position`. Append-only |
+| `payment` (V27) | Money received for one plot (feature 015): `kind` `PAYMENT` (amount > 0) or `PAYMENT_REVERSAL` (the negated amount, `reverses_payment_id`, `reason` 1-500), `source` `CASH`/`BANK`, `received_on`, `billing_month_id`, `group_id` (the parts of one split payment; a single payment is its own group), `receipt_number` (exactly the cash payments; every part of a cash group carries the group's number, the gist exclusion `payment_receipt_group_excl` keeps a number to one group), `bank_reference` (1-64, bank only), `payer_member_id`, `payer_note_enc` (the payer note sealed at `FieldRef("payment", "payer_note", id)`, ADR 0016), `created_by`, `created_at`. Reversed at most once (`payment_reversed_once_uq`); `payment_target_guard` keeps a reversal on a payment of the same plot with the negated amount. Append-only like `charge` |
+| `allocation` (V27) | A part of a payment placed on one charge of the same plot (`amount` > 0, `origin` `ENTRY`/`REALLOCATION`/`PREPAYMENT_MANUAL`/`PREPAYMENT_AUTO`) or a release (`amount` < 0, `releases_allocation_id`, `release_cause`); `created_by` null = the system. Composite keys `(tenant_id, payment_id, plot_id)` and `(tenant_id, charge_id, plot_id)` make "same plot and cooperative" structural; `allocation_guard` keeps a positive row on a `REGULAR`/`OPENING` charge that is not reversed and a payment that is not reversed, and a release within what is left of its allocation. Deferred backstops check at commit that a payment's and a charge's net allocations never exceed them. Append-only |
+| `receipt_counter` (V27) | The last cash receipt number per cooperative (`tenant_id` PK, `last_number`); a trigger allows only `+1`; `DELETE`/`TRUNCATE` revoked |
 | `not_charged_item` (V15) | The "not charged" queue: `item_key`, `kind` `TARIFF_MONTH`/`INTERVAL`/`LOSSES_NODE`/`COMMON_CONSUMER`, `plot_id`, `charge_type_id`, `meter_id`, `month`, `from_date`, `to_date`, `reason`, `params jsonb` (codes and ids only, `tariffIds`), `status` `OPEN`/`RESOLVED`/`OBSOLETE`, `resolved_at`. Not a ledger table: the application updates the status and, while open, the reason and params; `DELETE`/`TRUNCATE` revoked. One open item per key (`not_charged_item_open_key_uq`); an item goes with its plot or meter (`ON DELETE CASCADE`) |
 
 **Append-only (ADR 0006).** `nadel_app` has no `UPDATE`, `DELETE` or `TRUNCATE` on `charge` and `charge_part`, and a
@@ -48,6 +51,7 @@ cooperative that is not reversed, and a reversal never target an adjustment or a
 |---|---|
 | `ChargesBooked(tenantId, plotIds)` | Published inside the transaction of every booking or reversal (a reversal, an opening balance, the month run, a retry and the charges of readings, at most 500 plots per event; every later booking path must publish it too). `PlotStatusRefresher` recomputes the debt of those plots from the committed ledger. Ids only, no personal data; the set is never empty |
 | `OpeningBalanceImport` (with `Row`, `Item`, `Plan`, `Problem`, `Action`) | The "Opening balances" sheet of the Excel import (slice 8), `plan`/`lock`/`apply` like `meters.MeterImport`; implemented by `internal.OpeningBalanceImportService`, see Opening balances from the import |
+| `PaymentsChanged(tenantId, plotIds)` | Published inside the transaction of every change of payments or allocations of plots (feature 015: a payment entered; later slices a reversal, a reallocation, a prepayment allocation by hand or automatically), never empty, at most 500 plots. `PlotStatusRefresher` recomputes the debt and prepayment of those plots. Ids only |
 | `PaymentSource` (`CASH`, `BANK`) | Where the money of a payment came from (feature 015; column `payment.source`, V27); 016 adds the bank statement import |
 | `LedgerReadModel` (with `MonthTypeTotals`, `MonthGrouping`, `MonthStatus`, `PlotDebts`, `CorrectionRow`, `CorrectionKind`, `CorrectionSource`, `CorrectionCause`, `ChargedRow`, `ChargedRowKind`, `ChargedSource` (with `TARIFF` for the water rows), `ChargedPart`, `LossesRunNodeRow`, `LossesRunNodeOutcome`, `CommonConsumerRunLineRow`, `CommonConsumerRunLineOutcome`, `RunStatus`) | The read facade of the reports (feature 013), implemented by `internal.LedgerReportQueries`; see The read model of the reports |
 
@@ -64,8 +68,8 @@ Everything else is in `internal`.
 - `DebtCalculator.of(lines)`: debt per charge type = the sum of the plot's charges of the type, reversals negative,
   adjustments with their sign; total = their sum; the oldest unpaid accrual = the oldest `accrued_on` among the charges
   that are neither a reversal nor an adjustment, were not reversed, and whose effective amount (the charge plus its
-  adjustments) is above zero; prepayment zero. This is the rule for charges only; the account and the plot status
-  (`PlotStatusRefresher`) use it until they load payments (feature 015, slices 2 and 6). An adjustment carries the debt
+  adjustments) is above zero; prepayment zero. This is the rule for charges only; the account uses it until it loads
+  payments (feature 015 slice 6); the plot status (`PlotStatusRefresher`) uses the rule after payments below. An adjustment carries the debt
   age of its charge and never counts on its own. Exact `Money` addition, no rounding. Tests: `DebtCalculatorTests`.
 - `DebtCalculator.of(charges, allocations, payments)` (feature 015 §2.5): debt per charge type = Σ charges of the type
   − Σ net allocations to them (releases negative); prepayment = Σ payments (reversals negative) − Σ net allocations,
@@ -807,6 +811,46 @@ no interval, so it publishes nothing). `ReadingCharges` listens with the ADR 000
   every tariff `FOR SHARE` -> the billing month `FOR SHARE`. The month run takes the meters of its retries before its
   tariffs.
 
+## Payments (tag `payments`, feature 015 slice 2)
+
+| Endpoint | Operation | Who |
+|---|---|---|
+| `GET /payments?from&to&source&plotId&month&page&size` | The payments (kind `PAYMENT`; a reversal marks its payment `reversed`), newest first (`received_on`, then `created_at`, then id), filtered by `received_on`, source, plot and the billing month they are booked in; each with its receipt number or bank reference, the payer's short name, `allocated` (net allocations) and `prepayment` (what is left, `0.00` once reversed). `from` after `to` is 400 (`from` `INVALID`) | `PAYMENTS_VIEW` |
+| `GET /payments/{id}` | The card: the payment, its allocations and releases (oldest first, with the charge type, period, origin or release cause and `system` for rows written by the system), the other parts of its group, the reversal, the author's current name, and `payerNote` only for a viewer with `MEMBERS_VIEW`. Unknown, another cooperative's or a reversal's id: 404 `NOT_FOUND` | `PAYMENTS_VIEW` |
+| `POST /payments?preview=true\|false` | One plot (`plotId`); `lines` absent (or null) saves the proposal, an empty list places nothing. Preview (200): every open charge of the plot in planner order with `open` and `proposed` (`0.00` when nothing), `allocatedTotal`, the prepayment the payment leaves and the `digest`; nothing written, no lock. Save (201): the same plus `payments` (id, group, receipt number of a cash payment) | `PAYMENTS_ENTER` |
+
+`PaymentService.enter`, in this order: the values (`PaymentRules`: `amount` `AMOUNT_NOT_POSITIVE`/`INVALID`,
+`receivedOn` `DATE_IN_FUTURE`, `plotId` `REQUIRED`, `payerNote` `TOO_LONG`, `bankReference` `TOO_LONG` or `INVALID` on
+cash; texts trimmed, blank = none); the plot exists in the cooperative (404 `PLOT_NOT_FOUND`), is not archived (409
+`PLOT_ARCHIVED`) and not common land (409 `PLOT_COMMON_LAND`); the payer is a member of the cooperative through
+`members.MemberDirectory.find` (`payerMemberId` `MEMBER_NOT_FOUND`; an archived member may pay, a former owner paying an
+old debt). A save then takes its locks; the ledger of the plot (`PlotLedgerQueries.load`) is read under the plot ledger
+lock; a `digest` that differs from `PaymentDigest.entry` of that ledger is 409 `PREVIEW_OUTDATED` and nothing is
+written; the caller's lines are checked by `AllocationPlanner.validate` (400 `VALIDATION_FAILED` with
+`lines[j].chargeId` `NOT_FOUND`/`DUPLICATE` or `lines[j].amount` `AMOUNT_NOT_POSITIVE` first, then
+`ALLOCATION_EXCEEDS_PAYMENT` on `lines`, then `ALLOCATION_EXCEEDS_CHARGE` on `lines[j].amount`). The payment is booked
+in `BillingMonths.openForBooking(received_on)` (a payment received in a closed month counts in the earliest open month
+and keeps its `received_on`), its own group, with the next receipt number for cash; then its allocations (origin
+`ENTRY`, `created_by` the actor; the payment is flushed first because inserts are ordered by entity), the audit entry
+and `PaymentsChanged`. Logs carry ids and counts only.
+
+**Lock order** (technical considerations 2.4): charging lock (paths that charge) -> network / queue / charge type /
+tariff `FOR SHARE` -> plot `FOR SHARE` (`PlotCatalog.findAndLockShared`) -> **plot ledger locks** (`PlotLedgerLock`:
+`pg_advisory_xact_lock(hashtextextended('ledger.plot:'||tenant||':'||plot, 0))`, all plots of a path in one call in
+sorted order, remembered in a transaction-bound set for `assertHeld`) -> billing month `FOR SHARE` -> the
+`receipt_counter` row. The plot ledger lock stands for "the plot locked `FOR UPDATE` in the ledger" without a row lock
+on the plots module's table (which booking paths hold `FOR SHARE`). Paths that place money on charges or take it back
+lock the plots; paths that only add charges do not.
+
+**Receipt numbers** (`ReceiptCounter`, `MANDATORY`): inside the saving transaction, after the plot ledger lock and the
+month, `INSERT ... ON CONFLICT DO NOTHING` of `(tenant, 0)` and `UPDATE ... SET last_number = last_number + 1 RETURNING`.
+The row lock serialises concurrent cash saves of the cooperative (no duplicates); a rollback undoes the step (no gaps).
+Bank payments take no number.
+
+**Payer note** (`PaymentNoteCipher`): sealed with `privacy.PersonalDataCipher` at `FieldRef("payment", "payer_note",
+paymentId)` (the id is chosen before the row), opened only for the card of a viewer with `MEMBERS_VIEW`; sealed again
+for the audit entry; never logged.
+
 ## Readings in use
 
 `LedgerReadingUsage` implements `meters.ReadingUsage`: a charge reads its meter on the closed range of days from its
@@ -831,17 +875,21 @@ with a recalculation (`TARIFF_VERSION_*` causes, `tariffs.TariffVersionChanges`,
 
 ## Plot status
 
-`PlotStatusRefresher` listens to `ChargesBooked` with the ADR 0007 pattern (`@Async @TransactionalEventListener`, no
-`@Transactional`; `TenantContext.runAs(event.tenantId())`, then a `TransactionTemplate`): `plots.PlotDebtCache.lockAll`
-(the cache rows `FOR UPDATE` in id order), then the committed charges of the plots summed by `DebtCalculator`, then
-`record(plot, total, oldestAccrual)` per plot. Idempotent (it recomputes from the ledger), so a redelivered event writes
+`PlotStatusRefresher` listens to `ChargesBooked` and `PaymentsChanged` with the ADR 0007 pattern (`@Async
+@TransactionalEventListener`, no `@Transactional`; `TenantContext.runAs(event.tenantId())`, then a
+`TransactionTemplate`): `plots.PlotDebtCache.lockAll` (the cache rows `FOR UPDATE` in id order), then the committed
+charges, allocations and payments of the plots (`PlotLedgerQueries.load`, one `UNION ALL` statement per 500 plots)
+summed by `DebtCalculator.of(charges, allocations, payments)`, then `record(plot, debt, oldestAccrual, prepayment)` per
+plot: the debt after payments, the oldest charge with something still open, and the prepayment (a plot without debt
+is GREEN, also with a prepayment). Idempotent (it recomputes from the ledger), so a redelivered event writes
 the same values; logs counts only. The colour itself is derived by `plots` when it is read (see the plots README), so a
 change of the red threshold needs no refresh. Tests: `PlotStatusRefreshTests` (they wait for the asynchronous listener).
 
 ## Plot guard
 
 `LedgerPlotGuard` implements `plots.PlotChangeGuard`: a plot that has any charge (reversed or not) is not deleted, 409
-`PLOT_HAS_CHARGES` (the foreign key `charge_plot_fk` is the backstop). Archiving and turning into common land are not
+`PLOT_HAS_CHARGES` (the foreign key `charge_plot_fk` is the backstop); a plot that has payments but no charges is
+refused with 409 `PLOT_HAS_PAYMENTS` (`payment_plot_fk`). Archiving and turning into common land are not
 refused here. It is asked first among the plot guards (`@Order(100)`, before the guards of `meters`), so a plot with
 charges and a meter is refused with `PLOT_HAS_CHARGES`.
 
@@ -892,6 +940,14 @@ entry of the change that caused it), about the recalculation, label its months `
   (`TARIFF_VERSION_ADDED`/`UPDATED`/`DELETED` of the tariffs module, old and new values) before it in the same batch,
   with the field `recalculationId` (new value: the recalculation's id); a reading cause the reading change's entry
   (`READING_ENTERED`/`REPLACED`/`CORRECTED`/`DELETED` of the meters module) the same way.
+
+Entity type `PAYMENT` (`LedgerAuditPublisher.publishPayment`), about the plot like `CHARGE` (entity id the plot id,
+label the plot number):
+
+- `PAYMENT_RECORDED` (one per payment): `amount`, `source`, `receivedOn`, `billingMonth`, `receiptNumber` (cash) or
+  `bankReference` (bank, when given), and `payerNote` sealed by the publisher at `FieldChange.newValueRef(eventId,
+  "payerNote")` before the event exists (the 014 mechanism), so neither the outbox nor `audit_entry` holds it in the
+  clear; the audit listing opens it only for a reader with `MEMBERS_VIEW`.
 
 Every action is a constant of `LedgerAuditPublisher.Action` and must also be a value of `AuditAction` in
 `api/openapi.yaml`: the audit listing maps stored entries with `AuditAction.fromValue`, so a missing value breaks it
@@ -958,7 +1014,8 @@ cache writer `PlotDebtCache`; the import records `PlotImportRow`, `PlotImportPla
 `connectedToSource`, `MeterCatalog.find`, `chainOf` and `plotMeterIds`; the port `ReadingUsage`, implemented here;
 the facade `ReadingChanges`), `settings` (`CooperativeSettings.lossesMode`, `lossesPercent`,
 `commonConsumerDefaultSplit`; `LossesMode`, `CommonConsumerSplit`), `money` (`Money`), `identity` (`CurrentUser`, `AccessProfile`, `Permission`,
-`OwnedPlotsSource`), `audit` (events, `ActorNames`), `problem`, `tenancy` (`TenantContext`). `imports` depends on
+`OwnedPlotsSource`), `audit` (events, `ActorNames`, `FieldChange`), `members` (`MemberDirectory.find`: the payer of a
+payment), `privacy` (`PersonalDataCipher`, `FieldRef`: the payer note), `problem`, `tenancy` (`TenantContext`). `imports` depends on
 `ledger` (`OpeningBalanceImport`) and `reports` reads it through `LedgerReadModel`.
 
 ## Permissions
@@ -1026,7 +1083,16 @@ rules of §3, opening balances, booking after a closed month, the plot guard, al
 chairman, the treasurer, custom roles, a member for their own and another plot, the other cooperative and the platform
 operator; adjustments: the debt, `adjusts`/`adjustedBy`, `recalculationId` only with `CHARGES_VIEW`, the `kind` filter,
 409 `ADJUSTMENT_NOT_REVERSIBLE`); `LedgerAuditTests` (entries and `ChargesBooked`); `LedgerTenantIsolationTests` and `LedgerAppendOnlyTests`
-(the tables); `LedgerMigrationTests` (V13 on existing cooperatives); `ChargesBookedTests`. Test helpers clear ledger rows
+(the tables); `LedgerMigrationTests` (V13 on existing cooperatives); `ChargesBookedTests`. Payments (feature 015):
+`PaymentEntryTests` (examples 1, 2, 10, 11, 16 and 18 end to end, an empty allocation, line errors, common land,
+archived, the values, unknown and foreign plots, a stale digest writing nothing, a preview writing nothing, the list
+and the card with the payer note only for `MEMBERS_VIEW`, permissions, the plot guard),
+`ReceiptNumberConcurrencyTests` (example 17 with both saves waiting on the counter row, a failed save leaves no gap, a
+bank payment takes no number, a reversed number is not reused), `PaymentAuditTests` (`PAYMENT_RECORDED` values, the
+sealed note: not readable in `payment`, `audit_entry`, the outbox or the debug log), the payment cases of
+`PlotStatusRefreshTests` (red to yellow, green with a prepayment, the oldest unpaid charge, a redelivered
+`PaymentsChanged`, the cache equal to an SQL rebuild); `PaymentTenantIsolationTests`, `PaymentAppendOnlyTests` (V27) and
+the pure payment tests listed under Rules. Test helpers clear ledger rows
 and billing months as `nadel_owner` with the maintenance setting (`LedgerTestSupport`). The opening balances sheet is
 tested in `imports` (`ImportOpeningBalancesTests`: both languages, row problems, booking, a re-import of the same file,
 a reversed balance imported again, a renamed seeded type, a stale preview).

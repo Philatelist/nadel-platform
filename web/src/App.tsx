@@ -174,6 +174,28 @@ const router = createBrowserRouter([
         ],
       },
       {
+        element: <RequirePermission permission="PAYMENTS_ENTER" />,
+        children: [
+          {
+            path: 'payments/new',
+            lazy: () => import('./pages/PaymentNewPage').then((m) => ({ Component: m.PaymentNewPage })),
+          },
+        ],
+      },
+      {
+        element: <RequirePermission permission="PAYMENTS_VIEW" />,
+        children: [
+          {
+            path: 'payments',
+            lazy: () => import('./pages/PaymentsPage').then((m) => ({ Component: m.PaymentsPage })),
+          },
+          {
+            path: 'payments/:id',
+            lazy: () => import('./pages/PaymentPage').then((m) => ({ Component: m.PaymentPage })),
+          },
+        ],
+      },
+      {
         element: <RequirePermission permission="REPORTS_VIEW" />,
         children: [
           {

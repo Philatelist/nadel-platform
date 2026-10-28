@@ -109,3 +109,6 @@ red plots; guide PDFs.
   - AUTO: staffing gap — docs and guides task (Slice 8) has no specialist → `general-purpose` (no Open Questions section kept); noted for the final report.
   - AUTO: `<!-- not-user-reviewed -->` marker removed (Phase 1 decisions stand in for the plan review); plan listed in the final report.
 - Phase 2 done.
+- Slice 1 committed 23557e8 (verify: 168 tests 0 failures + typecheck); review round 1 started.
+- Slice 1 review round 1: PASS (minor notes in review-log).
+- Slice 2 verify: backend 476 tests 0 failures; pnpm typecheck/lint/test green.
