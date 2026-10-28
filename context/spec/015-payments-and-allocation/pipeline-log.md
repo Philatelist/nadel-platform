@@ -5,7 +5,7 @@
 - Branch: 015-payments-and-allocation (planned) · Base: main @ 75db154
 - Requirement: document docs/features/015-payments-and-allocation.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
-- Publish: pr+checks · PR: — · Checks: —
+- Publish: pr+checks · PR: https://github.com/Philatelist/nadel-platform/pull/56 · Checks: red: Backend, End-to-end (run 40706708919)
 - Review run: on (not started yet)
 
 ## Project facts
@@ -154,3 +154,5 @@ red plots; guide PDFs.
 - Decided automatically: see every `AUTO:` entry above (Phase 1 recommended answers, tech assumptions 1–12, builder choices logged per slice, e2e not runnable locally, PDFs not rebuilt).
 - Staffing: docs and guides task ran under `general-purpose` (no docs specialist).
 - Owner follow-ups: run `make guide-shots` (app on this branch) then `make guide` to add the four new screenshots and rebuild the PDFs; check the 3 [?] criteria in the browser; review the AUTO decisions; stale tariffs-chapter sentence in the board guide ("charges will appear later") predates this feature.
+- Phase 5: pushed 015-payments-and-allocation, opened PR #56 (label full-e2e). Waiting for checks.
+- CI run 40706708919 on PR #56: Clients, SAST, Security green; Backend red (PaymentAuditTests.theNoteIsNeverStoredOrLoggedInReadableForm:119 — unscoped audit scan for the note text "Оксана", order-dependent); End-to-end (full) red: 4 failed, 1 flaky of 142 — charges.spec member label renamed in Slice 6, design-system menu count/tab order (new Payments item), language-purity chairman every-screen (a screen without h1). payments.spec.ts passed. CI fix attempt 1 delegated (spring-backend, react-frontend).

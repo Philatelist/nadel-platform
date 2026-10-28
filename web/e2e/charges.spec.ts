@@ -483,7 +483,7 @@ test.describe('charges and period closing', () => {
     expect(owned).toContain('Plot 7');
     await expect(mine.getByRole('heading', { name: 'Plot 7' })).toBeVisible();
     expect((await mine.getByRole('heading', { name: /^Plot / }).allInnerTexts()).sort()).toEqual(owned);
-    await expect(mine.getByText('Debt by charge type').first()).toBeVisible();
+    await expect(mine.getByText('Debt after payments, by charge type').first()).toBeVisible();
     await expect(mine.getByRole('listitem').filter({ hasText: 'Membership fee' }).first()).toBeVisible();
     await expect(mine.getByRole('listitem').filter({ hasText: 'Electricity' }).first()).toBeVisible();
     await expect(mine.getByRole('listitem').filter({ hasText: 'Common consumers' }).first()).toBeVisible();

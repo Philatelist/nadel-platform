@@ -234,12 +234,30 @@ const CHAIRMAN_SCREENS = [
 
 for (const locale of ['uk', 'en'] as const) {
   test.describe(`one language: ${locale === 'uk' ? 'Ukrainian shows no Latin words' : 'English shows no Cyrillic text'}`, () => {
-    test(`chairman: every main screen (${locale})`, async ({ browser }) => {
+    // The dev server serves the app as thousands of small modules and every page.goto reloads them. One session over
+    // all screens exhausts the browser's network resources (net::ERR_INSUFFICIENT_RESOURCES, a blank page), so the
+    // screens are audited in several short sessions.
+    const half = Math.ceil(CHAIRMAN_SCREENS.length / 2);
+    const parts = [CHAIRMAN_SCREENS.slice(0, half), CHAIRMAN_SCREENS.slice(half)];
+    parts.forEach((screens, index) => {
+      test(`chairman: every main screen, part ${index + 1} (${locale})`, async ({ browser }) => {
+        test.setTimeout(180_000);
+        const page = await openSession(browser, 'chairman@demo.local', locale);
+        try {
+          const findings: Finding[] = [];
+          for (const path of screens) findings.push(...(await auditScreen(page, path, locale)));
+          expect(report(findings), 'language mixes').toBe('');
+        } finally {
+          await page.context().close();
+        }
+      });
+    });
+
+    test(`chairman: cards and edit forms (${locale})`, async ({ browser }) => {
       test.setTimeout(180_000);
       const page = await openSession(browser, 'chairman@demo.local', locale);
       try {
         const findings: Finding[] = [];
-        for (const path of CHAIRMAN_SCREENS) findings.push(...(await auditScreen(page, path, locale)));
 
         // cards and edit forms need an id: take the first one from the list
         await page.goto('/plots');
