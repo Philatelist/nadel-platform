@@ -66,3 +66,9 @@
 | Round | Commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `939958d` | PASS | — | minor: stale description string in `ChargeTypesTests:596`; `finally` restores only TARIFFS_MANAGE (as before) |
+
+## Fix — CI run 40706708919: `PaymentAuditTests` note collision; e2e label, menu, language-purity
+
+| Round | Commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `b0c3d4f`, `ae4cb1b` | PASS | — | language-purity split is a mitigation for browser resource exhaustion, confirmed only by CI; minor: comment why the screens are split in halves |
