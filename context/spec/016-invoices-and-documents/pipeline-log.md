@@ -1,0 +1,139 @@
+# Pipeline log — 016 invoices and documents
+
+- Status: running
+- Phase: 3 (implement, Slice 1)
+- Branch: 016-invoices-and-documents · Base: main @ 5287657
+- Requirement: document docs/features/016-invoices-and-documents.md
+- Autonomy: minimal (.claude/feature-pipeline.yml)
+- Publish: pr+checks · PR: — · Checks: —
+- Review run: off until Phase 6 (reviewRun: on)
+
+## Project facts
+
+- Base branch: `main` (origin/HEAD not symbolic; `main` == `origin/main` @ a668a03, no local-only commits).
+- Pipeline tooling present on `main`. Working tree clean.
+- Build: `cd backend && ./mvnw -q compile`; clients `pnpm -r typecheck`.
+- One test: `cd backend && ./mvnw test -Dtest='<Class>'`; module `-Dtest='app.nadel.<module>.**'`; web `pnpm --filter web exec playwright test <spec>`.
+- Full suite: `make check`, then `make e2e` (JDK 25).
+- Specialists: spring-backend, postgres-database, react-frontend, devops-infra, expo-mobile; testing: testing-expert; reviewer: slice-reviewer.
+- UI: web. Browser tool: claude-in-chrome (deferred).
+- Safe local run mode: `make up` (local docker-compose Postgres + Keycloak, backend :8080, web :5173).
+- Git rules: Conventional Commits; no AI attribution; never commit on main; push only the spec branch in Phase 5, no force.
+- Protected files: CLAUDE.md, .claude/, .mcp.json, .github/.
+- Publish pre-flight: gh logged in (Philatelist); origin github.com/Philatelist/nadel-platform; CI `.github/workflows/ci.yml`.
+- Next spec number: 016.
+
+## Settings
+
+- autonomy minimal: questions=blocking, reviewerEscalation=auto, notGreen=ask, gitUnsafe=ask, notTestableLocally=auto
+- publish=pr+checks, reviewRun=on, notify=true
+
+## Log
+
+- Phase 0 done. Phase 1b: agents A (git) and B (code) launched; orchestrator looks for the NBU Resolution 97 text.
+- NBU source: official PDF downloaded from https://bank.gov.ua/admin_uploads/law/19082025_97.pdf (55 pages, published 25.08.2025);
+  text extracted with PDFBox to scratchpad/nbu/nbu97.txt. Annex 4 (format 003) table 2 present: 17 fields. No stop needed.
+- Note (official text vs. requirement): amount "as short as possible" (UAH3 better than UAH3.00) → the official text wins;
+  field 10 "Категорія / ціль" is mandatory (ISO 20022 codes CCCC/PPPP) → value to be taken from the official text.
+- Agent A (git): no prior work on any branch/stash/worktree; `origin/docs/feature-016-invoices` (9140de4) == main (the merged requirement, #57).
+  Stale 012 worktree `.../60c46cb4-.../scratchpad/run-012` exists, not this run's; left untouched. pom.xml has no PDF/QR library; last ADR 0016.
+- Agent B (code): nothing of 016 implemented; no PDF/QR/JobRunr dependency; next migration V28; next ADR 0017.
+
+## Requirements brief
+
+**Requirement:** docs/features/016-invoices-and-documents.md. Monthly (and on-request) invoices per plot as PDF with the
+NBU payment QR code (format 003), stored as snapshots with versions; a month build in batches with progress and a
+print PDF; debt certificates with a sequential register and annulment; cash receipts for CASH payments of 015; amount in
+words. Users: treasurer/chairman (build, issue, print), member (own invoices and receipts).
+
+**Prior work:** none (A). Verdict: **new**, extends 011 (billing months, charge calculations), 013 (requisites, ledger
+read model), 015 (payments, receipt numbers, allocations), 014 (cipher), 007 (owners, shares), 002 (delivery channel).
+
+**Scope:** requirement §§1–13; out of scope §14. Mobile unchanged. Plus the two 015 UI polish items deferred to 016 in
+DECISIONS.local.md:125 (amount line wrap; hint with the remaining amount).
+
+**Findings that shape the design:**
+1. Billing month path parameter is `{month}` (YYYY-MM), not `{id}`.
+2. ЄДРПОУ lives on the tenant (`TenantDirectory.current()`), requisites in settings.
+3. LedgerReadModel lacks per-plot/billing-month invoice data (charged rows with calculation, payments in month, start/end
+   balances by booking month); `debtsAsOf` is by accrued_on → new read-model methods needed (example 5).
+4. Owners with shares, role holders (chairman/treasurer names) and delivery channel have no public API → new methods.
+5. JobRunr not yet added (ADR 0007 decided it; CLAUDE.md: long-running work uses JobRunr).
+6. No TTF fonts; design system font IBM Plex Sans is OFL-1.1 (embeddable).
+7. Payer note needs MEMBERS_VIEW (015), receipts need PAYMENTS_VIEW.
+8. architecture.md:169 plans object storage for invoice PDFs; 016 renders from snapshots → doc update.
+9. Stale "016 = bank import" mentions (ledger README:55, glossary:57, 015 spec:418).
+10. Demo months are relative to an anchor date; snapshot names need the Java cipher (not SQL).
+11. Demo IBAN `UA213223130000026007233566001` may be a published sample, not clearly test.
+
+**Verification:** backend unit + Testcontainers, `make check`, Playwright specs + smoke; PDFs rendered to PNG for the
+PR; UI via claude-in-chrome on `make up`. The owner's real-bank QR scan stays a manual `[?]` item.
+
+**Risks:** official QR layout details (field 10, mask), PDF byte-stability, certificate counter under concurrency, JobRunr
+introduction (tables via Flyway, RLS-free job storage), Supply-chain CI job with new libraries, large guide work.
+
+## Decisions (no blocking questions; autonomy minimal → recommended answers taken)
+
+- AUTO: (questions=blocking, none blocking) QR layout from the official PDF (Annex 4); where it differs from the
+  requirement, the official text wins: shortest amount form (`UAH413.26`, `UAH3`), mandatory field 10, LF endings,
+  encoding `1` (UTF-8), ban mask per bit numbering of table 2 (fields 1–5, 11, 14–17 always banned).
+- AUTO: Endpoints use the existing `{month}` (YYYY-MM) billing-month path parameter.
+- AUTO: New module `documents` (planned in architecture.md:91); it reads ledger/settings/tenancy/plots/members only
+  through public APIs; new public read methods added where missing.
+- AUTO: Long-running month build with JobRunr as ADR 0007 decided, unless the tech phase finds it cannot meet the
+  Flyway-only/RLS rules; then a documented fallback in ADR 0017.
+- AUTO: PDFs are not stored (spec wins over architecture.md:169; doc updated).
+- AUTO: Embedded font IBM Plex Sans TTF (OFL-1.1) with its licence in backend resources.
+- AUTO: Receipt payer: the payer member's name; the decrypted payer note only for callers with MEMBERS_VIEW; a member
+  downloading a receipt never sees another person's note.
+- AUTO: Demo IBAN: replace by a checksum-valid, clearly fictitious test IBAN; flagged in the PR for the owner to confirm
+  (and for the QR scan check, the owner can enter a real account locally).
+- AUTO: Demo invoices/certificate/receipt: created in Java under the demo profile (the cipher needs Java), for the demo
+  closed month.
+- AUTO: Stale "016 = bank statement import" references corrected to the new numbering.
+- AUTO: The two 015 UI polish items deferred to 016 are included as a small task.
+- Phase 1 done. Phase 2: branch 016-invoices-and-documents cut from main @ 5287657 (main was fast-forwarded by the owner from a668a03 to 5287657, #58: docs 017 and 018 only, between Phase 0 and the cut); log moved in; baseline started.
+- User (mid-run): field 10 «Категорія / ціль» must be taken from Annex 4 and the rule quoted in docs/domain/nbu-qr.md; no invented code.
+  Finding: Annex 4 (section I, item 4.10) has no default; the recipient fills ISO 20022 codes as CCCC/PPPP. Concrete values only in
+  its examples: SUPP/SUPP (example 1, utility payments), MP2P/MP2B, MP2B/GSCB, OTHR/GDDS.
+- User answer: field 10 = `SUPP/SUPP` (Annex 4 example 1, «Оплата комунальних послуг»). nbu-qr.md quotes item 4.10 and example 1.
+- Phase 2.3: functional-spec.md written (Creation Mode, no markers).
+- Phase 2.4: awos:tech — exploration reused from Agent B (scratchpad/recon-016.md); specialists spring-backend, postgres-database, react-frontend, devops-infra launched in parallel. Skill-update check of awos-recruitment not run (it needs a user choice; the pipeline asks nothing).
+- devops-infra: OSV scans backend/pom.xml (incl. transitives) → pin exact versions, no openhtmltopdf SVG module (batik), override PDFBox to latest 3.0.x via dependencyManagement if needed; font binaries fine for gitleaks, OFL.txt next to fonts; no CI change; JobRunr only with dashboard off, skip-create + Flyway-owned jobrunr_* tables, ids-only job args.
+- react-frontend: design in (read only part of the spec); orchestrator corrections: print scope paper|all; 'annul' not 'cancel'; audit actions per spec §2.11 only (no RECEIPT_PRINTED); open months invoiceable; PDFs as orval blob functions (application/pdf), new PlotTabs on PlotPage, CertificatesPage route documents/certificates.
+- postgres-database: V28 design in (invoice append-only via ledger_append_only, invoice_run with partial unique RUNNING + heartbeat, certificate_guard annul-once, document_counter +1 step, gapless counter in the issuing tx); recommends no JobRunr (invoice_run row as the job, @Async under runAs, batches of 50, one tx per batch); demo IBAN UA850000000000000000000123456 (bank code 000000; checksum verified by orchestrator); demo documents via a dev ApplicationRunner under runAs.
+- Baseline: make check on a668a03 green (3301 backend tests, 0 failures); worktree removed; review-log.md written.
+- main moved to 5287657 (#58 adds docs 017, 018). 017 expects from 016: a public documents facade (latest invoice version, PDF bytes, invoice-for-today, cash receipt PDF, QR link) and the print PDF; 017 is the first feature with retries.
+- User decision (28.10.2026): JobRunr comes in 017. In 016 the month build is synchronous like the month run (snapshots only,
+  PDFs on demand), measured on the largest fixture, limit + measurement in ADR 0017 as ADR 0012 did; no own job queue (no
+  @Async, no invoice_run progress table); progress UI only if the build exceeds a few seconds, else a spinner.
+  Functional spec §2.5, scope and assumptions updated; spring-backend informed while designing.
+- User decision (28.10.2026): the month build reads every snapshot at one point in time (one REPEATABLE READ transaction, or the
+  011 cooperative charging lock taken shared), so a payment or charge booked during the build is in all or none of its
+  invoices; a test for it is required.
+- User decision (hryvnia sign, Annex 1 items 10–14 mandatory for 003): first check the downloaded resolution PDF for the sign;
+  if vector, extract to docs/domain/nbu-hryvnia-sign.svg with the page cited and use it; else the font glyph U+20B4 behind a
+  replaceable source, PR note that the owner supplies the official file.
+- Hryvnia sign check: the resolution PDF has the sign only inside raster PNG images of the format 003 examples (PDF pages 46, 49,
+  52, 55; e.g. page 46 = Annex 4 sheet 11, Image130 500×500 px). Vector QR on page 28 is a format 002 example without the sign.
+  → Per the owner's rule: font glyph U+20B4 behind a replaceable sign source; PR note that the owner supplies the official file.
+- spring-backend (revised for the sync decision): synchronous build in one REPEATABLE READ transaction (matches the owner's
+  consistency rule), advisory month lock, chunks of 50 with flush/clear, limit 2,000 plots to be measured; PDFBox 3.0.8 own
+  layout layer; ZXing 3.5.4; Win1251 encoding '2', FEFF mask constant, Base64URL no padding; content hash = keyed blind index.
+- Phase 2.4: technical-considerations.md written. Tech assumptions (AUTO, conservative, listed in the doc):
+  - AUTO: QR encoding `2` (Win1251, as every official 003 example) with UTF-8 fallback (replaces the earlier brief note "encoding 1").
+  - AUTO: field 17 empty (table 2: optional); official examples print `RFU` → switch if a bank rejects it in the owner's check.
+  - AUTO: FEFF lock mask as the official constant; Base64URL without padding; link ≤ 507 bytes; QR version 10–17, level M.
+  - AUTO: PDF engine PDFBox 3.0.8 (Apache-2.0) with own layout layer; ZXing core 3.5.4 (javase test scope); IBM Plex Sans TTF.
+  - AUTO: consistency by one REPEATABLE READ transaction (not the charging lock: payments do not take it); advisory month lock.
+  - AUTO: build limit 2,000 invoiceable plots, measured in InvoiceBuildLimitTests; >~5 s → back to the owner.
+  - AUTO: content hash = keyed blind index (new IndexKind.DOCUMENT_CONTENT); no hash of plaintext names.
+  - AUTO: «До сплати» does not subtract prepayment; PAPER print = any current owner with PAPER; on-request = always new version.
+  - AUTO: documents tables keep `month date`, no FK to ledger tables; demo documents by a demo-profile ApplicationRunner.
+  - AUTO: public DocumentsFacade for 017.
+  - Staffing: no specialist for NBU QR / PDF engine → spring-backend (closest); suggest /awos:hire for PDF/QR later.
+- Phase 2.5: tasks.md written — 7 slices (6 implementation + Feature Testing & Regression on testing-expert).
+  - AUTO: staffing gap — docs and guides (Slice 6) and NBU QR / PDF engine (no specialist; spring-backend as closest) → Slice 6 on
+    `general-purpose`; no Open Questions section kept; noted for the final report.
+  - AUTO: `<!-- not-user-reviewed -->` marker not kept (Phase 1 decisions and the owner's mid-run decisions stand in for the plan review); plan listed in the final report.
+- Phase 2 done.
