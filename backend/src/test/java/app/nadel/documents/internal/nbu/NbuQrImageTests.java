@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.within;
 
 import app.nadel.documents.internal.nbu.NbuQrPayload.Invoice;
+import app.nadel.documents.internal.pdf.PdfDocument;
 import app.nadel.money.Money;
 import com.google.zxing.BinaryBitmap;
 import com.google.zxing.DecodeHintType;
@@ -12,11 +13,15 @@ import com.google.zxing.client.j2se.BufferedImageLuminanceSource;
 import com.google.zxing.common.HybridBinarizer;
 import com.google.zxing.qrcode.QRCodeReader;
 import java.awt.Shape;
+import java.awt.geom.Ellipse2D;
+import java.awt.geom.Path2D;
 import java.awt.geom.Rectangle2D;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
+import java.io.UncheckedIOException;
 import java.time.YearMonth;
 import java.util.Map;
 import javax.imageio.ImageIO;
@@ -25,6 +30,7 @@ import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
+import org.apache.pdfbox.pdmodel.interactive.annotation.PDAppearanceStream;
 import org.apache.pdfbox.rendering.ImageType;
 import org.apache.pdfbox.rendering.PDFRenderer;
 import org.junit.jupiter.api.Test;
@@ -102,6 +108,86 @@ class NbuQrImageTests {
     @Test
     void refusesALinkThatNeedsAVersionAbove17() {
         assertThatThrownBy(() -> NbuQrImage.of(link(520))).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void refusesALinkTooLongForAnyQrCode() {
+        assertThatThrownBy(() -> NbuQrImage.of(link(3000))).isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("too long for a QR code");
+    }
+
+    @Test
+    void theFinderPatternsAreInTheThreeCornersOfTheModuleMatrix() {
+        NbuQrImage image = NbuQrImage.of(demoLink());
+        int last = image.codeModules() - 1;
+
+        for (int[] corner : new int[][] {{0, 0}, {last - 6, 0}, {0, last - 6}}) {
+            int x = corner[0];
+            int y = corner[1];
+            assertThat(image.dark(x, y)).as("outer ring at %d,%d", x, y).isTrue();
+            assertThat(image.dark(x + 6, y + 6)).isTrue();
+            assertThat(image.dark(x + 1, y + 1)).as("light ring").isFalse();
+            assertThat(image.dark(x + 3, y + 3)).as("centre").isTrue();
+        }
+        assertThat(image.dark(7, 0)).as("separator").isFalse();
+        assertThat(image.dark(last, last - 6)).as("no finder at the bottom right").isFalse();
+    }
+
+    @Test
+    void aReplacementSignWithAHoleIsFilledByTheEvenOddRuleOnThePdfPage() throws Exception {
+        Path2D.Double ring = new Path2D.Double(Path2D.WIND_EVEN_ODD);
+        ring.append(new Ellipse2D.Double(0, 0, 10, 10), false);
+        ring.append(new Ellipse2D.Double(3, 3, 4, 4), false);
+        String link = demoLink();
+        NbuQrImage image = NbuQrImage.of(link, () -> ring);
+        float left = 300;
+        float bottom = 500;
+        byte[] pdf;
+        try (PDDocument document = new PDDocument()) {
+            PDPage page = new PDPage(PDRectangle.A4);
+            document.addPage(page);
+            try (PDPageContentStream content = new PDPageContentStream(document, page)) {
+                image.drawPdf(content, left, bottom, 0.5f);
+            }
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            document.save(out);
+            pdf = out.toByteArray();
+        }
+
+        try (PDDocument document = Loader.loadPDF(pdf)) {
+            BufferedImage rendered = new PDFRenderer(document).renderImageWithDPI(0, 300, ImageType.GRAY);
+            float scale = 300 / 72f;
+            float module = PdfDocument.mm(0.5f);
+            float centreX = left + (float) image.centre() * module;
+            float centreY = bottom + image.sidePoints(0.5f) - (float) image.centre() * module;
+            // the bounding box of the ring is inscribed in the sign circle: outer radius d / (2√2), the hole 0.4 of it
+            double outer = image.signDiameter() / (2 * Math.sqrt(2));
+            float ringY = centreY - (float) (outer * 0.7 * module);
+            int px = Math.round(centreX * scale);
+            assertThat(rendered.getRaster().getSample(px, Math.round((PDRectangle.A4.getHeight() - centreY) * scale),
+                    0)).as("the hole stays white").isGreaterThan(200);
+            assertThat(rendered.getRaster().getSample(px, Math.round((PDRectangle.A4.getHeight() - ringY) * scale),
+                    0)).as("the ring is black").isLessThan(60);
+            assertThat(decode(rendered)).isEqualTo(link);
+        }
+    }
+
+    @Test
+    void aFailingPageStreamIsAnUncheckedError() throws IOException {
+        NbuQrImage image = NbuQrImage.of(demoLink());
+        OutputStream failing = new OutputStream() {
+            @Override
+            public void write(int b) throws IOException {
+                throw new IOException("the stream is gone");
+            }
+        };
+        try (PDDocument document = new PDDocument()) {
+            PDPageContentStream content = new PDPageContentStream(document, new PDAppearanceStream(document),
+                    failing);
+
+            assertThatThrownBy(() -> image.drawPdf(content, 0, 0, 0.5f)).isInstanceOf(UncheckedIOException.class)
+                    .hasMessage("The QR code cannot be drawn").hasCauseInstanceOf(IOException.class);
+        }
     }
 
     @Test

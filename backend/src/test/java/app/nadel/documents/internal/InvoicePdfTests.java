@@ -153,6 +153,73 @@ class InvoicePdfTests {
         assertThat(InvoiceLayout.part(oneOff, texts).replace('\u00A0', ' ')).isEqualTo("500,00 ₴ за ділянку");
     }
 
+    private static InvoiceLedger.Line line(LineKind kind, LineSource source, YearMonth corrects,
+            List<InvoiceLedger.Reading> readings, String lossesPercent, String consumption, String consumerName) {
+        return new InvoiceLedger.Line(UUID.randomUUID(), ELECTRICITY, kind, source, m("12.50"),
+                LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 31), corrects, List.of(), readings, lossesPercent,
+                consumption, consumerName);
+    }
+
+    @Test
+    void anOpeningBalanceAndAReversalAreNamedWithoutACalculation() {
+        DocumentTexts texts = DocumentTexts.uk();
+
+        assertThat(InvoiceLayout.describe(line(LineKind.OPENING, LineSource.OPENING, null, List.of(), null, null,
+                null), texts)).isEqualTo("Вхідний залишок");
+        assertThat(InvoiceLayout.describe(line(LineKind.REVERSAL, LineSource.TARIFF, null, List.of(), null, null,
+                null), texts)).isEqualTo("Сторнування; жовтень 2026");
+        assertThat(InvoiceLayout.describe(line(LineKind.REVERSAL, LineSource.LOSSES, YearMonth.of(2026, 9),
+                List.of(), "5.00", "338.300", null), texts)).isEqualTo("Сторнування за вересень 2026; жовтень 2026");
+        assertThat(InvoiceLayout.describe(line(LineKind.ADJUSTMENT, LineSource.TARIFF, null, List.of(), null, null,
+                null), texts)).isEqualTo("Коригування; жовтень 2026");
+    }
+
+    @Test
+    void lossesAndACommonConsumerShareSayWhatTheyWereTakenOf() {
+        DocumentTexts texts = DocumentTexts.uk();
+
+        assertThat(InvoiceLayout.describe(line(LineKind.REGULAR, LineSource.LOSSES, null, List.of(), "5.00",
+                "338.300", null), texts).replace(' ', ' '))
+                .isEqualTo("жовтень 2026; втрати 5,00 % від 338,300 кВт·год");
+        assertThat(InvoiceLayout.describe(line(LineKind.REGULAR, LineSource.LOSSES, null, List.of(), null, null,
+                null), texts)).isEqualTo("жовтень 2026; втрати в мережі");
+        assertThat(InvoiceLayout.describe(line(LineKind.ADJUSTMENT, LineSource.COMMON_CONSUMER,
+                YearMonth.of(2026, 9), List.of(), null, null, "Насосна станція"), texts))
+                .isEqualTo("Коригування за вересень 2026; жовтень 2026; спільний споживач «Насосна станція»");
+        assertThat(InvoiceLayout.describe(line(LineKind.REGULAR, LineSource.COMMON_CONSUMER, null, List.of(), null,
+                null, " "), texts)).isEqualTo("жовтень 2026");
+    }
+
+    @Test
+    void aConsumptionLineWithoutAnIntervalShowsNoReadings() {
+        InvoiceLedger.Line single = line(LineKind.REGULAR, LineSource.CONSUMPTION, null,
+                List.of(new InvoiceLedger.Reading(UUID.randomUUID(), LocalDate.of(2026, 10, 5), "8543.300")), null,
+                null, null);
+
+        assertThat(InvoiceLayout.describe(single, DocumentTexts.uk())).isEqualTo("жовтень 2026");
+    }
+
+    @Test
+    void aPartWithoutARateOrAKnownUnitIsLeftOutAndAQuarterlyTariffIsDividedByThree() {
+        DocumentTexts texts = DocumentTexts.uk();
+        LocalDate from = LocalDate.of(2026, 10, 1);
+        LocalDate to = LocalDate.of(2026, 10, 31);
+
+        assertThat(InvoiceLayout.part(new InvoiceLedger.Part("PER_PLOT", "MONTHLY", "1", "PLOT", null, 31, from, to),
+                texts)).isNull();
+        assertThat(InvoiceLayout.part(new InvoiceLedger.Part(null, null, "2", "LITRE", "3.0000", 31, from, to),
+                texts)).isNull();
+        assertThat(InvoiceLayout.part(new InvoiceLedger.Part("PER_AREA_SOTKA", "YEARLY", null, "SOTKA", "50.0000",
+                31, from, to), texts)).isNull();
+        assertThat(InvoiceLayout.part(new InvoiceLedger.Part("PER_PLOT", "QUARTERLY", "1", "PLOT", "90.0000", 31,
+                from, to), texts).replace(' ', ' ')).isEqualTo("90,00 ₴ за ділянку / 3");
+        InvoiceLedger.Line withoutRate = new InvoiceLedger.Line(UUID.randomUUID(), MEMBERSHIP, LineKind.REGULAR,
+                LineSource.TARIFF, m("10.00"), from, to, null,
+                List.of(new InvoiceLedger.Part("PER_PLOT", "MONTHLY", "1", "PLOT", null, 31, from, to)), List.of(),
+                null, null, null);
+        assertThat(InvoiceLayout.describe(withoutRate, texts)).isEqualTo("жовтень 2026");
+    }
+
     @Test
     void theSecondVersionSaysSoAndAnOpenMonthIsAsOfTheDay() throws Exception {
         String text = text(InvoiceLayout.render(invoice(2, MonthStatus.OPEN, "413.26", "0.00")));

@@ -14,6 +14,7 @@ import app.nadel.documents.internal.pdf.TextBlock;
 import app.nadel.documents.internal.pdf.TextBlock.Align;
 import app.nadel.money.Money;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Instant;
@@ -219,6 +220,71 @@ class PdfDocumentTests {
             assertThat(text).contains("Ділянка " + i + " ");
         }
         assertThat(text).contains("СТОРНОВАНО 06.11.2026", "Рядок 39", "Прийняв(ла): Коваленко", "…");
+    }
+
+    /** Moves the cursor down until less than 10 points are left on the page. */
+    private static void fillPage(PdfDocument document) {
+        while (document.remaining() > 10) {
+            document.space(5);
+        }
+    }
+
+    private static String page(byte[] pdf, int page) throws IOException {
+        try (PDDocument document = Loader.loadPDF(pdf)) {
+            PDFTextStripper stripper = new PDFTextStripper();
+            stripper.setStartPage(page);
+            stripper.setEndPage(page);
+            return stripper.getText(document);
+        }
+    }
+
+    @Test
+    void aMarkASignatureADrawingAndATableThatDoNotFitStartTheNextPage() throws Exception {
+        byte[] pdf;
+        try (PdfDocument document = PdfDocument.create(PageSize.A5, IDENTITY, TIME)) {
+            fillPage(document);
+            document.mark("СТОРНОВАНО 06.11.2026", 13);
+            assertThat(document.pages()).isEqualTo(2);
+            fillPage(document);
+            document.signature("Прийняв(ла): Коваленко Олена Петрівна", "(підпис)", 9);
+            assertThat(document.pages()).isEqualTo(3);
+            fillPage(document);
+            float[] box = new float[2];
+            document.drawing(60, (content, left, bottom, width, height) -> {
+                box[0] = bottom;
+                box[1] = height;
+                content.addRect(left, bottom, width, height);
+                content.fill();
+            });
+            assertThat(document.pages()).isEqualTo(4);
+            assertThat(box[0] + box[1]).as("the box starts at the top margin of the new page")
+                    .isCloseTo(PageSize.A5.height() - PdfDocument.mm(12), org.assertj.core.data.Offset.offset(0.01f));
+            fillPage(document);
+            document.table(new Table(List.of(new Column("Ділянка", 3, Align.LEFT),
+                    new Column("Сума", 2, Align.RIGHT)), List.of(Row.of("№ 7", "70,00 ₴")), 9));
+            assertThat(document.pages()).isEqualTo(5);
+            pdf = document.toBytes();
+        }
+
+        assertThat(page(pdf, 1)).doesNotContain("СТОРНОВАНО");
+        assertThat(page(pdf, 2)).contains("СТОРНОВАНО 06.11.2026");
+        assertThat(page(pdf, 3)).contains("Прийняв(ла): Коваленко Олена Петрівна", "(підпис)");
+        assertThat(page(pdf, 5)).contains("Ділянка", "Сума", "№ 7");
+    }
+
+    @Test
+    void aDrawingIsAboveZeroAndAtMostAPageHighAndItsFailureIsUnchecked() {
+        try (PdfDocument document = PdfDocument.create(PageSize.A4, IDENTITY, TIME)) {
+            PdfDocument.Drawing nothing = (content, left, bottom, width, height) -> {
+            };
+            assertThatThrownBy(() -> document.drawing(0, nothing)).isInstanceOf(IllegalArgumentException.class);
+            assertThatThrownBy(() -> document.drawing(PageSize.A4.height(), nothing))
+                    .isInstanceOf(IllegalArgumentException.class);
+            assertThatThrownBy(() -> document.drawing(20, (content, left, bottom, width, height) -> {
+                throw new IOException("the drawing failed");
+            })).isInstanceOf(UncheckedIOException.class).hasCauseInstanceOf(IOException.class);
+            assertThat(document.pages()).isEqualTo(1);
+        }
     }
 
     @Test
