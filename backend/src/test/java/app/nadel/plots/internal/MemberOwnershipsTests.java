@@ -134,7 +134,7 @@ class MemberOwnershipsTests extends OwnershipTestSupport {
         UUID plot = newPlot();
         seedOwner(plot, owner, "1/1", "2020-05-05", null);
         giveBaseRole(DEMO_TENANT, owner, "MEMBER");
-        String email = ownerJdbc().queryForObject("select email from member where id = ?", String.class, owner);
+        String email = memberEmail(DEMO_TENANT, owner);
 
         membersOwnershipsAs(TestTokens.bearer(DEMO_TENANT, UUID.randomUUID().toString(), email), owner)
                 .andExpect(status().isOk())

@@ -5,6 +5,7 @@ import static org.awaitility.Awaitility.await;
 import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -15,9 +16,14 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -27,13 +33,14 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * GET /audit: permission, filters, the Europe/Kyiv date range, ordering, paging, tenant isolation, actor names and
- * field changes.
+ * GET /audit: permission, filters, the Europe/Kyiv date range, ordering, paging, tenant isolation, actor names,
+ * field changes and sealed personal values (shown only with MEMBERS_VIEW, otherwise hidden).
  * <p>
  * {@code audit_entry} is append-only for the application role, so fixture rows cannot be removed. Every test therefore
  * writes its rows with ids that occur nowhere else (a fresh entity id and, where the test needs one, a fresh actor)
  * and asserts through filters on those ids, so leftover rows never disturb other tests.
  */
+@ExtendWith(OutputCaptureExtension.class)
 class AuditReadTests extends IntegrationTest {
 
     @Autowired
@@ -43,11 +50,19 @@ class AuditReadTests extends IntegrationTest {
     JsonMapper json;
 
     private final List<UUID> apiCreatedMembers = new ArrayList<>();
+    private final List<UUID> customRoles = new ArrayList<>();
 
     @AfterEach
     void removeMembersCreatedThroughTheApi() {
         for (UUID id : apiCreatedMembers) {
             inTenant(DEMO_TENANT, sql -> sql.update("delete from member where id = ?", id));
+        }
+        for (UUID role : customRoles) {
+            inTenant(DEMO_TENANT, sql -> {
+                sql.update("delete from member_role where role_id = ?", role);
+                sql.update("delete from role_permission where role_id = ?", role);
+                return sql.update("delete from role where id = ?", role);
+            });
         }
     }
 
@@ -73,14 +88,12 @@ class AuditReadTests extends IntegrationTest {
     void theDemoTreasurerHoldsAuditView() throws Exception {
         // Demo data: the treasurer base role carries AUDIT_VIEW.
         // the token carries a random subject, so the treasurer must start unlinked whatever ran before
-        inTenant(DEMO_TENANT, sql -> sql.update(
-                "update member set keycloak_subject = null where email = 'treasurer@demo.local'"));
+        unlinkByEmail(DEMO_TENANT, "treasurer@demo.local");
         String token = TestTokens.bearer(DEMO_TENANT, UUID.randomUUID().toString(), "treasurer@demo.local");
         try {
             getAs(token, "/api/v1/audit?size=1").andExpect(status().isOk());
         } finally {
-            inTenant(DEMO_TENANT, sql -> sql.update(
-                    "update member set keycloak_subject = null where email = 'treasurer@demo.local'"));
+            unlinkByEmail(DEMO_TENANT, "treasurer@demo.local");
         }
     }
 
@@ -193,6 +206,68 @@ class AuditReadTests extends IntegrationTest {
                         .andExpect(jsonPath("$.items[0].entityLabel").value("Api" + tag + " Created"))
                         .andExpect(jsonPath("$.items[0].actorMemberId").value(chairman.toString()))
                         .andExpect(jsonPath("$.items[0].actorName").value("Test Member")));
+    }
+
+    // ---- personal values (feature 014, ADR 0016) ---------------------------------------------------------------
+
+    @Test
+    void personalValuesAreHiddenFromAReaderWhoMayNotViewMembers() throws Exception {
+        MemberUpdate update = memberWithAPhoneChange();
+        String auditOnly = auditViewOnly(DEMO_TENANT);
+
+        JsonNode entry = updatedEntry(auditOnly, update.member());
+        JsonNode phones = field(entry, "phones");
+        assertThat(phones.path("hidden").asBoolean()).isTrue();
+        assertThat(phones.has("oldValue")).isFalse();
+        assertThat(phones.has("newValue")).isFalse();
+        // a field without personal data is shown as before
+        JsonNode lastName = field(entry, "lastName");
+        assertThat(lastName.path("hidden").asBoolean()).isFalse();
+        assertThat(lastName.get("oldValue").asString()).isEqualTo(update.oldLastName());
+        assertThat(lastName.get("newValue").asString()).isEqualTo(update.newLastName());
+        assertThat(entry.toString()).doesNotContain(update.oldPhoneDigits()).doesNotContain(update.newPhoneDigits());
+    }
+
+    @Test
+    void personalValuesAreShownToTheChairmanAndTheTreasurer() throws Exception {
+        MemberUpdate update = memberWithAPhoneChange();
+
+        for (String reader : List.of(update.chairman(), auditViewer(DEMO_TENANT))) {
+            JsonNode phones = field(updatedEntry(reader, update.member()), "phones");
+            assertThat(phones.path("hidden").asBoolean()).isFalse();
+            assertThat(phones.get("oldValue").asString()).isEqualTo("+" + update.oldPhoneDigits());
+            assertThat(phones.get("newValue").asString()).isEqualTo("+" + update.newPhoneDigits());
+        }
+    }
+
+    @Test
+    void aSealedValueCopiedToAnotherEntryIsHiddenAndOnlyTheEntryIsLogged(CapturedOutput output) throws Exception {
+        MemberUpdate update = memberWithAPhoneChange();
+        UUID original = UUID.fromString(updatedEntry(update.chairman(), update.member()).get("id").asString());
+        UUID copy = UUID.randomUUID();
+        UUID copyEntity = UUID.randomUUID();
+        // someone with database access copies the ciphertext of one entry into another
+        ownerJdbc().update("""
+                insert into audit_entry (id, tenant_id, occurred_at, actor_member_id, actor_subject, action,
+                                         entity_type, entity_id, entity_label, changes)
+                select ?, tenant_id, occurred_at, actor_member_id, actor_subject, action, entity_type, ?, entity_label,
+                       changes
+                from audit_entry where id = ?
+                """, copy, copyEntity, original);
+
+        JsonNode copied = getJson(update.chairman(), "/api/v1/audit?entityId=" + copyEntity).path("items").get(0);
+
+        JsonNode phones = field(copied, "phones");
+        assertThat(phones.path("hidden").asBoolean()).isTrue();
+        assertThat(phones.has("oldValue")).isFalse();
+        assertThat(phones.has("newValue")).isFalse();
+        assertThat(field(copied, "lastName").get("newValue").asString()).isEqualTo(update.newLastName());
+        assertThat(output.getAll())
+                .contains("PERSONAL_DATA_UNREADABLE: a sealed value of audit entry " + copy + " could not be opened")
+                .doesNotContain(update.oldPhoneDigits()).doesNotContain(update.newPhoneDigits());
+        // the original still opens where it was sealed
+        assertThat(field(updatedEntry(update.chairman(), update.member()), "phones").get("newValue").asString())
+                .isEqualTo("+" + update.newPhoneDigits());
     }
 
     // ---- filters ----------------------------------------------------------------------------------------------
@@ -440,6 +515,85 @@ class AuditReadTests extends IntegrationTest {
 
     // ---- helpers ----------------------------------------------------------------------------------------------
 
+    /** A member created and then updated by a chairman through the API: a new phone and a new last name. */
+    private record MemberUpdate(String chairman, UUID member, String oldLastName, String newLastName,
+            String oldPhoneDigits, String newPhoneDigits) {
+    }
+
+    private MemberUpdate memberWithAPhoneChange() throws Exception {
+        UUID chairmanMember = newMember(DEMO_TENANT, "chairman-" + tag() + "@demo.local");
+        giveBaseRole(DEMO_TENANT, chairmanMember, "CHAIRMAN");
+        String chairman = TestTokens.bearer(DEMO_TENANT, UUID.randomUUID().toString(),
+                emailOf(DEMO_TENANT, chairmanMember));
+        String oldPhone = "38067" + digits(7);
+        String newPhone = "38050" + digits(7);
+        String oldName = "Sealed" + tag();
+        String newName = "Renamed" + tag();
+        String created = mvc.perform(post("/api/v1/members").header(HttpHeaders.AUTHORIZATION, chairman)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("lastName", oldName, "firstName", "Person",
+                                "phones", List.of("+" + oldPhone)))))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        UUID member = UUID.fromString(json.readTree(created).path("id").asString());
+        apiCreatedMembers.add(member);
+        mvc.perform(put("/api/v1/members/" + member).header(HttpHeaders.AUTHORIZATION, chairman)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("lastName", newName, "firstName", "Person",
+                                "phones", List.of("+" + newPhone)))))
+                .andExpect(status().isOk());
+        await().atMost(Duration.ofSeconds(10)).untilAsserted(() ->
+                assertThat(getJson(chairman, "/api/v1/audit?entityId=" + member).path("totalItems").asInt())
+                        .isEqualTo(2));
+        return new MemberUpdate(chairman, member, oldName, newName, oldPhone, newPhone);
+    }
+
+    /** The MEMBER_UPDATED entry of the member as the given reader sees it. */
+    private JsonNode updatedEntry(String bearer, UUID member) throws Exception {
+        for (JsonNode item : getJson(bearer, "/api/v1/audit?entityId=" + member).path("items")) {
+            if ("MEMBER_UPDATED".equals(item.path("action").asString())) {
+                return item;
+            }
+        }
+        throw new AssertionError("no MEMBER_UPDATED entry");
+    }
+
+    private static JsonNode field(JsonNode entry, String name) {
+        for (JsonNode change : entry.path("changes")) {
+            if (name.equals(change.path("field").asString())) {
+                return change;
+            }
+        }
+        throw new AssertionError("no change of " + name);
+    }
+
+    /**
+     * A signed-in member of a custom role whose only permission is AUDIT_VIEW (no MEMBERS_VIEW); the role and the
+     * member are removed after the test.
+     */
+    private String auditViewOnly(UUID tenant) {
+        String email = "auditonly-" + tag() + "@demo.local";
+        UUID member = newMember(tenant, email);
+        UUID role = UUID.randomUUID();
+        customRoles.add(role);
+        inTenant(tenant, sql -> {
+            sql.update("insert into role (id, tenant_id, name) values (?, ?, ?)", role, tenant, "AuditOnly " + role);
+            sql.update("insert into role_permission (tenant_id, role_id, permission) values (?, ?, 'AUDIT_VIEW')",
+                    tenant, role);
+            return sql.update("insert into member_role (tenant_id, member_id, role_id) values (?, ?, ?)", tenant,
+                    member, role);
+        });
+        return TestTokens.bearer(tenant, UUID.randomUUID().toString(), email);
+    }
+
+    private static String digits(int count) {
+        StringBuilder digits = new StringBuilder();
+        ThreadLocalRandom random = ThreadLocalRandom.current();
+        for (int i = 0; i < count; i++) {
+            digits.append(random.nextInt(10));
+        }
+        return digits.toString();
+    }
+
     /** A signed-in treasurer (holds AUDIT_VIEW) of the given cooperative; the member is removed after the test. */
     private String auditViewer(UUID tenant) {
         String email = "viewer-" + tag() + "@" + (tenant.equals(DEMO_TENANT) ? "demo" : "other") + ".local";
@@ -462,7 +616,7 @@ class AuditReadTests extends IntegrationTest {
     }
 
     private String emailOf(UUID tenant, UUID member) {
-        return inTenant(tenant, sql -> sql.queryForObject("select email from member where id = ?", String.class, member));
+        return memberEmail(tenant, member);
     }
 
     /** Lower-case token that is unique per call. */

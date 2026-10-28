@@ -104,8 +104,8 @@ class MemberDirectoryTests extends IntegrationTest {
 
     @Test
     void theResultIsCappedAndOrdered() {
-        ownerJdbc().update("insert into member (id, tenant_id, last_name, first_name, phones) "
-                + "select gen_random_uuid(), ?, 'Capzz' || lpad(n::text, 3, '0'), 'Test', '{}' "
+        ownerJdbc().update("insert into member (id, tenant_id, last_name, first_name) "
+                + "select gen_random_uuid(), ?, 'Capzz' || lpad(n::text, 3, '0'), 'Test' "
                 + "from generate_series(1, 205) as n", DEMO_TENANT);
 
         List<UUID> ids = as(DEMO_TENANT, () -> directory.idsMatchingName("capzz"));
@@ -118,11 +118,11 @@ class MemberDirectoryTests extends IntegrationTest {
 
     @Test
     void contactsGiveTheNamesPhonesAndEmailOfTheCooperativesOwnMembersOnly() {
-        UUID both = contactMember(DEMO_TENANT, "Contactzz", "Олена", "Петрівна",
-                "{+380501112233,+380671112233}", "olena@contacts.test");
-        UUID none = contactMember(DEMO_TENANT, "Contactzz-2", "Іван", null, "{}", null);
-        UUID theirs = contactMember(OTHER_TENANT, "Contactzz-3", "Петро", null, "{+380931112233}",
-                "petro@contacts.test");
+        UUID both = contactMember(DEMO_TENANT, "Contactzz", "Олена", "Петрівна", "olena@contacts.test",
+                "+380501112233", "+380671112233");
+        UUID none = contactMember(DEMO_TENANT, "Contactzz-2", "Іван", null, null);
+        UUID theirs = contactMember(OTHER_TENANT, "Contactzz-3", "Петро", null, "petro@contacts.test",
+                "+380931112233");
         UUID unknown = UUID.randomUUID();
 
         Map<UUID, MemberContacts> found = inTransaction(DEMO_TENANT,
@@ -150,12 +150,9 @@ class MemberDirectoryTests extends IntegrationTest {
                 .isInstanceOf(IllegalTransactionStateException.class);
     }
 
-    private UUID contactMember(UUID tenant, String lastName, String firstName, String middleName, String phones,
-            String email) {
-        UUID id = UUID.randomUUID();
-        ownerJdbc().update("insert into member (id, tenant_id, last_name, first_name, middle_name, phones, email) "
-                + "values (?, ?, ?, ?, ?, ?::text[], ?)", id, tenant, lastName, firstName, middleName, phones, email);
-        return id;
+    private UUID contactMember(UUID tenant, String lastName, String firstName, String middleName, String email,
+            String... phones) {
+        return newMember(tenant, lastName, firstName, middleName, email, phones);
     }
 
     private <T> T inTransaction(UUID tenant, java.util.function.Supplier<T> action) {

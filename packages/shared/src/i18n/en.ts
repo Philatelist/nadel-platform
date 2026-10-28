@@ -298,6 +298,7 @@ export const en = {
   members: {
     title: 'Members',
     searchPlaceholder: 'Search by name, phone or email',
+    searchHint: 'Name, full phone or last 4 digits, exact email',
     showArchived: 'Show archived',
     archived: 'Archived',
     empty: 'No members yet',
@@ -350,6 +351,8 @@ export const en = {
     AREA_INVALID: 'Enter a valid area: at most two decimals of m², greater than zero for a plot.',
     SHARE_INVALID: 'Enter the share like 1/2 (a whole number up to 1000 at the bottom).',
     PLOT_HAS_OWNERSHIP_HISTORY_kind: 'This plot has had owners and cannot become common land',
+    PLOT_HAS_WATER_CONNECTION_kind:
+      'The plot has a lasting water connection and cannot become common land — disconnect it first',
     MEMBER_NOT_FOUND: 'This member was not found.',
     OWNERSHIP_NOT_FOUND: 'This ownership record was not found. Reload the page.',
     REQUIRED_reason: 'Enter a reason',
@@ -531,6 +534,7 @@ export const en = {
     METER_VALUE_INVALID: 'The initial reading must be a non-negative number with at most three decimals.',
     READING_DATE_IN_FUTURE: 'The date cannot be in the future.',
     PLOT_HAS_METER: 'The plot has a meter — remove it first.',
+    PLOT_HAS_WATER_CONNECTION: 'The plot has a lasting water connection — disconnect it first.',
     AMOUNT_NOT_POSITIVE: 'The amount must be greater than zero.',
     INVALID_OPENING_BALANCES_amount: 'The amount has more than two decimals or is too large.',
     INVALID_OPENING_BALANCES_charge_type: 'This name stands for two charge types — use the full name.',
@@ -773,6 +777,7 @@ export const en = {
   },
   audit: {
     title: 'Audit log',
+    hiddenValue: 'hidden',
     columns: { time: 'Time', author: 'Author', action: 'Action', record: 'Record', changes: 'Changes' },
     action: {
       MEMBER_CREATED: 'Member created',
@@ -2347,6 +2352,7 @@ export const en = {
     TREE_PARENT_INACTIVE: 'The parent meter is already removed',
     TREE_DATE_BEFORE_LATEST: 'The date is before the meter’s latest change in the tree',
     PLOT_HAS_METER: 'Remove the plot’s meter first',
+    PLOT_HAS_WATER_CONNECTION: 'The plot has a lasting water connection — disconnect it first',
     READING_DATE_IN_FUTURE: 'The date cannot be in the future',
     READING_DATE_OUTSIDE_METER: 'The date is outside the meter’s working period',
     READING_OUT_OF_ORDER: 'The reading is lower than the previous one or higher than the next one',
@@ -2382,6 +2388,8 @@ export const en = {
       'There is no tariff for common consumers, so the run cannot be booked. Add the tariff first.',
     COMMON_CONSUMER_RANGE_OVERLAP:
       'This common consumer has already been charged for these days. Preview again and book the other consumers.',
+    PERSONAL_DATA_UNREADABLE:
+      'Contact details could not be read. Do not re-enter them; report the problem to the administrator.',
     UNKNOWN: 'Something went wrong. Please try again.',
   },
   map: {

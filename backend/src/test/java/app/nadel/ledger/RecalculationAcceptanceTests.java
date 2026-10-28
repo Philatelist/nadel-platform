@@ -123,8 +123,6 @@ class RecalculationAcceptanceTests extends ReadingChargeSupport {
 
     /** The member of the cooperative owns the plot since 2020. */
     private void ownedByTheMember(UUID plot) {
-        UUID memberId = owner().queryForObject("select id from member where tenant_id = ? and email like 'member-%'",
-                UUID.class, tenant);
         owner().update("insert into ownership (tenant_id, plot_id, member_id, share_numerator, share_denominator, "
                 + "valid_from) values (?, ?, ?, 1, 1, date '2020-01-01')", tenant, plot, memberId);
     }

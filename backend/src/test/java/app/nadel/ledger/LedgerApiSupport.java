@@ -114,8 +114,8 @@ abstract class LedgerApiSupport extends LedgerTestSupport {
 
     /** A first sign-in links the demo members to a subject; other tests expect them unlinked (their own subject). */
     private void unlinkDemoMembers() {
-        inTenant(DEMO_TENANT, sql -> sql.update("update member set keycloak_subject = null where email in "
-                + "('chairman@demo.local', 'treasurer@demo.local', 'member@demo.local', 'electrician@demo.local')"));
+        unlinkByEmail(DEMO_TENANT, "chairman@demo.local", "treasurer@demo.local", "member@demo.local",
+                "electrician@demo.local");
     }
 
     // ---- tokens
@@ -141,8 +141,7 @@ abstract class LedgerApiSupport extends LedgerTestSupport {
     }
 
     UUID demoMember(String email) {
-        return ownerJdbc().queryForObject("select id from member where tenant_id = ? and email = ?", UUID.class,
-                DEMO_TENANT, email);
+        return memberIdByEmail(DEMO_TENANT, email);
     }
 
     /** A token of a chairman of the other cooperative (a fresh member; removed after the test). */

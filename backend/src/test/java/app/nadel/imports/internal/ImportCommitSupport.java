@@ -199,8 +199,7 @@ abstract class ImportCommitSupport extends ImportsIntegrationTest {
         }
         JdbcTemplate owner = ownerJdbc();
         String plots = ids(owner, "select id from plot where tenant_id = ? and number ~ '^(CMT|IMP|LRG)-'");
-        String members = ids(owner, "select id from member where tenant_id = ? and (last_name like 'Fixt%' "
-                + "or email like '%@import.example.com')");
+        String members = String.join(",", importedMembers().stream().map(UUID::toString).toList());
         String freePlot = ids(owner, "select id from plot where tenant_id = ? and number = '" + FREE_DEMO_PLOT + "'");
         String meters = ids(owner, "select m.id from meter m join plot p on p.id = m.plot_id where m.tenant_id = ? "
                 + "and (m.serial like 'IMT-%' or p.number ~ '^(CMT|IMP|LRG)-')");
@@ -220,6 +219,24 @@ abstract class ImportCommitSupport extends ImportsIntegrationTest {
         owner.update("delete from member where id = any (string_to_array(?, ',')::uuid[])", members);
         owner.update("update plot_status set status = 'GREY' where plot_id = any (string_to_array(?, ',')::uuid[])",
                 freePlot);
+    }
+
+    /**
+     * The members an import of these tests created: last name {@code Fixt...}, or an e-mail at
+     * {@code import.example.com} (sealed, so it is opened for every member that is not demo data).
+     */
+    private List<UUID> importedMembers() {
+        List<UUID> found = new java.util.ArrayList<>();
+        for (Map<String, Object> row : ownerJdbc().queryForList("select id, last_name from member "
+                + "where tenant_id = ? and id::text not like 'aaaaaaaa-%'", DEMO_TENANT)) {
+            UUID id = (UUID) row.get("id");
+            String email = ((String) row.get("last_name")).startsWith("Fixt") ? null : memberEmail(DEMO_TENANT, id);
+            if (((String) row.get("last_name")).startsWith("Fixt")
+                    || (email != null && email.endsWith("@import.example.com"))) {
+                found.add(id);
+            }
+        }
+        return found;
     }
 
     private static String ids(JdbcTemplate owner, String sql) {

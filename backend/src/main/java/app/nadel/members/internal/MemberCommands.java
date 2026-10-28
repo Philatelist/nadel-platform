@@ -5,6 +5,7 @@ import app.nadel.audit.FieldChange;
 import app.nadel.identity.AccessProfile;
 import app.nadel.identity.Permission;
 import app.nadel.members.MemberArchiveGuard;
+import app.nadel.privacy.IndexKind;
 import app.nadel.problem.ApiProblemException;
 import app.nadel.problem.FieldProblem;
 import app.nadel.problem.ProblemCodes;
@@ -29,21 +30,23 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 class MemberCommands {
 
-    private static final String EMAIL_INDEX = "member_tenant_email_uq";
+    private static final String EMAIL_INDEX = "member_tenant_email_bidx_uq";
 
     private final MemberRepository members;
     private final RoleGrantReader grants;
     private final LastChairmanGuard lastChairman;
     private final List<MemberArchiveGuard> archiveGuards;
     private final MemberAuditPublisher audit;
+    private final MemberCrypto crypto;
 
     MemberCommands(MemberRepository members, RoleGrantReader grants, LastChairmanGuard lastChairman,
-            List<MemberArchiveGuard> archiveGuards, MemberAuditPublisher audit) {
+            List<MemberArchiveGuard> archiveGuards, MemberAuditPublisher audit, MemberCrypto crypto) {
         this.members = members;
         this.grants = grants;
         this.lastChairman = lastChairman;
         this.archiveGuards = archiveGuards;
         this.audit = audit;
+        this.crypto = crypto;
     }
 
     @Transactional
@@ -54,30 +57,41 @@ class MemberCommands {
             data = withNotes(data, null);
         }
         ensureEmailFree(actor.tenantId(), data.email(), null);
-        Member member = save(Member.create(actor.tenantId(), data, Instant.now()));
-        publish(actor, "MEMBER_CREATED", member, MemberSnapshot.diff(MemberSnapshot.NONE, MemberSnapshot.of(member)));
-        return card(member, actor);
+        Member member = Member.create(actor.tenantId(), data, Instant.now());
+        OpenedContacts contacts = crypto.seal(member, OpenedContacts.NONE, data);
+        member = save(member);
+        if (!contacts.phones().isEmpty()) {
+            crypto.replacePhoneIndex(member, contacts.phones()); // after the flush: the index refers to the row
+        }
+        publish(actor, "MEMBER_CREATED", member,
+                MemberSnapshot.diff(MemberSnapshot.NONE, MemberSnapshot.of(member, contacts)));
+        return card(member, contacts, actor);
     }
 
     @Transactional
     nadel.contract.model.Member update(UUID id, MemberInput input, AccessProfile actor) {
         MemberData data = MemberData.from(input);
         Member member = find(id);
+        OpenedContacts stored = crypto.open(member);
         if (!actor.can(Permission.MEMBERS_VIEW)) {
-            data = withNotes(data, member.getNotes()); // keep what is stored: the editor cannot see it
+            data = withNotes(data, stored.notes()); // keep what is stored: the editor cannot see it
         }
         if (!member.isArchived()) {
             ensureEmailFree(actor.tenantId(), data.email(), member.getId());
         }
-        MemberSnapshot before = MemberSnapshot.of(member);
+        MemberSnapshot before = MemberSnapshot.of(member, stored);
         member.apply(data);
-        List<FieldChange> changes = MemberSnapshot.diff(before, MemberSnapshot.of(member));
+        OpenedContacts contacts = crypto.seal(member, stored, data);
+        List<FieldChange> changes = MemberSnapshot.diff(before, MemberSnapshot.of(member, contacts));
         if (!changes.isEmpty()) {
             member.touch(Instant.now());
             save(member);
+            if (!contacts.phones().equals(stored.phones())) {
+                crypto.replacePhoneIndex(member, contacts.phones());
+            }
             publish(actor, "MEMBER_UPDATED", member, changes);
         }
-        return card(member, actor);
+        return card(member, contacts, actor);
     }
 
     /**
@@ -90,28 +104,32 @@ class MemberCommands {
     nadel.contract.model.Member archive(UUID id, AccessProfile actor) {
         lastChairman.lock(actor.tenantId());
         Member member = members.findByIdForUpdate(id).orElseThrow(ApiProblemException::notFound);
+        OpenedContacts contacts = crypto.open(member);
         if (!member.isArchived()) {
             lastChairman.ensureNotLast(actor.tenantId(), member.getId());
             archiveGuards.forEach(guard -> guard.ensureCanArchive(member.getId()));
-            MemberSnapshot before = MemberSnapshot.of(member);
+            MemberSnapshot before = MemberSnapshot.of(member, contacts);
             member.archive(Instant.now());
             save(member);
-            publish(actor, "MEMBER_ARCHIVED", member, MemberSnapshot.diff(before, MemberSnapshot.of(member)));
+            publish(actor, "MEMBER_ARCHIVED", member,
+                    MemberSnapshot.diff(before, MemberSnapshot.of(member, contacts)));
         }
-        return card(member, actor);
+        return card(member, contacts, actor);
     }
 
     @Transactional
     nadel.contract.model.Member restore(UUID id, AccessProfile actor) {
         Member member = find(id);
+        OpenedContacts contacts = crypto.open(member);
         if (member.isArchived()) {
-            ensureEmailFree(actor.tenantId(), member.getEmail(), member.getId());
-            MemberSnapshot before = MemberSnapshot.of(member);
+            ensureEmailIndexFree(actor.tenantId(), member.getEmailBidx(), member.getId());
+            MemberSnapshot before = MemberSnapshot.of(member, contacts);
             member.restore(Instant.now());
             save(member);
-            publish(actor, "MEMBER_RESTORED", member, MemberSnapshot.diff(before, MemberSnapshot.of(member)));
+            publish(actor, "MEMBER_RESTORED", member,
+                    MemberSnapshot.diff(before, MemberSnapshot.of(member, contacts)));
         }
-        return card(member, actor);
+        return card(member, contacts, actor);
     }
 
     /** The member of the current cooperative (RLS hides other cooperatives), or 404. */
@@ -133,10 +151,18 @@ class MemberCommands {
 
     /** Fast, friendly check; the unique index remains the guarantee against a concurrent request. */
     private void ensureEmailFree(UUID tenantId, String email, UUID selfId) {
-        if (email == null) {
+        String normalised = PhoneIndexValues.normalisedEmail(email);
+        if (normalised != null) {
+            ensureEmailIndexFree(tenantId, crypto.index(tenantId, IndexKind.EMAIL, normalised), selfId);
+        }
+    }
+
+    /** The same check by the stored blind index (restore: the e-mail need not be opened). */
+    private void ensureEmailIndexFree(UUID tenantId, byte[] emailBidx, UUID selfId) {
+        if (emailBidx == null) {
             return;
         }
-        Optional<Member> holder = members.findActiveByEmail(tenantId, email);
+        Optional<Member> holder = members.findActiveByEmailBidx(tenantId, emailBidx);
         if (holder.isPresent() && !holder.get().getId().equals(selfId)) {
             throw emailTaken();
         }
@@ -147,8 +173,8 @@ class MemberCommands {
                 member, changes);
     }
 
-    private nadel.contract.model.Member card(Member member, AccessProfile viewer) {
-        return MemberDtoMapper.toDto(member, grants.read(member), viewer);
+    private nadel.contract.model.Member card(Member member, OpenedContacts contacts, AccessProfile viewer) {
+        return MemberDtoMapper.toDto(member, contacts, grants.read(member), viewer);
     }
 
     private static MemberData withNotes(MemberData data, String notes) {

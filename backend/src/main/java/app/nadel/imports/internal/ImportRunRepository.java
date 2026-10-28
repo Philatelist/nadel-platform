@@ -15,13 +15,13 @@ import org.springframework.data.repository.query.Param;
 interface ImportRunRepository extends JpaRepository<ImportRun, UUID> {
 
     /**
-     * Drops the plan (personal data) of previews that expired: they can no longer be committed. Runs on every import
-     * call of the cooperative, since there is no scheduled job yet. Returns the number of runs cleared.
+     * Drops the sealed plan (personal data) of previews that expired: they can no longer be committed. Runs on every
+     * import call of the cooperative, since there is no scheduled job yet. Returns the number of runs cleared.
      */
     @Modifying
-    @Query("update ImportRun r set r.plan = null, r.planDigest = null where r.tenantId = :tenantId "
+    @Query("update ImportRun r set r.planEnc = null where r.tenantId = :tenantId "
             + "and r.status = app.nadel.imports.internal.ImportStatus.PREVIEW and r.expiresAt < :now "
-            + "and r.plan is not null")
+            + "and r.planEnc is not null")
     int clearExpiredPlans(@Param("tenantId") UUID tenantId, @Param("now") Instant now);
 
     /** The run with an exclusive row lock ({@code FOR UPDATE}) until the end of the transaction. RLS hides other cooperatives' runs. */
@@ -41,20 +41,20 @@ interface ImportRunRepository extends JpaRepository<ImportRun, UUID> {
     /** Marks a preview committed and drops its plan. Flushes first, clears the persistence context afterwards. */
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("update ImportRun r set r.status = app.nadel.imports.internal.ImportStatus.COMMITTED, "
-            + "r.committedAt = :now, r.plan = null, r.planDigest = null where r.id = :id "
+            + "r.committedAt = :now, r.planEnc = null where r.id = :id "
             + "and r.status = app.nadel.imports.internal.ImportStatus.PREVIEW")
     int markCommitted(@Param("id") UUID id, @Param("now") Instant now);
 
     /** Marks a preview stale and drops its plan (personal data). */
     @Modifying
     @Query("update ImportRun r set r.status = app.nadel.imports.internal.ImportStatus.STALE, "
-            + "r.plan = null, r.planDigest = null where r.id = :id "
+            + "r.planEnc = null where r.id = :id "
             + "and r.status = app.nadel.imports.internal.ImportStatus.PREVIEW")
     int markStale(@Param("id") UUID id);
 
     /** Drops the plan of an expired preview; its status stays PREVIEW (shown as expired once past its expiry). */
     @Modifying
-    @Query("update ImportRun r set r.plan = null, r.planDigest = null where r.id = :id "
+    @Query("update ImportRun r set r.planEnc = null where r.id = :id "
             + "and r.status = app.nadel.imports.internal.ImportStatus.PREVIEW")
     int dropPlan(@Param("id") UUID id);
 

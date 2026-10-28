@@ -15,9 +15,9 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * One uploaded import file. The author is a snapshot (member id, Keycloak subject, display name), so the history stays
- * readable when a member is renamed or removed. The {@code plan} holds the normalised rows of a preview that can still
- * be committed and contains personal data: it is cleared as soon as it is no longer needed, and queries that only
- * need the history must not load it.
+ * readable when a member is renamed or removed. The {@code plan_enc} holds the sealed rows and digest of a preview that
+ * can still be committed (see {@link SealedPlans}) and contains personal data: it is cleared as soon as it is no longer
+ * needed, and queries that only need the history must not load it.
  */
 @Entity
 @Table(name = "import_run")
@@ -62,12 +62,8 @@ class ImportRun {
     @Column(name = "problem_count", nullable = false)
     private int problemCount;
 
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(columnDefinition = "jsonb")
-    private Map<String, Object> plan;
-
-    @Column(name = "plan_digest")
-    private String planDigest;
+    @Column(name = "plan_enc")
+    private byte[] planEnc;
 
     protected ImportRun() {
     }
@@ -75,13 +71,12 @@ class ImportRun {
     /**
      * A new run.
      *
-     * @param plan       the normalised rows of a preview without problems; null for a run with problems
-     * @param planDigest the digest of the whole plan (see {@code PlanDigest}); null for a run with problems
+     * @param planEnc the sealed rows and digest of a preview without problems (see {@link SealedPlans}); null for a
+     *                run with problems
      */
     static ImportRun create(UUID id, UUID tenantId, String fileName, @Nullable UUID createdByMemberId,
             String createdBySubject, String createdByName, Instant createdAt, Instant expiresAt, ImportStatus status,
-            Map<String, Object> counts, int problemCount, @Nullable Map<String, Object> plan,
-            @Nullable String planDigest) {
+            Map<String, Object> counts, int problemCount, byte @Nullable [] planEnc) {
         ImportRun run = new ImportRun();
         run.id = id;
         run.tenantId = tenantId;
@@ -94,8 +89,7 @@ class ImportRun {
         run.status = status;
         run.counts = counts;
         run.problemCount = problemCount;
-        run.plan = plan;
-        run.planDigest = planDigest;
+        run.planEnc = planEnc;
         return run;
     }
 
@@ -119,12 +113,8 @@ class ImportRun {
         return counts;
     }
 
-    /** The stored rows of a preview that can still be committed; null once cleared. Personal data. */
-    @Nullable Map<String, Object> getPlan() {
-        return plan;
-    }
-
-    @Nullable String getPlanDigest() {
-        return planDigest;
+    /** The sealed rows and digest of a preview that can still be committed; null once cleared. Personal data. */
+    byte @Nullable [] getPlanEnc() {
+        return planEnc;
     }
 }

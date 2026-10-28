@@ -509,3 +509,21 @@ describe('AuditPage reading entries', () => {
     expect(screen.getByRole('option', { name: 'Meter reading' })).toBeInTheDocument();
   });
 });
+
+describe('AuditPage hidden changes', () => {
+  afterEach(() => window.localStorage.clear());
+
+  it('shows a placeholder instead of the values of a hidden change', () => {
+    show({
+      action: 'MEMBER_UPDATED',
+      entityType: 'MEMBER',
+      changes: [
+        { field: 'phone', hidden: true },
+        { field: 'area', oldValue: '600', newValue: '650' },
+      ],
+    });
+    expect(screen.getByTestId('audit-hidden')).toHaveTextContent('hidden');
+    expect(screen.getAllByTestId('audit-hidden')).toHaveLength(1);
+    expect(screen.getByText(/600/)).toBeInTheDocument();
+  });
+});

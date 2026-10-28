@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import nadel.contract.model.ImportResult;
+import org.jspecify.annotations.Nullable;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -65,6 +66,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 class ImportCommitter {
 
     private final ImportRunRepository runs;
+    private final SealedPlans sealedPlans;
     private final ImportPlanner planner;
     private final MemberImport memberImport;
     private final PlotImport plotImport;
@@ -79,11 +81,12 @@ class ImportCommitter {
     @PersistenceContext
     private EntityManager entityManager;
 
-    ImportCommitter(ImportRunRepository runs, ImportPlanner planner, MemberImport memberImport,
-            PlotImport plotImport, MeterImport meterImport, WaterConnectionImport waterImport,
-            OpeningBalanceImport openingImport, ApplicationEventPublisher events,
+    ImportCommitter(ImportRunRepository runs, SealedPlans sealedPlans, ImportPlanner planner,
+            MemberImport memberImport, PlotImport plotImport, MeterImport meterImport,
+            WaterConnectionImport waterImport, OpeningBalanceImport openingImport, ApplicationEventPublisher events,
             PlatformTransactionManager transactions, Clock clock) {
         this.runs = runs;
+        this.sealedPlans = sealedPlans;
         this.planner = planner;
         this.memberImport = memberImport;
         this.plotImport = plotImport;
@@ -122,9 +125,10 @@ class ImportCommitter {
         checkCommittable(run, now);
 
         String fileName = run.getFileName();
-        String digest = run.getPlanDigest();
-        Map<String, Object> stored = run.getPlan();
-        StoredPlan.Sheets sheets = StoredPlan.read(stored);
+        // the sealed rows and the preview's digest; a plan that does not open is 500 PERSONAL_DATA_UNREADABLE
+        SealedPlans.Opened stored = sealedPlans.open(tenantId, importId, run.getPlanEnc());
+        String digest = stored.digest();
+        StoredPlan.Sheets sheets = StoredPlan.read(stored.plan());
 
         // first planning: which existing plots and members do the rows touch? Locks come before the real planning.
         ImportPlan preliminary = planner.plan(tenantId, importId, sheets.plots(), sheets.members(), sheets.ownership(),
@@ -172,7 +176,7 @@ class ImportCommitter {
                     "The data changed after the preview; upload the file again.");
             case PREVIEW -> {
                 // a preview whose plan is already dropped is an expired one
-                if (now.isAfter(run.getExpiresAt()) || run.getPlan() == null || run.getPlanDigest() == null) {
+                if (now.isAfter(run.getExpiresAt()) || run.getPlanEnc() == null) {
                     throw new ApiProblemException(HttpStatus.GONE, ProblemCodes.IMPORT_EXPIRED,
                             "The preview expired; upload the file again.");
                 }
@@ -185,7 +189,7 @@ class ImportCommitter {
     }
 
     /** A plan with problems or another digest than the preview's is not what the chairman saw. */
-    private static void requireSamePlan(ImportPlan plan, String previewDigest) {
+    private static void requireSamePlan(ImportPlan plan, @Nullable String previewDigest) {
         if (plan.hasProblems() || plan.digest() == null || !plan.digest().equals(previewDigest)) {
             throw conflict(ProblemCodes.IMPORT_STALE,
                     "The plots, members, owners, meters, water connections or opening balances changed after the "

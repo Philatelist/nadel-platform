@@ -68,6 +68,10 @@ interface WaterConnectionRepository extends JpaRepository<WaterConnectionRecord,
     /** Whether any plot is or was connected to the meter. */
     boolean existsBySourceMeterId(UUID sourceMeterId);
 
+    /** The plots among {@code plotIds} that have a lasting connection (no end date): the plot guard. */
+    @Query("select distinct c.plotId from WaterConnectionRecord c where c.plotId in :plotIds and c.validTo is null")
+    List<UUID> plotIdsWithLastingConnection(@Param("plotIds") Collection<UUID> plotIds);
+
     /** The lasting connection of a plot. */
     Optional<WaterConnectionRecord> findByPlotIdAndValidToIsNull(UUID plotId);
 }

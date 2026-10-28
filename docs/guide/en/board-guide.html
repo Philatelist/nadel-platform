@@ -134,7 +134,21 @@
 
     <section class="chapter" id="members">
       <h2><span class="num">2</span> Members</h2>
-      <p>"Members" lists every member, with search by last name, phone or email.</p>
+      <p>"Members" lists every member. The search field says what it understands.</p>
+      <h3>Searching</h3>
+      <ul>
+        <li>By <strong>name</strong>: any part of the last or first name, in any letter case.</li>
+        <li>
+          By <strong>phone</strong>: the whole number written in any usual way (<code>+380 50 123 45 67</code
+          >, <code>0501234567</code>, <code>380501234567</code>), or exactly its
+          <strong>last 4 digits</strong>.
+        </li>
+        <li>By <strong>email</strong>: the whole address, in any letter case.</li>
+      </ul>
+      <p>
+        A part of an email (for example only what comes before the @) or digits from the middle of a phone
+        find nothing. If a member is not found, try the surname or the last 4 digits of the phone.
+      </p>
       <figure>
         <img src="../img/en/members.png" alt="Members" />
         <figcaption>The members list</figcaption>
@@ -158,6 +172,11 @@
           Notes are for working information about a member: how best to reach them, arrangements, relatives'
           contacts. Only people with "View members" see them. The system has no fields for tax numbers
           (РНОКПП), passport data or dates of birth — the cooperative does not need them for its records.
+        </p>
+        <p>
+          Phones, email, postal address, Telegram, Viber and notes are stored encrypted, so a copy of the
+          database does not reveal them. The system decrypts them for people who may see them, so nothing
+          changes in daily work, except the search rules above. Names stay readable.
         </p>
       </div>
 
@@ -335,7 +354,9 @@
       </figure>
       <p>
         "Archive" hides a plot from the list and keeps its history. Only a plot created by mistake that never
-        had an owner can be deleted.
+        had an owner can be deleted. A plot with a lasting water connection (or an active meter) cannot be
+        archived or turned into common land: the system refuses and asks to end the connection on the plot
+        card first.
       </p>
     </section>
 
@@ -691,6 +712,12 @@
         that really changed are shown; a change of a role's permissions lists the added ones ("+") and the
         removed ones ("−"). Filters by person, action, object and date.
       </p>
+      <p>
+        Old and new values of a member's phones, email, address, Telegram, Viber and notes are shown only to
+        someone who may also view members. Anyone else who is allowed to read the audit log sees that the
+        field changed, with the word «приховано» ("hidden") in place of the values. Other fields, such as a
+        name, are shown as usual.
+      </p>
       <figure>
         <img src="../img/en/audit.png" alt="Audit log" />
         <figcaption>The audit log</figcaption>
@@ -775,7 +802,10 @@
         <dt>One language</dt>
         <dd>The interface shows only the selected language, never a mix.</dd>
         <dt>Minimal personal data</dt>
-        <dd>No tax numbers, passports or dates of birth; personal data never goes to the server logs.</dd>
+        <dd>
+          No tax numbers, passports or dates of birth; contacts are stored encrypted; personal data never goes
+          to the server logs.
+        </dd>
       </dl>
       <div class="example">
         <span class="callout-title">Why round once</span>
@@ -1484,8 +1514,8 @@ prepayment           = Σ payments − Σ allocated payments</pre>
             end them on each plot's card.
           </li>
           <li>
-            Archiving a plot or making it common land does <strong>not</strong> end its lasting water
-            connection. End the connection on the plot card first.
+            A plot with a lasting water connection cannot be archived or made common land: end the connection
+            on the plot card first.
           </li>
         </ul>
       </div>

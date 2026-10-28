@@ -9,9 +9,9 @@ import { expect, test, type Browser, type Page } from '@playwright/test';
 import {
   api,
   archiveLeftovers,
+  cleanupMeterPlot,
   expectCreated,
   kyivDay,
-  retireMeter,
   shortDay,
   type CreatedPlot,
 } from './support/api';
@@ -80,17 +80,20 @@ async function createFixture(chairman: Page, stamp: string, ownerId?: string): P
   }
 }
 
-/** Best effort: retires the meter (readings a charge uses stay), ends the ownership and archives the plot. */
-async function cleanup(chairman: Page, fixtures: Fixture[]): Promise<void> {
-  for (const f of fixtures) {
-    await retireMeter(chairman, f.meterId);
+/**
+ * Best effort: cleans the plots of the fixtures in a fresh signed-in context, so that a test whose own page is already
+ * torn down (a timeout) still removes its data.
+ */
+async function cleanup(page: Page, fixtures: Fixture[]): Promise<void> {
+  const browser = page.context().browser();
+  if (!browser || fixtures.length === 0) return;
+  const chairman = await signedInPage(browser, 'chairman@demo.local').catch(() => undefined);
+  if (!chairman) return;
+  try {
+    for (const f of fixtures) await cleanupMeterPlot(chairman, f.plot.id);
+  } finally {
+    await chairman.context().close();
   }
-  await archiveLeftovers(
-    chairman,
-    fixtures.map((f) => f.plot),
-    [],
-    kyivDay(0),
-  );
 }
 
 test.describe('meters and readings', () => {
@@ -102,12 +105,8 @@ test.describe('meters and readings', () => {
         await api(chairman, 'GET', '/plots?q=E2E-M-'),
         200,
       );
-      await archiveLeftovers(
-        chairman,
-        found.items.filter((p) => p.number.startsWith('E2E-M-')),
-        [],
-        kyivDay(0),
-      );
+      for (const p of found.items.filter((p) => p.number.startsWith('E2E-M-')))
+        await cleanupMeterPlot(chairman, p.id);
     } finally {
       await chairman.context().close();
     }

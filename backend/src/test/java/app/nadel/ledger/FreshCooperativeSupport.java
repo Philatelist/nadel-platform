@@ -52,6 +52,8 @@ abstract class FreshCooperativeSupport extends LedgerTestSupport {
     String chairman;
     String treasurer;
     String member;
+    /** The member behind {@link #member}. */
+    UUID memberId;
 
     /** A tariff and its first version. */
     record Tariff(UUID id, UUID version) {
@@ -70,6 +72,7 @@ abstract class FreshCooperativeSupport extends LedgerTestSupport {
         chairman = person("CHAIRMAN");
         treasurer = person("TREASURER");
         member = person("MEMBER");
+        memberId = lastPerson;
     }
 
     @AfterEach
@@ -109,15 +112,20 @@ abstract class FreshCooperativeSupport extends LedgerTestSupport {
                 "cooperative_settings")) {
             owner().update("delete from " + table + " where tenant_id = ?", id);
         }
+        deleteDataKeys(id);
         owner().update("delete from tenant where id = ?", id);
     }
 
-    /** A member of the cooperative with one base role; returns a token. */
+    private UUID lastPerson;
+
+    /** A member of the cooperative with one base role (its e-mail sealed); returns a token. */
     private String person(String baseRole) {
         UUID id = UUID.randomUUID();
+        lastPerson = id;
         String email = baseRole.toLowerCase() + "-" + id + "@run.test";
-        owner().update("insert into member (id, tenant_id, last_name, first_name, email) values (?, ?, 'Test', ?, ?)",
-                id, tenant, baseRole, email);
+        owner().update("insert into member (id, tenant_id, last_name, first_name) values (?, ?, 'Test', ?)",
+                id, tenant, baseRole);
+        insertContacts(tenant, id, email);
         owner().update("insert into member_role (tenant_id, member_id, role_id) "
                 + "select ?, ?, id from role where tenant_id = ? and base_code = ?", tenant, id, tenant, baseRole);
         return TestTokens.bearer(tenant, "sub-" + email, email);

@@ -98,19 +98,21 @@ SELECT p.id, p.tenant_id, 'GREY', 0
 FROM plot p
 ON CONFLICT (plot_id) DO NOTHING;
 
--- Members and roles (spec 002). Emails equal the Keycloak demo users; keycloak_subject stays null (linked on first sign-in).
+-- Members and roles (spec 002). Names only: the contacts (phones, e-mails equal to the Keycloak demo users, addresses,
+-- messengers, notes) and delivery channels are encrypted personal data (spec 014) and come from demo-contacts.json,
+-- written by a Java callback after this script. A new row starts with PAPER (the channel rule needs ciphertext for the
+-- others); on conflict the channel is left untouched. keycloak_subject stays null (linked on first sign-in).
 SELECT seed_base_roles(id) FROM tenant;
 
-INSERT INTO member (id, tenant_id, last_name, first_name, middle_name, phones, email, delivery_channel) VALUES
-    ('aaaaaaaa-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111', 'Коваленко', 'Олександр', 'Петрович', '{+380501110001}', 'chairman@demo.local', 'EMAIL'),
-    ('aaaaaaaa-0000-0000-0000-000000000002', '11111111-1111-1111-1111-111111111111', 'Шевченко', 'Ірина', 'Володимирівна', '{+380501110002}', 'treasurer@demo.local', 'EMAIL'),
-    ('aaaaaaaa-0000-0000-0000-000000000003', '11111111-1111-1111-1111-111111111111', 'Бондаренко', 'Андрій', 'Миколайович', '{+380501110003}', 'member@demo.local', 'EMAIL'),
-    ('aaaaaaaa-0000-0000-0000-000000000004', '11111111-1111-1111-1111-111111111111', 'Ткаченко', 'Сергій', 'Іванович', '{+380501110004}', 'electrician@demo.local', 'EMAIL'),
-    ('bbbbbbbb-0000-0000-0000-000000000001', '22222222-2222-2222-2222-222222222222', 'Мельник', 'Олена', 'Степанівна', '{+380502220001}', 'member@other.local', 'EMAIL'),
-    ('bbbbbbbb-0000-0000-0000-000000000002', '22222222-2222-2222-2222-222222222222', 'Лисенко', 'Тарас', NULL, '{}', NULL, 'PAPER')
+INSERT INTO member (id, tenant_id, last_name, first_name, middle_name, delivery_channel) VALUES
+    ('aaaaaaaa-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111', 'Коваленко', 'Олександр', 'Петрович', 'PAPER'),
+    ('aaaaaaaa-0000-0000-0000-000000000002', '11111111-1111-1111-1111-111111111111', 'Шевченко', 'Ірина', 'Володимирівна', 'PAPER'),
+    ('aaaaaaaa-0000-0000-0000-000000000003', '11111111-1111-1111-1111-111111111111', 'Бондаренко', 'Андрій', 'Миколайович', 'PAPER'),
+    ('aaaaaaaa-0000-0000-0000-000000000004', '11111111-1111-1111-1111-111111111111', 'Ткаченко', 'Сергій', 'Іванович', 'PAPER'),
+    ('bbbbbbbb-0000-0000-0000-000000000001', '22222222-2222-2222-2222-222222222222', 'Мельник', 'Олена', 'Степанівна', 'PAPER'),
+    ('bbbbbbbb-0000-0000-0000-000000000002', '22222222-2222-2222-2222-222222222222', 'Лисенко', 'Тарас', NULL, 'PAPER')
 ON CONFLICT (id) DO UPDATE SET
-    last_name = EXCLUDED.last_name, first_name = EXCLUDED.first_name, middle_name = EXCLUDED.middle_name,
-    phones = EXCLUDED.phones, email = EXCLUDED.email, delivery_channel = EXCLUDED.delivery_channel;
+    last_name = EXCLUDED.last_name, first_name = EXCLUDED.first_name, middle_name = EXCLUDED.middle_name;
 
 INSERT INTO role (id, tenant_id, base_code, name, name_customized, description) VALUES
     ('cccccccc-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111', NULL, 'Електрик', true, 'Роль без дозволів до появи лічильників')
@@ -141,45 +143,43 @@ INSERT INTO member_role (tenant_id, member_id, role_id) VALUES
     ('11111111-1111-1111-1111-111111111111', 'aaaaaaaa-0000-0000-0000-000000000004', 'cccccccc-0000-0000-0000-000000000001')
 ON CONFLICT DO NOTHING;
 
--- Demo members 5..35 of the Demo cooperative (example.com emails never collide with Keycloak users).
+-- Demo members 5..35 of the Demo cooperative (contacts and channels are in demo-contacts.json; example.com emails never
+-- collide with Keycloak users).
 -- Mix of channels with matching contacts; 26 has no email and no phone (PAPER); 7, 14 and 29 have two phones; 20 is archived.
-INSERT INTO member (id, tenant_id, last_name, first_name, middle_name, phones, email, postal_address, delivery_channel, telegram_username, viber_phone, notes, archived_at) VALUES
-    ('aaaaaaaa-0000-0000-0000-000000000005', '11111111-1111-1111-1111-111111111111', 'Марченко', 'Наталія', 'Григорівна', '{+380672000005}', 'natalia.marchenko@example.com', NULL, 'EMAIL', NULL, NULL, NULL, NULL),
-    ('aaaaaaaa-0000-0000-0000-000000000006', '11111111-1111-1111-1111-111111111111', 'Савченко', 'Віктор', 'Олексійович', '{+380672000006}', 'viktor.savchenko@example.com', NULL, 'EMAIL', NULL, NULL, NULL, NULL),
-    ('aaaaaaaa-0000-0000-0000-000000000007', '11111111-1111-1111-1111-111111111111', 'Мороз', 'Галина', 'Павлівна', '{+380672000007,+380933000007}', 'halyna.moroz@example.com', NULL, 'EMAIL', NULL, NULL, NULL, NULL),
-    ('aaaaaaaa-0000-0000-0000-000000000008', '11111111-1111-1111-1111-111111111111', 'Кравченко', 'Дмитро', 'Андрійович', '{+380672000008}', 'dmytro.kravchenko@example.com', NULL, 'TELEGRAM', '@dmytro_kravchenko', NULL, NULL, NULL),
-    ('aaaaaaaa-0000-0000-0000-000000000009', '11111111-1111-1111-1111-111111111111', 'Поліщук', 'Оксана', 'Юріївна', '{+380672000009}', 'oksana.polishchuk@example.com', NULL, 'EMAIL', NULL, NULL, 'Секретар правління', NULL),
-    ('aaaaaaaa-0000-0000-0000-000000000010', '11111111-1111-1111-1111-111111111111', 'Руденко', 'Богдан', NULL, '{+380672000010}', 'bohdan.rudenko@example.com', NULL, 'VIBER', NULL, '+380672000010', NULL, NULL),
-    ('aaaaaaaa-0000-0000-0000-000000000011', '11111111-1111-1111-1111-111111111111', 'Литвиненко', 'Світлана', 'Михайлівна', '{+380672000011}', 'svitlana.lytvynenko@example.com', NULL, 'EMAIL', NULL, NULL, NULL, NULL),
-    ('aaaaaaaa-0000-0000-0000-000000000012', '11111111-1111-1111-1111-111111111111', 'Гриценко', 'Юрій', 'Васильович', '{+380672000012}', 'yurii.hrytsenko@example.com', 'вул. Садова, 12, Київ', 'PAPER', NULL, NULL, NULL, NULL),
-    ('aaaaaaaa-0000-0000-0000-000000000013', '11111111-1111-1111-1111-111111111111', 'Зінченко', 'Тетяна', 'Олександрівна', '{+380672000013}', 'tetiana.zinchenko@example.com', NULL, 'TELEGRAM', '@tetiana_zinchenko', NULL, NULL, NULL),
-    ('aaaaaaaa-0000-0000-0000-000000000014', '11111111-1111-1111-1111-111111111111', 'Павленко', 'Роман', 'Ігорович', '{+380672000014,+380933000014}', 'roman.pavlenko@example.com', NULL, 'EMAIL', NULL, NULL, 'Краще телефонувати ввечері', NULL),
-    ('aaaaaaaa-0000-0000-0000-000000000015', '11111111-1111-1111-1111-111111111111', 'Бойко', 'Людмила', 'Петрівна', '{+380672000015}', 'liudmyla.boiko@example.com', NULL, 'VIBER', NULL, '+380672000015', NULL, NULL),
-    ('aaaaaaaa-0000-0000-0000-000000000016', '11111111-1111-1111-1111-111111111111', 'Кузьменко', 'Василь', 'Степанович', '{+380672000016}', 'vasyl.kuzmenko@example.com', NULL, 'EMAIL', NULL, NULL, NULL, NULL),
-    ('aaaaaaaa-0000-0000-0000-000000000017', '11111111-1111-1111-1111-111111111111', 'Олійник', 'Катерина', NULL, '{+380672000017}', 'kateryna.oliinyk@example.com', NULL, 'EMAIL', NULL, NULL, NULL, NULL),
-    ('aaaaaaaa-0000-0000-0000-000000000018', '11111111-1111-1111-1111-111111111111', 'Ткачук', 'Ігор', 'Романович', '{+380672000018}', 'ihor.tkachuk@example.com', NULL, 'TELEGRAM', '@ihor_tkachuk', NULL, NULL, NULL),
-    ('aaaaaaaa-0000-0000-0000-000000000019', '11111111-1111-1111-1111-111111111111', 'Ярошенко', 'Марина', 'Сергіївна', '{+380672000019}', NULL, 'вул. Садова, 19, Київ', 'PAPER', NULL, NULL, NULL, NULL),
-    ('aaaaaaaa-0000-0000-0000-000000000020', '11111111-1111-1111-1111-111111111111', 'Гончаренко', 'Микола', 'Дмитрович', '{+380672000020}', 'mykola.honcharenko@example.com', NULL, 'EMAIL', NULL, NULL, 'Продав ділянку, збережено для історії', '2026-03-15 10:00:00+00'),
-    ('aaaaaaaa-0000-0000-0000-000000000021', '11111111-1111-1111-1111-111111111111', 'Сидоренко', 'Валентина', 'Іванівна', '{+380672000021}', 'valentyna.sydorenko@example.com', NULL, 'EMAIL', NULL, NULL, NULL, NULL),
-    ('aaaaaaaa-0000-0000-0000-000000000022', '11111111-1111-1111-1111-111111111111', 'Ковальчук', 'Павло', 'Анатолійович', '{+380672000022}', 'pavlo.kovalchuk@example.com', NULL, 'EMAIL', NULL, NULL, NULL, NULL),
-    ('aaaaaaaa-0000-0000-0000-000000000023', '11111111-1111-1111-1111-111111111111', 'Даниленко', 'Ольга', 'Вікторівна', '{+380672000023}', 'olha.danylenko@example.com', NULL, 'TELEGRAM', '@olha_danylenko', NULL, NULL, NULL),
-    ('aaaaaaaa-0000-0000-0000-000000000024', '11111111-1111-1111-1111-111111111111', 'Білоус', 'Степан', 'Григорович', '{+380672000024}', 'stepan.bilous@example.com', NULL, 'EMAIL', NULL, NULL, NULL, NULL),
-    ('aaaaaaaa-0000-0000-0000-000000000025', '11111111-1111-1111-1111-111111111111', 'Нестеренко', 'Алла', 'Володимирівна', '{+380672000025}', 'alla.nesterenko@example.com', NULL, 'VIBER', NULL, '+380672000025', NULL, NULL),
-    ('aaaaaaaa-0000-0000-0000-000000000026', '11111111-1111-1111-1111-111111111111', 'Романенко', 'Артем', NULL, '{}', NULL, 'вул. Садова, 26, Київ', 'PAPER', NULL, NULL, 'Без телефону та пошти; лише листи', NULL),
-    ('aaaaaaaa-0000-0000-0000-000000000027', '11111111-1111-1111-1111-111111111111', 'Федоренко', 'Зоряна', 'Богданівна', '{+380672000027}', 'zoriana.fedorenko@example.com', NULL, 'EMAIL', NULL, NULL, NULL, NULL),
-    ('aaaaaaaa-0000-0000-0000-000000000028', '11111111-1111-1111-1111-111111111111', 'Черненко', 'Леонід', 'Миколайович', '{+380672000028}', 'leonid.chernenko@example.com', NULL, 'TELEGRAM', '@leonid_chernenko', NULL, NULL, NULL),
-    ('aaaaaaaa-0000-0000-0000-000000000029', '11111111-1111-1111-1111-111111111111', 'Шаповал', 'Ірина', 'Олексіївна', '{+380672000029,+380933000029}', 'iryna.shapoval@example.com', NULL, 'EMAIL', NULL, NULL, NULL, NULL),
-    ('aaaaaaaa-0000-0000-0000-000000000030', '11111111-1111-1111-1111-111111111111', 'Вовк', 'Тарас', 'Ярославович', '{+380672000030}', 'taras.vovk@example.com', NULL, 'VIBER', NULL, '+380672000030', NULL, NULL),
-    ('aaaaaaaa-0000-0000-0000-000000000031', '11111111-1111-1111-1111-111111111111', 'Лук''яненко', 'Дарина', 'Андріївна', '{+380672000031}', 'daryna.lukianenko@example.com', NULL, 'EMAIL', NULL, NULL, NULL, NULL),
-    ('aaaaaaaa-0000-0000-0000-000000000032', '11111111-1111-1111-1111-111111111111', 'Панченко', 'Геннадій', 'Петрович', '{+380672000032}', NULL, 'вул. Садова, 32, Київ', 'PAPER', NULL, NULL, NULL, NULL),
-    ('aaaaaaaa-0000-0000-0000-000000000033', '11111111-1111-1111-1111-111111111111', 'Довженко', 'Надія', 'Іванівна', '{+380672000033}', 'nadiia.dovzhenko@example.com', NULL, 'TELEGRAM', '@nadiia_dovzhenko', NULL, NULL, NULL),
-    ('aaaaaaaa-0000-0000-0000-000000000034', '11111111-1111-1111-1111-111111111111', 'Харченко', 'Євген', 'Валерійович', '{+380672000034}', 'yevhen.kharchenko@example.com', NULL, 'EMAIL', NULL, NULL, NULL, NULL),
-    ('aaaaaaaa-0000-0000-0000-000000000035', '11111111-1111-1111-1111-111111111111', 'Стеценко', 'Лариса', 'Олександрівна', '{+380672000035}', 'larysa.stetsenko@example.com', NULL, 'VIBER', NULL, '+380672000035', NULL, NULL)
+INSERT INTO member (id, tenant_id, last_name, first_name, middle_name, delivery_channel, archived_at) VALUES
+    ('aaaaaaaa-0000-0000-0000-000000000005', '11111111-1111-1111-1111-111111111111', 'Марченко', 'Наталія', 'Григорівна', 'PAPER', NULL),
+    ('aaaaaaaa-0000-0000-0000-000000000006', '11111111-1111-1111-1111-111111111111', 'Савченко', 'Віктор', 'Олексійович', 'PAPER', NULL),
+    ('aaaaaaaa-0000-0000-0000-000000000007', '11111111-1111-1111-1111-111111111111', 'Мороз', 'Галина', 'Павлівна', 'PAPER', NULL),
+    ('aaaaaaaa-0000-0000-0000-000000000008', '11111111-1111-1111-1111-111111111111', 'Кравченко', 'Дмитро', 'Андрійович', 'PAPER', NULL),
+    ('aaaaaaaa-0000-0000-0000-000000000009', '11111111-1111-1111-1111-111111111111', 'Поліщук', 'Оксана', 'Юріївна', 'PAPER', NULL),
+    ('aaaaaaaa-0000-0000-0000-000000000010', '11111111-1111-1111-1111-111111111111', 'Руденко', 'Богдан', NULL, 'PAPER', NULL),
+    ('aaaaaaaa-0000-0000-0000-000000000011', '11111111-1111-1111-1111-111111111111', 'Литвиненко', 'Світлана', 'Михайлівна', 'PAPER', NULL),
+    ('aaaaaaaa-0000-0000-0000-000000000012', '11111111-1111-1111-1111-111111111111', 'Гриценко', 'Юрій', 'Васильович', 'PAPER', NULL),
+    ('aaaaaaaa-0000-0000-0000-000000000013', '11111111-1111-1111-1111-111111111111', 'Зінченко', 'Тетяна', 'Олександрівна', 'PAPER', NULL),
+    ('aaaaaaaa-0000-0000-0000-000000000014', '11111111-1111-1111-1111-111111111111', 'Павленко', 'Роман', 'Ігорович', 'PAPER', NULL),
+    ('aaaaaaaa-0000-0000-0000-000000000015', '11111111-1111-1111-1111-111111111111', 'Бойко', 'Людмила', 'Петрівна', 'PAPER', NULL),
+    ('aaaaaaaa-0000-0000-0000-000000000016', '11111111-1111-1111-1111-111111111111', 'Кузьменко', 'Василь', 'Степанович', 'PAPER', NULL),
+    ('aaaaaaaa-0000-0000-0000-000000000017', '11111111-1111-1111-1111-111111111111', 'Олійник', 'Катерина', NULL, 'PAPER', NULL),
+    ('aaaaaaaa-0000-0000-0000-000000000018', '11111111-1111-1111-1111-111111111111', 'Ткачук', 'Ігор', 'Романович', 'PAPER', NULL),
+    ('aaaaaaaa-0000-0000-0000-000000000019', '11111111-1111-1111-1111-111111111111', 'Ярошенко', 'Марина', 'Сергіївна', 'PAPER', NULL),
+    ('aaaaaaaa-0000-0000-0000-000000000020', '11111111-1111-1111-1111-111111111111', 'Гончаренко', 'Микола', 'Дмитрович', 'PAPER', '2026-03-15 10:00:00+00'),
+    ('aaaaaaaa-0000-0000-0000-000000000021', '11111111-1111-1111-1111-111111111111', 'Сидоренко', 'Валентина', 'Іванівна', 'PAPER', NULL),
+    ('aaaaaaaa-0000-0000-0000-000000000022', '11111111-1111-1111-1111-111111111111', 'Ковальчук', 'Павло', 'Анатолійович', 'PAPER', NULL),
+    ('aaaaaaaa-0000-0000-0000-000000000023', '11111111-1111-1111-1111-111111111111', 'Даниленко', 'Ольга', 'Вікторівна', 'PAPER', NULL),
+    ('aaaaaaaa-0000-0000-0000-000000000024', '11111111-1111-1111-1111-111111111111', 'Білоус', 'Степан', 'Григорович', 'PAPER', NULL),
+    ('aaaaaaaa-0000-0000-0000-000000000025', '11111111-1111-1111-1111-111111111111', 'Нестеренко', 'Алла', 'Володимирівна', 'PAPER', NULL),
+    ('aaaaaaaa-0000-0000-0000-000000000026', '11111111-1111-1111-1111-111111111111', 'Романенко', 'Артем', NULL, 'PAPER', NULL),
+    ('aaaaaaaa-0000-0000-0000-000000000027', '11111111-1111-1111-1111-111111111111', 'Федоренко', 'Зоряна', 'Богданівна', 'PAPER', NULL),
+    ('aaaaaaaa-0000-0000-0000-000000000028', '11111111-1111-1111-1111-111111111111', 'Черненко', 'Леонід', 'Миколайович', 'PAPER', NULL),
+    ('aaaaaaaa-0000-0000-0000-000000000029', '11111111-1111-1111-1111-111111111111', 'Шаповал', 'Ірина', 'Олексіївна', 'PAPER', NULL),
+    ('aaaaaaaa-0000-0000-0000-000000000030', '11111111-1111-1111-1111-111111111111', 'Вовк', 'Тарас', 'Ярославович', 'PAPER', NULL),
+    ('aaaaaaaa-0000-0000-0000-000000000031', '11111111-1111-1111-1111-111111111111', 'Лук''яненко', 'Дарина', 'Андріївна', 'PAPER', NULL),
+    ('aaaaaaaa-0000-0000-0000-000000000032', '11111111-1111-1111-1111-111111111111', 'Панченко', 'Геннадій', 'Петрович', 'PAPER', NULL),
+    ('aaaaaaaa-0000-0000-0000-000000000033', '11111111-1111-1111-1111-111111111111', 'Довженко', 'Надія', 'Іванівна', 'PAPER', NULL),
+    ('aaaaaaaa-0000-0000-0000-000000000034', '11111111-1111-1111-1111-111111111111', 'Харченко', 'Євген', 'Валерійович', 'PAPER', NULL),
+    ('aaaaaaaa-0000-0000-0000-000000000035', '11111111-1111-1111-1111-111111111111', 'Стеценко', 'Лариса', 'Олександрівна', 'PAPER', NULL)
 ON CONFLICT (id) DO UPDATE SET
-    last_name = EXCLUDED.last_name, first_name = EXCLUDED.first_name, middle_name = EXCLUDED.middle_name,
-    phones = EXCLUDED.phones, email = EXCLUDED.email, postal_address = EXCLUDED.postal_address,
-    delivery_channel = EXCLUDED.delivery_channel, telegram_username = EXCLUDED.telegram_username,
-    viber_phone = EXCLUDED.viber_phone, notes = EXCLUDED.notes, archived_at = EXCLUDED.archived_at;
+    last_name = EXCLUDED.last_name, first_name = EXCLUDED.first_name, middle_name = EXCLUDED.middle_name, archived_at = EXCLUDED.archived_at;
 
 -- Custom role Секретар (Secretary), assigned to the regular member 9. Permissions are reset to the listed set on every run.
 INSERT INTO role (id, tenant_id, base_code, name, name_customized, description) VALUES

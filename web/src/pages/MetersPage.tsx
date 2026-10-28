@@ -7,7 +7,7 @@ import {
   type MeterResource as MeterResourceValue,
 } from '@nadel/api-client';
 import { format, formatDay, formatMeterValue } from '@nadel/shared';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { RegisterMeterDialog } from '../components/meters/RegisterMeterDialog';
 import { QueryBoundary } from '../components/QueryBoundary';
@@ -23,7 +23,7 @@ import {
   type Column,
 } from '../components/ui';
 import { useCanManageMeters } from '../hooks/useCanManageMeters';
-import { useDebouncedValue } from '../hooks/useDebouncedValue';
+import { useDebouncedSearchParam } from '../hooks/useDebouncedSearchParam';
 import { useLocale, useT } from '../i18n';
 import { meterLabel, resourceUnit } from '../meters';
 import { useDocumentTitle } from '../useDocumentTitle';
@@ -52,19 +52,9 @@ export function MetersPage() {
   const [registering, setRegistering] = useState(false);
 
   const [input, setInput] = useState(street);
-  const debounced = useDebouncedValue(input.trim(), SEARCH_DELAY_MS);
-  useEffect(() => {
-    setParams(
-      (prev) => {
-        if ((prev.get('street') ?? '') === debounced) return prev;
-        const next = new URLSearchParams(prev);
-        if (debounced) next.set('street', debounced);
-        else next.delete('street');
-        return next;
-      },
-      { replace: true },
-    );
-  }, [debounced, setParams]);
+
+  // A changed search resets paging where there is one; the URL keeps the filters shareable.
+  useDebouncedSearchParam('street', input, SEARCH_DELAY_MS);
 
   function update(change: (next: URLSearchParams) => void) {
     const next = new URLSearchParams(params);

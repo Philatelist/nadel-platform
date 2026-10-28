@@ -7,14 +7,13 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
 import java.util.UUID;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
 
-/** A person of the cooperative. Personal data: never log its fields. */
+/**
+ * A person of the cooperative. The names stay readable (search and sort); the contacts and notes are sealed values
+ * ({@code *_enc}, ADR 0016) that only {@link MemberCrypto} writes and opens, and {@code email_bidx} is the blind index
+ * of the e-mail. Personal data: never log its fields.
+ */
 @Entity
 @Table(name = "member")
 class Member {
@@ -34,27 +33,32 @@ class Member {
     @Column(name = "middle_name")
     private String middleName;
 
-    @JdbcTypeCode(SqlTypes.ARRAY)
-    @Column(nullable = false, columnDefinition = "text[]")
-    private List<String> phones;
-
-    /** Stored trimmed and lower-case (CHECK in the database). */
-    private String email;
-
-    @Column(name = "postal_address")
-    private String postalAddress;
-
     @Enumerated(EnumType.STRING)
     @Column(name = "delivery_channel", nullable = false)
     private DeliveryChannel deliveryChannel;
 
-    @Column(name = "telegram_username")
-    private String telegramUsername;
+    /** The phones as one sealed JSON array; null when there are none. */
+    @Column(name = "phones_enc")
+    private byte[] phonesEnc;
 
-    @Column(name = "viber_phone")
-    private String viberPhone;
+    @Column(name = "email_enc")
+    private byte[] emailEnc;
 
-    private String notes;
+    @Column(name = "postal_address_enc")
+    private byte[] postalAddressEnc;
+
+    @Column(name = "telegram_username_enc")
+    private byte[] telegramUsernameEnc;
+
+    @Column(name = "viber_phone_enc")
+    private byte[] viberPhoneEnc;
+
+    @Column(name = "notes_enc")
+    private byte[] notesEnc;
+
+    /** HMAC of the normalised e-mail: equality lookup and uniqueness among active members. */
+    @Column(name = "email_bidx")
+    private byte[] emailBidx;
 
     /** Keycloak user id, set on the first sign-in. */
     @Column(name = "keycloak_subject")
@@ -89,24 +93,47 @@ class Member {
     }
 
     /**
-     * Overwrites every editable field with {@code data}. Does not stamp {@code updatedAt}: the caller calls
-     * {@link #touch} only when the audited fields really changed. The stored phone order is kept when only the order
-     * differs, so such an edit changes nothing.
+     * Overwrites the names and the channel with {@code data}; the contacts are sealed by {@link MemberCrypto#seal}
+     * before the row is written. Does not stamp {@code updatedAt}: the caller calls {@link #touch} only when the
+     * audited fields really changed.
      */
     void apply(MemberData data) {
         lastName = data.lastName();
         firstName = data.firstName();
         middleName = data.middleName();
-        if (phones == null || !Set.copyOf(phones).equals(Set.copyOf(data.phones()))
-                || phones.size() != data.phones().size()) {
-            phones = new ArrayList<>(data.phones());
-        }
-        email = data.email();
-        postalAddress = data.postalAddress();
         deliveryChannel = data.deliveryChannel();
-        telegramUsername = data.telegramUsername();
-        viberPhone = data.viberPhone();
-        notes = data.notes();
+    }
+
+    /** The sealed value of a contact field; null when the field is empty. */
+    byte[] sealed(ContactField field) {
+        return switch (field) {
+            case PHONES -> phonesEnc;
+            case EMAIL -> emailEnc;
+            case POSTAL_ADDRESS -> postalAddressEnc;
+            case TELEGRAM_USERNAME -> telegramUsernameEnc;
+            case VIBER_PHONE -> viberPhoneEnc;
+            case NOTES -> notesEnc;
+        };
+    }
+
+    /** Stores the sealed value of a contact field (null clears it). */
+    void seal(ContactField field, byte[] value) {
+        switch (field) {
+            case PHONES -> phonesEnc = value;
+            case EMAIL -> emailEnc = value;
+            case POSTAL_ADDRESS -> postalAddressEnc = value;
+            case TELEGRAM_USERNAME -> telegramUsernameEnc = value;
+            case VIBER_PHONE -> viberPhoneEnc = value;
+            case NOTES -> notesEnc = value;
+        }
+    }
+
+    byte[] getEmailBidx() {
+        return emailBidx;
+    }
+
+    void setEmailBidx(byte[] emailBidx) {
+        this.emailBidx = emailBidx;
     }
 
     void touch(Instant now) {
@@ -143,32 +170,8 @@ class Member {
         return middleName;
     }
 
-    List<String> getPhones() {
-        return phones;
-    }
-
-    String getEmail() {
-        return email;
-    }
-
-    String getPostalAddress() {
-        return postalAddress;
-    }
-
     DeliveryChannel getDeliveryChannel() {
         return deliveryChannel;
-    }
-
-    String getTelegramUsername() {
-        return telegramUsername;
-    }
-
-    String getViberPhone() {
-        return viberPhone;
-    }
-
-    String getNotes() {
-        return notes;
     }
 
     String getKeycloakSubject() {

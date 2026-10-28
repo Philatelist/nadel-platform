@@ -15,6 +15,11 @@ public final class ProblemCodes {
      */
     public static final String PLOT_NOT_FOUND = "PLOT_NOT_FOUND";
     public static final String INTERNAL_ERROR = "INTERNAL_ERROR";
+    /**
+     * 500: a stored personal value could not be decrypted (malformed, copied from another row or sealed with another
+     * key). The answer never carries a value; the server log names the table, column and row id only.
+     */
+    public static final String PERSONAL_DATA_UNREADABLE = "PERSONAL_DATA_UNREADABLE";
     public static final String EMAIL_TAKEN = "EMAIL_TAKEN";
     public static final String LAST_CHAIRMAN = "LAST_CHAIRMAN";
     public static final String ROLE_NAME_TAKEN = "ROLE_NAME_TAKEN";
@@ -67,6 +72,8 @@ public final class ProblemCodes {
     public static final String IMPORT_EXPIRED = "IMPORT_EXPIRED";
     /** 409: a plot that has a meter is deleted or turned into common land, or a plot with an active meter is archived. */
     public static final String PLOT_HAS_METER = "PLOT_HAS_METER";
+    /** 409: a plot with a lasting water connection is archived or turned into common land. */
+    public static final String PLOT_HAS_WATER_CONNECTION = "PLOT_HAS_WATER_CONNECTION";
     /** 409: the plot already has an active meter of the resource. */
     public static final String METER_ACTIVE_EXISTS = "METER_ACTIVE_EXISTS";
     /** 409: common land has no plot meters. */

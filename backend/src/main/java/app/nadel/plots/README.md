@@ -15,7 +15,7 @@ matched plot keeps its stored spelling of the number; a new plot needs a kind an
 area. Besides the rules of `PlotData`: a number repeated in the file is `DUPLICATE_IN_FILE` on the later rows, a cadastral
 number held by another plot (archived ones included) or claimed by an earlier row is `CADASTRAL_NUMBER_TAKEN`, and a plot
 with ownership history cannot become common land (`PLOT_HAS_OWNERSHIP_HISTORY`), nor can a plot that a `PlotChangeGuard`
-refuses (`PLOT_HAS_METER` from `meters`, on the `kind` column; see Guards). The lookups are bulk queries (500
+refuses (`PLOT_HAS_METER` or `PLOT_HAS_WATER_CONNECTION` from `meters`, on the `kind` column; see Guards). The lookups are bulk queries (500
 values per `IN` list). The id of a new plot is derived from the import id and the number, so planning the same import again
 gives the same ids. Applying a plan comes with a later slice.
 
@@ -241,15 +241,16 @@ lock a change of owner takes), so a guard and an ownership change of one plot ru
   `ownership` (`ON DELETE RESTRICT`) stays as the database backstop.
 - Update: a plot that has any ownership row cannot become common land: 409 `PLOT_HAS_OWNERSHIP_HISTORY` with
   `errors[{field: kind}]`. Common land with no history can become a plot, and other edits are unaffected.
-- `PlotChangeGuard` (SPI of this module, ADR 0011; implemented by `meters.internal.MeterPlotGuard` and
-  `ledger.internal.LedgerPlotGuard`): after the ownership
+- `PlotChangeGuard` (SPI of this module, ADR 0011; implemented by `meters.internal.MeterPlotGuard`,
+  `meters.internal.WaterConnectionPlotGuard` and `ledger.internal.LedgerPlotGuard`, asked in their `@Order`): after the ownership
   checks, `PlotCommands.delete`, `archive` and `update` (a `PLOT` becoming `COMMON`) ask every guard bean through
   `PlotChangeGuards` with the plot already locked `FOR UPDATE`; the first refusal is a 409 with the guard's code
-  (`PLOT_HAS_METER`; `errors[{field: kind}]` for the update). The import's plan asks the guards in bulk about the matched
+  (`PLOT_HAS_METER`, `PLOT_HAS_WATER_CONNECTION`; `errors[{field: kind}]` for the update). The import's plan asks the guards in bulk about the matched
   plots a row turns into common land and reports a refusal as a problem on `kind`; the commit plans again under the plot
   locks. Guards return the refused plots instead of throwing, only read and take no locks. `meters` refuses delete and
-  common land while the plot has any meter (active or removed) and archive while it has an active one; `ledger` refuses
-  delete while the plot has any charge (`PLOT_HAS_CHARGES`).
+  common land while the plot has any meter (active or removed) and archive while it has an active one, and archive and
+  common land while the plot has a lasting water connection (`PLOT_HAS_WATER_CONNECTION`, asked after the meter
+  check); `ledger` refuses delete while the plot has any charge (`PLOT_HAS_CHARGES`).
 - `OwnershipArchiveGuard` implements `members.MemberArchiveGuard`: 409 `MEMBER_OWNS_PLOT` when the member has a current
   ownership. Lock order: a change of owner takes the plot lock, then the members `FOR SHARE`; the member archive takes
   only the member row lock (after the chairman lock) and the guard takes no locks, so no cycle is possible. If the

@@ -1060,7 +1060,14 @@ test.describe('meters and readings: acceptance', () => {
     );
     const plot = found.items.find((p) => p.number === '9');
     expect(plot, 'demo plot 9').toBeDefined();
-    const removed = dayUk(kyivDay(-30));
+    // the demo data is dated by the database day (UTC in CI), which differs from the Kyiv day after midnight in Kyiv
+    const oldMeters = expectCreated<{ serial: string; removedOn?: string }[]>(
+      await api(page, 'GET', '/meters?kind=PLOT&resource=ELECTRICITY&includeRemoved=true'),
+      200,
+    );
+    const removedOn = oldMeters.find((m) => m.serial === 'ЕЛ-9')?.removedOn;
+    expect(removedOn, 'removal day of the old meter ЕЛ-9').toBeDefined();
+    const removed = dayUk(removedOn!);
     // old meter "ЕЛ-9" (final reading 3340) was replaced by "ЕЛ-9/2"
     const replacedLine = new RegExp(`^Замінено на ЕЛ-9/2: знято ${removed}, кінцевий показ 3\\s340 кВт·год$`);
     const replacesLine = new RegExp(

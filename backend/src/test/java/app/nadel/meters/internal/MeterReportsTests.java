@@ -91,8 +91,9 @@ class MeterReportsTests extends IntegrationTest {
         owner.queryForList("select seed_base_roles(?)", tenant);
         UUID member = UUID.randomUUID();
         String email = "chairman-" + member + "@tree.test";
-        owner.update("insert into member (id, tenant_id, last_name, first_name, email) values (?, ?, 'Test', "
-                + "'Chairman', ?)", member, tenant, email);
+        owner.update("insert into member (id, tenant_id, last_name, first_name) values (?, ?, 'Test', 'Chairman')",
+                member, tenant);
+        insertContacts(tenant, member, email);
         owner.update("insert into member_role (tenant_id, member_id, role_id) select ?, ?, id from role "
                 + "where tenant_id = ? and base_code = 'CHAIRMAN'", tenant, member, tenant);
         chairman = TestTokens.bearer(tenant, "sub-" + email, email);
@@ -137,6 +138,7 @@ class MeterReportsTests extends IntegrationTest {
                 "role", "member", "charge_type", "cooperative_settings")) {
             owner.update("delete from " + table + " where tenant_id = ?", tenant);
         }
+        deleteDataKeys(tenant);
         owner.update("delete from tenant where id = ?", tenant);
     }
 

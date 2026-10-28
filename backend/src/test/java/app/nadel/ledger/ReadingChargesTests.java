@@ -89,8 +89,6 @@ class ReadingChargesTests extends ReadingChargeSupport {
         UUID plot = plot("7", "600");
         electricity();
         UUID meter = electricityMeter(plot, "2026-08-22", "112.4");
-        UUID memberId = owner().queryForObject("select id from member where tenant_id = ? and email like 'member-%'",
-                UUID.class, tenant);
         owner().update("insert into ownership (tenant_id, plot_id, member_id, share_numerator, share_denominator, "
                 + "valid_from) values (?, ?, ?, 1, 1, date '2020-01-01')", tenant, plot, memberId);
 

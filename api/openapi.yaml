@@ -90,13 +90,18 @@ paths:
       summary: List members
       description: |
         Returns a page of members of the current cooperative. Requires the `MEMBERS_VIEW` permission.
-        `q` is a case-insensitive substring match against the last, first and middle name and the email, or,
-        when it looks like a phone number (only digits, spaces and + ( ) - ., with at least three digits), against the digits of the phone numbers. Archived members are excluded unless
-        `includeArchived` is true. The result is sorted by last name, then first name.
+        `q` (trimmed) matches the last, first and middle name by a case-insensitive substring. Contacts are stored
+        encrypted, so they match only exactly: a `q` with `@` matches the whole email (case ignored), a `q` that is a
+        full phone number in any usual spelling (`+380 50 123 45 67`, `0501234567`, `380501234567`) matches that
+        phone, and exactly four digits match the last four digits of any phone. A part of an email or digits from the
+        middle of a phone match nothing. Archived members are excluded unless `includeArchived` is true. The result
+        is sorted by last name, then first name.
       parameters:
         - name: q
           in: query
           required: false
+          description: >-
+            Part of a name, an exact email, a full phone number or the last 4 digits of a phone.
           schema:
             type: string
             maxLength: 100
@@ -795,7 +800,9 @@ paths:
         The same rules apply as when creating: 409 `PLOT_NUMBER_TAKEN`, 409 `CADASTRAL_NUMBER_TAKEN`,
         400 `CADASTRAL_INVALID`, 400 `AREA_INVALID`. A plot that has ever had an owner cannot become common land
         (409 `PLOT_HAS_OWNERSHIP_HISTORY`, `errors[{field: kind}]`), and neither can a plot that has a meter, active
-        or removed (409 `PLOT_HAS_METER`, `errors[{field: kind}]`). A change that alters nothing is accepted and not audited.
+        or removed (409 `PLOT_HAS_METER`, `errors[{field: kind}]`), nor a plot that has a lasting water connection
+        (409 `PLOT_HAS_WATER_CONNECTION`, `errors[{field: kind}]`; end the connection first). A change that alters
+        nothing is accepted and not audited.
       parameters:
         - name: id
           in: path
@@ -867,7 +874,8 @@ paths:
         Moves the plot to the archive: it is hidden from the default list and its number becomes free for a new
         plot. Archiving an already archived plot is a no-op and is not audited. A plot that has a current owner cannot
         be archived (409 `PLOT_HAS_OWNERS`), nor can a plot with an active meter (409 `PLOT_HAS_METER`; remove the
-        meter first). Requires `PLOTS_VIEW` and `PLOTS_EDIT`.
+        meter first) or a plot with a lasting water connection (409 `PLOT_HAS_WATER_CONNECTION`; end the connection
+        first). Requires `PLOTS_VIEW` and `PLOTS_EDIT`.
       parameters:
         - name: id
           in: path
@@ -1262,7 +1270,8 @@ paths:
           `area_m2` and `area_sotky` must be filled for a new plot);
         - plot rules, as when a plot is entered by hand: `REQUIRED`, `TOO_LONG`, `INVALID`, `AREA_INVALID`,
           `CADASTRAL_INVALID`, `CADASTRAL_NUMBER_TAKEN`, `PLOT_HAS_OWNERSHIP_HISTORY`, `PLOT_HAS_METER` (`kind`: a
-          plot that has a meter cannot become common land);
+          plot that has a meter cannot become common land), `PLOT_HAS_WATER_CONNECTION` (`kind`: nor can a plot that
+          has a lasting water connection);
         - member rules, as when a member is entered by hand: `REQUIRED`, `TOO_LONG`, `INVALID` (an e-mail that is
           not an address, an unknown `delivery_channel`), `PHONE_INVALID` (`phones` or `viber_phone`),
           `CHANNEL_CONTACT_MISSING` (the contact the delivery channel needs is empty: `email`, `telegram_username` or
@@ -4605,7 +4614,9 @@ components:
         `TARIFF_LAST_VERSION`), or a tariff is added to, a version is added to, corrected or deleted, or the scope is
         changed of a tariff under an archived charge type (code `CHARGE_TYPE_ARCHIVED`), or a plot that has a meter is
         deleted or turned into common land, or a plot with an active meter is archived (code `PLOT_HAS_METER`, with
-        `errors[{field: kind}]` for the update), or a meter is registered for a plot that already has an active meter
+        `errors[{field: kind}]` for the update), or a plot with a lasting water connection is archived or turned into
+        common land (code `PLOT_HAS_WATER_CONNECTION`, with `errors[{field: kind}]` for the update), or a meter is
+        registered for a plot that already has an active meter
         of the resource (code `METER_ACTIVE_EXISTS`) or for common land (code `METER_COMMON_LAND`) or an archived plot
         (code `PLOT_ARCHIVED`), both with `errors[{field: plotId}]`, a meter with readings is deleted (code
         `METER_HAS_READINGS`), a removed meter is removed again or deleted (code `METER_REMOVED`), or a date or value
@@ -5394,6 +5405,9 @@ components:
         correction adds `from` and `to`, ISO dates, `to` absent while the record is open). Meter readings are plain
         decimals with three decimals (`8205.000`). Money amounts are plain decimals with two decimals (`-25.00`), a
         billing month is `YYYY-MM`. Values written before this format are plain text and are shown as stored.
+        Personal values (a member's phones, e-mail, postal address, Telegram username, Viber phone and notes) are
+        stored encrypted and returned only to a reader who may also view members; for anyone else `hidden` is true
+        and both values are absent.
       required: [field]
       properties:
         field:
@@ -5402,6 +5416,12 @@ components:
           type: string
         newValue:
           type: string
+        hidden:
+          type: boolean
+          default: false
+          description: >-
+            True means the field holds personal data and the reader may not view members (or the stored value could
+            not be read): `oldValue` and `newValue` are then absent.
 
     AuditEntry:
       type: object
@@ -6111,7 +6131,9 @@ components:
         code:
           type: string
           description: >-
-            Stable machine-readable error code, for example `VALIDATION_FAILED`, `NOT_FOUND` or `PLOT_NOT_FOUND`
+            Stable machine-readable error code, for example `VALIDATION_FAILED`, `NOT_FOUND` or `PLOT_NOT_FOUND`.
+            Any endpoint that reads stored personal data (member contacts) may answer 500 `PERSONAL_DATA_UNREADABLE`
+            when a stored value cannot be decrypted; the body never carries a value.
         errors:
           type: array
           description: Field-level validation errors

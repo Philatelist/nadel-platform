@@ -74,8 +74,8 @@ class MembersAccessAcceptanceTests extends IntegrationTest {
     @AfterEach
     void cleanUp() {
         // first sign-in links demo members and the journeys touch base roles
-        inTenant(DEMO_TENANT, sql -> sql.update("update member set keycloak_subject = null "
-                + "where email in ('chairman@demo.local', 'treasurer@demo.local', 'member@demo.local', 'electrician@demo.local')"));
+        unlinkByEmail(DEMO_TENANT, "chairman@demo.local", "treasurer@demo.local", "member@demo.local",
+                "electrician@demo.local");
         inTenant(DEMO_TENANT, sql -> sql.update("update member set archived_at = null where id = ?", DEMO_CHAIRMAN));
         for (UUID id : createdMembers) {
             inTenant(DEMO_TENANT, sql -> {

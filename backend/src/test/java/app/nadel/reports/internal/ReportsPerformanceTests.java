@@ -64,6 +64,22 @@ class ReportsPerformanceTests extends ReportsTestSupport {
 
     private String t;
 
+    /** The contacts of the 360 members, sealed as the application seals them (the names carry the number). */
+    private void sealPerformanceContacts() {
+        for (Map<String, Object> row : ownerJdbc().queryForList(
+                "select id, last_name from member where tenant_id = ?", tenant)) {
+            UUID id = (UUID) row.get("id");
+            String name = (String) row.get("last_name");
+            if (name.startsWith("Співвласник")) {
+                String i = String.format("%07d", Integer.parseInt(name.substring("Співвласник".length())));
+                insertContacts(tenant, id, "co-owner" + Integer.parseInt(i) + "@perf.test", "+38067" + i, "+38093" + i);
+            } else if (name.startsWith("Власник")) {
+                String i = String.format("%07d", Integer.parseInt(name.substring("Власник".length())));
+                insertContacts(tenant, id, "owner" + Integer.parseInt(i) + "@perf.test", "+38050" + i);
+            }
+        }
+    }
+
     @BeforeEach
     void bookThePerformanceFixture() {
         long started = System.nanoTime();
@@ -91,16 +107,14 @@ class ReportsPerformanceTests extends ReportsTestSupport {
                        case when i % 4 = 2 then null else current_date - (i % 200) end
                 from generate_series(1, 300) i""");
         run("""
-                insert into member (id, tenant_id, last_name, first_name, phones, email)
-                select md5('#S#M' || i)::uuid, #T#, 'Власник' || i, 'Іван', array['+38050' || lpad(i::text, 7, '0')],
-                       'owner' || i || '@perf.test'
+                insert into member (id, tenant_id, last_name, first_name)
+                select md5('#S#M' || i)::uuid, #T#, 'Власник' || i, 'Іван'
                 from generate_series(1, 300) i""");
         run("""
-                insert into member (id, tenant_id, last_name, first_name, phones, email)
-                select md5('#S#N' || i)::uuid, #T#, 'Співвласник' || i, 'Марія',
-                       array['+38067' || lpad(i::text, 7, '0'), '+38093' || lpad(i::text, 7, '0')],
-                       'co-owner' || i || '@perf.test'
+                insert into member (id, tenant_id, last_name, first_name)
+                select md5('#S#N' || i)::uuid, #T#, 'Співвласник' || i, 'Марія'
                 from generate_series(1, 60) i""");
+        sealPerformanceContacts();
         run("""
                 insert into ownership (tenant_id, plot_id, member_id, share_numerator, share_denominator, valid_from)
                 select #T#, md5('#S#P' || i)::uuid, md5('#S#M' || i)::uuid, 1, case when i <= 60 then 2 else 1 end,

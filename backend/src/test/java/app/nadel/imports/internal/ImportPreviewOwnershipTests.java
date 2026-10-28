@@ -104,8 +104,8 @@ class ImportPreviewOwnershipTests extends ImportsIntegrationTest {
 
         Map<String, Object> run = runRow(body(result).get("id").asString());
         assertThat(run).containsEntry("status", "PREVIEW");
-        assertThat((String) run.get("plan_digest")).matches("[0-9a-f]{64}");
-        JsonNode plan = JSON.readTree(run.get("plan").toString());
+        assertThat(openedPlan(run.get("id").toString()).digest()).matches("[0-9a-f]{64}");
+        JsonNode plan = storedPlan(run.get("id").toString());
         assertThat(plan.get("version").asInt()).isEqualTo(1);
         assertThat(plan.get("ownership")).hasSize(3);
         JsonNode stored = plan.get("ownership").get(0);
@@ -170,7 +170,7 @@ class ImportPreviewOwnershipTests extends ImportsIntegrationTest {
                 .andReturn();
 
         assertThat(runRow(body(result).get("id").asString())).containsEntry("status", "HAS_ERRORS")
-                .containsEntry("plan", null).containsEntry("plan_digest", null);
+                .containsEntry("plan_enc", null);
     }
 
     @Test
@@ -319,7 +319,7 @@ class ImportPreviewOwnershipTests extends ImportsIntegrationTest {
 
         MvcResult result = upload(withExcelDate).andExpect(jsonPath("$.problemCount").value(0))
                 .andExpect(jsonPath("$.counts.ownerships.created").value(1)).andReturn();
-        assertThat(JSON.readTree(runRow(body(result).get("id").asString()).get("plan").toString())
+        assertThat(storedPlan(body(result).get("id").asString())
                 .get("ownership").get(0).get("validFrom").asString()).isEqualTo("2021-06-05");
         // 1/2 alone is not a whole plot, which proves the Ukrainian columns were all found
         assertThat(problems(preview(file))).containsExactly("OWNERSHIP/2/share/SHARES_NOT_ONE");

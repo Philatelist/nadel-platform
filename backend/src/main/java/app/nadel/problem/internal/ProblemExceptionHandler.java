@@ -41,6 +41,10 @@ class ProblemExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(ApiProblemException.class)
     ResponseEntity<Object> handleApiProblem(ApiProblemException ex) {
+        if (ex.status().is5xxServerError()) {
+            // A server-side failure with a code of its own (PERSONAL_DATA_UNREADABLE): the code only, never values
+            log.error("Answered {} with problem code {}", ex.status().value(), ex.code());
+        }
         return problem(ex.status(), ex.code(), ex.getMessage(), ex.errors(), null);
     }
 

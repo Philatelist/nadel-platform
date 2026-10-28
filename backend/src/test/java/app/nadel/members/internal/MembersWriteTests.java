@@ -16,8 +16,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import app.nadel.IntegrationTest;
 import app.nadel.TestTokens;
+import app.nadel.audit.FieldChange;
+import app.nadel.privacy.PersonalDataCipher;
+import app.nadel.tenancy.TenantContext;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -37,6 +41,8 @@ import tools.jackson.databind.json.JsonMapper;
 class MembersWriteTests extends IntegrationTest {
 
     static final UUID DEMO_CHAIRMAN = UUID.fromString("aaaaaaaa-0000-0000-0000-000000000001");
+    static final UUID DEMO_TREASURER = UUID.fromString("aaaaaaaa-0000-0000-0000-000000000002");
+    static final UUID DEMO_MEMBER = UUID.fromString("aaaaaaaa-0000-0000-0000-000000000003");
     static final UUID OTHER_MEMBER = UUID.fromString("bbbbbbbb-0000-0000-0000-000000000001");
 
     @Autowired
@@ -44,6 +50,9 @@ class MembersWriteTests extends IntegrationTest {
 
     @Autowired
     JsonMapper json;
+
+    @Autowired
+    PersonalDataCipher cipher;
 
     private final List<UUID> createdThroughApi = new ArrayList<>();
     private final List<UUID> roles = new ArrayList<>();
@@ -53,8 +62,8 @@ class MembersWriteTests extends IntegrationTest {
         // first sign-in links the demo members and a refused archive must leave the chairman active
         inTenant(DEMO_TENANT, sql -> sql.update(
                 "update member set keycloak_subject = null, archived_at = null where id = ?", DEMO_CHAIRMAN));
-        inTenant(DEMO_TENANT, sql -> sql.update("update member set keycloak_subject = null "
-                + "where email in ('treasurer@demo.local', 'member@demo.local')"));
+        inTenant(DEMO_TENANT, sql -> sql.update("update member set keycloak_subject = null where id in (?, ?)",
+                DEMO_TREASURER, DEMO_MEMBER));
         for (UUID id : createdThroughApi) {
             inTenant(DEMO_TENANT, sql -> sql.update("delete from member where id = ?", id));
         }
@@ -306,8 +315,11 @@ class MembersWriteTests extends IntegrationTest {
         assertThat(update.get("entity_label")).isEqualTo("Before Person");
         JsonNode changes = json.readTree((String) update.get("changes"));
         assertThat(changes).hasSize(2);
-        assertThat(change(changes, "phones").get("old").asString()).isEqualTo("+380671234567");
-        assertThat(change(changes, "phones").get("new").asString()).isEqualTo("+380501112233");
+        // personal values are stored sealed at their place in this entry (ADR 0016); a name is stored as it is
+        UUID entry = (UUID) update.get("id");
+        assertThat(update.get("changes").toString()).doesNotContain("380671234567").doesNotContain("380501112233");
+        assertThat(openAudit(entry, "phones", change(changes, "phones").get("old"), true)).isEqualTo("+380671234567");
+        assertThat(openAudit(entry, "phones", change(changes, "phones").get("new"), false)).isEqualTo("+380501112233");
         assertThat(change(changes, "middleName").get("new").asString()).isEqualTo("Added");
         assertThat(entries.get(0).get("action")).isEqualTo("MEMBER_CREATED");
     }
@@ -510,8 +522,15 @@ class MembersWriteTests extends IntegrationTest {
 
     private List<Map<String, Object>> auditEntries(UUID entityId) {
         return inTenant(DEMO_TENANT, sql -> sql.queryForList(
-                "select action, actor_member_id, entity_type, entity_label, cast(changes as text) as changes "
+                "select id, action, actor_member_id, entity_type, entity_label, cast(changes as text) as changes "
                         + "from audit_entry where entity_id = ? order by occurred_at, action desc", entityId));
+    }
+
+    /** Opens a sealed audit value ({@code {"enc": "<base64>"}}) of the entry with the cooperative's key. */
+    private String openAudit(UUID entry, String field, JsonNode stored, boolean old) {
+        byte[] sealed = Base64.getDecoder().decode(stored.get("enc").asString());
+        return TenantContext.runAs(DEMO_TENANT, () -> cipher.decrypt(DEMO_TENANT,
+                old ? FieldChange.oldValueRef(entry, field) : FieldChange.newValueRef(entry, field), sealed));
     }
 
     private static JsonNode change(JsonNode changes, String field) {
@@ -534,12 +553,10 @@ class MembersWriteTests extends IntegrationTest {
     }
 
     private String notes(UUID id) {
-        return inTenant(DEMO_TENANT, sql -> sql.queryForObject(
-                "select notes from member where id = ?", String.class, id));
+        return decryptedContacts(DEMO_TENANT, id).notes();
     }
 
     private String emailOf(UUID id) {
-        return inTenant(DEMO_TENANT, sql -> sql.queryForObject(
-                "select email from member where id = ?", String.class, id));
+        return decryptedContacts(DEMO_TENANT, id).email();
     }
 }

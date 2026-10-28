@@ -71,6 +71,7 @@ class BaseRolesMatrixTests extends IntegrationTest {
             owner.update("delete from charge_type where tenant_id = ?", tenant);
             owner.update("delete from role_permission where tenant_id = ?", tenant);
             owner.update("delete from role where tenant_id = ?", tenant);
+            deleteDataKeys(tenant);
             owner.update("delete from tenant where id = ?", tenant);
         }
     }

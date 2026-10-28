@@ -3,13 +3,13 @@ import {
   useGetReadingRound,
   type MeterResource as MeterResourceValue,
 } from '@nadel/api-client';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { QueryBoundary } from '../components/QueryBoundary';
 import { ReadingDateField } from '../components/readings/ReadingDateField';
 import { PageHeader, Panel, SearchField, Select, TextField } from '../components/ui';
 import { RoundCard } from '../components/readings/RoundCard';
-import { useDebouncedValue } from '../hooks/useDebouncedValue';
+import { useDebouncedSearchParam } from '../hooks/useDebouncedSearchParam';
 import { useT } from '../i18n';
 import { kyivDaysAgo, kyivToday } from '../kyivToday';
 import { groupRound, readStoredResource, storeResource } from '../readingsRound';
@@ -44,19 +44,9 @@ export function ReadingsRoundPage() {
   const [roundDate, setRoundDate] = useState<string>();
 
   const [input, setInput] = useState(street);
-  const debounced = useDebouncedValue(input.trim(), SEARCH_DELAY_MS);
-  useEffect(() => {
-    setParams(
-      (prev) => {
-        if ((prev.get('street') ?? '') === debounced) return prev;
-        const next = new URLSearchParams(prev);
-        if (debounced) next.set('street', debounced);
-        else next.delete('street');
-        return next;
-      },
-      { replace: true },
-    );
-  }, [debounced, setParams]);
+
+  // A changed search resets paging where there is one; the URL keeps the filters shareable.
+  useDebouncedSearchParam('street', input, SEARCH_DELAY_MS);
 
   function update(change: (next: URLSearchParams) => void) {
     const next = new URLSearchParams(params);

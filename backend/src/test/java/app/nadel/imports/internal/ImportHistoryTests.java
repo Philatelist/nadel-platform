@@ -49,11 +49,11 @@ class ImportHistoryTests extends ImportCommitSupport {
         UUID id = UUID.randomUUID();
         ownerJdbc().update("insert into import_run (id, tenant_id, file_name, created_by_member_id, "
                         + "created_by_subject, created_by_name, created_at, expires_at, committed_at, status, counts, "
-                        + "problem_count, plan, plan_digest) values (?, ?, ?, ?, 's', ?, ?::timestamptz, "
-                        + "?::timestamptz, ?::timestamptz, ?, ?::jsonb, ?, ?::jsonb, ?)",
+                        + "problem_count, plan_enc) values (?, ?, ?, ?, 's', ?, ?::timestamptz, "
+                        + "?::timestamptz, ?::timestamptz, ?, ?::jsonb, ?, ?)",
                 id, tenant, fileName, memberId, authorName, createdAt.toString(), expiresAt.toString(),
-                committedAt == null ? null : committedAt.toString(), status, COUNTS, problems, plan,
-                plan == null ? null : "digest");
+                committedAt == null ? null : committedAt.toString(), status, COUNTS, problems,
+                plan == null ? null : plan.getBytes(java.nio.charset.StandardCharsets.UTF_8));
         return id;
     }
 
@@ -286,7 +286,7 @@ class ImportHistoryTests extends ImportCommitSupport {
 
         String json = result.getResponse().getContentAsString();
         assertThat(json).doesNotContain("SECRET-PLOT-777").doesNotContain("SecretSurname").doesNotContain("digest");
-        assertThat(ownerJdbc().queryForObject("select plan is not null from import_run where file_name = ?",
+        assertThat(ownerJdbc().queryForObject("select plan_enc is not null from import_run where file_name = ?",
                 Boolean.class, "with-plan.xlsx")).isTrue();
     }
 

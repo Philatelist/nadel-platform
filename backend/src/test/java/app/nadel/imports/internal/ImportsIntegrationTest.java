@@ -4,7 +4,10 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 
 import app.nadel.IntegrationTest;
 import app.nadel.TestTokens;
+import app.nadel.tenancy.TenantContext;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -12,6 +15,8 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Base of the import tests that call the API as demo users. The first sign-in of a demo member links it to a Keycloak
@@ -29,21 +34,19 @@ abstract class ImportsIntegrationTest extends IntegrationTest {
     @Autowired
     protected MockMvc mvc;
 
-    private List<String> unlinkedBefore = List.of();
+    @Autowired
+    protected SealedPlans sealedPlans;
+
+    private List<UUID> unlinkedBefore = List.of();
 
     @BeforeEach
     void rememberUnlinkedDemoMembers() {
-        unlinkedBefore = inTenant(DEMO_TENANT, sql -> sql.queryForList(
-                "select email from member where keycloak_subject is null and email = any (string_to_array(?, ','))",
-                String.class, String.join(",", DEMO_EMAILS)));
+        unlinkedBefore = unlinkedMembersByEmail(DEMO_TENANT, DEMO_EMAILS.toArray(String[]::new));
     }
 
     @AfterEach
     void cleanUpAfterTheTest() {
-        for (String email : unlinkedBefore) {
-            inTenant(DEMO_TENANT, sql -> sql.update(
-                    "update member set keycloak_subject = null where email = ?", email));
-        }
+        unlinkMembers(DEMO_TENANT, unlinkedBefore);
         ownerJdbc().update("delete from import_run");
     }
 
@@ -64,6 +67,23 @@ abstract class ImportsIntegrationTest extends IntegrationTest {
 
     protected ResultActions upload(byte[] content) throws Exception {
         return upload(chairman(), "plots.xlsx", content);
+    }
+
+    /**
+     * The sealed plan of a run opened with its cooperative's key (read as the owner, opened as the application would);
+     * the run must still have one.
+     */
+    protected SealedPlans.Opened openedPlan(String importId) {
+        Map<String, Object> run = ownerJdbc().queryForMap("select tenant_id, plan_enc from import_run where id = ?::uuid",
+                importId);
+        UUID tenant = (UUID) run.get("tenant_id");
+        byte[] sealed = (byte[]) run.get("plan_enc");
+        return TenantContext.runAs(tenant, () -> sealedPlans.open(tenant, UUID.fromString(importId), sealed));
+    }
+
+    /** The stored rows of a run's sealed plan as a JSON tree. */
+    protected JsonNode storedPlan(String importId) {
+        return JsonMapper.shared().valueToTree(openedPlan(importId).plan());
     }
 
     protected int count(String table) {

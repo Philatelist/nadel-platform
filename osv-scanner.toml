@@ -16,3 +16,7 @@ reason = "uuid via @expo/config-plugins (xcode project tooling): build-time only
 [[IgnoredVulns]]
 id = "GHSA-mrhx-c7xc-m3w5"
 reason = "zod 3.x via @expo/cli: Expo CLI dev/build tooling only, never shipped in the app or the server; no patched 3.x yet; revisit when Expo moves @expo/cli to zod 4 or a patched 3.x appears"
+
+[[IgnoredVulns]]
+id = "GHSA-gcqx-w48m-w2h4"
+reason = "deepmerge 4.3.1 via @expo/config: mobile build tooling only, merges our own app config, never user input; not in the backend or the web bundle; no fixed release yet; revisit in phase 5 or when a fixed deepmerge or an @expo/config without it is released"

@@ -499,7 +499,9 @@ export const getUpdatePlotUrl = (id: string,) => {
  * The same rules apply as when creating: 409 `PLOT_NUMBER_TAKEN`, 409 `CADASTRAL_NUMBER_TAKEN`,
  * 400 `CADASTRAL_INVALID`, 400 `AREA_INVALID`. A plot that has ever had an owner cannot become common land
  * (409 `PLOT_HAS_OWNERSHIP_HISTORY`, `errors[{field: kind}]`), and neither can a plot that has a meter, active
- * or removed (409 `PLOT_HAS_METER`, `errors[{field: kind}]`). A change that alters nothing is accepted and not audited.
+ * or removed (409 `PLOT_HAS_METER`, `errors[{field: kind}]`), nor a plot that has a lasting water connection
+ * (409 `PLOT_HAS_WATER_CONNECTION`, `errors[{field: kind}]`; end the connection first). A change that alters
+ * nothing is accepted and not audited.
  * @summary Update a plot or common land
  */
 export const updatePlot = async (id: string,
@@ -669,7 +671,8 @@ export const useDeletePlot = <TError = BadRequestResponse | UnauthorizedResponse
  * Moves the plot to the archive: it is hidden from the default list and its number becomes free for a new
  * plot. Archiving an already archived plot is a no-op and is not audited. A plot that has a current owner cannot
  * be archived (409 `PLOT_HAS_OWNERS`), nor can a plot with an active meter (409 `PLOT_HAS_METER`; remove the
- * meter first). Requires `PLOTS_VIEW` and `PLOTS_EDIT`.
+ * meter first) or a plot with a lasting water connection (409 `PLOT_HAS_WATER_CONNECTION`; end the connection
+ * first). Requires `PLOTS_VIEW` and `PLOTS_EDIT`.
  * @summary Archive a plot or common land
  */
 export const archivePlot = async (id: string, options?: Parameters<typeof nadelFetch>[1]): Promise<PlotDetails> => {

@@ -176,7 +176,10 @@ make e2e-install    # once: the browser for end-to-end tests</pre>
           </tr>
           <tr>
             <td><code>make up</code> / <code>make dev</code></td>
-            <td>Infrastructure + backend (:8080) + web (:5173)</td>
+            <td>
+              Infrastructure + backend (:8080) + web (:5173); creates <code>infra/.env</code> with a local
+              master key the first time
+            </td>
           </tr>
           <tr>
             <td><code>make backend</code>, <code>make web</code>, <code>make mobile</code></td>
@@ -282,6 +285,22 @@ make e2e-install    # once: the browser for end-to-end tests</pre>
           </tr>
         </tbody>
       </table>
+      <h3>The local master key (<code>infra/.env</code>)</h3>
+      <p>
+        Members' contacts are stored encrypted (chapter 8). The first time <code>make up</code>,
+        <code>make backend</code> or <code>make e2e</code> runs, it creates the file
+        <code>infra/.env</code> with one line, <code>NADEL_PD_MASTER_KEY=…</code>, a random local key. The
+        file is git-ignored, has mode 600 and is read only by the backend process. An existing file is never
+        overwritten.
+      </p>
+      <ul>
+        <li>Never commit this file and never paste the key into a chat or a ticket.</li>
+        <li>
+          If you delete it, the contacts already in the local database become unreadable (the backend refuses
+          to start with <code>PD_MASTER_KEY_MISMATCH</code>, chapter 12). Then reset the local database too
+          (below) — it is only demo data.
+        </li>
+      </ul>
       <h3>Resetting the local database</h3>
       <pre class="formula">make down && docker compose -f infra/docker-compose.yml down -v && make up</pre>
       <p>
@@ -321,7 +340,8 @@ make e2e-install    # once: the browser for end-to-end tests</pre>
         </li>
         <li>
           The member is found by <strong>email</strong>: the email in Keycloak must match the email on the
-          member card. The backend remembers the link at the first sign-in.
+          member card (any letter case). The backend remembers the link at the first sign-in. The first
+          chairman of a new cooperative is linked differently, by the Keycloak user's identifier (chapter 4).
         </li>
         <li>
           Roles and permissions live in the cooperative's database, not in Keycloak. The exception is the
@@ -412,32 +432,59 @@ make e2e-install    # once: the browser for end-to-end tests</pre>
         settings and the standard charge types.
       </p>
       <h3>Creating a new cooperative (until the operator console exists)</h3>
+      <p>
+        Contacts (phones, email, address) are encrypted by the application, so SQL cannot write them. The
+        first chairman is therefore created <em>without</em> contacts and is linked to the Keycloak account by
+        the account's identifier; the chairman enters the email and phones in the app afterwards.
+      </p>
       <ol class="steps">
         <li>
           Connect to the database as the superuser:
           <code>docker compose -f infra/docker-compose.yml exec postgres psql -U postgres -d nadel</code>.
         </li>
-        <li>Run, with the name and the chairman's details filled in:</li>
+        <li>Create the cooperative, with the name filled in, and note the identifier from the message:</li>
       </ol>
       <pre class="formula">
 DO $$
-DECLARE t uuid := gen_random_uuid(); m uuid := gen_random_uuid();
+DECLARE t uuid := gen_random_uuid();
 BEGIN
   INSERT INTO tenant (id, name) VALUES (t, 'СТ «Назва»');
   PERFORM seed_base_roles(t);          -- roles, settings, charge types
-  INSERT INTO member (id, tenant_id, last_name, first_name, email, delivery_channel)
-  VALUES (m, t, 'Last name', 'First name', 'chairman@example.com', 'EMAIL');
-  INSERT INTO member_role (tenant_id, member_id, role_id)
-  SELECT t, m, id FROM role WHERE tenant_id = t AND base_code = 'CHAIRMAN';
   RAISE NOTICE 'tenant_id = %', t;
 END $$;</pre>
       <ol class="steps" start="3">
         <li>
-          Note the <code>tenant_id</code> from the message and create the chairman's Keycloak account with
-          that attribute (chapter 3).
+          Create the chairman's account in Keycloak with the attribute <code>tenant_id</code> set to that
+          identifier (chapter 3). Open the new user and copy the <strong>ID</strong> shown on the
+          <strong>Details</strong> tab (a UUID) — it is the Keycloak <em>subject</em>.
         </li>
-        <li>The chairman signs in and fills in the cooperative: Excel import, members, tariffs, meters.</li>
+        <li>
+          Back in <code>psql</code>, add the chairman with the identifier and the subject (name and both
+          values filled in):
+        </li>
       </ol>
+      <pre class="formula">
+DO $$
+DECLARE t uuid := '&lt;tenant_id&gt;'; m uuid := gen_random_uuid();
+BEGIN
+  INSERT INTO member (id, tenant_id, last_name, first_name, delivery_channel, keycloak_subject)
+  VALUES (m, t, 'Last name', 'First name', 'PAPER', '&lt;Keycloak user ID&gt;');
+  INSERT INTO member_role (tenant_id, member_id, role_id)
+  SELECT t, m, id FROM role WHERE tenant_id = t AND base_code = 'CHAIRMAN';
+END $$;</pre>
+      <ol class="steps" start="5">
+        <li>
+          The chairman signs in (the subject links the account to the card) and opens "Members" → their own
+          card → "Edit" to enter the email, phones and the preferred channel; the app encrypts them. Then the
+          Excel import, members, tariffs and meters.
+        </li>
+      </ol>
+      <p>
+        The cooperative's encryption keys are created by the server the first time the cooperative needs them
+        (for example when the chairman saves the first contact); there is nothing to do for them here. The
+        delivery channel stays "Paper" until a contact exists, because the database rejects a channel without
+        its contact.
+      </p>
       <div class="warn">
         <span class="callout-title">A temporary way</span>
         <p>
@@ -582,7 +629,11 @@ END $$;</pre>
           </tr>
           <tr>
             <td>Card → Archive / Restore</td>
-            <td>Hides the plot from the list or brings it back</td>
+            <td>
+              Hides the plot from the list or brings it back. Refused while the plot has a lasting water
+              connection (or an active meter): end the connection on the plot card first. The same applies to
+              turning a plot into common land
+            </td>
             <td>Edit plots</td>
           </tr>
           <tr>
@@ -625,7 +676,10 @@ END $$;</pre>
         <tbody>
           <tr>
             <td>Search, "Show archived"</td>
-            <td>By name, phone or email</td>
+            <td>
+              By any part of the name; by the full phone in any usual form or exactly its last 4 digits; by
+              the whole email. A part of an email or digits from the middle of a phone find nothing
+            </td>
             <td>View members</td>
           </tr>
           <tr>
@@ -1034,10 +1088,6 @@ END $$;</pre>
         <span class="callout-title">Known gaps</span>
         <ul>
           <li>The lasting connections of a removed well can only be ended on each plot's card.</li>
-          <li>
-            Archiving a plot or making it common land does not end its lasting water connection: end it on the
-            plot card first.
-          </li>
         </ul>
       </div>
 
@@ -1144,8 +1194,12 @@ END $$;</pre>
         <tbody>
           <tr>
             <td>Audit log → record type, From, To, "Only this record", "Only this author"</td>
-            <td>Filter entries; "Remove filter"</td>
-            <td>View audit log</td>
+            <td>
+              Filter entries; "Remove filter". Old and new values of phones, email, address, Telegram, Viber
+              and notes are shown only to a person who also has "View members"; for anyone else the entry says
+              the field changed and shows "hidden" in place of the values
+            </td>
+            <td>View audit log (values: also View members)</td>
           </tr>
           <tr>
             <td>My account</td>
@@ -1358,15 +1412,75 @@ END $$;</pre>
         </dd>
         <dt>Dependencies</dt>
         <dd>CI checks known vulnerabilities (pnpm audit, OSV) and the code (Semgrep).</dd>
+        <dt>Encrypted contacts</dt>
+        <dd>
+          Phones, email, postal address, Telegram, Viber and the notes of a member are stored encrypted
+          (AES-256-GCM), also in the audit log and in the pending Excel import. Names stay readable, because
+          the board searches and sorts by them. A copy of the database without the master key reveals no
+          contact. On the server the disk and the backups are encrypted as well (chapter 9).
+        </dd>
       </dl>
-      <div class="note">
-        <span class="callout-title">Encrypting personal data</span>
+
+      <h3>Personal data encryption: keys</h3>
+      <ul>
+        <li>
+          <strong>Master key</strong> <code>NADEL_PD_MASTER_KEY</code>: 32 random bytes in base64. It lives
+          only in the server's environment — never in the database, the repository, the logs or a backup.
+        </li>
+        <li>
+          <strong>Cooperative keys</strong>: every cooperative has its own data key (and a key for the search
+          indexes), kept in the database <em>wrapped</em> by the master key. They are created the first time a
+          cooperative needs them. So a stolen database holds only wrapped keys, and one cooperative's key
+          never opens another's data.
+        </li>
+        <li>
+          Search finds contacts without decrypting the table: the server compares keyed hashes of the full
+          phone, its last 4 digits and the whole email (chapter 6, "Members").
+        </li>
+      </ul>
+      <h3>Generating the master key</h3>
+      <pre class="formula">openssl rand -base64 32</pre>
+      <p>
+        Put the output into the server's secret store as <code>NADEL_PD_MASTER_KEY</code>. Use different keys
+        for staging and production. The server in the <code>prod</code> profile
+        <strong>refuses to start</strong> without a key or with one that is not 32 bytes of base64; the
+        message names the setting <code>NADEL_PD_MASTER_KEY</code> and never shows a key. With a key that does
+        not match the database it refuses too, with <code>PD_MASTER_KEY_MISMATCH</code> (chapter 12).
+      </p>
+      <div class="warn">
+        <span class="callout-title">A lost master key = lost contacts</span>
         <p>
-          A separate feature is under discussion: encrypting contacts, addresses and notes in the database, so
-          that even a copy of the database without the key reveals no personal data. On the server the disk
-          and the backups are encrypted as well (chapter 9).
+          Nothing else can open the encrypted contacts: not a backup, not the developers. Keep at least two
+          copies <strong>offline</strong> (a password manager entry and a sealed paper copy), apart from the
+          database backups. A backup stored together with its key gives no protection, and a backup without
+          the key cannot be restored to readable contacts. Names, plots, charges and payments are not affected
+          — only the contacts, addresses and notes.
         </p>
       </div>
+      <h3>Rotating the master key</h3>
+      <ol class="steps">
+        <li>Generate a new key: <code>openssl rand -base64 32</code>.</li>
+        <li>
+          Deploy with the new key as <code>NADEL_PD_MASTER_KEY</code> and the old one as
+          <code>NADEL_PD_MASTER_KEY_PREVIOUS</code>.
+        </li>
+        <li>
+          At start-up the server re-wraps every cooperative's keys with the new key (one transaction per
+          cooperative) and logs counts only, for example
+          <code>Personal data keys: 12 checked, 12 re-wrapped, 0 left on the previous master key</code>. If a
+          key is wrapped with neither master key, the start-up stops with
+          <code>PD_MASTER_KEY_MISMATCH</code> before anything is changed.
+        </li>
+        <li>Remove <code>NADEL_PD_MASTER_KEY_PREVIOUS</code> and deploy again.</li>
+        <li>
+          Keep the old key offline until no backup made before the rotation is retained: such a backup still
+          holds keys wrapped by the old key.
+        </li>
+      </ol>
+      <p class="muted small">
+        Only the master key is rotated; the cooperatives' own data keys stay as they are. Restore drills need
+        the key: restore the database, start the backend with the key and check that contacts open.
+      </p>
     </section>
 
     <section class="chapter" id="deploy">
@@ -1585,6 +1699,30 @@ END $$;</pre>
             <td>
               A lock file left by an interrupted command. Make sure no git is running and delete the named
               <code>.lock</code>.
+            </td>
+          </tr>
+          <tr>
+            <td>The backend does not start: <code>PD_MASTER_KEY_MISMATCH</code> in the log</td>
+            <td>
+              The server was started with a master key other than the one that wrapped the cooperatives' keys
+              (a different environment's key, a lost or changed value). Start it with the right key. To change
+              the master key on purpose, start with the new key as
+              <code>NADEL_PD_MASTER_KEY</code> and the old one as
+              <code>NADEL_PD_MASTER_KEY_PREVIOUS</code> (chapter 8, rotation). Locally: use the key in
+              <code>infra/.env</code>, or, if that file was lost, reset the local database with
+              <code>docker compose -f infra/docker-compose.yml down -v</code> (demo data only).
+            </td>
+          </tr>
+          <tr>
+            <td>
+              The backend does not start:
+              <code>NADEL_PD_MASTER_KEY is missing or is not 32 bytes of base64</code>
+            </td>
+            <td>
+              The variable is not set or is malformed (extra characters, a truncated copy). Generate one with
+              <code>openssl rand -base64 32</code>, or on a local run use <code>make up</code> /
+              <code>make backend</code>, which create <code>infra/.env</code> (chapter 2). The same message
+              names <code>NADEL_PD_MASTER_KEY_PREVIOUS</code> if that one is malformed.
             </td>
           </tr>
           <tr>

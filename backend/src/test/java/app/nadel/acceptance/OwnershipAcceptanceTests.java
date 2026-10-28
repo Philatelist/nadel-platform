@@ -665,7 +665,7 @@ class OwnershipAcceptanceTests extends IntegrationTest {
 
     /** A token of an existing member who holds the MEMBER role. */
     private String tokenOf(UUID member) {
-        String email = ownerJdbc().queryForObject("select email from member where id = ?", String.class, member);
+        String email = memberEmail(DEMO_TENANT, member);
         giveBaseRole(DEMO_TENANT, member, "MEMBER");
         return TestTokens.bearer(DEMO_TENANT, UUID.randomUUID().toString(), email);
     }

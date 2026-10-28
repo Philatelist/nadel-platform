@@ -108,8 +108,7 @@ class PlanDigestTests extends ImportsIntegrationTest {
 
     private String digestOf(byte[] file) throws Exception {
         String id = JSON.readTree(upload(file).andReturn().getResponse().getContentAsString()).get("id").asString();
-        String digest = ownerJdbc().queryForObject("select plan_digest from import_run where id = ?::uuid",
-                String.class, id);
+        String digest = openedPlan(id).digest();
         assertThat(digest).as("a preview without problems stores its digest").matches("[0-9a-f]{64}");
         return digest;
     }

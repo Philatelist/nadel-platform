@@ -17,7 +17,6 @@ import java.io.IOException;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import org.dhatim.fastexcel.reader.ReadableWorkbook;
 import org.dhatim.fastexcel.reader.Row;
@@ -81,10 +80,8 @@ class ImportTemplateLanguageTests extends ImportsIntegrationTest {
         return body(upload(file).andExpect(status().isCreated()).andReturn());
     }
 
-    private JsonNode plan(JsonNode preview) throws Exception {
-        Map<String, Object> run = ownerJdbc().queryForMap("select * from import_run where id = ?::uuid",
-                preview.get("id").asString());
-        return JSON.readTree(run.get("plan").toString());
+    private JsonNode plan(JsonNode preview) {
+        return storedPlan(preview.get("id").asString());
     }
 
     private static List<String> problems(JsonNode preview) {

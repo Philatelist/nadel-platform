@@ -287,8 +287,7 @@ class NotChargedQueueTests extends FreshCooperativeSupport {
         send(demoChairman, post(RETRY.formatted(item)), null).andExpect(status().isNotFound());
         JsonNode demoQueue = body(send(demoChairman, get(NOT_CHARGED), null).andExpect(status().isOk()));
         demoQueue.forEach(entry -> assertThat(entry.get("id").asString()).isNotEqualTo(item.toString()));
-        owner().update("update member set keycloak_subject = null where tenant_id = ? and email = ?", DEMO_TENANT,
-                "chairman@demo.local");
+        unlinkByEmail(DEMO_TENANT, "chairman@demo.local");
     }
 
     @Test

@@ -881,15 +881,14 @@ class MetersAcceptanceTests extends IntegrationTest {
             assertThat(pendingList).hasSize((int) demoPending).hasSize(1);
             assertThat(pendingList.get(0).get("meter").get("plot").get("number").asString()).isEqualTo("7");
         } finally {
-            owner.update("update member set keycloak_subject = null where email in ('chairman@demo.local')");
+            unlinkByEmail(DEMO_TENANT, "chairman@demo.local");
         }
     }
 
     // ---- helpers
 
     private String tokenOf(UUID tenant, UUID member) {
-        String email = inTenant(tenant, sql -> sql.queryForObject("select email from member where id = ?", String.class,
-                member));
+        String email = memberEmail(tenant, member);
         return TestTokens.bearer(tenant, UUID.randomUUID().toString(), email);
     }
 

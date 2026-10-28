@@ -2,7 +2,7 @@
 
 The append-only audit log: who changed what, when, from which value to which. Table `audit_entry` (RLS
 `tenant_isolation`; the application role `nadel_app` can only `SELECT` and `INSERT`, so entries can never be changed or
-removed). Read with `GET /audit` (below).
+removed; the one exception is the Java migration 24, below). Read with `GET /audit` (below).
 
 ## Public API
 
@@ -12,7 +12,7 @@ removed). Read with `GET /audit` (below).
 | `AuditBatch` | Up to 500 `AuditEvent`s of one cooperative recorded together (`batchId`, `tenantId`, `entries`); `AuditBatch.of(tenantId, events)` splits a list into batches. Used by the Excel import |
 | `Actor` | Member id (nullable), Keycloak subject and display name of whoever made the change |
 | `ActorNames` | SPI implemented by `members`: current display names of acting members, so `audit` never depends on `members` |
-| `FieldChange` | `field`, `oldValue`, `newValue` as strings. Multi-valued fields (phones, role names) are sorted and joined by the publisher |
+| `FieldChange` | `field`, `oldValue`, `newValue` as strings and `sealed`. Multi-valued fields (phones, role names) are sorted and joined by the publisher. The 3-argument constructor means `sealed = false`. `sealed = true`: the values are personal data already sealed by the publisher, as base64 text, at `FieldChange.oldValueRef(eventId, field)` / `newValueRef(eventId, field)` (see "Personal values") |
 
 A module records a change by publishing an `AuditEvent` with `ApplicationEventPublisher` **inside the transaction that
 makes the change**. The Spring Modulith event publication registry (table `event_publication`, `completion-mode: delete`)
@@ -29,7 +29,8 @@ publishing transaction commits it runs on another thread, binds the event's coop
 `TenantContext.runAs(event.tenantId(), ...)` and only then opens a transaction with a `TransactionTemplate`, so
 `TenantAwareTransactionManager` sets `app.tenant_id` for it. `AuditWriter` inserts the row with a parameterised native
 query `insert ... on conflict (id) do nothing`; `audit_entry.id` is the event id, so a redelivered event cannot create a
-second entry. `changes` is a JSON array `[{"field", "old", "new"}]` written with Jackson.
+second entry. `changes` is a JSON array `[{"field", "old", "new"}]` written with Jackson; a value of a sealed change is
+stored as `{"enc": "<base64>"}` (old and new separately, null stays null).
 
 ### How a batch is written
 
@@ -72,7 +73,45 @@ profile (the token) and is an explicit `tenant_id` condition on top of RLS.
 - Order is `occurred_at desc, id desc` (the id makes paging stable); size defaults to 50, at most 100.
 - `actorName` is the actor's current name, looked up through the `ActorNames` SPI in one query for the whole page;
   absent when the entry has no actor or the member no longer exists (or belongs to another cooperative).
-- `changes` is mapped from the stored `[{field, old, new}]` to `[{field, oldValue, newValue}]`; a null value is absent.
+- `changes` is mapped from the stored `[{field, old, new}]` to `[{field, oldValue, newValue, hidden}]`; a null value is
+  absent. A change with a sealed value is opened or hidden (below).
+
+## Personal values (feature 014, ADR 0016)
+
+Personal data in a change never reaches `event_publication` or `audit_entry` in the clear:
+
+- **The publisher seals.** A module that records personal data generates the event id first and seals each value with
+  `privacy.PersonalDataCipher` at `FieldRef("audit_entry", "changes.<field>.old" | "changes.<field>.new", eventId)`,
+  the field name in snake case (`FieldChange.oldValueRef` / `newValueRef`: `postalAddress` is
+  `changes.postal_address.old`). The event carries the base64 text with `sealed = true`, so the outbox holds only
+  ciphertext. Today only `members` does this (`MemberAuditPublisher`, used by both the endpoints and the Excel import),
+  for `phones`, `email`, `postalAddress`, `telegramUsername`, `viberPhone` and `notes` of `MEMBER` entries; phase 3
+  reuses the same mechanism.
+- **Stored format.** `AuditWriter` writes each sealed value as `{"enc": "<base64>"}`. The entry id is the event id, so
+  the place the value was sealed for is the place it is stored at; copied to another entry, field, side (old/new) or
+  cooperative it does not open.
+- **Read rule.** `AuditController` passes `revealPersonal` = the caller holds `MEMBERS_VIEW` (authority
+  `PERM_MEMBERS_VIEW`). `AuditQueries.changesOf` is generic: for any change with an `{"enc"}` value, a reader with
+  `MEMBERS_VIEW` gets both values opened with the entry's cooperative and the same `FieldRef`; anyone else gets
+  `hidden: true` and neither value (the web shows «приховано» / "hidden"). Changes without a sealed value are shown as
+  stored. A sealed value that does not open hides the change too and logs
+  `PERSONAL_DATA_UNREADABLE: a sealed value of audit entry <id> could not be opened` (the entry id only, at WARN); the
+  page still loads.
+- **Java migration 24** (`SealAuditValuesMigration`, a `JavaMigration` bean that Spring Boot hands to Flyway) seals what
+  the previous release stored in the clear, on Flyway's owner connection and in its transaction, through
+  `privacy.OwnerKeyring` (no JPA):
+  - every `audit_entry` of entity type `MEMBER`: each string value of the six fields becomes `{"enc": …}` at the
+    entry's `FieldRef`. This **UPDATE as the schema owner is the one documented exception** to the append-only rule:
+    it rewrites the form of the values, never what they say, and `nadel_app` still has no `UPDATE` or `DELETE` on the
+    table;
+  - every unfinished `event_publication` (`completion_date is null`; completed rows are deleted, `completion-mode:
+    delete`) whose `event_type` is `app.nadel.audit.AuditEvent` or `app.nadel.audit.AuditBatch`: the serialized
+    changes of `MEMBER` events get the six fields' values sealed as base64 with `"sealed": true`, exactly as the
+    publisher now sends them.
+
+  Idempotent (a value that is already `{"enc"}`, or a change already `sealed`, is skipped), fixed checksum, counts-only
+  log: `Audit values sealed: N of M member entries, K of L pending audit publications`. A publication stored before
+  the flag existed and holding no personal field reads with `sealed = false` (`FieldChange.fromJson`).
 
 ## Values: codes and parameters, never display text
 
@@ -113,11 +152,12 @@ does not match a format above is shown as stored.
 
 ## Things to remember
 
-- Event payloads contain names and contact details. They are never logged: the listener logs the event id (or the batch id) only. Completed
+- Event payloads contain names (contact details only sealed, see above). They are never logged: the listener logs the event id (or the batch id) only. Completed
   publications are deleted so personal data does not linger in `event_publication`, which has no `tenant_id` and no RLS on
   purpose (startup resubmission has no tenant); `EventPublicationGuardTests` guards that.
 - Listeners and the writer are idempotent; keep it so when adding a listener.
 - `Actor.displayName` travels with the event but is not stored: `audit_entry` keeps the member id and subject.
 
-Depends on `tenancy` (public `TenantContext`), `identity` (`CurrentUser` in the controller) and `problem`. Used by
-`members`; it never depends on the modules that publish (actor names come through the `ActorNames` SPI).
+Depends on `tenancy` (public `TenantContext`), `identity` (`CurrentUser` and `Permission` in the controller), `privacy`
+(`PersonalDataCipher`, `FieldRef`, `OwnerKeyring`) and `problem`. Used by `members`; it never depends on the modules that
+publish (actor names come through the `ActorNames` SPI, the personal field names of migration 24 are listed in it).

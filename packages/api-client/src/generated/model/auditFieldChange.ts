@@ -11,10 +11,12 @@
  */
 
 /**
- * One changed field. A missing `oldValue` means the field was empty (or the entity was just created). Values are codes and parameters, not display text: enum codes, ISO dates (`2026-01-01`), plain decimal numbers, `true`/`false`, `base:<CODE>` tokens for a standard role or charge type name (also in the `roles` list joined by ", "), and for `owners` a JSON array of `{"member": "Last First", "share": "1/2"}` (a correction adds `from` and `to`, ISO dates, `to` absent while the record is open). Meter readings are plain decimals with three decimals (`8205.000`). Money amounts are plain decimals with two decimals (`-25.00`), a billing month is `YYYY-MM`. Values written before this format are plain text and are shown as stored.
+ * One changed field. A missing `oldValue` means the field was empty (or the entity was just created). Values are codes and parameters, not display text: enum codes, ISO dates (`2026-01-01`), plain decimal numbers, `true`/`false`, `base:<CODE>` tokens for a standard role or charge type name (also in the `roles` list joined by ", "), and for `owners` a JSON array of `{"member": "Last First", "share": "1/2"}` (a correction adds `from` and `to`, ISO dates, `to` absent while the record is open). Meter readings are plain decimals with three decimals (`8205.000`). Money amounts are plain decimals with two decimals (`-25.00`), a billing month is `YYYY-MM`. Values written before this format are plain text and are shown as stored. Personal values (a member's phones, e-mail, postal address, Telegram username, Viber phone and notes) are stored encrypted and returned only to a reader who may also view members; for anyone else `hidden` is true and both values are absent.
  */
 export interface AuditFieldChange {
   field: string;
   oldValue?: string;
   newValue?: string;
+  /** True means the field holds personal data and the reader may not view members (or the stored value could not be read): `oldValue` and `newValue` are then absent. */
+  hidden?: boolean;
 }

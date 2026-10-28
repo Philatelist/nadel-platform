@@ -27,24 +27,31 @@ interface MemberRepository extends JpaRepository<Member, UUID> {
             + "and m.archivedAt is null")
     Optional<Member> findActiveBySubject(@Param("tenantId") UUID tenantId, @Param("subject") String subject);
 
-    /** {@code email} must be lower-case. At most one active member per e-mail (unique index). */
-    @Query("select m from Member m where m.tenantId = :tenantId and lower(m.email) = :email "
+    /** The active member with this e-mail blind index; at most one (unique {@code member_tenant_email_bidx_uq}). */
+    @Query("select m from Member m where m.tenantId = :tenantId and m.emailBidx = :emailBidx "
             + "and m.archivedAt is null")
-    Optional<Member> findActiveByEmail(@Param("tenantId") UUID tenantId, @Param("email") String email);
+    Optional<Member> findActiveByEmailBidx(@Param("tenantId") UUID tenantId, @Param("emailBidx") byte[] emailBidx);
 
-    /** The active members whose lower-cased e-mail is one of {@code emails} (lower-case), for the Excel import. */
-    @Query("select m from Member m where m.tenantId = :tenantId and lower(m.email) in :emails "
-            + "and m.archivedAt is null")
-    List<Member> findActiveByLowerEmails(@Param("tenantId") UUID tenantId,
-            @Param("emails") Collection<String> emails);
+    /** The active members whose e-mail blind index is one of {@code emailBidxs}, for the Excel import. */
+    @Query(value = """
+            select m.* from member m
+            where m.tenant_id = :tenantId and m.archived_at is null and m.email_bidx in (:emailBidxs)
+            """, nativeQuery = true)
+    List<Member> findActiveByEmailBidxIn(@Param("tenantId") UUID tenantId,
+            @Param("emailBidxs") Collection<byte[]> emailBidxs);
 
-    /** The active members that have at least one of {@code phones} (normalised), for the Excel import. */
+    /**
+     * The active members with a phone whose blind index ({@code member_phone_index.phone_bidx}) is one of
+     * {@code phoneBidxs}, for the Excel import.
+     */
     @Query(value = """
             select m.* from member m
             where m.tenant_id = :tenantId and m.archived_at is null
-              and exists (select 1 from unnest(m.phones) as phone(value) where phone.value in (:phones))
+              and m.id in (select pi.member_id from member_phone_index pi
+                           where pi.tenant_id = :tenantId and pi.phone_bidx in (:phoneBidxs))
             """, nativeQuery = true)
-    List<Member> findActiveByAnyPhone(@Param("tenantId") UUID tenantId, @Param("phones") Collection<String> phones);
+    List<Member> findActiveByPhoneBidxIn(@Param("tenantId") UUID tenantId,
+            @Param("phoneBidxs") Collection<byte[]> phoneBidxs);
 
     /**
      * Binds the member to a Keycloak user only while it is still unbound, so concurrent first sign-ins cannot
@@ -62,9 +69,10 @@ interface MemberRepository extends JpaRepository<Member, UUID> {
     List<RoleGrantRow> findRoleGrants(@Param("tenantId") UUID tenantId, @Param("memberId") UUID memberId);
 
     /**
-     * One page of the member list. {@code textPattern} is a LIKE pattern over lower-cased text ({@code %token%}, with
-     * {@code !} as the escape character); {@code phonePattern} is a LIKE pattern over digits and only used when
-     * {@code phoneSearch} is true. Order is fixed here, so the {@code Pageable} must be unsorted.
+     * One page of the member list. {@code textPattern} is a LIKE pattern over lower-cased names ({@code %token%}, with
+     * {@code !} as the escape character); the three blind indexes match the e-mail, a full phone and the last 4 digits
+     * of a phone exactly (a candidate the query does not stand for is bound as 32 zero bytes, which matches nothing).
+     * Order is fixed here, so the {@code Pageable} must be unsorted.
      */
     @Query(value = """
             select m.* from member m
@@ -73,10 +81,10 @@ interface MemberRepository extends JpaRepository<Member, UUID> {
               and (lower(m.last_name) like :textPattern escape '!'
                    or lower(m.first_name) like :textPattern escape '!'
                    or lower(m.middle_name) like :textPattern escape '!'
-                   or lower(m.email) like :textPattern escape '!'
-                   or (:phoneSearch = true and exists (
-                         select 1 from unnest(m.phones) as phone(value)
-                         where regexp_replace(phone.value, '[^0-9]', '', 'g') like :phonePattern escape '!')))
+                   or m.email_bidx = :emailBidx
+                   or m.id in (select pi.member_id from member_phone_index pi
+                               where pi.tenant_id = :tenantId
+                                 and (pi.phone_bidx = :phoneBidx or pi.last4_bidx = :last4Bidx)))
             order by lower(m.last_name), lower(m.first_name), m.id
             """,
             countQuery = """
@@ -86,15 +94,15 @@ interface MemberRepository extends JpaRepository<Member, UUID> {
               and (lower(m.last_name) like :textPattern escape '!'
                    or lower(m.first_name) like :textPattern escape '!'
                    or lower(m.middle_name) like :textPattern escape '!'
-                   or lower(m.email) like :textPattern escape '!'
-                   or (:phoneSearch = true and exists (
-                         select 1 from unnest(m.phones) as phone(value)
-                         where regexp_replace(phone.value, '[^0-9]', '', 'g') like :phonePattern escape '!')))
+                   or m.email_bidx = :emailBidx
+                   or m.id in (select pi.member_id from member_phone_index pi
+                               where pi.tenant_id = :tenantId
+                                 and (pi.phone_bidx = :phoneBidx or pi.last4_bidx = :last4Bidx)))
             """,
             nativeQuery = true)
     Page<Member> search(@Param("tenantId") UUID tenantId, @Param("includeArchived") boolean includeArchived,
-            @Param("textPattern") String textPattern, @Param("phoneSearch") boolean phoneSearch,
-            @Param("phonePattern") String phonePattern, Pageable pageable);
+            @Param("textPattern") String textPattern, @Param("emailBidx") byte[] emailBidx,
+            @Param("phoneBidx") byte[] phoneBidx, @Param("last4Bidx") byte[] last4Bidx, Pageable pageable);
 
     /** Roles of several members in one query (no permissions), for the list. */
     @Query("select new app.nadel.members.internal.MemberRoleRow(mr.memberId, r.id, r.name, r.baseCode, r.nameCustomized) "

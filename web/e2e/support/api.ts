@@ -187,3 +187,16 @@ export async function retireMeter(page: Page, meterId: string): Promise<void> {
     finalReading: last ?? '0',
   }).catch(() => undefined);
 }
+
+/**
+ * Best effort, never throws: gets a test plot with meters out of the way. For each meter of the plot it rejects the
+ * pending readings (also one submitted by a member and not yet decided), deletes the readings that can be deleted,
+ * deletes or retires the meter, then ends the ownership and archives the plot. Needs a chairman's page.
+ */
+export async function cleanupMeterPlot(page: Page, plotId: string): Promise<void> {
+  const listed = await api(page, 'GET', `/plots/${plotId}/meters`).catch(() => undefined);
+  if (listed?.status === 200)
+    for (const meter of [...(JSON.parse(listed.body) as { id: string; active: boolean }[])].reverse())
+      await retireMeter(page, meter.id);
+  await archiveLeftovers(page, [{ id: plotId, number: '' }], [], kyivDay(0));
+}

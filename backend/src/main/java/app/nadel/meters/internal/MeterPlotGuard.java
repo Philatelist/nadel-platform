@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 /**
@@ -17,9 +18,16 @@ import org.springframework.stereotype.Component;
  * plot {@code FOR SHARE} first, so the two never interleave: if the registration committed first this check sees the
  * meter; if the plot change committed first the registration finds the plot gone, archived or common land. The guard
  * only reads and takes no locks.
+ * <p>
+ * Asked after {@code ledger}'s guard and before {@link WaterConnectionPlotGuard}, so the first refusal of a plot is
+ * deterministic.
  */
 @Component
+@Order(MeterPlotGuard.ORDER)
 class MeterPlotGuard implements PlotChangeGuard {
+
+    /** The position among the plot guards (lower is asked first). */
+    static final int ORDER = 200;
 
     private static final Refusal HAS_METER = new Refusal(ProblemCodes.PLOT_HAS_METER,
             "The plot has a meter; remove the meter first.");
