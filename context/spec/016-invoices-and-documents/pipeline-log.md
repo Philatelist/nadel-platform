@@ -5,7 +5,7 @@
 - Branch: 016-invoices-and-documents · Base: main @ 5287657
 - Requirement: document docs/features/016-invoices-and-documents.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
-- Publish: pr+checks · PR: — · Checks: —
+- Publish: pr+checks · PR: https://github.com/Philatelist/nadel-platform/pull/59 · Checks: green (run 40788506178 on 676eca8)
 - Review run: off until Phase 6 (reviewRun: on)
 
 ## Project facts
@@ -208,3 +208,6 @@ introduction (tables via Flyway, RLS-free job storage), Supply-chain CI job with
 - Full suite vs baseline: green, no regressions; coverage floor met.
 - AUTO decisions: see "Decisions" and the AUTO lines above; parked items: none.
 - Suggested: /awos:hire cover 016-invoices-and-documents: need PDF generation (PDFBox), NBU payment QR.
+- Phase 5: pushed 016-invoices-and-documents (no force); PR #59 opened (feat(documents): …). Waiting for checks.
+- Checks: all 5 green (run 40788506178): Backend 8m54s, Clients 3m13s, End-to-end 4m26s, SAST 1m13s, Security 2m25s.
+- Finding: inside the full suite the first month build at 2,000 plots is slow and repeatable — local 47.6 s, CI 54.3 s (ceiling 60 s) — vs 3.0–3.4 s alone. Root-cause investigation started (spring-backend, worktree scratchpad/perf-016); Phase 6 review run started in parallel.
