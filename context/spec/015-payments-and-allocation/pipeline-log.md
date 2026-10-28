@@ -1,7 +1,7 @@
 # Pipeline log — 015 payments and allocation
 
 - Status: running
-- Phase: 3 (implement, Slice 1)
+- Phase: 4 (verify and full suite)
 - Branch: 015-payments-and-allocation (planned) · Base: main @ 75db154
 - Requirement: document docs/features/015-payments-and-allocation.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
@@ -136,3 +136,5 @@ red plots; guide PDFs.
 - Slice 8 verify: DemoLedgerDataTests+PlotStatusRefreshTests 27/0; e2e tsc, lint, format-check green (guide HTML formatted with prettier). AUTO: PDFs not rebuilt (would show placeholders for new screens) → owner follow-up with guide-shots.
 - Slice 8 committed 9d2b59b; review round 1 MAJOR_ISSUES (M1 role-names 22 permissions) → fix 72a880e → round 2 PASS. All implementation slices PASS; Slice 9 started.
 - Slice 9: PaymentsAcceptanceTests 27/0 (RED checked on 3 tests); registry context/qa/list-of-tests.md updated; UI-only criteria covered by Vitest + payments.spec.ts (CI).
+- Slice 9 committed cca927a; review round 1: PASS. All slice reviews PASS. Phase 4 started (full make check running in background).
+- Phase 4 full make check (attempt 1 for regressions): backend 3281 tests, 1 failure + 1 error, not in baseline: MeEndpointTests.treasurerHasReadPermissions (order-dependent treasurer permissions), SealImportPlansMigrationTests (context at V26 fails schema validation on allocation). Regression fix delegated to spring-backend.
