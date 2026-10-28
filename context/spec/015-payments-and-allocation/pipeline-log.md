@@ -1,12 +1,12 @@
 # Pipeline log — 015 payments and allocation
 
-- Status: finished
+- Status: finished (owner review round done; spec In Review pending the owner re-check)
 - Phase: 6 (review run running)
 - Branch: 015-payments-and-allocation (planned) · Base: main @ 75db154
 - Requirement: document docs/features/015-payments-and-allocation.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
 - Publish: pr+checks · PR: https://github.com/Philatelist/nadel-platform/pull/56 · Checks: green (run 40715246536 on 03b0e4d)
-- Review run: running at http://localhost:5173 (web), http://localhost:8080 (API), http://localhost:8180 (Keycloak); make up PID 4980 (pids in the session scratchpad review-run.pids)
+- Review run: running at http://localhost:5173 (web), :8080 (API), :8180 (Keycloak) on e99222a; make up PID 67153
 
 ## Project facts
 
@@ -141,7 +141,7 @@ red plots; guide PDFs.
 - Regression fix 939958d (ChargeTypesTests restores the treasurer role from its current permissions; SealImportPlansMigrationTests ddl-auto none below latest): fix review round 1 PASS. Full make check re-running.
 - Full `make check` (after regression fix 939958d): green — backend 3281 tests, 0 failures (baseline main 75db154: 2969/0), JaCoCo floor met; contract, format, lint, client typecheck and tests green (web 810, shared 130). Regressions: none left. Measured line coverage 0.9778 → `coverage.minimum` raised 0.974 → 0.977.
 - /awos:verify: 47 of 50 acceptance criteria [x] with test evidence (PaymentsAcceptanceTests + slice tests); 3 [?]: large receipt screen, settings switch after reload / treasurer view, electrician menu and no-access page — server side verified, real-browser rendering not checked locally (ports 8080/5173 held by the owner's own `make up`; Keycloak redirects only to :5173). Covered by `web/e2e/payments.spec.ts` and Vitest; Playwright runs in CI.
-- Status: finished
+- Status: finished (owner review round done; spec In Review pending the owner re-check)
 - Product docs: suggested (not run) `/awos:architecture Payments and allocations live in the ledger module (feature 015): payment, allocation and receipt_counter tables (V27), PlotLedgerLock, AllocationReleaser, PrepaymentAllocator, PaymentsChanged event, PaymentNotes port; remove "payments" from the planned modules`.
 - Worktrees: only the main checkout plus the pre-existing 012 worktree (not created by this run, left untouched).
 
@@ -180,7 +180,7 @@ red plots; guide PDFs.
 
 ## Owner review of PR #56 (NOTES.local.md, 2026-10-28)
 
-- Status: running again (owner review round). Items: 1 reallocation dialog validation and stuck preview (also payment form and split); 2 payments list filter layout (plot popover, billing month select), also reports and plot account filters; 3 owner decision: with auto-allocation on, an unallocated remainder is placed at once on open debts (changes spec 2.4, 8.2, 8.4, money-rules 7, guides); 4 payment card: «Зараз зараховано» then collapsible «Історія розподілу».
+- Status: finished (owner review round done; spec In Review pending the owner re-check)
 - Decision (conflict with CLAUDE.md "only the server calculates money"): item 1's "validate on the client" is met server-side — an invalid preview returns 200 with per-line problems and the server's allocated total; the table stays, the button is disabled, real errors show above the table. Owner can override by changing the CLAUDE.md rule.
 - Owner review fixes committed: fa5356b (docs, item 3), 83b3bc4 (item 2), e3b668e (items 1, 3, 4). Fix review PASS. Flaky-order fix of LedgerAccountTests in progress; full make check running.
 - Full make check after the owner review fixes: backend 3301 tests, 0 failures, JaCoCo floor met; web 825, shared 130; contract, format, lint green. LedgerAccountTests order fix (explicit created_at) added.
@@ -189,3 +189,4 @@ red plots; guide PDFs.
 - CI run 40745784297 on ae8a02c: all five checks green (full e2e).
 - Finish 4: make guide-shots (108) and make guide (4 PDFs) on the review run at 6db0891; 24 screenshots and the PDFs changed (payment card, list filters, form, account). Note: the local dev DB contains the review test payments № 10–13, visible in the payments list and card shots.
 - Finish 5: /awos:architecture — context/product/architecture.md records payments and allocations in the ledger module (V27 tables, PlotLedgerLock, AllocationReleaser, PrepaymentAllocator and the owner rule, PaymentsChanged, PaymentNotes, permissions); reports: nine incl. payments; payments removed from the planned modules. Drift found: maplibre-gl is a web dependency with no use in web/src — kept as recorded (default), reported to the owner.
+- Finish 6: review run restarted on e99222a (make up PID 67153). Not merged.
