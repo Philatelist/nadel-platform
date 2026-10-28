@@ -145,8 +145,11 @@ and retry, and the requirement's `invoice_run` is dropped.
   loose ceiling (60 s per build, 10 s on request).
   Measured (Testcontainers PostgreSQL on a developer Mac, while the application and the guide screenshots ran in
   parallel): the first build in about 3.7 seconds (3,721 ms), the rebuild without a change in about 3.2 seconds
-  (3,221 ms), the on-request invoice in about 0.16 seconds (156 ms). The limit stays at 2,000 plots; the first build is
-  below the threshold of about 5 s, so the web shows a spinner and no progress UI.
+  (3,221 ms), the on-request invoice in about 0.16 seconds (156 ms). Run alone twice: first build 3.0 s and 3.4 s,
+  rebuild 2.4 s, on-request 0.12 s. Inside one full `./mvnw verify` run (shared JVM after 3,600 other tests, load
+  average above 8) one first build took 47.6 s; isolated reruns did not reproduce it, so it is treated as contention,
+  and the test's 60 s ceiling is watched in CI. The limit stays at 2,000 plots; the first build is below the threshold
+  of about 5 s, so the web shows a spinner and no progress UI.
 - **Progress UI:** a spinner only while the measured first build at the limit is at most about 5 s; a longer build
   goes back to the owner (a lower limit, or the build as a JobRunr job in 017) instead of a progress bar here.
 
