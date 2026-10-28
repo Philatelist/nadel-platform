@@ -94,7 +94,7 @@ export function PlotPicker({
         <ul
           id={listId}
           role="listbox"
-          aria-label={label}
+          aria-label={`${label} · ${t.tariffs.scope.plotSuggestions}`}
           className="absolute inset-x-0 top-full z-20 mt-1 max-h-60 overflow-y-auto rounded-control border border-line bg-surface shadow-lg"
         >
           {results.map((p, index) => (

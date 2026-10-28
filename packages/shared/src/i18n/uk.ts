@@ -753,6 +753,7 @@ export const uk: Messages = {
       kind: 'Застосовується до',
       searchPlot: 'Номер ділянки',
       noPlotsFound: 'Ділянок не знайдено',
+      plotSuggestions: 'Підказки ділянок',
       addExclusion: 'Додати виняток',
       addSelected: 'Додати ділянку',
       plot: 'Ділянка',

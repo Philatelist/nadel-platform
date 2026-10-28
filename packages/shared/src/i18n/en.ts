@@ -738,6 +738,7 @@ export const en = {
       kind: 'Applies to',
       searchPlot: 'Plot number',
       noPlotsFound: 'No plots found',
+      plotSuggestions: 'Plot suggestions',
       addExclusion: 'Add exclusion',
       addSelected: 'Add plot',
       plot: 'Plot',

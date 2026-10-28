@@ -270,11 +270,11 @@ test.describe('tariffs: acceptance', () => {
       await main(page).getByRole('button', { name: 'Змінити', exact: true }).click();
 
       // #4 common land is not offered by the search; the unarchived ordinary plot is
-      await main(page).getByLabel('Додати виняток').fill(road.number);
+      await main(page).getByLabel('Додати виняток', { exact: true }).fill(road.number);
       await expect(main(page).getByText('Ділянок не знайдено')).toBeVisible();
-      await main(page).getByLabel('Додати виняток').fill(a.number);
+      await main(page).getByLabel('Додати виняток', { exact: true }).fill(a.number);
       await main(page)
-        .getByRole('button', { name: new RegExp(`^${a.number}`) })
+        .getByRole('option', { name: new RegExp(`^${a.number}`) })
         .click();
       await expect(main(page).getByLabel('Причина')).toBeVisible();
 
@@ -300,9 +300,9 @@ test.describe('tariffs: acceptance', () => {
       await main(page).getByRole('button', { name: 'Змінити', exact: true }).click();
       await main(page).getByText('Вибрані ділянки', { exact: true }).click();
       for (const plot of [a, b]) {
-        await main(page).getByLabel('Додати ділянку').fill(plot.number);
+        await main(page).getByLabel('Додати ділянку', { exact: true }).fill(plot.number);
         await main(page)
-          .getByRole('button', { name: new RegExp(`^${plot.number}`) })
+          .getByRole('option', { name: new RegExp(`^${plot.number}`) })
           .click();
       }
       await main(page).getByRole('button', { name: 'Зберегти', exact: true }).click();

@@ -286,8 +286,8 @@ test.describe('meters and readings: acceptance', () => {
         await main(page).getByRole('button', { name: 'Зареєструвати лічильник' }).click();
         const dialog = page.getByRole('dialog', { name: 'Реєстрація лічильника' });
         if (resource) await dialog.getByLabel('Ресурс', { exact: true }).selectOption({ label: resource });
-        await dialog.getByLabel('Знайдіть ділянку за номером').fill(fixture.plot.number);
-        await dialog.getByRole('button', { name: new RegExp(fixture.plot.number) }).click();
+        await dialog.getByLabel('Знайдіть ділянку за номером', { exact: true }).fill(fixture.plot.number);
+        await dialog.getByRole('option', { name: new RegExp(fixture.plot.number) }).click();
         return dialog;
       };
 
