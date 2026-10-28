@@ -2,9 +2,9 @@
 
 - **Topic:** The treasurer records money received from members, as cash at the cooperative's cash desk or as a bank
   transfer entered by hand. The app places each payment on the plot's debts (oldest first), keeps what is left as a
-  prepayment, places prepayments on later charges, and from then on every debt, plot colour, report and member account
+  prepayment only when the plot has no open debt, places prepayments on later charges, and from then on every debt, plot colour, report and member account
   reflects the payments.
-- **Status:** Completed
+- **Status:** In Review
 - **Author:** Alex Usov
 - **Source:** `docs/features/015-payments-and-allocation.md` (roadmap phase 3, feature 1 of 3)
 
@@ -59,7 +59,11 @@ Charge type order used in the examples: Membership, Electricity, Land tax.
   charge types; then the earliest service period; then the order the charges were booked in. Each charge receives at
   most what is still open on it.
 - The treasurer may change the amount on any line, or add any other open charge of the plot, before saving. The total
-  may not exceed the payment; no line may exceed what is open on its charge. What is not allocated stays as prepayment.
+  may not exceed the payment; no line may exceed what is open on its charge. The treasurer chooses the lines; the free
+  remainder is dealt with by 2.7: with automatic allocation on it is placed at once on the oldest debts, otherwise it
+  stays as prepayment. Under the prepayment line the form says «Залишок буде зараховано автоматично на найстаріші
+  борги» ("The remainder will be placed automatically on the oldest debts") when the setting is on, and the preview
+  shows the resulting lines, the automatic ones marked.
 - "Зберегти" ("Save") records the payment. For cash, the screen shows the receipt number large ("Квитанція № 42") with
   "Ще один платіж" ("Another payment"). For bank, it shows the saved payment.
 - A payment of a closed month (the date is in a month that is already closed) is accepted: it counts in the earliest
@@ -79,9 +83,17 @@ Charge type order used in the examples: Membership, Electricity, Land tax.
   - [x] Given an opening balance of membership 1200,00 ₴ on the plot, when the treasurer enters 500,00 ₴, then the
         proposal puts 500,00 ₴ on the opening balance and 700,00 ₴ stays open.
         *Verified:* PaymentsAcceptanceTests.fs2_1_anOpeningBalanceReceivesThePaymentAndKeepsWhatIsOpen; AllocationPlannerTests example 18
-  - [x] When the treasurer changes the proposal of a 700,00 ₴ payment to electricity 250,00 ₴ and membership
-        400,00 ₴ and saves, then the payment is saved as chosen and 200,00 ₴ of membership stays open.
-        *Verified:* PaymentsAcceptanceTests.fs2_1_theTreasurersOwnLinesAreSavedAsChosen; AllocationPlannerTests example 10
+  - [ ] When the treasurer changes the proposal of a 700,00 ₴ payment to electricity 250,00 ₴ and membership
+        400,00 ₴ and saves, then the lines are saved as chosen; with automatic allocation on the remaining 50,00 ₴ is
+        placed on membership and 150,00 ₴ of membership stays open, with it off 200,00 ₴ stays open and 50,00 ₴ is
+        prepayment. (Amended 2026-10-28: the earlier criterion expected 200,00 ₴ open with automatic allocation on.)
+  - [ ] Given plot 9 owes membership 600,00 ₴ (January) and electricity 250,00 ₴ (February) and automatic allocation
+        is on, when the treasurer enters 700,00 ₴ and allocates only electricity 250,00 ₴, then the form says «Залишок
+        буде зараховано автоматично на найстаріші борги», the preview shows membership 450,00 ₴ as an automatic line,
+        and after saving membership is open 150,00 ₴ and the prepayment is 0,00 ₴.
+  - [ ] Given the same debts and automatic allocation off, when the treasurer enters 700,00 ₴ and allocates only
+        electricity 250,00 ₴, then the form shows no such note, and after saving membership is open 600,00 ₴ and the
+        prepayment is 450,00 ₴.
   - [x] When the treasurer allocates 900,00 ₴ of a 700,00 ₴ payment, then they see "Розподілено більше, ніж сума
         платежу" / "More is allocated than the payment amount" and nothing is saved.
         *Verified:* PaymentsAcceptanceTests.fs2_1_everyRefusalNamesItsCodeAndSavesNothingNorUsesUpAReceiptNumber (400 ALLOCATION_EXCEEDS_PAYMENT); screen text from the i18n catalogs; rendering covered by Vitest, real-browser rendering by `web/e2e/payments.spec.ts` in CI (Playwright could not run locally: ports 8080/5173 held by the owner's own app)
@@ -159,9 +171,12 @@ Charge type order used in the examples: Membership, Electricity, Land tax.
 - The list shows, newest first: receipt number or bank document number, date received, plot, payer (member's short
   name), source, amount, allocated, prepayment, and whether it is reversed. Filters: date range, billing month, source,
   plot.
-- The payment card shows the payment's details, the payer note (only for those allowed to see member data), each
-  allocation and each release (when money was taken back from a charge) with the charge, its period and the amount, the
-  other parts of its group, who entered it and when.
+- The payment card shows the payment's details, the payer note (only for those allowed to see member data), the
+  other parts of its group, who entered it and when. The allocation is shown in two parts: «Зараз зараховано»
+  ("Currently allocated"), what the payment covers now, and «Історія розподілу» ("Allocation history"), every
+  allocation and release (when money was taken back from a charge) with the charge, its period, the amount, who did it
+  and when. (Amended 2026-10-28.)
+- The list filters sit in one tidy row/grid that does not overlap the table (amended 2026-10-28).
 - **Acceptance Criteria:**
   - [x] When the treasurer opens "Платежі" and filters by source "Готівка", then only cash payments are listed, each
         with its receipt number.
@@ -194,8 +209,13 @@ Charge type order used in the examples: Membership, Electricity, Land tax.
 
 - "Перерозподілити" ("Reallocate") on the payment card shows the payment's current allocations next to a new proposal
   and lets the treasurer change it as in 2.1. Saving takes back the old allocations and writes the new ones at once.
-- When automatic allocation is off and a plot has a prepayment, the plot account shows "Розподілити аванс" ("Allocate
-  prepayment") with a proposal over the plot's open charges, changeable as in 2.1.
+- When a payment is reallocated with automatic allocation on, lines left at 0,00 ₴ do not create a waiting prepayment
+  while the plot has open debts: the free remainder is placed on the oldest debts as in 2.7. The reallocation dialog
+  keeps its table on screen with a message per problem line and «Розподілено X з Y» ("Allocated X of Y"), and does not
+  get stuck on an old preview.
+- When automatic allocation is off and the prepayment is above 0,00 with an open charge on the plot, "Розподілити аванс"
+  ("Allocate prepayment") is shown on the plot account and on the payment card, with a proposal over the plot's open
+  charges, changeable as in 2.1.
 - **Acceptance Criteria:**
   - [x] Given a 700,00 ₴ payment paid membership 600,00 ₴ and electricity 100,00 ₴, when the treasurer reallocates it
         as electricity 250,00 ₴ and membership 450,00 ₴, then the account shows membership open 150,00 ₴, electricity
@@ -205,19 +225,32 @@ Charge type order used in the examples: Membership, Electricity, Land tax.
         open, when the treasurer uses "Розподілити аванс" and saves the proposal, then land tax is paid and the
         prepayment is 30,00 ₴.
         *Verified:* PaymentsAcceptanceTests.fs2_6_withAutomaticAllocationOffThePrepaymentIsAllocatedByHandAndTheRestStays; PrepaymentAllocationTests
+  - [ ] Given automatic allocation is on and plot 9 owes membership 600,00 ₴ and electricity 250,00 ₴, when the
+        treasurer reallocates a payment leaving a line at 0,00 ₴, then the freed money is placed on the oldest debts
+        and no prepayment waits while a debt is open.
+  - [ ] Given automatic allocation is off, a prepayment above 0,00 ₴ and an open charge, when the treasurer opens the
+        payment card, then "Розподілити аванс" is shown there as well as on the plot account.
+  - [ ] When a reallocation line is invalid, then the dialog keeps the table with a message on that line and
+        «Розподілено X з Y», and the preview is not stuck (the same in the payment form and the split).
 
 ### 2.7 Prepayment and automatic allocation
 
-- A plot's prepayment is the money paid for it that is not placed on any charge. It is never negative.
+- A plot's prepayment is the money paid for it that is not placed on any charge. It is never negative. With
+  automatic allocation on, prepayment never waits while the plot has open debts.
 - A new cooperative setting "Автоматично зараховувати аванс" ("Allocate prepayment automatically"), on by default,
   changeable by those who manage settings.
 - With the setting on, a plot's prepayment is placed on the plot's open charges (same order as 2.1) whenever new
   charges are booked for the plot (a month run, a reading, a run, an opening balance, a recalculation) and whenever
   money is taken back from a charge (2.8). The plot account shows such a line as "Зараховано з авансу" ("Allocated from
   prepayment").
-- When a payment is saved with money left over, that remainder is not placed beyond what the treasurer chose; it waits
-  for new charges.
-- With the setting off, the prepayment stays until the treasurer allocates it by hand (2.6).
+- When a payment is saved with money left over (amended 2026-10-28, owner decision), the treasurer's lines are saved
+  as chosen and the remainder is placed at once on the plot's open charges, oldest first, then by the charge type
+  order, in the same save. The same holds for a reallocation: lines left at 0,00 ₴ do not create a waiting prepayment
+  while open debts exist. The remainder stays as prepayment, waiting for new charges, only when the plot has no open
+  debt.
+- With the setting off, nothing is placed automatically: the remainder stays as prepayment until the treasurer
+  allocates it by hand (2.6), with "Розподілити аванс" on the plot account and on the payment card whenever the
+  prepayment is above 0,00 ₴ and a charge is open.
 - **Acceptance Criteria:**
   - [x] Given plot 9 has a prepayment of 150,00 ₴ and automatic allocation is on, when a land tax charge of 120,00 ₴ is
         booked for plot 9, then the plot account shows land tax 120,00 ₴ "Зараховано з авансу" and a prepayment of
@@ -226,6 +259,13 @@ Charge type order used in the examples: Membership, Electricity, Land tax.
   - [x] Given the same plot with automatic allocation off, when the land tax charge is booked, then land tax stays
         open 120,00 ₴ and the prepayment stays 150,00 ₴.
         *Verified:* PaymentsAcceptanceTests.fs2_7_withTheSettingOffTheNewChargeStaysOpenAndThePrepaymentStays; AutoAllocationTests example 5
+  - [ ] Given debts membership 600,00 ₴ and electricity 250,00 ₴ and automatic allocation on, when the treasurer
+        saves 700,00 ₴ with only electricity 250,00 ₴ chosen, then 450,00 ₴ is placed on membership at once (open
+        150,00 ₴), the prepayment is 0,00 ₴, and the plot account shows the automatic line.
+  - [ ] Given the same case with automatic allocation off, then the 450,00 ₴ stays as prepayment and membership stays
+        open 600,00 ₴.
+  - [ ] Given a plot with no open debt and automatic allocation on, when a payment is saved, then the whole amount is
+        a prepayment and waits for new charges.
   - [x] When the chairman switches "Автоматично зараховувати аванс" off and saves the settings, then the switch stays
         off after reloading the page, and a treasurer does not see the switch as changeable.
         *Verified:* rendered on the review run: the chairman switched «Allocate prepayment automatically» off and saved («Settings saved»); after a page reload the switch is still off and the database stores false, see `docs/screenshots/015-payments-and-allocation-auto-allocation-off.png` (switched back on afterwards); a treasurer opening Settings gets «You don't have access to this page»; server side: PaymentsAcceptanceTests.fs2_7_theChairmanSwitchesTheSettingOff….
@@ -258,7 +298,8 @@ Charge type order used in the examples: Membership, Electricity, Land tax.
 - The plot account (011) now shows:
   - payments, reversals of payments and allocations from prepayment, interleaved with the charges by date;
   - per charge: charged, paid, open;
-  - the prepayment, with "Розподілити аванс" when automatic allocation is off;
+  - «Аванс X ₴» ("Prepayment X") next to the debt total at the top, whenever the prepayment is above 0,00 ₴;
+  - the prepayment, with "Розподілити аванс" when it is above 0,00 ₴, a charge is open and automatic allocation is off;
   - a filter "Лише платежі" ("Payments only");
   - the debt after payments, per charge type and in total.
 - **Acceptance Criteria:**
@@ -272,6 +313,8 @@ Charge type order used in the examples: Membership, Electricity, Land tax.
   - [x] When the treasurer chooses "Лише платежі" on a plot account, then only payments and their reversals are listed,
         and the debts above the list are unchanged.
         *Verified:* PaymentsAcceptanceTests.fs2_9_aFullyPaidPlot…PaymentsOnlyKeepsTheDebts (kind=PAYMENTS); PlotAccountPayments.test.tsx
+  - [ ] Given a plot has a prepayment of 150,00 ₴, when anyone allowed opens its account, then «Аванс 150,00 ₴» is shown
+        next to the debt total; with no prepayment nothing is shown.
 
 ### 2.10 What a member sees
 
@@ -389,6 +432,13 @@ Decided with the owner (28.10.2026, in the requirement): allocation order oldest
 treasurer's change before saving; internal receipt numbers, no fiscal cash register; prepayment auto-allocated by
 default (setting); split over several plots proposed in proportion to debts, one receipt per cash group.
 
+Decided with the owner (28.10.2026, review of PR #56; replaces the earlier wording "the remainder waits for new
+charges"): with auto-allocation on, prepayment never waits while the plot has open debts. On saving a payment, and on a
+reallocation, the unallocated remainder is placed at once by the standard order (oldest first, then the charge type
+order); the treasurer still chooses the lines. Prepayment stays only when the plot has no open debt or when
+auto-allocation is off. «Розподілити аванс» is on the plot account and the payment card when the setting is off and the
+prepayment is above 0,00 ₴ with an open charge; «Аванс X ₴» shows next to the debt total.
+
 Taken automatically by the pipeline (autonomy `minimal`, no blocking questions; see `pipeline-log.md`):
 
 - A member sees their plots' payments (date, receipt or bank number, amount, what it paid, reversed or not) but not the
@@ -409,4 +459,12 @@ Taken automatically by the pipeline (autonomy `minimal`, no blocking questions; 
 
 ## Change Log
 
-- (none yet)
+- 2026-10-28, owner review of PR #56 (Status back to In Review; the new criteria are unchecked until verified):
+  1. Reallocation dialog validation and a stuck preview: the table stays with per-line messages and «Розподілено X з
+     Y»; the same fixed in the payment form and the split (2.1, 2.6).
+  2. Payments list: the filters laid out without overlapping the table (2.4).
+  3. Owner decision: with auto-allocation on, the remainder of a payment or a reallocation is placed at once on the
+     oldest debts; prepayment stays only without open debts or with auto-allocation off. New form note, automatic lines
+     in the preview, «Розподілити аванс» also on the payment card, «Аванс X ₴» next to the debt total (2.1, 2.6, 2.7,
+     2.9). The criterion of 2.1 with 250,00 + 400,00 ₴ of 700,00 ₴ changed (open membership 150,00 ₴ with the setting on).
+  4. Payment card: «Зараз зараховано» (current allocation) separated from «Історія розподілу» (history, with authors) (2.4).

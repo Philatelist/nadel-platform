@@ -614,7 +614,7 @@ Each charge receives at most its open amount. What is left is the prepayment.
 
 **The treasurer's change.** Before saving, the treasurer may change the amount of any line or add other open charges of
 the plot. The lines may not add up to more than the payment (`ALLOCATION_EXCEEDS_PAYMENT`) and no line may exceed the
-charge's open amount (`ALLOCATION_EXCEEDS_CHARGE`). What is not allocated stays as prepayment. The server checks the
+charge's open amount (`ALLOCATION_EXCEEDS_CHARGE`). What is not allocated is the remainder; the paragraph on prepayment below says where it goes. The server checks the
 digest of the preview it showed; if the ledger changed meanwhile, saving is refused (`PREVIEW_OUTDATED`).
 
 **Reallocation.** A saved payment can be reallocated: its allocations are released and new ones written in one
@@ -639,9 +639,13 @@ reversal is booked in the payment's own month while that month is open, otherwis
 idea of allocating "when a period is closed". With it on, a plot's prepayment is allocated by the same order whenever
 charges are booked for the plot (a month run, a reading, a run, an opening balance, a recalculation) and whenever money is
 released from a charge. These allocations are written by the system and shown on the account as "Allocated from
-prepayment". A payment saved with a remainder does not place the remainder beyond what the treasurer chose: it waits for
-new charges. With the setting off, the prepayment stays until the treasurer allocates it by hand. Switching the setting
-on places no old prepayment at once.
+prepayment". With the setting on, prepayment never waits while the plot has open debts: when a payment is saved, the
+treasurer's lines are kept as chosen and the unallocated remainder is placed at once, in the same transaction, by the
+standard order (oldest first, then the charge type order) on the charges still open. A reallocation works the same way:
+lines left at 0.00 do not create a waiting prepayment while open debts exist. Prepayment remains only when the plot has
+no open debt (it then waits for new charges) or when the setting is off. With the setting off nothing is placed
+automatically: the prepayment stays until the treasurer allocates it by hand, which is offered whenever the prepayment is
+above 0.00 and a charge is open. Switching the setting on places no old prepayment at once.
 
 **One payment over several plots of one payer.** The treasurer chooses a payer; the form lists the payer's current
 plots (not common land, not archived). The proposed split is in proportion to the plots' debts, by `Money.allocate`
@@ -671,7 +675,7 @@ splitter or the release rules):
 | 7 | Membership 600.00 fully paid; a recalculation adjusts it by −100.00 | release 100.00 of the latest allocation; prepayment 100.00 |
 | 8 | Membership 600.00 paid 600.00; an adjustment of +50.00 | open 50.00; debt 50.00; the plot is no longer GREEN |
 | 9 | The payment of 700.00 of example 1 is reversed | releases 600.00 and 100.00; debts back to 600.00 and 250.00 |
-| 10 | The treasurer allocates 700.00 as electricity 250.00 and membership 400.00 | saved as chosen; open membership 200.00 |
+| 10 | The treasurer allocates a 700.00 payment as electricity 250.00 and membership 400.00 | saved as chosen; the remainder 50.00 goes on membership at once with auto-allocation on (open membership 150.00), or stays as prepayment with it off (open membership 200.00) |
 | 11 | The treasurer allocates 900.00 of a 700.00 payment | refused: `ALLOCATION_EXCEEDS_PAYMENT` |
 | 12 | A member owns plots 7 (debt 300.00) and 15 (debt 100.00) and pays 200.00 | proposal 150.00 and 50.00 |
 | 13 | Three plots with debts 100.00, 100.00, 100.00; payment 100.00 | 33.34, 33.33, 33.33 (the first plot gets the extra kopeck) |
@@ -680,6 +684,8 @@ splitter or the release rules):
 | 16 | A cash payment of 31.01 entered on 03.02, January is closed | booked in February with `received_on` 31.01; January's totals unchanged |
 | 17 | Two treasurers save cash payments at the same time | receipts 41 and 42, no gap, no duplicate |
 | 18 | Opening balance membership 1200.00, payment 500.00 | allocated to the opening charge; open 700.00 |
+| 19 | Debts: membership 600.00 (Jan), electricity 250.00 (Feb). Payment 700.00; the treasurer allocates electricity 250.00 only; auto-allocation on | the remainder 450.00 is placed at once on membership; open membership 150.00; prepayment 0.00 |
+| 20 | Example 19 with auto-allocation off | electricity 250.00; the remainder 450.00 stays as prepayment; open membership 600.00 |
 
 ## 8. Ownership and sale
 

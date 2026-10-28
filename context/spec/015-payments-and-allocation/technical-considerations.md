@@ -2,7 +2,7 @@
 
 - **Functional Specification:** [functional-spec.md](functional-spec.md) (requirement
   `docs/features/015-payments-and-allocation.md`)
-- **Status:** Completed
+- **Status:** In Review (2.3, 2.4, 2.6 and risk notes amended 2026-10-28, owner review of PR #56)
 - **Author(s):** Alex Usov
 
 ---
@@ -77,6 +77,13 @@ plot_id, received_on) INCLUDE (amount, kind)`, `(tenant_id, billing_month_id)`, 
   `min(remaining, open)`; the rest is prepayment. `validate`: distinct charges, amounts > 0, each an allocatable charge of
   the plot (else 400 `VALIDATION_FAILED`, field `NOT_FOUND`), Σ ≤ payment (400 `ALLOCATION_EXCEEDS_PAYMENT`), each ≤ open
   (400 `ALLOCATION_EXCEEDS_CHARGE`, field `parts[i].lines[j].amount`).
+- **Automatic placement of the remainder (amended 2026-10-28).** With `autoAllocatePrepayment` on, the entry and the
+  reallocation compute, after the treasurer's lines, the remainder (payment − Σ lines) and run the planner over the
+  charges still open after those lines (the plot's open amounts minus the chosen lines); its lines are the **automatic
+  lines** (origin `PREPAYMENT_AUTO`, `created_by` null, same transaction and plot lock as the payment). What the planner
+  cannot place (no open charge left) is the prepayment. With the setting off the remainder is the prepayment. The same
+  pure function serves the preview and the save, so the preview shows exactly what is saved. All money calculation
+  stays on the server; the web only displays the preview's lines (the `auto` flag marks automatic ones).
 - **Splitter:** the payer's current plots (not common land, not archived) in natural plot order, weighted by debt.
   amount ≥ total debt → each plot its debt, the excess to the first plot; total debt 0 → all to the first plot;
   otherwise `Money.allocate(debts)`.
@@ -116,7 +123,7 @@ plot_id, received_on) INCLUDE (amount, kind)`, `(tenant_id, billing_month_id)`, 
   transaction: setting off → nothing; else lock the event's plots that have prepayment and open charges, recompute,
   allocate (`PREPAYMENT_AUTO`, `created_by` null), publish `PaymentsChanged`. Idempotent (only the current prepayment
   under the lock); no loop (it never publishes `ChargesBooked`). Entry, reallocation and manual allocation never trigger
-  it. Releases inside a charge path are followed by that path's `ChargesBooked`, so released money is re-placed.
+  it as events (the remainder is placed inside the payment's own transaction, see 2.3). Releases inside a charge path are followed by that path's `ChargesBooked`, so released money is re-placed.
 
 ### 2.5 Receipt numbers
 
@@ -134,6 +141,7 @@ duplicates). A cash group takes one number, stored on every part.
 | `GET /payments/{id}` | `PAYMENTS_VIEW` | payment, allocations and releases (charge, period, amount, origin, cause), group parts, `payerNote` only with `MEMBERS_VIEW`, author, `reversible`, `reversedBy` |
 | `POST /payments/{id}/reverse` | `PAYMENTS_REVERSE` | `{reason}` |
 | `POST /payments/{id}/reallocate?preview` | `PAYMENTS_ENTER` | `{lines?, digest?}`; preview shows current allocations and the proposal as if released |
+| *Amended 2026-10-28* | | Preview line problems (exceeds payment or charge) are answered **200 with `problems`** per line and a total (`allocatedTotal` of the payment), so the form keeps its table and shows «Розподілено X з Y»; the **save** still answers 400 with the same codes. Preview lines carry `auto` for the automatic remainder lines. The preview and the plot account carry `prepaymentAllocatable` (prepayment > 0.00 and an open charge exists), which shows «Розподілити аванс» on the plot account and the payment card when the setting is off. `GET /payments/{id}` returns `currentAllocations` (live allocations) separately from `history` (allocations and releases with their authors). |
 | `POST /plots/{id}/prepayment/allocate?preview` | `PAYMENTS_ENTER` | `{lines?, digest?}` |
 | `GET /plots/{id}/account` | as 011 | + `payments[]` (date, source, receipt/reference, amount, allocations, reversed; payer note only with `PAYMENTS_VIEW`+`MEMBERS_VIEW`, author only with `CHARGES_VIEW`), per charge `paid` and `open`, `prepayment`, debts after payments, filter `kind=PAYMENTS` |
 | `GET\|PUT /settings` | as now | + `autoAllocatePrepayment` |
@@ -229,7 +237,8 @@ settings README. Guides (uk, en): board guide chapter «Платежі та ка
     that changes the type.
   - *e2e churn from demo payments* (`plots-acceptance` colour counts, plot 1 debt, ownership/reports colour asserts) →
     fixed in the demo-data slice; new payment specs use fresh plots and never assert a fixed receipt number.
-  - *The treasurer's deliberate remainder* is placed by the next booking (requirement §2.4); *turning the setting on*
+  - *The treasurer's deliberate remainder* (amended 2026-10-28): with auto-allocation on it is placed at once at save
+    (requirement §2.4); it waits for the next booking only when the plot has no open debt or the setting is off; *turning the setting on*
     places existing prepayments only at the next booking for the plot (no sweep job) → documented in the guide.
   - *Personal data*: payer note encrypted in the table and the audit; the payments report decrypts only with
     `MEMBERS_VIEW`; never logged.

@@ -866,7 +866,13 @@
       <ul>
         <li>
           You can change the amount on any line, or add another open charge of the plot with "Add a charge".
-          Whatever is not allocated becomes prepayment.
+          The treasurer chooses the lines; the system places the free remainder itself (see below).
+        </li>
+        <li>
+          While automatic allocation is on, a note under the "Prepayment" line says "The remainder will be
+          placed automatically on the oldest debts", and the preview shows the resulting lines, the automatic
+          ones marked. If a line is wrong, the table stays on screen with a message at that line and
+          "Allocated X of Y" below; you can save as soon as there are no problems.
         </li>
         <li>
           The total may not exceed the payment ("More is allocated than the payment amount"), and a line may
@@ -922,16 +928,22 @@
       </figure>
       <p>
         The card shows the payment's details, the note about the payer (only to those with "View members"),
-        every allocation to a charge with its period and amount, every amount
-        <strong>taken back from a charge</strong> (a release) with its cause, the other parts of the group,
-        and who entered the payment and when.
+        the other parts of the group, and who entered the payment and when. The allocation has two parts:
+        <strong>"Currently allocated"</strong> - what the payment covers now - and
+        <strong>"Allocation history"</strong> - every allocation and every amount
+        <strong>taken back from a charge</strong> (a release) with its period, amount, cause, author and time.
+        When automatic allocation is off, there is a prepayment and a charge is open, the card also has the
+        "Allocate prepayment" button.
       </p>
 
       <h3>Reallocate</h3>
       <p>
         <strong>"Reallocate"</strong> ("Enter payments") shows the current allocation next to a new proposal
         that can be changed as when entering. Saving takes back the old allocation and writes the new one in
-        one step and is written to the audit log. This is how money is moved between charges.
+        one step and is written to the audit log. This is how money is moved between charges. The dialog does
+        not get stuck on an old preview: the table stays, wrong lines have a message and "Allocated X of Y" is
+        shown below. While automatic allocation is on, lines left at 0.00 do not create a prepayment as long
+        as the plot has open debts: the free amount goes to the oldest debts.
       </p>
 
       <h3>Reverse a payment</h3>
@@ -962,13 +974,17 @@
           taken back from a charge. On the account such lines are labelled "Allocated from prepayment".
         </li>
         <li>
-          When a payment is saved with a remainder, the remainder is not placed beyond what the treasurer
-          chose: it waits for new charges.
+          While automatic allocation is on, prepayment never waits while the plot has open debts. When a
+          payment is saved, the lines the treasurer chose are kept as chosen and the rest of the amount is
+          placed at once by the standard order: the oldest debts first, then the order of charge types. The
+          same happens on a reallocation. Prepayment remains only when the plot has no open debt (it then
+          waits for new charges).
         </li>
         <li>
-          While the switch is off, the prepayment stays until the treasurer allocates it by hand: on the
-          plot's account, next to the "Prepayment" line, is the <strong>"Allocate prepayment"</strong> button
-          - a proposal over the open charges that can be changed.
+          While the switch is off, nothing is placed automatically: the prepayment stays until the treasurer
+          allocates it by hand. The <strong>"Allocate prepayment"</strong> button is on the plot's account and
+          on the payment card whenever the prepayment is above 0.00 and a charge is open - a proposal over the
+          open charges that can be changed.
         </li>
       </ul>
       <p>
@@ -978,9 +994,10 @@
       <h3>The plot account after payments</h3>
       <p>
         On the account, payments are interleaved with charges by date; next to each charge are "Charged",
-        "Paid" and "Open". Above the list are the debt after payments per type and in total, and the
-        prepayment. The <strong>"Payments only"</strong> filter keeps only payments and their reversals; the
-        debts above the list do not change.
+        "Paid" and "Open". Above the list are the debt after payments per type and in total, and next to the
+        total debt "Prepayment X" whenever the prepayment is above 0.00. The
+        <strong>"Payments only"</strong> filter keeps only payments and their reversals; the debts above the
+        list do not change.
       </p>
       <p>
         "Charges → Months" has a <strong>"Received"</strong> column next to "Charged". The "Plot balances",
@@ -2305,12 +2322,14 @@ prepayment             = Σ payments (net of reversals) − Σ allocated</pre>
           The oldest debt first (by the day it counts from); for the same day, in the order of the
           cooperative's charge types (membership, electricity, land tax - as on the charge types page); then
           by the start of the service period and the booking order. Each charge receives at most its open
-          amount; the rest is prepayment.
+          amount; the rest is prepayment if the plot has no open debt (while automatic allocation is on, the
+          free remainder goes at once to the oldest debts).
         </dd>
         <dt>The treasurer's change</dt>
         <dd>
           The proposal can be changed before saving: the lines may not add up to more than the payment, and a
-          line may not exceed the charge's open amount. Whatever is not allocated is prepayment.
+          line may not exceed the charge's open amount. With automatic allocation on, the unallocated
+          remainder goes to the oldest debts; with it off, or when no debt is open, it becomes prepayment.
         </dd>
         <dt>Taking money back from a charge</dt>
         <dd>
@@ -2365,6 +2384,21 @@ prepayment             = Σ payments (net of reversals) − Σ allocated</pre>
           the prepayment to the land tax and the prepayment becomes 30.00. With the switch off, the land tax
           would stay a debt of 120.00 and the prepayment 150.00 until the treasurer presses "Allocate
           prepayment".
+        </p>
+      </div>
+      <div class="example">
+        <span class="callout-title">Example 19. A payment with a remainder while debts are open</span>
+        <p>
+          Debts: membership 600.00 (January), electricity 250.00 (February). Payment 700.00; the treasurer
+          allocates only the electricity 250.00. Automatic allocation is on: the remaining 450.00 is placed at
+          once on the membership, 150.00 of membership stays open, the prepayment is 0.00.
+        </p>
+      </div>
+      <div class="example">
+        <span class="callout-title">Example 20. The same with automatic allocation off</span>
+        <p>
+          The same case with the switch off: electricity 250.00, the remaining 450.00 stays as prepayment and
+          the membership stays open at 600.00. The treasurer can press "Allocate prepayment".
         </p>
       </div>
       <div class="example">

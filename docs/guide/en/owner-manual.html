@@ -1141,8 +1141,10 @@ END $$;</pre>
             <td>Form → allocation table (Allocate, Add a charge, Prepayment)</td>
             <td>
               The proposal: the oldest debt first, and within one debt date the order of charge types. A
-              line's amount can be changed or another open charge added; whatever is not allocated is the
-              "Prepayment"
+              line's amount can be changed or another open charge added; with automatic allocation on, the
+              free remainder goes at once to the oldest debts (a note under the "Prepayment" line says "The
+              remainder will be placed automatically on the oldest debts"), otherwise it is the "Prepayment".
+              The table stays on screen: a message at a wrong line and "Allocated X of Y" below
             </td>
             <td>Enter payments</td>
           </tr>
@@ -1165,9 +1167,11 @@ END $$;</pre>
           <tr>
             <td>Payment card</td>
             <td>
-              The payment's details, "Allocation" (charge, period, amount; "Allocated from prepayment" for
-              automatic ones), "Taken back from the charge" with the cause, the other parts of the group, who
-              entered it and when; the payer note is shown only to someone who also has "View members"
+              The payment's details, "Currently allocated" (the current allocation: charge, period, amount;
+              "Allocated from prepayment" for automatic ones), "Allocation history" (allocations and "Taken
+              back from the charge" with the cause and the author), the other parts of the group, who entered
+              it and when; "Allocate prepayment" when the prepayment is above 0.00, a charge is open and
+              automatic allocation is off; the payer note is shown only to someone who also has "View members"
             </td>
             <td>View payments</td>
           </tr>
@@ -1175,7 +1179,8 @@ END $$;</pre>
             <td>Payment card → Reallocate</td>
             <td>
               Shows the current allocation and a new proposal; saving takes back the old allocation and writes
-              the new one in one step; written to the audit log
+              the new one in one step; written to the audit log. Lines left at 0.00 create no prepayment while
+              open debts exist (automatic allocation on)
             </td>
             <td>Enter payments</td>
           </tr>
@@ -1192,23 +1197,25 @@ END $$;</pre>
             <td>Plot account → payments, "Payments only"</td>
             <td>
               Payments, their reversals and "Allocated from prepayment" interleaved with the charges by date;
-              per charge: charged, paid, open; the debt after payments; "Payments only" keeps only the
-              payments
+              per charge: charged, paid, open; the debt after payments, with "Prepayment X" next to the total
+              debt when the prepayment is above 0.00; "Payments only" keeps only the payments
             </td>
             <td>View charges (payments: also View payments or an own plot)</td>
           </tr>
           <tr>
             <td>Plot account → Prepayment → Allocate prepayment</td>
             <td>
-              Shown when there is a prepayment and "Allocate prepayment automatically" is off: a proposal over
-              the open charges, which can be changed
+              Shown (also on the payment card) when the prepayment is above 0.00, a charge is open and
+              "Allocate prepayment automatically" is off: a proposal over the open charges, which can be
+              changed
             </td>
             <td>Enter payments</td>
           </tr>
           <tr>
             <td>Settings → Allocate prepayment automatically → Save the payment settings</td>
             <td>
-              On by default: the prepayment goes by itself to the plot's new charges and to released amounts.
+              On by default: prepayment never waits while the plot has open debts - the remainder of a payment
+              is placed at once - and later goes by itself to the plot's new charges and to released amounts.
               Without the permission the switch is read-only. Switching it on does not allocate old prepayment
               at once
             </td>
