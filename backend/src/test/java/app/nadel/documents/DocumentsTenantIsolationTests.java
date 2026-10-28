@@ -168,8 +168,9 @@ class DocumentsTenantIsolationTests extends DocumentTableTestSupport {
 
     @Test
     void theSameNumbersMayExistInTwoCooperatives() {
-        ownerJdbc().update("update certificate set number = 'Д-2031-5', seq = 5 where id in (?, ?)", demoCertificate,
-                otherCertificate);
+        // the certificate guard refuses to change a number, so this runs on the owner's maintenance path
+        asNadelOwner(true, sql -> sql.update("update certificate set number = 'Д-2031-5', seq = 5 where id in (?, ?)",
+                demoCertificate, otherCertificate));
 
         assertThat(count(DEMO_TENANT, "certificate", "where number = 'Д-2031-5'")).isEqualTo(1);
         assertThat(count(OTHER_TENANT, "certificate", "where number = 'Д-2031-5'")).isEqualTo(1);

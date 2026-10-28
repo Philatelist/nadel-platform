@@ -46,8 +46,9 @@ class CertificateAccessTests extends CertificateTestSupport {
     }
 
     private void readsTheRegisterAndThePdf(String bearer) throws Exception {
+        // the register lists newest first, and some tests issue a newer certificate first: find this one by id
         register(bearer, null).andExpect(status().isOk())
-                .andExpect(jsonPath("$.items[0].id").value(certificate.toString()));
+                .andExpect(jsonPath("$.items[?(@.id == '" + certificate + "')]").isNotEmpty());
         ResultActions pdf = certificatePdf(bearer, certificate).andExpect(status().isOk());
         assertThat(pdf.andReturn().getResponse().getContentType()).startsWith("application/pdf");
     }

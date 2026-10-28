@@ -143,7 +143,10 @@ and retry, and the requirement's `invoice_run` is dropped.
   payment of the month on half of the plots, a tenth of the plots shared by two owners; the first build (2,000 new
   versions), a rebuild without a change (2,000 compared, nothing written) and one on-request invoice. The test checks a
   loose ceiling (60 s per build, 10 s on request).
-  Measured: <filled after the measurement run>
+  Measured (Testcontainers PostgreSQL on a developer Mac, while the application and the guide screenshots ran in
+  parallel): the first build in about 3.7 seconds (3,721 ms), the rebuild without a change in about 3.2 seconds
+  (3,221 ms), the on-request invoice in about 0.16 seconds (156 ms). The limit stays at 2,000 plots; the first build is
+  below the threshold of about 5 s, so the web shows a spinner and no progress UI.
 - **Progress UI:** a spinner only while the measured first build at the limit is at most about 5 s; a longer build
   goes back to the owner (a lower limit, or the build as a JobRunr job in 017) instead of a progress bar here.
 
