@@ -30,7 +30,12 @@ import tools.jackson.databind.JsonNode;
 class PaymentAuditTests extends PaymentApiSupport {
 
     private static final String AUDIT = "/api/v1/audit";
-    private static final String NOTE = "Онука Оксана Петренко, +380671112233";
+    /**
+     * Unique per run: other tests legitimately store readable member first names in the audit log (names are not
+     * sealed since 014), so a fixed name here would collide with their rows in the global scans below.
+     */
+    private static final String PAYER = "Оксана-" + UUID.randomUUID().toString().substring(0, 8);
+    private static final String NOTE = "Онука " + PAYER + " Петренко, +380671112233";
 
     private UUID cashWithNote(UUID plot) throws Exception {
         JsonNode saved = body(save(treasurer(), with(with(cash(plot, "250.00"), "payerNote", "  " + NOTE + " "),
@@ -64,7 +69,7 @@ class PaymentAuditTests extends PaymentApiSupport {
                 new Change("billingMonth", null, kyivToday().toString().substring(0, 7)),
                 new Change("receiptNumber", null, Long.toString(receipt)));
         assertThat(changes).extracting(Change::field).doesNotContain("bankReference");
-        assertThat((String) entry.get("changes")).doesNotContain(NOTE).doesNotContain("Оксана")
+        assertThat((String) entry.get("changes")).doesNotContain(NOTE).doesNotContain(PAYER)
                 .contains("\"enc\"");
 
         // the chairman (MEMBERS_VIEW) reads the note in the log, a reader without it sees it hidden
@@ -111,23 +116,23 @@ class PaymentAuditTests extends PaymentApiSupport {
             byte[] stored = ownerJdbc().queryForObject("select payer_note_enc from payment where id = ?",
                     byte[].class, payment);
             assertThat(stored).isNotEmpty();
-            assertThat(new String(stored, StandardCharsets.UTF_8)).doesNotContain("Оксана");
+            assertThat(new String(stored, StandardCharsets.UTF_8)).doesNotContain(PAYER);
             assertThat(ownerJdbc().queryForObject("select count(*) from payment where id = ? "
-                    + "and position(convert_to(?, 'UTF8') in payer_note_enc) > 0", Integer.class, payment, "Оксана"))
+                    + "and position(convert_to(?, 'UTF8') in payer_note_enc) > 0", Integer.class, payment, PAYER))
                     .isZero();
             assertThat(ownerJdbc().queryForObject("select count(*) from audit_entry where cast(changes as text) "
-                    + "like ?", Integer.class, "%Оксана%")).isZero();
+                    + "like ?", Integer.class, "%" + PAYER + "%")).isZero();
             assertThat(ownerJdbc().queryForObject("select count(*) from outbox_copy where serialized_event "
                     + "like ? and serialized_event like '%PAYMENT_RECORDED%' and serialized_event like '%payerNote%'",
                     Integer.class, "%" + plot + "%")).isOne();
             assertThat(ownerJdbc().queryForObject("select count(*) from outbox_copy where serialized_event like ? "
-                    + "or serialized_event like ?", Integer.class, "%Оксана%", "%380671112233%")).isZero();
+                    + "or serialized_event like ?", Integer.class, "%" + PAYER + "%", "%380671112233%")).isZero();
             assertThat(ownerJdbc().queryForObject("select count(*) from event_publication where serialized_event "
-                    + "like ?", Integer.class, "%Оксана%")).isZero();
+                    + "like ?", Integer.class, "%" + PAYER + "%")).isZero();
             // the card opens it for a reader who may view members
             assertThat(body(card(treasurer(), payment).andExpect(status().isOk())).get("payerNote").asString())
                     .isEqualTo(NOTE);
-            assertThat(output.getAll()).contains("Payment " + payment).doesNotContain("Оксана")
+            assertThat(output.getAll()).contains("Payment " + payment).doesNotContain(PAYER)
                     .doesNotContain("380671112233");
         } finally {
             app.setLevel(level);

@@ -45,7 +45,12 @@ import tools.jackson.databind.JsonNode;
 @Timeout(180)
 class PaymentsAcceptanceTests extends FreshPaymentSupport {
 
-    private static final String SPLIT_PAYER_NOTE = "Онука Оксана Петренко, +380671112233";
+    /**
+     * Unique per run: other tests legitimately store readable member first names in the audit log (names are not
+     * sealed since 014), so a fixed name here would collide with their rows in the global scans below.
+     */
+    private static final String PAYER = "Оксана-" + UUID.randomUUID().toString().substring(0, 8);
+    private static final String SPLIT_PAYER_NOTE = "Онука " + PAYER + " Петренко, +380671112233";
 
     @AfterEach
     void unlinkDemoUsers() {
@@ -658,7 +663,7 @@ class PaymentsAcceptanceTests extends FreshPaymentSupport {
         assertThat(payment.get("amount").asString()).isEqualTo("100.00");
         assertThat(payment.has("payerNote")).isFalse();
         assertThat(payment.has("createdByName")).isFalse();
-        assertThat(account.toString()).doesNotContain("Оксана");
+        assertThat(account.toString()).doesNotContain(PAYER);
 
         send(member, get(ACCOUNT.formatted(foreign)), null).andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.payments").doesNotExist()).andExpect(jsonPath("$.total").doesNotExist());
@@ -783,11 +788,11 @@ class PaymentsAcceptanceTests extends FreshPaymentSupport {
         // the stored data: sealed in the payment and in the audit entry
         byte[] stored = owner().queryForObject("select payer_note_enc from payment where id = ?", byte[].class,
                 payment);
-        assertThat(new String(stored, StandardCharsets.UTF_8)).doesNotContain("Оксана");
+        assertThat(new String(stored, StandardCharsets.UTF_8)).doesNotContain(PAYER);
         assertThat(owner().queryForObject("select count(*) from audit_entry where tenant_id = ? and "
-                + "cast(changes as text) like ?", Integer.class, tenant, "%Оксана%")).isZero();
+                + "cast(changes as text) like ?", Integer.class, tenant, "%" + PAYER + "%")).isZero();
         assertThat(owner().queryForObject("select count(*) from event_publication where serialized_event like ?",
-                Integer.class, "%Оксана%")).isZero();
+                Integer.class, "%" + PAYER + "%")).isZero();
         // the treasurer (who may view members) reads it on the card; the member never does
         assertThat(api().card(treasurer, payment).get("payerNote").asString()).isEqualTo(SPLIT_PAYER_NOTE);
     }
