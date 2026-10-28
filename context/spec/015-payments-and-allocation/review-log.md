@@ -72,3 +72,9 @@
 | Round | Commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `b0c3d4f`, `ae4cb1b` | PASS | — | language-purity split is a mitigation for browser resource exhaustion, confirmed only by CI; minor: comment why the screens are split in halves |
+
+## Fix — CI run 40711286319: `meters.spec.ts:272` debounced street filter race
+
+| Round | Commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `7c36272` | PASS | — | waits verified against `useDebouncedSearchParam` (`street`, `q`; spaces as `+`); minor: the regex building in `meters.spec.ts:286-288` could use a helper |
