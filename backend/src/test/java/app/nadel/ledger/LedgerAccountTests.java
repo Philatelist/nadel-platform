@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -795,11 +796,17 @@ class LedgerAccountTests extends PaymentApiSupport {
         // by hand: «Розподілити аванс» places 60.00 on the membership
         allocatePrepayment(treasurer(), plot, false, lines(List.of(line(membership, "60.00")), null))
                 .andExpect(status().isCreated());
-        // by the system: an automatic allocation, as the allocator writes it (two rows of one run, no author)
-        ownerJdbc().update("insert into allocation (id, tenant_id, payment_id, charge_id, plot_id, amount, origin) "
-                + "values (?, ?, ?, ?, ?, 40.00, 'PREPAYMENT_AUTO'), (?, ?, ?, ?, ?, 20.00, 'PREPAYMENT_AUTO')",
-                UUID.randomUUID(), DEMO_TENANT, payment, electricity, plot, UUID.randomUUID(), DEMO_TENANT, payment,
-                land, plot);
+        // by the system: an automatic allocation, as the allocator writes it (two rows of one run, no author),
+        // stamped explicitly one second after the manual one so the order never depends on the database clock
+        OffsetDateTime manualAt = ownerJdbc().queryForObject(
+                "select created_at from allocation where payment_id = ? and origin = 'PREPAYMENT_MANUAL'",
+                OffsetDateTime.class, payment);
+        OffsetDateTime automaticAt = manualAt.plusSeconds(1);
+        ownerJdbc().update("insert into allocation (id, tenant_id, payment_id, charge_id, plot_id, amount, origin, "
+                + "created_at) values (?, ?, ?, ?, ?, 40.00, 'PREPAYMENT_AUTO', ?), "
+                + "(?, ?, ?, ?, ?, 20.00, 'PREPAYMENT_AUTO', ?)",
+                UUID.randomUUID(), DEMO_TENANT, payment, electricity, plot, automaticAt, UUID.randomUUID(), DEMO_TENANT,
+                payment, land, plot, automaticAt);
 
         JsonNode account = account(member(plot), plot);
 

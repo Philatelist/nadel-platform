@@ -78,3 +78,9 @@
 | Round | Commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `7c36272` | PASS | — | waits verified against `useDebouncedSearchParam` (`street`, `q`; spaces as `+`); minor: the regex building in `meters.spec.ts:286-288` could use a helper |
+
+## Fix — owner review of PR #56 (items 1–4): `fa5356b`, `83b3bc4`, `e3b668e`
+
+| Round | Commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `fa5356b`, `83b3bc4`, `e3b668e` | PASS | — | minor: `LedgerAccountTests:811` order depends on host vs DB clock (fixed separately); PlotPicker `aria-controls` target absent while closed, stale results during debounce, active index not clamped; a typed line and its automatic top-up show as two rows; one long line in `PaymentService.book` |
