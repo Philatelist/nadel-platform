@@ -67,6 +67,20 @@ describe('Layout', () => {
     expect(hrefs).toEqual(['/plots', '/members', '/roles', '/audit']);
   });
 
+  it('shows Payments after Charges, only with PAYMENTS_VIEW', () => {
+    me = meWith(['CHARGES_VIEW', 'PAYMENTS_VIEW', 'REPORTS_VIEW']);
+    const { unmount } = renderWithApp(<Layout />);
+    const hrefs = () =>
+      Array.from(screen.getByRole('navigation', { name: 'Main menu' }).querySelectorAll('a')).map((a) =>
+        a.getAttribute('href'),
+      );
+    expect(hrefs()).toEqual(['/plots', '/charges', '/payments', '/reports']);
+    unmount();
+    me = meWith(['CHARGES_VIEW']);
+    renderWithApp(<Layout />);
+    expect(hrefs()).toEqual(['/plots', '/charges']);
+  });
+
   it('shows Reports after Charges, only with REPORTS_VIEW', () => {
     me = meWith(['CHARGES_VIEW', 'REPORTS_VIEW']);
     const { unmount } = renderWithApp(<Layout />);

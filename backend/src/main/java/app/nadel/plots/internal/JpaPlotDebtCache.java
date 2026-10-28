@@ -54,7 +54,10 @@ class JpaPlotDebtCache implements PlotDebtCache {
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
-    public void record(UUID plotId, Money debt, @Nullable LocalDate oldestDebtDate) {
+    public void record(UUID plotId, Money debt, @Nullable LocalDate oldestDebtDate, Money prepayment) {
+        if (prepayment.signum() < 0) {
+            throw new IllegalArgumentException("A prepayment is never negative");
+        }
         PlotStatusEntry entry = statuses.findById(plotId).orElse(null);
         Plot plot = plots.findById(plotId).orElse(null);
         if (entry == null || plot == null) {
@@ -62,6 +65,6 @@ class JpaPlotDebtCache implements PlotDebtCache {
         }
         PlotStatusCode snapshot = PlotStatusPolicy.statusOf(plot.getKind(), ownerships.existsCurrentByPlotId(plotId),
                 debt, oldestDebtDate, statusBasis.current());
-        entry.recordDebt(debt.value(), oldestDebtDate, snapshot, clock.instant());
+        entry.recordDebt(debt.value(), oldestDebtDate, prepayment.value(), snapshot, clock.instant());
     }
 }

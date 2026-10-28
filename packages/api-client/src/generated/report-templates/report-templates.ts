@@ -303,13 +303,15 @@ export const useUploadReportTemplate = <TError = ReportTemplateBadRequestRespons
 
 /**
  * The field catalog (feature 013 §4.2): every placeholder `${key}` the app fills, in a fixed order (the
- * cooperative, the period, when and by whom, the totals, then the row sets `plots`, `months`, `meters`, `water`),
- * each with its value type, its row set (absent for a single value), a language-neutral example where one exists
- * and the permission it needs. The server returns codes, never text: the description of an entry is
+ * cooperative, the period, when and by whom, the totals, then the row sets `plots`, `months`, `meters`, `water`,
+ * `payments`), each with its value type, its row set (absent for a single value), a language-neutral example where
+ * one exists and the permission it needs: `REPORTS_VIEW`, or `PAYMENTS_VIEW` for the payment fields
+ * (`totals.paid.<type>`, `totals.prepayment` and the row set `payments`). The server returns codes, never text: the description of an entry is
  * `reportTemplates.fields.<field>` in the client's catalogs.
  *
- * Two families depend on the cooperative's charge types and are listed once per charge type, archived ones
- * included, in the configured order: `totals.charged.<type>` and `rows.plots.debt.<type>`, where `<type>` is the
+ * Three families depend on the cooperative's charge types and are listed once per charge type, archived ones
+ * included, in the configured order: `totals.charged.<type>`, `totals.paid.<type>` and `rows.plots.debt.<type>`,
+ * where `<type>` is the
  * code of a seeded type (`MEMBERSHIP`, `ELECTRICITY`, `LAND_TAX`, `WATER`, `COMMON_CONSUMERS`) and the id of a
  * custom type. Such an entry carries the family in `pattern`, the description code of the family in `field` and
  * the type in `chargeTypeId` (the client names it). Names, phones and e-mails of people are never placeholders.
@@ -698,12 +700,18 @@ export const useArchiveReportTemplate = <TError = UnauthorizedResponse | Forbidd
  * - `totals.landTax.*` and `rows.plots.landTax.*`: the land tax report for the year of `to`;
  * - `totals.charged.<type>`: the effective amount (charges plus adjustments minus reversals, opening balances
  *   left out) of the type's charges whose first service day is from `from` to `to`, booked whenever;
+ * - `totals.paid.<type>`: what payments pay, as of `to`, on the charges counted by `totals.charged.<type>` (an
+ *   allocation counts from the later of the day its payment was received and the debt date of its charge);
+ * - `totals.prepayment`: the money received that is on no charge, summed over every plot, as of `to`, or as of
+ *   today when `to` is later (the day of the plot balances);
  * - `totals.debt`, `totals.plots.*` and the row set `plots`: the plot balances of the active plots (common land
  *   left out) as of `to`, or as of today when `to` is later;
  * - the row set `months`: per billing month from the month of `from` to the month of `to` that has charges, the
  *   cooperative's totals as on the charges by month report;
  * - the row sets `meters` (the electricity tree's consumption) and `water` (the water report's plots): the
- *   service days from `from` to `to`.
+ *   service days from `from` to `to`;
+ * - the row set `payments`: the payments received from `from` to `to`, as on the payments report, without the
+ *   payer and the payer note.
  *
  * Warnings, never errors, are listed in a sheet added at the end of the file when there is at least one
  * ("Попередження" or "Warnings", made unique if the template has a sheet of that name) and in the response
@@ -725,7 +733,9 @@ export const useArchiveReportTemplate = <TError = UnauthorizedResponse | Forbidd
  * rows, or the file would unpack to more than 256 MB. Every generated file is written to the audit log as `REPORT_GENERATED` (entity type
  * `REPORT_TEMPLATE`, entity id the template, label its name) with the fields `template` (the id), `version`,
  * `filters` (`from`, `to`), `rows` (the rows written for row sets), `personalData` (`false`) and `output`
- * (`XLSX`), never the contents. Requires `REPORTS_VIEW`; the platform operator has no cooperative data: 403.
+ * (`XLSX`), never the contents. Requires `REPORTS_VIEW`; a template that uses a payment field (`totals.paid.<type>`,
+ * `totals.prepayment` or the row set `payments`) also needs `PAYMENTS_VIEW` (403 `PERMISSION_DENIED`, nothing
+ * written to the audit log); the platform operator has no cooperative data: 403.
  * @summary Fill the latest version of a template for a period
  */
 export const generateReportTemplate = async (id: string,

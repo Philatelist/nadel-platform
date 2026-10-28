@@ -21,6 +21,7 @@ interface NavItem {
     | 'approvals'
     | 'meters'
     | 'charges'
+    | 'payments'
     | 'reports'
     | 'imports'
     | 'roles'
@@ -40,6 +41,7 @@ const NAV_ITEMS: readonly NavItem[] = [
   { to: '/readings/approvals', label: 'approvals', permission: 'READINGS_APPROVE' },
   { to: '/meters', label: 'meters', permission: 'METERS_VIEW' },
   { to: '/charges', label: 'charges', permission: 'CHARGES_VIEW' },
+  { to: '/payments', label: 'payments', permission: 'PAYMENTS_VIEW' },
   { to: '/reports', label: 'reports', permission: 'REPORTS_VIEW' },
   { to: '/imports', label: 'imports', permission: 'IMPORT_RUN' },
   { to: '/roles', label: 'roles', permission: 'ROLES_MANAGE' },

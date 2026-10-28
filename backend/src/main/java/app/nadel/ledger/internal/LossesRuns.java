@@ -118,6 +118,8 @@ class LossesRuns {
     private final ActorNames actorNames;
     private final LedgerAuditPublisher audit;
     private final ChargingLock chargingLock;
+    private final PlotLedgerLock plotLocks;
+    private final AllocationReleaser releaser;
     private final EntityManager entityManager;
     private final Clock clock;
 
@@ -125,7 +127,8 @@ class LossesRuns {
             CooperativeSettings settings, BillingMonths billingMonths, BillingMonthRepository months,
             LossesRunRepository runs, LossesRunNodeRepository nodes, ChargeRepository charges,
             ChargePartRepository parts, NotChargedItemRepository items, ActorNames actorNames,
-            LedgerAuditPublisher audit, ChargingLock chargingLock, EntityManager entityManager,
+            LedgerAuditPublisher audit, ChargingLock chargingLock, PlotLedgerLock plotLocks,
+            AllocationReleaser releaser, EntityManager entityManager,
             Clock clock) {
         this.network = network;
         this.book = book;
@@ -142,6 +145,8 @@ class LossesRuns {
         this.actorNames = actorNames;
         this.audit = audit;
         this.chargingLock = chargingLock;
+        this.plotLocks = plotLocks;
+        this.releaser = releaser;
         this.entityManager = entityManager;
         this.clock = clock;
     }
@@ -589,6 +594,8 @@ class LossesRuns {
         if (run.getStatus() == LossesRunRecord.Status.REVERSED) {
             throw conflict(ProblemCodes.RUN_ALREADY_REVERSED, "The run has already been reversed.");
         }
+        // the ledger locks of every plot the run charged, sorted, before the month: money paid on them is released
+        plotLocks.lockAll(tenantId, charges.plotIdsOfRuns(Set.of(id)));
         BillingMonthRecord month = months.findByIdForShare(run.getBillingMonthId()).orElseThrow();
         if (month.isClosed()) {
             throw conflict(ProblemCodes.RUN_IN_CLOSED_MONTH,
@@ -601,6 +608,8 @@ class LossesRuns {
         String runTo = run.getToDate().toString();
         Reversed reversed = reverseLocked(run, booking.getId(), reason, ChargeSource.MANUAL_REVERSAL, null,
                 actor.memberId(), now);
+        // the money paid on the reversed charges becomes prepayment; the ChargesBooked below lets it be placed again
+        releaser.settleCharges(tenantId, reversed.plotIds(), actor.memberId());
         audit.publishLossesRun(actor, LedgerAuditPublisher.Action.LOSSES_RUN_REVERSED, id, label, List.of(
                 new FieldChange("from", null, runFrom),
                 new FieldChange("to", null, runTo),

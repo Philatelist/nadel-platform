@@ -63,7 +63,8 @@ class SettingsController implements SettingsApi {
                 update.getOfficialName(),
                 update.getLegalAddress(),
                 update.getBankName(),
-                update.getIban());
+                update.getIban(),
+                update.getAutoAllocatePrepayment());
         return ResponseEntity.ok(toDto(service.update(change, currentUser.profile()), edrpou()));
     }
 
@@ -79,7 +80,8 @@ class SettingsController implements SettingsApi {
                 values.lossesPercent().toPlainString(),
                 nadel.contract.model.CommonConsumerSplit.fromValue(values.commonConsumerDefaultSplit().name()),
                 values.redAmount().toPlainString(),
-                values.redDays());
+                values.redDays(),
+                values.autoAllocatePrepayment());
         dto.setOfficialName(values.requisites().officialName());
         dto.setLegalAddress(values.requisites().legalAddress());
         dto.setBankName(values.requisites().bankName());

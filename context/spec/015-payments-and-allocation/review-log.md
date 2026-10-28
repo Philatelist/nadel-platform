@@ -1,0 +1,92 @@
+# Review log — 015-payments-and-allocation
+
+## Baseline failures
+
+- Base commit: `75db154` (`main`), command: `make check`
+- Result: 0 failing (backend 2969 tests, 0 failures; contract, format, lint, client typecheck and tests green)
+- e2e not part of the baseline (`make check` excludes it).
+
+## Slice 1 — ledger tables, permissions and the pure allocation rules
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `6a3d4a3..23557e8` | PASS | — | minor: release-cap check in `allocation_guard` relies on the per-plot lock of later slices (service must lock before releasing); allocation to a reversed payment caught by the deferred backstop when the reversal is in the same transaction |
+
+## Slice 2 — enter a payment for one plot, list and card
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `23557e8..faf6564` | PASS | — | minor: Javadoc over 120 columns in `PlotDebtCache`/`PlotStatusEntry`; `Money.parse` and `YearMonth.parse` rely on the contract pattern (a bypass would be 500, not 400) |
+
+## Slice 3 — one payment split over several plots of one payer
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `faf6564..ec792e9` | PASS | — | minor: split proposal reads unlocked non-part plots (protected by digest and sum check); `PaymentQueries` javadoc over 120 columns; payer without plots gets `NOT_FOUND` on `split.payerMemberId` |
+
+## Slice 4 — reverse a payment, reallocate it, allocate prepayment by hand
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `ec792e9..2bf814c` | PASS | — | minor: `LedgerAuditPublisher` Javadoc line over wrap width; reallocate preview resolves the plot without a lock (save re-reads under the lock) |
+
+## Slice 5 — automatic release on charge corrections and automatic allocation of prepayment
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `2bf814c..08e3d1d` | PASS | — | deadlock analysis: no cycle (only `MonthClosing.close` takes month FOR UPDATE and holds no other ledger lock; a FOR SHARE on an already share-locked row does not queue behind it). Optional hardening: take plot ledger locks in `book` before the plan's month locks. minor: settings README line over wrap width; RecalculationService javadoc could name the `MonthClosing` argument |
+
+## Slice 6 — plot account, member account, billing months received and the permission matrix
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `08e3d1d..f6b5f41` | PASS | — | minor: a member receives the free-text reversal reason (not forbidden by the spec; could be gated by `PAYMENTS_VIEW`); account merge sorts by day only (same-day order by kind) |
+
+## Slice 7 — reports and templates after payments
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `f6b5f41..592d62a` | PASS | — | minor: payments report street filter binds one large `IN (:plotIds)` (other queries chunk by 500); `PREPAYMENT_AS_OF` with all plots runs once per chunk; `TemplateField` javadoc wrapping |
+
+## Slice 8 — demo payments, end-to-end flows, docs and guides
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `592d62a..9d2b59b` | MAJOR_ISSUES | M1 `web/e2e/role-names.spec.ts:71-72` still expects 22 permission checkboxes (now 25) | minor: guide images and PDFs not committed (owner follow-up before merge); member e2e leaves a net-zero payment+reversal on plot 7; `DemoLedgerData` javadoc line length; `payment-card` shot relies on the newest payment being reversible |
+| 2 | + `72a880e` | PASS | M1 resolved (count from `GET /permissions`) | minor: `api()` status not checked before `JSON.parse` in `role-names.spec.ts:72` |
+
+## Slice 9 — Feature Testing & Regression
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `72a880e..cca927a` | PASS | — | minor: `fs2_4_…NewestFirst…` asserts in any order; closed-month loop passes silently if the month is absent; `event_publication` note count not scoped to the tenant |
+
+## Fix — full-suite regressions `MeEndpointTests.treasurerHasReadPermissions`, `SealImportPlansMigrationTests`
+
+| Round | Commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `939958d` | PASS | — | minor: stale description string in `ChargeTypesTests:596`; `finally` restores only TARIFFS_MANAGE (as before) |
+
+## Fix — CI run 40706708919: `PaymentAuditTests` note collision; e2e label, menu, language-purity
+
+| Round | Commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `b0c3d4f`, `ae4cb1b` | PASS | — | language-purity split is a mitigation for browser resource exhaustion, confirmed only by CI; minor: comment why the screens are split in halves |
+
+## Fix — CI run 40711286319: `meters.spec.ts:272` debounced street filter race
+
+| Round | Commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `7c36272` | PASS | — | waits verified against `useDebouncedSearchParam` (`street`, `q`; spaces as `+`); minor: the regex building in `meters.spec.ts:286-288` could use a helper |
+
+## Fix — owner review of PR #56 (items 1–4): `fa5356b`, `83b3bc4`, `e3b668e`
+
+| Round | Commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `fa5356b`, `83b3bc4`, `e3b668e` | PASS | — | minor: `LedgerAccountTests:811` order depends on host vs DB clock (fixed separately); PlotPicker `aria-controls` target absent while closed, stale results during debounce, active index not clamped; a typed line and its automatic top-up show as two rows; one long line in `PaymentService.book` |
+
+## Fix — CI run 40737374368: plot combobox selectors in meters, recalculation and tariffs specs; privacy race
+
+| Round | Commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `6db0891` | PASS | — | minor: `plotSuggestions` key lives under `tariffs.scope` though PlotPicker is shared |

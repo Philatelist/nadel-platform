@@ -16,6 +16,7 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
@@ -143,7 +144,8 @@ class XlsxReportWriter {
 
         private String header(Column column) {
             if (column.chargeTypeId() != null) {
-                return chargeTypeNames.apply(column.chargeTypeId());
+                return texts.text(DebtColumns.HEADER_PREFIX + DebtColumns.Family.ofColumn(column.key()).key(),
+                        Map.of("chargeType", chargeTypeNames.apply(column.chargeTypeId())));
             }
             return texts.text("reports." + code + ".columns." + column.key());
         }

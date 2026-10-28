@@ -21,12 +21,14 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * The plot status follows the ledger (feature 011 §2.10 and its acceptance rows): every booking or reversal publishes
- * {@link ChargesBooked}, the status refresher rebuilds the debt cache of the plots after the commit (asynchronously, so
- * the tests wait for it), and the plot card and list derive the colour from the cached debt, the red threshold of the
- * settings and today. A change of the threshold applies at once, without a refresh.
+ * The plot status follows the ledger (feature 011 §2.10 and its acceptance rows, feature 015 §2.9): every booking or
+ * reversal publishes {@link ChargesBooked} and every payment {@link PaymentsChanged}, the status refresher rebuilds the
+ * debt cache of the plots after the commit (asynchronously, so the tests wait for it): the debt after payments, the
+ * oldest unpaid charge and the prepayment. The plot card and list derive the colour from the cached debt, the red
+ * threshold of the settings and today; a plot without debt is green, also with a prepayment. A change of the threshold
+ * applies at once, without a refresh.
  */
-class PlotStatusRefreshTests extends LedgerApiSupport {
+class PlotStatusRefreshTests extends PaymentApiSupport {
 
     private static final String PLOT = "/api/v1/plots/%s";
 
@@ -69,8 +71,33 @@ class PlotStatusRefreshTests extends LedgerApiSupport {
     }
 
     private Map<String, Object> cache(UUID plot) {
-        return ownerJdbc().queryForMap("select status, debt, oldest_debt_date from plot_status where plot_id = ?",
-                plot);
+        return ownerJdbc().queryForMap("select status, debt, oldest_debt_date, prepayment from plot_status "
+                + "where plot_id = ?", plot);
+    }
+
+    /**
+     * The debt cache rebuilt from the ledger by SQL, independently of the application: the debt is the charges minus
+     * the net allocations, the prepayment the payments (reversals negative) minus the net allocations (not below zero),
+     * the oldest unpaid charge the oldest regular or opening charge, not reversed, whose effective amount exceeds what
+     * is allocated to it.
+     */
+    private Map<String, Object> rebuilt(UUID plot) {
+        return ownerJdbc().queryForMap("""
+                select (select coalesce(sum(amount), 0) from charge where plot_id = :p)
+                       - (select coalesce(sum(amount), 0) from allocation where plot_id = :p) as debt,
+                       (select min(c.accrued_on) from charge c
+                        where c.plot_id = :p and c.kind in ('REGULAR', 'OPENING')
+                          and not exists (select 1 from charge r where r.reverses_charge_id = c.id)
+                          and c.amount + coalesce((select sum(a.amount) from charge a where a.adjusts_charge_id = c.id), 0)
+                              > coalesce((select sum(l.amount) from allocation l where l.charge_id = c.id), 0))
+                           as oldest_debt_date,
+                       greatest((select coalesce(sum(amount), 0) from payment where plot_id = :p)
+                                - (select coalesce(sum(amount), 0) from allocation where plot_id = :p), 0) as prepayment
+                """.replace(":p", "'" + plot + "'::uuid"));
+    }
+
+    private void pay(UUID plot, String amount) throws Exception {
+        save(treasurer(), cash(plot, amount)).andExpect(status().isCreated());
     }
 
     @Test
@@ -178,5 +205,72 @@ class PlotStatusRefreshTests extends LedgerApiSupport {
 
         awaitStatus(plot, "YELLOW");
         assertThat(cache(plot)).containsEntry("debt", new BigDecimal("25.00"));
+    }
+
+    @Test
+    void aPaymentBelowTheRedAmountTurnsARedPlotYellow() throws Exception {
+        UUID plot = ownedPlot();
+        enterOpening(plot, "MEMBERSHIP", "1200.00", kyivToday());
+        awaitStatus(plot, "RED");
+
+        // §2.9: plot 9 is red with a debt of 1200,00 ₴; a payment lowers it to 300,00 ₴
+        pay(plot, "900.00");
+
+        awaitStatus(plot, "YELLOW");
+        assertThat(cache(plot)).containsEntry("debt", new BigDecimal("300.00"))
+                .containsEntry("prepayment", new BigDecimal("0.00"));
+        assertThat(cache(plot).get("oldest_debt_date").toString()).isEqualTo(kyivToday().toString());
+        assertThat(cache(plot)).containsAllEntriesOf(rebuilt(plot));
+    }
+
+    @Test
+    void aFullyPaidPlotIsGreenWithItsPrepayment() throws Exception {
+        UUID plot = ownedPlot();
+        enterOpening(plot, "MEMBERSHIP", "600.00", kyivToday());
+        awaitStatus(plot, "YELLOW");
+
+        // §2.9: the debt is fully paid with 50,00 ₴ left over
+        pay(plot, "650.00");
+
+        await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> assertThat(cache(plot))
+                .containsEntry("prepayment", new BigDecimal("50.00")));
+        assertThat(statusOf(chairman(), plot)).isEqualTo("GREEN");
+        assertThat(cache(plot)).containsEntry("debt", new BigDecimal("0.00")).containsEntry("oldest_debt_date", null)
+                .containsEntry("status", "GREEN");
+        assertThat(cache(plot)).containsAllEntriesOf(rebuilt(plot));
+    }
+
+    @Test
+    void theOldestUnpaidChargeFollowsThePayments() throws Exception {
+        UUID plot = ownedPlot();
+        enterOpening(plot, "MEMBERSHIP", "25.00", kyivToday().minusDays(120));
+        enterOpening(plot, "LAND_TAX", "40.00", kyivToday().minusDays(10));
+        awaitStatus(plot, "RED");
+
+        // the oldest charge is paid: the debt now counts from the younger one
+        pay(plot, "25.00");
+
+        awaitStatus(plot, "YELLOW");
+        assertThat(cache(plot)).containsEntry("debt", new BigDecimal("40.00"));
+        assertThat(cache(plot).get("oldest_debt_date").toString())
+                .isEqualTo(kyivToday().minusDays(10).toString());
+        assertThat(cache(plot)).containsAllEntriesOf(rebuilt(plot));
+    }
+
+    @Test
+    void aRedeliveredPaymentEventChangesNothingAndTheCacheEqualsARebuild() throws Exception {
+        UUID plot = ownedPlot();
+        enterOpening(plot, "MEMBERSHIP", "300.00", kyivToday());
+        pay(plot, "120.00");
+        await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> assertThat(cache(plot))
+                .containsEntry("debt", new BigDecimal("180.00")));
+        Map<String, Object> before = cache(plot);
+
+        new TransactionTemplate(transactionManager).executeWithoutResult(
+                status -> events.publishEvent(new PaymentsChanged(DEMO_TENANT, Set.of(plot))));
+
+        await().during(Duration.ofMillis(500)).atMost(Duration.ofSeconds(5))
+                .untilAsserted(() -> assertThat(cache(plot)).isEqualTo(before));
+        assertThat(before).containsAllEntriesOf(rebuilt(plot));
     }
 }

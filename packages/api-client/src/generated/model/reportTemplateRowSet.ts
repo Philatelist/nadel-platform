@@ -11,7 +11,7 @@
  */
 
 /**
- * The rows a template row repeats over. `PLOTS`: the active plots with their balances and land tax. `MONTHS`: the billing months with charges. `METERS`: the nodes of the electricity meter tree. `WATER`: the plots connected to water, one row per plot and source
+ * The rows a template row repeats over. `PLOTS`: the active plots with their balances and land tax. `MONTHS`: the billing months with charges. `METERS`: the nodes of the electricity meter tree. `WATER`: the plots connected to water, one row per plot and source. `PAYMENTS`: the payments received in the period, one row per payment, without the payer and the payer note (needs `PAYMENTS_VIEW`)
  */
 export type ReportTemplateRowSet = typeof ReportTemplateRowSet[keyof typeof ReportTemplateRowSet];
 
@@ -21,4 +21,5 @@ export const ReportTemplateRowSet = {
   MONTHS: 'MONTHS',
   METERS: 'METERS',
   WATER: 'WATER',
+  PAYMENTS: 'PAYMENTS',
 } as const;

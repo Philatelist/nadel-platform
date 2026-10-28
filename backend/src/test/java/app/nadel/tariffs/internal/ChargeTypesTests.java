@@ -594,8 +594,12 @@ class ChargeTypesTests extends IntegrationTest {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("name", "Treasurer");
         body.put("description", "Read access to members, plots and audit");
-        body.put("permissions", List.of("MEMBERS_VIEW", "PLOTS_VIEW", "AUDIT_VIEW", "TARIFFS_VIEW", "METERS_VIEW",
-                "CHARGES_VIEW", "REPORTS_VIEW", "TARIFFS_MANAGE"));
+        // the role keeps every permission it has (the base set) and gains TARIFFS_MANAGE, so the finally block
+        // restores it exactly and later tests that use the demo treasurer see the full base set
+        List<String> permissions = new ArrayList<>(ownerJdbc().queryForList(
+                "select permission from role_permission where role_id = ?", String.class, treasurerRole));
+        permissions.add("TARIFFS_MANAGE");
+        body.put("permissions", permissions);
         try {
             send(chairman, put("/api/v1/roles/" + treasurerRole), body).andExpect(status().isOk());
 

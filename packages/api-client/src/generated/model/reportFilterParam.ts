@@ -32,4 +32,5 @@ export const ReportFilterParam = {
   meterKinds: 'meterKinds',
   waterSource: 'waterSource',
   correctionKinds: 'correctionKinds',
+  source: 'source',
 } as const;

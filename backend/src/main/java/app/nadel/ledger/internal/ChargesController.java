@@ -8,6 +8,7 @@ import nadel.contract.model.Charge;
 import nadel.contract.model.ChargeReversal;
 import nadel.contract.model.OpeningBalanceInput;
 import nadel.contract.model.PlotAccount;
+import nadel.contract.model.PlotAccountKind;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -37,11 +38,16 @@ class ChargesController implements ChargesApi {
         this.openingBalances = openingBalances;
     }
 
-    /** No {@code @PreAuthorize}: {@code CHARGES_VIEW} sees any plot, anyone else the plots they own now. */
+    /**
+     * No {@code @PreAuthorize}: {@code CHARGES_VIEW} sees any plot, anyone else the plots they own now. {@code kind}
+     * {@code PAYMENTS} lists only the payments and their reversals, a charge kind only the charges of that kind.
+     */
     @Override
     public ResponseEntity<PlotAccount> getPlotAccount(UUID id, @Nullable LocalDate from, @Nullable LocalDate to,
-            nadel.contract.model.@Nullable ChargeKind kind) {
-        return ResponseEntity.ok(accounts.account(id, from, to, kind == null ? null : ChargeKind.valueOf(kind.name()),
+            @Nullable PlotAccountKind kind) {
+        boolean paymentsOnly = kind == PlotAccountKind.PAYMENTS;
+        ChargeKind chargeKind = kind == null || paymentsOnly ? null : ChargeKind.valueOf(kind.name());
+        return ResponseEntity.ok(accounts.account(id, new AccountQueries.Filter(from, to, chargeKind, paymentsOnly),
                 currentUser.profile()));
     }
 

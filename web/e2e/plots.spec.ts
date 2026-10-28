@@ -43,6 +43,8 @@ test.describe('plots registry', () => {
 
     // plot 21 has a cadastral number and a building
     await field(page, 'Search by number, street or cadastral number').fill('21');
+    // the search reaches the URL after its debounce: wait for it, so a late write cannot cancel the click below
+    await expect(page).toHaveURL(/[?&]q=21(&|$)/);
     await rows(page)
       .filter({ hasText: 'вул. Вишнева' })
       .first()
@@ -63,6 +65,8 @@ test.describe('plots registry', () => {
     // plot 9 carries a note: the treasurer reads it on the card
     await page.getByRole('link', { name: 'Back to plots' }).click();
     await field(page, 'Search by number, street or cadastral number').fill('9');
+    // the search reaches the URL after its debounce: wait for it, so a late write cannot cancel the click below
+    await expect(page).toHaveURL(/[?&]q=9(&|$)/);
     await rows(page)
       .filter({ hasText: 'вул. Садова' })
       .first()

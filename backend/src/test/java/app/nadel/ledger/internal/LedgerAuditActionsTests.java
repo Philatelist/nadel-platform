@@ -22,11 +22,24 @@ class LedgerAuditActionsTests {
     }
 
     @Test
+    void thePaymentActionsAreAuditActionsOfTheContract() {
+        assertThat(AuditAction.fromValue(LedgerAuditPublisher.Action.PAYMENT_RECORDED.name()))
+                .isEqualTo(AuditAction.PAYMENT_RECORDED);
+        assertThat(AuditAction.fromValue(LedgerAuditPublisher.Action.PAYMENT_REVERSED.name()))
+                .isEqualTo(AuditAction.PAYMENT_REVERSED);
+        assertThat(AuditAction.fromValue(LedgerAuditPublisher.Action.PAYMENT_REALLOCATED.name()))
+                .isEqualTo(AuditAction.PAYMENT_REALLOCATED);
+        assertThat(AuditAction.fromValue(LedgerAuditPublisher.Action.PREPAYMENT_ALLOCATED.name()))
+                .isEqualTo(AuditAction.PREPAYMENT_ALLOCATED);
+        assertThat(AuditEntityType.fromValue(LedgerAuditPublisher.PAYMENT)).isEqualTo(AuditEntityType.PAYMENT);
+    }
+
+    @Test
     void everyLedgerEntityTypeIsAnAuditEntityTypeOfTheContract() {
         var contract = Arrays.stream(AuditEntityType.values()).map(AuditEntityType::getValue).toList();
 
         assertThat(contract).contains(LedgerAuditPublisher.CHARGE, LedgerAuditPublisher.BILLING_MONTH,
                 LedgerAuditPublisher.LOSSES_RUN, LedgerAuditPublisher.COMMON_CONSUMER_RUN, LedgerAuditPublisher.METER,
-                LedgerAuditPublisher.RECALCULATION);
+                LedgerAuditPublisher.RECALCULATION, LedgerAuditPublisher.PAYMENT);
     }
 }

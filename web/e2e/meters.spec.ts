@@ -282,6 +282,10 @@ test.describe('meters and readings', () => {
         await menuLink(treasurer, 'Meters').click();
         await expect(treasurer.getByRole('heading', { level: 1, name: 'Meters' })).toBeVisible();
         await main(treasurer).getByLabel('Street', { exact: true }).fill(fixture.street);
+        // the search reaches the URL after its debounce: wait for it, so a late write cannot cancel the click below
+        await expect(treasurer).toHaveURL(
+          new RegExp(`[?&]street=${encodeURIComponent(fixture.street).replace(/%20/g, '\\+')}(&|$)`),
+        );
         await expect(main(treasurer).getByRole('link', { name: fixture.serial })).toBeVisible();
         await expect(main(treasurer).getByRole('button', { name: 'Register a meter' })).toHaveCount(0);
 

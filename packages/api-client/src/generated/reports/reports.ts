@@ -69,8 +69,8 @@ export const getListReportsUrl = () => {
  * The built-in reports the caller may run, in the order of `ReportCode`, each with its filters: what the filter
  * is (`key`, `type`), which query parameters of `getReport` and `downloadReport` it fills (`params`), whether
  * it must be given, the values it starts with (`defaults`) and, for a period, whether it means billing months,
- * service days or reading dates (`basis`). A report that needs a permission the caller lacks is not listed:
- * `debtors` also needs `MEMBERS_VIEW`. A cooperative that has booked nothing still gets every report it may run.
+ * service days, reading dates or the days payments were received (`basis`). A report that needs a permission the
+ * caller lacks is not listed: `debtors` also needs `MEMBERS_VIEW`, `payments` also needs `PAYMENTS_VIEW`. A cooperative that has booked nothing still gets every report it may run.
  *
  * The server returns codes only: the name and description of a report and the label of a filter come from the
  * client's catalogs by the report code and the filter key, in the user's language. Defaults that depend on the
@@ -168,7 +168,7 @@ export function useListReports<TData = Awaited<ReturnType<typeof listReports>>, 
 
 
 
-export const getGetReportUrl = (code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections',
+export const getGetReportUrl = (code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections' | 'payments',
     params?: GetReportParams,) => {
   const normalizedParams = new URLSearchParams();
 
@@ -202,8 +202,10 @@ export const getGetReportUrl = (code: 'charges-by-month' | 'plot-balances' | 'de
  * (`YYYY-MM`, both included); `from` and `to` are calendar days in Europe/Kyiv, both included, meaning service
  * days or reading dates as the filter's `basis` says; `chargeTypeIds`, `statuses`, `meterKinds` and
  * `correctionKinds` left out mean all; `street` is compared with the plot's street as stored, ignoring case and
- * surrounding spaces; `resource` and `waterSource` left out mean all. In `debtors`, `minDebt` and
- * `olderThanDays` combine with OR, as in the red status.
+ * surrounding spaces; `resource`, `waterSource` and `source` left out mean all. In `debtors`, `minDebt` and
+ * `olderThanDays` combine with OR, as in the red status. In `payments` the billing months choose the payments
+ * by the month they are booked in; when `from` and `to` are given (its optional filter `received`, basis
+ * `PAYMENT_DATES`), the days the payments were received choose them instead and the months are not used.
  *
  * A malformed parameter (a wrong format, a number out of range) is 400 `VALIDATION_FAILED`, an unknown enum
  * value 400 `MALFORMED_REQUEST`. Filters that do not fit the report are 400 `REPORT_FILTER_INVALID` with
@@ -216,17 +218,21 @@ export const getGetReportUrl = (code: 'charges-by-month' | 'plot-balances' | 'de
  * (`"1250.50"`), kWh and m³ with three (`"152.400"`), ISO dates, `YYYY-MM` months and codes. A value that is not
  * known is absent with a `reason`, never `0`. Totals are the sums of the rows as listed, with no separate
  * rounding. "Charged" is always the effective amount (charges plus their adjustments, reversals counting
- * negative); columns that split it show regular charges, reversals and adjustments separately. Plots are listed in
- * the natural order of their numbers, meters in the order of the meter tree, charge types in their configured
- * order. No report has a "paid" column until payments exist.
+ * negative); columns that split it show regular charges, reversals and adjustments separately. "Paid" is what
+ * payments pay on the charges (net allocations) as of the report's day: an allocation counts from its value date,
+ * the later of the day the payment was received and the debt date of the charge; "debt" is charged minus paid;
+ * "prepayment" is what was received and is on no charge yet. Plots are listed in the natural order of their
+ * numbers, meters in the order of the meter tree, charge types in their configured order.
  *
  * Every run is written to the audit log (`REPORT_GENERATED`, entity type `REPORT`, `output` `PREVIEW`) with the
  * filters as ids, codes and dates, the row count and whether the report holds personal data, never its contents.
- * Requires `REPORTS_VIEW`; `debtors` also needs `MEMBERS_VIEW` (403 `PERMISSION_DENIED` otherwise). An unknown
- * code is 400 `MALFORMED_REQUEST`; a code of `ReportCode` this server does not produce yet is 404 `NOT_FOUND`.
+ * Requires `REPORTS_VIEW`; `debtors` also needs `MEMBERS_VIEW`, `payments` also needs `PAYMENTS_VIEW` (403
+ * `PERMISSION_DENIED` otherwise); the payer note column of `payments` is there only for a caller with
+ * `MEMBERS_VIEW`. An unknown code is 400 `MALFORMED_REQUEST`; a code of `ReportCode` this server does not produce
+ * yet is 404 `NOT_FOUND`.
  * @summary The on-screen preview of a report
  */
-export const getReport = async (code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections',
+export const getReport = async (code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections' | 'payments',
     params?: GetReportParams, options?: Parameters<typeof nadelFetch>[1]): Promise<ReportPreview> => {
 
   return nadelFetch<ReportPreview>(getGetReportUrl(code,params),
@@ -242,7 +248,7 @@ export const getReport = async (code: 'charges-by-month' | 'plot-balances' | 'de
 
 
 
-export const getGetReportQueryKey = (code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections',
+export const getGetReportQueryKey = (code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections' | 'payments',
     params?: GetReportParams,) => {
     return [
     `/api/v1/reports/${code}`, ...(params ? [params] : [])
@@ -250,7 +256,7 @@ export const getGetReportQueryKey = (code: 'charges-by-month' | 'plot-balances' 
     }
 
 
-export const getGetReportQueryOptions = <TData = Awaited<ReturnType<typeof getReport>>, TError = ReportBadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ReportTooLargeResponse>(code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections',
+export const getGetReportQueryOptions = <TData = Awaited<ReturnType<typeof getReport>>, TError = ReportBadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ReportTooLargeResponse>(code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections' | 'payments',
     params?: GetReportParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getReport>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
 ) => {
 
@@ -274,7 +280,7 @@ export type GetReportQueryError = ReportBadRequestResponse | UnauthorizedRespons
 
 
 export function useGetReport<TData = Awaited<ReturnType<typeof getReport>>, TError = ReportBadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ReportTooLargeResponse>(
- code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections',
+ code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections' | 'payments',
     params: undefined |  GetReportParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getReport>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
           Awaited<ReturnType<typeof getReport>>,
@@ -285,7 +291,7 @@ export function useGetReport<TData = Awaited<ReturnType<typeof getReport>>, TErr
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 export function useGetReport<TData = Awaited<ReturnType<typeof getReport>>, TError = ReportBadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ReportTooLargeResponse>(
- code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections',
+ code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections' | 'payments',
     params?: GetReportParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getReport>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
           Awaited<ReturnType<typeof getReport>>,
@@ -296,7 +302,7 @@ export function useGetReport<TData = Awaited<ReturnType<typeof getReport>>, TErr
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 export function useGetReport<TData = Awaited<ReturnType<typeof getReport>>, TError = ReportBadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ReportTooLargeResponse>(
- code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections',
+ code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections' | 'payments',
     params?: GetReportParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getReport>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
@@ -305,7 +311,7 @@ export function useGetReport<TData = Awaited<ReturnType<typeof getReport>>, TErr
  */
 
 export function useGetReport<TData = Awaited<ReturnType<typeof getReport>>, TError = ReportBadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ReportTooLargeResponse>(
- code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections',
+ code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections' | 'payments',
     params?: GetReportParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getReport>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
@@ -322,7 +328,7 @@ export function useGetReport<TData = Awaited<ReturnType<typeof getReport>>, TErr
 
 
 
-export const getDownloadReportUrl = (code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections',
+export const getDownloadReportUrl = (code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections' | 'payments',
     params?: DownloadReportParams,) => {
   const normalizedParams = new URLSearchParams();
 
@@ -367,7 +373,7 @@ export const getDownloadReportUrl = (code: 'charges-by-month' | 'plot-balances' 
  * before `/reports/{code}`.
  * @summary Download a report as an Excel file
  */
-export const downloadReport = async (code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections',
+export const downloadReport = async (code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections' | 'payments',
     params?: DownloadReportParams, options?: Parameters<typeof nadelFetch>[1]): Promise<Blob> => {
 
   return nadelFetch<Blob>(getDownloadReportUrl(code,params),
@@ -383,7 +389,7 @@ export const downloadReport = async (code: 'charges-by-month' | 'plot-balances' 
 
 
 
-export const getDownloadReportQueryKey = (code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections',
+export const getDownloadReportQueryKey = (code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections' | 'payments',
     params?: DownloadReportParams,) => {
     return [
     `/api/v1/reports/${code}.xlsx`, ...(params ? [params] : [])
@@ -391,7 +397,7 @@ export const getDownloadReportQueryKey = (code: 'charges-by-month' | 'plot-balan
     }
 
 
-export const getDownloadReportQueryOptions = <TData = Awaited<ReturnType<typeof downloadReport>>, TError = ReportBadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ReportTooLargeResponse>(code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections',
+export const getDownloadReportQueryOptions = <TData = Awaited<ReturnType<typeof downloadReport>>, TError = ReportBadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ReportTooLargeResponse>(code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections' | 'payments',
     params?: DownloadReportParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadReport>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
 ) => {
 
@@ -415,7 +421,7 @@ export type DownloadReportQueryError = ReportBadRequestResponse | UnauthorizedRe
 
 
 export function useDownloadReport<TData = Awaited<ReturnType<typeof downloadReport>>, TError = ReportBadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ReportTooLargeResponse>(
- code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections',
+ code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections' | 'payments',
     params: undefined |  DownloadReportParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadReport>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
           Awaited<ReturnType<typeof downloadReport>>,
@@ -426,7 +432,7 @@ export function useDownloadReport<TData = Awaited<ReturnType<typeof downloadRepo
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 export function useDownloadReport<TData = Awaited<ReturnType<typeof downloadReport>>, TError = ReportBadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ReportTooLargeResponse>(
- code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections',
+ code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections' | 'payments',
     params?: DownloadReportParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadReport>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
           Awaited<ReturnType<typeof downloadReport>>,
@@ -437,7 +443,7 @@ export function useDownloadReport<TData = Awaited<ReturnType<typeof downloadRepo
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 export function useDownloadReport<TData = Awaited<ReturnType<typeof downloadReport>>, TError = ReportBadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ReportTooLargeResponse>(
- code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections',
+ code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections' | 'payments',
     params?: DownloadReportParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadReport>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
@@ -446,7 +452,7 @@ export function useDownloadReport<TData = Awaited<ReturnType<typeof downloadRepo
  */
 
 export function useDownloadReport<TData = Awaited<ReturnType<typeof downloadReport>>, TError = ReportBadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ReportTooLargeResponse>(
- code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections',
+ code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections' | 'payments',
     params?: DownloadReportParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadReport>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {

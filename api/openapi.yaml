@@ -42,6 +42,10 @@ tags:
     description: The electricity meter tree, its dated history and the consumption per node over a date range
   - name: charges
     description: The ledger of a plot (its account), reversals of charges and opening balances
+  - name: payments
+    description: >-
+      Payments received for plots (cash with a receipt number, bank transfers entered by hand), how they are placed on
+      the plots' charges, the payments list and the payment card
   - name: billing
     description: Billing months, their totals, the closing check list, the month run and closing
   - name: not-charged
@@ -842,8 +846,8 @@ paths:
         Removes a plot that was created by mistake, together with its status. Requires `PLOTS_VIEW` and `PLOTS_EDIT`. Only an active
         plot can be deleted; an archived plot is refused with 409 `PLOT_ARCHIVED` and must be restored first, and a plot
         that has ever had an owner is refused with 409 `PLOT_HAS_OWNERSHIP_HISTORY`, a plot that has a meter (active or
-        removed) with 409 `PLOT_HAS_METER`, a plot that has charges (any kind) with 409 `PLOT_HAS_CHARGES`. The deletion
-        is audited.
+        removed) with 409 `PLOT_HAS_METER`, a plot that has charges (any kind) with 409 `PLOT_HAS_CHARGES`, a plot that
+        has payments (and no charges) with 409 `PLOT_HAS_PAYMENTS`. The deletion is audited.
       parameters:
         - name: id
           in: path
@@ -1096,7 +1100,8 @@ paths:
         Returns the settings of the current cooperative. Every member of the cooperative may call it; the platform
         operator has no cooperative data: 403. A cooperative that never saved its settings has the defaults
         (`memberPlotStatusVisibility` `OWN_ONLY`, `lossesMode` `FIXED_PERCENT`, `lossesPercent` `0.00`,
-        `commonConsumerDefaultSplit` `CONNECTED_PLOTS`, `redAmount` `1000.00`, `redDays` 90) and no requisites. The
+        `commonConsumerDefaultSplit` `CONNECTED_PLOTS`, `redAmount` `1000.00`, `redDays` 90,
+        `autoAllocatePrepayment` true) and no requisites. The
         requisites (`officialName`, `legalAddress`, `bankName`, `iban`) and the read-only ЄДРПОУ code (`edrpou`, set by
         the platform operator) are public data of the legal entity, not personal data; a requisite that is not set is
         absent.
@@ -1127,7 +1132,8 @@ paths:
         not a valid Ukrainian IBAN (`UA` and 27 digits with a correct mod-97 check) is 400 `IBAN_INVALID` with the field
         error `iban` `IBAN_INVALID`, and nothing is saved. `edrpou` is read-only: it is changed only by the platform
         operator, and a value sent here is ignored. A change of the red threshold applies to every plot status shown
-        from then on (the status is derived when it is read).
+        from then on (the status is derived when it is read). Turning `autoAllocatePrepayment` on places no existing
+        prepayment at once: a plot's prepayment is placed at its next booking of charges.
       requestBody:
         required: true
         content:
@@ -2806,18 +2812,30 @@ paths:
     get:
       tags: [charges]
       operationId: getPlotAccount
-      summary: The account of a plot with its charges and the debt per charge type
+      summary: The account of a plot with its charges, payments and the debt per charge type
       description: |
-        The ledger of one plot. `debts` lists every charge type the plot has a charge of, in the order of the charge
-        types, with the sum of its charges (a reversal counts negative); `total` is their sum. Until payments exist
-        the debt is the sum of the charges, adjustments included. `charges` lists the charges newest first (by
-        `accruedOn`, then by the time they were booked); `from` and `to` (both optional, inclusive) limit the list by
-        `accruedOn`, and `kind` limits it to one kind (for example `ADJUSTMENT`), never the debts. `from` after `to` is
-        400 `VALIDATION_FAILED` (`errors[{field: from, code: INVALID}]`). An adjustment names the charge it adjusts
-        (`adjusts`), an adjusted charge its adjustments (`adjustedBy`); `recalculationId` is shown only to callers with
-        `CHARGES_VIEW`. Every amount is calculated by the server. No permission annotation: a caller with `CHARGES_VIEW` may ask for any plot of the
-        cooperative, anyone else only for a plot they currently own. Any other plot, an unknown id and a plot of
+        The ledger of one plot (feature 011 §2.1, feature 015 §2.9). `debts` lists every charge type the plot has a
+        charge of, in the order of the charge types, with its debt after payments: the sum of its charges (a reversal
+        counts negative, adjustments with their sign) minus what payments pay on them (allocations minus releases);
+        `total` is their sum and `prepayment` the money paid for the plot that is on no charge. `charges` lists the
+        charges newest first (by `accruedOn`, then by the time they were booked); a regular charge or an opening
+        balance carries `paid` and `open`. `payments` lists the payments of the plot and their reversals newest first
+        (by `receivedOn`, then by the time they were entered), each payment with its allocations and releases;
+        `prepaymentAllocations` lists the times the plot's prepayment was placed on its charges ("allocated from
+        prepayment", by hand or by the system), newest first. The client interleaves the lists by date. `from` and `to`
+        (both optional, inclusive) limit the lists (charges by `accruedOn`, payments by `receivedOn`, prepayment
+        allocations by `allocatedOn`); `kind` limits them to one kind of charge (for example `ADJUSTMENT`: no payments
+        then) or, with `PAYMENTS`, to the payments and their reversals (no charges, no prepayment allocations); neither
+        ever changes `debts`, `total` or `prepayment`. `from` after `to` is 400 `VALIDATION_FAILED`
+        (`errors[{field: from, code: INVALID}]`). An adjustment names the charge it adjusts (`adjusts`), an adjusted
+        charge its adjustments (`adjustedBy`); `recalculationId` is shown only to callers with `CHARGES_VIEW`. Every
+        amount is calculated by the server. No permission annotation: a caller with `CHARGES_VIEW` may ask for any plot
+        of the cooperative, anyone else only for a plot they currently own. Any other plot, an unknown id and a plot of
         another cooperative are the same 404 `PLOT_NOT_FOUND`; the platform operator has no cooperative data: 403.
+        `payments` and `prepaymentAllocations` are listed for a caller with `PAYMENTS_VIEW` and for a current owner of
+        the plot, and are empty for anyone else. A payment's `payerNote` is shown only to callers with both
+        `PAYMENTS_VIEW` and `MEMBERS_VIEW`, its `createdByName` only to callers with `CHARGES_VIEW`; a member never sees
+        either.
       parameters:
         - name: id
           in: path
@@ -2828,23 +2846,27 @@ paths:
         - name: from
           in: query
           required: false
-          description: The first day of the list (by `accruedOn`), inclusive
+          description: >-
+            The first day of the lists (charges by `accruedOn`, payments by `receivedOn`, prepayment allocations by
+            `allocatedOn`), inclusive
           schema:
             type: string
             format: date
         - name: to
           in: query
           required: false
-          description: The last day of the list (by `accruedOn`), inclusive
+          description: >-
+            The last day of the lists (charges by `accruedOn`, payments by `receivedOn`, prepayment allocations by
+            `allocatedOn`), inclusive
           schema:
             type: string
             format: date
         - name: kind
           in: query
           required: false
-          description: Only charges of this kind
+          description: Only charges of this kind, or with `PAYMENTS` only the payments and their reversals
           schema:
-            $ref: '#/components/schemas/ChargeKind'
+            $ref: '#/components/schemas/PlotAccountKind'
       responses:
         '200':
           description: OK
@@ -2955,6 +2977,416 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
 
+  /payments:
+    get:
+      tags: [payments]
+      operationId: listPayments
+      summary: The payments of the cooperative
+      description: |
+        A page of the payments (money received; a reversal is not a row of its own, it marks its payment `reversed`),
+        newest first (by `receivedOn`, then by the time they were entered). `from` and `to` (both optional, inclusive)
+        limit the list by `receivedOn`; `month` by the billing month the payment is booked in; `source` and `plotId`
+        by their values. `from` after `to` is 400 `VALIDATION_FAILED` (`errors[{field: from, code: INVALID}]`).
+        Every amount is calculated by the server. Requires `PAYMENTS_VIEW`; the platform operator has no permissions:
+        403.
+      parameters:
+        - name: from
+          in: query
+          required: false
+          description: The first day received (by `receivedOn`), inclusive
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: false
+          description: The last day received (by `receivedOn`), inclusive
+          schema:
+            type: string
+            format: date
+        - name: source
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/PaymentSource'
+        - name: plotId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: month
+          in: query
+          required: false
+          description: The billing month the payment is booked in, `YYYY-MM`
+          schema:
+            type: string
+            pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+        - name: page
+          in: query
+          required: false
+          description: Zero-based page index
+          schema:
+            type: integer
+            format: int32
+            minimum: 0
+            default: 0
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [payments]
+      operationId: enterPayment
+      summary: Preview or save a payment for a plot, or one payment split over several plots of one payer
+      description: |
+        Money received for one plot (`plotId`), or one payment split over several plots of one payer (`split`), as
+        cash at the cooperative's cash desk (`CASH`) or a bank transfer entered by hand (`BANK`), placed on the plots'
+        open charges (money rules section 2, feature 015 §2.2). Exactly one of `plotId` and `split` is given. Only
+        `REGULAR` and `OPENING` charges that are not reversed are open: their effective amount (the charge plus its
+        adjustments) minus what payments already placed on them. The proposal fills the open charges oldest debt date
+        (`accruedOn`) first, then by the cooperative's order of charge types, then by the start of the service period,
+        then in booking order; each receives at most what is open on it. Without `lines` the proposal is saved; with
+        `lines` the caller's choice is (an empty list places nothing). The remainder (the amount minus the lines) is
+        placed at once while the cooperative's setting `autoAllocatePrepayment` is on: on the charges still open after
+        the lines, in the same order, as allocations of origin `PREPAYMENT_AUTO` by the system (`resultLines` with
+        `automatic: true`), so no prepayment waits while the plot has an open charge. Only what is left after that (the
+        plot owes nothing more), or the whole remainder while the setting is off, stays as the plot's prepayment.
+
+        With `preview=true` nothing is written and no lock is taken: the answer (200) lists every open charge of the
+        plot in that order (`proposed`: what the proposal or the caller's lines place on it, `0.00` for nothing), the
+        lines a save would write (`resultLines`), the total placed (`allocatedTotal`, the automatic part in
+        `automaticTotal`), the prepayment the payment leaves and a `digest`. A preview whose lines have a problem is
+        still 200, with `valid: false`, every problem in `problems` (see `AllocationProblem`), the table with the
+        requested amounts and their total, no `resultLines`, no automatic placement and no `digest`. With
+        `preview=false` the payment and its allocations are saved together (201) and `payments` names the saved
+        payment; a cash payment gets the cooperative's next receipt number (no gaps, no duplicates). The payment is
+        booked in the billing month of `receivedOn` when that month is open, otherwise in the earliest open month after
+        it; it keeps its `receivedOn`. The `digest` covers the open charges and the lines a save writes (the automatic
+        ones included); sent with the `digest` of a preview that no longer matches, the save is 409 `PREVIEW_OUTDATED`
+        and writes nothing.
+
+        **Split** (`split`, feature 015 §2.6): the payer's current plots (owned now, not common land, not archived) in
+        natural plot order are the plots of the split; the preview lists them in `split.plots` with their debt (the
+        sum of what is open on their charges) and the proposed part. The proposal is in proportion to the debts
+        (kopecks rounded down, the leftover kopecks to the largest remainders, ties to the plot listed first); an
+        amount of at least the total debt gives each plot its debt and the excess to the first plot as prepayment (also
+        when the plots owe nothing). Without `split.parts` the proposal is used; with them, each part names a plot of
+        the payer at most once, its `amount` (`0.00` allowed: such a part is shown but not saved; absent takes the
+        proposed part of the plot) and its `lines` as for one plot; the remainder of each part is placed automatically
+        on its plot as for one plot. The parts must add up to `amount` (a save: 400 `SPLIT_TOTAL_MISMATCH`,
+        `errors[{field: split.parts}]`; a preview: 200 with the problem `SPLIT_TOTAL_MISMATCH`). `parts` of the answer
+        has one part per plot of the split, in natural plot order. A save writes one payment per part above zero, all
+        with one `groupId` and the payer `split.payerMemberId`; a cash group takes one receipt number, stored on every
+        part. The `digest` covers the amount, the payer, the parts (plot, amount), each part's open charges and the
+        lines a save writes.
+
+        400 `VALIDATION_FAILED`: `amount` not above zero (`AMOUNT_NOT_POSITIVE`) or with more than 12 integer digits
+        (`INVALID`), `receivedOn` after today in Europe/Kyiv (`DATE_IN_FUTURE`), `plotId` missing without `split`
+        (`REQUIRED`), `split` together with `plotId` (`split` `INVALID`) or with `lines` (`lines` `INVALID`),
+        `payerMemberId` differing from `split.payerMemberId` (`INVALID`), `split.payerMemberId` not a member of the
+        cooperative (`MEMBER_NOT_FOUND`) or a member without a current plot that takes payments (`NOT_FOUND`), an
+        empty `split.parts` (`REQUIRED`), `split.parts[i].plotId` not a current plot of the payer (`NOT_FOUND`) or
+        named twice (`DUPLICATE`), `split.parts[i].amount` negative or with more than 12 integer digits (`INVALID`),
+        the lines of a part as for one plot under `split.parts[i].lines[j]`,
+        `payerNote` over 200 characters or `bankReference` over 64 (`TOO_LONG`), a `bankReference` on a cash payment
+        (`INVALID`), `payerMemberId` not a member of the cooperative (`MEMBER_NOT_FOUND`; an archived member may pay),
+        `lines[j].chargeId` not an open charge of the plot (`NOT_FOUND`) or named twice (`DUPLICATE`),
+        `lines[j].amount` not above zero (`AMOUNT_NOT_POSITIVE`). 400 `ALLOCATION_EXCEEDS_PAYMENT` when the lines
+        together exceed `amount` (`errors[{field: lines}]`, of a part: its amount, `split.parts[i].lines`); 400
+        `ALLOCATION_EXCEEDS_CHARGE` when a line exceeds what is open on its charge (`errors[{field: lines[j].amount}]`,
+        of a part `split.parts[i].lines[j].amount`). The problems of the lines (and `SPLIT_TOTAL_MISMATCH`) are 400 for
+        a save only; a preview answers them in `problems`. An unknown plot, or one of another cooperative, is
+        404 `PLOT_NOT_FOUND`; common land is 409 `PLOT_COMMON_LAND` and an archived plot 409 `PLOT_ARCHIVED`.
+
+        The payer note is personal data: it is stored encrypted and is never logged. Requires `PAYMENTS_ENTER`; a save
+        is written to the audit log (`PAYMENT_RECORDED`, entity type `PAYMENT` about the plot, with the amount, source,
+        date, billing month, receipt number or bank reference, and the payer note sealed; one entry per saved part of
+        a split).
+      parameters:
+        - name: preview
+          in: query
+          required: true
+          description: '`true` shows the proposal without writing anything; `false` saves the payment'
+          schema:
+            type: boolean
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentEntryRequest'
+      responses:
+        '200':
+          description: The proposal (preview)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentEntryResult'
+        '201':
+          description: The saved payment (save)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentEntryResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /payments/{id}:
+    get:
+      tags: [payments]
+      operationId: getPayment
+      summary: One payment with its allocations and its group
+      description: |
+        The payment as saved, with what it pays on each charge now (`currentAllocations`), every allocation and
+        release of it (oldest first, with the author's current name), the other parts of its group (a payment split
+        over several plots of one payer) and its reversal. `payerNote` is returned only to a caller who may also view
+        members (`MEMBERS_VIEW`). An unknown payment, a payment of another cooperative or the id of
+        a reversal row is 404 `NOT_FOUND`. Requires `PAYMENTS_VIEW`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentDetails'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /payments/{id}/reverse:
+    post:
+      tags: [payments]
+      operationId: reversePayment
+      summary: Reverse a payment
+      description: |
+        Cancels a payment by a new payment row of kind `PAYMENT_REVERSAL` (feature 015 §2.5): the negated amount, the
+        same plot, source, group and `receivedOn`, the reason, pointing at the payment. Every allocation of the payment
+        still on a charge is taken back first (a release with the cause `PAYMENT_REVERSED`), so the charges it paid are
+        owed again; the money is gone with the payment and does not become a prepayment. The reversal is booked in the
+        billing month of `receivedOn` while that month is open, otherwise in the earliest open month. A cash payment
+        keeps its receipt number and is shown reversed. A part of a split payment is reversed on its own; the other
+        parts stay. A payment of an archived plot can still be reversed. Nothing is changed or deleted (the ledger is
+        append-only). The answer (201) is the card of the reversed payment.
+
+        400 `VALIDATION_FAILED` with `reason` `REQUIRED` (absent or blank) or `TOO_LONG` (over 500 characters). 409
+        `PAYMENT_ALREADY_REVERSED` when the payment was reversed before (also when two reversals meet) or the id is
+        the id of a reversal row. An unknown payment, or one of another cooperative, is 404 `NOT_FOUND`. Requires
+        `PAYMENTS_REVERSE`; written to the audit log (`PAYMENT_REVERSED`, entity type `PAYMENT` about the plot, with
+        the amount of the reversal, the receipt number of a cash payment, the billing month and the reason).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentReversal'
+      responses:
+        '201':
+          description: The reversed payment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentDetails'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /payments/{id}/reallocate:
+    post:
+      tags: [payments]
+      operationId: reallocatePayment
+      summary: Preview or save a new allocation of a saved payment
+      description: |
+        Moves the money of a payment between the plot's charges (feature 015 §2.6): every allocation of the payment
+        still on a charge is taken back (a release with the cause `REALLOCATED`) and the new lines are written (origin
+        `REALLOCATION`) in one transaction. The new lines are checked against the plot's open charges as if the
+        payment's allocations were already taken back, and together may not exceed the payment's amount. Without
+        `lines` the proposal is saved (the plot's open charges as if released, filled in the order of `enterPayment`);
+        with `lines` the caller's choice is (an empty list places nothing). The remainder is placed automatically as at
+        `enterPayment` while `autoAllocatePrepayment` is on (origin `PREPAYMENT_AUTO`, by the system); only what is left
+        after that, or all of it while the setting is off, stays as prepayment.
+
+        With `preview=true` nothing is written and no lock is taken (200): `current` lists what the payment places on
+        charges now, and `proposal` every open charge of the plot as if released with `proposed` (`0.00` for a charge
+        that receives nothing), the lines a save writes (`resultLines`), the total placed and what stays as
+        prepayment, with a `digest`. Lines with a problem are still 200 in a preview, with `valid: false` and
+        `problems`, as at `enterPayment`. With `preview=false` the releases and the new allocations are saved (201),
+        with the same answer. The `digest` covers the payment, what is left of each of its allocations, the open
+        charges as if released and the lines a save writes; sent with the `digest` of a preview that no longer
+        matches, the save is 409 `PREVIEW_OUTDATED` and writes nothing.
+
+        400 `VALIDATION_FAILED`: `lines[j].chargeId` not an open charge of the plot (`NOT_FOUND`) or named twice
+        (`DUPLICATE`), `lines[j].amount` not above zero (`AMOUNT_NOT_POSITIVE`); 400 `ALLOCATION_EXCEEDS_PAYMENT` when
+        the lines together exceed the payment (`errors[{field: lines}]`); 400 `ALLOCATION_EXCEEDS_CHARGE` when a line
+        exceeds what is open on its charge (`errors[{field: lines[j].amount}]`); these are 400 for a save only, a
+        preview answers them in `problems`. 409 `PAYMENT_ALREADY_REVERSED` for a
+        reversed payment or the id of a reversal row. An unknown payment, or one of another cooperative, is 404
+        `NOT_FOUND`. Requires `PAYMENTS_ENTER`; a save is written to the audit log (`PAYMENT_REALLOCATED`, entity type
+        `PAYMENT` about the plot, with the payment's amount, `receivedOn`, receipt number of a cash payment, and
+        `lines` old and new, each line as `<charge type code or name> <YYYY-MM of the service start> <amount>`).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: preview
+          in: query
+          required: true
+          description: '`true` shows the new allocation without writing anything; `false` saves it'
+          schema:
+            type: boolean
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AllocationLinesRequest'
+      responses:
+        '200':
+          description: The proposal (preview)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentReallocationResult'
+        '201':
+          description: The saved allocation (save)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentReallocationResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /plots/{id}/prepayment/allocate:
+    post:
+      tags: [payments]
+      operationId: allocatePrepayment
+      summary: Preview or save an allocation of the plot's prepayment by hand
+      description: |
+        Places the plot's prepayment (its payments, reversals negative, minus what they place on charges) on its open
+        charges (feature 015 §2.6, "Allocate prepayment"), whether or not automatic allocation is on. Without `lines`
+        the proposal is saved (the open charges filled in the order of `enterPayment` up to the prepayment); with
+        `lines` the caller's choice is. Each line's money is taken from the plot's payments that still have money left,
+        the oldest first (`receivedOn`, then the time they were entered), so a line may become several allocations
+        (origin `PREPAYMENT_MANUAL`). Nothing is placed automatically here. With `autoAllocatePrepayment` on, a plot
+        with an open charge normally has no prepayment waiting; the action is offered where `prepaymentAllocatable`
+        says so (the setting off).
+
+        With `preview=true` nothing is written and no lock is taken (200): `proposal` lists every open charge of the
+        plot with `proposed`, its `amount` is the prepayment, `allocatedTotal` the total placed and `prepayment` what
+        stays, with a `digest` (the plot, its prepayment and its open charges). Lines with a problem are still 200 in a
+        preview, with `valid: false` and `problems`, as at `enterPayment`. With `preview=false` the allocations are saved (201), with the
+        same answer; a `digest` of a preview that no longer matches is 409 `PREVIEW_OUTDATED` and writes nothing.
+
+        409 `NOTHING_TO_ALLOCATE` when the plot has no prepayment or no open charge. 400 `VALIDATION_FAILED`: an empty
+        `lines` (`REQUIRED`), the lines as in `reallocatePayment`; 400 `ALLOCATION_EXCEEDS_PAYMENT` when the lines
+        together exceed the prepayment (`errors[{field: lines}]`); 400 `ALLOCATION_EXCEEDS_CHARGE` as in
+        `reallocatePayment`; the problems of the lines are 400 for a save only. An unknown plot, or one of another cooperative, is 404 `PLOT_NOT_FOUND`. Requires
+        `PAYMENTS_ENTER`; a save is written to the audit log (`PREPAYMENT_ALLOCATED`, entity type `PAYMENT` about the
+        plot, with `lines` as in `PAYMENT_REALLOCATED` and their `total`).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: preview
+          in: query
+          required: true
+          description: '`true` shows the proposal without writing anything; `false` saves it'
+          schema:
+            type: boolean
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AllocationLinesRequest'
+      responses:
+        '200':
+          description: The proposal (preview)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrepaymentAllocationResult'
+        '201':
+          description: The saved allocation (save)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrepaymentAllocationResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
   /billing-months:
     get:
       tags: [billing]
@@ -2965,7 +3397,9 @@ paths:
         first charge) to the current month in Europe/Kyiv, including months that have no row or no charge yet (they
         are listed `OPEN` with empty totals; a row is created when the month is closed or a charge is booked in it).
         `totals` holds the sum of the charges booked in the month per charge type (a reversal counts negative), in the
-        order of the charge types; `total` is their sum. A cooperative without any month gets an empty list.
+        order of the charge types; `total` is their sum. `received` is the sum of the payments booked in the month, a
+        reversal of a payment negative (a payment received in a closed month is booked in the earliest open month and
+        counts there). A cooperative without any month gets an empty list.
         Requires `CHARGES_VIEW`.
       responses:
         '200':
@@ -3965,8 +4399,8 @@ paths:
         The built-in reports the caller may run, in the order of `ReportCode`, each with its filters: what the filter
         is (`key`, `type`), which query parameters of `getReport` and `downloadReport` it fills (`params`), whether
         it must be given, the values it starts with (`defaults`) and, for a period, whether it means billing months,
-        service days or reading dates (`basis`). A report that needs a permission the caller lacks is not listed:
-        `debtors` also needs `MEMBERS_VIEW`. A cooperative that has booked nothing still gets every report it may run.
+        service days, reading dates or the days payments were received (`basis`). A report that needs a permission the
+        caller lacks is not listed: `debtors` also needs `MEMBERS_VIEW`, `payments` also needs `PAYMENTS_VIEW`. A cooperative that has booked nothing still gets every report it may run.
 
         The server returns codes only: the name and description of a report and the label of a filter come from the
         client's catalogs by the report code and the filter key, in the user's language. Defaults that depend on the
@@ -4002,8 +4436,10 @@ paths:
         (`YYYY-MM`, both included); `from` and `to` are calendar days in Europe/Kyiv, both included, meaning service
         days or reading dates as the filter's `basis` says; `chargeTypeIds`, `statuses`, `meterKinds` and
         `correctionKinds` left out mean all; `street` is compared with the plot's street as stored, ignoring case and
-        surrounding spaces; `resource` and `waterSource` left out mean all. In `debtors`, `minDebt` and
-        `olderThanDays` combine with OR, as in the red status.
+        surrounding spaces; `resource`, `waterSource` and `source` left out mean all. In `debtors`, `minDebt` and
+        `olderThanDays` combine with OR, as in the red status. In `payments` the billing months choose the payments
+        by the month they are booked in; when `from` and `to` are given (its optional filter `received`, basis
+        `PAYMENT_DATES`), the days the payments were received choose them instead and the months are not used.
 
         A malformed parameter (a wrong format, a number out of range) is 400 `VALIDATION_FAILED`, an unknown enum
         value 400 `MALFORMED_REQUEST`. Filters that do not fit the report are 400 `REPORT_FILTER_INVALID` with
@@ -4016,14 +4452,18 @@ paths:
         (`"1250.50"`), kWh and m³ with three (`"152.400"`), ISO dates, `YYYY-MM` months and codes. A value that is not
         known is absent with a `reason`, never `0`. Totals are the sums of the rows as listed, with no separate
         rounding. "Charged" is always the effective amount (charges plus their adjustments, reversals counting
-        negative); columns that split it show regular charges, reversals and adjustments separately. Plots are listed in
-        the natural order of their numbers, meters in the order of the meter tree, charge types in their configured
-        order. No report has a "paid" column until payments exist.
+        negative); columns that split it show regular charges, reversals and adjustments separately. "Paid" is what
+        payments pay on the charges (net allocations) as of the report's day: an allocation counts from its value date,
+        the later of the day the payment was received and the debt date of the charge; "debt" is charged minus paid;
+        "prepayment" is what was received and is on no charge yet. Plots are listed in the natural order of their
+        numbers, meters in the order of the meter tree, charge types in their configured order.
 
         Every run is written to the audit log (`REPORT_GENERATED`, entity type `REPORT`, `output` `PREVIEW`) with the
         filters as ids, codes and dates, the row count and whether the report holds personal data, never its contents.
-        Requires `REPORTS_VIEW`; `debtors` also needs `MEMBERS_VIEW` (403 `PERMISSION_DENIED` otherwise). An unknown
-        code is 400 `MALFORMED_REQUEST`; a code of `ReportCode` this server does not produce yet is 404 `NOT_FOUND`.
+        Requires `REPORTS_VIEW`; `debtors` also needs `MEMBERS_VIEW`, `payments` also needs `PAYMENTS_VIEW` (403
+        `PERMISSION_DENIED` otherwise); the payer note column of `payments` is there only for a caller with
+        `MEMBERS_VIEW`. An unknown code is 400 `MALFORMED_REQUEST`; a code of `ReportCode` this server does not produce
+        yet is 404 `NOT_FOUND`.
       parameters:
         - $ref: '#/components/parameters/ReportCodePath'
         - $ref: '#/components/parameters/ReportFromMonth'
@@ -4041,6 +4481,7 @@ paths:
         - $ref: '#/components/parameters/ReportMeterKinds'
         - $ref: '#/components/parameters/ReportWaterSource'
         - $ref: '#/components/parameters/ReportCorrectionKinds'
+        - $ref: '#/components/parameters/ReportSource'
       responses:
         '200':
           description: OK
@@ -4098,6 +4539,7 @@ paths:
         - $ref: '#/components/parameters/ReportMeterKinds'
         - $ref: '#/components/parameters/ReportWaterSource'
         - $ref: '#/components/parameters/ReportCorrectionKinds'
+        - $ref: '#/components/parameters/ReportSource'
         - name: lang
           in: query
           required: false
@@ -4248,13 +4690,15 @@ paths:
       summary: Every placeholder a template can use
       description: |
         The field catalog (feature 013 §4.2): every placeholder `${key}` the app fills, in a fixed order (the
-        cooperative, the period, when and by whom, the totals, then the row sets `plots`, `months`, `meters`, `water`),
-        each with its value type, its row set (absent for a single value), a language-neutral example where one exists
-        and the permission it needs. The server returns codes, never text: the description of an entry is
+        cooperative, the period, when and by whom, the totals, then the row sets `plots`, `months`, `meters`, `water`,
+        `payments`), each with its value type, its row set (absent for a single value), a language-neutral example where
+        one exists and the permission it needs: `REPORTS_VIEW`, or `PAYMENTS_VIEW` for the payment fields
+        (`totals.paid.<type>`, `totals.prepayment` and the row set `payments`). The server returns codes, never text: the description of an entry is
         `reportTemplates.fields.<field>` in the client's catalogs.
 
-        Two families depend on the cooperative's charge types and are listed once per charge type, archived ones
-        included, in the configured order: `totals.charged.<type>` and `rows.plots.debt.<type>`, where `<type>` is the
+        Three families depend on the cooperative's charge types and are listed once per charge type, archived ones
+        included, in the configured order: `totals.charged.<type>`, `totals.paid.<type>` and `rows.plots.debt.<type>`,
+        where `<type>` is the
         code of a seeded type (`MEMBERSHIP`, `ELECTRICITY`, `LAND_TAX`, `WATER`, `COMMON_CONSUMERS`) and the id of a
         custom type. Such an entry carries the family in `pattern`, the description code of the family in `field` and
         the type in `chargeTypeId` (the client names it). Names, phones and e-mails of people are never placeholders.
@@ -4410,12 +4854,18 @@ paths:
         - `totals.landTax.*` and `rows.plots.landTax.*`: the land tax report for the year of `to`;
         - `totals.charged.<type>`: the effective amount (charges plus adjustments minus reversals, opening balances
           left out) of the type's charges whose first service day is from `from` to `to`, booked whenever;
+        - `totals.paid.<type>`: what payments pay, as of `to`, on the charges counted by `totals.charged.<type>` (an
+          allocation counts from the later of the day its payment was received and the debt date of its charge);
+        - `totals.prepayment`: the money received that is on no charge, summed over every plot, as of `to`, or as of
+          today when `to` is later (the day of the plot balances);
         - `totals.debt`, `totals.plots.*` and the row set `plots`: the plot balances of the active plots (common land
           left out) as of `to`, or as of today when `to` is later;
         - the row set `months`: per billing month from the month of `from` to the month of `to` that has charges, the
           cooperative's totals as on the charges by month report;
         - the row sets `meters` (the electricity tree's consumption) and `water` (the water report's plots): the
-          service days from `from` to `to`.
+          service days from `from` to `to`;
+        - the row set `payments`: the payments received from `from` to `to`, as on the payments report, without the
+          payer and the payer note.
 
         Warnings, never errors, are listed in a sheet added at the end of the file when there is at least one
         ("Попередження" or "Warnings", made unique if the template has a sheet of that name) and in the response
@@ -4437,7 +4887,9 @@ paths:
         rows, or the file would unpack to more than 256 MB. Every generated file is written to the audit log as `REPORT_GENERATED` (entity type
         `REPORT_TEMPLATE`, entity id the template, label its name) with the fields `template` (the id), `version`,
         `filters` (`from`, `to`), `rows` (the rows written for row sets), `personalData` (`false`) and `output`
-        (`XLSX`), never the contents. Requires `REPORTS_VIEW`; the platform operator has no cooperative data: 403.
+        (`XLSX`), never the contents. Requires `REPORTS_VIEW`; a template that uses a payment field (`totals.paid.<type>`,
+        `totals.prepayment` or the row set `payments`) also needs `PAYMENTS_VIEW` (403 `PERMISSION_DENIED`, nothing
+        written to the audit log); the platform operator has no cooperative data: 403.
       parameters:
         - $ref: '#/components/parameters/ReportTemplateIdPath'
       requestBody:
@@ -4535,7 +4987,11 @@ components:
 
   responses:
     BadRequest:
-      description: Malformed request or failed validation (code `VALIDATION_FAILED` or `MALFORMED_REQUEST`)
+      description: >-
+        Malformed request or failed validation (code `VALIDATION_FAILED` or `MALFORMED_REQUEST`); the allocation lines
+        of a payment together exceed the payment (code `ALLOCATION_EXCEEDS_PAYMENT`) or a line exceeds what is open on
+        its charge (code `ALLOCATION_EXCEEDS_CHARGE`); the parts of a split payment do not add up to the payment (code
+        `SPLIT_TOTAL_MISMATCH`)
       content:
         application/problem+json:
           schema:
@@ -4567,8 +5023,8 @@ components:
       description: >-
         The resource does not exist or is not visible to the caller (code `NOT_FOUND`; `PLOT_NOT_FOUND` from the
         plot-scoped meter operations `listPlotMeters` and `submitPlotReading` and the ledger operations
-        `getPlotAccount` and `enterOpeningBalance` when the plot is unknown, of another cooperative or not the
-        caller's)
+        `getPlotAccount` and `enterOpeningBalance` and the payment operations `enterPayment` and `allocatePrepayment`
+        when the plot is unknown, of another cooperative or not the caller's)
       content:
         application/problem+json:
           schema:
@@ -4649,7 +5105,11 @@ components:
         from it (code `WATER_NOT_CONNECTED`), the water source is not an active common consumer meter (code
         `WATER_SOURCE_INVALID`), or a meter that plots are or were connected to as their water source is deleted (code
         `WATER_SOURCE_IN_USE`), or a manual recalculation spans more than 24 months (code
-        `RECALCULATION_RANGE_TOO_LONG`) or finds nothing to change (code `NOTHING_TO_RECALCULATE`)
+        `RECALCULATION_RANGE_TOO_LONG`) or finds nothing to change (code `NOTHING_TO_RECALCULATE`), or a payment is
+        entered for common land (code `PLOT_COMMON_LAND`) or an archived plot (code `PLOT_ARCHIVED`), or a plot that
+        has payments is deleted (code `PLOT_HAS_PAYMENTS`), or a payment that was reversed (or a reversal row) is
+        reversed or reallocated (code `PAYMENT_ALREADY_REVERSED`), or a plot's prepayment is allocated while it has no
+        prepayment or no open charge (code `NOTHING_TO_ALLOCATE`)
       content:
         application/problem+json:
           schema:
@@ -4854,6 +5314,13 @@ components:
         maxItems: 2
         items:
           $ref: '#/components/schemas/ReportCorrectionKind'
+    ReportSource:
+      name: source
+      in: query
+      required: false
+      description: Only payments of this source (`CASH` or `BANK`); left out means both (filter type `SOURCE`)
+      schema:
+        $ref: '#/components/schemas/PaymentSource'
 
   schemas:
     Money:
@@ -4888,6 +5355,9 @@ components:
         - RECALCULATION_RUN
         - REPORTS_VIEW
         - REPORT_TEMPLATES_MANAGE
+        - PAYMENTS_VIEW
+        - PAYMENTS_ENTER
+        - PAYMENTS_REVERSE
 
     PlotStatusVisibility:
       type: string
@@ -4936,6 +5406,7 @@ components:
           commonConsumerDefaultSplit,
           redAmount,
           redDays,
+          autoAllocatePrepayment,
         ]
       properties:
         memberPlotStatusVisibility:
@@ -4953,6 +5424,12 @@ components:
           format: int32
           minimum: 0
           maximum: 36500
+        autoAllocatePrepayment:
+          type: boolean
+          description: >-
+            Allocate prepayment automatically (feature 015 §2.7): when on (the default), a plot's prepayment is
+            placed on its open charges, oldest first, whenever charges are booked for the plot or money is taken back
+            from its charges; when off, the prepayment waits until the treasurer allocates it by hand
         officialName:
           type: string
           maxLength: 300
@@ -4998,6 +5475,9 @@ components:
           format: int32
           minimum: 0
           maximum: 36500
+        autoAllocatePrepayment:
+          type: boolean
+          description: Allocate prepayment automatically; see `CooperativeSettings.autoAllocatePrepayment`
         officialName:
           type: string
           maxLength: 300
@@ -5350,6 +5830,10 @@ components:
         - COMMON_CONSUMER_RUN_REVERSED
         - COMMON_CONSUMER_BILLING_CHANGED
         - RECALCULATION_BOOKED
+        - PAYMENT_RECORDED
+        - PAYMENT_REVERSED
+        - PAYMENT_REALLOCATED
+        - PREPAYMENT_ALLOCATED
         - REPORT_GENERATED
         - REPORT_TEMPLATE_UPLOADED
         - REPORT_TEMPLATE_ARCHIVED
@@ -5365,7 +5849,14 @@ components:
         `NOT_CHARGED_RETRIED` entry of a losses node or common consumer item is a `METER` entry about the node or
         consumer meter, and so is `COMMON_CONSUMER_BILLING_CHANGED` (about the consumer meter, label its name). A
         `RECALCULATION` entry (`RECALCULATION_BOOKED`) is about a booked recalculation: its label is its months as
-        `from/to` (`YYYY-MM`). A `REPORT` entry (`REPORT_GENERATED`) is about one run of a report: its entity id is
+        `from/to` (`YYYY-MM`). A `PAYMENT` entry (`PAYMENT_RECORDED`, `PAYMENT_REVERSED`, `PAYMENT_REALLOCATED`,
+        `PREPAYMENT_ALLOCATED`) is about the plot whose payment it is: its `entityId` is the plot id and its label the
+        plot number. `PAYMENT_RECORDED` has `amount`, `source`, `receivedOn`, `billingMonth`, `receiptNumber` (cash) or
+        `bankReference` (bank, when given) and the payer note `payerNote` (personal data, sealed); `PAYMENT_REVERSED`
+        has `amount` (the reversal, negative), `receiptNumber` (cash), `billingMonth` and `reason`;
+        `PAYMENT_REALLOCATED` has `amount`, `receivedOn`, `receiptNumber` (cash) and `lines` (old and new value, each
+        line as `<charge type code or name> <YYYY-MM> <amount>`, joined by `; `); `PREPAYMENT_ALLOCATED` has `lines`
+        and `total`. A `REPORT` entry (`REPORT_GENERATED`) is about one run of a report: its entity id is
         the same for every run of the report (the name-based UUID of `report:<code>`, so the log can be filtered by
         report), its label the report code (for example `charges-by-month`), and its fields are `report` (the code),
         `output` (`PREVIEW` or `XLSX`), `filters` (a JSON array of `{param, value}` as the query string carries them:
@@ -5391,6 +5882,7 @@ components:
           LOSSES_RUN,
           COMMON_CONSUMER_RUN,
           RECALCULATION,
+          PAYMENT,
           REPORT,
           REPORT_TEMPLATE,
         ]
@@ -7518,6 +8010,17 @@ components:
           description: >-
             The current name of the member who booked the charge; only for callers with `CHARGES_VIEW`, absent for
             charges booked by the system or by a member who no longer exists
+        paid:
+          $ref: '#/components/schemas/Money'
+          description: >-
+            On the plot account, for a regular charge or an opening balance: what payments pay on it now (allocations
+            minus releases); absent for reversals, adjustments and outside the plot account
+        open:
+          $ref: '#/components/schemas/Money'
+          description: >-
+            On the plot account, for a regular charge or an opening balance: what is still owed on it, its amount plus
+            its adjustments (`0.00` once reversed) minus `paid`; absent for reversals, adjustments and outside the plot
+            account
 
     ChargeAdjustmentTarget:
       type: object
@@ -7540,7 +8043,9 @@ components:
 
     ChargeTypeDebt:
       type: object
-      description: The debt of a plot for one charge type (its charges, reversals and adjustments)
+      description: >-
+        The debt of a plot for one charge type after payments: its charges, reversals and adjustments minus what
+        payments pay on them
       required: [chargeTypeId, name, nameCustomized, debt]
       properties:
         chargeTypeId:
@@ -7559,22 +8064,163 @@ components:
     PlotAccount:
       type: object
       description: The account of a plot
-      required: [plotId, debts, total, charges]
+      required:
+        [plotId, debts, total, prepayment, prepaymentAllocatable, charges, payments, prepaymentAllocations]
       properties:
         plotId:
           type: string
           format: uuid
         debts:
           type: array
+          description: The debt per charge type after payments
           items:
             $ref: '#/components/schemas/ChargeTypeDebt'
         total:
           $ref: '#/components/schemas/Money'
+          description: The debt of the plot after payments, the sum of `debts`
+        prepayment:
+          $ref: '#/components/schemas/Money'
+          description: >-
+            The money paid for the plot that is on no charge: its payments (reversals negative) minus what they pay on
+            charges; never below `0.00`
+        prepaymentAllocatable:
+          type: boolean
+          description: >-
+            True when the caller may allocate the plot's prepayment by hand now ("Allocate prepayment"):
+            `PAYMENTS_ENTER`, automatic allocation off, `prepayment` above `0.00` and an open charge
         charges:
           type: array
-          description: Newest first, limited by `from` and `to`
+          description: Newest first, limited by `from`, `to` and `kind`
           items:
             $ref: '#/components/schemas/Charge'
+        payments:
+          type: array
+          description: >-
+            The payments of the plot and their reversals, newest first, limited by `from`, `to` and `kind`; empty for a
+            caller who neither has `PAYMENTS_VIEW` nor owns the plot now
+          items:
+            $ref: '#/components/schemas/AccountPayment'
+        prepaymentAllocations:
+          type: array
+          description: >-
+            The times the plot's prepayment was placed on its charges, newest first, limited by `from`, `to` and
+            `kind`; empty for a caller who neither has `PAYMENTS_VIEW` nor owns the plot now
+          items:
+            $ref: '#/components/schemas/AccountPrepaymentAllocation'
+
+    PlotAccountKind:
+      type: string
+      description: >-
+        What the plot account lists: a charge kind (`REGULAR`, `REVERSAL`, `OPENING`, `ADJUSTMENT`) only the charges of
+        that kind; `PAYMENTS` only the payments of the plot and their reversals
+      enum: [REGULAR, REVERSAL, OPENING, ADJUSTMENT, PAYMENTS]
+
+    PaymentKind:
+      type: string
+      description: >-
+        `PAYMENT` money received for the plot; `PAYMENT_REVERSAL` cancels one payment with the opposite amount (see
+        `reverses`, `reason`)
+      enum: [PAYMENT, PAYMENT_REVERSAL]
+
+    AccountPayment:
+      type: object
+      description: >-
+        A payment of the plot or the reversal of one, as the plot account shows it. Never changed or deleted. A member
+        sees the payments of the plots they own now, with the receipt or bank document number and what each payment
+        paid, never the payer note or who entered it
+      required:
+        [id, kind, groupId, source, amount, receivedOn, billingMonth, reversed, allocations, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          $ref: '#/components/schemas/PaymentKind'
+        groupId:
+          type: string
+          format: uuid
+          description: The group of the payment (the parts of a payment split over several plots share it)
+        source:
+          $ref: '#/components/schemas/PaymentSource'
+        amount:
+          $ref: '#/components/schemas/Money'
+          description: Above zero for a payment, below zero for a reversal
+        receivedOn:
+          type: string
+          format: date
+          description: The day the money was received; a reversal keeps the day of its payment
+        billingMonth:
+          type: string
+          pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+          description: The billing month the row is booked in, `YYYY-MM`
+        receiptNumber:
+          type: integer
+          format: int64
+          description: The receipt number of a cash payment; absent for a bank payment and for a reversal
+        bankReference:
+          type: string
+          description: The bank document number of a bank payment, when given (user content)
+        reversed:
+          type: boolean
+          description: True for a payment that a reversal cancels; false for a reversal row
+        reversedBy:
+          type: string
+          format: uuid
+          description: The reversal that cancelled this payment
+        reverses:
+          type: string
+          format: uuid
+          description: The payment a reversal cancels
+        reason:
+          type: string
+          description: The reason of a reversal (user content)
+        allocations:
+          type: array
+          description: >-
+            What the payment paid: its allocations and releases, oldest first, each with its charge (also those placed
+            later from the prepayment); empty for a reversal
+          items:
+            $ref: '#/components/schemas/PaymentAllocation'
+        payerNote:
+          type: string
+          description: The payer note (personal data); only for callers with `PAYMENTS_VIEW` and `MEMBERS_VIEW`
+        createdAt:
+          type: string
+          format: date-time
+        createdByName:
+          type: string
+          description: >-
+            The current name of the member who entered the row; only for callers with `CHARGES_VIEW`, absent when
+            unknown
+
+    AccountPrepaymentAllocation:
+      type: object
+      description: >-
+        One placement of the plot's prepayment on its charges ("allocated from prepayment"): the allocation rows of
+        origin `PREPAYMENT_AUTO` or `PREPAYMENT_MANUAL` written together. The same rows also appear among the
+        allocations of the payments whose money they place
+      required: [allocatedOn, createdAt, origin, system, amount, lines]
+      properties:
+        allocatedOn:
+          type: string
+          format: date
+          description: The day the prepayment was placed, in Europe/Kyiv
+        createdAt:
+          type: string
+          format: date-time
+        origin:
+          $ref: '#/components/schemas/AllocationOrigin'
+        system:
+          type: boolean
+          description: True when the system placed it (automatic allocation), false when a member did
+        amount:
+          $ref: '#/components/schemas/Money'
+          description: The sum of the lines
+        lines:
+          type: array
+          description: The allocation rows, in the order of their charges (oldest first)
+          items:
+            $ref: '#/components/schemas/PaymentAllocation'
 
     ChargeReversal:
       type: object
@@ -7633,8 +8279,8 @@ components:
 
     BillingMonthSummary:
       type: object
-      description: A billing month with the totals of the charges booked in it
-      required: [month, status, runDone, totals, total]
+      description: A billing month with the totals of the charges and the payments booked in it
+      required: [month, status, runDone, totals, total, received]
       properties:
         month:
           type: string
@@ -7656,6 +8302,11 @@ components:
             $ref: '#/components/schemas/ChargeTypeTotal'
         total:
           $ref: '#/components/schemas/Money'
+        received:
+          $ref: '#/components/schemas/Money'
+          description: >-
+            The sum of the payments booked in the month, reversals of payments negative (a payment received in a
+            closed month counts in the open month it is booked in)
 
     StaleMeter:
       type: object
@@ -7701,7 +8352,7 @@ components:
     BillingMonthDetails:
       type: object
       description: A billing month with its totals and the closing check list
-      required: [month, status, runDone, totals, total, checklist]
+      required: [month, status, runDone, totals, total, received, checklist]
       properties:
         month:
           type: string
@@ -7723,6 +8374,9 @@ components:
             $ref: '#/components/schemas/ChargeTypeTotal'
         total:
           $ref: '#/components/schemas/Money'
+        received:
+          $ref: '#/components/schemas/Money'
+          description: The sum of the payments booked in the month, reversals of payments negative
         checklist:
           $ref: '#/components/schemas/BillingMonthChecklist'
 
@@ -9125,17 +9779,801 @@ components:
           type: integer
           format: int32
 
+    PaymentSource:
+      type: string
+      description: >-
+        Where the money of a payment came from: `CASH` taken at the cooperative's cash desk (the payment carries a
+        receipt number), `BANK` a bank transfer entered by hand (no receipt number, an optional bank document number)
+      enum: [CASH, BANK]
+
+    AllocationOrigin:
+      type: string
+      description: >-
+        Who placed an allocation: `ENTRY` when the payment was entered, `REALLOCATION` when the payment was reallocated,
+        `PREPAYMENT_MANUAL` the plot's prepayment placed by hand, `PREPAYMENT_AUTO` placed by the system: the prepayment
+        after new charges were booked, or the remainder of a payment placed at once when it was entered or reallocated
+        (automatic allocation on)
+      enum: [ENTRY, REALLOCATION, PREPAYMENT_MANUAL, PREPAYMENT_AUTO]
+
+    AllocationReleaseCause:
+      type: string
+      description: >-
+        Why a release took money back from a charge: `CHARGE_REVERSED` the charge was reversed, `CHARGE_ADJUSTED` an
+        adjustment lowered it below what was placed on it, `PAYMENT_REVERSED` the payment was reversed, `REALLOCATED`
+        the payment was reallocated
+      enum: [CHARGE_REVERSED, CHARGE_ADJUSTED, PAYMENT_REVERSED, REALLOCATED]
+
+    PaymentLineInput:
+      type: object
+      description: An amount of the payment placed on one open charge of the plot
+      required: [chargeId, amount]
+      properties:
+        chargeId:
+          type: string
+          format: uuid
+        amount:
+          $ref: '#/components/schemas/Money'
+
+    PaymentEntryRequest:
+      type: object
+      description: >-
+        A payment for one plot (`plotId`, with optional `lines`) or one payment split over several plots of one payer
+        (`split`); exactly one of `plotId` and `split` is given.
+      required: [amount, receivedOn, source]
+      properties:
+        amount:
+          $ref: '#/components/schemas/Money'
+        receivedOn:
+          type: string
+          format: date
+          description: The day the money arrived; not after today in Europe/Kyiv
+        source:
+          $ref: '#/components/schemas/PaymentSource'
+        bankReference:
+          type: string
+          maxLength: 64
+          description: >-
+            The bank document number of a `BANK` payment (user content); surrounding whitespace is trimmed, blank means
+            none
+        payerMemberId:
+          type: string
+          format: uuid
+          description: >-
+            The member who paid; any member of the cooperative, optional. With `split` the payer is
+            `split.payerMemberId`; this field is then absent or the same member
+        payerNote:
+          type: string
+          maxLength: 200
+          description: >-
+            A note about the payer (for example the name of a relative who brought the money): personal data, stored
+            encrypted; surrounding whitespace is trimmed, blank means none
+        plotId:
+          type: string
+          format: uuid
+          description: The plot the payment is for; required unless `split` is given
+        lines:
+          type: [array, 'null']
+          maxItems: 1000
+          description: >-
+            The caller's allocation for `plotId`, each charge at most once; absent (or null) saves the proposal, an
+            empty list places nothing. Not with `split` (each part has its own lines)
+          items:
+            $ref: '#/components/schemas/PaymentLineInput'
+        split:
+          $ref: '#/components/schemas/PaymentSplitInput'
+        digest:
+          type: string
+          maxLength: 64
+          description: The `digest` of the preview the caller saw; optional
+
+    PaymentSplitInput:
+      type: object
+      description: >-
+        One payment split over several current plots of one payer (feature 015 §2.6). Without `parts` the proposed
+        split over every current plot of the payer is used
+      required: [payerMemberId]
+      properties:
+        payerMemberId:
+          type: string
+          format: uuid
+          description: The member who paid; the split is over the plots this member owns now
+        parts:
+          type: [array, 'null']
+          maxItems: 500
+          description: >-
+            The caller's parts, each a current plot of the payer at most once; together they add up to `amount`.
+            Absent (or null) uses the proposed split
+          items:
+            $ref: '#/components/schemas/PaymentSplitPartInput'
+
+    PaymentSplitPartInput:
+      type: object
+      description: The part of a split payment for one plot
+      required: [plotId]
+      properties:
+        plotId:
+          type: string
+          format: uuid
+        amount:
+          $ref: '#/components/schemas/Money'
+          description: >-
+            The part, `0.00` or more (a part of `0.00` is not saved); absent takes the proposed part of the plot
+        lines:
+          type: [array, 'null']
+          maxItems: 1000
+          description: >-
+            The caller's allocation of the part, as `lines` of a payment for one plot; absent (or null) uses the
+            proposal of the part
+          items:
+            $ref: '#/components/schemas/PaymentLineInput'
+
+    PaymentProposalLine:
+      type: object
+      description: An open charge of the plot with the amount the payment places on it
+      required: [chargeId, kind, chargeType, billingMonth, serviceFrom, serviceTo, accruedOn, open, proposed]
+      properties:
+        chargeId:
+          type: string
+          format: uuid
+        kind:
+          $ref: '#/components/schemas/ChargeKind'
+        chargeType:
+          $ref: '#/components/schemas/ChargeTypeRef'
+        billingMonth:
+          type: string
+          pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+          description: The billing month the charge is booked in, `YYYY-MM`
+        serviceFrom:
+          type: string
+          format: date
+        serviceTo:
+          type: string
+          format: date
+        accruedOn:
+          type: string
+          format: date
+          description: The day the debt counts from
+        open:
+          $ref: '#/components/schemas/Money'
+        proposed:
+          $ref: '#/components/schemas/Money'
+
+    PaymentPartProposal:
+      type: object
+      description: >-
+        What a payment places on the open charges of one plot: every open charge in the order of the proposal (oldest
+        debt date first) with what the proposal or the caller's lines place on it, the lines a save writes (the
+        automatic placement of the remainder included), the total placed and what is left as prepayment
+      required: [plotId, plotNumber, amount, lines, resultLines, allocatedTotal, automaticTotal, prepayment]
+      properties:
+        plotId:
+          type: string
+          format: uuid
+        plotNumber:
+          type: string
+        amount:
+          $ref: '#/components/schemas/Money'
+          description: The payment, its part of a split, or the prepayment being allocated
+        lines:
+          type: array
+          description: >-
+            Every open charge of the plot; `proposed` is what the proposal or the caller's lines place on it (in a
+            preview with problems: the amounts requested, as sent)
+          items:
+            $ref: '#/components/schemas/PaymentProposalLine'
+        resultLines:
+          type: array
+          description: >-
+            The allocations a save writes: the proposal's or the caller's lines in their order (`automatic: false`),
+            then the remainder placed automatically in the order of the proposal (`automatic: true`). Empty in a
+            preview with problems
+          items:
+            $ref: '#/components/schemas/PaymentResultLine'
+        allocatedTotal:
+          $ref: '#/components/schemas/Money'
+          description: >-
+            The total placed, the automatic placement included; in a preview with problems the sum of the requested
+            amounts above zero
+        automaticTotal:
+          $ref: '#/components/schemas/Money'
+          description: What the automatic placement of the remainder places (`0.00` when nothing or switched off)
+        prepayment:
+          $ref: '#/components/schemas/Money'
+          description: >-
+            What the payment leaves unplaced (the amount minus `allocatedTotal`, never below `0.00`); `0.00` while the
+            plot still has an open charge and automatic allocation is on
+        debt:
+          $ref: '#/components/schemas/Money'
+          description: What the plot owes before the payment (the sum of `open` of its open charges)
+
+    PaymentResultLine:
+      type: object
+      description: One allocation a save writes
+      required: [chargeId, amount, automatic]
+      properties:
+        chargeId:
+          type: string
+          format: uuid
+        amount:
+          $ref: '#/components/schemas/Money'
+        automatic:
+          type: boolean
+          description: >-
+            True for the remainder placed by the system (origin `PREPAYMENT_AUTO`); false for the proposal's or the
+            caller's line
+
+    AllocationProblemCode:
+      type: string
+      description: >-
+        What is wrong with the lines of a preview: `ALLOCATION_EXCEEDS_CHARGE` a line exceeds what is open on its
+        charge, `ALLOCATION_EXCEEDS_PAYMENT` the lines together exceed the amount (no line), `AMOUNT_NOT_POSITIVE` a
+        line not above zero, `NOT_FOUND` a line names no open charge of the plot, `DUPLICATE` a charge named on an
+        earlier line again, `SPLIT_TOTAL_MISMATCH` the parts of a split do not add up to the amount (no plot, no line)
+      enum:
+        [
+          ALLOCATION_EXCEEDS_CHARGE,
+          ALLOCATION_EXCEEDS_PAYMENT,
+          AMOUNT_NOT_POSITIVE,
+          NOT_FOUND,
+          DUPLICATE,
+          SPLIT_TOTAL_MISMATCH,
+        ]
+
+    AllocationProblem:
+      type: object
+      description: >-
+        A problem of the lines of a preview. A problem of one line names its plot, its index in the lines sent (of the
+        part of the plot for a split) and the charge it names; `ALLOCATION_EXCEEDS_PAYMENT` names only the plot,
+        `SPLIT_TOTAL_MISMATCH` nothing
+      required: [code]
+      properties:
+        code:
+          $ref: '#/components/schemas/AllocationProblemCode'
+        plotId:
+          type: string
+          format: uuid
+        line:
+          type: integer
+          format: int32
+          description: The index of the line in the `lines` sent
+        chargeId:
+          type: string
+          format: uuid
+          description: The charge the line names
+
+    PaymentSplitPlot:
+      type: object
+      description: A current plot of the payer of a split payment, with its debt and its proposed part
+      required: [plotId, plotNumber, debt, proposedAmount]
+      properties:
+        plotId:
+          type: string
+          format: uuid
+        plotNumber:
+          type: string
+        debt:
+          $ref: '#/components/schemas/Money'
+          description: What the plot owes (the sum of what is open on its charges)
+        proposedAmount:
+          $ref: '#/components/schemas/Money'
+          description: The part the proposed split gives the plot
+
+    PaymentSplitPreview:
+      type: object
+      description: The payer of a split payment and every current plot of the payer, in natural plot order
+      required: [payerMemberId, plots]
+      properties:
+        payerMemberId:
+          type: string
+          format: uuid
+        plots:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentSplitPlot'
+
+    SavedPayment:
+      type: object
+      description: A payment just saved
+      required: [id, groupId, plotId, amount, source, receivedOn, billingMonth]
+      properties:
+        id:
+          type: string
+          format: uuid
+        groupId:
+          type: string
+          format: uuid
+        plotId:
+          type: string
+          format: uuid
+        amount:
+          $ref: '#/components/schemas/Money'
+        source:
+          $ref: '#/components/schemas/PaymentSource'
+        receivedOn:
+          type: string
+          format: date
+        billingMonth:
+          type: string
+          pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+          description: The billing month the payment is booked in, `YYYY-MM`
+        receiptNumber:
+          type: integer
+          format: int64
+          description: The receipt number of a cash payment; absent for a bank payment
+
+    PaymentEntryResult:
+      type: object
+      description: >-
+        The proposal of a payment (preview) or the payments saved with it (save). `parts` has one part per plot: one
+        for a payment of one plot, one per plot of the split (in natural plot order, parts of `0.00` included) for a
+        split payment, which also has `split`. `payments` is empty for a preview; a save lists one payment per part
+        above zero, all of one group. A preview whose lines have a problem has `valid: false`, the problems and no
+        `digest`; a save is always valid.
+      required: [preview, valid, amount, parts, problems, payments]
+      properties:
+        preview:
+          type: boolean
+        valid:
+          type: boolean
+          description: False when `problems` is not empty; only a valid preview can be saved
+        problems:
+          type: array
+          items:
+            $ref: '#/components/schemas/AllocationProblem'
+        amount:
+          $ref: '#/components/schemas/Money'
+        parts:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentPartProposal'
+        split:
+          $ref: '#/components/schemas/PaymentSplitPreview'
+        digest:
+          type: string
+          description: >-
+            Send it back with the save to refuse it when the open charges or the lines changed since; absent in a
+            preview with problems
+        payments:
+          type: array
+          items:
+            $ref: '#/components/schemas/SavedPayment'
+
+    PaymentPayer:
+      type: object
+      description: The member who paid
+      required: [memberId, shortName]
+      properties:
+        memberId:
+          type: string
+          format: uuid
+        shortName:
+          type: string
+          description: Last and first name (personal data)
+
+    PaymentSummary:
+      type: object
+      description: One payment of the list
+      required:
+        [
+          id,
+          groupId,
+          plotId,
+          plotNumber,
+          source,
+          amount,
+          receivedOn,
+          billingMonth,
+          allocated,
+          prepayment,
+          reversed,
+        ]
+      properties:
+        id:
+          type: string
+          format: uuid
+        groupId:
+          type: string
+          format: uuid
+        groupSize:
+          type: integer
+          format: int32
+          description: >-
+            The number of payments in the group (the parts of a split payment, reversed ones included); 1 for a
+            payment of one plot
+        receiptNumber:
+          type: integer
+          format: int64
+        bankReference:
+          type: string
+        receivedOn:
+          type: string
+          format: date
+        billingMonth:
+          type: string
+          pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+        plotId:
+          type: string
+          format: uuid
+        plotNumber:
+          type: string
+        payer:
+          $ref: '#/components/schemas/PaymentPayer'
+        source:
+          $ref: '#/components/schemas/PaymentSource'
+        amount:
+          $ref: '#/components/schemas/Money'
+        allocated:
+          $ref: '#/components/schemas/Money'
+          description: What the payment pays on charges now (allocations minus releases)
+        prepayment:
+          $ref: '#/components/schemas/Money'
+          description: What is left of the payment on no charge; `0.00` once reversed
+        reversed:
+          type: boolean
+
+    PaymentPage:
+      type: object
+      required: [items, page, size, totalItems, totalPages]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentSummary'
+        page:
+          type: integer
+          format: int32
+          description: Zero-based page index
+        size:
+          type: integer
+          format: int32
+        totalItems:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+
+    PaymentAllocation:
+      type: object
+      description: >-
+        One allocation of the payment (positive `amount`, with its `origin`) or one release (negative `amount`, with
+        its `releaseCause` and the allocation it takes back)
+      required: [id, chargeId, chargeType, serviceFrom, serviceTo, accruedOn, amount, system, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        chargeId:
+          type: string
+          format: uuid
+        chargeType:
+          $ref: '#/components/schemas/ChargeTypeRef'
+        serviceFrom:
+          type: string
+          format: date
+        serviceTo:
+          type: string
+          format: date
+        accruedOn:
+          type: string
+          format: date
+        amount:
+          $ref: '#/components/schemas/Money'
+        origin:
+          $ref: '#/components/schemas/AllocationOrigin'
+        releaseCause:
+          $ref: '#/components/schemas/AllocationReleaseCause'
+        releasesAllocationId:
+          type: string
+          format: uuid
+        system:
+          type: boolean
+          description: True when the system wrote the row (an automatic allocation or release), not a member
+        createdAt:
+          type: string
+          format: date-time
+        createdByName:
+          type: string
+          description: >-
+            The current name of the member who wrote the row; absent for a row of the system. Given on the payment
+            card only
+
+    PaymentGroupPart:
+      type: object
+      description: Another part of the same payment group (a payment split over several plots of one payer)
+      required: [id, plotId, plotNumber, amount, reversed]
+      properties:
+        id:
+          type: string
+          format: uuid
+        plotId:
+          type: string
+          format: uuid
+        plotNumber:
+          type: string
+        amount:
+          $ref: '#/components/schemas/Money'
+        reversed:
+          type: boolean
+
+    PaymentReversalInfo:
+      type: object
+      description: The reversal of a payment
+      required: [id, reason, billingMonth, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        reason:
+          type: string
+          description: User content
+        billingMonth:
+          type: string
+          pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+        createdAt:
+          type: string
+          format: date-time
+        createdByName:
+          type: string
+
+    PaymentDetails:
+      type: object
+      description: A payment with its allocations, its group and its reversal
+      required:
+        [
+          id,
+          groupId,
+          plotId,
+          plotNumber,
+          source,
+          amount,
+          receivedOn,
+          billingMonth,
+          allocated,
+          prepayment,
+          reversed,
+          currentAllocations,
+          allocations,
+          groupParts,
+          createdAt,
+          reversible,
+          reallocatable,
+          prepaymentAllocatable,
+        ]
+      properties:
+        id:
+          type: string
+          format: uuid
+        groupId:
+          type: string
+          format: uuid
+        plotId:
+          type: string
+          format: uuid
+        plotNumber:
+          type: string
+        source:
+          $ref: '#/components/schemas/PaymentSource'
+        amount:
+          $ref: '#/components/schemas/Money'
+        receivedOn:
+          type: string
+          format: date
+        billingMonth:
+          type: string
+          pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+        receiptNumber:
+          type: integer
+          format: int64
+        bankReference:
+          type: string
+        payer:
+          $ref: '#/components/schemas/PaymentPayer'
+        payerNote:
+          type: string
+          description: The payer note (personal data); only for callers who may view members
+        allocated:
+          $ref: '#/components/schemas/Money'
+        prepayment:
+          $ref: '#/components/schemas/Money'
+          description: What is left of the payment on no charge; `0.00` once reversed
+        reversed:
+          type: boolean
+        reversedBy:
+          $ref: '#/components/schemas/PaymentReversalInfo'
+        currentAllocations:
+          type: array
+          description: >-
+            Where the payment's money is now: per charge the net of its allocations and releases, only charges with
+            more than `0.00`, in the order of the proposal (oldest debt date first); empty once reversed
+          items:
+            $ref: '#/components/schemas/PaymentChargeAmount'
+        allocations:
+          type: array
+          description: The history of the allocation, every allocation and release, oldest first
+          items:
+            $ref: '#/components/schemas/PaymentAllocation'
+        groupParts:
+          type: array
+          description: The other parts of the payment's group; empty for a payment of one plot
+          items:
+            $ref: '#/components/schemas/PaymentGroupPart'
+        createdAt:
+          type: string
+          format: date-time
+        createdByName:
+          type: string
+          description: The current name of the member who entered the payment; absent when unknown
+        reversible:
+          type: boolean
+          description: True when the caller may reverse the payment now (`PAYMENTS_REVERSE`, the payment not reversed)
+        reallocatable:
+          type: boolean
+          description: True when the caller may reallocate the payment now (`PAYMENTS_ENTER`, the payment not reversed)
+        prepaymentAllocatable:
+          type: boolean
+          description: >-
+            True when the caller may allocate the prepayment of the payment's plot by hand now: `PAYMENTS_ENTER`,
+            automatic allocation off, the plot has a prepayment above `0.00` and an open charge
+
+    PaymentChargeAmount:
+      type: object
+      description: What a payment pays on one charge now (its allocations to the charge minus their releases)
+      required: [chargeId, kind, chargeType, billingMonth, serviceFrom, serviceTo, accruedOn, amount]
+      properties:
+        chargeId:
+          type: string
+          format: uuid
+        kind:
+          $ref: '#/components/schemas/ChargeKind'
+        chargeType:
+          $ref: '#/components/schemas/ChargeTypeRef'
+        billingMonth:
+          type: string
+          pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+          description: The billing month the charge is booked in, `YYYY-MM`
+        serviceFrom:
+          type: string
+          format: date
+        serviceTo:
+          type: string
+          format: date
+        accruedOn:
+          type: string
+          format: date
+        amount:
+          $ref: '#/components/schemas/Money'
+
+    PaymentReversal:
+      type: object
+      description: Why a payment is reversed
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+          description: User content, stored as typed; surrounding whitespace is trimmed
+
+    AllocationLinesRequest:
+      type: object
+      description: >-
+        The caller's allocation for a reallocation of a payment or an allocation of a plot's prepayment, and the digest
+        of the preview the caller saw
+      properties:
+        lines:
+          type: [array, 'null']
+          maxItems: 1000
+          description: >-
+            The caller's allocation, each open charge of the plot at most once; absent (or null) uses the proposal
+          items:
+            $ref: '#/components/schemas/PaymentLineInput'
+        digest:
+          type: string
+          maxLength: 64
+          description: The `digest` of the preview the caller saw; optional
+
+    PaymentCurrentAllocation:
+      type: object
+      description: What one allocation of the payment places on its charge now (the allocation minus its releases)
+      required:
+        [allocationId, chargeId, kind, chargeType, billingMonth, serviceFrom, serviceTo, accruedOn, amount]
+      properties:
+        allocationId:
+          type: string
+          format: uuid
+        chargeId:
+          type: string
+          format: uuid
+        kind:
+          $ref: '#/components/schemas/ChargeKind'
+        chargeType:
+          $ref: '#/components/schemas/ChargeTypeRef'
+        billingMonth:
+          type: string
+          pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+          description: The billing month the charge is booked in, `YYYY-MM`
+        serviceFrom:
+          type: string
+          format: date
+        serviceTo:
+          type: string
+          format: date
+        accruedOn:
+          type: string
+          format: date
+        amount:
+          $ref: '#/components/schemas/Money'
+
+    PaymentReallocationResult:
+      type: object
+      description: >-
+        A reallocation of a payment: what the payment places on charges before it (`current`), the new allocation over
+        the plot's open charges as if `current` were taken back (`proposal`, its `amount` the payment's amount) and the
+        digest
+      required: [preview, valid, problems, paymentId, current, proposal]
+      properties:
+        preview:
+          type: boolean
+        valid:
+          type: boolean
+          description: False when `problems` is not empty; only a valid preview can be saved
+        problems:
+          type: array
+          items:
+            $ref: '#/components/schemas/AllocationProblem'
+        paymentId:
+          type: string
+          format: uuid
+        current:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentCurrentAllocation'
+        proposal:
+          $ref: '#/components/schemas/PaymentPartProposal'
+        digest:
+          type: string
+          description: >-
+            Send it back with the save to refuse it when the payment, the open charges or the lines changed since;
+            absent in a preview with problems
+
+    PrepaymentAllocationResult:
+      type: object
+      description: >-
+        An allocation of a plot's prepayment: the proposal over the plot's open charges (its `amount` the prepayment,
+        its `prepayment` what stays) and the digest
+      required: [preview, valid, problems, proposal]
+      properties:
+        preview:
+          type: boolean
+        valid:
+          type: boolean
+          description: False when `problems` is not empty; only a valid preview can be saved
+        problems:
+          type: array
+          items:
+            $ref: '#/components/schemas/AllocationProblem'
+        proposal:
+          $ref: '#/components/schemas/PaymentPartProposal'
+        digest:
+          type: string
+          description: >-
+            Send it back with the save to refuse it when the prepayment or the open charges changed since; absent in a
+            preview with problems
+
     ReportCode:
       type: string
       description: >-
-        A built-in report. `charges-by-month`: what was charged per billing month and charge type, with a second sheet
-        by service period. `plot-balances`: the debt of every active plot per charge type on a day, without names.
+        A built-in report. `charges-by-month`: what was charged per billing month and charge type and what is paid on it,
+        with a second sheet by service period. `plot-balances`: charged, paid, debt and prepayment of every active plot
+        per charge type on a day, without names.
         `debtors`: the plots over the red amount or older than the red days, with the owners' names and contacts
         (also needs `MEMBERS_VIEW`). `electricity-tree`: electricity from the substation down to the plots, with a
         consumption sheet and a charged sheet. `water`: water use and water charges of the connected plots.
         `missing-readings`: active meters without an approved reading in a range. `land-tax`: the expected and the
         charged land tax per plot for a year. `corrections`: every reversal and adjustment booked in a range of
-        billing months.
+        billing months. `payments`: the payments of a range of billing months or of days, one row per payment, with
+        totals per source (also needs `PAYMENTS_VIEW`; the payer note only with `MEMBERS_VIEW`).
       enum:
         - charges-by-month
         - plot-balances
@@ -9145,6 +10583,7 @@ components:
         - missing-readings
         - land-tax
         - corrections
+        - payments
 
     ReportFilterType:
       type: string
@@ -9154,7 +10593,7 @@ components:
         (`minDebt`). `INT`: a whole number (`olderThanDays`). `CHARGE_TYPES`: charge types `chargeTypeIds`, several.
         `STREET`: one street `street`. `STATUS`: status colours `statuses`, several. `RESOURCE`: `resource`.
         `METER_KIND`: meter kinds `meterKinds`, several. `WATER_SOURCE`: the kind of water source `waterSource`.
-        `CORRECTION_KIND`: `correctionKinds`, several.
+        `CORRECTION_KIND`: `correctionKinds`, several. `SOURCE`: the source of a payment `source`.
       enum:
         - MONTH_RANGE
         - DATE_RANGE
@@ -9169,6 +10608,7 @@ components:
         - METER_KIND
         - WATER_SOURCE
         - CORRECTION_KIND
+        - SOURCE
 
     ReportFilterParam:
       type: string
@@ -9189,14 +10629,15 @@ components:
         - meterKinds
         - waterSource
         - correctionKinds
+        - source
 
     ReportPeriodBasis:
       type: string
       description: >-
         What the period of a report means; the filter label says so. `BILLING_MONTHS`: the billing months the entries
         were booked in. `SERVICE_DAYS`: the days a service was provided (the service period of a charge).
-        `READING_DATES`: the dates of meter readings.
-      enum: [BILLING_MONTHS, SERVICE_DAYS, READING_DATES]
+        `READING_DATES`: the dates of meter readings. `PAYMENT_DATES`: the days payments were received.
+      enum: [BILLING_MONTHS, SERVICE_DAYS, READING_DATES, PAYMENT_DATES]
 
     ReportCorrectionKind:
       type: string
@@ -9225,8 +10666,9 @@ components:
           type: string
           pattern: '^[a-z][A-Za-z]*$'
           description: >-
-            Names the filter in the client's catalogs: `period`, `asOf`, `year`, `chargeTypes`, `street`, `statuses`,
-            `minDebt`, `olderThanDays`, `resource`, `meterKinds`, `waterSource` or `correctionKinds`
+            Names the filter in the client's catalogs: `period`, `received`, `asOf`, `year`, `chargeTypes`, `street`,
+            `statuses`, `minDebt`, `olderThanDays`, `resource`, `meterKinds`, `waterSource`, `correctionKinds` or
+            `source`
         type:
           $ref: '#/components/schemas/ReportFilterType'
         params:
@@ -9256,7 +10698,7 @@ components:
           $ref: '#/components/schemas/ReportCode'
         personalData:
           type: boolean
-          description: True when the report holds names and contacts of people (only `debtors`)
+          description: True when the report holds names of people (`debtors` with their contacts, `payments`)
         filters:
           type: array
           description: The filters in the order the form shows them; the period comes first
@@ -9287,7 +10729,8 @@ components:
           pattern: '^[a-z][A-Za-z0-9]*(\.[A-Za-z0-9-]+)?$'
           description: >-
             Stable within the report, for example `month`, `effective` or, for a column per charge type,
-            `debt.<chargeTypeId>`
+            `<family>.<chargeTypeId>` with the family `charged`, `paid` or `debt` (the client heads it with the charge
+            type's name and the family)
         type:
           $ref: '#/components/schemas/ReportColumnType'
         chargeTypeId:
@@ -9395,8 +10838,8 @@ components:
         A sentence of the report header. `SERVICE_PERIOD_SHEET`: the second sheet groups the charges by the month of
         the service, so an adjustment booked later shows under the month it is for. `PAST_DATE_STATUS`: for a past day
         the status is worked out as of that day with today's thresholds. `STATUS_ALL_CHARGE_TYPES`: with a charge type
-        filter, today's status still counts every charge type. `OLDEST_UNPAID_IS_OLDEST_CHARGE`: until payments exist,
-        the oldest unpaid charge is the oldest charge with a debt. `LOSSES_FIXED_PERCENT`: the cooperative charges losses
+        filter, today's status still counts every charge type. `OLDEST_UNPAID_IS_OLDEST_CHARGE`: the oldest unpaid
+        charge is the oldest charge that still has a debt after what payments pay on it. `LOSSES_FIXED_PERCENT`: the cooperative charges losses
         now as a fixed percentage of each interval (param `percent`, two decimals); `LOSSES_PROPORTIONAL`: it charges
         losses now by proportional runs; with either, a charge or a run booked under another mode shows what it booked.
         `RECALCULATION_SUGGESTED`: some rows differ from the expected amount and a recalculation may be due (param
@@ -9600,8 +11043,9 @@ components:
       description: >-
         The rows a template row repeats over. `PLOTS`: the active plots with their balances and land tax. `MONTHS`:
         the billing months with charges. `METERS`: the nodes of the electricity meter tree. `WATER`: the plots
-        connected to water, one row per plot and source
-      enum: [PLOTS, MONTHS, METERS, WATER]
+        connected to water, one row per plot and source. `PAYMENTS`: the payments received in the period, one row per
+        payment, without the payer and the payer note (needs `PAYMENTS_VIEW`)
+      enum: [PLOTS, MONTHS, METERS, WATER, PAYMENTS]
 
     ReportTemplateField:
       type: object
@@ -9617,13 +11061,13 @@ components:
           description: >-
             The description code: the description is `reportTemplates.fields.<field>` in the client's catalogs. The
             key itself for a fixed placeholder; for a placeholder of a charge type family the family's code,
-            `totals.charged.byChargeType` or `rows.plots.debt.byChargeType`, whose text names the type
-            (`{chargeType}`)
+            `totals.charged.byChargeType`, `totals.paid.byChargeType` or `rows.plots.debt.byChargeType`, whose text
+            names the type (`{chargeType}`)
         pattern:
           type: string
           description: >-
-            Only for a charge type family: the family's keys, `totals.charged.<type>` or `rows.plots.debt.<type>`
-            (`<type>` the code of a seeded type or the id of a custom type)
+            Only for a charge type family: the family's keys, `totals.charged.<type>`, `totals.paid.<type>` or
+            `rows.plots.debt.<type>` (`<type>` the code of a seeded type or the id of a custom type)
         chargeTypeId:
           type: string
           format: uuid

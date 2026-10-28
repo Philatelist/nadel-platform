@@ -191,6 +191,42 @@ class TemplateGenerateTests extends ReportsTestSupport {
         assertThat(awaitReportEntries(1)).hasSize(1);
     }
 
+    /**
+     * Feature 015 §6: a template that uses a payment field (here the paid membership total, or the payments rows) is
+     * filled only for a caller with "View payments"; without it the generation is refused with 403 and writes no audit
+     * entry, while a template without payment fields is still filled for that caller.
+     */
+    @Test
+    void aTemplateWithAPaymentFieldNeedsPaymentsView() throws Exception {
+        bookTheLedger();
+        UUID paid = upload(chairman, "Сплачено", TemplateFiles.workbook(sheet -> {
+            sheet.value(0, 0, "${totals.paid.MEMBERSHIP}");
+            sheet.value(1, 0, "${totals.debt}");
+        }));
+        UUID rows = upload(chairman, "Платежі", TemplateFiles.workbook(sheet ->
+                sheet.value(0, 0, "${rows.payments.amount}")));
+        UUID plain = upload(chairman, "Борг", TemplateFiles.workbook(sheet -> sheet.value(0, 0, "${totals.debt}")));
+        String auditor = personWithPermissions("Ревізор", "REPORTS_VIEW");
+
+        for (UUID template : List.of(paid, rows)) {
+            generate(auditor, template, PERIOD + "}")
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
+        }
+        awaitOutbox();
+        assertThat(reportEntries()).isEmpty();
+
+        generate(auditor, plain, PERIOD + "}").andExpect(status().isOk());
+        byte[] file = generate(treasurer, paid, PERIOD + "}").andExpect(status().isOk()).andReturn().getResponse()
+                .getContentAsByteArray();
+        try (ReadableWorkbook workbook = new ReadableWorkbook(new ByteArrayInputStream(file))) {
+            List<Row> cells = workbook.getFirstSheet().read();
+            // no payment in the ledger: nothing is paid
+            assertThat(cells.get(0).getCellAsNumber(0).orElseThrow()).isEqualByComparingTo("0");
+        }
+        assertThat(awaitReportEntries(2)).hasSize(2);
+    }
+
     @Test
     void moreRowsThanTheCapAreRefusedAndWriteNoAuditEntry() throws Exception {
         bookTheLedger();

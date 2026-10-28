@@ -7,6 +7,7 @@
 // restore flow lives in acceptance.spec.ts. Titles carry the criteria as "§2.x #n". Every spec that renames restores
 // the standard name in `finally`.
 import { expect, test, type Browser, type Page } from '@playwright/test';
+import { api } from './support/api';
 import { loginAs } from './support/login';
 
 const TREASURER_MEMBER_ID = 'aaaaaaaa-0000-0000-0000-000000000002';
@@ -68,8 +69,11 @@ test.describe('Role names in Ukrainian', () => {
         .click();
       await expect(nameField(page)).toBeEnabled();
       const boxes = page.getByRole('checkbox');
-      await expect(boxes).toHaveCount(22); // every permission, settings and charges included
-      for (let i = 0; i < 22; i++) {
+      // every permission the server lists, whatever features add to the catalogue
+      const permissionCount = (JSON.parse((await api(page, 'GET', '/permissions')).body) as unknown[]).length;
+      expect(permissionCount).toBeGreaterThan(0);
+      await expect(boxes).toHaveCount(permissionCount);
+      for (let i = 0; i < permissionCount; i++) {
         await expect(boxes.nth(i)).toBeChecked();
         await expect(boxes.nth(i)).toBeDisabled();
       }

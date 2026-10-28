@@ -26,6 +26,7 @@ const ENTITY_TYPES = [
   'LOSSES_RUN',
   'COMMON_CONSUMER_RUN',
   'RECALCULATION',
+  'PAYMENT',
 ] as const;
 
 /** Where a record of an entity type is shown; absent for types without a page of their own. */
@@ -40,6 +41,8 @@ const entityHref: Readonly<Partial<Record<AuditEntityType, (entityId: string) =>
   METER_READING: (id) => `/meters/${id}`,
   // the entity id of a charge's record is its plot
   CHARGE: (id) => `/plots/${id}`,
+  // likewise the entity id of a payment's record is its plot
+  PAYMENT: (id) => `/plots/${id}`,
   LOSSES_RUN: (id) => `/charges/losses?run=${id}`,
   COMMON_CONSUMER_RUN: (id) => `/charges/common?run=${id}`,
   RECALCULATION: (id) => `/charges/recalculations/${id}`,

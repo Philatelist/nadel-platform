@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.dhatim.fastexcel.reader.Cell;
 import org.dhatim.fastexcel.reader.CellType;
 import org.dhatim.fastexcel.reader.ReadableWorkbook;
@@ -51,13 +52,14 @@ class PlotBalancesReportTests extends ReportsTestSupport {
         assertThat(sheet.get("key").asString()).isEqualTo("main");
         List<String> keys = columnKeys(sheet);
         assertThat(keys.subList(0, 3)).containsExactly("number", "street", "owners");
-        assertThat(keys.subList(keys.size() - 4, keys.size())).containsExactly("total", "oldestUnpaid",
-                "daysOverdue", "status");
-        // one money column per charge type, in configured order, named by the charge type's id
-        JsonNode membershipColumn = sheet.get("columns").get(keys.indexOf("debt." + membership));
+        assertThat(keys.subList(keys.size() - 7, keys.size())).containsExactly("charged", "paid", "total",
+                "prepayment", "oldestUnpaid", "daysOverdue", "status");
+        // per charge type, in configured order, its charged, paid and debt money columns, named by the type's id
+        assertThat(keys.subList(3, 9)).containsExactly("charged." + membership, "paid." + membership,
+                "debt." + membership, "charged." + electricity, "paid." + electricity, "debt." + electricity);
+        JsonNode membershipColumn = sheet.get("columns").get(keys.indexOf("paid." + membership));
         assertThat(membershipColumn.get("type").asString()).isEqualTo("MONEY");
         assertThat(membershipColumn.get("chargeTypeId").asString()).isEqualTo(membership.toString());
-        assertThat(keys.indexOf("debt." + membership)).isLessThan(keys.indexOf("debt." + electricity));
         assertThat(preview.get("chargeTypes")).extracting(type -> type.get("code").asString())
                 .startsWith("MEMBERSHIP", "ELECTRICITY");
 
@@ -114,6 +116,42 @@ class PlotBalancesReportTests extends ReportsTestSupport {
                 "10=GREEN", "11=GREY");
     }
 
+    /**
+     * Functional spec 2.11: plot 9 is charged 600.00 membership (60 days ago) and 250.00 electricity (40 days ago),
+     * 850.00 in all, and pays 700.00 thirty days ago (600.00 on the membership, 100.00 on the electricity): it shows
+     * charged 850.00, paid 700.00, debt 150.00 and prepayment 0.00, its oldest unpaid charge the electricity. Plot 8
+     * has no charge and paid 50.00 that is on nothing: its prepayment. As of a day before the payment, nothing is paid.
+     */
+    @Test
+    void aPlotShowsWhatItWasChargedWhatItPaidWhatItOwesAndItsPrepayment() throws Exception {
+        UUID nine = plot("9", "Вишнева");
+        UUID eight = plot("8", "Вишнева");
+        UUID fee = dayCharge(nine, membership, "600.00", 60);
+        UUID power = dayCharge(nine, electricity, "250.00", 40);
+        UUID paid = payment(nine, "CASH", "700.00", today.minusDays(30), 1L, null, null);
+        allocate(paid, fee, "600.00");
+        allocate(paid, power, "100.00");
+        payment(eight, "BANK", "50.00", today.minusDays(20), null, null, null);
+
+        JsonNode sheet = body(send(treasurer, get(REPORT).param("street", "Вишнева")).andExpect(status().isOk()))
+                .get("sheets").get(0);
+
+        assertThat(money(sheet)).containsExactly(
+                "8 0.00/0.00/0.00 0.00/0.00/0.00 0.00/0.00/0.00 prepayment=50.00 - -",
+                "9 600.00/600.00/0.00 250.00/100.00/150.00 850.00/700.00/150.00 prepayment=0.00 " + daysAgo(40)
+                        + " 40",
+                "TOTAL 600.00/600.00/0.00 250.00/100.00/150.00 850.00/700.00/150.00 prepayment=50.00 - -");
+
+        // before the payment was received nothing of it is paid, and plot 8 has no prepayment yet either
+        JsonNode before = body(send(treasurer, get(REPORT).param("street", "Вишнева")
+                .param("asOf", today.minusDays(35).toString())).andExpect(status().isOk())).get("sheets").get(0);
+        assertThat(money(before)).containsExactly(
+                "8 0.00/0.00/0.00 0.00/0.00/0.00 0.00/0.00/0.00 prepayment=0.00 - -",
+                "9 600.00/0.00/600.00 250.00/0.00/250.00 850.00/0.00/850.00 prepayment=0.00 " + daysAgo(60)
+                        + " 25",
+                "TOTAL 600.00/0.00/600.00 250.00/0.00/250.00 850.00/0.00/850.00 prepayment=0.00 - -");
+    }
+
     @Test
     void aDayAfterTodayIsAFilterError() throws Exception {
         send(treasurer, get(REPORT).param("asOf", today.plusDays(1).toString()))
@@ -154,22 +192,23 @@ class PlotBalancesReportTests extends ReportsTestSupport {
                 .andExpect(status().isOk()));
 
         JsonNode sheet = preview.get("sheets").get(0);
-        assertThat(columnKeys(sheet)).containsExactly("number", "street", "owners", "debt." + electricity, "total",
+        assertThat(columnKeys(sheet)).containsExactly("number", "street", "owners", "charged." + electricity,
+                "paid." + electricity, "debt." + electricity, "charged", "paid", "total", "prepayment",
                 "oldestUnpaid", "daysOverdue", "status");
         assertThat(cellLines(sheet)).containsExactly(
-                "1 Лісова 2 52.50 52.50 " + daysAgo(30) + " 30 RED",
-                "2 Садова 1 0.00 0.00 - - RED",
-                "3 Садова 1 0.00 0.00 - - YELLOW",
-                "10 Лісова 1 0.00 0.00 - - GREEN",
-                "11 Лісова 0 0.00 0.00 - - GREY",
-                "TOTAL - - - 52.50 52.50 - - -");
+                "1 Лісова 2 52.50 0.00 52.50 52.50 0.00 52.50 0.00 " + daysAgo(30) + " 30 RED",
+                "2 Садова 1 0.00 0.00 0.00 0.00 0.00 0.00 0.00 - - RED",
+                "3 Садова 1 0.00 0.00 0.00 0.00 0.00 0.00 0.00 - - YELLOW",
+                "10 Лісова 1 0.00 0.00 0.00 0.00 0.00 0.00 0.00 - - GREEN",
+                "11 Лісова 0 0.00 0.00 0.00 0.00 0.00 0.00 0.00 - - GREY",
+                "TOTAL - - - 52.50 0.00 52.50 52.50 0.00 52.50 0.00 - - -");
         assertThat(notes(preview)).containsExactly("STATUS_ALL_CHARGE_TYPES", "OLDEST_UNPAID_IS_OLDEST_CHARGE");
 
         // on a past day too: electricity alone would make plot 1 yellow (52.50, 15 days), every type makes it red
         JsonNode past = body(send(treasurer, get(REPORT).param("chargeTypeIds", electricity.toString())
                 .param("asOf", today.minusDays(15).toString())).andExpect(status().isOk()));
         assertThat(cellLines(past.get("sheets").get(0)).getFirst())
-                .isEqualTo("1 Лісова 2 52.50 52.50 " + daysAgo(30) + " 15 RED");
+                .isEqualTo("1 Лісова 2 52.50 0.00 52.50 52.50 0.00 52.50 0.00 " + daysAgo(30) + " 15 RED");
         assertThat(notes(past)).containsExactly("PAST_DATE_STATUS", "STATUS_ALL_CHARGE_TYPES",
                 "OLDEST_UNPAID_IS_OLDEST_CHARGE");
     }
@@ -196,13 +235,17 @@ class PlotBalancesReportTests extends ReportsTestSupport {
             assertThat(byIndex.get(1).getCellText(0)).isEqualTo("Борги ділянок");
             assertThat(byIndex.get(2).getCellText(0)).isEqualTo("Фільтри: Станом на: " + ReportTexts.day(today)
                     + "; Види нарахувань: усі; Вулиця: усі; Стани: усі");
-            assertThat(byIndex.get(5).getCellText(0)).startsWith("Поки оплати не обліковуються");
+            assertThat(byIndex.get(5).getCellText(0)).startsWith("Найстаріше неоплачене нарахування — це")
+                    .contains("після зарахування платежів");
             List<String> headers = new ArrayList<>();
             byIndex.get(7).forEach(cell -> headers.add(cell.getText()));
-            assertThat(headers.subList(0, 5)).containsExactly("Ділянка", "Вулиця", "Власників", "Членський внесок",
-                    "Електроенергія");
-            assertThat(headers.subList(headers.size() - 4, headers.size())).containsExactly("Борг усього",
-                    "Найстаріше неоплачене", "Днів прострочення", "Стан");
+            // a column per charge type says the type and what it shows
+            assertThat(headers.subList(0, 9)).containsExactly("Ділянка", "Вулиця", "Власників",
+                    "Членський внесок: нараховано", "Членський внесок: сплачено", "Членський внесок: борг",
+                    "Електроенергія: нараховано", "Електроенергія: сплачено", "Електроенергія: борг");
+            assertThat(headers.subList(headers.size() - 7, headers.size())).containsExactly("Нараховано усього",
+                    "Сплачено усього", "Борг усього", "Аванс", "Найстаріше неоплачене", "Днів прострочення",
+                    "Стан");
             // plot 1: two owners as a number, its money and its status in the language
             Row first = byIndex.get(8);
             assertThat(first.getCellText(0)).isEqualTo("1");
@@ -214,7 +257,7 @@ class PlotBalancesReportTests extends ReportsTestSupport {
             assertThat(byIndex.get(12).getCellText(headers.size() - 1)).isEqualTo("Без власника або спільна земля");
             Row totals = byIndex.get(13);
             assertThat(totals.getCellText(0)).isEqualTo("Усього");
-            assertNumber(totals.getCell(headers.size() - 4), "2552.5", "#,##0.00");
+            assertNumber(totals.getCell(headers.size() - 5), "2552.5", "#,##0.00");
         }
         assertThat(String.join("|", texts)).doesNotContain(PERSONAL);
 
@@ -222,7 +265,8 @@ class PlotBalancesReportTests extends ReportsTestSupport {
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray());
         assertThat(english.text(2, 0)).isEqualTo("Filters: As of: " + ReportTexts.day(today)
                 + "; Charge types: all; Street: all; Statuses: Has debt");
-        assertThat(english.text(7, 3)).isEqualTo("Membership fee");
+        assertThat(english.text(7, 3)).isEqualTo("Membership fee: charged");
+        assertThat(english.text(7, 4)).isEqualTo("Membership fee: paid");
         assertThat(english.text(8, english.width(7) - 1)).isEqualTo("Has debt");
     }
 
@@ -275,6 +319,33 @@ class PlotBalancesReportTests extends ReportsTestSupport {
             lines.add("TOTAL " + pick(total.get("cells"), wanted));
         }
         return lines;
+    }
+
+    /**
+     * Per row and the totals: number (TOTAL), membership and electricity as charged/paid/debt, the totals the same way,
+     * the prepayment, the oldest unpaid date and the days overdue.
+     */
+    private List<String> money(JsonNode sheet) {
+        List<String> keys = columnKeys(sheet);
+        List<String> lines = new ArrayList<>();
+        List<JsonNode> lists = new ArrayList<>();
+        sheet.get("rows").forEach(row -> lists.add(row.get("cells")));
+        sheet.get("totals").forEach(total -> lists.add(total.get("cells")));
+        for (int index = 0; index < lists.size(); index++) {
+            List<String> all = values(lists.get(index));
+            String first = index < sheet.get("rows").size() ? all.getFirst() : "TOTAL";
+            lines.add(first + " " + triple(all, keys, "charged." + membership, "paid." + membership,
+                    "debt." + membership) + " " + triple(all, keys, "charged." + electricity, "paid." + electricity,
+                    "debt." + electricity) + " " + triple(all, keys, "charged", "paid", "total") + " prepayment="
+                    + all.get(keys.indexOf("prepayment")) + " " + all.get(keys.indexOf("oldestUnpaid")) + " "
+                    + all.get(keys.indexOf("daysOverdue")));
+        }
+        return lines;
+    }
+
+    private static String triple(List<String> values, List<String> keys, String charged, String paid, String debt) {
+        return values.get(keys.indexOf(charged)) + "/" + values.get(keys.indexOf(paid)) + "/"
+                + values.get(keys.indexOf(debt));
     }
 
     /** Every cell of every row and the totals. */

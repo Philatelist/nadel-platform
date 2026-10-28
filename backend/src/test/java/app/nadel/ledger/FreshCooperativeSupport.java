@@ -86,6 +86,12 @@ abstract class FreshCooperativeSupport extends LedgerTestSupport {
         }
         UUID id = tenant;
         asLedgerOwner(sql -> {
+            // payments (feature 015): releases point at their allocation, reversals at their payment
+            sql.update("delete from allocation where tenant_id = ? and releases_allocation_id is not null", id);
+            sql.update("delete from allocation where tenant_id = ?", id);
+            sql.update("delete from payment where tenant_id = ? and reverses_payment_id is not null", id);
+            sql.update("delete from payment where tenant_id = ?", id);
+            sql.update("delete from receipt_counter where tenant_id = ?", id);
             sql.update("delete from meter_value_use where tenant_id = ?", id);
             // the lines point at the charges, the adjustments and reversals at their originals, the charges of a
             // recalculation at the recalculation

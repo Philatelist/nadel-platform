@@ -12,6 +12,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.ZoneId;
 import java.util.ArrayList;
@@ -65,18 +66,18 @@ class ChargesByMonthReportTests extends ReportsTestSupport {
         assertThat(main.get("key").asString()).isEqualTo("byBillingMonth");
         assertThat(columns(main)).containsExactly("month:MONTH", "status:CODE", "chargeType:CHARGE_TYPE",
                 "plots:INTEGER", "regular:MONEY", "opening:MONEY", "reversals:MONEY", "adjustments:MONEY",
-                "effective:MONEY");
+                "effective:MONEY", "paid:MONEY");
         assertThat(lines(main)).containsExactly(
-                "DETAIL 2025-01 CLOSED MEMBERSHIP 2 60.00 1500.00 0.00 0.00 1560.00",
-                "DETAIL 2025-01 CLOSED ELECTRICITY 1 52.50 0.00 0.00 0.00 52.50",
-                "SUBTOTAL 2025-01 CLOSED - - 112.50 1500.00 0.00 0.00 1612.50",
+                "DETAIL 2025-01 CLOSED MEMBERSHIP 2 60.00 1500.00 0.00 0.00 1560.00 0.00",
+                "DETAIL 2025-01 CLOSED ELECTRICITY 1 52.50 0.00 0.00 0.00 52.50 0.00",
+                "SUBTOTAL 2025-01 CLOSED - - 112.50 1500.00 0.00 0.00 1612.50 0.00",
                 // the reversal is in its own column and the effective total is smaller by it
-                "DETAIL 2025-02 CLOSED MEMBERSHIP 2 60.00 0.00 -30.00 0.00 30.00",
-                "SUBTOTAL 2025-02 CLOSED - - 60.00 0.00 -30.00 0.00 30.00",
+                "DETAIL 2025-02 CLOSED MEMBERSHIP 2 60.00 0.00 -30.00 0.00 30.00 0.00",
+                "SUBTOTAL 2025-02 CLOSED - - 60.00 0.00 -30.00 0.00 30.00 0.00",
                 // the adjustments booked in March for January and February are under March
-                "DETAIL 2025-03 OPEN MEMBERSHIP 2 50.00 0.00 0.00 -10.00 40.00",
-                "SUBTOTAL 2025-03 OPEN - - 50.00 0.00 0.00 -10.00 40.00",
-                "TOTAL all - - - - 222.50 1500.00 -30.00 -10.00 1682.50");
+                "DETAIL 2025-03 OPEN MEMBERSHIP 2 50.00 0.00 0.00 -10.00 40.00 0.00",
+                "SUBTOTAL 2025-03 OPEN - - 50.00 0.00 0.00 -10.00 40.00 0.00",
+                "TOTAL all - - - - 222.50 1500.00 -30.00 -10.00 1682.50 0.00");
         assertThat(main.get("rowCount").asInt()).isEqualTo(7);
         assertThat(main.get("truncated").asBoolean()).isFalse();
         assertThat(preview.get("code").asString()).isEqualTo("charges-by-month");
@@ -98,16 +99,17 @@ class ChargesByMonthReportTests extends ReportsTestSupport {
         JsonNode service = preview.get("sheets").get(1);
         assertThat(service.get("key").asString()).isEqualTo("byServicePeriod");
         assertThat(columns(service)).containsExactly("month:MONTH", "chargeType:CHARGE_TYPE", "plots:INTEGER",
-                "regular:MONEY", "opening:MONEY", "reversals:MONEY", "adjustments:MONEY", "effective:MONEY");
+                "regular:MONEY", "opening:MONEY", "reversals:MONEY", "adjustments:MONEY", "effective:MONEY",
+                "paid:MONEY");
         // the electricity of 16.12.2024-15.01.2025 starts in December, before the range
         assertThat(lines(service)).containsExactly(
-                "DETAIL 2025-01 MEMBERSHIP 2 60.00 1500.00 0.00 -5.00 1555.00",
-                "SUBTOTAL 2025-01 - - 60.00 1500.00 0.00 -5.00 1555.00",
-                "DETAIL 2025-02 MEMBERSHIP 2 60.00 0.00 -30.00 -5.00 25.00",
-                "SUBTOTAL 2025-02 - - 60.00 0.00 -30.00 -5.00 25.00",
-                "DETAIL 2025-03 MEMBERSHIP 2 50.00 0.00 0.00 0.00 50.00",
-                "SUBTOTAL 2025-03 - - 50.00 0.00 0.00 0.00 50.00",
-                "TOTAL all - - - 170.00 1500.00 -30.00 -10.00 1630.00");
+                "DETAIL 2025-01 MEMBERSHIP 2 60.00 1500.00 0.00 -5.00 1555.00 0.00",
+                "SUBTOTAL 2025-01 - - 60.00 1500.00 0.00 -5.00 1555.00 0.00",
+                "DETAIL 2025-02 MEMBERSHIP 2 60.00 0.00 -30.00 -5.00 25.00 0.00",
+                "SUBTOTAL 2025-02 - - 60.00 0.00 -30.00 -5.00 25.00 0.00",
+                "DETAIL 2025-03 MEMBERSHIP 2 50.00 0.00 0.00 0.00 50.00 0.00",
+                "SUBTOTAL 2025-03 - - 50.00 0.00 0.00 0.00 50.00 0.00",
+                "TOTAL all - - - 170.00 1500.00 -30.00 -10.00 1630.00 0.00");
     }
 
     @Test
@@ -144,24 +146,57 @@ class ChargesByMonthReportTests extends ReportsTestSupport {
         assertThat(withCharges).isEqualTo(3);
     }
 
+    /**
+     * Feature 015 §6: the paid column is what payments pay on the charges of the row as of today, while the charged
+     * totals stay those of the billing months screen. P1 pays 1 525.00 in February on its opening balance (1 500.00)
+     * and on its January membership (25.00, the charge after its -5.00 adjustment); P2 pays 52.50 in April on its
+     * electricity.
+     */
+    @Test
+    void thePaidColumnIsWhatPaymentsPayOnTheChargesOfTheRowWhileTheChargedTotalsStayThoseOfTheScreen()
+            throws Exception {
+        UUID x = payment(p1, "CASH", "1525.00", LocalDate.of(2025, 2, 10), 1L, null, null);
+        allocate(x, chargeOf(p1, "OPENING", "2025-01-01"), "1500.00");
+        allocate(x, chargeOf(p1, "REGULAR", "2025-01-01"), "25.00");
+        UUID y = payment(p2, "BANK", "52.50", LocalDate.of(2025, 4, 2), null, "ПД-1", null);
+        allocate(y, chargeOf(p2, "REGULAR", "2024-12-16"), "52.50");
+
+        JsonNode preview = body(send(treasurer, get(REPORT + RANGE)).andExpect(status().isOk()));
+
+        assertThat(lines(preview.get("sheets").get(0))).containsExactly(
+                "DETAIL 2025-01 CLOSED MEMBERSHIP 2 60.00 1500.00 0.00 0.00 1560.00 1525.00",
+                "DETAIL 2025-01 CLOSED ELECTRICITY 1 52.50 0.00 0.00 0.00 52.50 52.50",
+                "SUBTOTAL 2025-01 CLOSED - - 112.50 1500.00 0.00 0.00 1612.50 1577.50",
+                "DETAIL 2025-02 CLOSED MEMBERSHIP 2 60.00 0.00 -30.00 0.00 30.00 0.00",
+                "SUBTOTAL 2025-02 CLOSED - - 60.00 0.00 -30.00 0.00 30.00 0.00",
+                "DETAIL 2025-03 OPEN MEMBERSHIP 2 50.00 0.00 0.00 -10.00 40.00 0.00",
+                "SUBTOTAL 2025-03 OPEN - - 50.00 0.00 0.00 -10.00 40.00 0.00",
+                "TOTAL all - - - - 222.50 1500.00 -30.00 -10.00 1682.50 1577.50");
+        // by service month the electricity of 16.12.2024, and what is paid on it, is outside the months asked
+        assertThat(lines(preview.get("sheets").get(1)).getLast())
+                .isEqualTo("TOTAL all - - - 170.00 1500.00 -30.00 -10.00 1630.00 1525.00");
+        // the charged totals per month and type are still the screen's, cent for cent
+        everyMonthOfTheBillingMonthsScreenHasTheSameTotalsCentForCent();
+    }
+
     @Test
     void theStreetFilterCountsAndSumsOnlyThePlotsOfThatStreet() throws Exception {
         JsonNode preview = body(send(treasurer, get(REPORT + RANGE).param("street", " лісова "))
                 .andExpect(status().isOk()));
 
         assertThat(lines(preview.get("sheets").get(0))).containsExactly(
-                "DETAIL 2025-01 CLOSED MEMBERSHIP 1 30.00 1500.00 0.00 0.00 1530.00",
-                "SUBTOTAL 2025-01 CLOSED - - 30.00 1500.00 0.00 0.00 1530.00",
-                "DETAIL 2025-02 CLOSED MEMBERSHIP 1 30.00 0.00 0.00 0.00 30.00",
-                "SUBTOTAL 2025-02 CLOSED - - 30.00 0.00 0.00 0.00 30.00",
-                "DETAIL 2025-03 OPEN MEMBERSHIP 1 25.00 0.00 0.00 -10.00 15.00",
-                "SUBTOTAL 2025-03 OPEN - - 25.00 0.00 0.00 -10.00 15.00",
-                "TOTAL all - - - - 85.00 1500.00 0.00 -10.00 1575.00");
+                "DETAIL 2025-01 CLOSED MEMBERSHIP 1 30.00 1500.00 0.00 0.00 1530.00 0.00",
+                "SUBTOTAL 2025-01 CLOSED - - 30.00 1500.00 0.00 0.00 1530.00 0.00",
+                "DETAIL 2025-02 CLOSED MEMBERSHIP 1 30.00 0.00 0.00 0.00 30.00 0.00",
+                "SUBTOTAL 2025-02 CLOSED - - 30.00 0.00 0.00 0.00 30.00 0.00",
+                "DETAIL 2025-03 OPEN MEMBERSHIP 1 25.00 0.00 0.00 -10.00 15.00 0.00",
+                "SUBTOTAL 2025-03 OPEN - - 25.00 0.00 0.00 -10.00 15.00 0.00",
+                "TOTAL all - - - - 85.00 1500.00 0.00 -10.00 1575.00 0.00");
         assertThat(filters(preview)).containsExactly("fromMonth=2025-01", "toMonth=2025-03", "street=лісова");
 
         JsonNode nowhere = body(send(treasurer, get(REPORT + RANGE).param("street", "Невідома"))
                 .andExpect(status().isOk())).get("sheets").get(0);
-        assertThat(lines(nowhere)).containsExactly("TOTAL all - - - - 0.00 0.00 0.00 0.00 0.00");
+        assertThat(lines(nowhere)).containsExactly("TOTAL all - - - - 0.00 0.00 0.00 0.00 0.00 0.00");
         assertThat(nowhere.get("rowCount").asInt()).isZero();
     }
 
@@ -171,9 +206,9 @@ class ChargesByMonthReportTests extends ReportsTestSupport {
                 .andExpect(status().isOk()));
 
         assertThat(lines(preview.get("sheets").get(0))).containsExactly(
-                "DETAIL 2025-01 CLOSED ELECTRICITY 1 52.50 0.00 0.00 0.00 52.50",
-                "SUBTOTAL 2025-01 CLOSED - - 52.50 0.00 0.00 0.00 52.50",
-                "TOTAL all - - - - 52.50 0.00 0.00 0.00 52.50");
+                "DETAIL 2025-01 CLOSED ELECTRICITY 1 52.50 0.00 0.00 0.00 52.50 0.00",
+                "SUBTOTAL 2025-01 CLOSED - - 52.50 0.00 0.00 0.00 52.50 0.00",
+                "TOTAL all - - - - 52.50 0.00 0.00 0.00 52.50 0.00");
         assertThat(filters(preview)).containsExactly("fromMonth=2025-01", "toMonth=2025-03",
                 "chargeTypeIds=" + electricity);
         assertThat(preview.get("chargeTypes")).extracting(type -> type.get("code").asString())
@@ -242,7 +277,8 @@ class ChargesByMonthReportTests extends ReportsTestSupport {
             assertThat(text(rows, 4, 0)).startsWith("Сформував(ла): ").contains("CHAIRMAN");
             assertThat(text(rows, 5, 0)).startsWith("Аркуш «За період послуг» групує");
             assertThat(rowTexts(rows, 7)).containsExactly("Місяць", "Стан місяця", "Вид нарахування", "Ділянок",
-                    "Нараховано", "Вхідні залишки", "Сторно", "Коригування", "Разом нараховано");
+                    "Нараховано", "Вхідні залишки", "Сторно", "Коригування", "Разом нараховано",
+                    "Сплачено");
             // January membership: month as a date, codes and names in the language, numbers as numbers
             Row january = rows.get(8);
             assertThat(january.getCell(0).getType()).isEqualTo(CellType.NUMBER);
@@ -268,7 +304,8 @@ class ChargesByMonthReportTests extends ReportsTestSupport {
 
             Rows service = new Rows(sheets.get(1).read());
             assertThat(rowTexts(service, 7)).containsExactly("Місяць", "Вид нарахування", "Ділянок", "Нараховано",
-                    "Вхідні залишки", "Сторно", "Коригування", "Разом нараховано");
+                    "Вхідні залишки", "Сторно", "Коригування", "Разом нараховано",
+                    "Сплачено");
             assertNumber(service.get(service.size() - 1).getCell(7), "1630", "#,##0.00");
         }
         // the header row (the eighth) stays in view: the pane is frozen below it on both sheets
@@ -285,7 +322,7 @@ class ChargesByMonthReportTests extends ReportsTestSupport {
         assertThat(text(english, 3, 0)).startsWith("Generated at: ");
         assertThat(text(english, 4, 0)).startsWith("Generated by: ");
         assertThat(rowTexts(english, 7)).containsExactly("Month", "Month status", "Charge type", "Plots", "Charged",
-                "Opening balances", "Reversals", "Adjustments", "Effective total");
+                "Opening balances", "Reversals", "Adjustments", "Effective total", "Paid");
         assertThat(text(english, 8, 1)).isEqualTo("Closed");
         assertThat(text(english, 8, 2)).isEqualTo("Membership fee");
 
@@ -404,6 +441,12 @@ class ChargesByMonthReportTests extends ReportsTestSupport {
     }
 
     // ---- helpers
+
+    /** The charge of the plot of the kind whose first service day is {@code from}. */
+    private UUID chargeOf(UUID plot, String kind, String from) {
+        return ownerJdbc().queryForObject("select id from charge where plot_id = ? and kind = ? "
+                + "and service_from = ?::date", UUID.class, plot, kind, from);
+    }
 
     private List<String> lines(JsonNode sheet) {
         Map<String, String> codes = Map.of(membership.toString(), "MEMBERSHIP", electricity.toString(),

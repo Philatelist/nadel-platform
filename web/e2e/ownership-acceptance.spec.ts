@@ -261,11 +261,10 @@ test.describe('ownership: acceptance', () => {
     await loginAs(page, 'treasurer@demo.local');
     await expect(page).toHaveURL(/\/plots$/);
 
-    // the first page: twenty owned plots, each with an owner name and a debt colour label (the demo ledger gives
-    // every owned plot a debt, so none is "No debt")
+    // the first page: twenty owned plots, each with an owner name and a debt colour label (the demo ledger holds
+    // payments, so some owned plots are paid up and show "No debt")
     await expect(rows(page)).toHaveCount(20);
-    await expect(rows(page).filter({ hasText: /Debt above threshold|Has debt/ })).toHaveCount(20);
-    await expect(rows(page).filter({ hasText: 'No debt' })).toHaveCount(0);
+    await expect(rows(page).filter({ hasText: /Debt above threshold|Has debt|No debt/ })).toHaveCount(20);
     await expect(rows(page).filter({ hasText: 'No owner' })).toHaveCount(0);
     const coOwned = rows(page).filter({ has: page.locator('td:first-child', { hasText: /^3$/ }) });
     await expect(coOwned).toHaveCount(1);
@@ -274,7 +273,7 @@ test.describe('ownership: acceptance', () => {
     // the second page: the last owned plots, then the few grey ones and the road
     await page.goto('/plots?page=1');
     await expect(rows(page)).toHaveCount(11);
-    await expect(rows(page).filter({ hasText: /Debt above threshold|Has debt/ })).toHaveCount(5);
+    await expect(rows(page).filter({ hasText: /Debt above threshold|Has debt|No debt/ })).toHaveCount(5);
     await expect(rows(page).filter({ hasText: 'No owner' })).toHaveCount(5);
     await expect(rows(page).filter({ hasText: 'Common land' })).toHaveCount(1);
 

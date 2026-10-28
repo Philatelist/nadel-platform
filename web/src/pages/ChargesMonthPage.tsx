@@ -81,7 +81,7 @@ function MonthView({ month }: { month: BillingMonthDetails }) {
         }
       />
       <Panel title={t.billing.totalsTitle}>
-        <MonthTotals totals={month.totals} total={month.total} />
+        <MonthTotals totals={month.totals} total={month.total} received={month.received} />
       </Panel>
       <Panel title={t.billing.checklist.title}>
         <MonthChecklist checklist={month.checklist} />

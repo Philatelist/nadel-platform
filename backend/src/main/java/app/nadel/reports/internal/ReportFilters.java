@@ -1,6 +1,7 @@
 package app.nadel.reports.internal;
 
 import app.nadel.ledger.CorrectionKind;
+import app.nadel.ledger.PaymentSource;
 import app.nadel.meters.MeterKind;
 import app.nadel.meters.MeterResource;
 import app.nadel.meters.WaterSourceKind;
@@ -50,6 +51,7 @@ final class ReportFilters {
     private @Nullable MeterResource resource;
     private Set<MeterKind> meterKinds = Set.of();
     private @Nullable WaterSourceKind waterSource;
+    private @Nullable PaymentSource source;
     private final List<ReportFilterValue> values = new ArrayList<>();
 
     ReportFilters() {
@@ -148,6 +150,11 @@ final class ReportFilters {
         values.add(new ReportFilterValue(ReportFilterParam.WATER_SOURCE, source.name()));
     }
 
+    void source(PaymentSource paymentSource) {
+        this.source = Objects.requireNonNull(paymentSource, "paymentSource");
+        values.add(new ReportFilterValue(ReportFilterParam.SOURCE, paymentSource.name()));
+    }
+
     // ---- read by the report definitions
 
     /** The first billing month; only for a report with a month range. */
@@ -223,6 +230,16 @@ final class ReportFilters {
     /** The chosen kind of water source; null when every source counts. */
     @Nullable WaterSourceKind waterSource() {
         return waterSource;
+    }
+
+    /** The chosen payment source; null when both count. */
+    @Nullable PaymentSource source() {
+        return source;
+    }
+
+    /** True when a range of days was set (a report whose days are optional reads them only then). */
+    boolean hasDays() {
+        return from != null && to != null;
     }
 
     /**

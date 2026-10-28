@@ -1,5 +1,6 @@
 package app.nadel.reports.internal;
 
+import app.nadel.identity.Permission;
 import app.nadel.ledger.LedgerReadModel;
 import app.nadel.ledger.PlotDebts;
 import app.nadel.money.Money;
@@ -48,6 +49,7 @@ import nadel.contract.model.ReportTemplateFieldType;
 import nadel.contract.model.ReportTemplateValueReason;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Component;
 
 /**
@@ -76,13 +78,23 @@ import org.springframework.stereotype.Component;
  * <li>{@code totals.charged.<type>}: the effective amount (charges plus adjustments minus reversals; opening balances
  * left out) of the type's charges whose first service day lies in the period, booked whenever, on every plot
  * ({@code ledger.LedgerReadModel.chargedByType}, the land tax report's year rule over any range of days);</li>
+ * <li>{@code totals.paid.<type>}: what payments pay, as of {@code to}, on the charges {@code totals.charged.<type>}
+ * counts ({@code ledger.LedgerReadModel.paidByType}, the same accrual basis);</li>
+ * <li>{@code totals.prepayment}: the cooperative's prepayment as of the day of the balances
+ * ({@code ledger.LedgerReadModel.prepaymentAsOf}): the money received that is on no charge;</li>
  * <li>the row set {@code months}: one row per billing month from the month of {@code from} to the month of
  * {@code to} that has charges, with the cooperative's totals of that month (the subtotal rows of the charges by month
  * report's sheet by billing month);</li>
  * <li>the row set {@code meters}: the consumption sheet of the electricity report for the service days
  * ({@link ElectricityTreeReport#consumption});</li>
- * <li>the row set {@code water}: the main sheet of the water report for the service days, every source and street.</li>
+ * <li>the row set {@code water}: the main sheet of the water report for the service days, every source and street;</li>
+ * <li>the row set {@code payments}: the payments report's rows for the days received, every source and street, without
+ * the payer and the payer note ({@link PaymentsReport#sheet}); {@code reversed} is the text "yes" or "no" of the
+ * file's language.</li>
  * </ul>
+ * The payment fields ({@link TemplateField#permission()} {@code PAYMENTS_VIEW}) are filled only for a caller who holds
+ * that permission: asking for one without it is refused ({@code AccessDeniedException}, 403), before anything of it is
+ * read.
  * A value the report shows as not known (a meter value without a reading and everything worked out from it) is not
  * known here either, with its reason; an empty report cell is an empty value. A row set over the row cap of the reports
  * is 422 {@code REPORT_TOO_LARGE}. Texts of codes (statuses, meter kinds, water sources) are those of the report files
@@ -102,12 +114,13 @@ class TemplateValues {
     private final ChargesByMonthReport chargesByMonth;
     private final ElectricityTreeReport electricity;
     private final WaterReport water;
+    private final PaymentsReport payments;
     private final ReportLimits limits;
 
     TemplateValues(TenantDirectory tenants, CooperativeSettings settings, ChargeTypeCatalog chargeTypes,
             LedgerReadModel ledger, PlotBalancesReport plotBalances, LandTaxReport landTax,
             ChargesByMonthReport chargesByMonth, ElectricityTreeReport electricity, WaterReport water,
-            ReportLimits limits) {
+            PaymentsReport payments, ReportLimits limits) {
         this.tenants = tenants;
         this.settings = settings;
         this.chargeTypes = chargeTypes;
@@ -117,6 +130,7 @@ class TemplateValues {
         this.chargesByMonth = chargesByMonth;
         this.electricity = electricity;
         this.water = water;
+        this.payments = payments;
         this.limits = limits;
     }
 
@@ -129,9 +143,10 @@ class TemplateValues {
      * @param language    the language of the texts of codes
      * @param generatedBy the display name of the caller
      * @param generatedAt when the fill started; its day in Kyiv is "today"
+     * @param permissions the caller's permissions: a field that needs one the caller lacks is refused
      */
     Resolver resolver(LocalDate from, LocalDate to, ReportLanguage language, String generatedBy,
-            Instant generatedAt) {
+            Instant generatedAt, Set<Permission> permissions) {
         Objects.requireNonNull(from, "from");
         Objects.requireNonNull(to, "to");
         if (to.isBefore(from)) {
@@ -140,7 +155,8 @@ class TemplateValues {
         LocalDate today = LocalDate.ofInstant(generatedAt, KYIV);
         ReportContext context = new ReportContext(today, limits.rowCap() + 1, chargeTypes.all());
         return new Resolver(from, to, ReportTexts.of(language), generatedBy,
-                LocalDateTime.ofInstant(generatedAt, KYIV).truncatedTo(ChronoUnit.SECONDS), context);
+                LocalDateTime.ofInstant(generatedAt, KYIV).truncatedTo(ChronoUnit.SECONDS), context,
+                Set.copyOf(permissions));
     }
 
     /** The values of one fill: single values by key, row sets as rows of values by key. */
@@ -152,20 +168,30 @@ class TemplateValues {
         private final String generatedBy;
         private final LocalDateTime generatedAt;
         private final ReportContext context;
+        private final Set<Permission> permissions;
         private final Map<TemplateRowSet, List<Map<String, TemplateValue>>> rowSets =
                 new EnumMap<>(TemplateRowSet.class);
         private @Nullable List<Balance> balances;
         private @Nullable List<PlotLandTax> landTaxPlots;
         private @Nullable Map<UUID, Money> chargedByType;
+        private @Nullable Map<UUID, Money> paidByType;
 
         private Resolver(LocalDate from, LocalDate to, ReportTexts texts, String generatedBy,
-                LocalDateTime generatedAt, ReportContext context) {
+                LocalDateTime generatedAt, ReportContext context, Set<Permission> permissions) {
             this.from = from;
             this.to = to;
             this.texts = texts;
             this.generatedBy = generatedBy;
             this.generatedAt = generatedAt;
             this.context = context;
+            this.permissions = permissions;
+        }
+
+        /** Refuses a field whose permission the caller lacks (403), before anything of it is read. */
+        private void requirePermission(TemplateField field) {
+            if (!permissions.contains(TemplateField.BASE_PERMISSION) || !permissions.contains(field.permission())) {
+                throw new AccessDeniedException("The template uses a field that needs a permission the caller lacks");
+            }
         }
 
         /** The placeholder of a key; empty when the app does not know it ({@code UNKNOWN_PLACEHOLDER}). */
@@ -188,6 +214,7 @@ class TemplateValues {
             if (placeholder.get().field().rowSet() != null) {
                 throw new IllegalArgumentException("A row set's placeholder is filled per row");
             }
+            requirePermission(placeholder.get().field());
             return Optional.of(value(placeholder.get()));
         }
 
@@ -195,10 +222,16 @@ class TemplateValues {
          * The rows of a row set, each the value of every placeholder of the set by key (the families once per charge
          * type, under the code of a seeded type and under the id of every type).
          *
-         * @throws ApiProblemException 422 {@code REPORT_TOO_LARGE} when the set has more rows than the cap
+         * @throws ApiProblemException   422 {@code REPORT_TOO_LARGE} when the set has more rows than the cap
+         * @throws AccessDeniedException when a field of the set needs a permission the caller lacks
          */
         @Override
         public List<Map<String, TemplateValue>> rows(TemplateRowSet set) {
+            for (TemplateField field : TemplateField.values()) {
+                if (field.rowSet() == set) {
+                    requirePermission(field);
+                }
+            }
             List<Map<String, TemplateValue>> rows = rowSets.get(set);
             if (rows == null) {
                 rows = switch (set) {
@@ -206,6 +239,7 @@ class TemplateValues {
                     case MONTHS -> monthRows();
                     case METERS -> meterRows();
                     case WATER -> waterRows();
+                    case PAYMENTS -> paymentRows();
                 };
                 if (rows.size() > limits.rowCap()) {
                     throw new ApiProblemException(HttpStatus.UNPROCESSABLE_ENTITY, ProblemCodes.REPORT_TOO_LARGE,
@@ -238,6 +272,9 @@ class TemplateValues {
                         .reduce(Money.ZERO, Money::plus));
                 case TOTALS_CHARGED -> money(chargedByType().getOrDefault(
                         Objects.requireNonNull(placeholder.chargeType()).id(), Money.ZERO));
+                case TOTALS_PAID -> money(paidByType().getOrDefault(
+                        Objects.requireNonNull(placeholder.chargeType()).id(), Money.ZERO));
+                case TOTALS_PREPAYMENT -> money(ledger.prepaymentAsOf(asOf()));
                 case TOTALS_DEBT -> money(balances().stream().map(balance -> balance.debts().total())
                         .reduce(Money.ZERO, Money::plus));
                 case TOTALS_PLOTS_COUNT -> integer(balances().size());
@@ -362,6 +399,24 @@ class TemplateValues {
                     TemplateField.WATER_TOTAL, "total"));
         }
 
+        private List<Map<String, TemplateValue>> paymentRows() {
+            ReportFilters filters = new ReportFilters();
+            filters.days(from, to);
+            Sheet sheet = payments.sheet(filters, context, false, false);
+            Map<TemplateField, String> columns = new EnumMap<>(TemplateField.class);
+            columns.put(TemplateField.PAYMENTS_RECEIVED_ON, "receivedOn");
+            columns.put(TemplateField.PAYMENTS_BILLING_MONTH, "billingMonth");
+            columns.put(TemplateField.PAYMENTS_SOURCE, "source");
+            columns.put(TemplateField.PAYMENTS_DOCUMENT, "document");
+            columns.put(TemplateField.PAYMENTS_NUMBER, "number");
+            columns.put(TemplateField.PAYMENTS_STREET, "street");
+            columns.put(TemplateField.PAYMENTS_AMOUNT, "amount");
+            columns.put(TemplateField.PAYMENTS_ALLOCATED, "allocated");
+            columns.put(TemplateField.PAYMENTS_PREPAYMENT, "prepayment");
+            columns.put(TemplateField.PAYMENTS_REVERSED, "reversed");
+            return rows(sheet, row -> true, columns);
+        }
+
         /** The rows of a sheet that {@code take} keeps, each the fields' values read from their columns. */
         private List<Map<String, TemplateValue>> rows(Sheet sheet, Predicate<Row> take,
                 Map<TemplateField, String> columns) {
@@ -397,6 +452,9 @@ class TemplateValues {
             if (value == null) {
                 return TemplateValue.EMPTY;
             }
+            if (field.type() == ReportTemplateFieldType.TEXT && value instanceof Boolean yes) {
+                return text(texts.text(yes ? "reports.yes" : "reports.no"));
+            }
             if (field.type() == ReportTemplateFieldType.TEXT) {
                 return text(column.codes() == null ? value.toString() : texts.text(column.codes() + "." + value));
             }
@@ -428,6 +486,10 @@ class TemplateValues {
 
         private Map<UUID, Money> chargedByType() {
             return chargedByType = once(chargedByType, () -> ledger.chargedByType(from, to));
+        }
+
+        private Map<UUID, Money> paidByType() {
+            return paidByType = once(paidByType, () -> ledger.paidByType(from, to));
         }
 
         private static <T> T once(@Nullable T loaded, Supplier<T> load) {

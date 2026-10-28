@@ -122,6 +122,8 @@ class CommonConsumerRuns {
     private final ActorNames actorNames;
     private final LedgerAuditPublisher audit;
     private final ChargingLock chargingLock;
+    private final PlotLedgerLock plotLocks;
+    private final AllocationReleaser releaser;
     private final EntityManager entityManager;
     private final Clock clock;
 
@@ -129,7 +131,8 @@ class CommonConsumerRuns {
             PlotCatalog plots, CooperativeSettings settings, CommonConsumerSettings billing,
             BillingMonths billingMonths, BillingMonthRepository months, CommonConsumerRunRepository runs,
             CommonConsumerRunLineRepository lines, ChargeRepository charges, NotChargedItemRepository items,
-            ActorNames actorNames, LedgerAuditPublisher audit, ChargingLock chargingLock, EntityManager entityManager,
+            ActorNames actorNames, LedgerAuditPublisher audit, ChargingLock chargingLock, PlotLedgerLock plotLocks,
+            AllocationReleaser releaser, EntityManager entityManager,
             Clock clock) {
         this.network = network;
         this.water = water;
@@ -147,6 +150,8 @@ class CommonConsumerRuns {
         this.actorNames = actorNames;
         this.audit = audit;
         this.chargingLock = chargingLock;
+        this.plotLocks = plotLocks;
+        this.releaser = releaser;
         this.entityManager = entityManager;
         this.clock = clock;
     }
@@ -584,6 +589,8 @@ class CommonConsumerRuns {
         if (run.getStatus() == CommonConsumerRunRecord.Status.REVERSED) {
             throw conflict(ProblemCodes.RUN_ALREADY_REVERSED, "The run has already been reversed.");
         }
+        // the ledger locks of every plot the run charged, sorted, before the month: money paid on them is released
+        plotLocks.lockAll(tenantId, charges.plotIdsOfRuns(Set.of(id)));
         BillingMonthRecord month = months.findByIdForShare(run.getBillingMonthId()).orElseThrow();
         if (month.isClosed()) {
             throw conflict(ProblemCodes.RUN_IN_CLOSED_MONTH,
@@ -596,6 +603,8 @@ class CommonConsumerRuns {
         String runTo = run.getToDate().toString();
         LossesRuns.Reversed reversed = reverseLocked(run, booking.getId(), reason, ChargeSource.MANUAL_REVERSAL, null,
                 actor.memberId(), now);
+        // the money paid on the reversed charges becomes prepayment; the ChargesBooked below lets it be placed again
+        releaser.settleCharges(tenantId, reversed.plotIds(), actor.memberId());
         audit.publishCommonConsumerRun(actor, LedgerAuditPublisher.Action.COMMON_CONSUMER_RUN_REVERSED, id,
                 label, List.of(
                         new FieldChange("from", null, runFrom),

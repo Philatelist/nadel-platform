@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import app.nadel.money.Money;
 import app.nadel.tenancy.TenantContext;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
@@ -251,7 +252,7 @@ class LedgerReadModelTests extends FreshCooperativeSupport {
     @Test
     void itRunsOnlyInTheCallersTransaction() {
         assertThatThrownBy(() -> TenantContext.runAs(tenant, () -> readModel.monthTotals(JAN, MAR, Set.of(), null,
-                MonthGrouping.BILLING_MONTH))).isInstanceOf(IllegalTransactionStateException.class);
+                MonthGrouping.BILLING_MONTH, LocalDate.now()))).isInstanceOf(IllegalTransactionStateException.class);
     }
 
     @Test
@@ -265,7 +266,7 @@ class LedgerReadModelTests extends FreshCooperativeSupport {
     private List<MonthTypeTotals> totals(UUID cooperative, YearMonth from, YearMonth to, Set<UUID> types,
             Set<UUID> plots, MonthGrouping grouping) {
         return TenantContext.runAs(cooperative, () -> tx.execute(status -> readModel.monthTotals(from, to, types,
-                plots, grouping)));
+                plots, grouping, LocalDate.now())));
     }
 
     private String line(MonthTypeTotals row) {

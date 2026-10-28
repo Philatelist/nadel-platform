@@ -27,6 +27,8 @@ describe('ChargesPage', () => {
       '/charges/months/2026-09',
     );
     expect(within(items[0]!).getByText('Open')).toBeInTheDocument();
+    expect(within(items[0]!).getByText('Received')).toBeInTheDocument();
+    expect(within(items[0]!).getByText(/1[\s ,]?200\.00/)).toBeInTheDocument();
     expect(within(items[0]!).getByText('Electricity')).toBeInTheDocument();
     expect(within(items[1]!).getByText('Closed')).toBeInTheDocument();
     expect(within(items[1]!).getByText('No charges')).toBeInTheDocument();

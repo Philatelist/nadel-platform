@@ -42,7 +42,7 @@ function MonthCard({ month }: { month: BillingMonthSummary }) {
         </Link>
         <Badge tone={month.status === 'CLOSED' ? 'neutral' : 'info'}>{t.billing.status[month.status]}</Badge>
       </div>
-      <MonthTotals totals={month.totals} />
+      <MonthTotals totals={month.totals} received={month.received} />
       <p className="flex justify-between gap-4 font-semibold">
         <span>{t.billing.total}</span>
         <Money amount={month.total} />

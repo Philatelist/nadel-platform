@@ -30,5 +30,7 @@ export interface BillingMonthDetails {
   closedByName?: string;
   totals: ChargeTypeTotal[];
   total: Money;
+  /** The sum of the payments booked in the month, reversals of payments negative */
+  received: Money;
   checklist: BillingMonthChecklist;
 }

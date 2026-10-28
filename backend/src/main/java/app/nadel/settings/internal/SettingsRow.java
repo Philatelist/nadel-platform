@@ -56,6 +56,9 @@ class SettingsRow {
     @Column(name = "iban")
     private String iban;
 
+    @Column(name = "auto_allocate_prepayment", nullable = false)
+    private boolean autoAllocatePrepayment;
+
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
@@ -65,6 +68,7 @@ class SettingsRow {
     /** The stored values. */
     SettingsValues values() {
         return new SettingsValues(memberPlotStatusVisibility, lossesMode, lossesPercent, commonConsumerDefaultSplit,
-                redAmount, redDays, new Requisites(officialName, legalAddress, bankName, iban));
+                redAmount, redDays, new Requisites(officialName, legalAddress, bankName, iban),
+                autoAllocatePrepayment);
     }
 }

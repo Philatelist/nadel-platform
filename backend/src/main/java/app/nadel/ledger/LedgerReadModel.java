@@ -14,20 +14,31 @@ import org.jspecify.annotations.Nullable;
  * Read-only figures of the ledger for other modules (the reports of feature 013), so they never read the ledger tables.
  * Every method runs in the caller's transaction ({@code Propagation.MANDATORY}: a call without one fails), which the
  * tenant-aware transaction manager has bound to the cooperative, so the rows of other cooperatives are invisible (RLS).
- * The answers carry ids, codes and {@code Money} only, never personal data; the caller orders and names the charge
- * types and plots through their own modules. Aggregates are bounded by their filters (months times charge types, or the
- * plots or meters asked for), so no row limit applies to them; {@link #corrections}, {@link #electricityCharged} and
- * {@link #waterCharged}, lists of single rows, take a limit; the runs of a range are bounded by the runs times the nodes or consumers of the tree.
+ * The answers carry ids, codes and {@code Money} only, never personal data (the payer note of a payment is read
+ * through the separate port {@link PaymentNotes}); the caller orders and names the charge types and plots through their
+ * own modules. Aggregates are bounded by their filters (months times charge types, or the plots or meters asked for),
+ * so no row limit applies to them; {@link #corrections}, {@link #electricityCharged}, {@link #waterCharged} and
+ * {@link #payments}, lists of single rows, take a limit; the runs of a range are bounded by the runs times the nodes
+ * or consumers of the tree.
+ * <p>
+ * <b>Paid as of a day</b> (feature 015 §6, technical considerations 2.3): an allocation of a payment to a charge counts
+ * from its value date, {@code GREATEST(payment.received_on, charge.accrued_on)}; a release (a negative allocation row)
+ * names the payment and the charge of the allocation it takes back, so it shares that date. A payment counts from the
+ * day it was received; a payment reversal keeps the day of its original.
  */
 public interface LedgerReadModel {
 
     /**
-     * The charges per month and charge type, split by kind, aggregated in the database. With
+     * The charges per month and charge type, split by kind, and what payments pay on them as of a day, aggregated in
+     * the database. With
      * {@link MonthGrouping#BILLING_MONTH} the months are the billing months from {@code fromMonth} to {@code toMonth}
      * and the effective total of a month and type is exactly the total the billing months screen shows for it (the same
      * predicate: every row booked in the month, of every kind, summed with its sign). With
      * {@link MonthGrouping#SERVICE_MONTH} the months are those of each row's first service day ({@code service_from}),
      * from the first day of {@code fromMonth} to the last day of {@code toMonth}.
+     * <p>
+     * {@link MonthTypeTotals#paid} is the net allocations to the charges of the group whose value date is on or before
+     * {@code asOf}; {@code effective} does not depend on {@code asOf}.
      * <p>
      * A month and type without any row is absent (a month without charges has no row at all). Rows come ordered by
      * month, then by charge type id; the caller puts the types in their configured order.
@@ -38,35 +49,42 @@ public interface LedgerReadModel {
      * @param plotIds       the plots to count (a street filter resolved by the caller); {@code null} means every plot,
      *                      an empty set gives no rows
      * @param grouping      by billing month or by service month
+     * @param asOf          the day the paid amounts are counted on
      * @throws IllegalArgumentException when {@code toMonth} is before {@code fromMonth}
      */
     List<MonthTypeTotals> monthTotals(YearMonth fromMonth, YearMonth toMonth, Set<UUID> chargeTypeIds,
-            @Nullable Set<UUID> plotIds, MonthGrouping grouping);
+            @Nullable Set<UUID> plotIds, MonthGrouping grouping, LocalDate asOf);
 
     /**
-     * The debt of each plot as of a day (plot balances and debtors, feature 013 §3.2 and §3.3), aggregated in the
-     * database with the rule of the plot account and the plot status cache ({@code DebtCalculator}, money rules 2, 5.4
-     * and 9), applied to the charges whose debt date ({@code accrued_on}) is on or before {@code asOf} and whose charge
-     * type is among {@code chargeTypeIds}:
+     * The charged, paid and owed amounts of each plot as of a day (plot balances and debtors, feature 013 §3.2 and
+     * §3.3, feature 015 §6), aggregated in the database with the rule of the plot account and the plot status cache
+     * ({@code DebtCalculator}, money rules 2, 5.4 and 9, feature 015 §2.5), applied to the charges whose debt date
+     * ({@code accrued_on}) is on or before {@code asOf} and whose charge type is among {@code chargeTypeIds}, and to
+     * the allocations whose value date is on or before {@code asOf}:
      * <ul>
-     * <li>the debt of a type is the signed sum of those charges: reversals negative, adjustments with their sign, opening
-     * balances included;</li>
+     * <li>the charged amount of a type is the signed sum of those charges: reversals negative, adjustments with their
+     * sign, opening balances included;</li>
+     * <li>the paid amount of a type is the net allocations (allocations minus releases) to those charges as of the
+     * day; the debt of a type is charged minus paid;</li>
      * <li>the oldest unpaid date is the oldest debt date among those charges that are neither a reversal nor an
-     * adjustment, were not reversed by one of those charges, and whose amount plus its adjustments among those charges is
-     * above zero (until payments exist nothing is paid);</li>
-     * <li>the days overdue are {@code asOf} minus that date.</li>
+     * adjustment, were not reversed by one of those charges, and whose amount plus its adjustments among those charges
+     * minus what is paid on it as of the day is above zero;</li>
+     * <li>the days overdue are {@code asOf} minus that date;</li>
+     * <li>the prepayment is the plot's payments received on or before the day (a reversal negative, on the day of its
+     * original) minus every allocation of the plot counted as of the day, never below zero; it counts every charge
+     * type whatever {@code chargeTypeIds} says.</li>
      * </ul>
      * A reversal and an adjustment keep the debt date and the charge type of the charge they correct, so the day and
      * type filters keep or drop a charge together with its corrections. The day is the debt date, not the booking time:
-     * an adjustment booked later for a charge dated before {@code asOf} counts, as on the plot account. With
-     * {@code asOf} today or later and every type, the totals and the oldest date are those of the plot account and of
-     * the {@code plot_status} cache.
+     * an adjustment booked later for a charge dated before {@code asOf} counts, as on the plot account. As of a day on
+     * or after every debt date and every day received of the plot (today, in practice) and with every type, the debt,
+     * the oldest unpaid date and the prepayment equal the plot account and the {@code plot_status} cache.
      *
      * @param asOf          the last debt date counted
      * @param chargeTypeIds the charge types to count; empty means every type
-     * @param plotIds       the plots; every distinct id is a key of the result (a plot without counted charges, or an
-     *                      id unknown in the cooperative, gets {@link PlotDebts#none}), in the order of first
-     *                      appearance
+     * @param plotIds       the plots; every distinct id is a key of the result (a plot without counted charges and
+     *                      without prepayment, or an id unknown in the cooperative, gets {@link PlotDebts#none}), in
+     *                      the order of first appearance
      */
     Map<UUID, PlotDebts> debtsAsOf(LocalDate asOf, Set<UUID> chargeTypeIds, Collection<UUID> plotIds);
 
@@ -124,6 +142,44 @@ public interface LedgerReadModel {
      * @throws IllegalArgumentException when {@code to} is before {@code from}
      */
     Map<UUID, Money> chargedByType(LocalDate from, LocalDate to);
+
+    /**
+     * What payments pay per charge type, as of {@code to}, on the charges {@link #chargedByType} counts for the same
+     * range (the totals {@code totals.paid.<type>} of report templates, feature 015 §6): the net allocations to the
+     * regular charges of each type whose service period starts in the range ({@code service_from} from {@code from} to
+     * {@code to}), on every plot, whose value date is on or before {@code to}. The same accrual basis as
+     * {@code totals.charged.<type>}, so paid never belongs to another range than its charge.
+     *
+     * @param from the first day, inclusive
+     * @param to   the last day, inclusive, and the day the allocations are counted on; not before {@code from}
+     * @return the charge types with at least one such allocation, keyed by id (a type without one is absent:
+     *         {@code 0.00})
+     * @throws IllegalArgumentException when {@code to} is before {@code from}
+     */
+    Map<UUID, Money> paidByType(LocalDate from, LocalDate to);
+
+    /**
+     * The prepayment of the cooperative as of a day (the total {@code totals.prepayment} of report templates): per
+     * plot, every plot of the cooperative, its payments received on or before {@code asOf} (a reversal negative, on the
+     * day of its original) minus its allocations whose value date is on or before {@code asOf}, never below zero;
+     * summed.
+     *
+     * @param asOf the day
+     */
+    Money prepaymentAsOf(LocalDate asOf);
+
+    /**
+     * The payments of the filter (the payments report, feature 015 §6), one {@link PaymentRow} per payment (kind
+     * {@code PAYMENT}; a reversed payment is listed once with {@code reversed} set, its reversal row is not listed),
+     * with its net allocations now and what is left of it. Without the payer note: that is {@link PaymentNotes}. Rows
+     * come ordered by the day received, then the time booked, then id. At most {@code limit} rows are returned: a
+     * caller with a row cap passes the cap plus one.
+     *
+     * @param filter the billing months or the days, the source and the plots
+     * @param limit  the most rows returned; at least 1
+     * @throws IllegalArgumentException when {@code limit} is below 1
+     */
+    List<PaymentRow> payments(PaymentFilter filter, int limit);
 
     /**
      * The electricity charges whose service period overlaps a range of days (the "Charged" sheet of the electricity

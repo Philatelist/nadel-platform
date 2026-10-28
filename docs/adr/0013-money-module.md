@@ -40,5 +40,11 @@ will reuse both. Questions:
 - Tariffs (spec 009), the ledger (spec 011) and payments use the same two types; the rounding rule is testable in one
   class (`MoneyTests`) and the worked examples of money-rules section 4 pass through `Money.ofQuotient`.
 - A review can grep for `setScale(` and `RoundingMode` outside `app.nadel.money` to find a violation of the rule.
+- **Note (feature 015):** the proportional split of one payment over several plots by their debts rounds too, so it is
+  `Money.allocate(weights)`, the third rounding operation of `Money` and the only place a proportional split rounds:
+  each part is its exact share rounded down to the kopeck, the leftover kopecks (fewer than the parts) go one each to
+  the largest remainders, ties to the earlier weight, and the parts always add up to the amount (100.00 over three
+  equal debts is 33.34, 33.33, 33.33). With every weight zero the whole amount is the first part. Tests:
+  `MoneyAllocateTests`.
 - A rate cannot carry more than four decimals or a sign; a future rate that needs a different precision is a new decision.
 - The module is tiny and has no behaviour of its own over time, so it adds no coupling beyond a type dependency.

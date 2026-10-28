@@ -80,17 +80,29 @@ export const getGetPlotAccountUrl = (id: string,
 }
 
 /**
- * The ledger of one plot. `debts` lists every charge type the plot has a charge of, in the order of the charge
- * types, with the sum of its charges (a reversal counts negative); `total` is their sum. Until payments exist
- * the debt is the sum of the charges, adjustments included. `charges` lists the charges newest first (by
- * `accruedOn`, then by the time they were booked); `from` and `to` (both optional, inclusive) limit the list by
- * `accruedOn`, and `kind` limits it to one kind (for example `ADJUSTMENT`), never the debts. `from` after `to` is
- * 400 `VALIDATION_FAILED` (`errors[{field: from, code: INVALID}]`). An adjustment names the charge it adjusts
- * (`adjusts`), an adjusted charge its adjustments (`adjustedBy`); `recalculationId` is shown only to callers with
- * `CHARGES_VIEW`. Every amount is calculated by the server. No permission annotation: a caller with `CHARGES_VIEW` may ask for any plot of the
- * cooperative, anyone else only for a plot they currently own. Any other plot, an unknown id and a plot of
+ * The ledger of one plot (feature 011 §2.1, feature 015 §2.9). `debts` lists every charge type the plot has a
+ * charge of, in the order of the charge types, with its debt after payments: the sum of its charges (a reversal
+ * counts negative, adjustments with their sign) minus what payments pay on them (allocations minus releases);
+ * `total` is their sum and `prepayment` the money paid for the plot that is on no charge. `charges` lists the
+ * charges newest first (by `accruedOn`, then by the time they were booked); a regular charge or an opening
+ * balance carries `paid` and `open`. `payments` lists the payments of the plot and their reversals newest first
+ * (by `receivedOn`, then by the time they were entered), each payment with its allocations and releases;
+ * `prepaymentAllocations` lists the times the plot's prepayment was placed on its charges ("allocated from
+ * prepayment", by hand or by the system), newest first. The client interleaves the lists by date. `from` and `to`
+ * (both optional, inclusive) limit the lists (charges by `accruedOn`, payments by `receivedOn`, prepayment
+ * allocations by `allocatedOn`); `kind` limits them to one kind of charge (for example `ADJUSTMENT`: no payments
+ * then) or, with `PAYMENTS`, to the payments and their reversals (no charges, no prepayment allocations); neither
+ * ever changes `debts`, `total` or `prepayment`. `from` after `to` is 400 `VALIDATION_FAILED`
+ * (`errors[{field: from, code: INVALID}]`). An adjustment names the charge it adjusts (`adjusts`), an adjusted
+ * charge its adjustments (`adjustedBy`); `recalculationId` is shown only to callers with `CHARGES_VIEW`. Every
+ * amount is calculated by the server. No permission annotation: a caller with `CHARGES_VIEW` may ask for any plot
+ * of the cooperative, anyone else only for a plot they currently own. Any other plot, an unknown id and a plot of
  * another cooperative are the same 404 `PLOT_NOT_FOUND`; the platform operator has no cooperative data: 403.
- * @summary The account of a plot with its charges and the debt per charge type
+ * `payments` and `prepaymentAllocations` are listed for a caller with `PAYMENTS_VIEW` and for a current owner of
+ * the plot, and are empty for anyone else. A payment's `payerNote` is shown only to callers with both
+ * `PAYMENTS_VIEW` and `MEMBERS_VIEW`, its `createdByName` only to callers with `CHARGES_VIEW`; a member never sees
+ * either.
+ * @summary The account of a plot with its charges, payments and the debt per charge type
  */
 export const getPlotAccount = async (id: string,
     params?: GetPlotAccountParams, options?: Parameters<typeof nadelFetch>[1]): Promise<PlotAccount> => {
@@ -167,7 +179,7 @@ export function useGetPlotAccount<TData = Awaited<ReturnType<typeof getPlotAccou
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
- * @summary The account of a plot with its charges and the debt per charge type
+ * @summary The account of a plot with its charges, payments and the debt per charge type
  */
 
 export function useGetPlotAccount<TData = Awaited<ReturnType<typeof getPlotAccount>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(

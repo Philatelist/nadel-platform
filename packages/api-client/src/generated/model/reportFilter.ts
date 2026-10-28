@@ -19,7 +19,7 @@ import type { ReportPeriodBasis } from './reportPeriodBasis';
  */
 export interface ReportFilter {
   /**
-     * Names the filter in the client's catalogs: `period`, `asOf`, `year`, `chargeTypes`, `street`, `statuses`, `minDebt`, `olderThanDays`, `resource`, `meterKinds`, `waterSource` or `correctionKinds`
+     * Names the filter in the client's catalogs: `period`, `received`, `asOf`, `year`, `chargeTypes`, `street`, `statuses`, `minDebt`, `olderThanDays`, `resource`, `meterKinds`, `waterSource`, `correctionKinds` or `source`
      * @pattern ^[a-z][A-Za-z]*$
      */
   key: string;

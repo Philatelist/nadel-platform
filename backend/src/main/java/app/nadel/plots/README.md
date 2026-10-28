@@ -200,8 +200,9 @@ no debt. The list's status filter repeats the same rule in SQL (`PlotRepository.
 
 `PlotDebtCache` (public, `JpaPlotDebtCache`) is how the ledger keeps the cache: `lockAll(plotIds)` creates missing rows
 (GREY, no debt) and locks the rows `FOR UPDATE` in the database's uuid order (500 per `IN` list), then
-`record(plotId, debt, oldestDebtDate)` stores the debt rebuilt from the committed ledger. Both run in the caller's
-transaction (`MANDATORY`).
+`record(plotId, debt, oldestDebtDate, prepayment)` stores the debt after payments, the oldest unpaid charge and the
+prepayment (`plot_status.prepayment`, V27, never negative; feature 015) rebuilt from the committed ledger. A plot with
+no debt is GREEN, also with a prepayment. Both run in the caller's transaction (`MANDATORY`).
 
 Decision on the stored `plot_status.status` column: **this release no longer reads it** (contract later, never dropped
 in this feature). It is kept written as a snapshot for the previous release during a rolling update: `record` writes

@@ -18,11 +18,17 @@ import org.jspecify.annotations.Nullable;
  * bundles: the key itself for a fixed placeholder, {@code <family>.byChargeType} for the two families that depend on
  * the cooperative's charge types.
  * <p>
- * The families {@code totals.charged.<type>} and {@code rows.plots.debt.<type>} name a charge type by its code
+ * The families {@code totals.charged.<type>}, {@code totals.paid.<type>} and {@code rows.plots.debt.<type>} name a
+ * charge type by its code
  * ({@code MEMBERSHIP}, ...) when it is a seeded type and by its id otherwise; {@link #catalog} lists one entry per
  * charge type of the cooperative, archived ones included, and {@link #resolve} accepts the code of a seeded type or the
  * id of any type. Names, phones and e-mails of people are never placeholders: the plots carry the number of owners,
- * never who they are; {@code generatedBy} is the person making the file, as in the header of every report file.
+ * never who they are; {@code generatedBy} is the person making the file, as in the header of every report file; the
+ * row set {@code payments} has neither the payer nor the payer note.
+ * <p>
+ * Every placeholder needs {@code REPORTS_VIEW} ({@link #BASE_PERMISSION}); the payment fields ({@code
+ * totals.paid.<type>}, {@code totals.prepayment} and the row set {@code payments}) also need {@code PAYMENTS_VIEW}
+ * ({@link #permission()}): filling a template that uses one is refused without it ({@link TemplateValues}).
  * <p>
  * What each value means for a period is {@link TemplateValues}; the order of the constants is the order of the catalog.
  */
@@ -47,6 +53,9 @@ enum TemplateField {
     TOTALS_LAND_TAX_EXPECTED("totals.landTax.expected", ReportTemplateFieldType.MONEY, null, "12600.00"),
     TOTALS_LAND_TAX_CHARGED("totals.landTax.charged", ReportTemplateFieldType.MONEY, null, "12390.00"),
     TOTALS_CHARGED("totals.charged.", ReportTemplateFieldType.MONEY, null, "18000.00", true),
+    TOTALS_PAID("totals.paid.", ReportTemplateFieldType.MONEY, null, "15000.00", true, Permission.PAYMENTS_VIEW),
+    TOTALS_PREPAYMENT("totals.prepayment", ReportTemplateFieldType.MONEY, null, "1200.00", false,
+            Permission.PAYMENTS_VIEW),
     TOTALS_DEBT("totals.debt", ReportTemplateFieldType.MONEY, null, "45210.50"),
     TOTALS_PLOTS_COUNT("totals.plots.count", ReportTemplateFieldType.INT, null, "60"),
     TOTALS_PLOTS_AREA_SOTKA("totals.plots.areaSotka", ReportTemplateFieldType.NUMBER, null, "360.5000"),
@@ -101,7 +110,29 @@ enum TemplateField {
     WATER_CONNECTED_DAYS("rows.water.connectedDays", ReportTemplateFieldType.INT, TemplateRowSet.WATER, "31"),
     WATER_SERIAL("rows.water.serial", ReportTemplateFieldType.TEXT, TemplateRowSet.WATER, "WS-12"),
     WATER_CUBIC_METRES("rows.water.cubicMetres", ReportTemplateFieldType.QUANTITY, TemplateRowSet.WATER, "30.000"),
-    WATER_TOTAL("rows.water.total", ReportTemplateFieldType.MONEY, TemplateRowSet.WATER, "175.00");
+    WATER_TOTAL("rows.water.total", ReportTemplateFieldType.MONEY, TemplateRowSet.WATER, "175.00"),
+
+    // ---- row set payments: the payments report's rows for the days received, without the payer and the payer note
+    PAYMENTS_RECEIVED_ON("rows.payments.receivedOn", ReportTemplateFieldType.DATE, TemplateRowSet.PAYMENTS,
+            "2026-10-05", false, Permission.PAYMENTS_VIEW),
+    PAYMENTS_BILLING_MONTH("rows.payments.billingMonth", ReportTemplateFieldType.MONTH, TemplateRowSet.PAYMENTS,
+            "2026-10", false, Permission.PAYMENTS_VIEW),
+    PAYMENTS_SOURCE("rows.payments.source", ReportTemplateFieldType.TEXT, TemplateRowSet.PAYMENTS, null, false,
+            Permission.PAYMENTS_VIEW),
+    PAYMENTS_DOCUMENT("rows.payments.document", ReportTemplateFieldType.TEXT, TemplateRowSet.PAYMENTS, "125", false,
+            Permission.PAYMENTS_VIEW),
+    PAYMENTS_NUMBER("rows.payments.number", ReportTemplateFieldType.TEXT, TemplateRowSet.PAYMENTS, "12", false,
+            Permission.PAYMENTS_VIEW),
+    PAYMENTS_STREET("rows.payments.street", ReportTemplateFieldType.TEXT, TemplateRowSet.PAYMENTS, null, false,
+            Permission.PAYMENTS_VIEW),
+    PAYMENTS_AMOUNT("rows.payments.amount", ReportTemplateFieldType.MONEY, TemplateRowSet.PAYMENTS, "700.00", false,
+            Permission.PAYMENTS_VIEW),
+    PAYMENTS_ALLOCATED("rows.payments.allocated", ReportTemplateFieldType.MONEY, TemplateRowSet.PAYMENTS, "700.00",
+            false, Permission.PAYMENTS_VIEW),
+    PAYMENTS_PREPAYMENT("rows.payments.prepayment", ReportTemplateFieldType.MONEY, TemplateRowSet.PAYMENTS, "0.00",
+            false, Permission.PAYMENTS_VIEW),
+    PAYMENTS_REVERSED("rows.payments.reversed", ReportTemplateFieldType.TEXT, TemplateRowSet.PAYMENTS, null, false,
+            Permission.PAYMENTS_VIEW);
 
     /** What a key may look like (ADR 0015): the text between {@code ${} and {@code }}. */
     static final Pattern KEY = Pattern.compile("[A-Za-z][A-Za-z0-9_.\\-]*");
@@ -109,14 +140,18 @@ enum TemplateField {
     /** The last part of the description code of a family. */
     static final String FAMILY_FIELD = "byChargeType";
 
-    /** Every placeholder needs this permission; generating from a template needs it too. */
-    static final Permission PERMISSION = Permission.REPORTS_VIEW;
+    /**
+     * Every placeholder needs this permission; generating from a template needs it too. (The constructors name it
+     * directly: an enum constant's initializer cannot read a static field.)
+     */
+    static final Permission BASE_PERMISSION = Permission.REPORTS_VIEW;
 
     private final String key;
     private final ReportTemplateFieldType type;
     private final @Nullable TemplateRowSet rowSet;
     private final @Nullable String example;
     private final boolean family;
+    private final Permission permission;
 
     TemplateField(String key, ReportTemplateFieldType type, @Nullable TemplateRowSet rowSet,
             @Nullable String example) {
@@ -125,11 +160,25 @@ enum TemplateField {
 
     TemplateField(String key, ReportTemplateFieldType type, @Nullable TemplateRowSet rowSet,
             @Nullable String example, boolean family) {
+        this(key, type, rowSet, example, family, Permission.REPORTS_VIEW);
+    }
+
+    TemplateField(String key, ReportTemplateFieldType type, @Nullable TemplateRowSet rowSet,
+            @Nullable String example, boolean family, Permission permission) {
         this.key = key;
         this.type = type;
         this.rowSet = rowSet;
         this.example = example;
         this.family = family;
+        this.permission = permission;
+    }
+
+    /**
+     * The permission the placeholder needs besides {@link #BASE_PERMISSION}: {@code PAYMENTS_VIEW} for a payment
+     * field, {@link #BASE_PERMISSION} itself otherwise.
+     */
+    Permission permission() {
+        return permission;
     }
 
     /** The key of a fixed placeholder; for a family the prefix its keys start with (ending in a dot). */
@@ -179,7 +228,7 @@ enum TemplateField {
         /** The catalog entry of the API. */
         ReportTemplateField toDto() {
             ReportTemplateField dto = new ReportTemplateField(key, field.field(), field.type(),
-                    nadel.contract.model.Permission.fromValue(PERMISSION.name()));
+                    nadel.contract.model.Permission.fromValue(field.permission().name()));
             if (field.rowSet() != null) {
                 dto.setRowSet(field.rowSet().contract());
             }

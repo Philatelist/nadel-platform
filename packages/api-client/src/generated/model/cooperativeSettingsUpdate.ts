@@ -29,6 +29,8 @@ export interface CooperativeSettingsUpdate {
      * @maximum 36500
      */
   redDays?: number;
+  /** Allocate prepayment automatically; see `CooperativeSettings.autoAllocatePrepayment` */
+  autoAllocatePrepayment?: boolean;
   /**
      * The full official name; an empty string clears it
      * @maxLength 300

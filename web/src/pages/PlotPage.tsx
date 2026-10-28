@@ -20,7 +20,7 @@ import { PlotTariffsPanel } from '../components/tariffs/PlotTariffsPanel';
 import { WaterConnectionPanel } from '../components/water/WaterConnectionPanel';
 import { PlotMeterPanel } from '../components/meters/PlotMeterPanel';
 import { OwnersPanel } from '../components/ownership/OwnersPanel';
-import { Badge, Button, Notice, PageHeader, Panel, StatusDot } from '../components/ui';
+import { Badge, Button, Notice, PageHeader, Panel, StatusDot, buttonClass } from '../components/ui';
 import { useLocale, useT } from '../i18n';
 import { useCan, useMe } from '../me';
 import { useCanEditPlots } from '../hooks/useCanEditPlots';
@@ -67,6 +67,7 @@ function PlotView({ plot }: { plot: PlotDetails }) {
   const canViewCharges = useCan('CHARGES_VIEW');
   const canViewReports = useCan('REPORTS_VIEW');
   const canEdit = useCanEditPlots();
+  const canEnterPayment = useCan('PAYMENTS_ENTER') && plot.kind !== 'COMMON' && !plot.archived;
   const isOwner = useMe().ownedPlots.some((p) => p.plotId === plot.id);
   const navigate = useNavigate();
   const f = t.plot.fields;
@@ -130,29 +131,38 @@ function PlotView({ plot }: { plot: PlotDetails }) {
         title={cardTitleNode(t, plot)}
         badge={plot.archived && <Badge tone="neutral">{t.plots.archived}</Badge>}
         actions={
-          canEdit && (
+          (canEdit || canEnterPayment) && (
             <>
-              <Button onClick={() => void navigate(`/plots/${plot.id}/edit`)}>{t.plot.edit}</Button>
-              <Button
-                variant="secondary"
-                disabled={isToggling}
-                onClick={() => {
-                  setActionError(undefined);
-                  (plot.archived ? restore : archive).mutate({ id: plot.id });
-                }}
-              >
-                {plot.archived ? t.plot.restore : t.plot.archive}
-              </Button>
-              {!plot.archived && (
-                <Button
-                  variant="danger"
-                  onClick={() => {
-                    setActionError(undefined);
-                    setConfirmingDelete(true);
-                  }}
-                >
-                  {t.plot.delete}
-                </Button>
+              {canEnterPayment && (
+                <Link to={`/payments/new?plotId=${plot.id}`} className={buttonClass('secondary')}>
+                  {t.payments.enter}
+                </Link>
+              )}
+              {canEdit && (
+                <>
+                  <Button onClick={() => void navigate(`/plots/${plot.id}/edit`)}>{t.plot.edit}</Button>
+                  <Button
+                    variant="secondary"
+                    disabled={isToggling}
+                    onClick={() => {
+                      setActionError(undefined);
+                      (plot.archived ? restore : archive).mutate({ id: plot.id });
+                    }}
+                  >
+                    {plot.archived ? t.plot.restore : t.plot.archive}
+                  </Button>
+                  {!plot.archived && (
+                    <Button
+                      variant="danger"
+                      onClick={() => {
+                        setActionError(undefined);
+                        setConfirmingDelete(true);
+                      }}
+                    >
+                      {t.plot.delete}
+                    </Button>
+                  )}
+                </>
               )}
             </>
           )

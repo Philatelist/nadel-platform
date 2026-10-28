@@ -19,10 +19,10 @@ interface SettingsRepository extends JpaRepository<SettingsRow, UUID> {
     @Query(value = """
             insert into cooperative_settings (tenant_id, member_plot_status_visibility, losses_mode, losses_percent,
                 common_consumer_default_split, red_amount, red_days, official_name, legal_address, bank_name, iban,
-                updated_at)
+                auto_allocate_prepayment, updated_at)
             values (:tenantId, :visibility, :lossesMode, :lossesPercent, :split, :redAmount, :redDays,
                 cast(:officialName as text), cast(:legalAddress as text), cast(:bankName as text), cast(:iban as text),
-                now())
+                :autoAllocatePrepayment, now())
             on conflict (tenant_id) do update
             set member_plot_status_visibility = excluded.member_plot_status_visibility,
                 losses_mode = excluded.losses_mode,
@@ -34,11 +34,13 @@ interface SettingsRepository extends JpaRepository<SettingsRow, UUID> {
                 legal_address = excluded.legal_address,
                 bank_name = excluded.bank_name,
                 iban = excluded.iban,
+                auto_allocate_prepayment = excluded.auto_allocate_prepayment,
                 updated_at = now()
             """, nativeQuery = true)
     void upsert(@Param("tenantId") UUID tenantId, @Param("visibility") String visibility,
             @Param("lossesMode") String lossesMode, @Param("lossesPercent") BigDecimal lossesPercent,
             @Param("split") String split, @Param("redAmount") BigDecimal redAmount, @Param("redDays") int redDays,
             @Param("officialName") @Nullable String officialName, @Param("legalAddress") @Nullable String legalAddress,
-            @Param("bankName") @Nullable String bankName, @Param("iban") @Nullable String iban);
+            @Param("bankName") @Nullable String bankName, @Param("iban") @Nullable String iban,
+            @Param("autoAllocatePrepayment") boolean autoAllocatePrepayment);
 }

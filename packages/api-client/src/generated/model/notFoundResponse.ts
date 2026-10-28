@@ -12,6 +12,6 @@
 import type { Problem } from './problem';
 
 /**
- * The resource does not exist or is not visible to the caller (code `NOT_FOUND`; `PLOT_NOT_FOUND` from the plot-scoped meter operations `listPlotMeters` and `submitPlotReading` and the ledger operations `getPlotAccount` and `enterOpeningBalance` when the plot is unknown, of another cooperative or not the caller's)
+ * The resource does not exist or is not visible to the caller (code `NOT_FOUND`; `PLOT_NOT_FOUND` from the plot-scoped meter operations `listPlotMeters` and `submitPlotReading` and the ledger operations `getPlotAccount` and `enterOpeningBalance` and the payment operations `enterPayment` and `allocatePrepayment` when the plot is unknown, of another cooperative or not the caller's)
  */
 export type NotFoundResponse = Problem;

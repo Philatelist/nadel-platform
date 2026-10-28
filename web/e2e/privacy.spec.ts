@@ -77,9 +77,9 @@ test.describe('audit log and personal data', () => {
       await chairman.goto(`/audit?entityId=${memberId}`);
       await expect(async () => {
         await chairman.reload();
-        const text = await compactText(chairman);
-        expect(text).toContain(oldPhone);
-        expect(text).toContain(newPhone);
+        // reload resolves before the list is fetched: wait for the page to render the entries instead of reading "Loading…"
+        await expect.poll(() => compactText(chairman), { timeout: 5000 }).toContain(oldPhone);
+        expect(await compactText(chairman)).toContain(newPhone);
       }).toPass({ timeout: 15_000 });
       await expect(chairman.getByTestId('audit-hidden')).toHaveCount(0);
 

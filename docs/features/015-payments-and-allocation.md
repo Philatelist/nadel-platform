@@ -12,13 +12,16 @@ The treasurer records money received from a member, as cash at the cooperative's
 entered by hand. The system allocates it to the plot's debts and shows what is still owed and what is paid in advance.
 From then on the debt, the plot colour and the reports reflect payments. Until now they showed only charges.
 
-**Decided with the owner (28.10.2026):**
+**Decided with the owner (28.10.2026; the prepayment rule amended in the owner's review of PR #56):**
 - **Allocation order:** oldest debts first. Within the same day, the cooperative's order of charge types decides. The
   treasurer sees the proposal and can change it before saving.
 - **Cash:** an internal receipt with a sequential number. The printed form (прибутковий касовий ордер, the cash receipt
   order) comes with the PDFs of phase 4. The system is not a fiscal cash register (no ПРРО, the software cash register).
 - **Prepayment:** allocated automatically to every new charge of the plot, by the same order. This is a cooperative
-  setting and is on by default.
+  setting and is on by default. With auto-allocation on, prepayment never waits while the plot has open debts: on saving
+  a payment (and on a reallocation) any unallocated remainder is placed at once on the oldest debts. The treasurer
+  still chooses the lines; only the free remainder is placed automatically. Prepayment stays only when the plot has no
+  open debt, or when auto-allocation is off.
 - **One payment for several plots of one person:** the treasurer splits it when entering it. The proposed split is in
   proportion to the plots' debts. Each part is a payment of its plot. A cash payment keeps one receipt for all its parts.
 
@@ -104,7 +107,7 @@ Each charge receives at most its open amount. What is left is the **prepayment**
 **The treasurer's change.** Before saving, the treasurer can change the amount of any line of the proposal or add
 charges of the plot. The total of the lines must not exceed the payment
 (400 `ALLOCATION_EXCEEDS_PAYMENT`), and no line may exceed the charge's open amount (400
-`ALLOCATION_EXCEEDS_CHARGE`). What is not allocated stays as prepayment.
+`ALLOCATION_EXCEEDS_CHARGE`). What is not allocated is the remainder; 2.4 says where it goes (amended 28.10.2026).
 
 **Reallocation** of a saved payment releases its allocations and writes new ones in one transaction. The treasurer uses
 it to move money between charges. It is audited.
@@ -127,8 +130,12 @@ there are any. Every release is written in the same transaction as its cause. Th
 
 **Auto-allocation.** With the new setting `autoAllocatePrepayment` (default on), the plot's prepayment is allocated by
 the same order (2.2) whenever:
-- a payment is saved with an unallocated remainder: the remainder is not allocated beyond what the treasurer chose; it
-  waits for new charges;
+- a payment is saved with an unallocated remainder (amended 28.10.2026): the treasurer's lines are saved as chosen, and
+  the remainder is placed at once, in the same transaction, by the standard order on the plot's open charges that are
+  left after the treasurer's lines. Prepayment never waits while the plot has open debts. If the plot has no open debt,
+  the remainder stays as prepayment and waits for new charges;
+- a payment is reallocated and some lines are left at 0.00 (amended 28.10.2026): the same rule, so the lines left at
+  0.00 do not create a waiting prepayment while open debts exist;
 - charges are booked for the plot (the `ChargesBooked` event, in its own transaction after the commit, idempotent: it
   allocates only what is still unallocated);
 - allocations are released (2.3).
@@ -137,7 +144,9 @@ Auto-allocation writes allocations with `created_by` = the system. The plot acco
 ("Allocated from prepayment").
 
 With the setting off, prepayment stays until the treasurer allocates it by hand («Розподілити аванс», "Allocate
-prepayment").
+prepayment"). The button is on the plot account and on the payment card whenever the prepayment is above 0.00 and the
+plot has an open charge. The plot account shows «Аванс X ₴» ("Prepayment X") next to the debt total whenever the
+prepayment is above 0.00.
 
 ### 2.5 Debt and status (money-rules 2 and 9 updated)
 
@@ -177,7 +186,7 @@ Charge type order: Membership, Electricity, Land tax.
 | 7 | Membership 600.00 fully paid; a recalculation adjusts it by −100.00 (012) | release 100.00 of the latest allocation; prepayment 100.00 |
 | 8 | Membership 600.00 paid 600.00; an adjustment of +50.00 | open 50.00; debt 50.00; the plot is no longer GREEN |
 | 9 | Payment 700.00 of example 1 is reversed | releases 600.00 and 100.00; debts back to 600.00 and 250.00 |
-| 10 | Treasurer allocates 700.00 as electricity 250.00 and membership 400.00 | saved as chosen; open membership 200.00 |
+| 10 | Treasurer allocates a 700.00 payment as electricity 250.00 and membership 400.00 | saved as chosen; the remainder 50.00 goes on membership at once with auto-allocation on (open membership 150.00), or stays as prepayment with it off (open membership 200.00) |
 | 11 | Treasurer allocates 900.00 of a 700.00 payment | 400 `ALLOCATION_EXCEEDS_PAYMENT` |
 | 12 | Member owns plots 7 (debt 300.00) and 15 (debt 100.00), pays 200.00 | proposal 150.00 and 50.00 |
 | 13 | Plots with debts 100.00, 100.00 and 100.00, payment 100.00 | 33.34, 33.33 and 33.33 (the first plot gets the extra cent) |
@@ -186,6 +195,8 @@ Charge type order: Membership, Electricity, Land tax.
 | 16 | A cash payment of 31.01 entered on 03.02, January is closed | booked in February with `received_on` 31.01; January's totals unchanged |
 | 17 | Two treasurers save cash payments at the same time | receipts 41 and 42, no gap, no duplicate |
 | 18 | Opening balance (011) membership 1200.00, payment 500.00 | allocated to the opening charge; open 700.00 |
+| 19 | Debts: membership 600.00 (Jan), electricity 250.00 (Feb). Payment 700.00; the treasurer allocates electricity 250.00 only; auto-allocation on | the remainder 450.00 is placed at once on membership; open membership 150.00; prepayment 0.00 |
+| 20 | Example 19 with auto-allocation off | electricity 250.00; the remainder 450.00 stays as prepayment; open membership 600.00; «Розподілити аванс» is shown |
 
 ## 4. API (`api/openapi.yaml`, tag `payments`)
 
@@ -278,19 +289,28 @@ Seeding is the same as in V19 and V20.
    - payer;
    - note;
    - for a bank payment, the reference;
-   - then the proposal table (charge, period, open amount, to allocate, editable) and the prepayment line;
+   - then the proposal table (charge, period, open amount, to allocate, editable) and the prepayment line. With
+     auto-allocation on, a note under the prepayment line says «Залишок буде зараховано автоматично на найстаріші
+     борги» ("The remainder will be placed automatically on the oldest debts"), and the preview shows the resulting
+     lines, the automatic ones marked. The table stays on screen with per-line problems and «Розподілено X з Y»
+     ("Allocated X of Y");
    - «Зберегти» ("Save").
 
    After a cash payment the receipt number is shown large, with «Ще один платіж» ("Another payment").
 3. **The payment card:**
-   - allocations and releases;
+   - «Зараз зараховано» ("Currently allocated") and, separately, «Історія розподілу» ("Allocation history") with
+     allocations, releases and who did them;
    - the group;
+   - «Розподілити аванс» ("Allocate prepayment") when auto-allocation is off and the prepayment is above 0.00 with an
+     open charge;
    - «Перерозподілити» ("Reallocate") with `PAYMENTS_ENTER`;
    - «Сторнувати» ("Reverse") with `PAYMENTS_REVERSE`, with a reason.
 4. **The plot account (011):**
    - payments interleaved with charges by date;
    - per charge: charged, paid, open;
-   - the prepayment with «Розподілити аванс» ("Allocate prepayment") when auto-allocation is off;
+   - «Аванс X ₴» ("Prepayment X") next to the debt total at the top whenever it is above 0.00;
+   - the prepayment with «Розподілити аванс» ("Allocate prepayment") when it is above 0.00, an open charge exists and
+     auto-allocation is off;
    - a filter «лише платежі» ("payments only").
 5. **The plot card:** «Внести платіж» ("Enter payment") with the plot preset.
 6. **Settings:** the switch «Автоматично зараховувати аванс» ("Allocate prepayment automatically").
@@ -334,6 +354,8 @@ Automatic allocations and releases are ledger rows, not audit entries, like char
 ## 12. Acceptance criteria
 
 - [ ] Every row of section 3 is a passing unit test.
+- [ ] With auto-allocation on, a payment with a remainder and open debts is allocated in full at once (examples 19
+      and 20; a reallocation too); prepayment stays only without open debts or with auto-allocation off.
 - [ ] Booking tests cover the closed month, reversal, reallocation, automatic release on a charge reversal and on a
       negative adjustment, auto-allocation after a month run, and both settings of auto-allocation.
 - [ ] `payment` and `allocation` are append-only (trigger and grant tests, as for `charge`).

@@ -311,6 +311,71 @@ class SettingsTests extends IntegrationTest {
                 Integer.class, DEMO_TENANT)).isEqualTo(30);
     }
 
+    // ---- automatic allocation of prepayment (feature 015 §2.7)
+
+    @Test
+    void automaticAllocationIsOnWithoutARow() throws Exception {
+        read(demo("treasurer@demo.local")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.autoAllocatePrepayment").value(true));
+        assertThat(TenantContext.runAs(DEMO_TENANT, cooperativeSettings::autoAllocatePrepayment)).isTrue();
+        // no cooperative bound: the defaults
+        assertThat(cooperativeSettings.autoAllocatePrepayment()).isTrue();
+    }
+
+    @Test
+    void theChairmanSwitchesAutomaticAllocationOffAndItStaysOffWithTheOtherSettingsKept() throws Exception {
+        String chairman = demo("chairman@demo.local");
+        long initial = auditCount();
+        save(chairman, Map.of("redDays", 60)).andExpect(status().isOk());
+        long before = initial + 1;
+        await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> assertThat(auditCount()).isEqualTo(before));
+
+        save(chairman, Map.of("autoAllocatePrepayment", false)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.autoAllocatePrepayment").value(false))
+                .andExpect(jsonPath("$.redDays").value(60));
+
+        // after "reloading the page" every member reads it off; the other settings keep their values
+        read(demo("member@demo.local")).andExpect(jsonPath("$.autoAllocatePrepayment").value(false))
+                .andExpect(jsonPath("$.redDays").value(60));
+        assertThat(ownerJdbc().queryForObject("select auto_allocate_prepayment from cooperative_settings "
+                + "where tenant_id = ?", Boolean.class, DEMO_TENANT)).isFalse();
+        assertThat(TenantContext.runAs(DEMO_TENANT, cooperativeSettings::autoAllocatePrepayment)).isFalse();
+        // another change leaves it off
+        save(chairman, Map.of("redDays", 30)).andExpect(jsonPath("$.autoAllocatePrepayment").value(false));
+        // audited like every setting: one field, old and new as plain values
+        await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> assertThat(auditCount()).isEqualTo(before + 2));
+        JsonNode changes = json.readTree((String) auditEntries().get((int) before).get("changes"));
+        assertThat(changes).hasSize(1);
+        assertThat(changes.get(0).get("field").asString()).isEqualTo("autoAllocatePrepayment");
+        assertThat(changes.get(0).get("old").asString()).isEqualTo("true");
+        assertThat(changes.get(0).get("new").asString()).isEqualTo("false");
+
+        // switched on again; saving the current value writes no audit entry
+        save(chairman, Map.of("autoAllocatePrepayment", true)).andExpect(jsonPath("$.autoAllocatePrepayment")
+                .value(true));
+        save(chairman, Map.of("autoAllocatePrepayment", true)).andExpect(status().isOk());
+        await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> assertThat(auditCount()).isEqualTo(before + 3));
+        assertThat(TenantContext.runAs(DEMO_TENANT, cooperativeSettings::autoAllocatePrepayment)).isTrue();
+    }
+
+    @Test
+    void onlySettingsManageSwitchesAutomaticAllocation() throws Exception {
+        for (String email : List.of("treasurer@demo.local", "member@demo.local", "electrician@demo.local")) {
+            save(demo(email), Map.of("autoAllocatePrepayment", false)).andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
+        }
+        assertThat(rowCount(DEMO_TENANT)).isZero();
+        save(demo("chairman@demo.local"), Map.of("autoAllocatePrepayment", "sometimes"))
+                .andExpect(status().isBadRequest());
+        assertThat(rowCount(DEMO_TENANT)).isZero();
+        save(customRoleToken("SETTINGS_MANAGE"), Map.of("autoAllocatePrepayment", false))
+                .andExpect(status().isOk());
+        assertThat(ownerJdbc().queryForObject("select auto_allocate_prepayment from cooperative_settings "
+                + "where tenant_id = ?", Boolean.class, DEMO_TENANT)).isFalse();
+        // the other cooperative keeps its own default
+        assertThat(TenantContext.runAs(OTHER_TENANT, cooperativeSettings::autoAllocatePrepayment)).isTrue();
+    }
+
     @Test
     void theCooperativeComesFromTheTokenNotFromTheBody() throws Exception {
         save(demo("chairman@demo.local"), Map.of("memberPlotStatusVisibility", "ALL_PLOTS",

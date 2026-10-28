@@ -56,4 +56,8 @@ export interface Charge {
   createdAt: string;
   /** The current name of the member who booked the charge; only for callers with `CHARGES_VIEW`, absent for charges booked by the system or by a member who no longer exists */
   createdByName?: string;
+  /** On the plot account, for a regular charge or an opening balance: what payments pay on it now (allocations minus releases); absent for reversals, adjustments and outside the plot account */
+  paid?: Money;
+  /** On the plot account, for a regular charge or an opening balance: what is still owed on it, its amount plus its adjustments (`0.00` once reversed) minus `paid`; absent for reversals, adjustments and outside the plot account */
+  open?: Money;
 }

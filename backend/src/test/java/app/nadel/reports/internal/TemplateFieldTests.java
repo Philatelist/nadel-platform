@@ -70,7 +70,7 @@ class TemplateFieldTests {
         assertThat(TemplateField.catalog(TYPES).stream().map(entry -> entry.field().rowSet())
                 .filter(set -> set != null).distinct().toList())
                 .containsExactly(TemplateRowSet.PLOTS, TemplateRowSet.MONTHS, TemplateRowSet.METERS,
-                        TemplateRowSet.WATER);
+                        TemplateRowSet.WATER, TemplateRowSet.PAYMENTS);
     }
 
     @Test

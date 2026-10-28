@@ -231,20 +231,20 @@ test.describe('ownership', () => {
     await expect(main(page)).not.toContainText('Литвиненко');
     await expect(main(page)).not.toContainText(/No debt|Has debt|Debt above threshold/);
 
-    // the list: own plots 7 and 15 show a debt label (the demo ledger; red or yellow by where the anchor day falls),
-    // every other plot a neutral mark without a label
+    // the list: own plots 7 and 15 show a status label (the demo ledger: 7 is paid up, 15 still owes; red or yellow
+    // by where the anchor day falls), every other plot a neutral mark without a label
     await page.goto('/plots');
     await expect(rows(page).first()).toBeVisible();
-    const labelled = rows(page).filter({ hasText: /Has debt|Debt above threshold/ });
+    const labelled = rows(page).filter({ hasText: /Has debt|Debt above threshold|No debt/ });
     await expect(labelled).toHaveCount(2);
     await expect(labelled.nth(0)).toContainText('7');
     await expect(labelled.nth(1)).toContainText('15');
     await expect(rows(page).filter({ hasText: /No owner|Common land/ })).toHaveCount(0);
     await expect(main(page).getByTestId('status-neutral')).toHaveCount(18);
     // the status filter only matches the member's own plots
-    const label = (await labelled.nth(0).textContent())?.includes('Debt above threshold')
-      ? 'Debt above threshold'
-      : 'Has debt';
+    const firstText = (await labelled.nth(0).textContent()) ?? '';
+    const label =
+      ['Debt above threshold', 'Has debt', 'No debt'].find((l) => firstText.includes(l)) ?? 'No debt';
     const withLabel = await labelled.filter({ hasText: label }).count();
     await main(page).getByLabel('Status', { exact: true }).selectOption({ label });
     await expect(rows(page)).toHaveCount(withLabel);
@@ -273,7 +273,7 @@ test.describe('ownership', () => {
       await member.goto('/plots');
       await expect(rows(member).first()).toBeVisible();
       await expect(main(member).getByTestId('status-neutral')).toHaveCount(0);
-      await expect(rows(member).filter({ hasText: /Debt above threshold|Has debt/ })).toHaveCount(20);
+      await expect(rows(member).filter({ hasText: /Debt above threshold|Has debt|No debt/ })).toHaveCount(20);
       await expect(
         main(member)
           .locator('thead th')

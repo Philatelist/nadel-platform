@@ -275,8 +275,10 @@ test.describe('retroactive recalculation', () => {
         await main(page).getByLabel('From month', { exact: true }).fill(open);
         await main(page).getByLabel('To month', { exact: true }).fill(open);
         await main(page).getByLabel('Chosen plots', { exact: true }).check();
-        await main(page).getByLabel('Find a plot by number').fill(plot!.number);
-        await main(page).getByRole('button', { name: plot!.number }).click();
+        await main(page).getByLabel('Find a plot by number', { exact: true }).fill(plot!.number);
+        await main(page)
+          .getByRole('option', { name: new RegExp(`^${plot!.number}`) })
+          .click();
         await main(page).getByRole('button', { name: 'Preview', exact: true }).click();
       };
 

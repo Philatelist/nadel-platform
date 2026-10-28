@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useListChargeTypes, type ReportFilterParam, type ReportInfo } from '@nadel/api-client';
 import type { Messages } from '@nadel/shared';
+import { BillingMonthSelect } from '../charges/BillingMonthSelect';
 import { chargeTypeName } from '../../chargeTypeName';
 import { useT } from '../../i18n';
 import { useCan } from '../../me';
 import { PARAM_CONTROLS, reportParams, type FilterValues } from '../../reportFilters';
-import { Button, MonthField, Select, TextField } from '../ui';
+import { Button, Select, TextField } from '../ui';
 
 interface Option {
   value: string;
@@ -71,7 +72,13 @@ export function ReportFilterForm({
         switch (control.kind) {
           case 'month':
             return (
-              <MonthField key={param} label={label} value={one(param)} onChange={(v) => set(param, [v])} />
+              <BillingMonthSelect
+                key={param}
+                label={label}
+                emptyLabel={t.reports.noMonth}
+                value={one(param)}
+                onChange={(v) => set(param, [v])}
+              />
             );
           case 'date':
             return (

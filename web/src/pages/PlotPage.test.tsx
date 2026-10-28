@@ -222,3 +222,36 @@ describe('PlotPage tariffs panel', () => {
     expect(screen.queryByRole('heading', { name: 'Tariffs' })).toBeNull();
   });
 });
+
+describe('PlotPage enter payment link', () => {
+  beforeEach(() => {
+    permissions = ['PLOTS_VIEW', 'PAYMENTS_ENTER'];
+    plot = active;
+  });
+
+  it('links to the payment form with the plot chosen', () => {
+    renderCard();
+    expect(screen.getByRole('link', { name: 'Enter payment' })).toHaveAttribute(
+      'href',
+      '/payments/new?plotId=p1',
+    );
+  });
+
+  it('is absent without the permission', () => {
+    permissions = ['PLOTS_VIEW'];
+    renderCard();
+    expect(screen.queryByRole('link', { name: 'Enter payment' })).not.toBeInTheDocument();
+  });
+
+  it('is absent on common land', () => {
+    plot = { ...active, kind: 'COMMON' };
+    renderCard();
+    expect(screen.queryByRole('link', { name: 'Enter payment' })).not.toBeInTheDocument();
+  });
+
+  it('is absent on an archived plot', () => {
+    plot = { ...active, archived: true };
+    renderCard();
+    expect(screen.queryByRole('link', { name: 'Enter payment' })).not.toBeInTheDocument();
+  });
+});

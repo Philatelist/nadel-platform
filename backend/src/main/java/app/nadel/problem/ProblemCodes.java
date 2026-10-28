@@ -103,6 +103,24 @@ public final class ProblemCodes {
     public static final String READING_STATUS_INVALID = "READING_STATUS_INVALID";
     /** 409: a plot that has charges (any kind, reversed or not) is never deleted; the ledger keeps them. */
     public static final String PLOT_HAS_CHARGES = "PLOT_HAS_CHARGES";
+    /** 409: a plot that has payments is never deleted; the ledger keeps them (asked after {@link #PLOT_HAS_CHARGES}). */
+    public static final String PLOT_HAS_PAYMENTS = "PLOT_HAS_PAYMENTS";
+    /** 400: the allocation lines of a payment together exceed the payment ({@code errors[{field: lines}]}). */
+    public static final String ALLOCATION_EXCEEDS_PAYMENT = "ALLOCATION_EXCEEDS_PAYMENT";
+    /** 400: an allocation line exceeds what is open on its charge ({@code errors[{field: lines[j].amount}]}). */
+    public static final String ALLOCATION_EXCEEDS_CHARGE = "ALLOCATION_EXCEEDS_CHARGE";
+    /**
+     * 400: the parts of a payment split over several plots do not add up to the payment
+     * ({@code errors[{field: split.parts}]}).
+     */
+    public static final String SPLIT_TOTAL_MISMATCH = "SPLIT_TOTAL_MISMATCH";
+    /**
+     * 409: the payment was reversed before (a payment is reversed once and a reversed payment is not reallocated), or
+     * the id names a reversal row.
+     */
+    public static final String PAYMENT_ALREADY_REVERSED = "PAYMENT_ALREADY_REVERSED";
+    /** 409: the plot's prepayment is allocated by hand while it has no prepayment or no open charge. */
+    public static final String NOTHING_TO_ALLOCATE = "NOTHING_TO_ALLOCATE";
     /** 409: the charge was reversed before; a charge is reversed at most once. */
     public static final String CHARGE_ALREADY_REVERSED = "CHARGE_ALREADY_REVERSED";
     /** 409: the charge is a reversal, which cannot itself be reversed. */

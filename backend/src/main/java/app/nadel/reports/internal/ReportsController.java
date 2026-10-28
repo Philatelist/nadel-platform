@@ -7,6 +7,7 @@ import java.util.UUID;
 import nadel.contract.api.ReportsApi;
 import nadel.contract.model.MeterKind;
 import nadel.contract.model.MeterResource;
+import nadel.contract.model.PaymentSource;
 import nadel.contract.model.PlotStatus;
 import nadel.contract.model.ReportCode;
 import nadel.contract.model.ReportCorrectionKind;
@@ -26,9 +27,10 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * Endpoints of the built-in reports. Every one needs {@code REPORTS_VIEW}; a report that needs more (the debtors also
- * {@code MEMBERS_VIEW}) is not listed and is 403 ({@link ReportCatalog}). The platform operator holds no cooperative
- * permission and is refused with 403. A code of the contract without a definition yet is 404. {@code
- * /reports/{code}.xlsx} is matched before {@code /reports/{code}}: its pattern is the more specific one.
+ * {@code MEMBERS_VIEW}, the payments also {@code PAYMENTS_VIEW}) is not listed and is 403 ({@link ReportCatalog}). The
+ * platform operator holds no cooperative permission and is refused with 403. A code of the contract without a
+ * definition yet is 404. {@code /reports/{code}.xlsx} is matched before {@code /reports/{code}}: its pattern is the
+ * more specific one.
  */
 @RestController
 @RequestMapping("/api/v1")
@@ -58,9 +60,10 @@ class ReportsController implements ReportsApi {
             @Nullable Integer year, @Nullable List<UUID> chargeTypeIds, @Nullable String street,
             @Nullable List<PlotStatus> statuses, @Nullable String minDebt, @Nullable Integer olderThanDays,
             @Nullable MeterResource resource, @Nullable List<MeterKind> meterKinds,
-            @Nullable WaterSourceKind waterSource, @Nullable List<ReportCorrectionKind> correctionKinds) {
+            @Nullable WaterSourceKind waterSource, @Nullable List<ReportCorrectionKind> correctionKinds,
+            @Nullable PaymentSource source) {
         RawFilters raw = new RawFilters(fromMonth, toMonth, from, to, asOf, year, chargeTypeIds, street, statuses,
-                minDebt, olderThanDays, resource, meterKinds, waterSource, correctionKinds);
+                minDebt, olderThanDays, resource, meterKinds, waterSource, correctionKinds, source);
         return ResponseEntity.ok(runner.preview(code, raw));
     }
 
@@ -72,9 +75,9 @@ class ReportsController implements ReportsApi {
             @Nullable List<PlotStatus> statuses, @Nullable String minDebt, @Nullable Integer olderThanDays,
             @Nullable MeterResource resource, @Nullable List<MeterKind> meterKinds,
             @Nullable WaterSourceKind waterSource, @Nullable List<ReportCorrectionKind> correctionKinds,
-            @Nullable String lang) {
+            @Nullable PaymentSource source, @Nullable String lang) {
         RawFilters raw = new RawFilters(fromMonth, toMonth, from, to, asOf, year, chargeTypeIds, street, statuses,
-                minDebt, olderThanDays, resource, meterKinds, waterSource, correctionKinds);
+                minDebt, olderThanDays, resource, meterKinds, waterSource, correctionKinds, source);
         ReportLanguage language = ReportLanguage.resolve(lang, request.getHeader(HttpHeaders.ACCEPT_LANGUAGE));
         ReportFile file = runner.file(code, raw, language);
         return ResponseEntity.ok()

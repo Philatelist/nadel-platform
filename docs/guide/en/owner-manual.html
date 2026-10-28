@@ -826,7 +826,7 @@ END $$;</pre>
           </tr>
           <tr>
             <td>Charge types → Up / Down</td>
-            <td>Order (later the payment allocation priority)</td>
+            <td>Order; it also sets the payment allocation priority within one debt date</td>
             <td>Manage tariffs</td>
           </tr>
           <tr>
@@ -1091,6 +1091,161 @@ END $$;</pre>
         </ul>
       </div>
 
+      <h3>Payments and cash desk</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Element</th>
+            <th>What it does</th>
+            <th>Permission</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Payments (menu) → list</td>
+            <td>
+              Payments, newest first: receipt or bank document, date, plot, payer, source, amount,
+              "Allocated", "Prepayment", a "Reversed" mark. Filters: "From", "To", "Source", "Plot", "Billing
+              month"
+            </td>
+            <td>View payments</td>
+          </tr>
+          <tr>
+            <td>Payments → Enter payment</td>
+            <td>Opens the payment form</td>
+            <td>Enter payments</td>
+          </tr>
+          <tr>
+            <td>Plot card → Enter payment</td>
+            <td>The same form with the plot already chosen</td>
+            <td>Enter payments</td>
+          </tr>
+          <tr>
+            <td>Form → Plot, Source (Cash / Bank), Date received, Amount</td>
+            <td>
+              The date is not later than today; a date other than today only shows a gentle warning; the
+              amount is above zero with at most two decimals. Common land and an archived plot take no
+              payments
+            </td>
+            <td>Enter payments</td>
+          </tr>
+          <tr>
+            <td>Form → Payer, Payer note, Bank document number</td>
+            <td>
+              The payer is optional (the plot's owners first); the note, up to 200 characters, is stored
+              encrypted; the document number, up to 64 characters, is for bank payments only
+            </td>
+            <td>Enter payments</td>
+          </tr>
+          <tr>
+            <td>Form → allocation table (Allocate, Add a charge, Prepayment)</td>
+            <td>
+              The proposal: the oldest debt first, and within one debt date the order of charge types. A
+              line's amount can be changed or another open charge added; with automatic allocation on, the
+              free remainder goes at once to the oldest debts (a note under the "Prepayment" line says "The
+              remainder will be placed automatically on the oldest debts"), otherwise it is the "Prepayment".
+              The table stays on screen: a message at a wrong line and "Allocated X of Y" below
+            </td>
+            <td>Enter payments</td>
+          </tr>
+          <tr>
+            <td>Form → Several plots of one payer</td>
+            <td>
+              Split mode: the payer, their current plots with debts and the parts of the payment (by default
+              in proportion to the debts); the parts must add up to the payment amount
+            </td>
+            <td>Enter payments</td>
+          </tr>
+          <tr>
+            <td>Form → Save</td>
+            <td>
+              For cash shows "Receipt № …" large; "Another payment", "Open the payment card". If the data
+              changed after the preview, "The data changed after the preview" and nothing is saved
+            </td>
+            <td>Enter payments</td>
+          </tr>
+          <tr>
+            <td>Payment card</td>
+            <td>
+              The payment's details, "Currently allocated" (the current allocation: charge, period, amount;
+              "Allocated from prepayment" for automatic ones), "Allocation history" (allocations and "Taken
+              back from the charge" with the cause and the author), the other parts of the group, who entered
+              it and when; "Allocate prepayment" when the prepayment is above 0.00, a charge is open and
+              automatic allocation is off; the payer note is shown only to someone who also has "View members"
+            </td>
+            <td>View payments</td>
+          </tr>
+          <tr>
+            <td>Payment card → Reallocate</td>
+            <td>
+              Shows the current allocation and a new proposal; saving takes back the old allocation and writes
+              the new one in one step; written to the audit log. Lines left at 0.00 create no prepayment while
+              open debts exist (automatic allocation on)
+            </td>
+            <td>Enter payments</td>
+          </tr>
+          <tr>
+            <td>Payment card → Reverse</td>
+            <td>
+              Needs a reason (up to 500 characters); takes back every allocation of the payment, so the debts
+              return. A payment is reversed once; a part of a group on its own; the receipt number stays and
+              the payment is marked "Reversed"
+            </td>
+            <td>Reverse payments</td>
+          </tr>
+          <tr>
+            <td>Plot account → payments, "Payments only"</td>
+            <td>
+              Payments, their reversals and "Allocated from prepayment" interleaved with the charges by date;
+              per charge: charged, paid, open; the debt after payments, with "Prepayment X" next to the total
+              debt when the prepayment is above 0.00; "Payments only" keeps only the payments
+            </td>
+            <td>View charges (payments: also View payments or an own plot)</td>
+          </tr>
+          <tr>
+            <td>Plot account → Prepayment → Allocate prepayment</td>
+            <td>
+              Shown (also on the payment card) when the prepayment is above 0.00, a charge is open and
+              "Allocate prepayment automatically" is off: a proposal over the open charges, which can be
+              changed
+            </td>
+            <td>Enter payments</td>
+          </tr>
+          <tr>
+            <td>Settings → Allocate prepayment automatically → Save the payment settings</td>
+            <td>
+              On by default: prepayment never waits while the plot has open debts - the remainder of a payment
+              is placed at once - and later goes by itself to the plot's new charges and to released amounts.
+              Without the permission the switch is read-only. Switching it on does not allocate old prepayment
+              at once
+            </td>
+            <td>Manage settings</td>
+          </tr>
+          <tr>
+            <td>Charges → Months → "Received"</td>
+            <td>Next to "Charged": what came in during the month (payments net of reversals)</td>
+            <td>View charges</td>
+          </tr>
+          <tr>
+            <td>Reports → "Payments"</td>
+            <td>
+              Payments by billing months or receipt dates; filters: source, street; totals per source; the
+              payer note only for someone who also has "View members". The "Plot balances", "Debtors" and
+              "Charges by month" reports now take payments into account
+            </td>
+            <td>View reports + View payments</td>
+          </tr>
+          <tr>
+            <td>My account → My charges</td>
+            <td>
+              A member sees payments of their own plots only: date, receipt number, amount, what it paid, the
+              prepayment and the debt after payments; never the note or who entered the payment
+            </td>
+            <td>own plot</td>
+          </tr>
+        </tbody>
+      </table>
+
       <h3>Reports</h3>
       <table>
         <thead>
@@ -1103,7 +1258,7 @@ END $$;</pre>
         <tbody>
           <tr>
             <td>Reports (menu) → a report card</td>
-            <td>Opens one of the eight reports; "Debtors" is there only with "View members"</td>
+            <td>Opens one of the nine reports; "Debtors" is there only with "View members"</td>
             <td>View reports</td>
           </tr>
           <tr>
@@ -1203,7 +1358,10 @@ END $$;</pre>
           </tr>
           <tr>
             <td>My account</td>
-            <td>My details, roles, what I may do, my plots with shares, what I will be charged</td>
+            <td>
+              My details, roles, what I may do, my plots with shares, what I will be charged, my payments and
+              prepayment
+            </td>
             <td>—</td>
           </tr>
           <tr>
@@ -1347,6 +1505,27 @@ END $$;</pre>
             <td>—</td>
             <td>—</td>
           </tr>
+          <tr>
+            <td>View payments</td>
+            <td>yes</td>
+            <td>yes</td>
+            <td>—</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>Enter payments</td>
+            <td>yes</td>
+            <td>yes</td>
+            <td>—</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>Reverse payments</td>
+            <td>yes</td>
+            <td>—</td>
+            <td>—</td>
+            <td>—</td>
+          </tr>
         </tbody>
       </table>
       <ul>
@@ -1361,11 +1540,19 @@ END $$;</pre>
           tariff versions and readings. A member without "View charges" sees only their own accounts.
         </li>
         <li>
-          Reports: "View reports" (chairman, treasurer) opens the eight reports, downloads, and generates
-          files from templates; the "Debtors" report also needs "View members". "Manage report templates" (the
+          Reports: "View reports" (chairman, treasurer) opens the nine reports, downloads, and generates files
+          from templates; the "Debtors" report also needs "View members". "Manage report templates" (the
           chairman only) uploads, replaces, downloads and archives templates, including the tax report slot. A
           member and the electrician have no reports by default; the chairman gives these permissions to a
           custom role in "Roles".
+        </li>
+        <li>
+          Payments: "View payments" (chairman, treasurer) opens "Payments", the cards, the allocation and the
+          "Payments" report; "Enter payments" (chairman, treasurer) enters payments, splits them over plots,
+          reallocates and allocates prepayment; "Reverse payments" (the chairman only) reverses a payment - a
+          treasurer who made a mistake asks the chairman. The "Allocate prepayment automatically" switch needs
+          "Manage settings". A member sees the payments of their own plots in "My charges"; the electrician
+          sees none.
         </li>
       </ul>
     </section>
@@ -1841,6 +2028,15 @@ END $$;</pre>
               filler instead of Apache POI (POI stays the recorded fallback; the engine is about 1900 lines
               against the threshold of 2000 that triggers a review), with no formula evaluation, no macros and
               no external links.
+            </td>
+          </tr>
+          <tr>
+            <td>28.10.2026</td>
+            <td>
+              Payments (015): allocation from the oldest debt, within one debt date by the order of charge
+              types; prepayment goes automatically to new charges (a setting, on by default); cash gets an
+              internal receipt with a running number, not a fiscal receipt; only the chairman reverses a
+              payment; the treasurer splits one payer's payment over several plots when entering it.
             </td>
           </tr>
         </tbody>

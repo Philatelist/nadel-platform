@@ -4,9 +4,33 @@ import { ChargeTypeName } from '../ChargeTypeName';
 import { Money } from '../ui';
 
 /** Server totals per charge type; with `showTotal` the grand total follows. */
-export function MonthTotals({ totals, total }: { totals: readonly ChargeTypeTotal[]; total?: string }) {
+export function MonthTotals({
+  totals,
+  total,
+  received,
+}: {
+  totals: readonly ChargeTypeTotal[];
+  total?: string;
+  /** The payments booked in the month, from the server. */
+  received?: string;
+}) {
   const t = useT();
-  if (totals.length === 0) return <span className="text-ink-muted">{t.billing.noTotals}</span>;
+  const receivedRow = received !== undefined && (
+    <div className="flex justify-between gap-4 pt-1 font-semibold">
+      <dt>{t.billing.received}</dt>
+      <dd>
+        <Money amount={received} />
+      </dd>
+    </div>
+  );
+  if (totals.length === 0) {
+    return (
+      <div className="flex flex-col gap-1">
+        <span className="text-ink-muted">{t.billing.noTotals}</span>
+        {received !== undefined && <dl className="flex flex-col gap-1">{receivedRow}</dl>}
+      </div>
+    );
+  }
   return (
     <dl className="flex flex-col gap-1">
       {totals.map((row) => (
@@ -29,6 +53,7 @@ export function MonthTotals({ totals, total }: { totals: readonly ChargeTypeTota
           </dd>
         </div>
       )}
+      {receivedRow}
     </dl>
   );
 }

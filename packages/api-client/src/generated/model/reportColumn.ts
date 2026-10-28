@@ -16,7 +16,7 @@ import type { ReportColumnType } from './reportColumnType';
  */
 export interface ReportColumn {
   /**
-     * Stable within the report, for example `month`, `effective` or, for a column per charge type, `debt.<chargeTypeId>`
+     * Stable within the report, for example `month`, `effective` or, for a column per charge type, `<family>.<chargeTypeId>` with the family `charged`, `paid` or `debt` (the client heads it with the charge type's name and the family)
      * @pattern ^[a-z][A-Za-z0-9]*(\.[A-Za-z0-9-]+)?$
      */
   key: string;

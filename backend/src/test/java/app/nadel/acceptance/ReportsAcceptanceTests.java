@@ -32,7 +32,6 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.UUID;
 import java.util.function.Consumer;
-import java.util.regex.Pattern;
 import org.dhatim.fastexcel.Workbook;
 import org.dhatim.fastexcel.Worksheet;
 import org.dhatim.fastexcel.reader.ReadableWorkbook;
@@ -57,9 +56,9 @@ import tools.jackson.databind.json.JsonMapper;
  * Acceptance tests of the whole feature "Reports and report templates" (functional-spec.md of 013) through the public
  * HTTP API, for the criteria the per-report tests of the {@code reports} module do not reach on their own: what each
  * role sees of the Reports section (§2.1, §2.5, §2.14), the preview of 200 rows against the file of all rows of a real
- * report (§2.2), no "paid" column anywhere (§2.2), the debts of a report against the plot account (§2.4), the journey
- * of a template through its versions, the tax slot, the permissions, the archive and the audit (§2.11, §2.12), the
- * saved IBAN in a generated file (§2.13) and the demo "Land tax statement" (§2.16). The per-case rules stay in the
+ * report (§2.2), the "paid" columns feature 015 adds (§2.2), the debts of a report against the plot account (§2.4), the
+ * journey of a template through its versions, the tax slot, the permissions, the archive and the audit (§2.11, §2.12),
+ * the saved IBAN in a generated file (§2.13) and the demo "Land tax statement" (§2.16). The per-case rules stay in the
  * tests of the {@code reports} module; {@code acceptance-coverage.md} of the spec maps every criterion to its tests.
  * <p>
  * Every test works in a cooperative of its own (the ledger is append-only, so the demo cooperative is left alone),
@@ -82,7 +81,9 @@ class ReportsAcceptanceTests extends IntegrationTest {
     private static final ZoneId KYIV = ZoneId.of("Europe/Kyiv");
     private static final String IBAN = "UA213223130000026007233566001";
     private static final List<String> ALL_REPORTS = List.of("charges-by-month", "plot-balances", "debtors",
-            "electricity-tree", "water", "missing-readings", "land-tax", "corrections");
+            "electricity-tree", "water", "missing-readings", "land-tax", "corrections", "payments");
+    /** The reports that name people and need a permission besides "View reports" (feature 015 adds payments). */
+    private static final Set<String> GATED = Set.of("debtors", "payments");
 
     @Autowired
     MockMvc mvc;
@@ -117,7 +118,10 @@ class ReportsAcceptanceTests extends IntegrationTest {
 
     // ---- §2.1 and §2.14 who sees which reports
 
-    /** §2.1 #1, §2.14 #1: the chairman and the treasurer are offered all eight reports; only Debtors holds personal data. */
+    /**
+     * §2.1 #1, §2.14 #1: the chairman and the treasurer are offered every report (feature 015 adds Payments); Debtors
+     * and Payments hold personal data.
+     */
     @Test
     void section21_theChairmanAndTheTreasurerAreOfferedEveryBuiltInReport() throws Exception {
         for (String caller : List.of(chairman, treasurer)) {
@@ -125,7 +129,7 @@ class ReportsAcceptanceTests extends IntegrationTest {
             assertThat(codes(reports)).containsExactlyInAnyOrderElementsOf(ALL_REPORTS);
             for (JsonNode report : reports) {
                 assertThat(report.get("personalData").asBoolean()).as(report.get("code").asString())
-                        .isEqualTo(report.get("code").asString().equals("debtors"));
+                        .isEqualTo(GATED.contains(report.get("code").asString()));
             }
         }
         // negative: a member has no report at all, whatever the address
@@ -135,14 +139,17 @@ class ReportsAcceptanceTests extends IntegrationTest {
         send(member, get(REPORTS)).andExpect(status().isForbidden());
     }
 
-    /** §2.14 #3, §2.5 #2: a custom role with "View reports" but not "View members" sees every report except Debtors. */
+    /**
+     * §2.14 #3, §2.5 #2: a custom role with "View reports" but not "View members" sees every report except Debtors (and
+     * except Payments, which needs "View payments", feature 015 §2.12).
+     */
     @Test
     void section214_aCustomRoleWithReportsViewButWithoutMembersViewSeesEveryReportExceptDebtors() throws Exception {
         String auditor = personWithPermissions("Ревізор", "REPORTS_VIEW");
 
         List<String> listed = codes(body(send(auditor, get(REPORTS)).andExpect(status().isOk())));
         assertThat(listed).containsExactlyInAnyOrderElementsOf(
-                ALL_REPORTS.stream().filter(code -> !code.equals("debtors")).toList());
+                ALL_REPORTS.stream().filter(code -> !GATED.contains(code)).toList());
         // its address shows no access, for the preview and for the file
         send(auditor, get(REPORTS + "/debtors")).andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
@@ -157,7 +164,8 @@ class ReportsAcceptanceTests extends IntegrationTest {
         send(membersOnly, get(REPORTS)).andExpect(status().isForbidden());
         String both = personWithPermissions("Ревізор з членами", "REPORTS_VIEW", "MEMBERS_VIEW");
         assertThat(codes(body(send(both, get(REPORTS)).andExpect(status().isOk()))))
-                .containsExactlyInAnyOrderElementsOf(ALL_REPORTS);
+                .containsExactlyInAnyOrderElementsOf(ALL_REPORTS.stream().filter(code -> !code.equals("payments"))
+                        .toList());
     }
 
     /** §2.14 #2: "View reports" and "Manage report templates" are on the roles screen with descriptions; roles hold them as stated. */
@@ -271,35 +279,75 @@ class ReportsAcceptanceTests extends IntegrationTest {
         send(treasurer, get(REPORTS + "/plot-balances.xlsx")).andExpect(status().isOk());
     }
 
-    /** §2.2 (rule): until payments exist no report has a "paid" column, not even an empty one, on screen or in the file. */
+    /**
+     * §2.2 (rule) as feature 015 §6 fulfils it: the "paid" columns 013 promised exist now, on screen and in the file.
+     * Plot balances has charged, paid and debt per charge type and in total, and the prepayment; charges by month has a
+     * paid column on both sheets; the payments report lists the payments. One plot is charged 100.00 in January 2025
+     * and pays 60.00 on it on 10.02.2025, and 15.00 more that is on no charge.
+     */
     @Test
-    void section22_noReportHasAPaidColumnOnScreenOrInTheFile() throws Exception {
-        // a column header says "Paid" or "Payments"; the note about the oldest UNPAID charge is no column
-        Pattern paid = Pattern.compile("(?i)\\s*(paid|paid amount|payments?|сплачено|оплачено|оплата|платежі)\\s*");
-        for (String code : ALL_REPORTS) {
-            JsonNode preview = body(send(chairman, get(REPORTS + "/" + code)).andExpect(status().isOk()));
-            for (JsonNode sheet : preview.get("sheets")) {
-                for (JsonNode column : sheet.get("columns")) {
-                    String key = column.get("key").asString();
-                    assertThat(key.toLowerCase()).as("%s column key", code).doesNotContain("payment")
-                            .doesNotStartWith("paid");
+    void section22_thePaidColumnsExistOnScreenAndInTheFile() throws Exception {
+        UUID membership = typeId("MEMBERSHIP");
+        UUID plot = plot("1", "Лісова");
+        UUID january = charge(plot, membership, "REGULAR", "TARIFF", "100.00", "2025-01-01", "2025-01-31", "2025-01");
+        UUID payment = UUID.randomUUID();
+        ownerJdbc().update("insert into payment (id, tenant_id, plot_id, kind, source, amount, received_on, "
+                + "billing_month_id, group_id, receipt_number) values (?, ?, ?, 'PAYMENT', 'CASH', 75.00, "
+                + "date '2025-02-10', ?, ?, 1)", payment, tenant, plot, monthRow("2025-02"), UUID.randomUUID());
+        ownerJdbc().update("insert into allocation (tenant_id, payment_id, charge_id, plot_id, amount, origin) "
+                + "values (?, ?, ?, ?, 60.00, 'ENTRY')", tenant, payment, january, plot);
+
+        JsonNode balances = body(send(chairman, get(REPORTS + "/plot-balances")).andExpect(status().isOk()))
+                .get("sheets").get(0);
+        for (String key : List.of("charged." + membership, "paid." + membership, "debt." + membership, "charged",
+                "paid", "total", "prepayment")) {
+            assertThat(balances.get("columns").get(columnIndex(balances, key)).get("type").asString()).as(key)
+                    .isEqualTo("MONEY");
+        }
+        JsonNode cells = balances.get("rows").get(0).get("cells");
+        assertThat(List.of("charged", "paid", "total", "prepayment")).extracting(key -> cells.get(
+                columnIndex(balances, key)).get("value").asString()).containsExactly("100.00", "60.00", "40.00",
+                        "15.00");
+
+        JsonNode byMonth = body(send(chairman, get(REPORTS + "/charges-by-month").param("fromMonth", "2025-01")
+                .param("toMonth", "2025-01")).andExpect(status().isOk()));
+        for (JsonNode sheet : byMonth.get("sheets")) {
+            int paid = columnIndex(sheet, "paid");
+            assertThat(sheet.get("rows").get(0).get("cells").get(paid).get("value").asString())
+                    .as(sheet.get("key").asString()).isEqualTo("60.00");
+            assertThat(sheet.get("rows").get(0).get("cells").get(columnIndex(sheet, "effective")).get("value")
+                    .asString()).isEqualTo("100.00");
+        }
+
+        JsonNode payments = body(send(chairman, get(REPORTS + "/payments").param("fromMonth", "2025-02")
+                .param("toMonth", "2025-02")).andExpect(status().isOk())).get("sheets").get(0);
+        assertThat(payments.get("rowCount").asInt()).isEqualTo(1);
+        assertThat(List.of("amount", "allocated", "prepayment")).extracting(key -> payments.get("rows").get(0)
+                .get("cells").get(columnIndex(payments, key)).get("value").asString())
+                .containsExactly("75.00", "60.00", "15.00");
+
+        // the file says so in both languages
+        Map<String, List<String>> headers = Map.of("uk", List.of("Сплачено усього", "Аванс",
+                "Членський внесок: сплачено"), "en", List.of("Total paid", "Prepayment", "Membership fee: paid"));
+        for (String language : List.of("en", "uk")) {
+            List<String> texts = new ArrayList<>();
+            byte[] file = send(chairman, get(REPORTS + "/plot-balances.xlsx").param("lang", language))
+                    .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+            try (ReadableWorkbook workbook = new ReadableWorkbook(new ByteArrayInputStream(file))) {
+                for (Row row : workbook.getFirstSheet().read()) {
+                    row.forEach(cell -> texts.add(cell == null ? "" : cell.getText()));
                 }
             }
-            for (String language : List.of("en", "uk")) {
-                byte[] file = send(chairman, get(REPORTS + "/" + code + ".xlsx").param("lang", language))
-                        .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
-                List<String> texts = new ArrayList<>();
-                try (ReadableWorkbook workbook = new ReadableWorkbook(new ByteArrayInputStream(file))) {
-                    for (var sheet : workbook.getSheets().toList()) {
-                        for (Row row : sheet.read()) {
-                            row.forEach(cell -> texts.add(cell == null ? "" : cell.getText()));
-                        }
-                    }
+            assertThat(texts).as(language).containsAll(headers.get(language));
+            byte[] monthly = send(chairman, get(REPORTS + "/charges-by-month.xlsx").param("lang", language))
+                    .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+            List<String> monthlyTexts = new ArrayList<>();
+            try (ReadableWorkbook workbook = new ReadableWorkbook(new ByteArrayInputStream(monthly))) {
+                for (Row row : workbook.getFirstSheet().read()) {
+                    row.forEach(cell -> monthlyTexts.add(cell == null ? "" : cell.getText()));
                 }
-                assertThat(texts).as("%s %s file", code, language).isNotEmpty();
-                assertThat(texts.stream().filter(text -> paid.matcher(text).matches()).toList()).as("%s %s file", code, language)
-                        .isEmpty();
             }
+            assertThat(monthlyTexts).as(language).contains(language.equals("uk") ? "Сплачено" : "Paid");
         }
     }
 

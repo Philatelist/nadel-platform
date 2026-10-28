@@ -31,6 +31,13 @@ const catalog: ReportTemplateField[] = [
     rowSet: 'MONTHS',
     permission: 'REPORTS_VIEW',
   },
+  {
+    key: 'rows.payments.amount',
+    field: 'rows.payments.amount',
+    type: 'MONEY',
+    rowSet: 'PAYMENTS',
+    permission: 'PAYMENTS_VIEW',
+  },
 ];
 
 vi.mock('@nadel/api-client', async (importOriginal) => ({
@@ -121,6 +128,13 @@ describe('FieldCatalog', () => {
     expect(await screen.findByText('Copied')).toBeInTheDocument();
     expect(exec).toHaveBeenCalledWith('copy');
     Reflect.deleteProperty(document, 'execCommand');
+  });
+
+  it('lists the payments rows in their own group', () => {
+    renderWithApp(<FieldCatalog />);
+    const group = screen.getByRole('list', { name: 'Repeated row: payments' });
+    expect(within(group).getAllByRole('listitem')).toHaveLength(1);
+    expect(within(group).getByText('${rows.payments.amount}')).toBeInTheDocument();
   });
 
   it('in Ukrainian, the copy button label carries the description and no Latin key', () => {

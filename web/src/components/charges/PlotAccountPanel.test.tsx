@@ -44,7 +44,11 @@ const account = (charges: Charge[]): PlotAccount => ({
     },
   ],
   total: '403.06',
+  prepayment: '0.00',
+  prepaymentAllocatable: false,
   charges,
+  payments: [],
+  prepaymentAllocations: [],
 });
 
 function render(readOnly = false) {
@@ -61,9 +65,9 @@ describe('PlotAccountPanel', () => {
 
   it('shows the debt per type and total from the server, then the charges as given', () => {
     render();
-    const debts = screen.getByRole('region', { name: 'Debt by charge type' });
+    const debts = screen.getByRole('region', { name: 'Debt after payments, by charge type' });
     expect(within(debts).getAllByText('₴403.06')).toHaveLength(2);
-    expect(within(debts).getByText('Total debt')).toBeInTheDocument();
+    expect(within(debts).getByText('Total debt after payments')).toBeInTheDocument();
     const items = within(screen.getByRole('list', { name: 'Plot charges' })).getAllByRole('listitem');
     expect(items).toHaveLength(2);
     expect(items[0]).toHaveTextContent('By readings');

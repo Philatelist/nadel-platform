@@ -185,12 +185,17 @@ test.describe('plots registry: acceptance', () => {
     expect(plotRows.every((r) => r.includes('вул. Садова') || r.includes('вул. Вишнева'))).toBe(true);
     expect(plotRows.filter((r) => r.includes('вул. Садова')).length).toBeGreaterThan(10);
     expect(plotRows.filter((r) => r.includes('вул. Вишнева')).length).toBeGreaterThan(10);
-    // the demo ledger gives every one of the 25 owned plots a debt, so each is red or yellow and none green (how many
-    // are red depends on the day the demo was loaded); plots 25-29 have "No owner" and the road is "Common land"
+    // the demo ledger holds payments: of the 25 owned plots some are paid up (green: 7, 8, 10, 14, 20, 21) and the
+    // others still owe (red or yellow; how many of each depends on the day the demo was loaded, but the demo has
+    // both); plots 25-29 have "No owner" and the road is "Common land"
     const red = everyRow.filter((r) => r.includes('Debt above threshold')).length;
     const yellow = everyRow.filter((r) => r.includes('Has debt')).length;
-    expect(red + yellow).toBe(25);
-    expect(everyRow.filter((r) => r.includes('No debt')).length).toBe(0);
+    const green = everyRow.filter((r) => r.includes('No debt')).length;
+    expect(red).toBeGreaterThan(0);
+    expect(yellow).toBeGreaterThan(0);
+    expect(green).toBeGreaterThan(0);
+    expect(red + yellow + green).toBe(25);
+    expect(red + yellow).toBe(19);
     expect(everyRow.filter((r) => r.includes('No owner')).length).toBe(5);
     const road = everyRow.filter((r) => r.startsWith('R-1'));
     expect(road).toHaveLength(1);

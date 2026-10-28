@@ -38,7 +38,8 @@ const previewRange = [
 
 /**
  * name, demo user, path, optional link to follow (CSS selector, optional exact text), optional phone viewport.
- * Also optional: `steps` ({ fill: { label, value, within? } }, { check: checkbox label } or { click: button name };
+ * Also optional: `steps` ({ fill: { label, value, within? } }, { check: checkbox label }, { link: link name },
+ * { table: caption of a table to wait for } or { click: button name };
  * nothing is ever saved: a recalculation is only previewed, and a correction of a used tariff version or reading stops
  * at its preview) and `element`
  * (screenshot only the panel with this heading, or the element of a CSS selector).
@@ -234,6 +235,34 @@ const SHOTS = [
     path: '/settings',
     element: { heading: T('Реквізити', 'Requisites') },
   },
+  // feature 015: payments. Read-only: the form is filled to show the proposal and never saved, the reverse dialog is
+  // opened and left. Plot 9 owes in the demo; the card of the newest payment is a payment that can be reversed.
+  { name: 'payments', user: 'treasurer', path: '/payments' },
+  {
+    name: 'payment-form',
+    user: 'treasurer',
+    path: '/plots',
+    open: { css: 'main a[href^="/plots/"]', text: '9' },
+    steps: [
+      { link: T('Внести платіж', 'Enter payment') },
+      { fill: { label: T('Сума', 'Amount'), value: '1500' } },
+      { table: T('Розподіл платежу по нарахуваннях', 'Allocation of the payment to charges') },
+    ],
+  },
+  {
+    name: 'payment-card',
+    user: 'chairman',
+    path: '/payments',
+    open: { css: 'main a[href^="/payments/"]:not([href$="/new"])' },
+  },
+  {
+    name: 'payment-reverse',
+    user: 'chairman',
+    path: '/payments',
+    open: { css: 'main a[href^="/payments/"]:not([href$="/new"])' },
+    steps: [{ click: T('Сторнувати', 'Reverse') }],
+    element: { css: 'dialog[open]' },
+  },
   { name: 'treasurer-charges', user: 'treasurer', path: `/charges/months/${thisMonth}` },
   {
     name: 'member-charges',
@@ -322,6 +351,17 @@ try {
                   ? page.getByRole('form', { name: step.fill.within[lang], exact: true })
                   : page;
                 await scope.getByLabel(step.fill.label[lang], { exact: true }).fill(step.fill.value);
+              } else if (step.link) {
+                await page
+                  .getByRole('link', { name: step.link[lang], exact: true })
+                  .first()
+                  .click({ timeout: 10000 });
+                await page.waitForLoadState('networkidle');
+              } else if (step.table) {
+                // Wait for the table, then bring it into the viewport so the shot shows it.
+                const table = page.getByRole('table', { name: step.table[lang], exact: true });
+                await table.waitFor({ timeout: 15000 });
+                await table.scrollIntoViewIfNeeded();
               } else if (step.check) {
                 await page.getByLabel(step.check[lang], { exact: true }).click();
                 await page.waitForLoadState('networkidle');

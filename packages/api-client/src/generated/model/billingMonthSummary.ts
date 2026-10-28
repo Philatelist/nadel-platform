@@ -14,7 +14,7 @@ import type { ChargeTypeTotal } from './chargeTypeTotal';
 import type { Money } from './money';
 
 /**
- * A billing month with the totals of the charges booked in it
+ * A billing month with the totals of the charges and the payments booked in it
  */
 export interface BillingMonthSummary {
   /**
@@ -30,4 +30,6 @@ export interface BillingMonthSummary {
   /** Per charge type that has a charge in the month, in the order of the charge types */
   totals: ChargeTypeTotal[];
   total: Money;
+  /** The sum of the payments booked in the month, reversals of payments negative (a payment received in a closed month counts in the open month it is booked in) */
+  received: Money;
 }

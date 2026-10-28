@@ -23,10 +23,11 @@ import tools.jackson.databind.JsonNode;
  * Billing months through the API (feature 011 §2.2): the list from the first month to the current one with totals per
  * charge type, the month page with its check list, closing in order (409 {@code PERIOD_CLOSE_ORDER}), a closed month
  * that gets nothing more (a late charge goes to the earliest open month with its own service period and date), future
- * months, who may do what, the audit entry and the database guard of a closed month. Months are relative to the
- * current month in Europe/Kyiv, so the tests do not age.
+ * months, who may do what, the audit entry and the database guard of a closed month. "Received" (feature 015 §6): the
+ * payments booked in the month, reversals of payments negative, a payment of a closed month in the open month. Months
+ * are relative to the current month in Europe/Kyiv, so the tests do not age.
  */
-class BillingMonthsTests extends LedgerApiSupport {
+class BillingMonthsTests extends PaymentApiSupport {
 
     private static final String MONTHS = "/api/v1/billing-months";
     private static final String MONTH = "/api/v1/billing-months/%s";
@@ -124,6 +125,50 @@ class BillingMonthsTests extends LedgerApiSupport {
     void aCooperativeWithoutMonthsListsNothing() throws Exception {
         body(send(otherChairman(), get(MONTHS), null).andExpect(status().isOk()));
         assertThat(list(otherChairman())).isEmpty();
+    }
+
+    // ---- received (feature 015 §6)
+
+    @Test
+    void receivedIsWhatThePaymentsOfTheMonthBroughtWithReversalsNegative() throws Exception {
+        UUID plot = newPlot();
+        tariffCharge(plot, "MEMBERSHIP", "25.00", ym(2));
+        String day = current().minusMonths(1).atDay(10).toString();
+        saved(treasurer(), payment(plot, "CASH", "100.00", day, null));
+        UUID bank = saved(treasurer(), payment(plot, "BANK", "30.00", day, null));
+        reverse(chairman(), bank, "Помилковий платіж").andExpect(status().isCreated());
+
+        JsonNode months = list(chairman());
+
+        assertThat(entry(months, ym(1)).get("received").asString()).isEqualTo("100.00");
+        assertThat(entry(months, ym(1)).get("total").asString()).isEqualTo("0.00"); // charged nothing
+        // charged, nothing received; and a month without a row
+        assertThat(entry(months, ym(2)).get("received").asString()).isEqualTo("0.00");
+        assertThat(entry(months, ym(2)).get("total").asString()).isEqualTo("25.00");
+        assertThat(entry(months, ym(0)).get("received").asString()).isEqualTo("0.00");
+        JsonNode page = body(send(treasurer(), get(MONTH.formatted(ym(1))), null).andExpect(status().isOk()));
+        assertThat(page.get("received").asString()).isEqualTo("100.00");
+        assertThat(body(send(treasurer(), get(MONTH.formatted(ym(0))), null).andExpect(status().isOk()))
+                .get("received").asString()).isEqualTo("0.00");
+    }
+
+    @Test
+    void aLatePaymentOfAClosedMonthIsReceivedInTheOpenMonthItIsBookedIn() throws Exception {
+        UUID plot = newPlot();
+        tariffCharge(plot, "MEMBERSHIP", "25.00", ym(2));
+        send(chairman(), post(CLOSE.formatted(ym(2))), null).andExpect(status().isOk());
+
+        UUID late = saved(treasurer(), payment(plot, "CASH", "25.00", current().minusMonths(2).atDay(20).toString(),
+                null));
+
+        JsonNode months = list(chairman());
+        assertThat(entry(months, ym(2)).get("received").asString()).isEqualTo("0.00");
+        assertThat(entry(months, ym(1)).get("received").asString()).isEqualTo("25.00");
+        assertThat(body(card(treasurer(), late).andExpect(status().isOk())).get("billingMonth").asString())
+                .isEqualTo(ym(1));
+        // the reversal is booked in the open month too and nets it
+        reverse(chairman(), late, "Помилка").andExpect(status().isCreated());
+        assertThat(entry(list(chairman()), ym(1)).get("received").asString()).isEqualTo("0.00");
     }
 
     // ---- the month page and its check list

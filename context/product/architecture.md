@@ -63,8 +63,32 @@
     `settings`, `money`, `identity`, `audit` (events, `ActorNames`), `problem`, `tenancy`; `imports` depends on
     `ledger` (the opening balances sheet) and, since feature 013, `reports` reads it through `LedgerReadModel`. The demo cooperative's ledger is the block `demo ledger` of the demo
     script (section 2). Details in `backend/src/main/java/app/nadel/ledger/README.md`.
-  - `reports` (feature 013, ADR 0015; tables `report_template` and `report_template_version` in V20, under RLS `tenant_isolation`): eight built-in reports (`charges-by-month`, `plot-balances`, `debtors`, `electricity-tree`, `water`, `missing-readings`, `land-tax`, `corrections`) shown as a preview and downloaded as `.xlsx`, and report templates (uploaded `.xlsx` files, versioned, archived, never deleted) filled by an own streaming OOXML filler from a field catalog. No public API, no domain events and no money rule: it only reads, through the read facades `ledger.LedgerReadModel`, `meters.MeterReports`, `plots.PlotCatalog`/`PlotOwners`/`PlotStatuses`, `members.MemberDirectory`, `settings.CooperativeSettings`, `tariffs.ChargeTypeCatalog`/`ExpectedAmounts`, `tenancy.TenantDirectory`, and `xlsx.WorkbookGuard` for uploads; it audits through `audit` (`REPORT_GENERATED`, `REPORT_TEMPLATE_UPLOADED`, `REPORT_TEMPLATE_ARCHIVED`). Permissions `REPORTS_VIEW` (a report with personal data, Debtors, also needs `MEMBERS_VIEW`) and `REPORT_TEMPLATES_MANAGE`. Endpoints (tags `reports`, `report-templates`): `GET /reports`, `GET /reports/{code}`, `GET /reports/{code}.xlsx`, `/report-templates` (list, upload, versions, archive, file, catalog, generate). No module depends on `reports`. Details in `backend/src/main/java/app/nadel/reports/README.md`.
-  - Modules planned, in roadmap order: `payments`, `documents`, `notifications`.
+    **Payments and allocations (feature 015) live in `ledger` too**, because the debt is "charges − allocations" and one
+    transaction changes both (ADR 0006). Tables `payment` (kinds `PAYMENT`/`PAYMENT_REVERSAL`, sources `CASH`/`BANK`,
+    the payer note sealed as `payer_note_enc` by the `privacy` cipher, ADR 0016), `allocation` (positive rows place money
+    on a `REGULAR` or `OPENING` charge, negative rows release it) and `receipt_counter` (one gap-free counter per
+    cooperative, taken in the saving transaction) in V27, all under RLS `tenant_isolation`, `payment` and `allocation`
+    append-only like `charge`, with guard triggers and deferred constraint triggers as backstops (allocations never
+    exceed a payment or a charge's effective amount; a charge reversal or adjustment and a payment reversal must have
+    released their allocations by commit). Pure calculators: `OpenAmounts`, `AllocationPlanner` (oldest debt first, then
+    the charge type order), `PaymentSplitter` (one payment over several plots of a payer, rounding through
+    `Money.allocate`), `ReleasePlanner`, `PaymentDigest`. Concurrency: a per-plot transaction advisory lock
+    `PlotLedgerLock` in the lock order charging lock → plot `FOR SHARE` → plot ledger locks → billing month `FOR SHARE` →
+    receipt counter. Every path that reverses or lowers a charge (hand reversal, run reversals, recalculation) locks the
+    plots and calls `AllocationReleaser`, so the paid money becomes the plot's prepayment again. With the cooperative
+    setting `autoAllocatePrepayment` (V27, default on) a payment's unallocated remainder is placed at once on the plot's
+    open debts in the same transaction (owner decision 28.10.2026), and `PrepaymentAllocator` (an after-commit listener of
+    `ChargesBooked`, ADR 0007 pattern, idempotent) places a remaining prepayment on new charges; with the setting off the
+    treasurer allocates prepayment by hand. Public API additions: the event `PaymentsChanged(tenantId, plotIds)` (the
+    plot status is refreshed after every payment, allocation and release; `plot_status.prepayment` in V27),
+    `PaymentSource`, `PaymentRow`, `PaymentFilter` and the port `PaymentNotes` (the only read of personal data from the
+    ledger, gated by `MEMBERS_VIEW`, for the payments report). Endpoints (tag `payments`): entry with a preview and a
+    digest (one plot or a split), list, card, reversal (`PAYMENTS_REVERSE`, Chairman), reallocation and manual prepayment
+    allocation (`PAYMENTS_ENTER`, Chairman and Treasurer), reading (`PAYMENTS_VIEW`); a member sees the payments of their
+    own plots on the plot account. Audited as `PAYMENT_RECORDED`, `PAYMENT_REVERSED`, `PAYMENT_REALLOCATED`,
+    `PREPAYMENT_ALLOCATED` (entity type `PAYMENT`); automatic allocations and releases are ledger rows only.
+  - `reports` (feature 013, ADR 0015; tables `report_template` and `report_template_version` in V20, under RLS `tenant_isolation`): nine built-in reports (`charges-by-month`, `plot-balances`, `debtors`, `electricity-tree`, `water`, `missing-readings`, `land-tax`, `corrections`, and since feature 015 `payments`) shown as a preview and downloaded as `.xlsx`, and report templates (uploaded `.xlsx` files, versioned, archived, never deleted) filled by an own streaming OOXML filler from a field catalog. No public API, no domain events and no money rule: it only reads, through the read facades `ledger.LedgerReadModel`, `meters.MeterReports`, `plots.PlotCatalog`/`PlotOwners`/`PlotStatuses`, `members.MemberDirectory`, `settings.CooperativeSettings`, `tariffs.ChargeTypeCatalog`/`ExpectedAmounts`, `tenancy.TenantDirectory`, and `xlsx.WorkbookGuard` for uploads; it audits through `audit` (`REPORT_GENERATED`, `REPORT_TEMPLATE_UPLOADED`, `REPORT_TEMPLATE_ARCHIVED`). Permissions `REPORTS_VIEW` (a report with personal data, Debtors, also needs `MEMBERS_VIEW`) and `REPORT_TEMPLATES_MANAGE`. Endpoints (tags `reports`, `report-templates`): `GET /reports`, `GET /reports/{code}`, `GET /reports/{code}.xlsx`, `/report-templates` (list, upload, versions, archive, file, catalog, generate). No module depends on `reports`. Details in `backend/src/main/java/app/nadel/reports/README.md`.
+  - Modules planned, in roadmap order: `documents`, `notifications` (payments live in `ledger` since feature 015).
   - The `plots` module keeps plots as records from phase 1; polygon import, coordinate conversion and the map view arrive in roadmap phase 6. `plot.boundary` is nullable, and every feature before phase 6 must work for plots without a polygon.
 - **Security:** Spring Security as an OAuth2 JWT resource server **[in code]**.
   - Starter: `spring-boot-starter-security-oauth2-resource-server` (the Boot 4 name). The issuer URI is in `application.yml`.

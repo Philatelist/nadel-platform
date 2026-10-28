@@ -8,7 +8,9 @@ import java.util.UUID;
  * Charges were booked or reversed for these plots of one cooperative; published inside the transaction that wrote them.
  * A listener (the plot status, feature 011 slice 2) binds {@code tenantId} with {@code TenantContext.runAs} before it
  * opens its transaction and recomputes the debt of the plots from the committed ledger, so a redelivered event changes
- * nothing. Carries ids only, no personal data.
+ * nothing. Another (feature 015) places the plots' prepayment on their open charges when the cooperative allocates
+ * prepayment automatically; it places only what is still unplaced, so a redelivered event writes nothing. Carries ids
+ * only, no personal data.
  *
  * @param tenantId the cooperative
  * @param plotIds  the plots whose ledger changed; never empty

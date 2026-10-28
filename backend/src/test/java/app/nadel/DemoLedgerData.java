@@ -11,7 +11,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * The demo ledger of {@code R__demo_data.sql} (the block between {@code BEGIN demo ledger} and {@code END demo ledger}:
- * months, charges, runs, the "not charged" items, water connections, the settings of the ledger and the plot debts of
+ * months, charges, runs, payments and allocations, the "not charged" items, water connections, the settings of the ledger and the plot debts of
  * the demo cooperative). Integration tests start without it (the Flyway placeholder {@code demoledger} is {@code off}
  * in {@link IntegrationTest}), so the demo cooperative they share has no charges; a test that wants the demo ledger
  * calls {@link #restore} and removes it again with {@link #clear}. The rows are restored by running the same SQL block
@@ -48,6 +48,14 @@ public final class DemoLedgerData {
      */
     public static void clear(JdbcTemplate owner) {
         asLedgerOwner(owner, sql -> {
+            // payments and allocations first: they point at charges and billing months (releases and reversals first)
+            sql.update("delete from allocation where tenant_id in (?, ?) and releases_allocation_id is not null",
+                    DEMO_TENANT, OTHER_TENANT);
+            sql.update("delete from allocation where tenant_id in (?, ?)", DEMO_TENANT, OTHER_TENANT);
+            sql.update("delete from payment where tenant_id in (?, ?) and reverses_payment_id is not null",
+                    DEMO_TENANT, OTHER_TENANT);
+            sql.update("delete from payment where tenant_id in (?, ?)", DEMO_TENANT, OTHER_TENANT);
+            sql.update("delete from receipt_counter where tenant_id in (?, ?)", DEMO_TENANT, OTHER_TENANT);
             for (String table : new String[] {"meter_value_use", "charge_part"}) {
                 sql.update("delete from " + table + " where tenant_id in (?, ?)", DEMO_TENANT, OTHER_TENANT);
             }
@@ -70,7 +78,7 @@ public final class DemoLedgerData {
             // a row with nothing but defaults means what no row means; the demo script itself writes none
             sql.update("delete from cooperative_settings where tenant_id = ? "
                     + "and member_plot_status_visibility = 'OWN_ONLY'", DEMO_TENANT);
-            sql.update("update plot_status s set debt = 0, oldest_debt_date = null, updated_at = now(), "
+            sql.update("update plot_status s set debt = 0, oldest_debt_date = null, prepayment = 0, updated_at = now(), "
                     + "status = case when p.kind = 'PLOT' and exists (select 1 from ownership o "
                     + "where o.plot_id = p.id and o.valid_to is null) then 'GREEN' else 'GREY' end "
                     + "from plot p where p.id = s.plot_id and p.tenant_id = ?", DEMO_TENANT);

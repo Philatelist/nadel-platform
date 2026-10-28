@@ -75,8 +75,10 @@ describe('WaterSourcesSection', () => {
     renderSection();
     await user.click(screen.getAllByRole('button', { name: 'Connect plots' })[1]!);
     const dialog = screen.getByRole('dialog');
-    await user.click(within(dialog).getByRole('button', { name: '5' }));
-    await user.click(within(dialog).getByRole('button', { name: '6' }));
+    await user.type(within(dialog).getByRole('combobox'), '{ArrowDown}');
+    await user.click(within(dialog).getByRole('option', { name: '5' }));
+    await user.type(within(dialog).getByRole('combobox'), '{ArrowDown}');
+    await user.click(within(dialog).getByRole('option', { name: '6' }));
     fireEvent.change(within(dialog).getByLabelText('Connected from'), { target: { value: '2026-10-01' } });
     await user.click(within(dialog).getByRole('button', { name: 'Apply' }));
     expect(connect).toHaveBeenCalledWith(
@@ -100,7 +102,8 @@ describe('WaterSourcesSection', () => {
     renderSection();
     await user.click(screen.getAllByRole('button', { name: 'Connect plots' })[0]!);
     const dialog = screen.getByRole('dialog');
-    await user.click(within(dialog).getByRole('button', { name: '5' }));
+    await user.type(within(dialog).getByRole('combobox'), '{ArrowDown}');
+    await user.click(within(dialog).getByRole('option', { name: '5' }));
     await user.click(within(dialog).getByRole('button', { name: 'Apply' }));
     (connect.mock.calls[0]?.[1] as Callbacks).onError?.(
       new ApiError(409, { code: 'WATER_ALREADY_CONNECTED' }),

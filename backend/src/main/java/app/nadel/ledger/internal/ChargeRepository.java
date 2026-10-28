@@ -35,6 +35,13 @@ interface ChargeRepository extends JpaRepository<ChargeRecord, UUID> {
     /** The charges of a run of the kind (the charges a run booked: {@code REGULAR}), in no particular order. */
     List<ChargeRecord> findByRunIdAndKind(UUID runId, ChargeKind kind);
 
+    /**
+     * The plots the runs charged (any kind of their charges), in no particular order: the plots whose ledger locks a
+     * reversal of the runs takes before it writes (feature 015, technical considerations 2.4).
+     */
+    @Query("select distinct c.plotId from ChargeRecord c where c.runId in :runIds")
+    List<UUID> plotIdsOfRuns(@Param("runIds") Collection<UUID> runIds);
+
     /** The charges among {@code chargeIds} that a reversal cancels. */
     @Query("select c.reversesChargeId from ChargeRecord c where c.reversesChargeId in :ids")
     List<UUID> reversedAmong(@Param("ids") Collection<UUID> chargeIds);

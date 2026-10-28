@@ -11,6 +11,7 @@ export * from './meter-tree/meter-tree';
 export * from './meters/meters';
 export * from './not-charged/not-charged';
 export * from './ownerships/ownerships';
+export * from './payments/payments';
 export * from './permissions/permissions';
 export * from './plots/plots';
 export * from './readings/readings';

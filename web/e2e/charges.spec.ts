@@ -411,7 +411,12 @@ test.describe('charges and period closing', () => {
     expect(index).toBeGreaterThanOrEqual(0);
     expect(account.charges[index]?.reversible).toBe(false);
     await page.goto(`/plots/${plotId}`);
-    const row = main(page).getByRole('list', { name: 'Plot charges' }).getByRole('listitem').nth(index);
+    // the account interleaves payments with the charges (plot 14 has some): count only the rows of charges
+    const row = main(page)
+      .getByRole('list', { name: 'Plot charges' })
+      .getByRole('listitem')
+      .filter({ has: page.getByRole('button', { name: 'Details', exact: true }) })
+      .nth(index);
     await expect(row.getByRole('button', { name: 'Reverse', exact: true })).toHaveCount(0);
     await row.getByRole('button', { name: 'Details', exact: true }).click();
     await expect(page.getByRole('dialog')).toContainText(
@@ -478,7 +483,7 @@ test.describe('charges and period closing', () => {
     expect(owned).toContain('Plot 7');
     await expect(mine.getByRole('heading', { name: 'Plot 7' })).toBeVisible();
     expect((await mine.getByRole('heading', { name: /^Plot / }).allInnerTexts()).sort()).toEqual(owned);
-    await expect(mine.getByText('Debt by charge type').first()).toBeVisible();
+    await expect(mine.getByText('Debt after payments, by charge type').first()).toBeVisible();
     await expect(mine.getByRole('listitem').filter({ hasText: 'Membership fee' }).first()).toBeVisible();
     await expect(mine.getByRole('listitem').filter({ hasText: 'Electricity' }).first()).toBeVisible();
     await expect(mine.getByRole('listitem').filter({ hasText: 'Common consumers' }).first()).toBeVisible();

@@ -9,19 +9,19 @@
  *
  * OpenAPI spec version: 0.1.0
  */
-import type { ChargeKind } from './chargeKind';
+import type { PlotAccountKind } from './plotAccountKind';
 
 export type GetPlotAccountParams = {
 /**
- * The first day of the list (by `accruedOn`), inclusive
+ * The first day of the lists (charges by `accruedOn`, payments by `receivedOn`, prepayment allocations by `allocatedOn`), inclusive
  */
 from?: string;
 /**
- * The last day of the list (by `accruedOn`), inclusive
+ * The last day of the lists (charges by `accruedOn`, payments by `receivedOn`, prepayment allocations by `allocatedOn`), inclusive
  */
 to?: string;
 /**
- * Only charges of this kind
+ * Only charges of this kind, or with `PAYMENTS` only the payments and their reversals
  */
-kind?: ChargeKind;
+kind?: PlotAccountKind;
 };

@@ -12,6 +12,7 @@ export * from './generated/meter-tree/meter-tree';
 export * from './generated/meters/meters';
 export * from './generated/not-charged/not-charged';
 export * from './generated/ownerships/ownerships';
+export * from './generated/payments/payments';
 export * from './generated/permissions/permissions';
 export * from './generated/plots/plots';
 export * from './generated/readings/readings';
