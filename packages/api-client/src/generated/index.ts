@@ -1,5 +1,6 @@
 export * from './audit/audit';
 export * from './billing/billing';
+export * from './certificates/certificates';
 export * from './charge-types/charge-types';
 export * from './charges/charges';
 export * from './common-consumer-runs/common-consumer-runs';

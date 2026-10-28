@@ -229,6 +229,8 @@ const CHAIRMAN_SCREENS = [
   '/reports',
   '/reports/electricity-tree',
   '/reports/templates',
+  // feature 016: the register of debt certificates
+  '/documents/certificates',
   '/no-such-screen',
 ];
 

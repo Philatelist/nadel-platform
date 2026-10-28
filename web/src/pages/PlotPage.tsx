@@ -17,6 +17,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { UserContent, formatUser } from '../components/UserContent';
 import { PlotTabs } from '../components/PlotTabs';
 import { PlotInvoices } from '../components/invoices/PlotInvoices';
+import { CertificateForm } from '../components/certificates/CertificateForm';
 import { PlotAccountPanel } from '../components/charges/PlotAccountPanel';
 import { PlotTariffsPanel } from '../components/tariffs/PlotTariffsPanel';
 import { WaterConnectionPanel } from '../components/water/WaterConnectionPanel';
@@ -68,6 +69,7 @@ function PlotView({ plot }: { plot: PlotDetails }) {
   const canView = useCan('PLOTS_VIEW');
   const canViewCharges = useCan('CHARGES_VIEW');
   const canViewReports = useCan('REPORTS_VIEW');
+  const canIssueCertificates = useCan('CERTIFICATES_ISSUE');
   const canEdit = useCanEditPlots();
   const canEnterPayment = useCan('PAYMENTS_ENTER') && plot.kind !== 'COMMON' && !plot.archived;
   const isOwner = useMe().ownedPlots.some((p) => p.plotId === plot.id);
@@ -220,6 +222,12 @@ function PlotView({ plot }: { plot: PlotDetails }) {
               id: 'invoices',
               label: t.plot.tabs.invoices,
               content: <PlotInvoices plotId={plot.id} />,
+            },
+          plot.kind !== 'COMMON' &&
+            canIssueCertificates && {
+              id: 'certificates',
+              label: t.plot.tabs.certificates,
+              content: <CertificateForm plotId={plot.id} />,
             },
         ]}
       />

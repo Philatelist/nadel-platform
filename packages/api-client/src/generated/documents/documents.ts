@@ -30,8 +30,13 @@ import type {
 
 import type {
   BadRequestResponse,
+  BuildMonthInvoicesParams,
   ConflictResponse,
   ForbiddenResponse,
+  GetMonthInvoicesPrintPdfParams,
+  InvoiceBuild,
+  InvoiceBuildRequest,
+  InvoiceBuildTooLargeResponse,
   InvoicePage,
   InvoiceReadiness,
   InvoiceRow,
@@ -294,7 +299,8 @@ export const useIssuePlotInvoice = <TError = BadRequestResponse | UnauthorizedRe
 
 /**
  * A page of issued invoice versions, every version listed (older versions stay readable), newest month first,
- * then the newest issue, then the number, then the newest version. `latest` marks the latest version of each
+ * then the newest issue, then the number, then the newest version; with `month` the number is compared in the
+ * natural order of the plot number (9 before 10, 12 before 12а). `latest` marks the latest version of each
  * plot and month. Both filters are optional and combine. Requires `CHARGES_VIEW`.
  * @summary The issued invoices of the cooperative
  */
@@ -794,6 +800,251 @@ export function useGetInvoiceQrPng<TData = Awaited<ReturnType<typeof getInvoiceQ
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getGetInvoiceQrPngQueryOptions(id,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export const getBuildMonthInvoicesUrl = (month: string,
+    params: BuildMonthInvoicesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/v1/billing-months/${month}/invoices?${stringifiedParams}` : `/api/v1/billing-months/${month}/invoices`
+}
+
+/**
+ * Builds the invoices of every invoiceable plot for the billing month (feature 016 §2.5): the active plots that
+ * are not common land and have a current owner, in street and plot order. The whole build reads its figures
+ * from one database snapshot (a payment or a charge booked while it runs is in all of its invoices or in none)
+ * and runs in the request; the web shows a spinner. One build of a cooperative's month runs at a time: a build
+ * started while another build of the same month (or an on-request invoice of it) runs is 409
+ * `INVOICE_BUILD_RUNNING` and builds nothing; the user waits and refreshes the page. An on-request invoice of
+ * the month waits for a running build instead.
+ *
+ * Per plot: a plot that already has an invoice of the month is compared with its latest version and gets a new
+ * version only when its numbers, owners or requisites changed (`newVersions`), otherwise nothing (`unchanged`);
+ * a plot without an invoice of the month gets version 1 (`built`), unless nothing is due on it and
+ * `includeNothingDue` is not set (`skipped`). `built + newVersions + unchanged + skipped = invoiceable`. The
+ * build is written to the audit log as one `INVOICES_ISSUED` entry (entity type `BILLING_MONTH`, label
+ * `YYYY-MM`, fields `month`, `built`, `newVersions`, `unchanged`, `skipped`).
+ *
+ * With `preview=true` nothing is written: the answer has `invoiceable`, `toBuild` (the plots that would be built
+ * or compared), `nothingDue` (the plots without an invoice of the month that have nothing due: skipped unless
+ * `includeNothingDue`) and `existing` (the plots that already have an invoice of the month). With
+ * `preview=false` the answer has `invoiceable`, `built`, `newVersions`, `unchanged` and `skipped`.
+ *
+ * A month after the current one (Europe/Kyiv) is 409 `PERIOD_IN_FUTURE`; a month before the first month of the
+ * cooperative (or any month while it has none) is 404 `NOT_FOUND`; 409 `REQUISITES_MISSING` with `missing`
+ * when the IBAN or the ЄДРПОУ is not set; 422 `INVOICE_BUILD_TOO_LARGE` with `limit` when the month has more
+ * invoiceable plots than one build takes (2,000). These are checked in this order, for the preview too, and
+ * nothing is written; then a build (not the preview) may be 409 `INVOICE_BUILD_RUNNING`. Requires
+ * `INVOICES_ISSUE`.
+ * @summary Preview or build the invoices of a billing month
+ */
+export const buildMonthInvoices = async (month: string,
+    params: BuildMonthInvoicesParams,
+    invoiceBuildRequest?: InvoiceBuildRequest, options?: Parameters<typeof nadelFetch>[1]): Promise<InvoiceBuild> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return nadelFetch<InvoiceBuild>(getBuildMonthInvoicesUrl(month,params),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(invoiceBuildRequest)
+  }
+);}
+
+
+
+
+
+export const getBuildMonthInvoicesMutationKey = () => ['buildMonthInvoices'] as const;
+
+export const getBuildMonthInvoicesMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse | InvoiceBuildTooLargeResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof buildMonthInvoices>>, TError,BuildMonthInvoicesMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof buildMonthInvoices>>, TError,BuildMonthInvoicesMutationVariables, TContext> => {
+
+const mutationKey = getBuildMonthInvoicesMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof buildMonthInvoices>>, BuildMonthInvoicesMutationVariables> = (props) => {
+          const {month,params,data} = props ?? {};
+
+          return  buildMonthInvoices(month,params,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type BuildMonthInvoicesMutationResult = NonNullable<Awaited<ReturnType<typeof buildMonthInvoices>>>
+    export type BuildMonthInvoicesMutationBody = InvoiceBuildRequest | undefined
+    export type BuildMonthInvoicesMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse | InvoiceBuildTooLargeResponse
+    export type BuildMonthInvoicesMutationVariables = {month: string;params: BuildMonthInvoicesParams;data?: InvoiceBuildRequest}
+
+    /**
+ * @summary Preview or build the invoices of a billing month
+ */
+export const useBuildMonthInvoices = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse | InvoiceBuildTooLargeResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof buildMonthInvoices>>, TError,BuildMonthInvoicesMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof buildMonthInvoices>>,
+        TError,
+        BuildMonthInvoicesMutationVariables,
+        TContext
+      > => {
+      return useMutation(getBuildMonthInvoicesMutationOptions(options), queryClient);
+    }
+    export const getGetMonthInvoicesPrintPdfUrl = (month: string,
+    params?: GetMonthInvoicesPrintPdfParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/v1/billing-months/${month}/invoices/print.pdf?${stringifiedParams}` : `/api/v1/billing-months/${month}/invoices/print.pdf`
+}
+
+/**
+ * One PDF (A4, Ukrainian) with the latest version of each invoice of the month, one invoice per page (an invoice
+ * that needs more than one page continues on the next, and the next invoice starts on a new page), in street and
+ * plot order (the Ukrainian alphabet of the street, plots without a street last, then the natural order of the
+ * plot number). `scope=PAPER` (the default) takes the plots that have at least one current owner who chose
+ * paper delivery; `scope=ALL` every latest invoice of the month. A month without such invoices gives one page
+ * saying so. The file is not stored; the same invoices give the same bytes. A month that is not listed (before
+ * the first month of the cooperative, after the current one) is 404 `NOT_FOUND`. Requires `INVOICES_ISSUE`.
+ * @summary The invoices of a billing month as one PDF for printing
+ */
+export const getMonthInvoicesPrintPdf = async (month: string,
+    params?: GetMonthInvoicesPrintPdfParams, options?: Parameters<typeof nadelFetch>[1]): Promise<Blob> => {
+
+  return nadelFetch<Blob>(getGetMonthInvoicesPrintPdfUrl(month,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetMonthInvoicesPrintPdfQueryKey = (month: string,
+    params?: GetMonthInvoicesPrintPdfParams,) => {
+    return [
+    `/api/v1/billing-months/${month}/invoices/print.pdf`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetMonthInvoicesPrintPdfQueryOptions = <TData = Awaited<ReturnType<typeof getMonthInvoicesPrintPdf>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(month: string,
+    params?: GetMonthInvoicesPrintPdfParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMonthInvoicesPrintPdf>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetMonthInvoicesPrintPdfQueryKey(month,params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMonthInvoicesPrintPdf>>> = ({ signal }) => getMonthInvoicesPrintPdf(month,params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: month !== null && month !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getMonthInvoicesPrintPdf>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetMonthInvoicesPrintPdfQueryResult = NonNullable<Awaited<ReturnType<typeof getMonthInvoicesPrintPdf>>>
+export type GetMonthInvoicesPrintPdfQueryError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse
+
+
+export function useGetMonthInvoicesPrintPdf<TData = Awaited<ReturnType<typeof getMonthInvoicesPrintPdf>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ month: string,
+    params: undefined |  GetMonthInvoicesPrintPdfParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMonthInvoicesPrintPdf>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getMonthInvoicesPrintPdf>>,
+          TError,
+          Awaited<ReturnType<typeof getMonthInvoicesPrintPdf>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetMonthInvoicesPrintPdf<TData = Awaited<ReturnType<typeof getMonthInvoicesPrintPdf>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ month: string,
+    params?: GetMonthInvoicesPrintPdfParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMonthInvoicesPrintPdf>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getMonthInvoicesPrintPdf>>,
+          TError,
+          Awaited<ReturnType<typeof getMonthInvoicesPrintPdf>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetMonthInvoicesPrintPdf<TData = Awaited<ReturnType<typeof getMonthInvoicesPrintPdf>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ month: string,
+    params?: GetMonthInvoicesPrintPdfParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMonthInvoicesPrintPdf>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary The invoices of a billing month as one PDF for printing
+ */
+
+export function useGetMonthInvoicesPrintPdf<TData = Awaited<ReturnType<typeof getMonthInvoicesPrintPdf>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ month: string,
+    params?: GetMonthInvoicesPrintPdfParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMonthInvoicesPrintPdf>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetMonthInvoicesPrintPdfQueryOptions(month,params,options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 

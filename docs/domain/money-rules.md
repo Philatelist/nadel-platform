@@ -849,5 +849,7 @@ The worked examples (plot 9, charge types Membership then Electricity, October 2
 prints; the PDF is rebuilt from the snapshot and never changes. An on-request invoice is always a new version; the
 number `{YYYY-MM}/{plot number}` is the same for every version.
 
-**Certificates** (feature 016, a later slice): the debt per charge type, the total and the prepayment as of a day are
-the plot balances of 12 (2, by debt date), not the booking-month rule.
+**Certificates** (feature 016 §2.7): the debt per charge type, the total and the prepayment as of a day are
+the plot balances of 12 (2, by debt date), not the booking-month rule: `LedgerReadModel.debtsAsOf(asOf, every type)`,
+the same figures as the plot balances report for that day. «Заборгованість відсутня» when the total is 0,00. A
+certificate never changes; a mistake is answered by a new certificate and the annulment of the old one.

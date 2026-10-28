@@ -29,6 +29,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -102,10 +103,31 @@ class CashReceipts {
         if (owned != null && !data.parts().stream().map(CashReceiptData.Part::plotId).allMatch(owned::contains)) {
             throw ApiProblemException.notFound();
         }
-        if (data.source() != PaymentSource.CASH || data.receiptNumber() == null) {
+        if (!printable(data)) {
             throw new ApiProblemException(HttpStatus.CONFLICT, ProblemCodes.RECEIPT_NOT_AVAILABLE,
                     "A bank payment has no cash receipt.");
         }
+        return file(data, viewer);
+    }
+
+    /**
+     * The receipt of the payment's group for a caller that checked the access itself ({@code DocumentsFacade}): as a
+     * viewer with {@code PAYMENTS_VIEW} but without {@code MEMBERS_VIEW}, so without the payer note. Empty for an
+     * unknown payment, one of another cooperative, a reversal row and a bank payment.
+     */
+    @Transactional(readOnly = true)
+    Optional<ReceiptFile> receipt(UUID paymentId, UUID tenantId) {
+        AccessProfile system = new AccessProfile(tenantId, null, DocumentsFacadeService.SYSTEM, "",
+                Set.of(Permission.PAYMENTS_VIEW), List.of(), false);
+        return ledger.cashReceipt(paymentId).filter(CashReceipts::printable).map(data -> file(data, system));
+    }
+
+    private static boolean printable(CashReceiptData data) {
+        return data.source() == PaymentSource.CASH && data.receiptNumber() != null;
+    }
+
+    /** The receipt drawn now. */
+    private ReceiptFile file(CashReceiptData data, AccessProfile viewer) {
         Instant now = clock.instant();
         ReceiptContent content = content(data, viewer, DocumentFormat.dayOf(now));
         return new ReceiptFile("receipt_" + content.number() + ".pdf", ReceiptLayout.render(content, now));

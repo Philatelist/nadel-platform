@@ -7,17 +7,20 @@
  * is rebuilt from it on every download. The module adds no money rule (an invoice's figures are the ledger's
  * booking-month rule) and reads only through the public APIs of the modules that own the data, never their tables.
  * <p>
- * The module has no public API yet (the facade for feature 017 comes with the month build); everything is internal:
+ * The public API is {@code DocumentsFacade} with {@code PrintScope}: ids, links and PDF bytes for feature 017 (the
+ * delivery of invoices), for the cooperative the caller bound, without permission checks of its own. Everything else is
+ * internal:
  * the PDF layer ({@code internal.pdf}: {@code PdfDocument}, {@code TextBlock}, {@code Table}, {@code PdfFonts}), the
  * texts and formats ({@code DocumentTexts}, {@code DocumentFormat}, {@code AmountInWords}), the NBU payment QR code
  * ({@code internal.nbu}: {@code NbuQrPayload}, {@code NbuQrImage}, {@code HryvniaSign}; ZXing core), the receipt
  * ({@code CashReceipts}, {@code ReceiptContent}, {@code ReceiptLayout}), the invoice ({@code InvoiceBuilder},
  * {@code InvoiceCalculator}, {@code InvoiceFigures}, {@code InvoiceDocument}, {@code InvoiceSnapshots},
- * {@code InvoiceLayout}, {@code Invoices}, {@code RequisitesCheck}, {@code InvoiceRecord}, {@code InvoiceAuditPublisher})
+ * {@code InvoiceLayout}, {@code Invoices}, {@code RequisitesCheck}, {@code InvoiceRecord}, {@code InvoiceAuditPublisher},
+ * the month build's {@code ListedMonths} and the print set {@code PrintBundle}; {@code DocumentsFacadeService})
  * and the endpoints of tag {@code documents} ({@code DocumentsController}). Depends on {@code ledger}
- * ({@code LedgerReadModel#cashReceipt}, {@code #invoiceLedgers}; {@code PaymentNotes}: the payer note, only for a viewer
+ * ({@code LedgerReadModel#cashReceipt}, {@code #invoiceLedgers}, {@code #firstBillingMonth}; {@code PaymentNotes}: the payer note, only for a viewer
  * with {@code MEMBERS_VIEW}), {@code plots} ({@code PlotCatalog}, {@code PlotOwners}), {@code members}
- * ({@code MemberDirectory}: the payer and the owners; {@code RoleHolders}: the chairmen and treasurers), {@code audit}
+ * ({@code MemberDirectory}: the payer, the owners and their delivery channels; {@code RoleHolders}: the chairmen and treasurers), {@code audit}
  * ({@code ActorNames}: who accepted the money; {@code AuditEvent}), {@code tariffs} ({@code ChargeTypeCatalog}),
  * {@code settings} ({@code CooperativeSettings}: the requisites), {@code tenancy} ({@code TenantDirectory}: the name and
  * ЄДРПОУ), {@code identity} ({@code CurrentUser}, {@code OwnedPlotsSource}, {@code Permission}), {@code privacy}

@@ -25,12 +25,19 @@ import app.nadel.tenancy.TenantSummary;
 import jakarta.persistence.EntityManager;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.YearMonth;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.function.IntConsumer;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
@@ -41,8 +48,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * Builds and stores invoices (feature 016 §2.5, §2.6, technical considerations 2.5). Slice 2: the invoice of one plot
- * on request ({@code POST /plots/{id}/invoices}, {@link #forPlot}); the month build comes with slice 3.
+ * Builds and stores invoices (feature 016 §2.5, §2.6, technical considerations 2.5): the invoice of one plot on request
+ * ({@code POST /plots/{id}/invoices}, {@link #forPlot}) and the invoices of a whole billing month
+ * ({@code POST /billing-months/{month}/invoices}, {@link #forMonth}).
  * <p>
  * <b>Consistency.</b> One build per cooperative and month at a time: the transaction-scoped advisory lock
  * {@code documents.invoices:{tenant}:{YYYY-MM}} is taken first, in an outer transaction, and held until the build has
@@ -60,11 +68,48 @@ import org.springframework.transaction.support.TransactionTemplate;
  * {@code EDRPOU}; 409 {@code PLOT_NOT_INVOICEABLE} for common land, an archived plot or a plot without a current
  * owner. Nothing is stored unless every check passes. The caller holds
  * {@code INVOICES_ISSUE} (checked on the endpoint).
+ * <p>
+ * <b>Month build</b> (synchronous, in the request; ADR 0017 "Synchronous month build and its limit"): the checks, in
+ * this order, for the preview too: a month after the current one 409 {@code PERIOD_IN_FUTURE}, a month before the
+ * first billing month 404 {@code NOT_FOUND} ({@link ListedMonths}); the requisites 409 {@code REQUISITES_MISSING}; more
+ * than {@value #MONTH_LIMIT} invoiceable plots 422 {@code INVOICE_BUILD_TOO_LARGE}. The invoiceable plots are the
+ * chargeable ones ({@code PlotCatalog.findChargeable}: active, not common land) with a current owner, in street and plot
+ * order. Then, in chunks of {@value #CHUNK} plots, all inside the one {@code REPEATABLE READ} transaction with one
+ * {@code asOf}: the ledgers of the chunk, each plot's invoice, its content hash compared with the latest version of the
+ * month; a plot without an invoice of the month and with nothing due is skipped unless {@code includeNothingDue}; a plot
+ * whose latest version has the same hash is unchanged; every other plot gets a new version; the persistence context is
+ * flushed and cleared after each chunk. One {@code INVOICES_ISSUED} audit entry with the counts. The build takes the
+ * month's lock without waiting ({@code pg_try_advisory_xact_lock}): while another build of the month, or an on-request
+ * invoice of it, holds the lock it is 409 {@code INVOICE_BUILD_RUNNING} and nothing is built; the on-request invoice
+ * (short) waits for the lock instead. The preview takes no lock and writes nothing.
  */
 @Service
 class InvoiceBuilder {
 
     static final String LOCK = "documents.invoices:";
+
+    /** The most invoiceable plots one month build takes (the size of the largest supported cooperative). */
+    static final int MONTH_LIMIT = 2_000;
+
+    /** The plots read and written together in a month build. */
+    static final int CHUNK = 50;
+
+    /**
+     * The counts of a month build: always {@code invoiceable}; a preview has {@code toBuild}, {@code nothingDue} and
+     * {@code existing} (the other counts 0), a build {@code built}, {@code newVersions}, {@code unchanged} and
+     * {@code skipped}.
+     */
+    record MonthBuild(boolean preview, int invoiceable, int toBuild, int nothingDue, int existing, int built,
+            int newVersions, int unchanged, int skipped) {
+    }
+
+    /** The invoiceable plots of the month in street and plot order, with their facts and current owners. */
+    private record Invoiceable(List<UUID> order, Map<UUID, PlotFacts> facts, Map<UUID, List<OwnerShare>> owners) {
+    }
+
+    /** The latest version of a plot's invoice of the month. */
+    private record Latest(int version, byte[] contentHash) {
+    }
 
     /** The invoice version just stored. */
     record Issued(UUID id, UUID plotId, String plotNumber, YearMonth month, String number, int version, Money due,
@@ -92,12 +137,18 @@ class InvoiceBuilder {
     private final InvoiceSnapshots snapshots;
     private final InvoiceRepository invoices;
     private final InvoiceAuditPublisher audit;
+    private final ListedMonths months;
     private final Clock clock;
+
+    /** Test hook: called with the index of each chunk of a month build after it was written; nothing in production. */
+    private volatile IntConsumer afterChunk = chunk -> {
+    };
 
     InvoiceBuilder(EntityManager entityManager, PlatformTransactionManager transactionManager, LedgerReadModel ledger,
             PlotCatalog plots, PlotOwners plotOwners, MemberDirectory members, RoleHolders roleHolders,
             ChargeTypeCatalog chargeTypes, CooperativeSettings settings, TenantDirectory tenants,
-            InvoiceSnapshots snapshots, InvoiceRepository invoices, InvoiceAuditPublisher audit, Clock clock) {
+            InvoiceSnapshots snapshots, InvoiceRepository invoices, InvoiceAuditPublisher audit, ListedMonths months,
+            Clock clock) {
         this.entityManager = entityManager;
         this.repeatableRead = new TransactionTemplate(transactionManager);
         this.repeatableRead.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
@@ -113,7 +164,130 @@ class InvoiceBuilder {
         this.snapshots = snapshots;
         this.invoices = invoices;
         this.audit = audit;
+        this.months = months;
         this.clock = clock;
+    }
+
+    /** Sets the test hook called after each chunk of a month build; {@code null} removes it. */
+    void afterChunk(@Nullable IntConsumer hook) {
+        this.afterChunk = hook == null ? chunk -> {
+        } : hook;
+    }
+
+    /**
+     * Previews or builds the invoices of the month (see the class comment).
+     *
+     * @param includeNothingDue also build version 1 for a plot with nothing due
+     * @param preview           count only, write nothing and take no lock
+     * @param issuer            the caller, who holds {@code INVOICES_ISSUE}
+     */
+    @Transactional
+    MonthBuild forMonth(YearMonth month, boolean includeNothingDue, boolean preview, AccessProfile issuer) {
+        Objects.requireNonNull(month, "month");
+        UUID tenantId = Objects.requireNonNull(issuer.tenantId(), "tenantId");
+        months.requireListed(month, true);
+        if (preview) {
+            return Objects.requireNonNull(repeatableRead.execute(status -> preview(month, includeNothingDue)));
+        }
+        tryLockMonth(tenantId, month);
+        return Objects.requireNonNull(repeatableRead.execute(status -> build(tenantId, month, includeNothingDue,
+                issuer)));
+    }
+
+    /** The preview inside the {@code REPEATABLE READ} transaction: the counts, nothing written. */
+    private MonthBuild preview(YearMonth month, boolean includeNothingDue) {
+        Context context = context();
+        Invoiceable invoiceable = invoiceable();
+        Set<UUID> invoiced = new HashSet<>(invoices.plotsInvoicedIn(month.atDay(1)));
+        List<UUID> fresh = invoiceable.order().stream().filter(plotId -> !invoiced.contains(plotId)).toList();
+        int existing = invoiceable.order().size() - fresh.size();
+        Instant asOf = asOf();
+        int nothingDue = 0;
+        for (int from = 0; from < fresh.size(); from += CHUNK) {
+            List<UUID> chunk = fresh.subList(from, Math.min(fresh.size(), from + CHUNK));
+            for (InvoiceLedger plotLedger : ledger.invoiceLedgers(chunk, month, asOf).values()) {
+                if (!InvoiceCalculator.of(plotLedger, context.types()).payable()) {
+                    nothingDue++;
+                }
+            }
+            entityManager.clear();
+        }
+        int total = invoiceable.order().size();
+        return new MonthBuild(true, total, includeNothingDue ? total : total - nothingDue, nothingDue, existing, 0,
+                0, 0, 0);
+    }
+
+    /** The build inside the {@code REPEATABLE READ} transaction, chunk by chunk. */
+    private MonthBuild build(UUID tenantId, YearMonth month, boolean includeNothingDue, AccessProfile issuer) {
+        Context context = context();
+        Invoiceable invoiceable = invoiceable();
+        Instant asOf = asOf();
+        LocalDate first = month.atDay(1);
+        int built = 0;
+        int newVersions = 0;
+        int unchanged = 0;
+        int skipped = 0;
+        List<UUID> order = invoiceable.order();
+        for (int from = 0, index = 0; from < order.size(); from += CHUNK, index++) {
+            List<UUID> chunk = order.subList(from, Math.min(order.size(), from + CHUNK));
+            Map<UUID, InvoiceLedger> ledgers = ledger.invoiceLedgers(chunk, month, asOf);
+            Map<UUID, Latest> latest = latest(first, chunk);
+            Map<UUID, String> names = ownerNames(chunk.stream()
+                    .flatMap(plotId -> invoiceable.owners().get(plotId).stream()).toList());
+            for (UUID plotId : chunk) {
+                Latest previous = latest.get(plotId);
+                List<OwnerShare> owners = invoiceable.owners().get(plotId);
+                InvoiceDocument document = document(UUID.randomUUID(), previous == null ? 1 : previous.version() + 1,
+                        invoiceable.facts().get(plotId), owners, names, ledgers.get(plotId), context, asOf);
+                if (previous == null && !includeNothingDue && document.totals().due().signum() <= 0) {
+                    skipped++;
+                    continue;
+                }
+                if (previous != null
+                        && Arrays.equals(previous.contentHash(), snapshots.contentHash(tenantId, document))) {
+                    unchanged++;
+                    continue;
+                }
+                InvoiceSnapshots.Sealed sealed = snapshots.seal(tenantId, document);
+                entityManager.persist(InvoiceRecord.issue(document.id(), tenantId, document, sealed,
+                        issuer.memberId()));
+                if (previous == null) {
+                    built++;
+                } else {
+                    newVersions++;
+                }
+            }
+            entityManager.flush();
+            entityManager.clear();
+            afterChunk.accept(index);
+        }
+        audit.issued(issuer, month, built, newVersions, unchanged, skipped, asOf);
+        return new MonthBuild(false, order.size(), 0, 0, 0, built, newVersions, unchanged, skipped);
+    }
+
+    /**
+     * The invoiceable plots: the chargeable ones (active, not common land) with a current owner, in street and plot
+     * order; refuses more than {@value #MONTH_LIMIT} (422 {@code INVOICE_BUILD_TOO_LARGE}).
+     */
+    private Invoiceable invoiceable() {
+        Map<UUID, PlotFacts> facts = new LinkedHashMap<>();
+        plots.findChargeable().forEach(plot -> facts.put(plot.id(), plot));
+        Map<UUID, List<OwnerShare>> owners = new HashMap<>(plotOwners.currentOwnerShares(facts.keySet()));
+        owners.values().removeIf(List::isEmpty);
+        if (owners.size() > MONTH_LIMIT) {
+            throw ApiProblemException.invoiceBuildTooLarge(MONTH_LIMIT);
+        }
+        List<UUID> order = owners.isEmpty() ? List.of() : plots.inStreetOrder(owners.keySet());
+        return new Invoiceable(order, facts, owners);
+    }
+
+    /** The latest version of the month's invoice of each plot of the chunk that has one. */
+    private Map<UUID, Latest> latest(LocalDate month, List<UUID> chunk) {
+        Map<UUID, Latest> latest = new HashMap<>();
+        for (Object[] row : invoices.latestOfPlots(month, chunk)) {
+            latest.put((UUID) row[0], new Latest(((Number) row[1]).intValue(), (byte[]) row[2]));
+        }
+        return latest;
     }
 
     /**
@@ -242,7 +416,26 @@ class InvoiceBuilder {
         return application.isAfter(database) ? application : database;
     }
 
-    /** Waits for the build lock of the cooperative's month and holds it until the caller's transaction ends. */
+    /**
+     * Takes the build lock of the cooperative's month without waiting and holds it until the caller's transaction
+     * ends; while another build of the month (or an on-request invoice of it) holds it: 409
+     * {@code INVOICE_BUILD_RUNNING}, nothing built (feature 016 §2.5).
+     */
+    private void tryLockMonth(UUID tenantId, YearMonth month) {
+        Object acquired = entityManager.createNativeQuery(
+                "select pg_try_advisory_xact_lock(hashtextextended(:key, 0))")
+                .setParameter("key", LOCK + tenantId + ":" + month)
+                .getSingleResult();
+        if (!Boolean.TRUE.equals(acquired)) {
+            throw new ApiProblemException(HttpStatus.CONFLICT, ProblemCodes.INVOICE_BUILD_RUNNING,
+                    "The invoices of this month are being built already.");
+        }
+    }
+
+    /**
+     * Waits for the build lock of the cooperative's month and holds it until the caller's transaction ends (the
+     * on-request invoice: it is short, so it waits for a running build instead of being refused).
+     */
     private void lockMonth(UUID tenantId, YearMonth month) {
         entityManager.createNativeQuery(
                 "select count(*) from (select pg_advisory_xact_lock(hashtextextended(:key, 0))) as l")

@@ -29,4 +29,9 @@ export interface Problem {
      * @nullable
      */
   missing?: RequisiteField[] | null;
+  /**
+     * The most plots one build of a month's invoices takes, for `INVOICE_BUILD_TOO_LARGE`; absent on every other problem
+     * @nullable
+     */
+  limit?: number | null;
 }

@@ -211,6 +211,13 @@ public interface LedgerReadModel {
     Map<UUID, InvoiceLedger> invoiceLedgers(Collection<UUID> plotIds, YearMonth month, Instant asOf);
 
     /**
+     * The first billing month of the cooperative: the month of its earliest billing month row (a row is created by
+     * the first booking in a month or by closing it); empty while it has none. The months {@code GET /billing-months}
+     * lists run from it to the current month (feature 016: the month build of invoices answers 404 before it).
+     */
+    Optional<YearMonth> firstBillingMonth();
+
+    /**
      * The electricity charges whose service period overlaps a range of days (the "Charged" sheet of the electricity
      * report, feature 013 §3.4), one {@link ChargedRow} per ledger row: the charges of source {@code CONSUMPTION} and
      * {@code LOSSES} of the charge type {@code ELECTRICITY} (resolved by code through {@code tariffs.ChargeTypeCatalog})

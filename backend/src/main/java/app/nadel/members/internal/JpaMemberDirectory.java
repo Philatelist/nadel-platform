@@ -5,6 +5,7 @@ import app.nadel.members.MemberDirectory;
 import app.nadel.members.MemberRef;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -72,6 +73,21 @@ class JpaMemberDirectory implements MemberDirectory {
                 .map(member -> new MemberContacts(member.getId(), member.getLastName(), member.getFirstName(),
                         member.getMiddleName(), crypto.phones(member), crypto.email(member), member.isArchived()))
                 .collect(Collectors.toMap(MemberContacts::id, Function.identity()));
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Map<UUID, app.nadel.members.DeliveryChannel> deliveryChannels(Collection<UUID> ids) {
+        List<UUID> distinct = ids.stream().distinct().toList();
+        Map<UUID, app.nadel.members.DeliveryChannel> channels = new HashMap<>();
+        for (int from = 0; from < distinct.size(); from += CHUNK) {
+            for (Object[] row : members.findDeliveryChannels(
+                    distinct.subList(from, Math.min(distinct.size(), from + CHUNK)))) {
+                DeliveryChannel channel = (DeliveryChannel) row[1];
+                channels.put((UUID) row[0], app.nadel.members.DeliveryChannel.valueOf(channel.name()));
+            }
+        }
+        return channels;
     }
 
     @Override

@@ -220,6 +220,15 @@ const router = createBrowserRouter([
         ],
       },
       {
+        element: <RequirePermission permission="CHARGES_VIEW" />,
+        children: [
+          {
+            path: 'documents/certificates',
+            lazy: () => import('./pages/CertificatesPage').then((m) => ({ Component: m.CertificatesPage })),
+          },
+        ],
+      },
+      {
         element: <RequirePermission permission="AUDIT_VIEW" />,
         children: [
           {

@@ -145,6 +145,10 @@ interface MemberRepository extends JpaRepository<Member, UUID> {
             """)
     List<UUID> findIdsByName(@Param("pattern") String pattern, Pageable limit);
 
+    /** The id and the delivery channel of each given member, archived ones included (feature 016). */
+    @Query("select m.id, m.deliveryChannel from Member m where m.id in :ids")
+    List<Object[]> findDeliveryChannels(@Param("ids") Collection<UUID> ids);
+
     /** The given members (archived included) with a shared row lock ({@code FOR SHARE}), in id order. */
     @Lock(LockModeType.PESSIMISTIC_READ)
     @Query("select m from Member m where m.id in :ids order by m.id")

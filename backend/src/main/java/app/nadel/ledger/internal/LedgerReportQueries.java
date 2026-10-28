@@ -478,6 +478,14 @@ class LedgerReportQueries implements LedgerReadModel {
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<YearMonth> firstBillingMonth() {
+        LocalDate first = entityManager.createQuery("select min(m.month) from BillingMonthRecord m", LocalDate.class)
+                .getSingleResult();
+        return Optional.ofNullable(first).map(YearMonth::from);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
     public Optional<CashReceiptData> cashReceipt(UUID paymentId) {
         return cashReceipts.find(Objects.requireNonNull(paymentId, "paymentId"));
     }

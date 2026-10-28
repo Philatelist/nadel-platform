@@ -74,6 +74,10 @@ tags:
     description: >-
       Documents the app prints as PDF files from what it has booked: cash receipts and invoices with the NBU payment
       QR code (debt certificates follow)
+  - name: certificates
+    description: >-
+      Debt certificates of plots as of a date: issued with a gap-free number per cooperative and year, kept in a
+      register, printed as PDF files and annulled once with a reason
 
 paths:
   /me:
@@ -3293,7 +3297,8 @@ paths:
       summary: The issued invoices of the cooperative
       description: |
         A page of issued invoice versions, every version listed (older versions stay readable), newest month first,
-        then the newest issue, then the number, then the newest version. `latest` marks the latest version of each
+        then the newest issue, then the number, then the newest version; with `month` the number is compared in the
+        natural order of the plot number (9 before 10, 12 before 12а). `latest` marks the latest version of each
         plot and month. Both filters are optional and combine. Requires `CHARGES_VIEW`.
       parameters:
         - name: month
@@ -3454,6 +3459,122 @@ paths:
               schema:
                 type: string
                 format: binary
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /billing-months/{month}/invoices:
+    post:
+      tags: [documents]
+      operationId: buildMonthInvoices
+      summary: Preview or build the invoices of a billing month
+      description: |
+        Builds the invoices of every invoiceable plot for the billing month (feature 016 §2.5): the active plots that
+        are not common land and have a current owner, in street and plot order. The whole build reads its figures
+        from one database snapshot (a payment or a charge booked while it runs is in all of its invoices or in none)
+        and runs in the request; the web shows a spinner. One build of a cooperative's month runs at a time: a build
+        started while another build of the same month (or an on-request invoice of it) runs is 409
+        `INVOICE_BUILD_RUNNING` and builds nothing; the user waits and refreshes the page. An on-request invoice of
+        the month waits for a running build instead.
+
+        Per plot: a plot that already has an invoice of the month is compared with its latest version and gets a new
+        version only when its numbers, owners or requisites changed (`newVersions`), otherwise nothing (`unchanged`);
+        a plot without an invoice of the month gets version 1 (`built`), unless nothing is due on it and
+        `includeNothingDue` is not set (`skipped`). `built + newVersions + unchanged + skipped = invoiceable`. The
+        build is written to the audit log as one `INVOICES_ISSUED` entry (entity type `BILLING_MONTH`, label
+        `YYYY-MM`, fields `month`, `built`, `newVersions`, `unchanged`, `skipped`).
+
+        With `preview=true` nothing is written: the answer has `invoiceable`, `toBuild` (the plots that would be built
+        or compared), `nothingDue` (the plots without an invoice of the month that have nothing due: skipped unless
+        `includeNothingDue`) and `existing` (the plots that already have an invoice of the month). With
+        `preview=false` the answer has `invoiceable`, `built`, `newVersions`, `unchanged` and `skipped`.
+
+        A month after the current one (Europe/Kyiv) is 409 `PERIOD_IN_FUTURE`; a month before the first month of the
+        cooperative (or any month while it has none) is 404 `NOT_FOUND`; 409 `REQUISITES_MISSING` with `missing`
+        when the IBAN or the ЄДРПОУ is not set; 422 `INVOICE_BUILD_TOO_LARGE` with `limit` when the month has more
+        invoiceable plots than one build takes (2,000). These are checked in this order, for the preview too, and
+        nothing is written; then a build (not the preview) may be 409 `INVOICE_BUILD_RUNNING`. Requires
+        `INVOICES_ISSUE`.
+      parameters:
+        - name: month
+          in: path
+          required: true
+          description: The billing month, `YYYY-MM`
+          schema:
+            type: string
+            pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+        - name: preview
+          in: query
+          required: true
+          description: '`true` counts what the build would do without writing anything; `false` builds'
+          schema:
+            type: boolean
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvoiceBuildRequest'
+      responses:
+        '200':
+          description: What the build would do (preview) or did (build)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceBuild'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/InvoiceBuildTooLarge'
+
+  /billing-months/{month}/invoices/print.pdf:
+    get:
+      tags: [documents]
+      operationId: getMonthInvoicesPrintPdf
+      summary: The invoices of a billing month as one PDF for printing
+      description: |
+        One PDF (A4, Ukrainian) with the latest version of each invoice of the month, one invoice per page (an invoice
+        that needs more than one page continues on the next, and the next invoice starts on a new page), in street and
+        plot order (the Ukrainian alphabet of the street, plots without a street last, then the natural order of the
+        plot number). `scope=PAPER` (the default) takes the plots that have at least one current owner who chose
+        paper delivery; `scope=ALL` every latest invoice of the month. A month without such invoices gives one page
+        saying so. The file is not stored; the same invoices give the same bytes. A month that is not listed (before
+        the first month of the cooperative, after the current one) is 404 `NOT_FOUND`. Requires `INVOICES_ISSUE`.
+      parameters:
+        - name: month
+          in: path
+          required: true
+          description: The billing month, `YYYY-MM`
+          schema:
+            type: string
+            pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+        - name: scope
+          in: query
+          required: false
+          description: Which invoices to print
+          schema:
+            $ref: '#/components/schemas/InvoicePrintScope'
+      responses:
+        '200':
+          description: The print set, sent as an attachment
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -4661,6 +4782,181 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
 
+  /plots/{id}/certificates:
+    post:
+      tags: [certificates]
+      operationId: issuePlotCertificate
+      summary: Issue a debt certificate of a plot as of a date
+      description: |
+        Issues the debt certificate of one plot (feature 016 §2.7) and stores it in the register. The figures are those
+        of the plot balances report for the same day (`LedgerReadModel.debtsAsOf`, every charge type): the debt per
+        charge type, the total debt and the prepayment. The certificate also keeps the cooperative's requisites, the
+        plot, its area, its current owners with their shares, and the issuing user's name and role (the names are
+        sealed). The number is `Д-{YYYY}-{N}`: `YYYY` the year of the issue in Europe/Kyiv, `N` the next number of the
+        cooperative in that year, gap-free and never reused (taken in the issuing transaction, so a failed issue uses
+        no number). An issued certificate never changes; a mistake is answered with a new certificate and the old one
+        is annulled. Written to the audit log as `CERTIFICATE_ISSUED`.
+
+        `asOf` defaults to today in Europe/Kyiv; a day after today is 400 `VALIDATION_FAILED` with
+        `errors[{field: asOf, code: INVALID}]`. 404 `PLOT_NOT_FOUND` for an unknown plot or one of another
+        cooperative; 409 `PLOT_COMMON_LAND` for common land and 409 `PLOT_ARCHIVED` for an archived plot (the plot
+        balances report lists neither); 409 `REQUISITES_MISSING` with `missing` (`IBAN`, `EDRPOU`) as for invoices.
+        A plot without a current owner gets a certificate without owners. Requires `CERTIFICATES_ISSUE`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IssueCertificateRequest'
+      responses:
+        '201':
+          description: The issued certificate
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CertificateRow'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /certificates:
+    get:
+      tags: [certificates]
+      operationId: listCertificates
+      summary: The register of debt certificates
+      description: |
+        A page of the cooperative's certificates, newest issue first (then the newest number). `status` filters the
+        issued (`ISSUED`) or the annulled (`ANNULLED`) ones; absent means both. Requires `CHARGES_VIEW` (a member has
+        no access to certificates: 403).
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/CertificateStatus'
+        - name: page
+          in: query
+          required: false
+          description: Zero-based page index
+          schema:
+            type: integer
+            format: int32
+            minimum: 0
+            default: 0
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CertificatePage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /certificates/{id}/pdf:
+    get:
+      tags: [certificates]
+      operationId: getCertificatePdf
+      summary: A debt certificate as a PDF file
+      description: |
+        The certificate (A4, Ukrainian) rendered from its stored snapshot: the requisites, «Довідка № Д-{YYYY}-{N}»,
+        the day of issue and the as-of day, the plot, its area and owners, the debt per charge type and in total, the
+        prepayment, «Заборгованість відсутня» or «Заборгованість становить {сума}», the issuer's name and role with a
+        place for the signature and the stamp. An annulled certificate still opens, marked «АНУЛЬОВАНО» with the day
+        and the reason. The file is not stored: the same certificate in the same state always gives the same bytes.
+        404 `NOT_FOUND` for an unknown id or one of another cooperative. Requires `CHARGES_VIEW`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The certificate, sent as an attachment
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /certificates/{id}/annul:
+    post:
+      tags: [certificates]
+      operationId: annulCertificate
+      summary: Annul a debt certificate
+      description: |
+        Marks the certificate annulled with the reason, the day and the user (feature 016 §2.7); it stays in the
+        register and its PDF is marked «АНУЛЬОВАНО». Nothing else of it changes and its number is never reused.
+        Written to the audit log as `CERTIFICATE_ANNULLED`. The reason is required (400 `VALIDATION_FAILED` with
+        `errors[{field: reason, code: REQUIRED}]`, also for a blank one) and has at most 500 characters (`TOO_LONG`).
+        A certificate is annulled once: 409 `CERTIFICATE_ALREADY_ANNULLED`. 404 `NOT_FOUND` for an unknown id or one
+        of another cooperative. Requires `CERTIFICATES_ISSUE`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CertificateAnnulment'
+      responses:
+        '200':
+          description: The annulled certificate
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CertificateRow'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
   /reports:
     get:
       tags: [reports]
@@ -5384,7 +5680,22 @@ components:
         prepayment or no open charge (code `NOTHING_TO_ALLOCATE`), or a receipt is asked for a bank payment (code
         `RECEIPT_NOT_AVAILABLE`), or an invoice is built while the cooperative's IBAN or ЄДРПОУ is not set (code
         `REQUISITES_MISSING`, with `missing` naming `IBAN` and/or `EDRPOU`), or an invoice is built for common land, an
-        archived plot or a plot without a current owner (code `PLOT_NOT_INVOICEABLE`)
+        archived plot or a plot without a current owner (code `PLOT_NOT_INVOICEABLE`), or the invoices of a month
+        after the current one are built (code `PERIOD_IN_FUTURE`), or a build of a month's invoices is started while
+        another build of the same month runs (code `INVOICE_BUILD_RUNNING`), or a debt certificate is issued for common
+        land (code `PLOT_COMMON_LAND`) or an archived plot (code `PLOT_ARCHIVED`), or a certificate that is already
+        annulled is annulled again (code `CERTIFICATE_ALREADY_ANNULLED`)
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    InvoiceBuildTooLarge:
+      description: >-
+        The month has more invoiceable plots than one build takes (code `INVOICE_BUILD_TOO_LARGE`, with `limit`, the
+        most plots: 2,000); nothing is built
       content:
         application/problem+json:
           schema:
@@ -6115,6 +6426,9 @@ components:
         - REPORT_TEMPLATE_UPLOADED
         - REPORT_TEMPLATE_ARCHIVED
         - INVOICE_REISSUED
+        - INVOICES_ISSUED
+        - CERTIFICATE_ISSUED
+        - CERTIFICATE_ANNULLED
 
     AuditEntityType:
       type: string
@@ -6122,7 +6436,9 @@ components:
         Kind of the entity an audit entry is about. A `CHARGE` entry (a reversal, an opening balance, a retried
         "not charged" item) is about the plot whose account changed: its `entityId` is the plot id and its label the
         plot number. A `BILLING_MONTH` entry (a closing, a month run) is about a billing month: its label is the month
-        as `YYYY-MM`. A `LOSSES_RUN` entry (a losses run booked or reversed) is about the run: its label is the range
+        as `YYYY-MM`; so is `INVOICES_ISSUED` (a build of the month's invoices), whose `entityId` is the same for every
+        build of the month (the name-based UUID of `invoices:YYYY-MM`) and whose fields (new values only) are `month`
+        (`YYYY-MM`), `built`, `newVersions`, `unchanged` and `skipped` (integers). A `LOSSES_RUN` entry (a losses run booked or reversed) is about the run: its label is the range
         as `from/to` (ISO dates); so is a `COMMON_CONSUMER_RUN` entry (a common consumer run booked or reversed). A
         `NOT_CHARGED_RETRIED` entry of a losses node or common consumer item is a `METER` entry about the node or
         consumer meter, and so is `COMMON_CONSUMER_BILLING_CHANGED` (about the consumer meter, label its name). A
@@ -6145,7 +6461,11 @@ components:
         `filters` (`from`, `to`), `rows`, `personalData` and `output` (`XLSX`), never the contents. An `INVOICE`
         entry (`INVOICE_REISSUED`, an invoice issued on request) is about the plot whose invoice it is: its `entityId`
         is the plot id and its label the plot number; its fields (new values only) are `number` (`YYYY-MM/plot`),
-        `month` (`YYYY-MM`), `version` and `due` (two decimals).
+        `month` (`YYYY-MM`), `version` and `due` (two decimals). A `CERTIFICATE` entry (`CERTIFICATE_ISSUED`,
+        `CERTIFICATE_ANNULLED`) is about a debt certificate: its `entityId` is the certificate and its label the
+        certificate number (`Д-2026-1`); `CERTIFICATE_ISSUED` has `plot` (the plot number), `number`, `asOf` (ISO date)
+        and `totalDebt` (two decimals), `CERTIFICATE_ANNULLED` has `number` and `reason` (user content). Never the
+        names on the certificate (they stay sealed in it).
       enum:
         [
           MEMBER,
@@ -6167,6 +6487,7 @@ components:
           REPORT,
           REPORT_TEMPLATE,
           INVOICE,
+          CERTIFICATE,
         ]
 
     AuditFieldChange:
@@ -6920,6 +7241,83 @@ components:
             absent on every other problem
           items:
             $ref: '#/components/schemas/RequisiteField'
+        limit:
+          type: [integer, 'null']
+          format: int32
+          description: >-
+            The most plots one build of a month's invoices takes, for `INVOICE_BUILD_TOO_LARGE`; absent on every
+            other problem
+
+    InvoiceBuildRequest:
+      type: object
+      properties:
+        includeNothingDue:
+          type: boolean
+          default: false
+          description: >-
+            Also build an invoice (without the QR block) for a plot without an invoice of the month that has nothing
+            due; such plots are skipped otherwise
+    InvoiceBuild:
+      type: object
+      description: >-
+        The counts of a month build (`buildMonthInvoices`). Always `preview` and `invoiceable`; a preview adds
+        `toBuild`, `nothingDue` and `existing`, a build adds `built`, `newVersions`, `unchanged` and `skipped`
+      required: [preview, invoiceable]
+      properties:
+        preview:
+          type: boolean
+          description: Whether this is a preview (nothing written)
+        invoiceable:
+          type: integer
+          format: int32
+          minimum: 0
+          description: The active plots that are not common land and have a current owner
+        toBuild:
+          type: integer
+          format: int32
+          minimum: 0
+          description: >-
+            Preview: the plots that would be built or compared (`invoiceable` minus `nothingDue`, or `invoiceable`
+            with `includeNothingDue`)
+        nothingDue:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Preview, the plots without an invoice of the month that have nothing due
+        existing:
+          type: integer
+          format: int32
+          minimum: 0
+          description: >-
+            Preview, the plots that already have an invoice of the month: they get a new version only when their
+            numbers changed
+        built:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Build, the plots that got their first invoice of the month (version 1)
+        newVersions:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Build, the plots whose invoice changed and got a new version
+        unchanged:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Build, the plots whose latest invoice is still right (nothing written)
+        skipped:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Build, the plots without an invoice of the month with nothing due (nothing written)
+    InvoicePrintScope:
+      type: string
+      description: >-
+        Which invoices of a month go into the print set: `PAPER` the plots with at least one current owner who chose
+        paper delivery, `ALL` every latest invoice of the month
+      enum: [PAPER, ALL]
+      default: PAPER
 
     RequisiteField:
       type: string
@@ -8845,6 +9243,98 @@ components:
           description: The allocation rows, in the order of their charges (oldest first)
           items:
             $ref: '#/components/schemas/PaymentAllocation'
+
+    IssueCertificateRequest:
+      type: object
+      properties:
+        asOf:
+          type: string
+          format: date
+          description: The day the debt is certified as of; absent means today in Europe/Kyiv; never after today
+
+    CertificateStatus:
+      type: string
+      description: '`ISSUED` a valid certificate, `ANNULLED` one annulled with a reason'
+      enum: [ISSUED, ANNULLED]
+
+    CertificateRow:
+      type: object
+      description: One certificate of the register
+      required: [id, number, plotId, plotNumber, asOf, totalDebt, issuedAt, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        number:
+          type: string
+          description: '`Д-{YYYY}-{N}`, for example `Д-2026-1`'
+        plotId:
+          type: string
+          format: uuid
+        plotNumber:
+          type: string
+          description: The plot number as printed on the certificate (user content)
+        asOf:
+          type: string
+          format: date
+          description: The day the debt is certified as of
+        totalDebt:
+          $ref: '#/components/schemas/Money'
+        issuedById:
+          type: string
+          format: uuid
+          description: The member who issued it
+        issuedByName:
+          type: string
+          description: The current name of the member who issued it ("Last First Middle"); absent when unknown
+        issuedAt:
+          type: string
+          format: date-time
+        status:
+          $ref: '#/components/schemas/CertificateStatus'
+        annulledAt:
+          type: string
+          format: date-time
+          description: When it was annulled; only for `ANNULLED`
+        annulledByName:
+          type: string
+          description: The current name of the member who annulled it; only for `ANNULLED`, absent when unknown
+        annulReason:
+          type: string
+          description: Why it was annulled (user content); only for `ANNULLED`
+
+    CertificatePage:
+      type: object
+      required: [items, page, size, totalItems, totalPages]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CertificateRow'
+        page:
+          type: integer
+          format: int32
+          description: Zero-based page index
+        size:
+          type: integer
+          format: int32
+        totalItems:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+
+    CertificateAnnulment:
+      type: object
+      description: Why a certificate is annulled
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+          description: User content, stored as typed; surrounding whitespace is trimmed
 
     ChargeReversal:
       type: object

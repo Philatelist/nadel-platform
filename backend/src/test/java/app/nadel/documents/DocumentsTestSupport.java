@@ -50,6 +50,7 @@ abstract class DocumentsTestSupport extends IntegrationTest {
     static final String RECEIPT = "/api/v1/payments/%s/receipt.pdf";
     static final String PLOT_INVOICES = "/api/v1/plots/%s/invoices";
     static final String INVOICES = "/api/v1/invoices";
+    static final String MONTH_INVOICES = "/api/v1/billing-months/%s/invoices";
 
     static final String TREASURER_NAME = "Коваленко Олена Петрівна";
     static final String MEMBER_NAME = "Шевченко Тарас Григорович";
@@ -114,6 +115,8 @@ abstract class DocumentsTestSupport extends IntegrationTest {
             sql.update("delete from charge where tenant_id = ?", id);
             sql.update("delete from recalculation where tenant_id = ?", id);
             sql.update("delete from invoice where tenant_id = ?", id);
+            sql.update("delete from certificate where tenant_id = ?", id);
+            sql.update("delete from document_counter where tenant_id = ?", id);
             sql.update("delete from billing_month where tenant_id = ?", id);
         });
         for (String table : List.of("audit_entry", "plot_status", "ownership", "plot", "member_role",
@@ -282,6 +285,43 @@ abstract class DocumentsTestSupport extends IntegrationTest {
 
     ResultActions invoiceQr(String bearer, UUID invoice) throws Exception {
         return send(bearer, get(INVOICES + "/" + invoice + "/qr.png"), null);
+    }
+
+    /**
+     * {@code POST /billing-months/{month}/invoices?preview=...}, with the body {@code {includeNothingDue}} when it is
+     * not null.
+     */
+    ResultActions buildMonth(String bearer, String month, boolean preview, Boolean includeNothingDue)
+            throws Exception {
+        return send(bearer, post(MONTH_INVOICES.formatted(month) + "?preview=" + preview),
+                includeNothingDue == null ? null : Map.of("includeNothingDue", includeNothingDue));
+    }
+
+    /** The month build by the treasurer; returns its counts. */
+    JsonNode built(String month, boolean includeNothingDue) throws Exception {
+        return body(buildMonth(treasurer, month, false, includeNothingDue).andExpect(status().isOk()));
+    }
+
+    /** {@code GET /billing-months/{month}/invoices/print.pdf}, with {@code ?scope=} when it is not null. */
+    ResultActions printMonth(String bearer, String month, String scope) throws Exception {
+        return send(bearer, get(MONTH_INVOICES.formatted(month) + "/print.pdf"
+                + (scope == null ? "" : "?scope=" + scope)), null);
+    }
+
+    /** The number of stored invoice versions of the cooperative. */
+    int invoiceCount() {
+        return owner().queryForObject("select count(*) from invoice where tenant_id = ?", Integer.class, tenant);
+    }
+
+    /** Sets how the member receives invoices ({@code EMAIL}, {@code TELEGRAM}, {@code VIBER}, {@code PAPER}). */
+    void deliveryChannel(UUID member, String channel) {
+        owner().update("update member set delivery_channel = ? where id = ?", channel, member);
+    }
+
+    /** A member of the cooperative with the base role MEMBER; returns its id. */
+    UUID memberNamed(String lastName, String firstName, String middleName) {
+        person("MEMBER", lastName, firstName, middleName);
+        return lastPerson();
     }
 
     // ---- payments

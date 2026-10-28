@@ -23,6 +23,7 @@ interface NavItem {
     | 'charges'
     | 'payments'
     | 'reports'
+    | 'certificates'
     | 'imports'
     | 'roles'
     | 'audit'
@@ -43,6 +44,7 @@ const NAV_ITEMS: readonly NavItem[] = [
   { to: '/charges', label: 'charges', permission: 'CHARGES_VIEW' },
   { to: '/payments', label: 'payments', permission: 'PAYMENTS_VIEW' },
   { to: '/reports', label: 'reports', permission: 'REPORTS_VIEW' },
+  { to: '/documents/certificates', label: 'certificates', permission: 'CHARGES_VIEW' },
   { to: '/imports', label: 'imports', permission: 'IMPORT_RUN' },
   { to: '/roles', label: 'roles', permission: 'ROLES_MANAGE' },
   { to: '/audit', label: 'audit', permission: 'AUDIT_VIEW' },

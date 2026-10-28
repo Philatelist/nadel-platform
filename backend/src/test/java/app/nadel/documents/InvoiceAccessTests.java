@@ -20,6 +20,10 @@ import org.springframework.test.web.servlet.ResultActions;
  * {@code /qr.png} need {@code CHARGES_VIEW}, or the caller owns the plot now and the version is the latest one (an
  * older version, another plot's invoice and an unknown id are the same 404); a caller with neither the permission nor
  * a plot is 403; another cooperative finds nothing (404, an empty list); the platform operator is 403; no token 401.
+ * The month: {@code POST /billing-months/{month}/invoices} (preview and build) and
+ * {@code GET /billing-months/{month}/invoices/print.pdf} need {@code INVOICES_ISSUE} ({@code CHARGES_VIEW} alone, a
+ * member, the electrician and the operator are 403); another cooperative's chairman builds and prints only their own
+ * cooperative's invoices.
  */
 class InvoiceAccessTests extends DocumentsTestSupport {
 
@@ -74,6 +78,34 @@ class InvoiceAccessTests extends DocumentsTestSupport {
         return send(bearer, get(INVOICES + "/readiness"), null);
     }
 
+    private ResultActions preview(String bearer) throws Exception {
+        return buildMonth(bearer, currentMonth(), true, null);
+    }
+
+    private ResultActions build(String bearer) throws Exception {
+        return buildMonth(bearer, currentMonth(), false, null);
+    }
+
+    private ResultActions print(String bearer) throws Exception {
+        return printMonth(bearer, currentMonth(), "ALL");
+    }
+
+    /** The month build (preview and build) and the print set are allowed. */
+    private void everyMonthAction(String bearer) throws Exception {
+        preview(bearer).andExpect(status().isOk()).andExpect(jsonPath("$.invoiceable").value(2));
+        build(bearer).andExpect(status().isOk()).andExpect(jsonPath("$.invoiceable").value(2));
+        ok(print(bearer), "application/pdf");
+    }
+
+    /** The month build (preview and build) and the print set are refused, and nothing is written. */
+    private void noMonthAction(String bearer) throws Exception {
+        int before = invoiceCount();
+        forbidden(preview(bearer));
+        forbidden(build(bearer));
+        forbidden(print(bearer));
+        assertThat(invoiceCount()).isEqualTo(before);
+    }
+
     private void everyRead(String bearer) throws Exception {
         ok(invoice(bearer, oldVersion), "application/json");
         ok(invoice(bearer, latest), "application/json");
@@ -89,6 +121,7 @@ class InvoiceAccessTests extends DocumentsTestSupport {
         for (String bearer : new String[] {treasurer, chairman}) {
             issue(bearer, own, null).andExpect(status().isCreated());
             everyRead(bearer);
+            everyMonthAction(bearer);
         }
     }
 
@@ -98,8 +131,10 @@ class InvoiceAccessTests extends DocumentsTestSupport {
 
         everyRead(viewer);
         forbidden(issue(viewer, own, null));
+        noMonthAction(viewer);
         String issuer = customRole("INVOICES_ISSUE");
         issue(issuer, own, null).andExpect(status().isCreated());
+        everyMonthAction(issuer);
     }
 
     @Test
@@ -119,6 +154,7 @@ class InvoiceAccessTests extends DocumentsTestSupport {
         forbidden(list(member));
         forbidden(readiness(member));
         forbidden(issue(member, own, null));
+        noMonthAction(member);
     }
 
     @Test
@@ -144,6 +180,7 @@ class InvoiceAccessTests extends DocumentsTestSupport {
             forbidden(list(bearer));
             forbidden(readiness(bearer));
             forbidden(issue(bearer, own, null));
+            noMonthAction(bearer);
         }
     }
 
@@ -159,6 +196,15 @@ class InvoiceAccessTests extends DocumentsTestSupport {
         notFound(invoiceQr(other, latest));
         list(other).andExpect(status().isOk()).andExpect(jsonPath("$.totalItems").value(0));
         issue(other, own, null).andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("PLOT_NOT_FOUND"));
+        // the other cooperative's own month: a preview writes nothing, and its print set has none of this one's
+        int before = invoiceCount();
+        int previewStatus = preview(other).andReturn().getResponse().getStatus();
+        assertThat(previewStatus).isIn(200, 404, 409);
+        var printed = print(other).andReturn().getResponse();
+        if (printed.getStatus() == 200) {
+            assertThat(text(printed.getContentAsByteArray())).doesNotContain("Документи");
+        }
+        assertThat(invoiceCount()).isEqualTo(before);
         assertThat(owner().queryForObject("select count(*) from invoice where tenant_id = ?", Integer.class,
                 OTHER_TENANT)).isZero();
     }
@@ -173,7 +219,11 @@ class InvoiceAccessTests extends DocumentsTestSupport {
         forbidden(list(operator));
         forbidden(readiness(operator));
         forbidden(issue(operator, own, null));
+        noMonthAction(operator);
         invoice(null, latest).andExpect(status().isUnauthorized());
+        preview(null).andExpect(status().isUnauthorized());
+        build(null).andExpect(status().isUnauthorized());
+        print(null).andExpect(status().isUnauthorized());
         invoicePdf(null, latest).andExpect(status().isUnauthorized());
         list(null).andExpect(status().isUnauthorized());
         issue(null, own, null).andExpect(status().isUnauthorized());

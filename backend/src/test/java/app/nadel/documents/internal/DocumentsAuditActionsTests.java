@@ -25,4 +25,13 @@ class DocumentsAuditActionsTests {
     void theInvoiceEntityTypeIsAnAuditEntityTypeOfTheContract() {
         assertThat(AuditEntityType.fromValue(InvoiceAuditPublisher.INVOICE)).isEqualTo(AuditEntityType.INVOICE);
     }
+
+    @Test
+    void everyCertificateActionAndItsEntityTypeAreValuesOfTheContract() {
+        var contract = Arrays.stream(AuditAction.values()).map(AuditAction::getValue).toList();
+
+        assertThat(Arrays.stream(CertificateAuditPublisher.Action.values()).map(Enum::name)).isSubsetOf(contract);
+        assertThat(AuditEntityType.fromValue(CertificateAuditPublisher.CERTIFICATE))
+                .isEqualTo(AuditEntityType.CERTIFICATE);
+    }
 }

@@ -1,8 +1,8 @@
 # documents
 
 Printable documents built from what the other modules have booked (feature 016): the **cash receipt** of a payment
-and the **invoice** of a plot for a billing month with the NBU payment QR code (on request; the month build follows in
-slice 3); the debt certificate follows in a later slice of the spec. Every document is a PDF in Ukrainian (an official paper, whatever language the user's screens are in), drawn with
+and the **invoice** of a plot for a billing month with the NBU payment QR code (on request, and for every plot of a billing month
+with the print set for paper delivery) and the **debt certificate** of a plot as of a day with its register and annulment. Every document is a PDF in Ukrainian (an official paper, whatever language the user's screens are in), drawn with
 Apache PDFBox and the embedded IBM Plex Sans (ADR 0017). Requirements: `docs/features/016-invoices-and-documents.md`;
 specs: `context/spec/016-invoices-and-documents/`.
 
@@ -21,8 +21,16 @@ it.
 | `GET /invoices?month&plotId&page&size` | `listInvoices` | `CHARGES_VIEW` |
 | `GET /invoices/readiness` | `getInvoiceReadiness` | `CHARGES_VIEW` |
 | `GET /invoices/{id}` · `/pdf` · `/qr.png` | `getInvoice`, `getInvoicePdf`, `getInvoiceQrPng` | `CHARGES_VIEW`, or a current owner of the plot and only the latest version (else 404) |
+| `POST /billing-months/{month}/invoices?preview` (body `{includeNothingDue?}`) | `buildMonthInvoices` | `INVOICES_ISSUE` |
+| `GET /billing-months/{month}/invoices/print.pdf?scope=PAPER\|ALL` | `getMonthInvoicesPrintPdf` | `INVOICES_ISSUE` |
 
-All are implemented by `DocumentsController` (the whole generated `DocumentsApi`).
+| `POST /plots/{id}/certificates` (body `{asOf?}`) | `issuePlotCertificate` | `CERTIFICATES_ISSUE` |
+| `GET /certificates?status&page&size` | `listCertificates` | `CHARGES_VIEW` |
+| `GET /certificates/{id}/pdf` | `getCertificatePdf` | `CHARGES_VIEW` |
+| `POST /certificates/{id}/annul` (body `{reason}`) | `annulCertificate` | `CERTIFICATES_ISSUE` |
+
+The receipt and invoice endpoints are implemented by `DocumentsController` (the generated `DocumentsApi`), the
+certificate endpoints (tag `certificates`) by `CertificatesController` (the generated `CertificatesApi`).
 
 The receipt endpoint carries no `@PreAuthorize`: a member holds no permission for it, so `CashReceipts` decides, in
 this order:
@@ -101,7 +109,9 @@ sorted; compact JSON) gives `content_hash` = the keyed blind index `privacy.Inde
 detected without a hash of plaintext names (the month build uses it). The QR link is stored, so a later change of the
 code never changes an old version.
 
-**Reading** (`Invoices`): the list (newest month, newest issue, number, newest version; `latest` from a window over the
+**Reading** (`Invoices`): the list (newest month, newest issue, number, newest version; with a `month` filter the
+number in the natural order of the plot numbers, `PlotCatalog.inNaturalOrder`, so the month's versions are sorted and
+paged in memory; `latest` from a window over the
 plot and month), one version opened (`GET /invoices/{id}`, the contract's `InvoiceSnapshot`), its PDF and its QR PNG
 (8 px per module; 404 when nothing is due), the readiness (`missing`). Who sees a version: `CHARGES_VIEW`; or a
 current owner of its plot and only the latest version of its plot and month; anything else about an id is the same
@@ -121,6 +131,116 @@ part of a month; a reading interval «показники A – B (day – day)»
 у призначенні вказуйте номер ділянки», the chairmen and treasurers, «Сформовано в системі Наділ {дата час}». The file's
 `/ID` is derived from the version's whole snapshot and its dates are `issuedAt`, so a version always gives the same
 bytes.
+
+## The debt certificate (feature 016 §2.7)
+
+**Issue** (`Certificates.issue`, one read committed transaction): `asOf` defaults to today in Kyiv; a later day is 400
+`VALIDATION_FAILED` on `asOf` (`INVALID`). The plot (`PlotCatalog.find`; unknown or another cooperative's: 404
+`PLOT_NOT_FOUND`); common land 409 `PLOT_COMMON_LAND`, an archived plot 409 `PLOT_ARCHIVED` (the existing codes:
+the plot balances report, whose figures the certificate repeats, lists neither); the requisites as for an invoice (409
+`REQUISITES_MISSING` with `missing`, `RequisitesCheck`). A plot without a current owner gets a certificate without
+owners. Then: the current owners with their shares (`PlotOwners.currentOwnerShares`) and full names
+(`MemberDirectory`); the figures `LedgerReadModel.debtsAsOf(asOf, every type, [plot])`, the same as the plot balances
+report for that day (the debt per charge type the plot has a counted charge of, in the cooperative's type order with
+the printed name; the total; the prepayment); the area (`PlotFacts.areaM2`); the issuer: the issuing user's full name
+and role («Голова» when they hold the chairman's role, else «Казначей», else their custom roles' names, else «Член
+кооперативу»; a renamed base role prints its stored name). The names are sealed at
+`FieldRef("certificate", "snapshot.persons", certificateId)` (ADR 0016) before the number is taken.
+
+**Number** `Д-{YYYY}-{N}` (`DocumentCounter`): `YYYY` is the year of the issue instant in Europe/Kyiv; the counter row
+`document_counter (tenant, 'CERTIFICATE', year)` is created with `INSERT … ON CONFLICT DO NOTHING` and stepped with
+`UPDATE … SET last_value = last_value + 1 … RETURNING`, the last read of the transaction: only the insert of the
+`certificate` row and its audit event follow. The row lock orders concurrent issues (the waiting `UPDATE` reads the
+committed value), a rollback undoes the step, so numbers are consecutive, never duplicated and never skipped; a new
+year starts at 1.
+
+**Snapshot** (`CertificateSnapshots`, schema 1, `certificate.snapshot` jsonb, written once): `schema`, `number`,
+`year`, `seq`, `asOf`, `issuedAt` (microseconds), `issuedOn`, `cooperative` (name, ЄДРПОУ, address, IBAN, bank),
+`plot` (id, number, street, `areaM2`), `owners` (`memberId`, `numerator`, `denominator`), `types` (id, code, printed
+name, `debt`), `totals` (`debt`, `prepayment`), `issuer` (`memberId`, `role`), `persons` (base64 of the owners' and
+the issuer's names, sealed). `certificate.total_debt` is the total, never below 0.00 (the column's check).
+
+**Annul** (`Certificates.annul`): the reason is stripped and required (400 `REQUIRED`; over 500 characters
+`TOO_LONG`, also by the contract); one `UPDATE certificate SET annulled_at, annulled_by, annul_reason WHERE id = ? AND
+annulled_at IS NULL` (the `certificate_guard()` trigger allows only this change, once); 0 rows is 409
+`CERTIFICATE_ALREADY_ANNULLED` for an existing certificate, else 404 `NOT_FOUND`. A concurrent second annulment waits
+for the row lock and then matches nothing.
+
+**Register** (`Certificates.list`): newest issue first (then year and number), `status` `ISSUED` / `ANNULLED` /
+both, pages of at most 100; each row has the number, the plot (as printed), `asOf`, `totalDebt`, who issued it and
+who annulled it (current names through `audit.ActorNames`), the times and the reason.
+
+**The page** (`CertificateLayout`, A4): the requisites; «Довідка № Д-2026-1» «про стан розрахунків за ділянкою»;
+«Дата видачі», «Станом на»; when annulled, «АНУЛЬОВАНО {день}. Причина: …» in a frame; «Ділянка № N, street»;
+«Площа: 600,00 м² (6,00 сотки)»; «Власники: name (1/2), …» or «Власники: не зазначено»; the table of the debt per
+charge type with «Разом»; «Аванс (передоплата)»; «Заборгованість відсутня» when the total is 0,00, otherwise
+«Заборгованість становить {сума}»; «{role}: {name}» with a signature line, «М. П.» (the place for the stamp); the
+footer. The file's `/ID` is derived from the whole certificate with its annulment and its dates are `issuedAt` (or
+`annulledAt` once annulled), so a certificate in the same state always gives the same bytes. File name
+`certificate_D-2026-1.pdf`.
+
+**Audit** (`CertificateAuditPublisher`, through the outbox): entity type `CERTIFICATE`, entity id the certificate,
+label its number; `CERTIFICATE_ISSUED` with `plot` (number), `number`, `asOf`, `totalDebt`; `CERTIFICATE_ANNULLED`
+with `number` and `reason`. No names. Downloads are not audited.
+
+**The month build** (`InvoiceBuilder.forMonth`, `POST /billing-months/{month}/invoices`, synchronous: ADR 0017
+"Synchronous month build and its limit"):
+
+1. The month (`ListedMonths`): after the current month in Kyiv 409 `PERIOD_IN_FUTURE`; before the first billing month
+   (`LedgerReadModel.firstBillingMonth`) or while there is none 404 `NOT_FOUND`, as the billing month endpoints answer.
+2. Not a preview: the month's build lock without waiting, in the outer transaction (409 `INVOICE_BUILD_RUNNING` while
+   another build of the month or an on-request invoice of it holds it).
+3. The new `REPEATABLE READ` transaction: the requisites (409 `REQUISITES_MISSING`); the invoiceable plots =
+   `PlotCatalog.findChargeable` (active, not common land) with a current owner (`PlotOwners.currentOwnerShares`), in
+   street and plot order (`PlotCatalog.inStreetOrder`); more than 2,000 → 422 `INVOICE_BUILD_TOO_LARGE` with `limit`
+   (`ApiProblemException.invoiceBuildTooLarge`); `asOf` read once.
+4. Chunks of 50 plots: `invoiceLedgers` of the chunk, the latest version of each plot's invoice of the month with its
+   content hash (`InvoiceRepository.latestOfPlots`), the owners' names; per plot the invoice (`document`, as on
+   request) and then: no invoice of the month and nothing due → **skipped** (unless `includeNothingDue`, then version 1
+   without the QR code); no invoice → version 1 (**built**); the same content hash as the latest version →
+   **unchanged** (nothing written); otherwise the next version (**newVersions**). `flush()` and `clear()` after each
+   chunk; a package-private test hook (`afterChunk`, a no-op in production) runs between chunks.
+5. One `INVOICES_ISSUED` audit entry (entity type `BILLING_MONTH`, label `YYYY-MM`, the same entity id for every build of
+   the month; fields `month`, `built`, `newVersions`, `unchanged`, `skipped`), through the outbox in the build's
+   transaction. Answer 200 `InvoiceBuild{preview: false, invoiceable, built, newVersions, unchanged, skipped}`.
+
+The **preview** (`preview=true`) runs steps 1 and 3 and reads the figures of the plots without an invoice of the month,
+takes no lock and writes nothing: `InvoiceBuild{preview: true, invoiceable, toBuild, nothingDue, existing}` (`existing`
+= plots with an invoice of the month, compared on a build; `nothingDue` = the others with nothing due; `toBuild` =
+`invoiceable - nothingDue`, or `invoiceable` with `includeNothingDue`). The build takes the month's lock without waiting
+(`pg_try_advisory_xact_lock`): while another build of the month, or an on-request invoice of it, holds it, the answer is
+409 `INVOICE_BUILD_RUNNING` and nothing is built (the user waits and refreshes the page). The on-request invoice keeps
+the waiting lock (it is short), so it waits for a running month build.
+
+**The print set** (`PrintBundle`, `GET /billing-months/{month}/invoices/print.pdf`): a month that is not listed (after
+the current one, before the first) is 404 `NOT_FOUND`. The latest version of each plot's invoice of the month
+(`InvoiceRepository.latestOfMonth`); `scope=PAPER` (the default) keeps the plots with at least one current owner whose
+delivery channel is `PAPER` (`PlotOwners.currentOwnerIds`, `members.MemberDirectory.deliveryChannels`), `ALL` every
+plot; street and plot order; one A4 PDF, each invoice drawn by `InvoiceLayout.draw` from the top of a new page, the
+snapshots opened 50 at a time. Without invoices one page «За {місяць} немає рахунків для друку» with the reason of the
+scope (`print.*` in the bundle). Its `/ID` comes from the month, the scope and the printed version ids, its time is the
+latest `issuedAt` among them, so the same set gives the same bytes. File `invoices_{YYYY-MM}_{paper|all}.pdf`.
+
+## Public API: `DocumentsFacade` (for feature 017)
+
+`DocumentsFacade` (implemented by `internal.DocumentsFacadeService`) with `PrintScope` (`PAPER`, `ALL`): ids, links and
+bytes only.
+
+| Method | What |
+|---|---|
+| `latestInvoice(plotId, month)` | the id of the latest version of the plot's invoice for the month, or empty |
+| `invoicePdf(invoiceId)` | the PDF of a version (the same bytes as `GET /invoices/{id}/pdf`), or empty |
+| `invoiceForToday(plotId)` | a new version for the current month as of now (as `POST /plots/{id}/invoices`, the same lock, problems and `INVOICE_REISSUED` audit), issued by the system: no `issued_by`, audit subject `system:documents` |
+| `receiptPdf(paymentId)` | the cash receipt drawn now, without the payer note; empty for an unknown payment, a reversal row or a bank payment |
+| `printPdf(month, scope)` | the print set (as the endpoint, without the month check: an unknown month is the one page "no invoices") |
+| `qrLink(invoiceId)` | the stored NBU link of a version, or empty (unknown id, nothing due) |
+
+The cooperative is the one the caller bound (the request's token, or `TenantContext.runAs` in a job or a listener);
+without one a method throws `IllegalStateException`. Each method runs in a transaction of the tenant-aware transaction
+manager, `REQUIRED` (it joins the caller's, or opens its own, so a job needs none). The facade checks no permission: it
+answers as the system and the caller keeps the endpoints' rules (a member receives only the latest version of an
+invoice of a plot they own now, and only the receipt of a group whose every plot they own now). Only
+`invoiceForToday` writes (and audits).
 
 ## Amounts in words
 
@@ -221,7 +341,41 @@ hryvnia sign U+20B4. SHA-256: Regular `975dcda37d80f038dcd143c22e33ca2d97a0cc5a9
 - `InvoiceAccessTests` (Testcontainers): every endpoint for the treasurer, the chairman, a custom role with
   `CHARGES_VIEW` only and with `INVOICES_ISSUE` only, a member (own latest only; old version, foreign plot, a sold plot
   404; list, readiness and issue 403), the electrician and a custom role without either (403), another cooperative
-  (404, empty list, `PLOT_NOT_FOUND`), the operator (403), no token (401).
+  (404, empty list, `PLOT_NOT_FOUND`), the operator (403), no token (401); the month build (preview and build) and the
+  print set: allowed with `INVOICES_ISSUE`, 403 with `CHARGES_VIEW` only, for a member, the electrician and the
+  operator (nothing written), 401 without a token, another cooperative's preview writes nothing here.
+- `InvoiceMonthBuildTests` (Testcontainers): the preview's counts (20 invoiceable, 5 with nothing due, plots without
+  an owner, archived or common land not counted) and nothing written; a build, then a rebuild without a change; a
+  payment gives one version 2; `includeNothingDue` (invoices without the QR code, compared on the next build); a
+  closed and an open month; a future month (409), a month before the first (404), missing requisites (409); a second
+  build started while the first runs is 409 `INVOICE_BUILD_RUNNING` (a preview meanwhile is 200) and nothing is built
+  twice, the next build finds everything unchanged; one `INVOICES_ISSUED`
+  entry per build with its counts and no names; the month list in the natural order of the plot numbers.
+- `InvoiceBuildConsistencyTests` (Testcontainers): a payment and a charge committed (with a `created_at` before the
+  build) between the first and the second chunk of a 60-plot build, on plots of both chunks, are in none of its
+  invoices; the next build gives exactly those four plots a new version.
+- `InvoicePrintTests` (Testcontainers): one page per latest invoice in street and plot order, `PAPER` (the default)
+  with a plot shared by an e-mail and a paper owner, only the latest version, the same bytes twice, the one page of an
+  empty set, a month not listed (404), an unknown scope (400).
+- `InvoiceBuildLimitTests` (Testcontainers): 2,000 invoiceable plots, 12 months of two charge types, payments on half,
+  shared ownership; the first build, a rebuild and an on-request invoice measured (`INVOICE_BUILD_MEASURE` on the
+  output, the numbers in ADR 0017) under a loose ceiling; plot 2,001 refused with 422 `INVOICE_BUILD_TOO_LARGE` and
+  `limit`, preview and build.
+- `DocumentsFacadeTests` (Testcontainers, under `TenantContext.runAs` without a request): the latest invoice, its PDF
+  equal to the endpoint's, the QR link (none when nothing is due), the system's invoice for today (no member, audit
+  subject), the receipt without the payer note and none for a bank payment, the print set equal to the endpoint's,
+  another cooperative finds nothing, no bound cooperative fails.
+- `CertificateTests` (Testcontainers): the debt text with the per-type amounts and the no-debt text, the figures
+  equal to the plot balances report for today and for the end of last month, the names sealed, a future day (400, no
+  number taken), common land, an archived plot, an unknown plot and missing requisites, a plot without owners, the
+  annulment reason (required, blank, too long), annulled once (409) with the register and the PDF marked and the next
+  number still next, the register's pages, byte-identical PDFs before and after the annulment, the audit entries.
+- `CertificateNumberConcurrencyTests` (Testcontainers): six issues waiting on the counter row get 1 to 6; an issue
+  that fails after taking its number leaves no gap; the year of the issue in Kyiv with a fixed clock, a new year
+  starting at 1.
+- `CertificateAccessTests` (Testcontainers): the chairman issues, reads and annuls; the treasurer reads but cannot
+  issue or annul; custom roles with `CERTIFICATES_ISSUE` only and `CHARGES_VIEW` only; a member (own plot too) and the
+  electrician 403; another cooperative (404, nothing in its register); the operator 403; no token 401.
 - `ReceiptAccessTests` (Testcontainers): treasurer, chairman, a custom role with `PAYMENTS_VIEW`, a member with their
   own and a foreign payment, a split group with a plot no longer theirs, a reversal row, the electrician (403),
   another cooperative (404), the operator (403), no token (401).

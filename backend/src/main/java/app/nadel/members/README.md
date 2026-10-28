@@ -20,7 +20,11 @@ transaction (`MANDATORY`, 500 ids per `IN` list). It is the **only** way another
 feature 014 it opens the sealed phones and e-mail with the key of the caller's cooperative (`TenantContext`); a value
 that does not open fails the call with 500 `PERSONAL_DATA_UNREADABLE`, never an empty contact. Nothing logs the values. The
 implementation is `JpaMemberDirectory` (internal); `plots` uses it for owners (feature 007). Feature 005 (import) will
-add more lookups here.
+add more lookups here. `deliveryChannels(ids)` (feature 016) returns how each given member receives invoices as the
+public enum `DeliveryChannel` (`EMAIL`, `TELEGRAM`, `VIBER`, `PAPER`; the values of `member.delivery_channel`),
+archived members included, unknown ids and other cooperatives' members absent; it runs in the caller's transaction
+(`MANDATORY`, 500 ids per `IN` list). The documents module prints the paper set of a month's invoices with it; feature
+017 will deliver by it.
 
 `RoleHolders` (feature 016, implemented by `JpaRoleHolders`): `activeHolders(baseRoleCode)` returns the active (not
 archived) members who hold the base role with the code (`CHAIRMAN`, `TREASURER`, `MEMBER`) as `MemberRef`, in name

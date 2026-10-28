@@ -5,6 +5,7 @@ import { Link, useParams } from 'react-router';
 import { billingMonthLabel } from '../components/charges/billingMonth';
 import { ChargesTabs } from '../components/charges/ChargesTabs';
 import { CloseMonthDialog } from '../components/charges/CloseMonthDialog';
+import { MonthInvoicesPanel } from '../components/invoices/MonthInvoicesPanel';
 import { MonthChecklist } from '../components/charges/MonthChecklist';
 import { RunPreviewDialog } from '../components/charges/RunPreviewDialog';
 import { MonthTotals } from '../components/charges/MonthTotals';
@@ -86,6 +87,7 @@ function MonthView({ month }: { month: BillingMonthDetails }) {
       <Panel title={t.billing.checklist.title}>
         <MonthChecklist checklist={month.checklist} />
       </Panel>
+      <MonthInvoicesPanel month={month.month} />
       {running && <RunPreviewDialog month={month.month} onClose={() => setRunning(false)} />}
       {closing && (
         <CloseMonthDialog

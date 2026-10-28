@@ -6,6 +6,7 @@ import java.util.List;
 import nadel.contract.model.Problem;
 import nadel.contract.model.ProblemFieldError;
 import nadel.contract.model.RequisiteField;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
@@ -36,6 +37,15 @@ public class ProblemWriter {
      */
     public static Problem body(HttpStatusCode status, String code, String detail, List<FieldProblem> errors,
             List<String> missing) {
+        return body(status, code, detail, errors, missing, null);
+    }
+
+    /**
+     * The response body with the missing requisites of {@code REQUISITES_MISSING} ({@code missing}, left out when
+     * empty) and the limit of {@code INVOICE_BUILD_TOO_LARGE} ({@code limit}, left out when null).
+     */
+    public static Problem body(HttpStatusCode status, String code, String detail, List<FieldProblem> errors,
+            List<String> missing, @Nullable Integer limit) {
         var problem = new Problem();
         problem.setType("about:blank");
         problem.setTitle(title(status));
@@ -49,6 +59,9 @@ public class ProblemWriter {
         }
         if (!missing.isEmpty()) {
             problem.setMissing(missing.stream().map(RequisiteField::fromValue).toList());
+        }
+        if (limit != null) {
+            problem.setLimit(limit);
         }
         return problem;
     }

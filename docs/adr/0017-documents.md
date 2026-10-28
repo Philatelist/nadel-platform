@@ -1,7 +1,7 @@
 # 0017. Documents: PDFs drawn with Apache PDFBox 3.0.8 and the embedded IBM Plex Sans, byte-stable, never stored
 
-**Status:** proposed; introduced in phase 4 by spec 016 (`context/spec/016-invoices-and-documents/`). The measurement
-of the month build and its limit are added by slice 3 of the spec.
+**Status:** proposed; introduced in phase 4 by spec 016 (`context/spec/016-invoices-and-documents/`). Slice 3 of the
+spec adds the synchronous month build with its limit and measurement.
 
 ## Context
 Feature 016 prints official documents for a cooperative: the invoice of a plot for a billing month with the NBU payment
@@ -22,6 +22,7 @@ Questions:
 2. Which font, and how do we keep the documents legal to distribute and legible in Ukrainian?
 3. How are the files made byte-stable?
 4. Are the files stored?
+5. How is a month's set of invoices built, in the request or as a background job, and up to what size?
 
 ## Decision
 
@@ -101,7 +102,7 @@ A document is rendered on every download from its data: the receipt from the led
 
 ### One consistent read per build
 
-An invoice build (on request now, the month build in slice 3) reads every figure from one database snapshot: a new
+An invoice build (on request, and the month build) reads every figure from one database snapshot: a new
 `REPEATABLE READ` transaction through the tenant-aware transaction manager. One build per cooperative and month runs
 at a time: the transaction-scoped advisory lock `documents.invoices:{tenant}:{YYYY-MM}` is taken first, in an outer
 transaction that holds it until the build has committed, and the `REPEATABLE READ` transaction begins only once the
@@ -110,6 +111,47 @@ its first statement (the tenant's `set_config`), so after waiting for an earlier
 versions. The moment of the build (`asOf`) is the later of the application clock and the database clock, read once
 after the snapshot began, so every row committed before it counts whichever clock wrote its `created_at`.
 
+### Synchronous month build and its limit
+
+The month build (`POST /billing-months/{month}/invoices`, `InvoiceBuilder.forMonth`) runs **in the request, in one
+`REPEATABLE READ` transaction**, like the month run of feature 011 and the Excel import (ADR 0012); the web shows a
+spinner (owner decision 28.10.2026). No JobRunr (ADR 0007: it comes with feature 017, which delivers the invoices), no
+job queue of our own and no `invoice_run` table: a half-finished background build would need its own state, progress
+and retry, and the requirement's `invoice_run` is dropped.
+
+- **One snapshot for the whole build** (owner decision 28.10.2026): the transaction of "One consistent read per build"
+  above, with `asOf` read once. A payment or a charge committed by another transaction while the build runs is in all
+  of its invoices or in none, even on a plot read after the commit; `InvoiceBuildConsistencyTests` commits a payment
+  and a charge between two chunks (through a test hook) and finds them in none of that build's invoices and in the
+  next build. `REPEATABLE READ` blocks neither the payment entry nor the month run; the build only reads ledger rows and
+  inserts into `invoice`, so it has no write conflict on shared rows.
+- **Order and chunks:** the invoiceable plots (active, not common land, with a current owner) in street and plot order,
+  50 at a time: `LedgerReadModel.invoiceLedgers` (three queries) per chunk, the snapshot and its keyed content hash per
+  plot, compared with the latest version of the month (a new version only when it differs; a plot without an invoice and
+  with nothing due is skipped unless asked), then `flush()` and `clear()` of the persistence context, so memory does
+  not grow with the cooperative. One `INVOICES_ISSUED` audit entry per build, with the counts.
+- **One build per month at a time:** the advisory month lock, taken by the month build without waiting
+  (`pg_try_advisory_xact_lock`): a build started while another build of the month (or an on-request invoice of it)
+  runs is refused with 409 `INVOICE_BUILD_RUNNING` and builds nothing, so the second user is told a build is already
+  running (functional spec §2.5) instead of holding a request thread and two connections for the length of a build.
+  The on-request invoice is short and keeps the waiting lock (`pg_advisory_xact_lock`). The preview takes no lock and
+  writes nothing.
+- **Limit: 2,000 invoiceable plots** per build (the size of the largest supported cooperative, the import's plot
+  limit). Above it the build and the preview answer 422 `INVOICE_BUILD_TOO_LARGE` with `limit` and write nothing.
+- **Measurement** (`InvoiceBuildLimitTests`, Testcontainers PostgreSQL, the line `INVOICE_BUILD_MEASURE` on the
+  test's output): 2,000 invoiceable plots, two charge types charged in each of 12 months (48,000 charges), a bank
+  payment of the month on half of the plots, a tenth of the plots shared by two owners; the first build (2,000 new
+  versions), a rebuild without a change (2,000 compared, nothing written) and one on-request invoice. The test checks a
+  loose ceiling (60 s per build, 10 s on request).
+  Measured: <filled after the measurement run>
+- **Progress UI:** a spinner only while the measured first build at the limit is at most about 5 s; a longer build
+  goes back to the owner (a lower limit, or the build as a JobRunr job in 017) instead of a progress bar here.
+
+The print set of a month (`GET /billing-months/{month}/invoices/print.pdf`, `PrintBundle`) is drawn in the request
+too: one A4 PDF with the latest version of each invoice (the paper-delivery plots, or all), one invoice from the top of
+a page, from the stored snapshots 50 at a time; its identity is the month, the scope and the printed version ids, so
+the same set gives the same bytes.
+
 ## Consequences
 
 - Two new libraries (PDFBox, three artifacts; ZXing core, one artifact) to watch in OSV-Scanner; a new advisory is bumped or, with a reason,
@@ -117,7 +159,9 @@ after the snapshot began, so every row committed before it counts whichever cloc
 - The layout layer is ours to maintain: wrapping, tables and page breaks are tested in `PdfDocumentTests`; a richer
   layout need (for example free-form templates) would be a new decision.
 - About 400 KB of font files in the backend jar; the TTF files and `OFL.txt` must travel together.
-- Rendering costs CPU on every download (a receipt takes milliseconds); the month build and the print set are measured
-  in slice 3 and recorded here with the limit.
+- Rendering costs CPU on every download (a receipt takes milliseconds); the month build is measured at its limit
+  (above) and holds a request thread and two database connections (the lock's and the build's) while it runs.
+- A cooperative above 2,000 invoiceable plots cannot build its month's invoices in one request; raising the limit or
+  moving the build to a JobRunr job (feature 017) is a new decision.
 - The hryvnia sign of the NBU QR code uses the U+20B4 glyph of the embedded font until the owner supplies the official
   drawing (slice 2, `docs/domain/nbu-qr.md`).

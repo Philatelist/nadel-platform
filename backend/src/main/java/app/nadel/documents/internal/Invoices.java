@@ -6,6 +6,7 @@ import app.nadel.identity.OwnedPlot;
 import app.nadel.identity.OwnedPlotsSource;
 import app.nadel.identity.Permission;
 import app.nadel.money.Money;
+import app.nadel.plots.PlotCatalog;
 import app.nadel.problem.ApiProblemException;
 import app.nadel.problem.ProblemCodes;
 import app.nadel.settings.CooperativeSettings;
@@ -16,7 +17,11 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.YearMonth;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
@@ -57,6 +62,16 @@ class Invoices {
             limit :limit offset :offset
             """;
 
+    /** Every version of one month (optionally of one plot), for the natural order of the plots. */
+    private static final String MONTH = """
+            select i.id, i.plot_id, i.snapshot -> 'plot' ->> 'number' as plot_number, i.month, i.number,
+                   i.version, i.due, i.issued_at,
+                   i.version = max(i.version) over (partition by i.plot_id, i.month) as latest
+            from invoice i
+            where i.month = :month
+              and (:allPlots or i.plot_id = :plotId)
+            """;
+
     private static final String COUNT = """
             select count(*)
             from invoice i
@@ -82,15 +97,17 @@ class Invoices {
     }
 
     private final EntityManager entityManager;
+    private final PlotCatalog plots;
     private final InvoiceRepository invoices;
     private final InvoiceSnapshots snapshots;
     private final OwnedPlotsSource ownedPlots;
     private final CooperativeSettings settings;
     private final TenantDirectory tenants;
 
-    Invoices(EntityManager entityManager, InvoiceRepository invoices, InvoiceSnapshots snapshots,
+    Invoices(EntityManager entityManager, PlotCatalog plots, InvoiceRepository invoices, InvoiceSnapshots snapshots,
             OwnedPlotsSource ownedPlots, CooperativeSettings settings, TenantDirectory tenants) {
         this.entityManager = entityManager;
+        this.plots = plots;
         this.invoices = invoices;
         this.snapshots = snapshots;
         this.ownedPlots = ownedPlots;
@@ -98,9 +115,17 @@ class Invoices {
         this.tenants = tenants;
     }
 
-    /** The page of issued versions; the caller holds {@code CHARGES_VIEW}. */
+    /**
+     * The page of issued versions; the caller holds {@code CHARGES_VIEW}. Newest month, newest issue, number, newest
+     * version; with a month the number is compared in the natural order of the plot numbers
+     * ({@code PlotCatalog.inNaturalOrder}: 9 before 10), so the versions of the month are read and paged here (at most
+     * the month's plots times their versions).
+     */
     @Transactional(readOnly = true)
     Page list(@Nullable YearMonth month, @Nullable UUID plotId, int page, int size) {
+        if (month != null) {
+            return monthPage(month, plotId, page, size);
+        }
         // a filter that is off is bound to a placeholder value (a null of unknown type is not valid SQL there)
         LocalDate first = month == null ? LocalDate.EPOCH : month.atDay(1);
         UUID plot = plotId == null ? NONE : plotId;
@@ -118,14 +143,38 @@ class Invoices {
                 .setParameter("allPlots", plotId == null)
                 .setParameter("plotId", plot)
                 .getSingleResult()).longValue();
-        List<Row> items = rows.stream().map(row -> {
-            Object[] v = (Object[]) row;
-            LocalDate day = v[3] instanceof java.sql.Date sql ? sql.toLocalDate() : (LocalDate) v[3];
-            return new Row((UUID) v[0], (UUID) v[1], Objects.requireNonNullElse((String) v[2], ""),
-                    YearMonth.from(day), (String) v[4],
-                    ((Number) v[5]).intValue(), Money.of((BigDecimal) v[6]), (Instant) v[7], (Boolean) v[8]);
-        }).toList();
+        List<Row> items = rows.stream().map(Invoices::row).toList();
         return new Page(items, page, size, total);
+    }
+
+    /** The versions of one month: newest issue, plot in natural order, newest version, id. */
+    private Page monthPage(YearMonth month, @Nullable UUID plotId, int page, int size) {
+        List<?> found = entityManager.createNativeQuery(MONTH)
+                .setParameter("month", month.atDay(1))
+                .setParameter("allPlots", plotId == null)
+                .setParameter("plotId", plotId == null ? NONE : plotId)
+                .getResultList();
+        List<Row> rows = new ArrayList<>(found.stream().map(Invoices::row).toList());
+        Map<UUID, Integer> rank = new HashMap<>();
+        List<UUID> natural = plots.inNaturalOrder(rows.stream().map(Row::plotId).distinct().toList());
+        for (int i = 0; i < natural.size(); i++) {
+            rank.put(natural.get(i), i);
+        }
+        rows.sort(Comparator.comparing(Row::issuedAt, Comparator.reverseOrder())
+                .thenComparing(row -> rank.getOrDefault(row.plotId(), Integer.MAX_VALUE))
+                .thenComparing(Row::version, Comparator.reverseOrder())
+                .thenComparing(Row::id));
+        int from = (int) Math.min((long) page * size, rows.size());
+        int to = (int) Math.min((long) from + size, rows.size());
+        return new Page(List.copyOf(rows.subList(from, to)), page, size, rows.size());
+    }
+
+    private static Row row(Object row) {
+        Object[] v = (Object[]) row;
+        LocalDate day = v[3] instanceof java.sql.Date sql ? sql.toLocalDate() : (LocalDate) v[3];
+        return new Row((UUID) v[0], (UUID) v[1], Objects.requireNonNullElse((String) v[2], ""),
+                YearMonth.from(day), (String) v[4],
+                ((Number) v[5]).intValue(), Money.of((BigDecimal) v[6]), (Instant) v[7], (Boolean) v[8]);
     }
 
     /** One version as the viewer may see it, the names opened. */

@@ -92,7 +92,8 @@ export function PlotInvoices({ plotId }: { plotId: string }) {
   );
 }
 
-function InvoiceItem({ row }: { row: InvoiceRow }) {
+/** One invoice row with its PDF button; `plotLabel` is set where rows of several plots are listed. */
+export function InvoiceItem({ row, plotLabel }: { row: InvoiceRow; plotLabel?: string }) {
   const t = useT();
   const { locale } = useLocale();
   const i = t.invoices;
@@ -101,6 +102,7 @@ function InvoiceItem({ row }: { row: InvoiceRow }) {
     <li className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 py-3">
       <div className="flex min-w-0 flex-col gap-0.5">
         <div className="flex flex-wrap items-center gap-2 font-medium">
+          {plotLabel !== undefined && <span>{plotLabel}</span>}
           <span>{billingMonthLabel(row.month, t)}</span>
           <span className="font-mono">{row.number}</span>
           <span className="text-ink-muted">{format(i.version, { version: row.version })}</span>

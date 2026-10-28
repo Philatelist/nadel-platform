@@ -1,5 +1,6 @@
 package app.nadel.documents.internal;
 
+import app.nadel.documents.PrintScope;
 import app.nadel.documents.internal.CashReceipts.ReceiptFile;
 import app.nadel.identity.CurrentUser;
 import app.nadel.ledger.InvoiceLedger;
@@ -8,6 +9,7 @@ import java.time.OffsetDateTime;
 import java.time.YearMonth;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import nadel.contract.api.DocumentsApi;
 import nadel.contract.model.Basis;
@@ -16,6 +18,8 @@ import nadel.contract.model.CalculationUnit;
 import nadel.contract.model.ChargeCalculationPart;
 import nadel.contract.model.ChargeCalculationReading;
 import nadel.contract.model.Frequency;
+import nadel.contract.model.InvoiceBuild;
+import nadel.contract.model.InvoiceBuildRequest;
 import nadel.contract.model.InvoiceCooperative;
 import nadel.contract.model.InvoiceLaterPayment;
 import nadel.contract.model.InvoiceLine;
@@ -24,6 +28,7 @@ import nadel.contract.model.InvoiceLineSource;
 import nadel.contract.model.InvoiceOwner;
 import nadel.contract.model.InvoicePage;
 import nadel.contract.model.InvoicePlot;
+import nadel.contract.model.InvoicePrintScope;
 import nadel.contract.model.InvoiceQr;
 import nadel.contract.model.InvoiceReadiness;
 import nadel.contract.model.InvoiceRow;
@@ -50,7 +55,10 @@ import org.springframework.web.bind.annotation.RestController;
  * by {@link CashReceipts}, since a member holds no permission for it. The invoices: {@code POST /plots/{id}/invoices}
  * ({@code INVOICES_ISSUE}, {@link InvoiceBuilder}), {@code GET /invoices} and {@code GET /invoices/readiness}
  * ({@code CHARGES_VIEW}), {@code GET /invoices/{id}}, {@code /pdf} and {@code /qr.png} ({@code CHARGES_VIEW} or a
- * current owner and the latest version, decided by {@link Invoices}). Files are sent as attachments and never cached.
+ * current owner and the latest version, decided by {@link Invoices}). The month: {@code POST
+ * /billing-months/{month}/invoices} ({@code INVOICES_ISSUE}, {@link InvoiceBuilder#forMonth}) and {@code GET
+ * /billing-months/{month}/invoices/print.pdf} ({@code INVOICES_ISSUE}, {@link PrintBundle}). Files are sent as
+ * attachments and never cached.
  */
 @RestController
 @RequestMapping("/api/v1")
@@ -60,12 +68,15 @@ class DocumentsController implements DocumentsApi {
     private final CashReceipts receipts;
     private final InvoiceBuilder builder;
     private final Invoices invoices;
+    private final PrintBundle printBundle;
 
-    DocumentsController(CurrentUser currentUser, CashReceipts receipts, InvoiceBuilder builder, Invoices invoices) {
+    DocumentsController(CurrentUser currentUser, CashReceipts receipts, InvoiceBuilder builder, Invoices invoices,
+            PrintBundle printBundle) {
         this.currentUser = currentUser;
         this.receipts = receipts;
         this.builder = builder;
         this.invoices = invoices;
+        this.printBundle = printBundle;
     }
 
     @Override
@@ -82,6 +93,33 @@ class DocumentsController implements DocumentsApi {
         return ResponseEntity.status(HttpStatus.CREATED).body(new InvoiceRow(issued.id(), issued.plotId(),
                 issued.plotNumber(), issued.month().toString(), issued.number(), issued.version(),
                 issued.due().toString(), offset(issued.issuedAt()), true));
+    }
+
+    @Override
+    @PreAuthorize("hasAuthority('PERM_INVOICES_ISSUE')")
+    public ResponseEntity<InvoiceBuild> buildMonthInvoices(String month, Boolean preview,
+            @Nullable InvoiceBuildRequest request) {
+        boolean includeNothingDue = request != null && Boolean.TRUE.equals(request.getIncludeNothingDue());
+        InvoiceBuilder.MonthBuild result = builder.forMonth(YearMonth.parse(month), includeNothingDue,
+                Boolean.TRUE.equals(preview), currentUser.profile());
+        InvoiceBuild body = new InvoiceBuild(result.preview(), result.invoiceable());
+        if (result.preview()) {
+            body.toBuild(result.toBuild()).nothingDue(result.nothingDue()).existing(result.existing());
+        } else {
+            body.built(result.built()).newVersions(result.newVersions()).unchanged(result.unchanged())
+                    .skipped(result.skipped());
+        }
+        return ResponseEntity.ok(body);
+    }
+
+    @Override
+    @PreAuthorize("hasAuthority('PERM_INVOICES_ISSUE')")
+    public ResponseEntity<Resource> getMonthInvoicesPrintPdf(String month, @Nullable InvoicePrintScope scope) {
+        YearMonth target = YearMonth.parse(month);
+        PrintScope printScope = scope == null ? PrintScope.PAPER : PrintScope.valueOf(scope.getValue());
+        UUID tenantId = Objects.requireNonNull(currentUser.profile().tenantId(), "tenantId");
+        Invoices.File file = printBundle.printListed(tenantId, target, printScope);
+        return pdf(file.fileName(), file.content());
     }
 
     @Override
