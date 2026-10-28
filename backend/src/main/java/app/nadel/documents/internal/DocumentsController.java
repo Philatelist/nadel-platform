@@ -55,7 +55,8 @@ import org.springframework.web.bind.annotation.RestController;
  * by {@link CashReceipts}, since a member holds no permission for it. The invoices: {@code POST /plots/{id}/invoices}
  * ({@code INVOICES_ISSUE}, {@link InvoiceBuilder}), {@code GET /invoices} and {@code GET /invoices/readiness}
  * ({@code CHARGES_VIEW}), {@code GET /invoices/{id}}, {@code /pdf} and {@code /qr.png} ({@code CHARGES_VIEW} or a
- * current owner and the latest version, decided by {@link Invoices}). The month: {@code POST
+ * current owner and the latest version, decided by {@link Invoices}), {@code GET /me/invoices} (the caller's own
+ * plots, no permission, {@link Invoices#mine}). The month: {@code POST
  * /billing-months/{month}/invoices} ({@code INVOICES_ISSUE}, {@link InvoiceBuilder#forMonth}) and {@code GET
  * /billing-months/{month}/invoices/print.pdf} ({@code INVOICES_ISSUE}, {@link PrintBundle}). Files are sent as
  * attachments and never cached.
@@ -127,11 +128,21 @@ class DocumentsController implements DocumentsApi {
     public ResponseEntity<InvoicePage> listInvoices(@Nullable String month, @Nullable UUID plotId, Integer page,
             Integer size) {
         Invoices.Page found = invoices.list(month == null ? null : YearMonth.parse(month), plotId, page, size);
-        List<InvoiceRow> items = found.items().stream().map(row -> new InvoiceRow(row.id(), row.plotId(),
-                row.plotNumber(), row.month().toString(), row.number(), row.version(), row.due().toString(),
-                offset(row.issuedAt()), row.latest())).toList();
+        List<InvoiceRow> items = found.items().stream().map(DocumentsController::row).toList();
         return ResponseEntity.ok(new InvoicePage(items, found.page(), found.size(), found.totalItems(),
                 found.totalPages()));
+    }
+
+    /** No permission: the caller's own plots only, decided by {@link Invoices#mine}. */
+    @Override
+    public ResponseEntity<List<InvoiceRow>> listMyInvoices() {
+        return ResponseEntity.ok(invoices.mine(currentUser.profile()).stream().map(DocumentsController::row)
+                .toList());
+    }
+
+    private static InvoiceRow row(Invoices.Row row) {
+        return new InvoiceRow(row.id(), row.plotId(), row.plotNumber(), row.month().toString(), row.number(),
+                row.version(), row.due().toString(), offset(row.issuedAt()), row.latest());
     }
 
     @Override

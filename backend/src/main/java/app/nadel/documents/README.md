@@ -21,6 +21,7 @@ it.
 | `GET /invoices?month&plotId&page&size` | `listInvoices` | `CHARGES_VIEW` |
 | `GET /invoices/readiness` | `getInvoiceReadiness` | `CHARGES_VIEW` |
 | `GET /invoices/{id}` · `/pdf` · `/qr.png` | `getInvoice`, `getInvoicePdf`, `getInvoiceQrPng` | `CHARGES_VIEW`, or a current owner of the plot and only the latest version (else 404) |
+| `GET /me/invoices` | `listMyInvoices` | anyone in a cooperative: the latest version per month of the plots they own now (empty without a plot); the operator 403 |
 | `POST /billing-months/{month}/invoices?preview` (body `{includeNothingDue?}`) | `buildMonthInvoices` | `INVOICES_ISSUE` |
 | `GET /billing-months/{month}/invoices/print.pdf?scope=PAPER\|ALL` | `getMonthInvoicesPrintPdf` | `INVOICES_ISSUE` |
 
@@ -118,6 +119,14 @@ current owner of its plot and only the latest version of its plot and month; any
 404 `NOT_FOUND` as an unknown one; without the permission and without a plot of one's own 403 before the lookup; the
 platform operator 403. File names `invoice_{YYYY-MM}_plot-{number}_v{N}.pdf` / `_qr.png` (the web builds its own).
 Downloads are not audited.
+
+**A member's invoices** (`Invoices.mine`, `GET /me/invoices`, the member account's «Рахунки»): the plots the caller
+owns now (`identity.OwnedPlotsSource`), for each the latest version of each month's invoice (one native query: the
+version equal to the plot and month's highest), newest month first, then the plots in the natural order of their
+numbers; every row `latest: true`. No permission: a caller with no plot, or linked to no member, gets an empty list (a
+sold plot is no longer listed); the platform operator 403. Each row's PDF is `GET /invoices/{id}/pdf`, which lets a
+member have only that latest version. A member's cash receipts come from the plot account (`GET /plots/{id}/account`:
+`payments[].id`, `source`, `receiptNumber`) and `GET /payments/{id}/receipt.pdf`.
 
 **The page** (`InvoiceLayout`, A4): the requisites; «Рахунок № {number}» and «(версія N)» from version 2; «Дата
 видачі», «Розрахунковий місяць» and «Станом на {asOf}» for a month that was open; «Платник: ділянка № N, street» and
@@ -220,6 +229,24 @@ plot; street and plot order; one A4 PDF, each invoice drawn by `InvoiceLayout.dr
 snapshots opened 50 at a time. Without invoices one page «За {місяць} немає рахунків для друку» with the reason of the
 scope (`print.*` in the bundle). Its `/ID` comes from the month, the scope and the printed version ids, its time is the
 latest `issuedAt` among them, so the same set gives the same bytes. File `invoices_{YYYY-MM}_{paper|all}.pdf`.
+
+## Demo documents
+
+`DemoDocuments` (an `ApplicationRunner`, registered only when `spring.flyway.locations` contains `db/demo` and the
+placeholder `demoledger` is `on`: the `dev` profile of `make up`; never in production, never in the integration tests,
+which turn the placeholder off). The demo ledger block of `R__demo_data.sql` wipes `invoice`, `certificate` and
+`document_counter` of the demo cooperative on every re-run (the snapshots need the Java cipher, so the script cannot
+write them); on start-up the runner, under `TenantContext.runAs` for the demo cooperative:
+
+- finds the closed month: the first billing month (the demo ledger books nothing before it) while it is `CLOSED`;
+- builds its invoices with `InvoiceBuilder.forMonth` (no preview, without `includeNothingDue`) as the system (no
+  member, subject `system:documents`), unless the month already has an invoice;
+- issues one certificate of plot 9 with `Certificates.issue` as of the last day of the closed month, in the name of the
+  demo chairman (the first active holder of the chairman's base role, so it prints «Голова» and a name), unless plot 9
+  already has a certificate.
+
+Idempotent: the next start finds both and writes nothing. A refusal (requisites missing, a running build) or any
+failure is logged with its problem code or class only and never stops the application; the log has counts only.
 
 ## Public API: `DocumentsFacade` (for feature 017)
 
@@ -376,6 +403,15 @@ hryvnia sign U+20B4. SHA-256: Regular `975dcda37d80f038dcd143c22e33ca2d97a0cc5a9
 - `CertificateAccessTests` (Testcontainers): the chairman issues, reads and annuls; the treasurer reads but cannot
   issue or annul; custom roles with `CERTIFICATES_ISSUE` only and `CHARGES_VIEW` only; a member (own plot too) and the
   electrician 403; another cooperative (404, nothing in its register); the operator 403; no token 401.
+- `MemberInvoicesTests` (Testcontainers): `GET /me/invoices` lists only the latest version per month of the member's
+  own plots, newest month first and the plots in natural order; a sold plot drops out; the listed PDFs download, an
+  older version and another plot's invoice are 404; the certificates are 403; the member's own cash receipt downloads,
+  another plot's is 404; a caller without a plot (also the treasurer) and another cooperative's member get an empty
+  list; the operator 403; no token 401.
+- `DemoDocumentsTests` (Testcontainers, the demo ledger loaded): the runner is not registered in the tests; a run builds
+  the closed month's invoices (version 1, no member) and plot 9's certificate as of the month's last day by the demo
+  chairman; a second run writes nothing and the rows and the counter stay the same; without a closed month nothing is
+  built.
 - `ReceiptAccessTests` (Testcontainers): treasurer, chairman, a custom role with `PAYMENTS_VIEW`, a member with their
   own and a foreign payment, a split group with a plot no longer theirs, a reversal row, the electrician (403),
   another cooperative (404), the operator (403), no token (401).

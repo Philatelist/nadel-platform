@@ -165,7 +165,7 @@ describe('PaymentForm split mode', () => {
     expect(
       await screen.findByText('Сума частин не дорівнює сумі платежу', undefined, wait),
     ).toBeInTheDocument();
-    expect(screen.getByText('Сума перевищує залишок за нарахуванням')).toBeInTheDocument();
+    expect(screen.getByText(/^Більше, ніж залишок 600,00\s₴$/)).toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: 'Частина платежу для ділянки 7' })).toHaveValue('1');
     expect(save).toBeDisabled();
     await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument(), wait);

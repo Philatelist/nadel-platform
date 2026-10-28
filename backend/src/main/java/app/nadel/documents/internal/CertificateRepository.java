@@ -13,4 +13,7 @@ interface CertificateRepository extends JpaRepository<CertificateRecord, UUID> {
 
     /** The annulled certificates. */
     Page<CertificateRecord> findByAnnulledAtIsNotNull(Pageable pageable);
+
+    /** Whether the plot has a certificate, valid or annulled (the demo documents issue one only once). */
+    boolean existsByPlotId(UUID plotId);
 }

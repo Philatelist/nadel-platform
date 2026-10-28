@@ -3,6 +3,7 @@ import { useLocale, useT } from '../i18n';
 import { QueryBoundary } from '../components/QueryBoundary';
 import { MyPlotsPanel } from '../components/ownership/MyPlotsPanel';
 import { MyMetersPanel } from '../components/readings/MyMetersPanel';
+import { MyInvoices } from '../components/invoices/MyInvoices';
 import { MyChargesPanel } from '../components/charges/MyChargesPanel';
 import { MyExpectedChargesPanel } from '../components/tariffs/MyExpectedChargesPanel';
 import { MemberDetails } from '../components/MemberDetails';
@@ -62,6 +63,7 @@ export function AccountPage() {
 
       <MyPlotsPanel />
       <MyMetersPanel />
+      <MyInvoices />
       <MyChargesPanel />
       <MyExpectedChargesPanel />
     </div>

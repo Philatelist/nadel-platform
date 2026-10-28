@@ -99,6 +99,38 @@ public final class DemoAccessChecks {
         getAs(mvc, treasurer, "/api/v1/roles")
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
+
+        documentsAreEnforcedFromTheMembersRoles(mvc);
+    }
+
+    /**
+     * The documents (feature 016): the invoice list and the certificate register need {@code CHARGES_VIEW}, issuing a
+     * certificate {@code CERTIFICATES_ISSUE} (the chairman only), a member's own invoices need no permission.
+     */
+    public static void documentsAreEnforcedFromTheMembersRoles(MockMvc mvc) throws Exception {
+        String treasurer = demo("treasurer@demo.local");
+        String member = demo("member@demo.local");
+        String chairman = demo("chairman@demo.local");
+
+        getAs(mvc, treasurer, "/api/v1/invoices").andExpect(status().isOk());
+        getAs(mvc, member, "/api/v1/invoices")
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
+        getAs(mvc, member, "/api/v1/me/invoices")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray());
+
+        getAs(mvc, treasurer, "/api/v1/certificates").andExpect(status().isOk());
+        getAs(mvc, member, "/api/v1/certificates")
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
+        // CERTIFICATES_ISSUE guards the issue; an unknown plot shows whether the guard let the call through (404)
+        postAs(mvc, treasurer, "/api/v1/plots/" + UUID.randomUUID() + "/certificates")
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
+        postAs(mvc, chairman, "/api/v1/plots/" + UUID.randomUUID() + "/certificates")
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("PLOT_NOT_FOUND"));
     }
 
     /** A token as Keycloak would issue it for a demo user; the subject is stable per e-mail. */

@@ -1936,6 +1936,9 @@ export const en = {
     download: 'Download PDF',
     downloading: 'Downloading…',
     latest: 'Latest version',
+    myTitle: 'Invoices',
+    myEmpty: 'There are no invoices yet.',
+    myOlder: 'Earlier months',
     monthPanel: {
       title: 'Invoices of the month',
       includeNothingDue: 'Include invoices with nothing due',

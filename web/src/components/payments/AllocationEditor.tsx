@@ -3,7 +3,7 @@ import { isZeroMoney } from '@nadel/shared';
 import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
-import { useT } from '../../i18n';
+import { useLocale, useT } from '../../i18n';
 import { problemCode } from '../../problem';
 import { Button, LoadingState, Notice } from '../ui';
 import { ProposalTable } from './ProposalTable';
@@ -50,6 +50,7 @@ export function AllocationEditor<TResult extends AllocationPreview>({
   intro?: (result: TResult) => ReactNode;
 }) {
   const t = useT();
+  const { locale } = useLocale();
   const [edits, setEdits] = useState<Edits>(null);
   const [touched, setTouched] = useState<ReadonlySet<string>>(new Set());
   const [outdated, setOutdated] = useState(false);
@@ -84,7 +85,14 @@ export function AllocationEditor<TResult extends AllocationPreview>({
   }
   const shown = lastShown ?? query.data;
   const errors = paymentErrors(t, saveError ?? (waiting ? undefined : query.error));
-  const problems = allocationProblemTexts(t, shown?.problems, shown?.proposal.plotId);
+  const problems = allocationProblemTexts(t, shown?.problems, shown?.proposal.plotId, {
+    locale,
+    open: {
+      [shown?.proposal.plotId ?? '']: Object.fromEntries(
+        (shown?.proposal.lines ?? []).map((l) => [l.chargeId, l.open]),
+      ),
+    },
+  });
   const plotKey = shown?.proposal.plotId ?? '';
 
   const lineErrors: Record<string, string> = { ...problems.lines[plotKey] };

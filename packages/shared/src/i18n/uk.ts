@@ -1959,6 +1959,9 @@ export const uk: Messages = {
     download: 'Завантажити PDF',
     downloading: 'Завантаження…',
     latest: 'Остання версія',
+    myTitle: 'Рахунки',
+    myEmpty: 'Рахунків ще немає.',
+    myOlder: 'Попередні місяці',
     monthPanel: {
       title: 'Рахунки за місяць',
       includeNothingDue: 'Включити рахунки без боргу',

@@ -33,7 +33,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Reads the issued invoices (feature 016 §2.4, §2.9, technical considerations 2.8): the list for the board, one
- * version as stored, its PDF and its QR image, and whether invoices can be built.
+ * version as stored, its PDF and its QR image, whether invoices can be built, and a member's own invoices
+ * ({@link #mine}).
  * <p>
  * <b>Who sees a version</b> ({@link #document}): {@code CHARGES_VIEW}; or a current owner of the invoice's plot, and
  * only the latest version of its plot and month. Anything else about an existing id (another plot, an older version
@@ -70,6 +71,16 @@ class Invoices {
             from invoice i
             where i.month = :month
               and (:allPlots or i.plot_id = :plotId)
+            """;
+
+    /** The latest version of every month's invoice of the given plots ({@code GET /me/invoices}). */
+    private static final String MINE = """
+            select i.id, i.plot_id, i.snapshot -> 'plot' ->> 'number' as plot_number, i.month, i.number,
+                   i.version, i.due, i.issued_at, true as latest
+            from invoice i
+            where i.plot_id in (:plotIds)
+              and i.version = (select max(j.version) from invoice j
+                               where j.plot_id = i.plot_id and j.month = i.month)
             """;
 
     private static final String COUNT = """
@@ -175,6 +186,37 @@ class Invoices {
         return new Row((UUID) v[0], (UUID) v[1], Objects.requireNonNullElse((String) v[2], ""),
                 YearMonth.from(day), (String) v[4],
                 ((Number) v[5]).intValue(), Money.of((BigDecimal) v[6]), (Instant) v[7], (Boolean) v[8]);
+    }
+
+    /**
+     * The member account's invoices ({@code GET /me/invoices}, feature 016 §2.9): the latest version of each month's
+     * invoice of every plot the viewer owns now, newest month first, then the plots in the natural order of their
+     * numbers. No permission: a viewer who owns nothing (or is linked to no member) gets an empty list; the platform
+     * operator is 403.
+     */
+    @Transactional(readOnly = true)
+    List<Row> mine(AccessProfile viewer) {
+        requireCooperative(viewer);
+        if (viewer.memberId() == null) {
+            return List.of();
+        }
+        // currentPlotsOf answers in the natural order of the plot numbers
+        List<UUID> owned = ownedPlots.currentPlotsOf(viewer.memberId()).stream().map(OwnedPlot::plotId).distinct()
+                .toList();
+        if (owned.isEmpty()) {
+            return List.of();
+        }
+        Map<UUID, Integer> rank = new HashMap<>();
+        for (int i = 0; i < owned.size(); i++) {
+            rank.put(owned.get(i), i);
+        }
+        List<Row> rows = new ArrayList<>(entityManager.createNativeQuery(MINE)
+                .setParameter("plotIds", owned)
+                .getResultList().stream().map(Invoices::row).toList());
+        rows.sort(Comparator.comparing(Row::month, Comparator.reverseOrder())
+                .thenComparing(row -> rank.getOrDefault(row.plotId(), Integer.MAX_VALUE))
+                .thenComparing(Row::id));
+        return List.copyOf(rows);
     }
 
     /** One version as the viewer may see it, the names opened. */

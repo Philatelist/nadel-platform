@@ -1,5 +1,5 @@
 import { ApiError, type AllocationProblem } from '@nadel/api-client';
-import type { Messages } from '@nadel/shared';
+import { format, formatMoney, type Messages } from '@nadel/shared';
 import { problemCode, problemFieldErrors, problemMessage, type FieldErrors } from '../../problem';
 
 /** Text for a payment problem: the payment wording for a plot that takes no payment and for a stale preview. */
@@ -131,6 +131,24 @@ export function paymentErrors(t: Messages, error: unknown): PaymentErrors {
   return { notice, fields, lines, parts };
 }
 
+/** The server's open amount of each charge line, by plot id then charge id, with the locale to show it in. */
+export interface RemainingAmounts {
+  locale: string;
+  open: Readonly<Record<string, Readonly<Record<string, string>>>>;
+}
+
+/** "More than the remaining X" when the server's open amount of the line is known, else the plain wording. */
+function exceedsText(
+  t: Messages,
+  remaining: RemainingAmounts | undefined,
+  plot: string,
+  chargeId?: string,
+): string {
+  const open = chargeId === undefined ? undefined : remaining?.open[plot]?.[chargeId];
+  if (remaining === undefined || open === undefined) return t.problem.ALLOCATION_EXCEEDS_CHARGE;
+  return format(t.payments.proposal.exceedsOpen, { amount: formatMoney(open, remaining.locale) });
+}
+
 /** The problems of a preview (`valid: false`) as texts, placed by where they belong. */
 export interface ProblemTexts {
   /** Line problems by plot id, then by charge id. */
@@ -149,6 +167,7 @@ export function allocationProblemTexts(
   t: Messages,
   problems: readonly AllocationProblem[] | undefined,
   plotId?: string,
+  remaining?: RemainingAmounts,
 ): ProblemTexts {
   const lines: Record<string, Record<string, string>> = {};
   const payment: Record<string, string> = {};
@@ -167,7 +186,7 @@ export function allocationProblemTexts(
             ? t.payments.problem.lineDuplicate
             : problem.code === 'AMOUNT_NOT_POSITIVE'
               ? t.problem.AMOUNT_NOT_POSITIVE
-              : t.problem.ALLOCATION_EXCEEDS_CHARGE;
+              : exceedsText(t, remaining, key, problem.chargeId);
       if (problem.chargeId !== undefined) (lines[key] ??= {})[problem.chargeId] = text;
       else payment[key] = text;
     }

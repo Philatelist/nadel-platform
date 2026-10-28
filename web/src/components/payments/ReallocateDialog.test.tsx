@@ -96,7 +96,7 @@ describe('ReallocateDialog', () => {
     await user.type(field, '999');
 
     // the table is not replaced; the problem stands next to its line, the server's totals are shown, Save is off
-    expect(await screen.findByText('Сума перевищує залишок за нарахуванням', {}, wait)).toBeInTheDocument();
+    expect(await screen.findByText(/^Більше, ніж залишок 600,00\s₴$/, {}, wait)).toBeInTheDocument();
     expect(screen.getByRole('textbox', membershipField)).toHaveValue('999');
     const totals = screen.getByRole('rowheader', { name: 'Розподілено' }).closest('tr');
     expect(totals).toHaveTextContent('999,00 ₴ з 300,00 ₴');
@@ -107,7 +107,7 @@ describe('ReallocateDialog', () => {
     await user.clear(screen.getByRole('textbox', membershipField));
     await user.type(screen.getByRole('textbox', membershipField), '100');
     await waitFor(() => expect(screen.getByRole('button', { name: 'Перерозподілити' })).toBeEnabled(), wait);
-    expect(screen.queryByText('Сума перевищує залишок за нарахуванням')).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Більше, ніж залишок/)).not.toBeInTheDocument();
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Перерозподілити' }));
     await waitFor(() => expect(onDone).toHaveBeenCalled());

@@ -112,6 +112,16 @@ describe('PlotAccountPanel with payments', () => {
     expect(screen.getByText('Reversed')).toBeInTheDocument();
   });
 
+  it('offers the receipt button for a cash payment and not for a bank payment', () => {
+    render(true);
+    expect(screen.getAllByRole('button', { name: 'Print receipt' })).toHaveLength(1);
+    useGetPlotAccount.mockReturnValue(
+      queryResult(account({ payments: [{ ...payment, source: 'BANK', receiptNumber: undefined }] })),
+    );
+    render(true);
+    expect(screen.getAllByRole('button', { name: 'Print receipt' })).toHaveLength(1);
+  });
+
   it('links the payment card only with PAYMENTS_VIEW', () => {
     const { unmount } = render();
     expect(screen.queryByRole('link', { name: '10 Oct 2026' })).toBeNull();
