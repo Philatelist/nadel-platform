@@ -1,12 +1,12 @@
 # Pipeline log — 015 payments and allocation
 
-- Status: running
-- Phase: 5 (publish)
+- Status: finished
+- Phase: 6 (review run not started)
 - Branch: 015-payments-and-allocation (planned) · Base: main @ 75db154
 - Requirement: document docs/features/015-payments-and-allocation.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
-- Publish: pr+checks · PR: https://github.com/Philatelist/nadel-platform/pull/56 · Checks: red: End-to-end (run 40711286319)
-- Review run: on (not started yet)
+- Publish: pr+checks · PR: https://github.com/Philatelist/nadel-platform/pull/56 · Checks: green (run 40715246536 on 03b0e4d)
+- Review run: not started: ports 8080/5173 held by the owner's own `make up` (PIDs 2267 vite, 2383 java), which the pipeline does not stop
 
 ## Project facts
 
@@ -141,7 +141,7 @@ red plots; guide PDFs.
 - Regression fix 939958d (ChargeTypesTests restores the treasurer role from its current permissions; SealImportPlansMigrationTests ddl-auto none below latest): fix review round 1 PASS. Full make check re-running.
 - Full `make check` (after regression fix 939958d): green — backend 3281 tests, 0 failures (baseline main 75db154: 2969/0), JaCoCo floor met; contract, format, lint, client typecheck and tests green (web 810, shared 130). Regressions: none left. Measured line coverage 0.9778 → `coverage.minimum` raised 0.974 → 0.977.
 - /awos:verify: 47 of 50 acceptance criteria [x] with test evidence (PaymentsAcceptanceTests + slice tests); 3 [?]: large receipt screen, settings switch after reload / treasurer view, electrician menu and no-access page — server side verified, real-browser rendering not checked locally (ports 8080/5173 held by the owner's own `make up`; Keycloak redirects only to :5173). Covered by `web/e2e/payments.spec.ts` and Vitest; Playwright runs in CI.
-- Status: functional spec and technical considerations set to `Implemented — pending manual check`.
+- Status: finished
 - Product docs: suggested (not run) `/awos:architecture Payments and allocations live in the ledger module (feature 015): payment, allocation and receipt_counter tables (V27), PlotLedgerLock, AllocationReleaser, PrepaymentAllocator, PaymentsChanged event, PaymentNotes port; remove "payments" from the planned modules`.
 - Worktrees: only the main checkout plus the pre-existing 012 worktree (not created by this run, left untouched).
 
@@ -159,3 +159,16 @@ red plots; guide PDFs.
 - CI fix attempt 1 (Backend b0c3d4f, End-to-end ae4cb1b): fix review PASS. Pushing.
 - CI run 40711286319 on 2bebfbb: Backend, Clients, SAST, Security green; End-to-end: 144 passed, 1 failed (meters.spec:272 — debounced street filter race, same class as PR #54), 1 flaky (privacy.spec:37, passed on retry). Earlier e2e failures fixed (language-purity split worked). CI fix attempt 2 (End-to-end) delegated.
 - CI fix attempt 2 (End-to-end 7c36272): fix review PASS. Pushing.
+- CI run 40715246536 on 03b0e4d: Backend, Clients, End-to-end (full), SAST and Security green.
+
+## Final report addendum (Phase 5 and 6)
+
+- PR: https://github.com/Philatelist/nadel-platform/pull/56 — "feat(ledger): payments, cash desk and allocation" (label full-e2e).
+- Checks: green on run 40715246536 (03b0e4d) after three runs.
+- CI fixes:
+  - b0c3d4f (Backend): PaymentAuditTests' global note scan collided with a member named «Оксана» from MemberSearchTests (names are readable by design) → unique payer name per run in the note; scans stay global.
+  - ae4cb1b (End-to-end): charges.spec label renamed in Slice 6; design-system menu count and Tab order (new Payments item); language-purity chairman screens split into shorter sessions (browser resource exhaustion on the Vite dev server, net::ERR_INSUFFICIENT_RESOURCES).
+  - 7c36272 (End-to-end): meters.spec and plots.spec wait for the debounced filter in the URL before clicking a link (same race as main PR #54).
+  - No re-runs of infrastructure failures; privacy.spec:37 was flaky once (passed on retry), unchanged.
+- Review run (Phase 6): not started — ports 8080/5173 held by the owner's own app.
+- Left for the owner: review and merge the PR; `make guide-shots` + `make guide` on this branch (screenshots and PDFs); check the 3 [?] criteria in a browser; `/awos:architecture` follow-up; optional hardening of the recalculation lock order.
