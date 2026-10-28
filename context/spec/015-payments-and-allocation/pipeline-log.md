@@ -5,7 +5,7 @@
 - Branch: 015-payments-and-allocation (planned) · Base: main @ 75db154
 - Requirement: document docs/features/015-payments-and-allocation.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
-- Publish: pr+checks · PR: https://github.com/Philatelist/nadel-platform/pull/56 · Checks: red: Backend, End-to-end (run 40706708919)
+- Publish: pr+checks · PR: https://github.com/Philatelist/nadel-platform/pull/56 · Checks: red: End-to-end (run 40711286319)
 - Review run: on (not started yet)
 
 ## Project facts
@@ -157,3 +157,4 @@ red plots; guide PDFs.
 - Phase 5: pushed 015-payments-and-allocation, opened PR #56 (label full-e2e). Waiting for checks.
 - CI run 40706708919 on PR #56: Clients, SAST, Security green; Backend red (PaymentAuditTests.theNoteIsNeverStoredOrLoggedInReadableForm:119 — unscoped audit scan for the note text "Оксана", order-dependent); End-to-end (full) red: 4 failed, 1 flaky of 142 — charges.spec member label renamed in Slice 6, design-system menu count/tab order (new Payments item), language-purity chairman every-screen (a screen without h1). payments.spec.ts passed. CI fix attempt 1 delegated (spring-backend, react-frontend).
 - CI fix attempt 1 (Backend b0c3d4f, End-to-end ae4cb1b): fix review PASS. Pushing.
+- CI run 40711286319 on 2bebfbb: Backend, Clients, SAST, Security green; End-to-end: 144 passed, 1 failed (meters.spec:272 — debounced street filter race, same class as PR #54), 1 flaky (privacy.spec:37, passed on retry). Earlier e2e failures fixed (language-purity split worked). CI fix attempt 2 (End-to-end) delegated.
