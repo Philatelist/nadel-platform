@@ -37,3 +37,9 @@ Reviews deferred by the owner (28.10.2026) until after the combined verify run; 
 | Round | Commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | — | `c6844a5`, web fix | not reviewed separately | — | test-only changes plus one i18n key removal; proven by the re-run (backend 30 targeted tests green; clients 853/853) and covered by Slice 7 and the full suite |
+
+## Fix — CI: invoice month build slow under RLS (InvoiceLedgerQueries.CHARGES)
+
+| Round | Commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `5cf5ed9` | PASS | — | equivalence checked case by case; 32 targeted tests green. minor: diagnosis stated as fact (an EXPLAIN note would make it verifiable); no plan/timing pin beyond the 60 s ceiling; same expression join remains in LedgerReportQueries (013) |

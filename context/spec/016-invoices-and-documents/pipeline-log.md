@@ -214,3 +214,4 @@ introduction (tables via Flyway, RLS-free job storage), Supply-chain CI job with
 - Phase 6: make up started detached from the spec branch (make up 90999, java 91366, node 91200); ready (health 200, web 200).
 - Root cause (spring-backend, perf-016 worktree): InvoiceLedgerQueries.CHARGES joined the corrected charge on coalesce(...) — not leakproof under RLS → no charge_pkey use → every chunk read all charges; with stale stats (after bulk load) a nested loop (57.6 M rows filtered per chunk). Production-relevant (a cooperative right after a bulk import). Fix: two plain PK joins, same result; heavy sequence 47.9 s → 2.0 s; documents tests 324/324, ledger tests green with the fix. No migration, no test change, ceiling unchanged.
 - Follow-up (not changed, 013 code): the same expression join in LedgerReportQueries lines ~299 and ~352 (reports). Option for the owner: tighten the 60 s ceiling of InvoiceBuildLimitTests.
+- Fix review (5cf5ed9) round 1: PASS. Pushing.
