@@ -26,6 +26,7 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `b811a37..346a693` | MAJOR_ISSUES | M1 `DeliveryDispatcher.run`: an unexpected exception while preparing/sending a row is logged and skipped; the row stays QUEUED with attempts and next_attempt_at unchanged, `nextDue` returns now → a new job every second, never FAILED, 3-attempt rule bypassed | 38 slice tests green. minor: `DeliveryQueue.schedule` job id per second drops a wake in the same second as a finished job (sweep catches it within a minute); `DeliveryRows.markMonthPrinted` marks all TO_PRINT rows (document it in OpenAPI); Telegram 400 → NO_CONTACT (recorded deviation) |
+| 2 | + `053feb8` | PASS | M1 resolved | 37 tests green; minor: fully qualified java.util names in the new test |
 
 ## Slice 4 — payment and reversal messages
 

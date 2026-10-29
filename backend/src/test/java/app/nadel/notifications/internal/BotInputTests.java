@@ -36,15 +36,20 @@ class BotInputTests extends BotTestSupport {
     }
 
     @Test
-    void theMenuActionsAreAnnouncedUntilTheyArrive() throws Exception {
+    void theMenuActionsAnswerTheLinkedMemberAndKeepTheMenu() throws Exception {
         startBot();
         Owner owner = owner("Роман", 1);
+        String number = owner.plots().getFirst();
         long chat = chat();
         link(chat, owner.id());
 
-        assertThat(lastReply(chat, "Борг", 2).text()).isEqualTo("Ця дія з'явиться незабаром.");
-        assertThat(lastReply(chat, "Рахунок", 3).text()).isEqualTo("Ця дія з'явиться незабаром.");
-        assertThat(lastReply(chat, "Показання", 4).buttons()).containsExactly(MENU_ROW_1, MENU_ROW_2);
+        Sent debt = lastReply(chat, "Борг", 2);
+        assertThat(debt.text()).isEqualTo("Ділянка " + number + "\nБоргу немає");
+        assertThat(debt.buttons()).containsExactly(MENU_ROW_1, MENU_ROW_2);
+        Sent readings = lastReply(chat, "Показання", 3);
+        assertThat(readings.text()).isEqualTo("На ділянці " + number + " немає лічильників, показання яких можна "
+                + "передати.");
+        assertThat(readings.buttons()).containsExactly(MENU_ROW_1, MENU_ROW_2);
     }
 
     @Test

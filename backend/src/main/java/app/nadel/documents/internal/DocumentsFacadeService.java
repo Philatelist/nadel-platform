@@ -21,7 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Serves the public {@link DocumentsFacade} with the services of the endpoints: the stored versions
  * ({@link InvoiceRepository}, {@link InvoiceSnapshots}, {@link InvoiceLayout}), the on-request build
- * ({@link InvoiceBuilder#forPlot}), the cash receipt ({@link CashReceipts}) and the print set ({@link PrintBundle}).
+ * ({@link InvoiceBuilder#forPlot}, {@link InvoiceBuilder#forDay}), the cash receipt ({@link CashReceipts}) and the print set ({@link PrintBundle}).
  * It acts as the system: no member, subject {@value #SYSTEM}, no permission check (the facade's comment says what the
  * caller keeps). Nothing it reads is logged.
  */
@@ -92,6 +92,14 @@ class DocumentsFacadeService implements DocumentsFacade {
         UUID tenantId = tenant();
         AccessProfile system = new AccessProfile(tenantId, null, SYSTEM, "", Set.of(), List.of(), false);
         return builder.forPlot(Objects.requireNonNull(plotId, "plotId"), null, system).id();
+    }
+
+    @Override
+    @Transactional
+    public UUID invoiceForDay(UUID plotId) {
+        UUID tenantId = tenant();
+        AccessProfile system = new AccessProfile(tenantId, null, SYSTEM, "", Set.of(), List.of(), false);
+        return builder.forDay(Objects.requireNonNull(plotId, "plotId"), system);
     }
 
     @Override

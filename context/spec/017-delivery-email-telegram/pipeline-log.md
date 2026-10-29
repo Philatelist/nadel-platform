@@ -99,3 +99,6 @@
 - git: auto-gc failed on stale metadata of the removed review-017-s3-r1 worktree; ran `git worktree prune` (also dropped a stale entry of another session's run-012 whose directory no longer existed) and removed the stale .git/gc.log as git asks. No objects or branches touched.
 - Slice 4 review round 1: PASS (minor notes in review-log.md).
 - Slice 3 review fix round 1 (spring-backend): unexpected exceptions → transient CONNECTION_FAILED through the retry path; new test with RED validation; 37 tests green.
+- Slice 3 review fix commit 053feb8; review round 2 started.
+- Slice 3 review round 2: PASS (M1 resolved).
+- S5 done (spring-backend): MemberReadings port + ReadingDecided, DocumentsFacade.invoiceForDay, BotCommands («Борг», «Рахунок», «Показання»), ReadingMessages. Verify set 395 green + 64 neighbours; orchestrator re-run 28 green. Choices: reading decision messages sent directly via TelegramClient (no delivery row, no migration), duplicates prevented in memory (a crash between send and outbox completion could repeat one); port tests named MemberReadingsPortTests; "today's version" counts any version issued today; «Скасувати» button added; meter question always asked; numbers without spaces; DocumentFormats.number added.

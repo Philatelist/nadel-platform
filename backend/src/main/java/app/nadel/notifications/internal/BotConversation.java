@@ -13,7 +13,6 @@ import app.nadel.notifications.internal.TelegramLinks.NeedsConfirmation;
 import app.nadel.notifications.internal.TelegramLinks.Redeemed;
 import app.nadel.notifications.internal.telegram.ReplyMarkup;
 import app.nadel.notifications.internal.telegram.TelegramClient;
-import app.nadel.notifications.internal.telegram.TelegramException;
 import app.nadel.notifications.internal.telegram.TelegramUpdate;
 import app.nadel.tenancy.TenantContext;
 import app.nadel.tenancy.TenantDirectory;
@@ -22,7 +21,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -37,7 +35,8 @@ import org.springframework.stereotype.Component;
  *       «Це ви, {ім'я}?» first ({@link Step#CONFIRM_MOVE}).</li>
  *   <li>{@code /start}, {@code /help}: the help and the menu.</li>
  *   <li>«Відключити», {@code /stop}: ends the link.</li>
- *   <li>«Борг», «Рахунок», «Показання»: answered «Ця дія з'явиться незабаром» until they arrive (slice 5).</li>
+ *   <li>«Борг», «Рахунок», «Показання» and the steps of the plot choice and the reading dialogue: {@link BotCommands}.
+ *       </li>
  * </ul>
  * Untrusted input: at most {@value BotInputLimiter#PER_MINUTE} messages a minute per chat ({@link BotInputLimiter}),
  * texts over {@value #MAX_TEXT} characters refused, only private chats answered. Message texts and chat ids are
@@ -58,16 +57,18 @@ class BotConversation {
     private final OwnedPlotsSource plots;
     private final TenantDirectory tenants;
     private final TelegramClient telegram;
+    private final BotCommands commands;
     private final NotificationTexts texts = NotificationTexts.uk();
 
     BotConversation(TelegramLinks links, BotDialogue dialogue, BotInputLimiter limiter, OwnedPlotsSource plots,
-            TenantDirectory tenants, TelegramClient telegram) {
+            TenantDirectory tenants, TelegramClient telegram, BotCommands commands) {
         this.links = links;
         this.dialogue = dialogue;
         this.limiter = limiter;
         this.plots = plots;
         this.tenants = tenants;
         this.telegram = telegram;
+        this.commands = commands;
     }
 
     /** Answers the update; the cooperative is bound. */
@@ -79,7 +80,7 @@ class BotConversation {
         UUID tenantId = TenantContext.currentTenantId()
                 .orElseThrow(() -> new IllegalStateException("No cooperative is bound"));
         long chatId = message.chatId();
-        Chat chat = new Chat(tenantId, token, chatId);
+        BotChat chat = new BotChat(tenantId, token, chatId, telegram, links);
         switch (limiter.check(tenantId, chatId)) {
             case WARN -> {
                 chat.send(texts.text("bot.tooMany"), null);
@@ -120,22 +121,26 @@ class BotConversation {
         }
         Optional<UUID> member = links.memberOfChat(chatId);
         if (member.isEmpty()) {
+            dialogue.reset(tenantId, chatId);
             chat.send(texts.text("bot.invite", Map.of("cooperative", cooperativeName())),
                     new ReplyMarkup.RemoveKeyboard());
             return;
         }
         if (text.equals("/stop") || text.equals(texts.text("bot.menu.unlink"))) {
+            dialogue.reset(tenantId, chatId);
             links.unlinkChat(chatId, EndReason.UNLINKED);
             chat.send(texts.text("bot.unlinked"), new ReplyMarkup.RemoveKeyboard());
-        } else if (text.equals(texts.text("bot.menu.debt")) || text.equals(texts.text("bot.menu.invoice"))
-                || text.equals(texts.text("bot.menu.readings"))) {
-            chat.send(texts.text("bot.comingSoon"), menu());
+        } else if (commands.isAction(text)) {
+            commands.action(chat, member.get(), text);
+        } else if (!text.startsWith("/") && commands.step(chat, member.get(), state, text)) {
+            log.debug("Bot dialogue step answered in cooperative {}", tenantId);
         } else {
+            dialogue.reset(tenantId, chatId);
             chat.send(texts.text("bot.help", Map.of("cooperative", cooperativeName())), menu());
         }
     }
 
-    private void link(Chat chat, byte[] codeHash, boolean moveConfirmed) {
+    private void link(BotChat chat, byte[] codeHash, boolean moveConfirmed) {
         Redeemed redeemed = links.redeem(chat.chatId(), codeHash, moveConfirmed);
         switch (redeemed) {
             case Invalid invalid -> chat.send(texts.text("bot.link.invalid"), menuOrNone(chat.chatId()));
@@ -168,53 +173,10 @@ class BotConversation {
     }
 
     private ReplyMarkup menu() {
-        return new ReplyMarkup.Keyboard(List.of(
-                List.of(texts.text("bot.menu.debt"), texts.text("bot.menu.invoice")),
-                List.of(texts.text("bot.menu.readings"), texts.text("bot.menu.unlink"))));
+        return commands.menu();
     }
 
     private String cooperativeName() {
         return tenants.current().map(TenantSummary::name).orElse("");
-    }
-
-    /** The chat being answered. Never prints the chat id. */
-    private final class Chat {
-
-        private final UUID tenantId;
-        private final BotToken token;
-        private final long chatId;
-
-        private Chat(UUID tenantId, BotToken token, long chatId) {
-            this.tenantId = tenantId;
-            this.token = token;
-            this.chatId = chatId;
-        }
-
-        UUID tenantId() {
-            return tenantId;
-        }
-
-        long chatId() {
-            return chatId;
-        }
-
-        /** Sends a reply; a 403 (the member blocked the bot) ends the chat's link. */
-        void send(String text, @Nullable ReplyMarkup markup) {
-            try {
-                telegram.sendMessage(token.token(), chatId, text, markup);
-            } catch (TelegramException e) {
-                if (e.kind() == TelegramException.Kind.FORBIDDEN) {
-                    links.unlinkChat(chatId, EndReason.BLOCKED);
-                    log.info("Bot of cooperative {} is blocked by a chat; its link ended", tenantId);
-                } else {
-                    log.warn("Bot reply of cooperative {} failed: {}", tenantId, e.getMessage());
-                }
-            }
-        }
-
-        @Override
-        public String toString() {
-            return "Chat[" + tenantId + "]";
-        }
     }
 }

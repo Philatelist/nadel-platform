@@ -17,7 +17,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * The long poll of one cooperative's bot on this instance (feature 017 §2.5), on a virtual thread: {@code getUpdates}
  * from the saved offset, then each update in turn. Before an update is answered it is taken in the database
  * ({@link BotPollState#take}: the offset moves past it only while this instance holds the lease), so an update is
- * answered at most once even if two instances poll for a moment, and a reading submitted from the bot (slice 5) is
+ * answered at most once even if two instances poll for a moment, and a reading submitted from the bot is
  * never submitted twice. An instance that finds it no longer holds the lease stops.
  * <p>
  * Telegram refusing the token (401) stops the worker and reports it ({@code onUnauthorized}), so the supervisor does

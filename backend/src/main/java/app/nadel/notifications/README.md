@@ -1,10 +1,11 @@
 # notifications
 
 Delivery to members (feature 017, `context/spec/017-delivery-email-telegram/`): e-mail through the cooperative's own
-mailbox (SMTP) and Telegram through its own bot. **Draft (slices 1–4):** the channel settings and their checks, the
-member's own channel choice, Telegram links and the bot, sending the month's invoices with the delivery register and
-worker, the paper copies with a link QR code, and the payment and reversal messages. The bot's commands and
-announcements follow in later slices and are added here as they land. Design decisions: ADR 0018.
+mailbox (SMTP) and Telegram through its own bot. **Draft (slices 1–5):** the channel settings and their checks, the
+member's own channel choice, Telegram links and the bot with its menu («Борг», «Рахунок», «Показання»), sending the
+month's invoices with the delivery register and worker, the paper copies with a link QR code, the payment and reversal
+messages, and the messages about the board's decision on a reading. Announcements follow in a later slice and are
+added here when they land. Design decisions: ADR 0018.
 
 ## Public API
 
@@ -13,13 +14,14 @@ listens to their events. Allowed dependencies (`package-info.java`): `members`, 
 `meters`, `plots`, `identity`, `privacy`, `audit`, `tenancy`, `tariffs`, `money`, `settings`, `problem`. Used now:
 `members` (`MemberDirectory`: names, contacts and channels; `MemberChannels`: the member's own channel choice; the SPI
 `TelegramLinkStatus` is implemented here by `TelegramLinkStatusProvider`), `documents` (`DocumentsFacade`:
-`latestInvoices`, `invoiceSummary`, `invoicePdf`; `DocumentFormats` for the texts; the SPI `PaperRecipients` is
-implemented here by `PaperCopiesProvider`), `plots` (`PlotOwners`: the current owners of a plot; `PlotCatalog`: the plot number of a payment message), `ledger`
+`latestInvoices`, `invoiceSummary`, `invoicePdf`, `invoiceForDay` for the bot's «Рахунок»; `DocumentFormats` for the
+texts; the SPI `PaperRecipients` is implemented here by `PaperCopiesProvider`), `meters` (`MemberReadings`: the bot's
+«Показання»; the event `ReadingDecided`), `tariffs` (`ChargeTypeCatalog`: the charge type names of «Борг»), `plots` (`PlotOwners`: the current owners of a plot; `PlotCatalog`: the plot number of a payment message), `ledger`
 (the events `PaymentRecorded` and `PaymentReversed`; `LedgerReadModel.paymentsByIds` and `debtsAsOf` for the payment
-messages; `DocumentsFacade.receiptPdf` for the cash receipt), `tenancy` (`TenantContext`,
+messages and the bot's «Борг»; `DocumentsFacade.receiptPdf` for the cash receipt), `tenancy` (`TenantContext`,
 `TenantDirectory`: the cooperative's name), `privacy` (`PersonalDataCipher`, `FieldRef`, `IndexKind.TELEGRAM_CHAT`),
 `audit` (`AuditEvent`, `FieldChange`, `Actor`), `identity` (`CurrentUser`, `AccessProfile`, `OwnedPlotsSource` for the
-plot numbers of the bot's greeting) and `problem`.
+plot numbers of the bot's greeting and the plots its menu reaches) and `problem`.
 
 ## Endpoints (tag `notifications`)
 
@@ -124,21 +126,54 @@ transaction.
 - **Worker.** `BotWorker` runs on a virtual thread: `getUpdates(offset, timeout = nadel.telegram.poll-timeout)` (25 s,
   messages only), then per update `BotPollState.take` moves `last_update_id` past it only while this instance holds
   the lease of this settings version — so an update is answered at most once, and before anything it causes (a reading
-  submitted in slice 5). An instance that lost the lease stops. Other failures retry after 1–30 s (a 429 waits
+  submitted from the bot). An instance that lost the lease stops. Other failures retry after 1–30 s (a 429 waits
   `retry_after`). A stop interrupts only the long poll or a pause, never a database call.
 - **Conversation** (`BotConversation`, texts from `messages_uk.properties`): `/start <code>` links (greeting «Вітаємо,
   {ім'я}! Тепер рахунки за ділянку {номери} приходитимуть сюди.» with the menu «Борг», «Рахунок», «Показання»,
   «Відключити»; «Посилання недійсне, отримайте нове в кабінеті або в правлінні» for an unknown, used, expired or
   malformed code); `/start` and `/help` the help and the menu; «Відключити» and `/stop` unlink; «Борг», «Рахунок»,
-  «Показання» answer «Ця дія з'явиться незабаром» until slice 5; anything else the help. An unlinked chat gets only the
-  invitation to link through the account or the paper QR code, never data. Only private chats are answered.
+  «Показання» are the menu actions below (`BotCommands`); anything else the help. An unlinked chat gets only the
+  invitation to link through the account or the paper QR code, never data. Only private chats are answered. Replies
+  go through `BotChat` (a 403 ends the link `BLOCKED`).
+- **The menu actions** (`BotCommands`, feature 017 §2.5). A linked member reaches only the plots they own now
+  (`OwnedPlotsSource.currentPlotsOf`), checked again at every step; a member without plots is told so.
+  - «Борг»: one block per plot: «Ділянка 9», one line per charge type the plot has counted charges of
+    («Членський внесок: 1 200,00 ₴», the types in list order, a seeded type by its Ukrainian default name unless
+    renamed), «Усього боргу: …», and «Аванс: …» when there is a prepayment; «Боргу немає» for a plot without counted
+    charges. The figures are `LedgerReadModel.debtsAsOf(today in Kyiv, every type)`, so they equal the plot account
+    (`BotDebtTests` compares them).
+  - «Рахунок»: with several plots the question «Рахунок за яку ділянку?» with a button per plot («Ділянка 9») and
+    «Скасувати»; then `DocumentsFacade.invoiceForDay` (one day, one invoice; the next day a new version only when it
+    changed) sent as the PDF with the caption of an invoice delivery and «Оплатити» when something is due
+    (`InvoiceMessages`). After a plot question «Готую рахунок за ділянку 9…» brings the menu back first. An invoice
+    that cannot be issued (no requisites, a plot without an invoice) is «… зараз не вдається підготувати».
+  - «Показання»: `PICK_PLOT` (only with several plots) → `PICK_METER` (a button per active meter: «⚡ ЕЛ-9/2»,
+    «💧 В-9», and «Скасувати») → `ENTER_VALUE` («Введіть показання лічильника ЕЛ-9/2 — лише число…»). The value is
+    digits with an optional decimal comma or point (anything else: «Це не схоже на показання…», type again), submitted
+    through `meters.MemberReadings.submit` (dated today, `PENDING` for the board, the account's rules): «Показання
+    12 345 по лічильнику ЕЛ-9/2 передано на перевірку». A refusal is told in plain words per problem code with the
+    account's details (the previous or next reading, the meter's working period) from `bot.readings.problem.*`, a
+    generic sentence for any other code, and the member types again; a meter or plot that is no longer theirs, or a
+    removed meter, ends the dialogue. The update was taken (its offset saved) before it is answered, so a reading is
+    submitted at most once.
 - **Untrusted input.** At most 20 messages a minute per chat (`BotInputLimiter`: message 21 of a chat's minute gets
   «Забагато повідомлень, спробуйте за хвилину», the rest of the minute is ignored); a text over 64 characters gets
   «Повідомлення задовге…». Message texts and chat ids are never logged or stored; logs carry the cooperative id and an
   outcome.
 - **Dialogue** (`BotDialogue`): in memory on the lease holder, per cooperative and chat, 10 minutes after the last
-  step; steps `IDLE` and `CONFIRM_MOVE` (holding only the hash of the pending code); slice 5 adds `PICK_PLOT`,
-  `PICK_METER`, `ENTER_VALUE`. After a take-over the member taps the menu again.
+  step; steps `IDLE`, `CONFIRM_MOVE` (holding only the hash of the pending code), `PICK_PLOT` (with its purpose,
+  invoice or reading), `PICK_METER` (the plot) and `ENTER_VALUE` (the plot and the meter): ids only, never a text. A
+  menu action, `/start`, `/help` or `/stop` starts afresh; a step asked again keeps the chat at it for another 10
+  minutes. After a take-over the member taps the menu again.
+- **The board's decision on a reading** (`ReadingMessages`): `@Async @TransactionalEventListener` on
+  `meters.ReadingDecided` (ADR 0007: `TenantContext.runAs`, then a short read-only `TransactionTemplate`). When the
+  cooperative has a bot and the submitter an active link (whatever channel they chose for invoices), the bot sends
+  «Показання 12 345 по лічильнику ЕЛ-9/2 прийнято» or «… відхилено: {причина}» (the reason as the board typed it, read
+  back through `MemberReadings.decision`; the event carries none). Sent directly through `TelegramClient` outside any
+  transaction at the bot's pace (`RateLimiters`, per bot and per chat), **not** through the delivery register: a
+  reading message is a reply in the bot's conversation, and `delivery.kind` (V29) has no such kind, so a row would need
+  a migration for no gain. Idempotent enough: one message per (reading, decision) on the instance (a redelivered event
+  sends nothing); only a crash between the send and the outbox's completion could repeat it. Nothing is stored.
 - **403 on a reply** (the member blocked the bot) ends the chat's link as `BLOCKED`.
 
 ## Sending invoices (feature 017 §2.3, §2.4)
@@ -270,7 +305,15 @@ database), `MeNotificationsTests`; slice 3: `ChannelResolverTests` (one per row 
 delivers the letter; the V30 tables) and, in the documents tests, `PrintCopiesTests`; slice 4: `PaymentMessagesTests`
 (cash with the receipt by Telegram and by e-mail, a bank payment without an attachment and with the prepayment, the
 reversal text, the switch off, a paper co-owner, a redelivered event, the outbox payload) and, in the ledger tests,
-`PaymentEventsTests`. No test reaches Telegram or a real mailbox: `app.nadel.notifications.FakeBotApi`
+`PaymentEventsTests`; slice 5 (`BotCommandsTestSupport`: the throw-away cooperative's bot polled through the
+supervisor): `BotDebtTests` (the figures equal the plot account for a plot with two charge types and one with a
+prepayment; no charges; another member's plot never shown), `BotInvoiceTests` (the PDF with «Оплатити»; twice a day and
+after a payment the same invoice; the next day a new version only when changed; the plot question with several plots;
+nothing due without the button), `BotReadingTests` (a `PENDING` reading dated today with one plot and no plot
+question, the update taken; a value below the previous one refused with the account's code and typed again, a text
+that is no number, too many decimals; the approval and rejection messages, a redelivered decision told once; another
+member's plot and meter unreachable), and, in the meters and documents tests, `MemberReadingsPortTests` and
+`InvoiceForDayTests`. No test reaches Telegram or a real mailbox: `app.nadel.notifications.FakeBotApi`
 (test sources) is an in-JVM Bot API on a random port that every Spring test context points `nadel.telegram.api-url` at
 (`IntegrationTest`, which also turns the schedule off and sets a 1 s poll), with a long-poll `getUpdates` over updates
 a test pushes per token, a recorded `sendMessage` and multipart `sendDocument` (caption, file, URL buttons; 403 for a

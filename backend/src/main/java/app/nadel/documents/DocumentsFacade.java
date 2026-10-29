@@ -19,8 +19,8 @@ import java.util.UUID;
  * rules the endpoints apply are the caller's to keep: a member may receive only the latest version of an invoice of a
  * plot they own now ({@code GET /invoices/{id}}) and only a receipt of a payment group whose every plot they own now
  * ({@code GET /payments/{id}/receipt.pdf}). The receipt is drawn without the payer note (the endpoints show it only to
- * a viewer with {@code MEMBERS_VIEW}). Nothing here is audited except {@link #invoiceForToday} when it issues a new
- * version.
+ * a viewer with {@code MEMBERS_VIEW}). Nothing here is audited except {@link #invoiceForToday} and
+ * {@link #invoiceForDay} when they issue a new version.
  */
 public interface DocumentsFacade {
 
@@ -51,6 +51,14 @@ public interface DocumentsFacade {
      * version's id, nothing written.
      */
     UUID invoiceForToday(UUID plotId);
+
+    /**
+     * The plot's invoice of the day (feature 017 §2.5, the bot's «Рахунок»): the latest version of the current month
+     * (Europe/Kyiv) when it was issued today, otherwise {@link #invoiceForToday}; under the month's build lock, so one
+     * day gives the same invoice every time and at most one new version per plot. The same answers as
+     * {@link #invoiceForToday}.
+     */
+    UUID invoiceForDay(UUID plotId);
 
     /**
      * The printed cash receipt of the payment's group, drawn now; empty for an unknown payment, a reversal row and a

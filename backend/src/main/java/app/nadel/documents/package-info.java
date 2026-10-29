@@ -9,7 +9,7 @@
  * <p>
  * The public API is {@code DocumentsFacade} with {@code PrintScope}, {@code MonthInvoice} and {@code InvoiceSummary}:
  * ids, links and PDF bytes for feature 017 (the delivery of invoices), for the cooperative the caller bound, without
- * permission checks of its own; {@code DocumentFormats} (amounts, days and months as the documents write them); and the
+ * permission checks of its own; {@code DocumentFormats} (amounts, days, months and readings as the documents write them); and the
  * SPI {@code PaperRecipients} with {@code PaperCopy} (one paper copy per recipient with a link QR code, implemented by
  * the notifications module; the print PDF then creates link codes). Everything else is internal:
  * the PDF layer ({@code internal.pdf}: {@code PdfDocument}, {@code TextBlock}, {@code Table}, {@code PdfFonts}), the

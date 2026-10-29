@@ -48,7 +48,7 @@ public final class DocumentFormat {
      *
      * @throws NumberFormatException when the text is not a decimal
      */
-    static String decimal(String plain, int minScale) {
+    public static String decimal(String plain, int minScale) {
         BigDecimal value = new BigDecimal(Objects.requireNonNull(plain, "plain").strip());
         BigDecimal stripped = value.stripTrailingZeros();
         int scale = Math.max(minScale, Math.max(0, stripped.scale()));

@@ -365,6 +365,29 @@ class InvoiceBuilder {
     }
 
     /**
+     * The plot's invoice of the day (feature 017 §2.5, the bot's «Рахунок»): the latest version of the current month
+     * (Europe/Kyiv) when it was issued today, whoever issued it; otherwise {@link #forPlot} for the current month, which
+     * issues a new version only when the content changed. Both under the month's build lock, taken first, so two
+     * requests of one day issue at most one new version and the second gets it. The same answers as {@link #forPlot}.
+     *
+     * @return the id of the version
+     */
+    @Transactional
+    UUID forDay(UUID plotId, AccessProfile issuer) {
+        Objects.requireNonNull(plotId, "plotId");
+        UUID tenantId = Objects.requireNonNull(issuer.tenantId(), "tenantId");
+        LocalDate today = DocumentFormat.dayOf(clock.instant());
+        YearMonth month = YearMonth.from(today);
+        lockMonth(tenantId, month);
+        Optional<InvoiceRecord> latest = invoices.findFirstByPlotIdAndMonthOrderByVersionDesc(plotId,
+                month.atDay(1));
+        if (latest.isPresent() && DocumentFormat.dayOf(latest.get().getIssuedAt()).equals(today)) {
+            return latest.get().getId();
+        }
+        return forPlot(plotId, month, issuer).id();
+    }
+
+    /**
      * The build of one plot inside the {@code REPEATABLE READ} transaction: compared with the latest version of the
      * month as the month build compares it; written and audited only when it differs.
      */
