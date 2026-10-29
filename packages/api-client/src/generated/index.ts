@@ -12,6 +12,7 @@ export * from './members/members';
 export * from './meter-tree/meter-tree';
 export * from './meters/meters';
 export * from './not-charged/not-charged';
+export * from './notifications/notifications';
 export * from './ownerships/ownerships';
 export * from './payments/payments';
 export * from './permissions/permissions';

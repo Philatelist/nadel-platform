@@ -78,6 +78,10 @@ tags:
     description: >-
       Debt certificates of plots as of a date: issued with a gap-free number per cooperative and year, kept in a
       register, printed as PDF files and annulled once with a reason
+  - name: notifications
+    description: >-
+      Delivery to members by e-mail through the cooperative's own mailbox and by Telegram through its own bot: the
+      channel settings and their checks
 
 paths:
   /me:
@@ -1161,6 +1165,127 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+
+  /settings/delivery:
+    get:
+      tags: [notifications]
+      operationId: getDeliverySettings
+      summary: The cooperative's mailbox and bot
+      description: |
+        The delivery settings of the current cooperative: its own mailbox (SMTP) for e-mail and its own Telegram bot,
+        the e-mail sending rate and whether members are told about their payments. Requires the `SETTINGS_MANAGE`
+        permission (403 `PERMISSION_DENIED` otherwise; the platform operator has no cooperative data). A cooperative
+        that never saved them has no mailbox and no bot (`configured` false for both), `emailRatePerSecond` 1 and
+        `notifyPayments` true.
+
+        The secrets are write-only: the mailbox password and the bot token are never returned. The answer says only
+        whether a password is saved (`passwordSet`) and shows the last four characters of the token (`tokenLast4`).
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliverySettings'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    put:
+      tags: [notifications]
+      operationId: updateDeliverySettings
+      summary: Change the cooperative's mailbox and bot
+      description: |
+        Changes the delivery settings of the current cooperative. Requires `SETTINGS_MANAGE`. Each top-level field is
+        optional and a field left out keeps its value, so the mailbox form and the bot form save separately:
+
+        - `email` present replaces every mailbox field (a field absent or empty in it is cleared), except the
+          password: an absent or empty `password` keeps the saved one. Clearing `user` (no sign-in to the server)
+          also removes the saved password.
+        - `telegram.botToken` absent or empty keeps the saved token. A new token is saved sealed, its last four
+          characters are shown from then on, the bot's @name is forgotten until the next `testDeliveryTelegram`, and
+          the bot of the cooperative restarts with it.
+        - `emailRatePerSecond` (letters a second, 1 to 10) and `notifyPayments` change only when present.
+
+        A change is written to the audit log as `DELIVERY_SETTINGS_CHANGED` (entity type `DELIVERY_SETTINGS`, label
+        `delivery-settings`) with the old and the new value of every changed field (`host`, `port`, `security`,
+        `user`, `fromAddress`, `fromName`, `emailRatePerSecond`, `notifyPayments`); a changed secret is listed as the
+        field `password` or `botToken` with neither value, so the history shows only that it changed. Saving the
+        current values writes nothing. 400 `VALIDATION_FAILED` for a value outside its limits.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeliverySettingsUpdate'
+      responses:
+        '200':
+          description: The saved settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliverySettings'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /settings/delivery/test-email:
+    post:
+      tags: [notifications]
+      operationId: testDeliveryEmail
+      summary: Send a test letter through the cooperative's mailbox
+      description: |
+        Sends a short test letter through the saved mailbox to the signed-in member's own e-mail and answers what the
+        mail server said. Requires `SETTINGS_MANAGE`. Nothing is saved and nothing else changes.
+
+        `accepted` true: the server took the letter; `serverReply` is its last answer (for example
+        `250 2.0.0 Ok: queued`). `accepted` false: `failureCode` says why (`SMTP_AUTH_FAILED` the server refused the
+        user name or password, `SMTP_REJECTED` it refused the letter, `CONNECTION_FAILED` it could not be reached or
+        did not answer in time) and `serverReply` is the server's own refusal when there was one. `serverReply` is
+        text from the mail server, never an error of this application, and is shown as received.
+
+        409 `DELIVERY_NOT_CONFIGURED` when the cooperative has no mailbox (`email.configured` false); 409
+        `NO_OWN_EMAIL` when the signed-in member has no e-mail of their own.
+      responses:
+        '200':
+          description: What the mail server answered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryTestEmailResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /settings/delivery/test-telegram:
+    post:
+      tags: [notifications]
+      operationId: testDeliveryTelegram
+      summary: Ask Telegram about the cooperative's bot
+      description: |
+        Asks Telegram about the saved bot token (`getMe`). Requires `SETTINGS_MANAGE`. `ok` true with the bot's
+        `botUsername` (without `@`), which is also kept for the settings and the bot's links; `ok` false with `code`
+        `TOKEN_INVALID` when Telegram does not accept the token, or `TELEGRAM_UNAVAILABLE` when Telegram could not be
+        reached. 409 `DELIVERY_NOT_CONFIGURED` when no token is saved.
+      responses:
+        '200':
+          description: What Telegram answered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryTestTelegramResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
 
   /imports/template:
     get:
@@ -5735,7 +5860,9 @@ components:
         after the current one are built (code `PERIOD_IN_FUTURE`), or a build of a month's invoices is started while
         another build of the same month runs (code `INVOICE_BUILD_RUNNING`), or a debt certificate is issued for common
         land (code `PLOT_COMMON_LAND`) or an archived plot (code `PLOT_ARCHIVED`), or a certificate that is already
-        annulled is annulled again (code `CERTIFICATE_ALREADY_ANNULLED`)
+        annulled is annulled again (code `CERTIFICATE_ALREADY_ANNULLED`), or a check of the cooperative's mailbox or bot
+        is asked while it is not set up (code `DELIVERY_NOT_CONFIGURED`), or a test letter is asked by a member without
+        an e-mail of their own (code `NO_OWN_EMAIL`)
       content:
         application/problem+json:
           schema:
@@ -5997,6 +6124,7 @@ components:
         - PAYMENTS_REVERSE
         - INVOICES_ISSUE
         - CERTIFICATES_ISSUE
+        - ANNOUNCEMENTS_SEND
 
     PlotStatusVisibility:
       type: string
@@ -6480,6 +6608,7 @@ components:
         - INVOICES_ISSUED
         - CERTIFICATE_ISSUED
         - CERTIFICATE_ANNULLED
+        - DELIVERY_SETTINGS_CHANGED
 
     AuditEntityType:
       type: string
@@ -6516,7 +6645,10 @@ components:
         `CERTIFICATE_ANNULLED`) is about a debt certificate: its `entityId` is the certificate and its label the
         certificate number (`Д-2026-1`); `CERTIFICATE_ISSUED` has `plot` (the plot number), `number`, `asOf` (ISO date)
         and `totalDebt` (two decimals), `CERTIFICATE_ANNULLED` has `number` and `reason` (user content). Never the
-        names on the certificate (they stay sealed in it).
+        names on the certificate (they stay sealed in it). A `DELIVERY_SETTINGS` entry (`DELIVERY_SETTINGS_CHANGED`)
+        is about the cooperative's mailbox and bot: its `entityId` is the cooperative and its label the code
+        `delivery-settings`; it lists the changed fields with old and new values, and a changed secret (`password`,
+        `botToken`) with neither value.
       enum:
         [
           MEMBER,
@@ -6539,6 +6671,7 @@ components:
           REPORT_TEMPLATE,
           INVOICE,
           CERTIFICATE,
+          DELIVERY_SETTINGS,
         ]
 
     AuditFieldChange:
@@ -12280,3 +12413,188 @@ components:
           description: What was changed in the stored file; an upload lists only `EXTERNAL_LINKS_REMOVED`
           items:
             $ref: '#/components/schemas/ReportTemplateWarningCode'
+
+    SmtpSecurity:
+      type: string
+      description: >-
+        How the connection to the mail server is protected: `STARTTLS` (usually port 587, the connection must switch
+        to TLS or the letter is not sent) or `SSL` (TLS from the start, usually port 465). Absent: no encryption (only
+        for a local test server)
+      enum: [STARTTLS, SSL]
+
+    DeliveryEmailSettings:
+      type: object
+      description: >-
+        The cooperative's mailbox as saved. Never the password: `passwordSet` says whether one is saved. `configured`
+        is true when the server address, port and sender address are set, so letters can be sent
+      required: [passwordSet, configured]
+      properties:
+        host:
+          type: string
+        port:
+          type: integer
+          format: int32
+        security:
+          $ref: '#/components/schemas/SmtpSecurity'
+        user:
+          type: string
+        fromAddress:
+          type: string
+        fromName:
+          type: string
+        passwordSet:
+          type: boolean
+        configured:
+          type: boolean
+
+    DeliveryTelegramSettings:
+      type: object
+      description: >-
+        The cooperative's bot as saved. Never the token: `tokenLast4` is its last four characters, absent when no
+        token is saved. `botUsername` is the bot's @name (without `@`) as Telegram last reported it, absent until the
+        bot is checked. `configured` is true when a token is saved
+      required: [configured]
+      properties:
+        tokenLast4:
+          type: string
+          minLength: 4
+          maxLength: 4
+        botUsername:
+          type: string
+        configured:
+          type: boolean
+
+    DeliverySettings:
+      type: object
+      description: The delivery settings of the cooperative (`getDeliverySettings`)
+      required: [email, telegram, emailRatePerSecond, notifyPayments]
+      properties:
+        email:
+          $ref: '#/components/schemas/DeliveryEmailSettings'
+        telegram:
+          $ref: '#/components/schemas/DeliveryTelegramSettings'
+        emailRatePerSecond:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 10
+          description: Letters sent a second at most, so a free mailbox is not blocked (default 1)
+        notifyPayments:
+          type: boolean
+          description: Tell members about their payments and reversals (default true)
+
+    DeliveryEmailSettingsUpdate:
+      type: object
+      description: >-
+        The mailbox, replacing the saved one: a field absent or empty is cleared, except `password` (absent or empty
+        keeps the saved password). Clearing `user` also removes the saved password
+      properties:
+        host:
+          type: string
+          maxLength: 255
+          pattern: '^[^\s/]*$'
+          description: The mail server's address, for example `smtp.gmail.com`
+        port:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 65535
+        security:
+          $ref: '#/components/schemas/SmtpSecurity'
+        user:
+          type: string
+          maxLength: 320
+        password:
+          type: string
+          maxLength: 500
+          writeOnly: true
+          description: Write-only; never returned. Absent or empty keeps the saved password
+        fromAddress:
+          type: string
+          format: email
+          maxLength: 320
+          description: The sender's address, usually the mailbox itself
+        fromName:
+          type: string
+          maxLength: 200
+          description: The sender's name members see, for example the cooperative's name
+
+    DeliveryTelegramSettingsUpdate:
+      type: object
+      properties:
+        botToken:
+          type: string
+          maxLength: 200
+          pattern: '^([A-Za-z0-9:_-]{8,})?$'
+          writeOnly: true
+          description: >-
+            The token @BotFather gave for the cooperative's bot (letters, digits, `:`, `_` and `-`, at least 8
+            characters). Write-only; never returned. Absent or empty keeps the saved token
+
+    DeliverySettingsUpdate:
+      type: object
+      description: >-
+        A change of the delivery settings: each field present is changed, a field left out keeps its value (see
+        `updateDeliverySettings`)
+      properties:
+        email:
+          $ref: '#/components/schemas/DeliveryEmailSettingsUpdate'
+        telegram:
+          $ref: '#/components/schemas/DeliveryTelegramSettingsUpdate'
+        emailRatePerSecond:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 10
+        notifyPayments:
+          type: boolean
+
+    DeliveryFailureCode:
+      type: string
+      description: >-
+        Why a message was not delivered: `SMTP_REJECTED` the mail server refused the letter, `SMTP_AUTH_FAILED` it
+        refused the mailbox's user name or password, `CONNECTION_FAILED` the server could not be reached or did not
+        answer in time, `TELEGRAM_BLOCKED` the member blocked the bot, `CHANNEL_NOT_CONFIGURED` the cooperative's
+        mailbox or bot is not set up, `NO_CONTACT` the member has no address for the channel. The test letter
+        (`testDeliveryEmail`) uses only the first three
+      enum:
+        [
+          SMTP_REJECTED,
+          SMTP_AUTH_FAILED,
+          CONNECTION_FAILED,
+          TELEGRAM_BLOCKED,
+          CHANNEL_NOT_CONFIGURED,
+          NO_CONTACT,
+        ]
+
+    DeliveryTestEmailResult:
+      type: object
+      description: What the mail server answered to the test letter (`testDeliveryEmail`)
+      required: [accepted]
+      properties:
+        accepted:
+          type: boolean
+          description: Whether the server took the letter
+        serverReply:
+          type: string
+          description: >-
+            The mail server's last answer as received, absent when there was none (the server could not be reached)
+        failureCode:
+          $ref: '#/components/schemas/DeliveryFailureCode'
+
+    DeliveryTestTelegramResult:
+      type: object
+      description: What Telegram answered about the bot (`testDeliveryTelegram`)
+      required: [ok]
+      properties:
+        ok:
+          type: boolean
+        botUsername:
+          type: string
+          description: The bot's @name without `@`, when `ok`
+        code:
+          type: string
+          description: >-
+            Why the check failed, when not `ok`: `TOKEN_INVALID` Telegram does not accept the token,
+            `TELEGRAM_UNAVAILABLE` Telegram could not be reached
+          enum: [TOKEN_INVALID, TELEGRAM_UNAVAILABLE]

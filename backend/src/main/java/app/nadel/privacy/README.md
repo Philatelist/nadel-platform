@@ -12,7 +12,7 @@ Table `tenant_data_key` (V21). No endpoints. Depends on `tenancy` (`TenantContex
 |---|---|
 | `PersonalDataCipher` | Runtime use inside a cooperative's transaction: `encrypt(tenantId, FieldRef, plaintext)`, `decrypt(tenantId, FieldRef, sealed)`, `blindIndex(tenantId, IndexKind, normalised)`. Refuses (`IllegalStateException`) a `tenantId` that is not `TenantContext.currentTenantId()` |
 | `FieldRef(table, column, rowId)` | The place of a value, the associated data of its encryption. Names match `[a-z_.]+` (never `|`); a JSON path such as `changes.email.old` is a column name |
-| `IndexKind` | `EMAIL`, `PHONE`, `PHONE_LAST4`, `DOCUMENT_CONTENT` (feature 016: the content hash of an invoice snapshot's canonical form, names in plaintext, so a change is detected without a hash of plaintext names); part of the HMAC input, so kinds never collide |
+| `IndexKind` | `EMAIL`, `PHONE`, `PHONE_LAST4`, `DOCUMENT_CONTENT` (feature 016: the content hash of an invoice snapshot's canonical form, names in plaintext, so a change is detected without a hash of plaintext names), `TELEGRAM_CHAT` (feature 017: a Telegram chat id as the decimal text Telegram sends, so the bot finds the link of an incoming chat); part of the HMAC input, so kinds never collide |
 | `OwnerKeyring` | Owner-side work on Flyway's connection (Java migrations, callbacks): `open(connection).forTenant(tenantId)` gives `encrypt`/`decrypt`/`blindIndex` with the same formats; creates a missing key on that connection, inside the caller's transaction. Depends only on the master keys, never on JPA |
 | `PersonalDataUnreadableException` | A value or key that does not open: 500 `PERSONAL_DATA_UNREADABLE`, message without values. Callers never turn it into an empty field, which a later save would write back |
 
@@ -28,6 +28,12 @@ callback and at runtime (see the members README). The audit values of those cont
 README). The plan of a pending Excel import preview is sealed as one envelope `{"plan", "digest"}` at
 `FieldRef("import_run", "plan_enc", importId)`, by `imports` at runtime and by its Java migration 25.1 (see the imports
 README).
+The `notifications` module (feature 017) seals the secrets of a cooperative's own delivery channels, which are not
+personal data but are kept with the same key (ADR 0018): the mailbox password at
+`FieldRef("delivery_settings", "smtp_password_enc", tenantId)` and the bot token at
+`FieldRef("delivery_settings", "bot_token_enc", tenantId)` (the row id of `delivery_settings` is the cooperative), and
+the chat id of a member's Telegram link at `FieldRef("telegram_link", "chat_id_enc", linkId)` with the blind index
+`TELEGRAM_CHAT` in `telegram_link.chat_id_bidx` (see the notifications README).
 
 ## Formats
 

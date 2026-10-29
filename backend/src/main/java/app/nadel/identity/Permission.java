@@ -31,7 +31,8 @@ public enum Permission {
     PAYMENTS_ENTER,
     PAYMENTS_REVERSE,
     INVOICES_ISSUE,
-    CERTIFICATES_ISSUE;
+    CERTIFICATES_ISSUE,
+    ANNOUNCEMENTS_SEND;
 
     public static final String AUTHORITY_PREFIX = "PERM_";
 

@@ -1,5 +1,6 @@
 package app.nadel;
 
+import app.nadel.notifications.FakeBotApi;
 import app.nadel.privacy.FieldRef;
 import app.nadel.privacy.IndexKind;
 import app.nadel.privacy.PersonalDataCipher;
@@ -78,6 +79,8 @@ public abstract class IntegrationTest {
         // the dev key file (infra/.env) is never read or created by a test
         registry.add("nadel.privacy.master-key", () -> MASTER_KEY);
         registry.add("nadel.privacy.previous-master-key", () -> "");
+        // Feature 017: the Telegram Bot API is the in-JVM fake, so no test ever reaches Telegram (or the dev fake)
+        registry.add("nadel.telegram.api-url", () -> FakeBotApi.shared().url());
     }
 
     private static String randomMasterKey() {

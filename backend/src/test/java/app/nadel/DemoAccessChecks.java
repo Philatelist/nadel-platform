@@ -43,7 +43,7 @@ public final class DemoAccessChecks {
                         "SETTINGS_MANAGE", "TARIFFS_VIEW", "TARIFFS_MANAGE", "METERS_VIEW", "METERS_MANAGE", "READINGS_ENTER",
                         "READINGS_APPROVE", "CHARGES_VIEW", "CHARGES_RUN", "CHARGES_REVERSE", "PERIODS_CLOSE",
                         "RECALCULATION_RUN", "REPORTS_VIEW", "REPORT_TEMPLATES_MANAGE", "PAYMENTS_VIEW",
-                        "PAYMENTS_ENTER", "PAYMENTS_REVERSE", "INVOICES_ISSUE", "CERTIFICATES_ISSUE")));
+                        "PAYMENTS_ENTER", "PAYMENTS_REVERSE", "INVOICES_ISSUE", "CERTIFICATES_ISSUE", "ANNOUNCEMENTS_SEND")));
     }
 
     public static void treasurerHasReadPermissions(MockMvc mvc) throws Exception {

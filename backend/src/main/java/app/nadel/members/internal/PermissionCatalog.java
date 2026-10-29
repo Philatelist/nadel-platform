@@ -62,6 +62,8 @@ final class PermissionCatalog {
                     "Build, re-issue and print the invoices of plots with the payment QR code"};
             case CERTIFICATES_ISSUE -> new String[] {"Issue certificates",
                     "Issue and annul debt certificates of plots"};
+            case ANNOUNCEMENTS_SEND -> new String[] {"Send announcements",
+                    "Send announcements to the members by e-mail and Telegram and print them for the rest"};
         };
         return new PermissionInfo(nadel.contract.model.Permission.fromValue(permission.name()), text[0], text[1]);
     }

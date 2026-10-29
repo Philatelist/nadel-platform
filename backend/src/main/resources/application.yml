@@ -71,6 +71,14 @@ nadel:
     master-key: ${NADEL_PD_MASTER_KEY:}
     # The master key before a rotation; set only until the start-up log reports 0 keys left on it
     previous-master-key: ${NADEL_PD_MASTER_KEY_PREVIOUS:}
+  telegram:
+    # The Telegram Bot API; the dev profile points at the fake server of infra/fake-telegram instead
+    api-url: ${NADEL_TELEGRAM_API_URL:https://api.telegram.org}
+    connect-timeout: 5s
+    read-timeout: 15s
+  delivery:
+    # Connect, read and write timeout of a cooperative's mail server
+    smtp-timeout: 10s
 
 management:
   endpoints:
@@ -97,6 +105,9 @@ nadel:
     # Without NADEL_PD_MASTER_KEY the local key is read from the first existing file (repository root or backend/);
     # when none exists and infra/ is in the working directory, a random key is written to infra/.env (mode 600)
     dev-key-file: infra/.env,../infra/.env
+  telegram:
+    # The fake Telegram Bot API of infra/docker-compose.yml (fake-telegram), so the demo bot never reaches Telegram
+    api-url: ${NADEL_TELEGRAM_API_URL:http://localhost:8091}
 
 ---
 # Production. The personal data master key has no fallback: start-up fails without NADEL_PD_MASTER_KEY or with a

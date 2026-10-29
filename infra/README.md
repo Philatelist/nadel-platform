@@ -1,7 +1,45 @@
 # Local infrastructure
 
-`make infra` starts PostgreSQL + PostGIS and Keycloak and waits until both are healthy
+`make infra` starts the services below and waits until all are healthy
 (Keycloak health is probed on its management port, `/health/ready`).
+
+| Service         | Port(s)      | What it is                                                           |
+| --------------- | ------------ | -------------------------------------------------------------------- |
+| `postgres`      | 5432         | PostgreSQL 17 + PostGIS                                              |
+| `keycloak`      | 8180         | Keycloak, realm `nadel`                                              |
+| `mailpit`       | 1025, 8025   | Test mail server: SMTP on 1025, web UI and API on 8025 (in memory)   |
+| `fake-telegram` | 8091         | Fake Telegram Bot API (`fake-telegram/server.mjs`), no real network  |
+
+## Mailpit (e-mail)
+
+The backend sends e-mail to `localhost:1025` in development. Open http://localhost:8025 to read the messages,
+or use the API: `curl localhost:8025/api/v1/messages`. Messages live in memory and disappear on restart.
+
+## Fake Telegram
+
+The backend talks to the fake Bot API when `NADEL_TELEGRAM_API_URL=http://localhost:8091`; see
+`.env.example`. Any bot token works, except tokens starting with `bad`, which get `401 Unauthorized`. Updates and
+sent messages are kept per token, so two cooperatives' bots do not mix. Message texts and tokens are never logged.
+
+```bash
+# A resident presses "Start" with a link code (chat 555)
+curl -s -X POST localhost:8091/control/updates -H 'content-type: application/json' \
+  -d '{"token":"123:demo","chatId":555,"text":"/start ABC123","firstName":"Olena"}'
+
+# What the bot sent to chat 555 (method, chatId, text, documentName, replyMarkup, at)
+curl -s 'localhost:8091/control/sent?token=123:demo&chatId=555'
+
+# Simulate a resident who blocked the bot (sendMessage then answers 403), and undo it
+curl -s -X POST localhost:8091/control/block/555
+curl -s -X DELETE localhost:8091/control/block/555
+
+# Forget everything
+curl -s -X POST localhost:8091/control/reset
+```
+
+To check against the real Telegram instead (owner's check), create a bot with @BotFather, leave the variable
+unset or set `NADEL_TELEGRAM_API_URL=https://api.telegram.org`, register the real token in the cooperative
+settings, and stop the fake service with `docker compose -f infra/docker-compose.yml stop fake-telegram`.
 
 ## PostGIS image (Apple Silicon)
 

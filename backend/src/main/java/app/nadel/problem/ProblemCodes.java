@@ -140,6 +140,10 @@ public final class ProblemCodes {
      * it) runs; nothing is built (feature 016 §2.5).
      */
     public static final String INVOICE_BUILD_RUNNING = "INVOICE_BUILD_RUNNING";
+    /** 409: a check of the cooperative's mailbox or bot is asked while it is not set up (feature 017 §2.1). */
+    public static final String DELIVERY_NOT_CONFIGURED = "DELIVERY_NOT_CONFIGURED";
+    /** 409: a test letter is asked by a member who has no e-mail of their own to receive it (feature 017 §2.1). */
+    public static final String NO_OWN_EMAIL = "NO_OWN_EMAIL";
     /** 409: the plot's prepayment is allocated by hand while it has no prepayment or no open charge. */
     public static final String NOTHING_TO_ALLOCATE = "NOTHING_TO_ALLOCATE";
     /** 409: the charge was reversed before; a charge is reversed at most once. */

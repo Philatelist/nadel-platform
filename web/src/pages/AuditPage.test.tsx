@@ -513,6 +513,24 @@ describe('AuditPage reading entries', () => {
 describe('AuditPage hidden changes', () => {
   afterEach(() => window.localStorage.clear());
 
+  it('shows only "changed" for the sealed secrets of the delivery settings', () => {
+    show({
+      action: 'DELIVERY_SETTINGS_CHANGED',
+      entityType: 'DELIVERY_SETTINGS',
+      changes: [
+        { field: 'host', oldValue: 'a.example.org', newValue: 'b.example.org' },
+        { field: 'password', hidden: true },
+        { field: 'botToken' },
+      ],
+    });
+    expect(screen.getAllByTestId('audit-secret-changed').map((n) => n.textContent)).toEqual([
+      'changed',
+      'changed',
+    ]);
+    expect(screen.queryByTestId('audit-hidden')).toBeNull();
+    expect(screen.getByText('Mail server:')).toBeInTheDocument();
+  });
+
   it('shows a placeholder instead of the values of a hidden change', () => {
     show({
       action: 'MEMBER_UPDATED',
