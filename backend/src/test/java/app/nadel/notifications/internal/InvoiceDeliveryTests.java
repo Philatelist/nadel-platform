@@ -259,6 +259,52 @@ class InvoiceDeliveryTests extends DeliveryTestSupport {
     }
 
     @Test
+    void aMessageThatCannotBePreparedBacksOffAndFailsAfterThreeAttemptsWithoutRescheduling() throws Exception {
+        mailbox(Mailpit.PASSWORD);
+        UUID onEmail = member("Пошта", "EMAIL", "mail@delivery.test");
+        charge(plot("10", onEmail), "100.00");
+        buildInvoices();
+        sentMonth(false, false);
+        // the invoice's PDF is missing: preparing the message throws
+        InvoiceMessages broken = new InvoiceMessages(null, null) {
+            @Override
+            java.util.Optional<DeliveryMessage> of(UUID invoiceId) {
+                throw new java.util.NoSuchElementException("No value present");
+            }
+        };
+        List<Instant> wakes = new java.util.ArrayList<>();
+        DeliveryQueue recording = new DeliveryQueue(null, clock) {
+            @Override
+            void schedule(UUID tenantId, Channel channel, Instant at) {
+                wakes.add(at);
+            }
+        };
+
+        DeliveryDispatcher.Run first = dispatcher("broken", broken, recording).dispatch(tenant, Channel.EMAIL);
+        Instant start = clock.instant();
+
+        assertThat(first.retried()).isEqualTo(1);
+        assertThat(state()).containsEntry("status", "QUEUED").containsEntry("attempts", 1)
+                .containsEntry("failure_code", "CONNECTION_FAILED");
+        assertThat(nextAttempt()).isEqualTo(start.plus(Duration.ofMinutes(1)));
+        // the lane wakes when the row is due again, not at once
+        assertThat(wakes).containsExactly(start.plus(Duration.ofMinutes(1)));
+
+        clock.advance(Duration.ofMinutes(1));
+        assertThat(dispatcher("broken", broken, recording).dispatch(tenant, Channel.EMAIL).retried()).isEqualTo(1);
+        assertThat(state()).containsEntry("status", "QUEUED").containsEntry("attempts", 2);
+        assertThat(nextAttempt()).isEqualTo(clock.instant().plus(Duration.ofMinutes(5)));
+
+        clock.advance(Duration.ofMinutes(5));
+        wakes.clear();
+        assertThat(dispatcher("broken", broken, recording).dispatch(tenant, Channel.EMAIL).failed()).isEqualTo(1);
+        assertThat(state()).containsEntry("status", "FAILED").containsEntry("attempts", 3)
+                .containsEntry("failure_code", "CONNECTION_FAILED");
+        assertThat(wakes).isEmpty();
+        assertThat(mailpit.letters()).isEmpty();
+    }
+
+    @Test
     void aMailboxThatRefusesLettersFailsAfterThreeAttemptsAndARetrySendsItOnceFixed() throws Exception {
         mailbox(Mailpit.PASSWORD);
         mailpit.refuseRecipients(true);

@@ -95,3 +95,7 @@
 - Slice 3 commit 346a693; review round 1 started (b811a37..346a693).
 - Slice 3 review round 1: MAJOR_ISSUES (M1 dispatcher loop on unexpected exceptions). The fix touches DeliveryDispatcher, which the Slice 4 builder is editing → per the review loop, finish and commit Slice 4 first, then the fix as a separate commit.
 - S4 done (spring-backend): PaymentRecorded/PaymentReversed (ids only) from PaymentService.book and PaymentCorrections.reverse; LedgerReadModel.paymentsByIds; PaymentMessages listener; dispatcher handles PAYMENT/REVERSAL; DeliveryMessage without PDF. Verify set 864 green; orchestrator re-run 64 green. Choices: one message per plot per owner (a payment row covers one plot); delivery month = payment's billing month; payment rows show no plot number on the delivery screen (DeliveryRegister resolves plots via invoices — note for verify); missing payment → NO_CONTACT; PaymentAppendOnlyTests adjusted (`truncate payment, allocation, delivery`).
+- Slice 4 commit 3be8723; review round 1 started (346a693..3be8723).
+- git: auto-gc failed on stale metadata of the removed review-017-s3-r1 worktree; ran `git worktree prune` (also dropped a stale entry of another session's run-012 whose directory no longer existed) and removed the stale .git/gc.log as git asks. No objects or branches touched.
+- Slice 4 review round 1: PASS (minor notes in review-log.md).
+- Slice 3 review fix round 1 (spring-backend): unexpected exceptions → transient CONNECTION_FAILED through the retry path; new test with RED validation; 37 tests green.

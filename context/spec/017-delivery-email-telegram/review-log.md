@@ -26,3 +26,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `b811a37..346a693` | MAJOR_ISSUES | M1 `DeliveryDispatcher.run`: an unexpected exception while preparing/sending a row is logged and skipped; the row stays QUEUED with attempts and next_attempt_at unchanged, `nextDue` returns now → a new job every second, never FAILED, 3-attempt rule bypassed | 38 slice tests green. minor: `DeliveryQueue.schedule` job id per second drops a wake in the same second as a finished job (sweep catches it within a minute); `DeliveryRows.markMonthPrinted` marks all TO_PRINT rows (document it in OpenAPI); Telegram 400 → NO_CONTACT (recorded deviation) |
+
+## Slice 4 — payment and reversal messages
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `346a693..3be8723` | PASS | — | 64 tests green in the review worktree. minor: overlong lines in `MailChannel` javadoc and `notifications/README.md`; a payment message sent after its payment was reversed still attaches the receipt with today's balance (consistent with send-time texts; README sentence) |

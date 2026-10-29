@@ -328,12 +328,17 @@ abstract class DeliveryTestSupport extends IntegrationTest {
 
     /** A dispatcher of this test: the movable clock, a pause that moves it, the given holder id. */
     DeliveryDispatcher dispatcher(String instanceId) {
+        return dispatcher(instanceId, invoiceMessages, queue);
+    }
+
+    /** A dispatcher of this test with its own invoice messages and queue (the failure tests). */
+    DeliveryDispatcher dispatcher(String instanceId, InvoiceMessages invoices, DeliveryQueue lanesQueue) {
         clock.start();
         RateLimiters limiters = new RateLimiters(clock, pause -> {
             pauses.add(pause);
             clock.advance(pause);
         }, Duration.ofSeconds(1), 20);
-        return new DeliveryDispatcher(instanceId, rows, lanes, queue, invoiceMessages, paymentMessages,
+        return new DeliveryDispatcher(instanceId, rows, lanes, lanesQueue, invoices, paymentMessages,
                 settingsService, memberDirectory, telegramLinks, mailChannel, telegramChannel, limiters, clock,
                 DeliveryProperties.defaults(), jdbc, transactionManager);
     }

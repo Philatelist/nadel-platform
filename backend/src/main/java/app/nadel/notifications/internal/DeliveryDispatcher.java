@@ -38,7 +38,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  * <b>Attempts.</b> Three in all: now, after 1 min, after 5 min ({@code retry-delays}); then {@code FAILED} with the
  * last code. Permanent failures ({@code TELEGRAM_BLOCKED}, {@code NO_CONTACT}, {@code CHANNEL_NOT_CONFIGURED},
  * {@code SMTP_AUTH_FAILED}) fail at once; a blocked bot also ends the member's link ({@code BLOCKED}). Telegram's 429
- * moves the row by {@code retry_after} without counting an attempt and pauses the lane. JobRunr's own retries only
+ * moves the row by {@code retry_after} without counting an attempt and pauses the lane. An unexpected error while
+ * preparing or sending counts as a {@code CONNECTION_FAILED} attempt, so it backs off too. JobRunr's own retries only
  * cover a crashed run. An outcome is recorded only while the row is still the one that was sent (its attempts
  * unchanged), so a retry asked meanwhile is not lost.
  * <p>
@@ -178,19 +179,21 @@ class DeliveryDispatcher {
                     }
                     done.add(row.id());
                     SendOutcome outcome;
-                    long chatId;
+                    long preparedChat = 0;
                     try {
                         Prepared prepared = readOnly.execute(status -> prepare(row));
-                        chatId = prepared.chatId();
+                        preparedChat = prepared.chatId();
                         outcome = prepared.outcome() != null ? prepared.outcome() : send(tenantId, row, prepared);
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
                         break outer;
                     } catch (RuntimeException e) {
+                        // counted as a failed attempt, so the row backs off and ends FAILED instead of looping
                         log.warn("Delivery {} of cooperative {} not sent: {}", row.id(), tenantId,
                                 e.getClass().getSimpleName());
-                        continue;
+                        outcome = SendOutcome.transientFailure(SendOutcome.CONNECTION_FAILED);
                     }
+                    long chatId = preparedChat;
                     Instant now = clock.instant();
                     switch (outcome) {
                         case SendOutcome.Sent s -> {
