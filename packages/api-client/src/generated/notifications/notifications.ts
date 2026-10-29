@@ -31,13 +31,20 @@ import type {
 import type {
   BadRequestResponse,
   ConflictResponse,
+  DeliveryPage,
   DeliverySettings,
   DeliverySettingsUpdate,
   DeliveryTestEmailResult,
   DeliveryTestTelegramResult,
   ForbiddenResponse,
+  InvoiceSendRequest,
+  InvoiceSendResult,
+  ListDeliveriesParams,
   MyNotifications,
   MyNotificationsUpdate,
+  NotFoundResponse,
+  PrintDoneResult,
+  SendMonthInvoicesParams,
   TelegramLinkOffer,
   UnauthorizedResponse
 } from '../model';
@@ -787,4 +794,466 @@ export const useDeleteMyTelegramLink = <TError = UnauthorizedResponse | Forbidde
         TContext
       > => {
       return useMutation(getDeleteMyTelegramLinkMutationOptions(options), queryClient);
+    }
+    export const getSendMonthInvoicesUrl = (month: string,
+    params: SendMonthInvoicesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/v1/billing-months/${month}/invoices/send?${stringifiedParams}` : `/api/v1/billing-months/${month}/invoices/send`
+}
+
+/**
+ * «Надіслати рахунки за {місяць}» (feature 017 §2.3, §2.4): for the latest version of each invoice of the month
+ * (only those with something due unless `includeNothingDue`), every current owner of the plot gets the plot's
+ * invoice through their own channel: Telegram when they chose it, their Telegram is linked and the cooperative
+ * has a bot; e-mail when they chose it (or chose Telegram without a link or a bot) and have an e-mail and the
+ * cooperative has a mailbox; otherwise paper. A `VIBER` member gets paper with the note `VIBER_UNSUPPORTED`. An
+ * owner of two plots gets two messages.
+ *
+ * Each (invoice version, member, channel) is created once: sending the month again creates only what is new
+ * (a new version, a new owner, a changed channel), so nobody gets the same invoice twice. E-mail and Telegram
+ * deliveries are queued (`QUEUED`) and sent in the background at a limited pace (`listDeliveries` shows the
+ * outcome); paper deliveries wait as `TO_PRINT` until `markMonthPrinted`.
+ *
+ * `counts` are the deliveries this send creates per channel (with `preview=true`, would create; nothing is
+ * written); `queued` is the number of e-mail and Telegram deliveries queued (0 for a preview). A send that
+ * creates something is written to the audit log as `INVOICES_SENT` (entity type `BILLING_MONTH`, label
+ * `YYYY-MM`, the entity id of `INVOICES_ISSUED`; fields `month`, `telegram`, `email`, `paper`, new values
+ * only). A month without invoices answers zero counts. Requires `INVOICES_ISSUE`.
+ * @summary Preview or send the invoices of a billing month to the members
+ */
+export const sendMonthInvoices = async (month: string,
+    params: SendMonthInvoicesParams,
+    invoiceSendRequest?: InvoiceSendRequest, options?: Parameters<typeof nadelFetch>[1]): Promise<InvoiceSendResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return nadelFetch<InvoiceSendResult>(getSendMonthInvoicesUrl(month,params),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(invoiceSendRequest)
+  }
+);}
+
+
+
+
+
+export const getSendMonthInvoicesMutationKey = () => ['sendMonthInvoices'] as const;
+
+export const getSendMonthInvoicesMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendMonthInvoices>>, TError,SendMonthInvoicesMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof sendMonthInvoices>>, TError,SendMonthInvoicesMutationVariables, TContext> => {
+
+const mutationKey = getSendMonthInvoicesMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof sendMonthInvoices>>, SendMonthInvoicesMutationVariables> = (props) => {
+          const {month,params,data} = props ?? {};
+
+          return  sendMonthInvoices(month,params,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SendMonthInvoicesMutationResult = NonNullable<Awaited<ReturnType<typeof sendMonthInvoices>>>
+    export type SendMonthInvoicesMutationBody = InvoiceSendRequest | undefined
+    export type SendMonthInvoicesMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse
+    export type SendMonthInvoicesMutationVariables = {month: string;params: SendMonthInvoicesParams;data?: InvoiceSendRequest}
+
+    /**
+ * @summary Preview or send the invoices of a billing month to the members
+ */
+export const useSendMonthInvoices = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendMonthInvoices>>, TError,SendMonthInvoicesMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof sendMonthInvoices>>,
+        TError,
+        SendMonthInvoicesMutationVariables,
+        TContext
+      > => {
+      return useMutation(getSendMonthInvoicesMutationOptions(options), queryClient);
+    }
+    export const getSendInvoiceUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/invoices/${id}/send`
+}
+
+/**
+ * «Надіслати» on one invoice (feature 017 §2.4): the invoice version goes to every current owner of its plot
+ * through their own channel, by the rules of `sendMonthInvoices`, also when nothing is due on it. A delivery
+ * that exists already (the same version to the same member through the same channel) is not created again.
+ * Answers the deliveries created per channel and the number queued; written to the audit log as
+ * `INVOICES_SENT` like a month send, with the invoice `number` as a further field, when something was created.
+ * 404 `NOT_FOUND` for an unknown invoice or one of another cooperative. Requires `INVOICES_ISSUE`.
+ * @summary Send one invoice to the plot's owners
+ */
+export const sendInvoice = async (id: string, options?: Parameters<typeof nadelFetch>[1]): Promise<InvoiceSendResult> => {
+
+  return nadelFetch<InvoiceSendResult>(getSendInvoiceUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getSendInvoiceMutationKey = () => ['sendInvoice'] as const;
+
+export const getSendInvoiceMutationOptions = <TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendInvoice>>, TError,SendInvoiceMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof sendInvoice>>, TError,SendInvoiceMutationVariables, TContext> => {
+
+const mutationKey = getSendInvoiceMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof sendInvoice>>, SendInvoiceMutationVariables> = (props) => {
+          const {id} = props ?? {};
+
+          return  sendInvoice(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SendInvoiceMutationResult = NonNullable<Awaited<ReturnType<typeof sendInvoice>>>
+
+    export type SendInvoiceMutationError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse
+    export type SendInvoiceMutationVariables = {id: string}
+
+    /**
+ * @summary Send one invoice to the plot's owners
+ */
+export const useSendInvoice = <TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendInvoice>>, TError,SendInvoiceMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof sendInvoice>>,
+        TError,
+        SendInvoiceMutationVariables,
+        TContext
+      > => {
+      return useMutation(getSendInvoiceMutationOptions(options), queryClient);
+    }
+    export const getListDeliveriesUrl = (params?: ListDeliveriesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/v1/deliveries?${stringifiedParams}` : `/api/v1/deliveries`
+}
+
+/**
+ * The delivery screen (Документи → «Розсилка», feature 017 §2.4): a page of deliveries, newest first, each one
+ * message to one member through one channel with its status (`QUEUED` in the queue, `SENT` the mail server or
+ * Telegram accepted it, `FAILED` with `failureCode` after the last attempt, `TO_PRINT` a paper copy not yet
+ * printed, `PRINTED`), the attempts so far and when it was sent. `plotNumber` is the plot of an invoice;
+ * `memberName` the member ("Last First"). The filters are optional and combine. `summary` counts the
+ * deliveries per channel and status for `month` and `kind` (the other filters do not narrow it), so the screen
+ * shows sent, failed and to print per channel. A delivery holds no address, chat or text. Requires
+ * `INVOICES_ISSUE`.
+ * @summary The deliveries of the cooperative and their outcome
+ */
+export const listDeliveries = async (params?: ListDeliveriesParams, options?: Parameters<typeof nadelFetch>[1]): Promise<DeliveryPage> => {
+
+  return nadelFetch<DeliveryPage>(getListDeliveriesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListDeliveriesQueryKey = (params?: ListDeliveriesParams,) => {
+    return [
+    `/api/v1/deliveries`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListDeliveriesQueryOptions = <TData = Awaited<ReturnType<typeof listDeliveries>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>(params?: ListDeliveriesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listDeliveries>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListDeliveriesQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listDeliveries>>> = ({ signal }) => listDeliveries(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listDeliveries>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListDeliveriesQueryResult = NonNullable<Awaited<ReturnType<typeof listDeliveries>>>
+export type ListDeliveriesQueryError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse
+
+
+export function useListDeliveries<TData = Awaited<ReturnType<typeof listDeliveries>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>(
+ params: undefined |  ListDeliveriesParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listDeliveries>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listDeliveries>>,
+          TError,
+          Awaited<ReturnType<typeof listDeliveries>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListDeliveries<TData = Awaited<ReturnType<typeof listDeliveries>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>(
+ params?: ListDeliveriesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listDeliveries>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listDeliveries>>,
+          TError,
+          Awaited<ReturnType<typeof listDeliveries>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListDeliveries<TData = Awaited<ReturnType<typeof listDeliveries>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>(
+ params?: ListDeliveriesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listDeliveries>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary The deliveries of the cooperative and their outcome
+ */
+
+export function useListDeliveries<TData = Awaited<ReturnType<typeof listDeliveries>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>(
+ params?: ListDeliveriesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listDeliveries>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListDeliveriesQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export const getRetryDeliveryUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/deliveries/${id}/retry`
+}
+
+/**
+ * «Надіслати ще раз» (feature 017 §2.4) on a `FAILED` or `SENT` e-mail or Telegram delivery: it is queued again
+ * with its attempts from zero and sent in the background (`resends` counts how often this was asked). 409
+ * `DELIVERY_NOT_RETRYABLE` for a paper delivery or one that is still queued; 404 `NOT_FOUND` for an unknown
+ * delivery or one of another cooperative. Single sends are not written to the audit log. Requires
+ * `INVOICES_ISSUE`.
+ * @summary Send a delivery once more
+ */
+export const retryDelivery = async (id: string, options?: Parameters<typeof nadelFetch>[1]): Promise<void> => {
+
+  return nadelFetch<void>(getRetryDeliveryUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRetryDeliveryMutationKey = () => ['retryDelivery'] as const;
+
+export const getRetryDeliveryMutationOptions = <TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof retryDelivery>>, TError,RetryDeliveryMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof retryDelivery>>, TError,RetryDeliveryMutationVariables, TContext> => {
+
+const mutationKey = getRetryDeliveryMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof retryDelivery>>, RetryDeliveryMutationVariables> = (props) => {
+          const {id} = props ?? {};
+
+          return  retryDelivery(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RetryDeliveryMutationResult = NonNullable<Awaited<ReturnType<typeof retryDelivery>>>
+
+    export type RetryDeliveryMutationError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse
+    export type RetryDeliveryMutationVariables = {id: string}
+
+    /**
+ * @summary Send a delivery once more
+ */
+export const useRetryDelivery = <TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof retryDelivery>>, TError,RetryDeliveryMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof retryDelivery>>,
+        TError,
+        RetryDeliveryMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRetryDeliveryMutationOptions(options), queryClient);
+    }
+    export const getMarkMonthPrintedUrl = (month: string,) => {
+
+
+
+
+  return `/api/v1/billing-months/${month}/print-done`
+}
+
+/**
+ * «Роздруковано» (feature 017 §2.4): every invoice delivery of the month waiting as `TO_PRINT` becomes `PRINTED`;
+ * `printed` is how many. Paper copies created later (a new version, a new owner) wait again. Requires
+ * `INVOICES_ISSUE`.
+ * @summary Mark the month's paper invoices as printed
+ */
+export const markMonthPrinted = async (month: string, options?: Parameters<typeof nadelFetch>[1]): Promise<PrintDoneResult> => {
+
+  return nadelFetch<PrintDoneResult>(getMarkMonthPrintedUrl(month),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getMarkMonthPrintedMutationKey = () => ['markMonthPrinted'] as const;
+
+export const getMarkMonthPrintedMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markMonthPrinted>>, TError,MarkMonthPrintedMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof markMonthPrinted>>, TError,MarkMonthPrintedMutationVariables, TContext> => {
+
+const mutationKey = getMarkMonthPrintedMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof markMonthPrinted>>, MarkMonthPrintedMutationVariables> = (props) => {
+          const {month} = props ?? {};
+
+          return  markMonthPrinted(month,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type MarkMonthPrintedMutationResult = NonNullable<Awaited<ReturnType<typeof markMonthPrinted>>>
+
+    export type MarkMonthPrintedMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse
+    export type MarkMonthPrintedMutationVariables = {month: string}
+
+    /**
+ * @summary Mark the month's paper invoices as printed
+ */
+export const useMarkMonthPrinted = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markMonthPrinted>>, TError,MarkMonthPrintedMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof markMonthPrinted>>,
+        TError,
+        MarkMonthPrintedMutationVariables,
+        TContext
+      > => {
+      return useMutation(getMarkMonthPrintedMutationOptions(options), queryClient);
     }

@@ -21,4 +21,16 @@ public sealed interface ReplyMarkup {
     /** Takes a keyboard sent earlier away ({@code ReplyKeyboardRemove}). */
     record RemoveKeyboard() implements ReplyMarkup {
     }
+
+    /**
+     * One button under the message that opens a link ({@code InlineKeyboardMarkup} with a URL button), for example
+     * «Оплатити» with an invoice's payment link. Never log the link.
+     */
+    record UrlButton(String text, String url) implements ReplyMarkup {
+
+        @Override
+        public String toString() {
+            return "UrlButton[text=" + text + "]";
+        }
+    }
 }

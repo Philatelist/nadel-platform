@@ -1,6 +1,7 @@
 package app.nadel.notifications.internal.telegram;
 
 import app.nadel.notifications.internal.telegram.TelegramException.Kind;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -10,6 +11,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -30,7 +32,7 @@ import tools.jackson.databind.node.ObjectNode;
  * The token is part of the URL, so neither the URL nor the token is ever logged or put into an exception message, and
  * a token with characters outside {@code [A-Za-z0-9:_-]} is refused before it reaches a URL. Calls block (the caller
  * runs them outside any transaction, on a virtual thread for the bot): {@code getMe}, the long poll
- * {@code getUpdates} and {@code sendMessage}; {@code sendDocument} (multipart) is added over the same transport. A
+ * {@code getUpdates}, {@code sendMessage} and {@code sendDocument} (a hand-built {@code multipart/form-data} body). A
  * thread interrupted while it waits gets {@link Kind#UNAVAILABLE} with its interrupt flag set again.
  */
 @Component
@@ -108,6 +110,42 @@ public class TelegramClient {
         call(token, "sendMessage", json.writeValueAsString(body), readTimeout);
     }
 
+    /**
+     * Sends a PDF to a chat with a caption and the buttons of {@code markup} when given ({@code sendDocument},
+     * multipart). {@link Kind#FORBIDDEN} when the member blocked the bot, {@link Kind#TOO_MANY_REQUESTS} with
+     * {@code retryAfter} when Telegram asks to wait.
+     */
+    public void sendDocument(String token, long chatId, String fileName, byte[] pdf, String caption,
+            @Nullable ReplyMarkup markup) throws TelegramException {
+        String boundary = "nadel-" + UUID.randomUUID();
+        ByteArrayOutputStream body = new ByteArrayOutputStream(pdf.length + 1024);
+        field(body, boundary, "chat_id", Long.toString(chatId));
+        field(body, boundary, "caption", caption);
+        if (markup != null) {
+            field(body, boundary, "reply_markup", json.writeValueAsString(markup(markup)));
+        }
+        String safeName = fileName.replaceAll("[^A-Za-z0-9._-]", "_");
+        write(body, "--" + boundary + "\r\nContent-Disposition: form-data; name=\"document\"; filename=\""
+                + safeName + "\"\r\nContent-Type: application/pdf\r\n\r\n");
+        body.writeBytes(pdf);
+        write(body, "\r\n--" + boundary + "--\r\n");
+        HttpRequest request = HttpRequest.newBuilder(uri(token, "sendDocument"))
+                .timeout(readTimeout.multipliedBy(2))
+                .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+                .POST(HttpRequest.BodyPublishers.ofByteArray(body.toByteArray()))
+                .build();
+        send("sendDocument", request);
+    }
+
+    private static void field(ByteArrayOutputStream body, String boundary, String name, String value) {
+        write(body, "--" + boundary + "\r\nContent-Disposition: form-data; name=\"" + name + "\"\r\n"
+                + "Content-Type: text/plain; charset=UTF-8\r\n\r\n" + value + "\r\n");
+    }
+
+    private static void write(ByteArrayOutputStream body, String text) {
+        body.writeBytes(text.getBytes(StandardCharsets.UTF_8));
+    }
+
     private ObjectNode markup(ReplyMarkup markup) {
         ObjectNode node = json.createObjectNode();
         switch (markup) {
@@ -120,6 +158,8 @@ public class TelegramClient {
                 node.put("resize_keyboard", true);
             }
             case ReplyMarkup.RemoveKeyboard remove -> node.put("remove_keyboard", true);
+            case ReplyMarkup.UrlButton button -> node.putArray("inline_keyboard").addArray().addObject()
+                    .put("text", button.text()).put("url", button.url());
         }
         return node;
     }

@@ -1,9 +1,13 @@
 package app.nadel.documents.internal;
 
 import app.nadel.documents.DocumentsFacade;
+import app.nadel.documents.InvoiceSummary;
+import app.nadel.documents.MonthInvoice;
 import app.nadel.documents.PrintScope;
 import app.nadel.identity.AccessProfile;
+import app.nadel.money.Money;
 import app.nadel.tenancy.TenantContext;
+import java.math.BigDecimal;
 import java.time.YearMonth;
 import java.util.List;
 import java.util.Map;
@@ -52,6 +56,30 @@ class DocumentsFacadeService implements DocumentsFacade {
 
     @Override
     @Transactional(readOnly = true)
+    public List<MonthInvoice> latestInvoices(YearMonth month) {
+        tenant();
+        return invoices.latestSummariesOfMonth(Objects.requireNonNull(month, "month").atDay(1)).stream()
+                .map(row -> new MonthInvoice((UUID) row[0], (UUID) row[1], (Integer) row[2], (String) row[3],
+                        Money.of((BigDecimal) row[4]), month))
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<InvoiceSummary> invoiceSummary(UUID invoiceId) {
+        tenant();
+        return invoices.findById(Objects.requireNonNull(invoiceId, "invoiceId")).map(record -> {
+            Object plot = record.getSnapshot().get("plot");
+            Object number = plot instanceof Map<?, ?> map ? map.get("number") : null;
+            return new InvoiceSummary(record.getId(), record.getPlotId(),
+                    number instanceof String text ? text : "", record.getNumber(),
+                    YearMonth.from(record.getMonth()), record.getVersion(), Money.of(record.getDue()),
+                    qrLinkOf(record));
+        });
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Optional<byte[]> invoicePdf(UUID invoiceId) {
         UUID tenantId = tenant();
         return invoices.findById(Objects.requireNonNull(invoiceId, "invoiceId"))
@@ -74,8 +102,9 @@ class DocumentsFacadeService implements DocumentsFacade {
                 .map(CashReceipts.ReceiptFile::content);
     }
 
+    /** Read-write: the paper recipients may create their link codes ({@link PrintBundle}). */
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public byte[] printPdf(YearMonth month, PrintScope scope) {
         return printBundle.print(tenant(), month, scope).content();
     }
@@ -84,8 +113,12 @@ class DocumentsFacadeService implements DocumentsFacade {
     @Transactional(readOnly = true)
     public Optional<String> qrLink(UUID invoiceId) {
         tenant();
-        return invoices.findById(Objects.requireNonNull(invoiceId, "invoiceId"))
-                .map(record -> record.getSnapshot().get("qr"))
+        return invoices.findById(Objects.requireNonNull(invoiceId, "invoiceId")).flatMap(DocumentsFacadeService::qrLinkOf);
+    }
+
+    /** The payment link stored with the version; empty for a version with nothing due. */
+    private static Optional<String> qrLinkOf(InvoiceRecord record) {
+        return Optional.ofNullable(record.getSnapshot().get("qr"))
                 .filter(Map.class::isInstance)
                 .map(qr -> ((Map<?, ?>) qr).get("link"))
                 .filter(String.class::isInstance)

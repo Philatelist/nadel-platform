@@ -35,12 +35,14 @@ import tools.jackson.databind.node.ObjectNode;
  *       confirms (drops) the updates before it, as Telegram does;</li>
  *   <li>{@code sendMessage} records the message ({@link #sent}) and answers 403 for a chat that blocked the bot
  *       ({@link #block});</li>
+ *   <li>{@code sendDocument} (multipart) records the document with its caption, file and URL buttons
+ *       ({@link #documents}) and answers 403 for a chat that blocked the bot;</li>
  *   <li>a method without a handler gets 404;</li>
- *   <li>{@link #handle} adds or replaces a method's handler ({@code sendDocument} in a later slice),
- *       {@link #failNext} makes the next call of a method fail once (403 for a blocked chat, 429 with
- *       {@code retry_after}).</li>
+ *   <li>{@link #handle} adds or replaces a method's handler, {@link #failNext} makes the next call of a method fail
+ *       once (403 for a blocked chat, 429 with {@code retry_after}: {@link Reply#tooManyRequests}).</li>
  * </ul>
- * Every call is recorded ({@link #calls()}) with its method, the token's last four characters and the request body.
+ * Every call is recorded ({@link #calls()}) with its method, the token's last four characters and the request body (a
+ * multipart body as ISO-8859-1 text, byte for byte).
  * One server per test JVM ({@link #shared()}), wired into every Spring context by {@code IntegrationTest}; a test that
  * changes it calls {@link #reset()} afterwards.
  */
@@ -86,6 +88,15 @@ public final class FakeBotApi {
     public record Sent(String tokenLast4, long chatId, String text, List<String> buttons, boolean removesKeyboard) {
     }
 
+    /** A button under a document that opens a link. */
+    public record UrlButton(String text, String url) {
+    }
+
+    /** A document the bot sent: the caption, the file and the URL buttons under it. */
+    public record SentDocument(String tokenLast4, long chatId, String caption, String fileName, byte[] content,
+            List<UrlButton> buttons) {
+    }
+
     private record Update(long id, String json) {
     }
 
@@ -103,6 +114,7 @@ public final class FakeBotApi {
     private final Object updatesLock = new Object();
     private final Map<String, List<Update>> updates = new HashMap<>();
     private final List<Sent> sent = new ArrayList<>();
+    private final List<SentDocument> documents = new ArrayList<>();
     private final Set<Long> blocked = ConcurrentHashMap.newKeySet();
     private long nextUpdateId = 1_000;
     private volatile String username = DEFAULT_USERNAME;
@@ -213,7 +225,20 @@ public final class FakeBotApi {
         return sent().stream().filter(message -> message.chatId() == chatId).toList();
     }
 
-    /** From now on {@code sendMessage} to the chat answers 403, as for a member who blocked the bot. */
+    /** The documents the bots sent so far, oldest first. */
+    public synchronized List<SentDocument> documents() {
+        return List.copyOf(documents);
+    }
+
+    /** The documents sent to one chat so far, oldest first. */
+    public List<SentDocument> documents(long chatId) {
+        return documents().stream().filter(document -> document.chatId() == chatId).toList();
+    }
+
+    /**
+     * From now on {@code sendMessage} and {@code sendDocument} to the chat answer 403, as for a member who blocked the
+     * bot.
+     */
     public void block(long chatId) {
         blocked.add(chatId);
     }
@@ -225,6 +250,7 @@ public final class FakeBotApi {
         failures.clear();
         calls.clear();
         sent.clear();
+        documents.clear();
         blocked.clear();
         synchronized (updatesLock) {
             updates.clear();
@@ -234,6 +260,7 @@ public final class FakeBotApi {
                 + "\"username\":\"" + username + "\"}"));
         handle("getUpdates", this::getUpdates);
         handle("sendMessage", this::sendMessage);
+        handle("sendDocument", this::sendDocument);
     }
 
     private Reply getUpdates(String token, String body) {
@@ -286,9 +313,69 @@ public final class FakeBotApi {
                 + JSON.writeValueAsString(text) + "}");
     }
 
+    /** The parts of a multipart body (ISO-8859-1 text, byte for byte): name to the part's raw content. */
+    private static Map<String, String> parts(String body) {
+        Map<String, String> parts = new HashMap<>();
+        int firstLine = body.indexOf("\r\n");
+        if (!body.startsWith("--") || firstLine < 0) {
+            return parts;
+        }
+        String delimiter = "\r\n" + body.substring(0, firstLine);
+        int start = firstLine + 2;
+        while (true) {
+            int end = body.indexOf(delimiter, start);
+            if (end < 0) {
+                return parts;
+            }
+            String part = body.substring(start, end);
+            int headersEnd = part.indexOf("\r\n\r\n");
+            Matcher name = Pattern.compile("name=\"([^\"]+)\"").matcher(part.substring(0, Math.max(0, headersEnd)));
+            Matcher file = Pattern.compile("filename=\"([^\"]+)\"").matcher(part.substring(0, Math.max(0, headersEnd)));
+            if (headersEnd >= 0 && name.find()) {
+                parts.put(name.group(1), part.substring(headersEnd + 4));
+                if (file.find()) {
+                    parts.put(name.group(1) + ".filename", file.group(1));
+                }
+            }
+            start = end + delimiter.length() + 2;
+        }
+    }
+
+    private static String utf8(String latin1) {
+        return new String(latin1.getBytes(StandardCharsets.ISO_8859_1), StandardCharsets.UTF_8);
+    }
+
+    private Reply sendDocument(String token, String body) {
+        Map<String, String> parts = parts(body);
+        long chatId = Long.parseLong(parts.getOrDefault("chat_id", "0").strip());
+        if (blocked.contains(chatId)) {
+            return Reply.error(403, "Forbidden: bot was blocked by the user");
+        }
+        if (!parts.containsKey("document")) {
+            return Reply.error(400, "Bad Request: there is no document in the request");
+        }
+        List<UrlButton> buttons = new ArrayList<>();
+        if (parts.containsKey("reply_markup")) {
+            for (JsonNode row : JSON.readTree(utf8(parts.get("reply_markup"))).path("inline_keyboard")) {
+                for (JsonNode button : row) {
+                    buttons.add(new UrlButton(button.path("text").asString(), button.path("url").asString()));
+                }
+            }
+        }
+        synchronized (this) {
+            documents.add(new SentDocument(token.length() < 4 ? token : token.substring(token.length() - 4), chatId,
+                    utf8(parts.getOrDefault("caption", "")), parts.getOrDefault("document.filename", ""),
+                    parts.get("document").getBytes(StandardCharsets.ISO_8859_1), List.copyOf(buttons)));
+        }
+        return Reply.ok("{\"message_id\":2,\"chat\":{\"id\":" + chatId + ",\"type\":\"private\"}}");
+    }
+
     private void serve(HttpExchange exchange) throws IOException {
         try (exchange) {
-            String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+            String type = exchange.getRequestHeaders().getFirst("Content-Type");
+            byte[] raw = exchange.getRequestBody().readAllBytes();
+            String body = new String(raw, type != null && type.startsWith("multipart/")
+                    ? StandardCharsets.ISO_8859_1 : StandardCharsets.UTF_8);
             Matcher path = PATH.matcher(exchange.getRequestURI().getPath());
             Reply reply;
             if (!path.matches()) {

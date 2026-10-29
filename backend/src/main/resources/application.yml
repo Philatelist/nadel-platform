@@ -84,6 +84,32 @@ nadel:
   delivery:
     # Connect, read and write timeout of a cooperative's mail server
     smtp-timeout: 10s
+    # The sending worker (DeliveryDispatcher, DeliveryProperties): three attempts (now, +1 min, +5 min), one sender per
+    # cooperative and channel by a lease, about a minute per run, and a sweep that wakes the lanes with due rows
+    retry-delays: 1m,5m
+    lane-lease: 60s
+    run-limit: 60s
+    busy-retry: 5s
+    sweep-interval: 60s
+    telegram-per-second: 20
+    telegram-chat-gap: 1s
+
+jobrunr:
+  # Background jobs (feature 017, ADR 0007): JobRunr on the application's DataSource (nadel_app). Its tables come
+  # only from Flyway V30 (JobRunr 9.0.1 schema, default prefix, schema public), so JobRunr never creates them.
+  database:
+    skip-create: true
+  background-job-server:
+    # Runs the delivery workers (DispatchDeliveries); the tests turn it off and run the dispatcher themselves
+    enabled: true
+  dashboard:
+    enabled: false
+  jobs:
+    # Only a crashed run is retried by JobRunr; the delivery attempts are counted on the delivery rows
+    default-number-of-retries: 2
+  miscellaneous:
+    # No usage data leaves the server
+    allow-anonymous-data-usage: false
 
 management:
   endpoints:

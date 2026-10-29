@@ -37,6 +37,15 @@ interface InvoiceRepository extends JpaRepository<InvoiceRecord, UUID> {
             + "where j.plotId = i.plotId and j.month = i.month)")
     List<Object[]> latestOfMonth(@Param("month") LocalDate month);
 
+    /**
+     * The latest version of each plot's invoice for the month, as {@code [id, plotId, version, number, due]}, in the
+     * order of the numbers (feature 017: sending the month's invoices).
+     */
+    @Query("select i.id, i.plotId, i.version, i.number, i.due from InvoiceRecord i where i.month = :month "
+            + "and i.version = (select max(j.version) from InvoiceRecord j "
+            + "where j.plotId = i.plotId and j.month = i.month) order by i.number")
+    List<Object[]> latestSummariesOfMonth(@Param("month") LocalDate month);
+
     /** The latest version of the plot's invoice for the month. */
     Optional<InvoiceRecord> findFirstByPlotIdAndMonthOrderByVersionDesc(UUID plotId, LocalDate month);
 }

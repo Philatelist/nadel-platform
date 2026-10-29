@@ -18,8 +18,9 @@ import tools.jackson.databind.json.JsonMapper;
  * Mailpit in a container for the mail tests of feature 017: an SMTP server that keeps every letter and shows it over
  * its HTTP API ({@code /api/v1/messages}), so no test sends to a real mailbox. The image is the one of
  * {@code infra/docker-compose.yml}. The server asks for a sign-in ({@link #USER} / {@link #PASSWORD}, allowed without
- * TLS), so a wrong password is refused as a real mailbox would. One container per test JVM ({@link #shared()}),
- * started on first use; a test empties it with {@link #clear()}.
+ * TLS), so a wrong password is refused as a real mailbox would. Its chaos switch ({@link #refuseRecipients}) makes it
+ * refuse every letter, as a mailbox that blocks the sender. One container per test JVM ({@link #shared()}), started on
+ * first use; a test empties it with {@link #clear()} and turns the chaos off with {@code refuseRecipients(false)}.
  */
 public final class Mailpit {
 
@@ -44,6 +45,7 @@ public final class Mailpit {
                 .withExposedPorts(SMTP_PORT, HTTP_PORT)
                 .withEnv("MP_SMTP_AUTH", USER + ":" + PASSWORD)
                 .withEnv("MP_SMTP_AUTH_ALLOW_INSECURE", "true")
+                .withEnv("MP_ENABLE_CHAOS", "true")
                 .waitingFor(Wait.forHttp("/readyz").forPort(HTTP_PORT));
         container.start();
     }
@@ -82,6 +84,31 @@ public final class Mailpit {
     /** The plain-text body of a letter. */
     public String text(String id) {
         return JsonMapper.shared().readTree(get("/api/v1/message/" + id)).path("Text").asString();
+    }
+
+    /** The letters of one recipient, newest first. */
+    public List<Letter> lettersTo(String address) {
+        return letters().stream().filter(letter -> letter.to().contains(address)).toList();
+    }
+
+    /** The HTML body of a letter. */
+    public String html(String id) {
+        return JsonMapper.shared().readTree(get("/api/v1/message/" + id)).path("HTML").asString();
+    }
+
+    /** The file names of a letter's attachments. */
+    public List<String> attachments(String id) {
+        List<String> names = new ArrayList<>();
+        JsonMapper.shared().readTree(get("/api/v1/message/" + id)).path("Attachments")
+                .forEach(attachment -> names.add(attachment.path("FileName").asString()));
+        return names;
+    }
+
+    /** Whether the server refuses every recipient with {@code 550} (Mailpit's chaos), from now on. */
+    public void refuseRecipients(boolean refuse) {
+        String body = "{\"Recipient\":{\"ErrorCode\":550,\"Probability\":" + (refuse ? 100 : 0) + "}}";
+        send(HttpRequest.newBuilder(uri("/api/v1/chaos")).header("Content-Type", "application/json")
+                .PUT(HttpRequest.BodyPublishers.ofString(body)).build());
     }
 
     /** Removes every letter. */

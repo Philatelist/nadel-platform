@@ -103,6 +103,15 @@ class TelegramLinks {
         return activeByMember(memberId).isPresent();
     }
 
+    /** The chat of the member's active link, opened (to send them a document); empty when not linked. */
+    @Transactional(readOnly = true)
+    Optional<Long> chatOfMember(UUID memberId) {
+        UUID tenantId = boundTenant();
+        return jdbc.query("select id, chat_id_enc from telegram_link where member_id = ? and ended_at is null",
+                (rs, n) -> Long.parseLong(cipher.decrypt(tenantId, new FieldRef(TABLE, CHAT_COLUMN,
+                        rs.getObject(1, UUID.class)), rs.getBytes(2))), memberId).stream().findFirst();
+    }
+
     /** Of the given members, those linked now. */
     @Transactional(readOnly = true)
     Set<UUID> linkedAmong(Collection<UUID> memberIds) {

@@ -1380,6 +1380,226 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
 
+  /billing-months/{month}/invoices/send:
+    post:
+      tags: [notifications]
+      operationId: sendMonthInvoices
+      summary: Preview or send the invoices of a billing month to the members
+      description: |
+        «Надіслати рахунки за {місяць}» (feature 017 §2.3, §2.4): for the latest version of each invoice of the month
+        (only those with something due unless `includeNothingDue`), every current owner of the plot gets the plot's
+        invoice through their own channel: Telegram when they chose it, their Telegram is linked and the cooperative
+        has a bot; e-mail when they chose it (or chose Telegram without a link or a bot) and have an e-mail and the
+        cooperative has a mailbox; otherwise paper. A `VIBER` member gets paper with the note `VIBER_UNSUPPORTED`. An
+        owner of two plots gets two messages.
+
+        Each (invoice version, member, channel) is created once: sending the month again creates only what is new
+        (a new version, a new owner, a changed channel), so nobody gets the same invoice twice. E-mail and Telegram
+        deliveries are queued (`QUEUED`) and sent in the background at a limited pace (`listDeliveries` shows the
+        outcome); paper deliveries wait as `TO_PRINT` until `markMonthPrinted`.
+
+        `counts` are the deliveries this send creates per channel (with `preview=true`, would create; nothing is
+        written); `queued` is the number of e-mail and Telegram deliveries queued (0 for a preview). A send that
+        creates something is written to the audit log as `INVOICES_SENT` (entity type `BILLING_MONTH`, label
+        `YYYY-MM`, the entity id of `INVOICES_ISSUED`; fields `month`, `telegram`, `email`, `paper`, new values
+        only). A month without invoices answers zero counts. Requires `INVOICES_ISSUE`.
+      parameters:
+        - name: month
+          in: path
+          required: true
+          description: The billing month, `YYYY-MM`
+          schema:
+            type: string
+            pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+        - name: preview
+          in: query
+          required: true
+          description: '`true` counts what the send would create without writing anything; `false` sends'
+          schema:
+            type: boolean
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvoiceSendRequest'
+      responses:
+        '200':
+          description: What the send would create (preview) or created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceSendResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /invoices/{id}/send:
+    post:
+      tags: [notifications]
+      operationId: sendInvoice
+      summary: Send one invoice to the plot's owners
+      description: |
+        «Надіслати» on one invoice (feature 017 §2.4): the invoice version goes to every current owner of its plot
+        through their own channel, by the rules of `sendMonthInvoices`, also when nothing is due on it. A delivery
+        that exists already (the same version to the same member through the same channel) is not created again.
+        Answers the deliveries created per channel and the number queued; written to the audit log as
+        `INVOICES_SENT` like a month send, with the invoice `number` as a further field, when something was created.
+        404 `NOT_FOUND` for an unknown invoice or one of another cooperative. Requires `INVOICES_ISSUE`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The deliveries created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceSendResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /deliveries:
+    get:
+      tags: [notifications]
+      operationId: listDeliveries
+      summary: The deliveries of the cooperative and their outcome
+      description: |
+        The delivery screen (Документи → «Розсилка», feature 017 §2.4): a page of deliveries, newest first, each one
+        message to one member through one channel with its status (`QUEUED` in the queue, `SENT` the mail server or
+        Telegram accepted it, `FAILED` with `failureCode` after the last attempt, `TO_PRINT` a paper copy not yet
+        printed, `PRINTED`), the attempts so far and when it was sent. `plotNumber` is the plot of an invoice;
+        `memberName` the member ("Last First"). The filters are optional and combine. `summary` counts the
+        deliveries per channel and status for `month` and `kind` (the other filters do not narrow it), so the screen
+        shows sent, failed and to print per channel. A delivery holds no address, chat or text. Requires
+        `INVOICES_ISSUE`.
+      parameters:
+        - name: month
+          in: query
+          required: false
+          description: Only the deliveries of this billing month, `YYYY-MM`
+          schema:
+            type: string
+            pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+        - name: kind
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/DeliveryKind'
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/DeliveryStatus'
+        - name: channel
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/DeliveryMethod'
+        - name: page
+          in: query
+          required: false
+          description: Zero-based page index
+          schema:
+            type: integer
+            format: int32
+            minimum: 0
+            default: 0
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /deliveries/{id}/retry:
+    post:
+      tags: [notifications]
+      operationId: retryDelivery
+      summary: Send a delivery once more
+      description: |
+        «Надіслати ще раз» (feature 017 §2.4) on a `FAILED` or `SENT` e-mail or Telegram delivery: it is queued again
+        with its attempts from zero and sent in the background (`resends` counts how often this was asked). 409
+        `DELIVERY_NOT_RETRYABLE` for a paper delivery or one that is still queued; 404 `NOT_FOUND` for an unknown
+        delivery or one of another cooperative. Single sends are not written to the audit log. Requires
+        `INVOICES_ISSUE`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Queued again
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /billing-months/{month}/print-done:
+    post:
+      tags: [notifications]
+      operationId: markMonthPrinted
+      summary: Mark the month's paper invoices as printed
+      description: |
+        «Роздруковано» (feature 017 §2.4): every invoice delivery of the month waiting as `TO_PRINT` becomes `PRINTED`;
+        `printed` is how many. Paper copies created later (a new version, a new owner) wait again. Requires
+        `INVOICES_ISSUE`.
+      parameters:
+        - name: month
+          in: path
+          required: true
+          description: The billing month, `YYYY-MM`
+          schema:
+            type: string
+            pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+      responses:
+        '200':
+          description: How many paper deliveries were marked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrintDoneResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
   /imports/template:
     get:
       tags: [imports]
@@ -3816,9 +4036,13 @@ paths:
         One PDF (A4, Ukrainian) with the latest version of each invoice of the month, one invoice per page (an invoice
         that needs more than one page continues on the next, and the next invoice starts on a new page), in street and
         plot order (the Ukrainian alphabet of the street, plots without a street last, then the natural order of the
-        plot number). `scope=PAPER` (the default) takes the plots that have at least one current owner who chose
-        paper delivery; `scope=ALL` every latest invoice of the month. A month without such invoices gives one page
-        saying so. The file is not stored; the same invoices give the same bytes. A month that is not listed (before
+        plot number). `scope=PAPER` (the default) prints one copy per owner who gets the invoice on paper by the
+        channel rule of `sendMonthInvoices` (paper chosen, Viber, or e-mail or Telegram that cannot be used), each
+        closed with «Примірник для: {name}» and, when the cooperative has a bot, a small QR code «Отримувати рахунки в
+        Telegram» with the owner's personal link (feature 017): printing creates these one-time link codes (valid 90
+        days) for the owners who are not linked yet. `scope=ALL` prints every latest invoice of the month once, without
+        names or codes. A month without such invoices gives one page saying so. The file is not stored; the same
+        invoices give the same bytes, except a set with link codes, which has new codes on every print. A month that is not listed (before
         the first month of the cooperative, after the current one) is 404 `NOT_FOUND`. Requires `INVOICES_ISSUE`.
       parameters:
         - name: month
@@ -5956,7 +6180,8 @@ components:
         annulled is annulled again (code `CERTIFICATE_ALREADY_ANNULLED`), or a check of the cooperative's mailbox or bot
         is asked while it is not set up (code `DELIVERY_NOT_CONFIGURED`), or a test letter is asked by a member without
         an e-mail of their own (code `NO_OWN_EMAIL`), or a Telegram link is asked while the cooperative has no working
-        bot (code `TELEGRAM_NOT_CONFIGURED`)
+        bot (code `TELEGRAM_NOT_CONFIGURED`), or a paper delivery or one still queued is sent again (code
+        `DELIVERY_NOT_RETRYABLE`)
       content:
         application/problem+json:
           schema:
@@ -6711,6 +6936,7 @@ components:
         - CERTIFICATE_ISSUED
         - CERTIFICATE_ANNULLED
         - DELIVERY_SETTINGS_CHANGED
+        - INVOICES_SENT
         - TELEGRAM_LINKED
         - TELEGRAM_UNLINKED
 
@@ -6756,7 +6982,10 @@ components:
         about the member whose Telegram was linked or unlinked (label "Last First"), never with Telegram account
         details: `TELEGRAM_LINKED` has no fields, `TELEGRAM_UNLINKED` has `endReason` (new value only: `UNLINKED` the
         member unlinked it in the bot or the account, `BLOCKED` the member blocked the bot, `MOVED` the chat was
-        linked to another member).
+        linked to another member). `INVOICES_SENT` (feature 017, a send of a month's invoices or of one invoice) is a
+        `BILLING_MONTH` entry with the entity id of `INVOICES_ISSUED`; its fields (new values only) are `month`
+        (`YYYY-MM`), `telegram`, `email` and `paper` (the deliveries created per channel) and, for one invoice,
+        `number`.
       enum:
         [
           MEMBER,
@@ -12744,3 +12973,139 @@ components:
         expiresAt:
           type: string
           format: date-time
+
+    InvoiceSendRequest:
+      type: object
+      properties:
+        includeNothingDue:
+          type: boolean
+          description: Also send the invoices with nothing due («Надсилати й рахунки без боргу»); default false
+
+    DeliveryCounts:
+      type: object
+      description: Deliveries per channel
+      required: [telegram, email, paper]
+      properties:
+        telegram:
+          type: integer
+          format: int32
+        email:
+          type: integer
+          format: int32
+        paper:
+          type: integer
+          format: int32
+
+    InvoiceSendResult:
+      type: object
+      description: What a send of invoices created, or with `preview` would create (`sendMonthInvoices`, `sendInvoice`)
+      required: [counts, queued]
+      properties:
+        counts:
+          $ref: '#/components/schemas/DeliveryCounts'
+        queued:
+          type: integer
+          format: int32
+          description: The e-mail and Telegram deliveries queued for sending; 0 for a preview
+
+    DeliveryKind:
+      type: string
+      description: 'What a delivery carries: an invoice, a payment message, a reversal message or an announcement'
+      enum: [INVOICE, PAYMENT, REVERSAL, ANNOUNCEMENT]
+
+    DeliveryStatus:
+      type: string
+      description: >-
+        `QUEUED` waiting to be sent (or to be tried again), `SENT` the mail server or Telegram accepted it, `FAILED`
+        not delivered (see `failureCode`), `TO_PRINT` a paper copy not yet printed, `PRINTED` printed
+      enum: [QUEUED, SENT, FAILED, TO_PRINT, PRINTED]
+
+    DeliveryMethod:
+      type: string
+      description: The channel a delivery goes through (Viber members get paper)
+      enum: [EMAIL, TELEGRAM, PAPER]
+
+    DeliveryNote:
+      type: string
+      description: '`VIBER_UNSUPPORTED`: the member chose Viber, which is not supported yet, so they get paper'
+      enum: [VIBER_UNSUPPORTED]
+
+    DeliveryRow:
+      type: object
+      required: [id, kind, channel, status, attempts]
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          $ref: '#/components/schemas/DeliveryKind'
+        month:
+          type: string
+          description: The billing month, `YYYY-MM`
+        plotNumber:
+          type: string
+          description: The plot of the invoice
+        memberName:
+          type: string
+          description: The member, "Last First"
+        channel:
+          $ref: '#/components/schemas/DeliveryMethod'
+        status:
+          $ref: '#/components/schemas/DeliveryStatus'
+        failureCode:
+          $ref: '#/components/schemas/DeliveryFailureCode'
+        note:
+          $ref: '#/components/schemas/DeliveryNote'
+        attempts:
+          type: integer
+          format: int32
+        sentAt:
+          type: string
+          format: date-time
+
+    DeliverySummaryCount:
+      type: object
+      required: [channel, status, count]
+      properties:
+        channel:
+          $ref: '#/components/schemas/DeliveryMethod'
+        status:
+          $ref: '#/components/schemas/DeliveryStatus'
+        count:
+          type: integer
+          format: int32
+
+    DeliveryPage:
+      type: object
+      required: [items, page, size, totalItems, totalPages, summary]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/DeliveryRow'
+        page:
+          type: integer
+          format: int32
+          description: Zero-based page index
+        size:
+          type: integer
+          format: int32
+        totalItems:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+        summary:
+          type: array
+          description: The deliveries per channel and status for the `month` and `kind` filters
+          items:
+            $ref: '#/components/schemas/DeliverySummaryCount'
+
+    PrintDoneResult:
+      type: object
+      required: [printed]
+      properties:
+        printed:
+          type: integer
+          format: int32

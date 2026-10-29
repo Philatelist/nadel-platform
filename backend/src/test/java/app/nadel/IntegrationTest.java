@@ -84,6 +84,9 @@ public abstract class IntegrationTest {
         // No bot is polled on a schedule in tests: the bot tests drive the supervisor themselves, with short polls
         registry.add("nadel.telegram.bot-enabled", () -> "false");
         registry.add("nadel.telegram.poll-timeout", () -> "1s");
+        // No JobRunr background job server: the delivery tests run the dispatcher themselves, and enqueued jobs only
+        // stay in jobrunr_jobs. A test class that wants the server sets nadel.test.job-server=true (JobRunrTests).
+        registry.add("jobrunr.background-job-server.enabled", () -> "${nadel.test.job-server:false}");
     }
 
     private static String randomMasterKey() {

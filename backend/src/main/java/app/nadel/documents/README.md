@@ -245,6 +245,18 @@ snapshots opened 50 at a time. Without invoices one page «За {місяць} �
 scope (`print.*` in the bundle). Its `/ID` comes from the month, the scope and the printed version ids, its time is the
 latest `issuedAt` among them, so the same set gives the same bytes. File `invoices_{YYYY-MM}_{paper|all}.pdf`.
 
+**Copies per recipient (feature 017 §2.2, §2.3).** When a `PaperRecipients` implementation exists (the notifications
+module's `PaperCopiesProvider`), `scope=PAPER` prints one copy per recipient it names for a plot instead of one per
+plot: the owners whose channel comes out as paper by the channel rule (paper chosen, Viber, an e-mail or Telegram that
+cannot be used), in street and plot order and the owners' order. Each copy closes with «Примірник для: {Last First}»
+and, when the entry has a link, the small QR code «Отримувати рахунки в Telegram» (24 mm, `LinkQrImage`: plain QR,
+error correction M) beside how to use it (`print.copyFor`, `print.telegram.*`). **The print PDF now creates link
+codes:** the notifications module issues a 90-day `PAPER` code per unlinked recipient when the cooperative has a bot
+(only its hash is stored, so the code exists only on the paper), which is why the print runs in a read-write
+`REPEATABLE READ` transaction; a set with link codes differs from print to print, one without stays byte-stable (the
+recipients join the `/ID`). `scope=ALL` stays one copy per plot without names or codes; without an implementation
+`scope=PAPER` is the feature 016 filter above.
+
 ## Demo documents
 
 `DemoDocuments` (an `ApplicationRunner`, registered only when `spring.flyway.locations` contains `db/demo` and the
@@ -267,16 +279,20 @@ failure is logged with its problem code or class only and never stops the applic
 
 ## Public API: `DocumentsFacade` (for feature 017)
 
-`DocumentsFacade` (implemented by `internal.DocumentsFacadeService`) with `PrintScope` (`PAPER`, `ALL`): ids, links and
-bytes only.
+`DocumentsFacade` (implemented by `internal.DocumentsFacadeService`) with `PrintScope` (`PAPER`, `ALL`), the records
+`MonthInvoice` and `InvoiceSummary` and the SPI `PaperRecipients` with `PaperCopy`: ids, links and bytes only.
+`DocumentFormats` writes amounts, days and months as the documents do (`1 234,56 ₴`, `28.10.2026`, «жовтень 2026»;
+over the internal `DocumentFormat`) for the other modules' message texts.
 
 | Method | What |
 |---|---|
 | `latestInvoice(plotId, month)` | the id of the latest version of the plot's invoice for the month, or empty |
+| `latestInvoices(month)` | the latest version of each plot's invoice of the month (`MonthInvoice`: id, plot, version, number, «До сплати», month), in number order (feature 017: sending the month's invoices) |
+| `invoiceSummary(invoiceId)` | what a message about a version needs (`InvoiceSummary`: plot and its number as printed, number, month, version, «До сплати», the payment link), or empty |
 | `invoicePdf(invoiceId)` | the PDF of a version (the same bytes as `GET /invoices/{id}/pdf`), or empty |
 | `invoiceForToday(plotId)` | the current month's invoice as of now (as `POST /plots/{id}/invoices`, the same lock and problems): a new version with the `INVOICE_REISSUED` audit only when its content changed, otherwise the latest version's id; issued by the system: no `issued_by`, audit subject `system:documents` |
 | `receiptPdf(paymentId)` | the cash receipt drawn now, without the payer note; empty for an unknown payment, a reversal row or a bank payment |
-| `printPdf(month, scope)` | the print set (as the endpoint, without the month check: an unknown month is the one page "no invoices") |
+| `printPdf(month, scope)` | the print set (as the endpoint, without the month check: an unknown month is the one page "no invoices"); read-write, as the paper recipients may create link codes |
 | `qrLink(invoiceId)` | the stored NBU link of a version, or empty (unknown id, nothing due) |
 
 The cooperative is the one the caller bound (the request's token, or `TenantContext.runAs` in a job or a listener);
@@ -284,7 +300,12 @@ without one a method throws `IllegalStateException`. Each method runs in a trans
 manager, `REQUIRED` (it joins the caller's, or opens its own, so a job needs none). The facade checks no permission: it
 answers as the system and the caller keeps the endpoints' rules (a member receives only the latest version of an
 invoice of a plot they own now, and only the receipt of a group whose every plot they own now). Only
-`invoiceForToday` writes (and audits), and only when the invoice changed.
+`invoiceForToday` writes (and audits), and only when the invoice changed; `printPdf` lets the `PaperRecipients`
+implementation write its link codes.
+
+**SPI `PaperRecipients`** (implemented by the notifications module): `copiesFor(month, plotIds)` answers the paper
+copies of each plot (`PaperCopy`: member, label "Last First", optional link QR payload). Called in the print's
+transaction; optional (`ObjectProvider`): without it the print keeps the feature 016 filter.
 
 ## Amounts in words
 

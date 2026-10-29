@@ -15,8 +15,10 @@ import java.util.Objects;
  * (U+00A0) between the thousands and before the sign, a decimal comma and always two decimals; days as
  * {@code 05.11.2026} in {@code Europe/Kyiv}; months as «жовтень 2026» (nominative) and «жовтня» (genitive), from the
  * document bundle. Pure: an amount is written from its exact value, never rounded again.
+ * <p>
+ * Public only for {@code documents.DocumentFormats}, through which the other modules write their texts (feature 017).
  */
-final class DocumentFormat {
+public final class DocumentFormat {
 
     /** The cooperatives' zone: a day of a document is a day in Kyiv. */
     static final ZoneId ZONE = ZoneId.of("Europe/Kyiv");
@@ -30,7 +32,7 @@ final class DocumentFormat {
     }
 
     /** {@code 1 234,56 ₴}: the amount with the hryvnia sign. */
-    static String money(Money amount) {
+    public static String money(Money amount) {
         return amount(amount) + NBSP + DocumentTexts.uk().text("money.currency");
     }
 
@@ -75,7 +77,7 @@ final class DocumentFormat {
     }
 
     /** {@code 05.11.2026}. */
-    static String day(LocalDate day) {
+    public static String day(LocalDate day) {
         return DAY.format(day);
     }
 
@@ -90,7 +92,7 @@ final class DocumentFormat {
     }
 
     /** «жовтень 2026». */
-    static String month(YearMonth month) {
+    public static String month(YearMonth month) {
         return DocumentTexts.uk().text("month.nominative." + month.getMonthValue()) + " " + month.getYear();
     }
 

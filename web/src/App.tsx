@@ -229,6 +229,15 @@ const router = createBrowserRouter([
         ],
       },
       {
+        element: <RequirePermission permission="INVOICES_ISSUE" />,
+        children: [
+          {
+            path: 'deliveries',
+            lazy: () => import('./pages/DeliveriesPage').then((m) => ({ Component: m.DeliveriesPage })),
+          },
+        ],
+      },
+      {
         element: <RequirePermission permission="AUDIT_VIEW" />,
         children: [
           {

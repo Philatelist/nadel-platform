@@ -148,6 +148,12 @@ class DeliverySettingsService {
         return outcome.values();
     }
 
+    /** The settings of the bound cooperative (the secrets sealed). */
+    @Transactional(readOnly = true)
+    DeliverySettingsValues current() {
+        return valuesOf(boundTenant());
+    }
+
     /** The mailbox of the bound cooperative, opened; empty when it is not set up. */
     @Transactional(readOnly = true)
     Optional<SmtpSettings> mailbox() {

@@ -1,8 +1,9 @@
 # notifications
 
 Delivery to members (feature 017, `context/spec/017-delivery-email-telegram/`): e-mail through the cooperative's own
-mailbox (SMTP) and Telegram through its own bot. **Draft (slices 1–2):** the channel settings and their checks, the
-member's own channel choice, Telegram links and the bot. The delivery register and worker and announcements follow in
+mailbox (SMTP) and Telegram through its own bot. **Draft (slices 1–3):** the channel settings and their checks, the
+member's own channel choice, Telegram links and the bot, sending the month's invoices with the delivery register and
+worker, and the paper copies with a link QR code. Payment messages, the bot's commands and announcements follow in
 later slices and are added here as they land. Design decisions: ADR 0018.
 
 ## Public API
@@ -11,7 +12,9 @@ None. No module calls `notifications`; it reads other modules through their publ
 (later) listens to their events. Allowed dependencies (`package-info.java`): `members`, `documents`, `ledger`,
 `meters`, `plots`, `identity`, `privacy`, `audit`, `tenancy`, `tariffs`, `money`, `settings`, `problem`. Used now:
 `members` (`MemberDirectory`: names, contacts and channels; `MemberChannels`: the member's own channel choice; the SPI
-`TelegramLinkStatus` is implemented here by `TelegramLinkStatusProvider`), `tenancy` (`TenantContext`,
+`TelegramLinkStatus` is implemented here by `TelegramLinkStatusProvider`), `documents` (`DocumentsFacade`:
+`latestInvoices`, `invoiceSummary`, `invoicePdf`; `DocumentFormats` for the texts; the SPI `PaperRecipients` is
+implemented here by `PaperCopiesProvider`), `plots` (`PlotOwners`: the current owners of a plot), `tenancy` (`TenantContext`,
 `TenantDirectory`: the cooperative's name), `privacy` (`PersonalDataCipher`, `FieldRef`, `IndexKind.TELEGRAM_CHAT`),
 `audit` (`AuditEvent`, `FieldChange`, `Actor`), `identity` (`CurrentUser`, `AccessProfile`, `OwnedPlotsSource` for the
 plot numbers of the bot's greeting) and `problem`.
@@ -28,6 +31,11 @@ plot numbers of the bot's greeting) and `problem`.
 | `PUT /me/notifications` | `updateMyNotifications` | signed-in member (itself) |
 | `POST /me/telegram-link` | `createMyTelegramLink` | signed-in member (itself) |
 | `DELETE /me/telegram-link` | `deleteMyTelegramLink` | signed-in member (itself) |
+| `POST /billing-months/{month}/invoices/send?preview=` | `sendMonthInvoices` | `INVOICES_ISSUE` |
+| `POST /invoices/{id}/send` | `sendInvoice` | `INVOICES_ISSUE` |
+| `GET /deliveries?month&kind&status&channel&page&size` | `listDeliveries` | `INVOICES_ISSUE` |
+| `POST /deliveries/{id}/retry` | `retryDelivery` | `INVOICES_ISSUE` |
+| `POST /billing-months/{month}/print-done` | `markMonthPrinted` | `INVOICES_ISSUE` |
 
 One controller implements the generated `NotificationsApi` (`NotificationsController`). The platform operator has no
 permissions and no member, so every endpoint answers it 403 `PERMISSION_DENIED`. The `/me` endpoints act on the member
@@ -131,6 +139,67 @@ transaction.
   `PICK_METER`, `ENTER_VALUE`. After a take-over the member taps the menu again.
 - **403 on a reply** (the member blocked the bot) ends the chat's link as `BLOCKED`.
 
+## Sending invoices (feature 017 §2.3, §2.4)
+
+- **The channel rule** (`ChannelResolver`, pure; `RecipientChannels` reads what it needs): Telegram when chosen, linked
+  and the bot is set up; e-mail when chosen (or Telegram chosen without a link or a bot) with an e-mail and a mailbox;
+  otherwise paper. Viber is paper with the note `VIBER_UNSUPPORTED`.
+- **Planning** (`DeliveryPlanner`): `sendMonth` takes the month's latest invoices (`DocumentsFacade.latestInvoices`,
+  those with nothing due only with `includeNothingDue`), `sendInvoice` one version whatever is due; every current owner
+  of the plot (`PlotOwners.currentOwnerIds`) gets one row per (invoice version, member, channel): `INSERT … ON
+  CONFLICT DO NOTHING` on the table's unique key, so a second send adds only what is new. E-mail and Telegram rows are
+  `QUEUED` (due now), paper rows `TO_PRINT`. The answer is the rows created per channel and how many were queued; the
+  preview runs the same plan without writing (`queued` 0). A send that created something publishes `INVOICES_SENT`
+  (`BILLING_MONTH`, the entity id of `INVOICES_ISSUED`, fields `month`, `telegram`, `email`, `paper`, and `number` for
+  one invoice). After the commit the lanes with queued rows are woken (`DeliveryQueue.wakeAfterCommit`).
+- **The register** (`DeliveryRows`, `DeliveryRegister`): the list (newest first, filters month, kind, status, channel;
+  the plot from `invoiceSummary`, the member "Last First"; counts per channel and status for the month and kind),
+  «Надіслати ще раз» (a `SENT` or `FAILED` e-mail or Telegram row: `QUEUED`, attempts 0, `resends + 1`, the code
+  cleared, the lane woken; 409 `DELIVERY_NOT_RETRYABLE` for paper or a row still queued; 404 for another
+  cooperative's), «Роздруковано» (`TO_PRINT` → `PRINTED` for the month's invoice rows). Retries and the print mark are
+  not audited. A row holds ids, codes and the month only.
+- **The worker** (`DeliveryDispatcher`, the JobRunr job `DispatchDeliveries(tenantId, channel)` run by
+  `DispatchDeliveriesHandler`): binds the cooperative (`TenantContext.runAs`), claims the lane's lease in
+  `delivery_lane` (`DeliveryLanes`, 60 s, database time; a lane held elsewhere is tried again after 5 s), then takes
+  the due rows 20 at a time in a short transaction; per row it prepares the message in a short read-only transaction
+  (`InvoiceMessages`: the summary and the PDF; the opened mailbox and the member's e-mail, or the opened bot token
+  and the member's chat), waits for its slot (`RateLimiters`) and sends outside any transaction (`MailChannel`,
+  `TelegramChannel`), then records the outcome in a short transaction, only while the row's attempts are unchanged. A
+  run stops after 60 s and wakes the lane again, or when nothing is due and schedules the lane at the earliest next
+  attempt. Three attempts: now, +1 min, +5 min; then `FAILED` with the last code. `TELEGRAM_BLOCKED` (403, the link
+  ends `BLOCKED`), `NO_CONTACT` (no e-mail, no active link, a chat Telegram refuses), `CHANNEL_NOT_CONFIGURED` (no
+  mailbox or bot, a token Telegram refuses) and `SMTP_AUTH_FAILED` fail at once; `SMTP_REJECTED` and
+  `CONNECTION_FAILED` are tried again. Telegram's 429 moves the row by `retry_after` without counting an attempt and
+  pauses the lane until then. JobRunr retries a crashed run only (2 retries). Job ids come from the lane and the second
+  it is due, so a lane woken twice in a second gets one job.
+- **The sweep** (`DeliveryDispatcher.sweep`, every `nadel.delivery.sweep-interval` from `BotSchedule`): lists the lanes
+  with due rows through the `SECURITY DEFINER` function `notifications_due_lanes(now)` (V30_1: cooperative id and
+  channel code only; it runs without a cooperative, where RLS shows no row) and wakes each, so nothing waits after a
+  restart or a lost job.
+- **The pace** (`RateLimiters`, in memory: the lane lease makes one instance send a lane): one message a second per
+  member's chat, 20 a second per bot, the cooperative's `email_rate_per_second` per mailbox; sends are spaced evenly.
+- **The texts** (`messages_uk.properties`, `invoice.*`): Telegram sends the PDF (`sendDocument`) with the caption
+  «Рахунок за жовтень 2026, ділянка 9: до сплати 413,26 ₴» and the URL button «Оплатити» (the invoice's NBU payment
+  link) when something is due, otherwise «Рахунок за …, ділянка 9. Боргу немає, дякуємо!» without a button. E-mail: the
+  subject «Рахунок за жовтень 2026, ділянка 9», plain text and HTML with the same words, the payment link, «Рахунок у
+  вкладенні (PDF).» and «Правління {cooperative}», the PDF attached, from the mailbox's sender name.
+
+## Paper copies (`PaperCopiesProvider`, documents SPI `PaperRecipients`)
+
+The print PDF of a month (`scope=PAPER`) prints one copy per owner whose channel comes out as paper by the rule above,
+named "Last First". **It creates link codes:** when the cooperative has a bot whose @name is known
+(`delivery_settings.bot_username`), every such owner who is not linked yet gets a new 90-day `PAPER` code, printed as
+the QR code «Отримувати рахунки в Telegram» with the deep link `https://t.me/<bot>?start=<code>` (one code per member
+per print). Only the hash is stored, so the code exists only on paper; printing again creates new codes and the old
+ones stay valid until they expire or are used.
+
+## Background jobs (JobRunr)
+
+JobRunr 9.0.1 (`jobrunr-spring-boot-4-starter`, Jackson 3) on the application's DataSource as `nadel_app`, its tables
+from Flyway V30 (`jobrunr.database.skip-create=true`, default prefix, schema `public`, no RLS: job arguments are a
+cooperative id and a channel). Dashboard off, no usage data sent, the background job server on
+(`jobrunr.background-job-server.enabled`; the tests turn it off and call the dispatcher, `DeliveryJobTests` turns it on).
+
 ## Mail and Telegram clients
 
 - `internal.mail.MailSenderFactory`: one `JavaMailSenderImpl` per cooperative, kept while its mailbox is unchanged
@@ -140,7 +209,9 @@ transaction.
   (`spring.mail.*` stays unset).
 - `internal.telegram.TelegramClient`: the JDK `HttpClient` against `nadel.telegram.api-url`, `POST
   <api-url>/bot<token>/<method>` with a JSON body; `getMe`, `getUpdates` (long poll, `TelegramUpdate`) and
-  `sendMessage` (with a `ReplyMarkup`: a reply keyboard or its removal); `sendDocument` is added in slice 3. Errors are `TelegramException` with a `Kind` (`UNAUTHORIZED` 401/404, `FORBIDDEN` 403,
+  `sendMessage` (with a `ReplyMarkup`: a reply keyboard, its removal or a URL button) and `sendDocument` (a hand-built
+  `multipart/form-data` body: chat, caption, buttons and the PDF). Errors are `TelegramException` with a `Kind`
+  (`UNAUTHORIZED` 401/404, `FORBIDDEN` 403,
   `TOO_MANY_REQUESTS` 429 with `retryAfter`, `REJECTED`, `UNAVAILABLE`); their message names the method and status
   only and no cause is chained, so the token (part of the URL) never reaches a log.
 
@@ -155,18 +226,29 @@ transaction.
 | `nadel.telegram.supervisor-interval` | 20 s | How often the supervisor claims leases and starts or stops workers |
 | `nadel.telegram.lease` | 60 s | How long a bot lease lasts without renewal |
 | `nadel.delivery.smtp-timeout` | 10 s | Connect, read and write timeout of a mailbox |
+| `nadel.delivery.retry-delays` | 1m,5m | The pauses before the second and the third attempt |
+| `nadel.delivery.lane-lease` | 60 s | How long a send lane's lease lasts without renewal |
+| `nadel.delivery.run-limit` | 60 s | How long one run of a lane sends before it hands over to a new job |
+| `nadel.delivery.busy-retry` | 5 s | When a run that found its lane held elsewhere tries again |
+| `nadel.delivery.sweep-interval` | 60 s | How often the lanes with due rows are woken (with `nadel.telegram.bot-enabled`) |
+| `nadel.delivery.telegram-per-second`, `telegram-chat-gap` | 20, 1 s | The pace through one bot and to one chat |
+| `jobrunr.*` | see `application.yml` | `database.skip-create=true`, `dashboard.enabled=false`, `jobs.default-number-of-retries=2`, `miscellaneous.allow-anonymous-data-usage=false` |
 
 ## Tests
 
 `DeliverySettingsTests`, `TestEmailTests`, `TestTelegramTests`, `DeliverySettingsAccessTests` (plus the V29 table tests
 `NotificationsTenantIsolationTests`, `NotificationsGuardsTests`, `BotTenantsFunctionTests`); slice 2: `LinkCodesTests`,
 `TelegramLinkingTests`, `BotInputTests`, `BotSingleWorkerTests` (two supervisors with their own instance ids over one
-database), `MeNotificationsTests`. No test reaches Telegram or a real mailbox: `app.nadel.notifications.FakeBotApi`
+database), `MeNotificationsTests`; slice 3: `ChannelResolverTests` (one per row of the rule), `InvoiceDeliveryTests`
+(a throw-away cooperative, `DeliveryTestSupport`: Mailpit and the fake Bot API, a dispatcher with a movable clock),
+`DeliveryRateLimitTests`, `DeliveryAccessTests`, `DeliveryJobTests` (JobRunr's server on: the job a send wakes
+delivers the letter; the V30 tables) and, in the documents tests, `PrintCopiesTests`. No test reaches Telegram or a real mailbox: `app.nadel.notifications.FakeBotApi`
 (test sources) is an in-JVM Bot API on a random port that every Spring test context points `nadel.telegram.api-url` at
 (`IntegrationTest`, which also turns the schedule off and sets a 1 s poll), with a long-poll `getUpdates` over updates
-a test pushes per token, a recorded `sendMessage` (403 for a chat that blocked the bot), handlers per method, one-shot
-failures (403, 429) and a call record; `app.nadel.notifications.Mailpit` is Mailpit (`axllent/mailpit:v1.27.8`, as in
-`infra/docker-compose.yml`) in a Testcontainers `GenericContainer` with SMTP sign-in, read through `/api/v1/messages`.
+a test pushes per token, a recorded `sendMessage` and multipart `sendDocument` (caption, file, URL buttons; 403 for a
+chat that blocked the bot), handlers per method, one-shot failures (403, 429 with `retry_after`) and a call record; `app.nadel.notifications.Mailpit` is Mailpit (`axllent/mailpit:v1.27.8`, as in
+`infra/docker-compose.yml`) in a Testcontainers `GenericContainer` with SMTP sign-in and its chaos switch (every
+recipient refused with 550), read through `/api/v1/messages`.
 
 ## Things to remember
 

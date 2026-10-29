@@ -14,3 +14,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `b91832e..515ec7b` | PASS | — | backend Verify 124 tests green in the review worktree. minor: `TestLetters.java:36` Javadoc "never throws" but only MessagingException/UnsupportedEncodingException caught; `DeliverySettingsService.java:240,245` byte[] change detection by reference (works, needs a comment); SMTP host is free text → admin can point the test letter at internal hosts (SSRF note for the README / later restriction) |
+
+## Slice 2 — link a member to Telegram, choose the channel
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `515ec7b..b811a37` | PASS | — | 38 new tests green in the review worktree. minor: `BotWorker.handle` takes the update before answering, so a failed answer is lost (recorded "at most once" deviation); `MemberNotifications.askBotName` logs `e.getMessage()` (safe while TelegramException messages stay fixed); `TelegramLinks.redeem` concurrent double link → unique-index error logged, not answered (rare); `BotInputLimiter` map cleaned only above 10,000 entries; `V29_1` naming departs from `V{N}` (recorded) |

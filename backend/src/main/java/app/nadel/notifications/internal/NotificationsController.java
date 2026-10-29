@@ -4,9 +4,23 @@ import app.nadel.identity.CurrentUser;
 import app.nadel.notifications.internal.DeliveryChecks.BotCheck;
 import app.nadel.notifications.internal.mail.MailOutcome;
 import app.nadel.notifications.internal.mail.SmtpSecurity;
+import java.time.YearMonth;
 import java.time.ZoneOffset;
+import java.util.List;
+import java.util.UUID;
 import nadel.contract.api.NotificationsApi;
 import nadel.contract.model.DeliveryChannel;
+import nadel.contract.model.DeliveryCounts;
+import nadel.contract.model.DeliveryKind;
+import nadel.contract.model.DeliveryMethod;
+import nadel.contract.model.DeliveryNote;
+import nadel.contract.model.DeliveryPage;
+import nadel.contract.model.DeliveryRow;
+import nadel.contract.model.DeliveryStatus;
+import nadel.contract.model.DeliverySummaryCount;
+import nadel.contract.model.InvoiceSendRequest;
+import nadel.contract.model.InvoiceSendResult;
+import nadel.contract.model.PrintDoneResult;
 import nadel.contract.model.DeliveryEmailSettings;
 import nadel.contract.model.DeliveryEmailSettingsUpdate;
 import nadel.contract.model.DeliveryFailureCode;
@@ -18,6 +32,7 @@ import nadel.contract.model.DeliveryTestTelegramResult;
 import nadel.contract.model.MyNotifications;
 import nadel.contract.model.MyNotificationsUpdate;
 import nadel.contract.model.TelegramLinkOffer;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -31,6 +46,8 @@ import org.springframework.web.bind.annotation.RestController;
  *       the token, only {@code passwordSet} and {@code tokenLast4}.</li>
  *   <li>The member's own «Сповіщення» ({@code /me/notifications}, {@code /me/telegram-link}): no permission, always
  *       the member behind the token ({@link MemberNotifications}); the platform operator gets 403.</li>
+ *   <li>Sending invoices and the delivery screen: every one needs {@code INVOICES_ISSUE} ({@link DeliveryPlanner},
+ *       {@link DeliveryRegister}).</li>
  * </ul>
  */
 @RestController
@@ -41,13 +58,61 @@ class NotificationsController implements NotificationsApi {
     private final DeliverySettingsService service;
     private final DeliveryChecks checks;
     private final MemberNotifications mine;
+    private final DeliveryPlanner planner;
+    private final DeliveryRegister register;
 
     NotificationsController(CurrentUser currentUser, DeliverySettingsService service, DeliveryChecks checks,
-            MemberNotifications mine) {
+            MemberNotifications mine, DeliveryPlanner planner, DeliveryRegister register) {
         this.currentUser = currentUser;
         this.service = service;
         this.checks = checks;
         this.mine = mine;
+        this.planner = planner;
+        this.register = register;
+    }
+
+    @Override
+    @PreAuthorize("hasAuthority('PERM_INVOICES_ISSUE')")
+    public ResponseEntity<InvoiceSendResult> sendMonthInvoices(String month, Boolean preview,
+            @Nullable InvoiceSendRequest request) {
+        boolean includeNothingDue = request != null && Boolean.TRUE.equals(request.getIncludeNothingDue());
+        return ResponseEntity.ok(toDto(planner.sendMonth(YearMonth.parse(month), includeNothingDue,
+                Boolean.TRUE.equals(preview), currentUser.profile())));
+    }
+
+    @Override
+    @PreAuthorize("hasAuthority('PERM_INVOICES_ISSUE')")
+    public ResponseEntity<InvoiceSendResult> sendInvoice(UUID id) {
+        return ResponseEntity.ok(toDto(planner.sendInvoice(id, currentUser.profile())));
+    }
+
+    @Override
+    @PreAuthorize("hasAuthority('PERM_INVOICES_ISSUE')")
+    public ResponseEntity<DeliveryPage> listDeliveries(@Nullable String month, @Nullable DeliveryKind kind,
+            @Nullable DeliveryStatus status, @Nullable DeliveryMethod channel, Integer page, Integer size) {
+        var filter = new DeliveryRows.Filter(month == null ? null : YearMonth.parse(month),
+                kind == null ? null : kind.getValue(), status == null ? null : status.getValue(),
+                channel == null ? null : Channel.valueOf(channel.getValue()));
+        DeliveryRegister.Page found = register.list(filter, page, size);
+        List<DeliveryRow> items = found.rows().stream().map(NotificationsController::toDto).toList();
+        List<DeliverySummaryCount> summary = found.summary().stream().map(count -> new DeliverySummaryCount(
+                DeliveryMethod.fromValue(count.channel().name()), DeliveryStatus.fromValue(count.status()),
+                count.count())).toList();
+        int totalPages = (int) ((found.total() + size - 1) / size);
+        return ResponseEntity.ok(new DeliveryPage(items, page, size, found.total(), totalPages, summary));
+    }
+
+    @Override
+    @PreAuthorize("hasAuthority('PERM_INVOICES_ISSUE')")
+    public ResponseEntity<Void> retryDelivery(UUID id) {
+        register.retry(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @Override
+    @PreAuthorize("hasAuthority('PERM_INVOICES_ISSUE')")
+    public ResponseEntity<PrintDoneResult> markMonthPrinted(String month) {
+        return ResponseEntity.ok(new PrintDoneResult(register.printed(YearMonth.parse(month))));
     }
 
     @Override
@@ -112,6 +177,23 @@ class NotificationsController implements NotificationsApi {
     public ResponseEntity<Void> deleteMyTelegramLink() {
         mine.unlink(currentUser.profile());
         return ResponseEntity.noContent().build();
+    }
+
+    private static InvoiceSendResult toDto(DeliveryPlanner.Plan plan) {
+        return new InvoiceSendResult(new DeliveryCounts(plan.telegram(), plan.email(), plan.paper()), plan.queued());
+    }
+
+    private static DeliveryRow toDto(DeliveryRegister.Row row) {
+        DeliveryRows.Listed d = row.delivery();
+        var dto = new DeliveryRow(d.id(), DeliveryKind.fromValue(d.kind()), DeliveryMethod.fromValue(d.channel().name()),
+                DeliveryStatus.fromValue(d.status()), d.attempts());
+        dto.setMonth(d.month() == null ? null : d.month().toString());
+        dto.setPlotNumber(row.plotNumber());
+        dto.setMemberName(row.memberName());
+        dto.setFailureCode(d.failureCode() == null ? null : DeliveryFailureCode.fromValue(d.failureCode()));
+        dto.setNote(d.note() == null ? null : DeliveryNote.fromValue(d.note()));
+        dto.setSentAt(d.sentAt() == null ? null : d.sentAt().atOffset(ZoneOffset.UTC));
+        return dto;
     }
 
     private static MyNotifications toDto(MemberNotifications.View view) {
