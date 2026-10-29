@@ -36,6 +36,9 @@ import type {
   DeliveryTestEmailResult,
   DeliveryTestTelegramResult,
   ForbiddenResponse,
+  MyNotifications,
+  MyNotificationsUpdate,
+  TelegramLinkOffer,
   UnauthorizedResponse
 } from '../model';
 
@@ -432,4 +435,356 @@ export const useTestDeliveryTelegram = <TError = UnauthorizedResponse | Forbidde
         TContext
       > => {
       return useMutation(getTestDeliveryTelegramMutationOptions(options), queryClient);
+    }
+    export const getGetMyNotificationsUrl = () => {
+
+
+
+
+  return `/api/v1/me/notifications`
+}
+
+/**
+ * The member account's «Сповіщення» (feature 017 §2.2, §2.3): the signed-in member's preferred channel, the
+ * channels they may choose and whether their Telegram is linked. No permission is needed; the member is always
+ * the one behind the token (never a request parameter). The platform operator has no cooperative data: 403.
+ *
+ * `available` lists, in the order `EMAIL`, `TELEGRAM`, `PAPER`: `EMAIL` when the member has an e-mail and the
+ * cooperative's mailbox is set up, `TELEGRAM` when the cooperative's bot is set up, `PAPER` always. `channel` is
+ * the stored preference, which may be outside `available` (a `VIBER` member, or `TELEGRAM` after the bot was
+ * removed). `botAvailable` says whether the cooperative has a bot, so the account offers «Підключити Telegram».
+ * @summary How the signed-in member receives invoices
+ */
+export const getMyNotifications = async ( options?: Parameters<typeof nadelFetch>[1]): Promise<MyNotifications> => {
+
+  return nadelFetch<MyNotifications>(getGetMyNotificationsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetMyNotificationsQueryKey = () => {
+    return [
+    `/api/v1/me/notifications`
+    ] as const;
+    }
+
+
+export const getGetMyNotificationsQueryOptions = <TData = Awaited<ReturnType<typeof getMyNotifications>>, TError = UnauthorizedResponse | ForbiddenResponse>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMyNotifications>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetMyNotificationsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMyNotifications>>> = ({ signal }) => getMyNotifications({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getMyNotifications>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetMyNotificationsQueryResult = NonNullable<Awaited<ReturnType<typeof getMyNotifications>>>
+export type GetMyNotificationsQueryError = UnauthorizedResponse | ForbiddenResponse
+
+
+export function useGetMyNotifications<TData = Awaited<ReturnType<typeof getMyNotifications>>, TError = UnauthorizedResponse | ForbiddenResponse>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMyNotifications>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getMyNotifications>>,
+          TError,
+          Awaited<ReturnType<typeof getMyNotifications>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetMyNotifications<TData = Awaited<ReturnType<typeof getMyNotifications>>, TError = UnauthorizedResponse | ForbiddenResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMyNotifications>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getMyNotifications>>,
+          TError,
+          Awaited<ReturnType<typeof getMyNotifications>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetMyNotifications<TData = Awaited<ReturnType<typeof getMyNotifications>>, TError = UnauthorizedResponse | ForbiddenResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMyNotifications>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary How the signed-in member receives invoices
+ */
+
+export function useGetMyNotifications<TData = Awaited<ReturnType<typeof getMyNotifications>>, TError = UnauthorizedResponse | ForbiddenResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMyNotifications>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetMyNotificationsQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export const getUpdateMyNotificationsUrl = () => {
+
+
+
+
+  return `/api/v1/me/notifications`
+}
+
+/**
+ * Sets the signed-in member's preferred channel to one of `available` (see `getMyNotifications`); the board sees
+ * it on the member form. 400 `VALIDATION_FAILED` with `errors[{field: channel, code: INVALID}]` for a channel
+ * that is not available to the member. A change is written to the audit log as `MEMBER_UPDATED` of the member
+ * (field `deliveryChannel`); choosing the current channel writes nothing.
+ * @summary Choose how the signed-in member receives invoices
+ */
+export const updateMyNotifications = async (myNotificationsUpdate: MyNotificationsUpdate, options?: Parameters<typeof nadelFetch>[1]): Promise<MyNotifications> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return nadelFetch<MyNotifications>(getUpdateMyNotificationsUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(myNotificationsUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateMyNotificationsMutationKey = () => ['updateMyNotifications'] as const;
+
+export const getUpdateMyNotificationsMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateMyNotifications>>, TError,UpdateMyNotificationsMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateMyNotifications>>, TError,UpdateMyNotificationsMutationVariables, TContext> => {
+
+const mutationKey = getUpdateMyNotificationsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateMyNotifications>>, UpdateMyNotificationsMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateMyNotifications(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateMyNotificationsMutationResult = NonNullable<Awaited<ReturnType<typeof updateMyNotifications>>>
+    export type UpdateMyNotificationsMutationBody = MyNotificationsUpdate
+    export type UpdateMyNotificationsMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse
+    export type UpdateMyNotificationsMutationVariables = {data: MyNotificationsUpdate}
+
+    /**
+ * @summary Choose how the signed-in member receives invoices
+ */
+export const useUpdateMyNotifications = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateMyNotifications>>, TError,UpdateMyNotificationsMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof updateMyNotifications>>,
+        TError,
+        UpdateMyNotificationsMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateMyNotificationsMutationOptions(options), queryClient);
+    }
+    export const getCreateMyTelegramLinkUrl = () => {
+
+
+
+
+  return `/api/v1/me/telegram-link`
+}
+
+/**
+ * «Підключити Telegram» (feature 017 §2.2): a deep link to the cooperative's bot with a personal one-time code of
+ * the signed-in member, valid 30 minutes (`expiresAt`). Opening it in Telegram and pressing Start links the chat
+ * to the member; the code works once. Only the hash of the code is stored. 409 `TELEGRAM_NOT_CONFIGURED` when
+ * the cooperative has no bot, or Telegram does not accept its token. The platform operator: 403.
+ * @summary A personal link that connects the signed-in member's Telegram
+ */
+export const createMyTelegramLink = async ( options?: Parameters<typeof nadelFetch>[1]): Promise<TelegramLinkOffer> => {
+
+  return nadelFetch<TelegramLinkOffer>(getCreateMyTelegramLinkUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getCreateMyTelegramLinkMutationKey = () => ['createMyTelegramLink'] as const;
+
+export const getCreateMyTelegramLinkMutationOptions = <TError = UnauthorizedResponse | ForbiddenResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createMyTelegramLink>>, TError,void, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createMyTelegramLink>>, TError,void, TContext> => {
+
+const mutationKey = getCreateMyTelegramLinkMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createMyTelegramLink>>, void> = () => {
+
+
+          return  createMyTelegramLink(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateMyTelegramLinkMutationResult = NonNullable<Awaited<ReturnType<typeof createMyTelegramLink>>>
+
+    export type CreateMyTelegramLinkMutationError = UnauthorizedResponse | ForbiddenResponse | ConflictResponse
+
+
+    /**
+ * @summary A personal link that connects the signed-in member's Telegram
+ */
+export const useCreateMyTelegramLink = <TError = UnauthorizedResponse | ForbiddenResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createMyTelegramLink>>, TError,void, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof createMyTelegramLink>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getCreateMyTelegramLinkMutationOptions(options), queryClient);
+    }
+    export const getDeleteMyTelegramLinkUrl = () => {
+
+
+
+
+  return `/api/v1/me/telegram-link`
+}
+
+/**
+ * «Відключити Telegram» (feature 017 §2.2): ends the signed-in member's Telegram link; documents then go by the
+ * fallback channel. Written to the audit log as `TELEGRAM_UNLINKED` (`endReason` `UNLINKED`). 204 also when
+ * nothing was linked. The platform operator: 403.
+ * @summary Unlink the signed-in member's Telegram
+ */
+export const deleteMyTelegramLink = async ( options?: Parameters<typeof nadelFetch>[1]): Promise<void> => {
+
+  return nadelFetch<void>(getDeleteMyTelegramLinkUrl(),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteMyTelegramLinkMutationKey = () => ['deleteMyTelegramLink'] as const;
+
+export const getDeleteMyTelegramLinkMutationOptions = <TError = UnauthorizedResponse | ForbiddenResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteMyTelegramLink>>, TError,void, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteMyTelegramLink>>, TError,void, TContext> => {
+
+const mutationKey = getDeleteMyTelegramLinkMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteMyTelegramLink>>, void> = () => {
+
+
+          return  deleteMyTelegramLink(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteMyTelegramLinkMutationResult = NonNullable<Awaited<ReturnType<typeof deleteMyTelegramLink>>>
+
+    export type DeleteMyTelegramLinkMutationError = UnauthorizedResponse | ForbiddenResponse
+
+
+    /**
+ * @summary Unlink the signed-in member's Telegram
+ */
+export const useDeleteMyTelegramLink = <TError = UnauthorizedResponse | ForbiddenResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteMyTelegramLink>>, TError,void, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof deleteMyTelegramLink>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getDeleteMyTelegramLinkMutationOptions(options), queryClient);
     }

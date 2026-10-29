@@ -11,12 +11,17 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * An in-JVM fake of the Telegram Bot API for the backend tests (feature 017), so no test ever reaches Telegram. It
@@ -25,10 +30,15 @@ import java.util.regex.Pattern;
  * <ul>
  *   <li>a token starting with {@code bad} gets 401 for every method, as Telegram answers an unknown token;</li>
  *   <li>{@code getMe} answers the bot {@link #username()} (default {@code nadel_test_bot});</li>
+ *   <li>{@code getUpdates} is a long poll over the updates a test pushes for a token ({@link #pushMessage}): it answers
+ *       the updates from {@code offset} on at once, or waits up to its {@code timeout} for one; asking with an offset
+ *       confirms (drops) the updates before it, as Telegram does;</li>
+ *   <li>{@code sendMessage} records the message ({@link #sent}) and answers 403 for a chat that blocked the bot
+ *       ({@link #block});</li>
  *   <li>a method without a handler gets 404;</li>
- *   <li>{@link #handle} adds or replaces a method's handler ({@code getUpdates}, {@code sendMessage},
- *       {@code sendDocument} in later slices), {@link #failNext} makes the next call of a method fail once (403 for a
- *       blocked chat, 429 with {@code retry_after}).</li>
+ *   <li>{@link #handle} adds or replaces a method's handler ({@code sendDocument} in a later slice),
+ *       {@link #failNext} makes the next call of a method fail once (403 for a blocked chat, 429 with
+ *       {@code retry_after}).</li>
  * </ul>
  * Every call is recorded ({@link #calls()}) with its method, the token's last four characters and the request body.
  * One server per test JVM ({@link #shared()}), wired into every Spring context by {@code IntegrationTest}; a test that
@@ -67,16 +77,34 @@ public final class FakeBotApi {
     public record Call(String method, String tokenLast4, String body) {
     }
 
+    /**
+     * A message the bot sent.
+     *
+     * @param buttons the texts of the reply keyboard's buttons, row by row joined; empty without a keyboard
+     * @param removesKeyboard whether the message took the keyboard away
+     */
+    public record Sent(String tokenLast4, long chatId, String text, List<String> buttons, boolean removesKeyboard) {
+    }
+
+    private record Update(long id, String json) {
+    }
+
     public static final String DEFAULT_USERNAME = "nadel_test_bot";
     public static final long BOT_ID = 7_000_000_001L;
 
     private static final Pattern PATH = Pattern.compile("^/bot([^/]+)/([A-Za-z]+)$");
+    private static final JsonMapper JSON = JsonMapper.shared();
     private static FakeBotApi shared;
 
     private final HttpServer server;
     private final Map<String, Handler> handlers = new ConcurrentHashMap<>();
     private final Map<String, Deque<Reply>> failures = new ConcurrentHashMap<>();
     private final List<Call> calls = new ArrayList<>();
+    private final Object updatesLock = new Object();
+    private final Map<String, List<Update>> updates = new HashMap<>();
+    private final List<Sent> sent = new ArrayList<>();
+    private final Set<Long> blocked = ConcurrentHashMap.newKeySet();
+    private long nextUpdateId = 1_000;
     private volatile String username = DEFAULT_USERNAME;
 
     private FakeBotApi() {
@@ -133,14 +161,129 @@ public final class FakeBotApi {
         return calls().stream().filter(c -> c.method().equals(method)).toList();
     }
 
-    /** Back to the start: the default username, only {@code getMe}, no pending failures, no recorded calls. */
+    /**
+     * Queues a private-chat text message from {@code chatId} for the bot with this token; {@code text} null is a
+     * message without text (a sticker). Answers the update's id.
+     */
+    public long pushMessage(String token, long chatId, String text) {
+        return push(token, id -> {
+            ObjectNode update = JSON.createObjectNode();
+            update.put("update_id", id);
+            ObjectNode message = update.putObject("message");
+            message.put("message_id", id);
+            message.put("date", System.currentTimeMillis() / 1000);
+            message.putObject("chat").put("id", chatId).put("type", "private").put("first_name", "Test");
+            message.putObject("from").put("id", chatId).put("is_bot", false).put("first_name", "Test");
+            if (text != null) {
+                message.put("text", text);
+            }
+            return JSON.writeValueAsString(update);
+        });
+    }
+
+    /** Queues a text message from a group chat for the bot with this token. */
+    public long pushGroupMessage(String token, long chatId, String text) {
+        return push(token, id -> {
+            ObjectNode update = JSON.createObjectNode();
+            update.put("update_id", id);
+            ObjectNode message = update.putObject("message");
+            message.put("message_id", id);
+            message.putObject("chat").put("id", chatId).put("type", "group").put("title", "Group");
+            message.put("text", text);
+            return JSON.writeValueAsString(update);
+        });
+    }
+
+    private long push(String token, java.util.function.LongFunction<String> json) {
+        synchronized (updatesLock) {
+            long id = nextUpdateId++;
+            updates.computeIfAbsent(token, t -> new ArrayList<>()).add(new Update(id, json.apply(id)));
+            updatesLock.notifyAll();
+            return id;
+        }
+    }
+
+    /** The messages the bots sent so far, oldest first. */
+    public synchronized List<Sent> sent() {
+        return List.copyOf(sent);
+    }
+
+    /** The messages sent to one chat so far, oldest first. */
+    public List<Sent> sent(long chatId) {
+        return sent().stream().filter(message -> message.chatId() == chatId).toList();
+    }
+
+    /** From now on {@code sendMessage} to the chat answers 403, as for a member who blocked the bot. */
+    public void block(long chatId) {
+        blocked.add(chatId);
+    }
+
+    /** Back to the start: the default username, the Bot API methods, no pending failures or updates, nothing recorded. */
     public synchronized void reset() {
         username = DEFAULT_USERNAME;
         handlers.clear();
         failures.clear();
         calls.clear();
+        sent.clear();
+        blocked.clear();
+        synchronized (updatesLock) {
+            updates.clear();
+            updatesLock.notifyAll();
+        }
         handle("getMe", (token, body) -> Reply.ok("{\"id\":" + BOT_ID + ",\"is_bot\":true,\"first_name\":\"Nadel test\","
                 + "\"username\":\"" + username + "\"}"));
+        handle("getUpdates", this::getUpdates);
+        handle("sendMessage", this::sendMessage);
+    }
+
+    private Reply getUpdates(String token, String body) {
+        JsonNode request = JSON.readTree(body);
+        long offset = request.path("offset").asLong(0);
+        long timeoutMillis = Math.min(30, request.path("timeout").asLong(0)) * 1000;
+        long deadline = System.currentTimeMillis() + timeoutMillis;
+        synchronized (updatesLock) {
+            while (true) {
+                List<Update> queued = updates.getOrDefault(token, new ArrayList<>());
+                if (offset > 0) {
+                    queued.removeIf(update -> update.id() < offset);
+                }
+                List<Update> due = queued.stream().filter(update -> update.id() >= offset).toList();
+                long left = deadline - System.currentTimeMillis();
+                if (!due.isEmpty() || left <= 0) {
+                    return Reply.ok("[" + String.join(",", due.stream().map(Update::json).toList()) + "]");
+                }
+                try {
+                    updatesLock.wait(left);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return Reply.ok("[]");
+                }
+            }
+        }
+    }
+
+    private Reply sendMessage(String token, String body) {
+        JsonNode request = JSON.readTree(body);
+        long chatId = request.path("chat_id").asLong();
+        if (blocked.contains(chatId)) {
+            return Reply.error(403, "Forbidden: bot was blocked by the user");
+        }
+        List<String> buttons = new ArrayList<>();
+        for (JsonNode row : request.path("reply_markup").path("keyboard")) {
+            List<String> labels = new ArrayList<>();
+            for (JsonNode button : row) {
+                labels.add(button.path("text").asString());
+            }
+            buttons.add(String.join(" | ", labels));
+        }
+        boolean removes = request.path("reply_markup").path("remove_keyboard").asBoolean(false);
+        String text = request.path("text").asString();
+        synchronized (this) {
+            sent.add(new Sent(token.length() < 4 ? token : token.substring(token.length() - 4), chatId, text,
+                    List.copyOf(buttons), removes));
+        }
+        return Reply.ok("{\"message_id\":1,\"chat\":{\"id\":" + chatId + ",\"type\":\"private\"},\"text\":"
+                + JSON.writeValueAsString(text) + "}");
     }
 
     private void serve(HttpExchange exchange) throws IOException {

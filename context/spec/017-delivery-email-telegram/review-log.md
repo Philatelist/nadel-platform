@@ -8,3 +8,9 @@
 - `web: RecalculationStep.test.tsx > RecalculationStep > previews again at once when the preview is outdated and says so` (timed out in 5000ms)
 - `web: RecalculationStep.test.tsx > RecalculationStep > shows another problem as its message and keeps the preview` (timed out in 5000ms)
 - e2e not part of the baseline (`make check` excludes it).
+
+## Slice 1 — channel settings, the cooperative's mailbox and bot, with test buttons
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `b91832e..515ec7b` | PASS | — | backend Verify 124 tests green in the review worktree. minor: `TestLetters.java:36` Javadoc "never throws" but only MessagingException/UnsupportedEncodingException caught; `DeliverySettingsService.java:240,245` byte[] change detection by reference (works, needs a comment); SMTP host is free text → admin can point the test letter at internal hosts (SSRF note for the README / later restriction) |

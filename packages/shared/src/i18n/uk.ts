@@ -59,6 +59,26 @@ export const uk: Messages = {
     noPermissions: 'Ваші ролі не дають додаткових дозволів. Ви бачите лише свої дані.',
     details: 'Мої дані',
   },
+  notifications: {
+    title: 'Сповіщення',
+    channelLegend: 'Як отримувати рахунки',
+    save: 'Зберегти',
+    saved: 'Збережено.',
+    viberUnsupported: 'Viber ще не підтримується — рахунки друкуються на папері',
+  },
+  telegramLink: {
+    title: 'Telegram',
+    connect: 'Підключити Telegram',
+    connected: 'Telegram підключено',
+    notConnected: 'Telegram не підключено',
+    hint: 'Посилання діє 30 хвилин. Відкрийте його в Telegram і натисніть «Почати».',
+    disconnect: 'Відключити Telegram',
+    disconnectTitle: 'Відключити Telegram?',
+    disconnectMessage: 'Рахунки більше не надходитимуть у Telegram, доки ви не підключите його знову.',
+    memberLine: 'Telegram',
+    memberLinked: 'підключено',
+    memberNotLinked: 'не підключено',
+  },
   member: {
     fields: {
       name: 'ПІБ',
@@ -905,6 +925,8 @@ export const uk: Messages = {
       CERTIFICATE_ISSUED: 'Довідку видано',
       CERTIFICATE_ANNULLED: 'Довідку анульовано',
       DELIVERY_SETTINGS_CHANGED: 'Змінено налаштування розсилки',
+      TELEGRAM_LINKED: 'Підключено Telegram',
+      TELEGRAM_UNLINKED: 'Відключено Telegram',
     },
     entityType: {
       MEMBER: 'Член кооперативу',
@@ -932,6 +954,7 @@ export const uk: Messages = {
     output: { PREVIEW: 'На екрані', XLSX: 'Файл Excel' },
     lossesMode: { FIXED_PERCENT: 'Фіксований відсоток', PROPORTIONAL: 'Пропорційно' },
     outcome: { RESOLVED: 'Нараховано', OBSOLETE: 'Більше не потрібно', OPEN: 'Усе ще не нараховано' },
+    endReason: { UNLINKED: 'відключено членом', BLOCKED: 'бот заблоковано', MOVED: 'перенесено' },
     split: {
       CONNECTED_PLOTS: 'Між підключеними ділянками',
       EQUAL_PER_PLOT: 'Порівну на ділянку',
@@ -949,6 +972,7 @@ export const uk: Messages = {
       emailRatePerSecond: 'Листів на секунду',
       notifyPayments: 'Повідомляти про платежі',
       botToken: 'Токен бота Telegram',
+      endReason: 'Причина відключення',
       resource: 'Ресурс',
       serial: 'Серійний номер',
       installedOn: 'Встановлено',
@@ -2812,6 +2836,7 @@ export const uk: Messages = {
     },
   },
   problem: {
+    TELEGRAM_NOT_CONFIGURED: 'Бот Telegram у кооперативі не налаштовано.',
     SPLIT_TOTAL_MISMATCH: 'Сума частин не дорівнює сумі платежу',
     PLOT_HAS_PAYMENTS: 'На ділянці є платежі, тому її не можна видалити',
     ALLOCATION_EXCEEDS_PAYMENT: 'Розподілено більше, ніж сума платежу',

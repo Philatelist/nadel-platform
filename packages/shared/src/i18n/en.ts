@@ -53,6 +53,26 @@ export const en = {
     noPermissions: 'Your roles give no extra permissions. You can see your own data.',
     details: 'My details',
   },
+  notifications: {
+    title: 'Notifications',
+    channelLegend: 'How to receive invoices',
+    save: 'Save',
+    saved: 'Saved.',
+    viberUnsupported: 'Viber is not supported yet — invoices are printed on paper',
+  },
+  telegramLink: {
+    title: 'Telegram',
+    connect: 'Connect Telegram',
+    connected: 'Telegram connected',
+    notConnected: 'Telegram not connected',
+    hint: 'The link is valid for 30 minutes. Open it in Telegram and press Start.',
+    disconnect: 'Disconnect Telegram',
+    disconnectTitle: 'Disconnect Telegram?',
+    disconnectMessage: 'Invoices will no longer arrive in Telegram until you connect it again.',
+    memberLine: 'Telegram',
+    memberLinked: 'connected',
+    memberNotLinked: 'not connected',
+  },
   member: {
     fields: {
       name: 'Name',
@@ -889,6 +909,8 @@ export const en = {
       CERTIFICATE_ISSUED: 'Debt certificate issued',
       CERTIFICATE_ANNULLED: 'Debt certificate annulled',
       DELIVERY_SETTINGS_CHANGED: 'Delivery settings changed',
+      TELEGRAM_LINKED: 'Telegram linked',
+      TELEGRAM_UNLINKED: 'Telegram unlinked',
     },
     entityType: {
       MEMBER: 'Member',
@@ -916,6 +938,7 @@ export const en = {
     output: { PREVIEW: 'On screen', XLSX: 'Excel file' },
     lossesMode: { FIXED_PERCENT: 'Fixed percentage', PROPORTIONAL: 'Proportional' },
     outcome: { RESOLVED: 'Charged', OBSOLETE: 'No longer needed', OPEN: 'Still not charged' },
+    endReason: { UNLINKED: 'unlinked by the member', BLOCKED: 'bot blocked', MOVED: 'moved' },
     split: {
       CONNECTED_PLOTS: 'Among connected plots',
       EQUAL_PER_PLOT: 'Equally per plot',
@@ -933,6 +956,7 @@ export const en = {
       emailRatePerSecond: 'Letters per second',
       notifyPayments: 'Notify about payments',
       botToken: 'Telegram bot token',
+      endReason: 'Unlink reason',
       resource: 'Resource',
       serial: 'Serial number',
       installedOn: 'Installed on',
@@ -2786,6 +2810,7 @@ export const en = {
     },
   },
   problem: {
+    TELEGRAM_NOT_CONFIGURED: 'The cooperative has no Telegram bot set up.',
     SPLIT_TOTAL_MISMATCH: 'The parts do not add up to the payment amount',
     PLOT_HAS_PAYMENTS: 'The plot has payments, so it cannot be deleted',
     ALLOCATION_EXCEEDS_PAYMENT: 'More is allocated than the payment amount',

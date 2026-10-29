@@ -76,6 +76,11 @@ nadel:
     api-url: ${NADEL_TELEGRAM_API_URL:https://api.telegram.org}
     connect-timeout: 5s
     read-timeout: 15s
+    # The cooperatives' bots (long polling, one instance per bot by a lease in bot_poll_state, ADR 0018)
+    bot-enabled: true
+    poll-timeout: 25s
+    supervisor-interval: 20s
+    lease: 60s
   delivery:
     # Connect, read and write timeout of a cooperative's mail server
     smtp-timeout: 10s

@@ -6,10 +6,11 @@ import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 
 /**
- * How a member receives invoices. EMAIL, TELEGRAM and VIBER need the matching contact; PAPER needs nothing.
+ * How a member receives invoices. EMAIL and VIBER need the matching contact; TELEGRAM and PAPER need nothing (feature
+ * 017: the member links Telegram through the cooperative's bot, so the Telegram username is only an optional note).
  */
 enum DeliveryChannel {
-    EMAIL("email"), TELEGRAM("telegramUsername"), VIBER("viberPhone"), PAPER(null);
+    EMAIL("email"), TELEGRAM(null), VIBER("viberPhone"), PAPER(null);
 
     private final @Nullable String contactField;
 
@@ -21,13 +22,11 @@ enum DeliveryChannel {
      * The problem to report when the contact this channel needs is missing (null or blank), or empty when the
      * channel is satisfied.
      */
-    Optional<FieldProblem> check(@Nullable String email, @Nullable String telegramUsername,
-            @Nullable String viberPhone) {
+    Optional<FieldProblem> check(@Nullable String email, @Nullable String viberPhone) {
         String contact = switch (this) {
             case EMAIL -> email;
-            case TELEGRAM -> telegramUsername;
             case VIBER -> viberPhone;
-            case PAPER -> "-";
+            case TELEGRAM, PAPER -> "-";
         };
         if (contact != null && !contact.isBlank()) {
             return Optional.empty();

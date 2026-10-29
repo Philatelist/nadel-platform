@@ -28,7 +28,8 @@ record MemberData(
         @Nullable String notes) {
 
     /**
-     * Validates what Bean Validation cannot (blank names, phone format, channel contact) and normalises the rest.
+     * Validates what Bean Validation cannot (blank names, phone format, channel contact: {@link DeliveryChannel#check})
+     * and normalises the rest.
      *
      * @throws ApiProblemException 400 {@code VALIDATION_FAILED} listing every invalid field
      */
@@ -97,7 +98,7 @@ record MemberData(
         String email = blankToNull(rawEmail);
         email = email == null ? null : email.toLowerCase(Locale.ROOT);
         String telegram = blankToNull(rawTelegram);
-        channel.check(email, telegram, viber).ifPresent(errors::add);
+        channel.check(email, viber).ifPresent(errors::add);
 
         if (!errors.isEmpty()) {
             return new Validation(null, List.copyOf(errors));

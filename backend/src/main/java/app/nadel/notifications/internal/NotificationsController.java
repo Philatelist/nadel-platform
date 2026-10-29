@@ -4,7 +4,9 @@ import app.nadel.identity.CurrentUser;
 import app.nadel.notifications.internal.DeliveryChecks.BotCheck;
 import app.nadel.notifications.internal.mail.MailOutcome;
 import app.nadel.notifications.internal.mail.SmtpSecurity;
+import java.time.ZoneOffset;
 import nadel.contract.api.NotificationsApi;
+import nadel.contract.model.DeliveryChannel;
 import nadel.contract.model.DeliveryEmailSettings;
 import nadel.contract.model.DeliveryEmailSettingsUpdate;
 import nadel.contract.model.DeliveryFailureCode;
@@ -13,28 +15,39 @@ import nadel.contract.model.DeliverySettingsUpdate;
 import nadel.contract.model.DeliveryTelegramSettings;
 import nadel.contract.model.DeliveryTestEmailResult;
 import nadel.contract.model.DeliveryTestTelegramResult;
+import nadel.contract.model.MyNotifications;
+import nadel.contract.model.MyNotificationsUpdate;
+import nadel.contract.model.TelegramLinkOffer;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * The delivery settings endpoints of tag {@code notifications}. Every one needs {@code SETTINGS_MANAGE}; the platform
- * operator has no permissions, so it gets 403 like any member without it. The secrets are write-only: a response
- * never carries the password or the token, only {@code passwordSet} and {@code tokenLast4}.
+ * The endpoints of tag {@code notifications} (one controller per generated interface).
+ * <ul>
+ *   <li>The delivery settings: every one needs {@code SETTINGS_MANAGE}; the platform operator has no permissions, so
+ *       it gets 403 like any member without it. The secrets are write-only: a response never carries the password or
+ *       the token, only {@code passwordSet} and {@code tokenLast4}.</li>
+ *   <li>The member's own «Сповіщення» ({@code /me/notifications}, {@code /me/telegram-link}): no permission, always
+ *       the member behind the token ({@link MemberNotifications}); the platform operator gets 403.</li>
+ * </ul>
  */
 @RestController
 @RequestMapping("/api/v1")
-class DeliverySettingsController implements NotificationsApi {
+class NotificationsController implements NotificationsApi {
 
     private final CurrentUser currentUser;
     private final DeliverySettingsService service;
     private final DeliveryChecks checks;
+    private final MemberNotifications mine;
 
-    DeliverySettingsController(CurrentUser currentUser, DeliverySettingsService service, DeliveryChecks checks) {
+    NotificationsController(CurrentUser currentUser, DeliverySettingsService service, DeliveryChecks checks,
+            MemberNotifications mine) {
         this.currentUser = currentUser;
         this.service = service;
         this.checks = checks;
+        this.mine = mine;
     }
 
     @Override
@@ -76,6 +89,39 @@ class DeliverySettingsController implements NotificationsApi {
         dto.setCode(check.problem() == null ? null
                 : DeliveryTestTelegramResult.CodeEnum.fromValue(check.problem().name()));
         return ResponseEntity.ok(dto);
+    }
+
+    @Override
+    public ResponseEntity<MyNotifications> getMyNotifications() {
+        return ResponseEntity.ok(toDto(mine.view(currentUser.profile())));
+    }
+
+    @Override
+    public ResponseEntity<MyNotifications> updateMyNotifications(MyNotificationsUpdate update) {
+        return ResponseEntity.ok(toDto(mine.choose(currentUser.profile(),
+                app.nadel.members.DeliveryChannel.valueOf(update.getChannel().getValue()))));
+    }
+
+    @Override
+    public ResponseEntity<TelegramLinkOffer> createMyTelegramLink() {
+        MemberNotifications.LinkOffer offer = mine.offerLink(currentUser.profile());
+        return ResponseEntity.ok(new TelegramLinkOffer(offer.deepLink(), offer.expiresAt().atOffset(ZoneOffset.UTC)));
+    }
+
+    @Override
+    public ResponseEntity<Void> deleteMyTelegramLink() {
+        mine.unlink(currentUser.profile());
+        return ResponseEntity.noContent().build();
+    }
+
+    private static MyNotifications toDto(MemberNotifications.View view) {
+        return new MyNotifications(channel(view.channel()),
+                view.available().stream().map(NotificationsController::channel).toList(), view.telegramLinked(),
+                view.botAvailable());
+    }
+
+    private static DeliveryChannel channel(app.nadel.members.DeliveryChannel channel) {
+        return DeliveryChannel.fromValue(channel.name());
     }
 
     private static DeliverySettings toDto(DeliverySettingsValues values) {

@@ -81,6 +81,9 @@ public abstract class IntegrationTest {
         registry.add("nadel.privacy.previous-master-key", () -> "");
         // Feature 017: the Telegram Bot API is the in-JVM fake, so no test ever reaches Telegram (or the dev fake)
         registry.add("nadel.telegram.api-url", () -> FakeBotApi.shared().url());
+        // No bot is polled on a schedule in tests: the bot tests drive the supervisor themselves, with short polls
+        registry.add("nadel.telegram.bot-enabled", () -> "false");
+        registry.add("nadel.telegram.poll-timeout", () -> "1s");
     }
 
     private static String randomMasterKey() {

@@ -37,6 +37,15 @@ public record AccessProfile(
         return new AccessProfile(null, null, subject, displayName, Set.of(), List.of(), true);
     }
 
+    /**
+     * A member acting on their own behalf without a token (feature 017: the cooperative's Telegram bot answers a
+     * linked member): no permissions, no roles, an empty subject and display name. What it may reach is what a member
+     * reaches through ownership rules alone; audit entries name the member by id.
+     */
+    public static AccessProfile ownerOnly(UUID tenantId, UUID memberId) {
+        return new AccessProfile(tenantId, memberId, "", "", Set.of(), List.of(), false);
+    }
+
     public boolean can(Permission permission) {
         return permissions.contains(permission);
     }

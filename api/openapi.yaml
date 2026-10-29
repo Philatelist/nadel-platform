@@ -81,7 +81,7 @@ tags:
   - name: notifications
     description: >-
       Delivery to members by e-mail through the cooperative's own mailbox and by Telegram through its own bot: the
-      channel settings and their checks
+      channel settings and their checks, and the member's own channel choice and Telegram link
 
 paths:
   /me:
@@ -1287,6 +1287,99 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
 
+  /me/notifications:
+    get:
+      tags: [notifications]
+      operationId: getMyNotifications
+      summary: How the signed-in member receives invoices
+      description: |
+        The member account's «Сповіщення» (feature 017 §2.2, §2.3): the signed-in member's preferred channel, the
+        channels they may choose and whether their Telegram is linked. No permission is needed; the member is always
+        the one behind the token (never a request parameter). The platform operator has no cooperative data: 403.
+
+        `available` lists, in the order `EMAIL`, `TELEGRAM`, `PAPER`: `EMAIL` when the member has an e-mail and the
+        cooperative's mailbox is set up, `TELEGRAM` when the cooperative's bot is set up, `PAPER` always. `channel` is
+        the stored preference, which may be outside `available` (a `VIBER` member, or `TELEGRAM` after the bot was
+        removed). `botAvailable` says whether the cooperative has a bot, so the account offers «Підключити Telegram».
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MyNotifications'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    put:
+      tags: [notifications]
+      operationId: updateMyNotifications
+      summary: Choose how the signed-in member receives invoices
+      description: |
+        Sets the signed-in member's preferred channel to one of `available` (see `getMyNotifications`); the board sees
+        it on the member form. 400 `VALIDATION_FAILED` with `errors[{field: channel, code: INVALID}]` for a channel
+        that is not available to the member. A change is written to the audit log as `MEMBER_UPDATED` of the member
+        (field `deliveryChannel`); choosing the current channel writes nothing.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MyNotificationsUpdate'
+      responses:
+        '200':
+          description: The saved choice
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MyNotifications'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /me/telegram-link:
+    post:
+      tags: [notifications]
+      operationId: createMyTelegramLink
+      summary: A personal link that connects the signed-in member's Telegram
+      description: |
+        «Підключити Telegram» (feature 017 §2.2): a deep link to the cooperative's bot with a personal one-time code of
+        the signed-in member, valid 30 minutes (`expiresAt`). Opening it in Telegram and pressing Start links the chat
+        to the member; the code works once. Only the hash of the code is stored. 409 `TELEGRAM_NOT_CONFIGURED` when
+        the cooperative has no bot, or Telegram does not accept its token. The platform operator: 403.
+      responses:
+        '200':
+          description: The deep link
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TelegramLinkOffer'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    delete:
+      tags: [notifications]
+      operationId: deleteMyTelegramLink
+      summary: Unlink the signed-in member's Telegram
+      description: |
+        «Відключити Telegram» (feature 017 §2.2): ends the signed-in member's Telegram link; documents then go by the
+        fallback channel. Written to the audit log as `TELEGRAM_UNLINKED` (`endReason` `UNLINKED`). 204 also when
+        nothing was linked. The platform operator: 403.
+      responses:
+        '204':
+          description: Unlinked (or nothing was linked)
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
   /imports/template:
     get:
       tags: [imports]
@@ -1413,8 +1506,8 @@ paths:
           has a lasting water connection);
         - member rules, as when a member is entered by hand: `REQUIRED`, `TOO_LONG`, `INVALID` (an e-mail that is
           not an address, an unknown `delivery_channel`), `PHONE_INVALID` (`phones` or `viber_phone`),
-          `CHANNEL_CONTACT_MISSING` (the contact the delivery channel needs is empty: `email`, `telegram_username` or
-          `viber_phone`);
+          `CHANNEL_CONTACT_MISSING` (the contact the delivery channel needs is empty: `email` or `viber_phone`; the
+          `TELEGRAM` channel needs no contact, the member links Telegram through the cooperative's bot);
         - member matching: `MEMBER_KEY_MISSING` (`email`: the row has neither an e-mail nor a phone, so a later import
           could not recognise the member), `MEMBER_AMBIGUOUS` (`phones`: the last name, first name and first phone match
           two or more members), `EMAIL_TAKEN` (`email`: the e-mail belongs to a member other than the one the name and
@@ -5862,7 +5955,8 @@ components:
         land (code `PLOT_COMMON_LAND`) or an archived plot (code `PLOT_ARCHIVED`), or a certificate that is already
         annulled is annulled again (code `CERTIFICATE_ALREADY_ANNULLED`), or a check of the cooperative's mailbox or bot
         is asked while it is not set up (code `DELIVERY_NOT_CONFIGURED`), or a test letter is asked by a member without
-        an e-mail of their own (code `NO_OWN_EMAIL`)
+        an e-mail of their own (code `NO_OWN_EMAIL`), or a Telegram link is asked while the cooperative has no working
+        bot (code `TELEGRAM_NOT_CONFIGURED`)
       content:
         application/problem+json:
           schema:
@@ -6434,6 +6528,12 @@ components:
         archivedAt:
           type: string
           format: date-time
+        telegramLinked:
+          type: boolean
+          readOnly: true
+          description: >-
+            Whether the member has linked Telegram through the cooperative's bot (feature 017 §2.2). Always present in
+            responses; read-only. Only this flag is shown: never the member's Telegram account details
 
     MemberInput:
       type: object
@@ -6474,11 +6574,13 @@ components:
             - $ref: '#/components/schemas/DeliveryChannel'
           default: PAPER
           description: >-
-            Preferred invoice channel, `PAPER` when omitted. `EMAIL` requires `email`, `TELEGRAM` requires
-            `telegramUsername`, `VIBER` requires `viberPhone` (otherwise `CHANNEL_CONTACT_MISSING`).
+            Preferred invoice channel, `PAPER` when omitted. `EMAIL` requires `email`, `VIBER` requires `viberPhone`
+            (otherwise `CHANNEL_CONTACT_MISSING`). `TELEGRAM` needs no contact: the member links Telegram through the
+            cooperative's bot (feature 017), `telegramUsername` is an optional note.
         telegramUsername:
           type: string
           maxLength: 64
+          description: Optional note; not needed for the `TELEGRAM` channel
         viberPhone:
           type: string
           maxLength: 32
@@ -6609,6 +6711,8 @@ components:
         - CERTIFICATE_ISSUED
         - CERTIFICATE_ANNULLED
         - DELIVERY_SETTINGS_CHANGED
+        - TELEGRAM_LINKED
+        - TELEGRAM_UNLINKED
 
     AuditEntityType:
       type: string
@@ -6648,7 +6752,11 @@ components:
         names on the certificate (they stay sealed in it). A `DELIVERY_SETTINGS` entry (`DELIVERY_SETTINGS_CHANGED`)
         is about the cooperative's mailbox and bot: its `entityId` is the cooperative and its label the code
         `delivery-settings`; it lists the changed fields with old and new values, and a changed secret (`password`,
-        `botToken`) with neither value.
+        `botToken`) with neither value. `TELEGRAM_LINKED` and `TELEGRAM_UNLINKED` (feature 017) are `MEMBER` entries
+        about the member whose Telegram was linked or unlinked (label "Last First"), never with Telegram account
+        details: `TELEGRAM_LINKED` has no fields, `TELEGRAM_UNLINKED` has `endReason` (new value only: `UNLINKED` the
+        member unlinked it in the bot or the account, `BLOCKED` the member blocked the bot, `MOVED` the chat was
+        linked to another member).
       enum:
         [
           MEMBER,
@@ -12598,3 +12706,41 @@ components:
             Why the check failed, when not `ok`: `TOKEN_INVALID` Telegram does not accept the token,
             `TELEGRAM_UNAVAILABLE` Telegram could not be reached
           enum: [TOKEN_INVALID, TELEGRAM_UNAVAILABLE]
+
+    MyNotifications:
+      type: object
+      description: How the signed-in member receives invoices (`getMyNotifications`)
+      required: [channel, available, telegramLinked, botAvailable]
+      properties:
+        channel:
+          $ref: '#/components/schemas/DeliveryChannel'
+        available:
+          type: array
+          description: The channels the member may choose, in the order `EMAIL`, `TELEGRAM`, `PAPER`
+          items:
+            $ref: '#/components/schemas/DeliveryChannel'
+        telegramLinked:
+          type: boolean
+          description: Whether the member's Telegram is linked to the cooperative's bot
+        botAvailable:
+          type: boolean
+          description: Whether the cooperative has a bot, so «Підключити Telegram» can be offered
+
+    MyNotificationsUpdate:
+      type: object
+      required: [channel]
+      properties:
+        channel:
+          $ref: '#/components/schemas/DeliveryChannel'
+
+    TelegramLinkOffer:
+      type: object
+      description: A personal deep link to the cooperative's bot (`createMyTelegramLink`)
+      required: [deepLink, expiresAt]
+      properties:
+        deepLink:
+          type: string
+          description: '`https://t.me/<bot>?start=<code>`; the code is personal, works once and is valid 30 minutes'
+        expiresAt:
+          type: string
+          format: date-time
