@@ -217,3 +217,4 @@ introduction (tables via Flyway, RLS-free job storage), Supply-chain CI job with
 - Fix review (5cf5ed9) round 1: PASS. Pushing.
 - Checks on 980d4dd: Backend red — AuditPlaintextScanTests (014 test) line 112: outbox publication still PROCESSING (attempt 2) after the entries were stored → timing race; Clients, E2E, SAST, Security green. First build in CI now 12.4 s (was 54.3 s). CI fix attempt 1 → spring-backend (await eventual completion; assertion unchanged).
 - CI fix attempt 1 (Backend): race confirmed — listener commits entries, Modulith marks the publication completed after return (completion-mode delete); test's final assertion now awaits (unchanged assertion); AuditPlaintextScanTests+AuditOutboxTests 3/3 runs green in a worktree.
+- Fix review (c2de033) round 1: PASS. Pushing.

@@ -43,3 +43,9 @@ Reviews deferred by the owner (28.10.2026) until after the combined verify run; 
 | Round | Commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `5cf5ed9` | PASS | — | equivalence checked case by case; 32 targeted tests green. minor: diagnosis stated as fact (an EXPLAIN note would make it verifiable); no plan/timing pin beyond the 60 s ceiling; same expression join remains in LedgerReportQueries (013) |
+
+## Fix — CI: AuditPlaintextScanTests race (outbox completion after the listener returns)
+
+| Round | Commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `c2de033` | PASS | — | waiting for an asynchronous completion with the unchanged assertion is not a retry or weakening; diagnosis matches AuditListener, completion-mode delete and audit/README; 5 tests green. minor: comment wording |
