@@ -5,7 +5,7 @@
 - Branch: 016-invoices-and-documents · Base: main @ 5287657
 - Requirement: document docs/features/016-invoices-and-documents.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
-- Publish: pr+checks · PR: https://github.com/Philatelist/nadel-platform/pull/59 · Checks: green (run 40788506178 on 676eca8)
+- Publish: pr+checks · PR: https://github.com/Philatelist/nadel-platform/pull/59 · Checks: red: Backend (run 40793904794)
 - Review run: running at http://localhost:5173 (web), :8080 (API), :8180 (Keycloak) (PIDs in /private/tmp/claude-501/-Users-alex-IdeaProjects-nadel-platform/2b5d7728-8708-45b9-b4c7-7c43fe039804/scratchpad/review-run.pids)
 
 ## Project facts
@@ -215,3 +215,5 @@ introduction (tables via Flyway, RLS-free job storage), Supply-chain CI job with
 - Root cause (spring-backend, perf-016 worktree): InvoiceLedgerQueries.CHARGES joined the corrected charge on coalesce(...) — not leakproof under RLS → no charge_pkey use → every chunk read all charges; with stale stats (after bulk load) a nested loop (57.6 M rows filtered per chunk). Production-relevant (a cooperative right after a bulk import). Fix: two plain PK joins, same result; heavy sequence 47.9 s → 2.0 s; documents tests 324/324, ledger tests green with the fix. No migration, no test change, ceiling unchanged.
 - Follow-up (not changed, 013 code): the same expression join in LedgerReportQueries lines ~299 and ~352 (reports). Option for the owner: tighten the 60 s ceiling of InvoiceBuildLimitTests.
 - Fix review (5cf5ed9) round 1: PASS. Pushing.
+- Checks on 980d4dd: Backend red — AuditPlaintextScanTests (014 test) line 112: outbox publication still PROCESSING (attempt 2) after the entries were stored → timing race; Clients, E2E, SAST, Security green. First build in CI now 12.4 s (was 54.3 s). CI fix attempt 1 → spring-backend (await eventual completion; assertion unchanged).
+- CI fix attempt 1 (Backend): race confirmed — listener commits entries, Modulith marks the publication completed after return (completion-mode delete); test's final assertion now awaits (unchanged assertion); AuditPlaintextScanTests+AuditOutboxTests 3/3 runs green in a worktree.

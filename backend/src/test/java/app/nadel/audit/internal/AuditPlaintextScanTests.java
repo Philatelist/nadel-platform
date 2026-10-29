@@ -109,7 +109,8 @@ class AuditPlaintextScanTests extends IntegrationTest {
         List<String> stored = entries(member);
         assertThat(String.join("", stored)).contains("\"enc\"");
         assertNoContact(stored, before, after);
-        assertThat(pendingPublications(member)).isEmpty();
+        // the listener commits the entries before the registry marks its publication completed, in a later step
+        await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> assertThat(pendingPublications(member)).isEmpty());
     }
 
     @Test
