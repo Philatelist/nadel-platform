@@ -1051,16 +1051,19 @@
       </p>
       <ol>
         <li>
-          <strong>Preview</strong> "Build invoices for October": how many plots get an invoice (active plots
-          that are not common land and have a current owner), how many have nothing due and are skipped, and
-          how many already have an invoice for this month. The switch
+          <strong>Preview</strong> "Build invoices for October": how many plots can get an invoice (active
+          plots that are not common land and have a current owner), how many of them already have an invoice
+          for this month, and what the build will do, in the words of its result: "To be built: 18. New
+          versions: 0. Unchanged: 1. Skipped: 6." A plot that already has an invoice gets a new version only
+          when its numbers changed; plots with nothing due are skipped. The switch
           <strong>"Include invoices with nothing due"</strong> adds the plots without a debt (their invoice
           has no QR code).
         </li>
         <li>
           Press <strong>"Build invoices for October"</strong> and wait: a spinner is shown until the result
           appears - how many invoices were built, how many got a new version, how many stayed unchanged and
-          how many were skipped.
+          how many were skipped. When nothing was booked between the preview and the build, the result matches
+          the preview. The result takes the place of the preview until you change the month or the switch.
         </li>
         <li>
           Running the build again creates nothing new while nothing has changed. If someone is already
@@ -1072,10 +1075,11 @@
         <figcaption>The month's invoices: preview, result and the list with a PDF per row</figcaption>
       </figure>
       <p>
-        Below is the list of the month's invoices: plot, version, "Amount due", date of issue and a PDF link
-        per row. <strong>"PDF for printing"</strong> downloads one PDF with the latest invoices, one per A4
-        page, ordered by street and plot - for the members who chose paper delivery; a switch puts in all
-        members.
+        Below is the list of the month's invoices: one row per plot with its latest version (plot, version,
+        "Amount due", date of issue and a PDF link); a plot's older versions are folded under
+        <strong>"Earlier versions (N)"</strong>. <strong>"PDF for printing"</strong> downloads one PDF with
+        the latest invoices, one per A4 page, ordered by street and plot - for the members who chose paper
+        delivery; a switch puts in all members.
       </p>
 
       <h3>Versions</h3>
@@ -1084,15 +1088,19 @@
         the same owners, even after a payment or a change of owner. After a payment, a correction or a
         recalculation the treasurer builds the month again: a plot whose numbers changed gets a
         <strong>new version</strong>
-        ("version 2") under the same invoice number; the older versions stay readable in the plot's invoice
-        list. A member sees only the latest version. An invoice is never deleted.
+        ("version 2") under the same invoice number; a plot where nothing changed gets no new version. The
+        older versions stay readable: the lists show the latest version, and "Earlier versions (N)" unfolds
+        the earlier ones. A member sees only the latest version. An invoice is never deleted.
       </p>
 
       <h3>An invoice on request</h3>
       <p>
         On a plot card the <strong>"Invoices"</strong> tab lists the plot's invoices (month, version, amount
-        due, issued) with the PDF of each. <strong>"Invoice for today"</strong> builds an invoice as of today
-        for the current billing month - as a new version of this month's invoice.
+        due, issued) with the PDF of each: the latest version of each month, the older ones under "Earlier
+        versions (N)". <strong>"Invoice for today"</strong> builds an invoice as of today for the current
+        billing month and downloads its PDF right away (the button shows a spinner while it is prepared). A
+        new version appears only when something changed since the latest version (a payment, a charge, the
+        owners, the requisites); otherwise the PDF of the latest version downloads and nothing new is created.
       </p>
       <figure>
         <img src="../img/en/invoices-plot.png" alt="The Invoices tab of a plot card" />
@@ -1108,17 +1116,30 @@
         <li>The plot, the street and the current owners with their shares.</li>
         <li>
           A table with one row per charge type: debt at the start of the month, charged, paid, debt at the
-          end. Under "Charged" are the details members ask about: the readings of each electricity interval
-          with the kWh and the price, losses and common consumers, the basis of a fixed tariff, and for an
-          adjustment the month it corrects.
+          end. Under "Charged" are the details members ask about: each electricity interval as one range of
+          reading dates with both readings, the kWh and the price ("показники 10.08.2026 → 03.10.2026: 3
+          435,900 → 3 705,500 = 269,600 кВт·год × 4,32 ₴"), losses and common consumers, the basis of a fixed
+          tariff, and for an adjustment the month it corrects.
         </li>
-        <li>The totals: debt at the end of the month, prepayment and <strong>"Amount due"</strong>.</li>
         <li>
-          Under the table, the payments received after the month but before the invoice was issued ("Received
-          after October") - they lower the amount due.
+          "Payments for October" ("Оплати за жовтень 2026"): each payment booked in the month with its date,
+          the cash receipt number or the bank reference, and the amount, so a member can match it with their
+          bank. A reversed payment shows as the payment and a negative "reversal" row.
         </li>
-        <li>The QR code - only when the amount due is above 0.00.</li>
+        <li>
+          The payments received after the month but before the invoice was issued ("Received after October") -
+          they lower the amount due.
+        </li>
+        <li>
+          The totals: debt at the end of the month, prepayment and <strong>"Amount due"</strong>; beside them
+          the QR code - only when the amount due is above 0.00 - with the line "Pay in the bank app"
+          ("Оплатити в застосунку банку"): on a phone, tapping it opens the bank transfer without scanning.
+        </li>
       </ul>
+      <p>
+        Each invoice fits on one A4 page. An invoice with very many lines goes on on a second page whose
+        header repeats the invoice number and the plot.
+      </p>
       <p>
         An invoice for a month that is not closed yet says "as of" a date. How the numbers are formed is in
         chapter 25.

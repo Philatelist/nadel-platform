@@ -149,6 +149,15 @@ public final class NbuQrImage {
     }
 
     /**
+     * The side of the largest image format 003 can need (version {@value #MAX_VERSION} with the quiet zone) in PDF
+     * points for a module of {@code moduleMm} millimetres: the space an invoice reserves for its code (Annex 1 item
+     * 17).
+     */
+    public static float maxSidePoints(float moduleMm) {
+        return (MAX_VERSION * 4 + 17 + 2 * QUIET_ZONE) * PdfDocument.mm(moduleMm);
+    }
+
+    /**
      * Draws the image as vector shapes: a white square with the quiet zone, the dark modules as rectangles (one
      * filled path), the white background circle and the black sign.
      *

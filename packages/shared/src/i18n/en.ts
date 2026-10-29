@@ -1938,13 +1938,15 @@ export const en = {
     myTitle: 'Invoices',
     myEmpty: 'There are no invoices yet.',
     myOlder: 'Earlier months',
+    earlierVersions: 'Earlier versions ({count})',
     monthPanel: {
       title: 'Invoices of the month',
       includeNothingDue: 'Include invoices with nothing due',
       invoiceable: 'Plots with an owner: {count}',
-      toBuild: 'To be built: {count}',
-      nothingDue: 'Nothing due, skipped: {count}',
-      existing: 'Already invoiced (a new version only if the amount changed): {count}',
+      existing: 'Already invoiced for this month: {count}',
+      previewTitle: 'What the build will do',
+      preview:
+        'To be built: {built}. New versions: {newVersions}. Unchanged: {unchanged}. Skipped: {skipped}.',
       previewLoading: 'Counting…',
       build: 'Build invoices for {month}',
       building: 'Building invoices…',

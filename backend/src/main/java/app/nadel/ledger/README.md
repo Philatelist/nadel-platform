@@ -559,11 +559,15 @@ Methods:
   earlier, and the stored `calculation` copied as codes and plain decimals: the parts' basis, frequency, quantity,
   unit, rate, days and dates, the readings' meter, day and value, `lossesPercent`, `consumption`, `consumerName`); the
   prepayment at the end of the month; and the payments booked after it, created by `asOf` and not reversed by then
-  (`LaterPayment`). Only rows created at or before `asOf` count, so a caller reading every plot of a build with one
+  (`LaterPayment`); and every payment row booked in the month (`MonthPayment`, `MonthMovements.bookedIn`: a payment
+  and a payment reversal alike, the reversal as its own row with the negated amount, in the order received; the
+  receipt number and the bank reference, a reversal those of the payment it reverses). Only rows created at or before
+  `asOf` count, so a caller reading every plot of a build with one
   `asOf` inside one `REPEATABLE READ` transaction gets one consistent picture. Implemented by
   `internal.InvoiceLedgerQueries`: three parameterised native queries per call (the billing months; the plots' charges
   booked in or before the month with the target of each correction; the plots' payments and allocations as one
-  `UNION ALL` with the billing months of each allocation's payment and charge), plots 500 per `IN` list; the caller
+  `UNION ALL` with the billing months of each allocation's payment and charge and each payment's receipt number and
+  bank reference), plots 500 per `IN` list; the caller
   passes a bounded number of plots (a chunk of a build). Tests: `MonthMovementsTests` (pure, the worked examples 1-5),
   `documents` `InvoiceOnRequestTests` (example 5 end to end, a closed month against `debtsAsOf` of its last day).
 - `firstBillingMonth()` (feature 016): the month of the earliest `billing_month` row, empty while the cooperative has

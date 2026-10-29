@@ -35,6 +35,12 @@ import tools.jackson.databind.json.JsonMapper;
  * a snapshot outlives a change of owner without plaintext names in the database. The payment QR code's link and
  * purpose are stored, so a later change of the code never changes an old version.
  * <p>
+ * <b>Optional keys</b> (added after the first invoices were stored, so a snapshot without them still opens):
+ * {@code payments}, the payment rows booked in the month ({@code paymentId}, {@code reverses} for a reversal,
+ * {@code receivedOn}, {@code amount} with its sign, {@code receiptNumber} and {@code bankReference} when set), written
+ * only when the month has any, so the canonical form of an invoice without payments in its month is what it was
+ * before the key existed.
+ * <p>
  * <b>Change detection</b>: the canonical form is the snapshot without {@code version}, {@code asOf},
  * {@code issuedAt}, {@code issuedOn} and {@code qr}, with the persons in plaintext, every object's keys sorted, written
  * as compact JSON; its content hash is the keyed blind index {@link IndexKind#DOCUMENT_CONTENT} of that text, so the
@@ -150,6 +156,19 @@ class InvoiceSnapshots {
             return row;
         }).toList());
         body.put("lines", d.lines().stream().map(InvoiceSnapshots::line).toList());
+        if (!d.payments().isEmpty()) {
+            body.put("payments", d.payments().stream().map(payment -> {
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("paymentId", payment.paymentId().toString());
+                putIfSet(row, "reverses", payment.reverses() == null ? null : payment.reverses().toString());
+                row.put("receivedOn", payment.receivedOn().toString());
+                row.put("amount", payment.amount().toString());
+                putIfSet(row, "receiptNumber", payment.receiptNumber() == null ? null
+                        : payment.receiptNumber().toString());
+                putIfSet(row, "bankReference", payment.bankReference());
+                return row;
+            }).toList());
+        }
         body.put("receivedAfter", d.receivedAfter().stream().map(payment -> {
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("paymentId", payment.paymentId().toString());
@@ -249,6 +268,15 @@ class InvoiceSnapshots {
         for (Object row : list(s, "lines")) {
             lines.add(line((Map<String, Object>) row));
         }
+        List<InvoiceLedger.MonthPayment> payments = new ArrayList<>();
+        for (Object row : list(s, "payments")) {
+            Map<String, Object> m = (Map<String, Object>) row;
+            String reverses = optional(m, "reverses");
+            String receipt = optional(m, "receiptNumber");
+            payments.add(new InvoiceLedger.MonthPayment(uuid(m, "paymentId"),
+                    reverses == null ? null : UUID.fromString(reverses), LocalDate.parse(string(m, "receivedOn")),
+                    money(m, "amount"), receipt == null ? null : Long.valueOf(receipt), optional(m, "bankReference")));
+        }
         List<InvoiceLedger.LaterPayment> later = new ArrayList<>();
         for (Object row : list(s, "receivedAfter")) {
             Map<String, Object> l = (Map<String, Object>) row;
@@ -269,7 +297,7 @@ class InvoiceSnapshots {
                 new InvoiceDocument.Cooperative(string(c, "officialName"), optional(c, "edrpou"),
                         optional(c, "address"), optional(c, "bankName"), optional(c, "iban")),
                 new InvoiceDocument.Plot(uuid(p, "id"), string(p, "number"), optional(p, "street")), owners,
-                strings(persons, "chairmen"), strings(persons, "treasurers"), types, lines, later,
+                strings(persons, "chairmen"), strings(persons, "treasurers"), types, lines, payments, later,
                 new InvoiceDocument.Totals(money(totals, "endDebt"), money(totals, "prepayment"),
                         money(totals, "receivedAfter"), money(totals, "due")),
                 code);

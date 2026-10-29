@@ -26,7 +26,7 @@ class InvoiceBuildLimitTests extends DocumentsTestSupport {
     private static final int MONTHS = 12;
 
     /** Loose: a build at the limit must not come near it; the measured time goes into ADR 0017. */
-    private static final Duration BUILD_CEILING = Duration.ofSeconds(60);
+    private static final Duration BUILD_CEILING = Duration.ofSeconds(30);
     private static final Duration ON_REQUEST_CEILING = Duration.ofSeconds(10);
 
     /** The fixture, written in bulk as the database owner (no event). */
@@ -96,6 +96,11 @@ class InvoiceBuildLimitTests extends DocumentsTestSupport {
 
         UUID plot = owner().queryForObject("select id from plot where tenant_id = ? and number = '1000'", UUID.class,
                 tenant);
+        // an on-request invoice of an unchanged plot returns the latest version; a payment makes it a real write
+        owner().update("insert into payment (id, tenant_id, plot_id, kind, source, amount, received_on, "
+                + "billing_month_id, group_id) select gen_random_uuid(), p.tenant_id, p.id, 'PAYMENT', 'BANK', 10.00, ?, "
+                + "m.id, gen_random_uuid() from plot p join billing_month m on m.tenant_id = p.tenant_id "
+                + "and m.month = ?::date where p.id = ?", today(), current.atDay(1).toString(), plot);
         long onRequestStart = System.nanoTime();
         JsonNode onRequest = issued(plot, month);
         long onRequestMillis = millisSince(onRequestStart);

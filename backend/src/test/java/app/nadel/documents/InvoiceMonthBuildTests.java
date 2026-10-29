@@ -24,7 +24,8 @@ import tools.jackson.databind.JsonNode;
 
 /**
  * The month build of invoices ({@code POST /billing-months/{month}/invoices}, feature 016 §2.5, technical
- * considerations 2.5): the preview counts and writes nothing; the build creates version 1 for every invoiceable plot
+ * considerations 2.5): the preview counts and writes nothing, and predicts exactly what the next build does (built,
+ * new versions, unchanged, skipped); the build creates version 1 for every invoiceable plot
  * with something due and skips the others unless {@code includeNothingDue}; a rebuild without a change writes nothing;
  * a payment gives exactly that plot a version 2; a closed and an open month; the months the endpoint refuses; a second
  * build of the same month started while the first runs is refused with 409 {@code INVOICE_BUILD_RUNNING} and nothing
@@ -82,11 +83,16 @@ class InvoiceMonthBuildTests extends DocumentsTestSupport {
         assertThat(count(preview, "toBuild")).isEqualTo(15);
         assertThat(count(preview, "nothingDue")).isEqualTo(5);
         assertThat(count(preview, "existing")).isZero();
-        assertThat(preview.has("built")).isFalse();
+        assertThat(count(preview, "built")).isEqualTo(15);
+        assertThat(count(preview, "newVersions")).isZero();
+        assertThat(count(preview, "unchanged")).isZero();
+        assertThat(count(preview, "skipped")).isEqualTo(5);
 
         JsonNode all = body(buildMonth(treasurer, month, true, true).andExpect(status().isOk()));
         assertThat(count(all, "toBuild")).isEqualTo(20);
         assertThat(count(all, "nothingDue")).isEqualTo(5);
+        assertThat(count(all, "built")).isEqualTo(20);
+        assertThat(count(all, "skipped")).isZero();
 
         assertThat(invoiceCount()).isZero();
     }
@@ -120,7 +126,43 @@ class InvoiceMonthBuildTests extends DocumentsTestSupport {
         JsonNode preview = body(buildMonth(treasurer, month, true, false).andExpect(status().isOk()));
         assertThat(count(preview, "existing")).isEqualTo(15);
         assertThat(count(preview, "nothingDue")).isEqualTo(5);
-        assertThat(count(preview, "toBuild")).isEqualTo(15);
+        assertThat(count(preview, "toBuild")).isZero();
+        assertThat(count(preview, "unchanged")).isEqualTo(15);
+        assertThat(count(preview, "skipped")).isEqualTo(5);
+    }
+
+    /** The counts a build answers, in the order built, newVersions, unchanged, skipped. */
+    private static List<Integer> outcome(JsonNode result) {
+        return List.of(count(result, "built"), count(result, "newVersions"), count(result, "unchanged"),
+                count(result, "skipped"));
+    }
+
+    @Test
+    void thePreviewPredictsTheBuildWhenAPlotAlreadyHasAnInvoiceOfTheMonth() throws Exception {
+        String month = currentMonth();
+        List<UUID> plots = twentyPlots(month);
+        issued(plots.get(0), month); // on request before the build: the only plot with an invoice of the month
+
+        JsonNode preview = body(buildMonth(treasurer, month, true, false).andExpect(status().isOk()));
+        assertThat(count(preview, "invoiceable")).isEqualTo(20);
+        assertThat(count(preview, "existing")).isEqualTo(1);
+        assertThat(count(preview, "toBuild")).isEqualTo(14);
+        assertThat(count(preview, "nothingDue")).isEqualTo(5);
+        assertThat(outcome(preview)).containsExactly(14, 0, 1, 5);
+        assertThat(invoiceCount()).isEqualTo(1);
+
+        JsonNode result = built(month, false);
+        assertThat(outcome(result)).isEqualTo(outcome(preview));
+        assertThat(count(result, "invoiceable")).isEqualTo(count(preview, "invoiceable"));
+        assertThat(invoiceCount()).isEqualTo(15);
+
+        // a payment on a plot: the preview predicts its new version, and the build agrees
+        pay(plots.get(1), "CASH", "75.00", null);
+        JsonNode next = body(buildMonth(treasurer, month, true, false).andExpect(status().isOk()));
+        assertThat(count(next, "existing")).isEqualTo(15);
+        assertThat(outcome(next)).containsExactly(0, 1, 14, 5);
+        assertThat(outcome(built(month, false))).isEqualTo(outcome(next));
+        assertThat(invoiceCount()).isEqualTo(16);
     }
 
     @Test

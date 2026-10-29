@@ -33,6 +33,8 @@ import org.jspecify.annotations.Nullable;
  * or before it, never below {@code 0.00}.</li>
  * <li>{@code receivedAfter} = the payments booked after the month, created by {@code asOf} and not reversed by a
  * reversal created by then, in the order received.</li>
+ * <li>{@link #bookedIn}: the payment rows booked in the month and created by {@code asOf}, a reversal as its own
+ * negative row, in the order received (the invoice's «Оплати за {місяць}»).</li>
  * </ul>
  * A closed month never changes: a row counted in or before it was created before the month was closed (a charge or a
  * payment is booked only in an open month, and an allocation created after the closing counts in a later month), and
@@ -175,6 +177,21 @@ final class MonthMovements {
                         payment.amount()))
                 .toList();
         return new Result(types, prepayment.signum() < 0 ? Money.ZERO : prepayment, later);
+    }
+
+    /**
+     * The payment rows booked in {@code month} and created at or before {@code asOf}: payments and payment reversals
+     * alike, each as the ledger holds it (a reversal with its negated amount), in the order received, then created,
+     * then by id.
+     */
+    static List<PaymentEntry> bookedIn(YearMonth month, Instant asOf, Collection<PaymentEntry> payments) {
+        Objects.requireNonNull(month, "month");
+        Objects.requireNonNull(asOf, "asOf");
+        return payments.stream()
+                .filter(payment -> payment.bookedIn().equals(month) && !payment.createdAt().isAfter(asOf))
+                .sorted(Comparator.comparing(PaymentEntry::receivedOn).thenComparing(PaymentEntry::createdAt)
+                        .thenComparing(payment -> payment.id().toString()))
+                .toList();
     }
 
     /**

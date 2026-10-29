@@ -187,16 +187,20 @@ export const getIssuePlotInvoiceUrl = (id: string,) => {
 }
 
 /**
- * Builds the invoice of one plot for one billing month as of now (feature 016 §2.6, «Рахунок на сьогодні») and
- * stores it as a new version: the number is `{YYYY-MM}/{plot number}` (for example `2026-10/9`) and stays the
- * same for every version of the plot and month; the version is one more than the latest one (1 for the first).
- * An on-request invoice is always a new version, even when nothing changed. The figures follow the booking-month
- * rule (`docs/domain/money-rules.md`, «Рахунки та довідки»): the debt at the start of the month, what was charged
- * and paid in the month per charge type, the debt at the end of the month, the prepayment, the payments booked
- * after the month and received by now, and «До сплати» (the end debt minus those payments, never below 0.00).
- * A closed month always gives the same figures. The stored snapshot keeps every number and name the PDF shows
- * (the owners' names, the chairman's and the treasurer's are sealed), so the PDF of a version never changes. The
- * re-issue is written to the audit log as `INVOICE_REISSUED`.
+ * Builds the invoice of one plot for one billing month as of now (feature 016 §2.6, «Рахунок на сьогодні»). The
+ * number is `{YYYY-MM}/{plot number}` (for example `2026-10/9`) and stays the same for every version of the plot
+ * and month. The new invoice is compared with the latest version of the plot and month by its content (every
+ * number, line, owner and requisite it prints; the issue date and time, the version and the QR code do not
+ * count, as in the month build): when it is the same, nothing is written and the latest version is returned as
+ * it is (200, no audit entry); otherwise it is stored as a new version, one more than the latest one (1 for the
+ * first), and returned with 201. The figures follow the booking-month rule (`docs/domain/money-rules.md`,
+ * «Рахунки та довідки»): the debt at the start of the month, what was charged and paid in the month per charge
+ * type, the debt at the end of the month, the prepayment, the payments booked after the month and received by
+ * now, and «До сплати» (the end debt minus those payments, never below 0.00). A closed month always gives the
+ * same figures. The stored snapshot keeps every number and name the PDF shows (the owners' names, the
+ * chairman's and the treasurer's are sealed), so the PDF of a version never changes. A new version is written
+ * to the audit log as `INVOICE_REISSUED`. The web downloads the PDF of the returned version
+ * (`GET /invoices/{id}/pdf`) right after the call.
  *
  * `month` defaults to the current month (today in Europe/Kyiv); a month after it is 400 `VALIDATION_FAILED`
  * with `errors[{field: month, code: INVALID}]`. 404 `PLOT_NOT_FOUND` for an unknown plot or one of another
@@ -301,7 +305,10 @@ export const useIssuePlotInvoice = <TError = BadRequestResponse | UnauthorizedRe
  * A page of issued invoice versions, every version listed (older versions stay readable), newest month first,
  * then the newest issue, then the number, then the newest version; with `month` the number is compared in the
  * natural order of the plot number (9 before 10, 12 before 12а). `latest` marks the latest version of each
- * plot and month. Both filters are optional and combine. Requires `CHARGES_VIEW`.
+ * plot and month. With `latestOnly=true` only the latest version of each plot and month is listed (the web's
+ * main lists; the earlier versions of a plot and month are `version - 1`, numbered 1 to `version - 1` without
+ * gaps, and are read with `plotId` and `month`). The filters are optional and combine. Requires
+ * `CHARGES_VIEW`.
  * @summary The issued invoices of the cooperative
  */
 export const listInvoices = async (params?: ListInvoicesParams, options?: Parameters<typeof nadelFetch>[1]): Promise<InvoicePage> => {
@@ -949,10 +956,14 @@ export const getBuildMonthInvoicesUrl = (month: string,
  * build is written to the audit log as one `INVOICES_ISSUED` entry (entity type `BILLING_MONTH`, label
  * `YYYY-MM`, fields `month`, `built`, `newVersions`, `unchanged`, `skipped`).
  *
- * With `preview=true` nothing is written: the answer has `invoiceable`, `toBuild` (the plots that would be built
- * or compared), `nothingDue` (the plots without an invoice of the month that have nothing due: skipped unless
- * `includeNothingDue`) and `existing` (the plots that already have an invoice of the month). With
- * `preview=false` the answer has `invoiceable`, `built`, `newVersions`, `unchanged` and `skipped`.
+ * With `preview=true` nothing is written and no lock is taken: the preview makes the same decision per plot as
+ * the build would at that moment (it builds every invoice and compares its content hash with the latest
+ * version), so it answers the same `built`, `newVersions`, `unchanged` and `skipped` as a build started next
+ * (unless the ledger changes in between), plus `toBuild` (`built + newVersions`, the invoices that would be
+ * written), `nothingDue` (the plots without an invoice of the month that have nothing due: skipped unless
+ * `includeNothingDue`) and `existing` (the plots that already have an invoice of the month,
+ * `newVersions + unchanged`). With `preview=false` the answer has `invoiceable`, `built`, `newVersions`,
+ * `unchanged` and `skipped`.
  *
  * A month after the current one (Europe/Kyiv) is 409 `PERIOD_IN_FUTURE`; a month before the first month of the
  * cooperative (or any month while it has none) is 404 `NOT_FOUND`; 409 `REQUISITES_MISSING` with `missing`

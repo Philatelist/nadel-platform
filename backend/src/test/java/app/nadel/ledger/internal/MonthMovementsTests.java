@@ -232,4 +232,26 @@ class MonthMovementsTests {
         assertThat(october(at("2026-11-03")).receivedAfter()).extracting(LaterPayment::paymentId)
                 .containsExactly(reversed, kept);
     }
+
+    @Test
+    void thePaymentRowsBookedInTheMonthAreListedAReversalAsItsOwnNegativeRow() {
+        UUID september = pay(SEPTEMBER, "2026-09-28", "40.00");
+        UUID late = pay(OCTOBER, "2026-10-20", "75.00");
+        UUID early = pay(OCTOBER, "2026-10-03", "100.00");
+        UUID reversal = UUID.randomUUID();
+        payments.add(new PaymentEntry(reversal, early, OCTOBER, LocalDate.of(2026, 10, 3), m("-100.00"),
+                at("2026-10-05")));
+        // a September payment reversed in October: the reversal is booked in October
+        UUID septemberReversal = UUID.randomUUID();
+        payments.add(new PaymentEntry(septemberReversal, september, OCTOBER, LocalDate.of(2026, 9, 28),
+                m("-40.00"), at("2026-10-02")));
+        pay(NOVEMBER, "2026-11-02", "60.00");
+
+        assertThat(MonthMovements.bookedIn(OCTOBER, ISSUED, payments)).extracting(PaymentEntry::id)
+                .containsExactly(septemberReversal, early, reversal, late);
+        assertThat(MonthMovements.bookedIn(OCTOBER, at("2026-10-04"), payments)).extracting(PaymentEntry::id)
+                .containsExactly(septemberReversal, early);
+        assertThat(MonthMovements.bookedIn(SEPTEMBER, ISSUED, payments)).extracting(PaymentEntry::id)
+                .containsExactly(september);
+    }
 }

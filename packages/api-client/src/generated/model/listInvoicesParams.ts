@@ -21,6 +21,10 @@ month?: string;
  */
 plotId?: string;
 /**
+ * Only the latest version of each plot and month
+ */
+latestOnly?: boolean;
+/**
  * Zero-based page index
  * @minimum 0
  */

@@ -42,7 +42,8 @@ class InvoiceAccessTests extends DocumentsTestSupport {
         charge(own, "MEMBERSHIP", "75.00", currentMonth());
         charge(foreign, "MEMBERSHIP", "75.00", currentMonth());
         oldVersion = idOf(issued(own, null));
-        latest = idOf(issued(own, null));
+        pay(own, "CASH", "10.00", null); // a change, so the next request is a new version
+        latest = idOf(issuedNewVersion(own, null));
         foreignInvoice = idOf(issued(foreign, null));
     }
 
@@ -119,7 +120,8 @@ class InvoiceAccessTests extends DocumentsTestSupport {
     @Test
     void theTreasurerAndTheChairmanIssueAndReadEveryInvoice() throws Exception {
         for (String bearer : new String[] {treasurer, chairman}) {
-            issue(bearer, own, null).andExpect(status().isCreated());
+            // nothing changed since the latest version: 200 with that version
+            issue(bearer, own, null).andExpect(status().isOk());
             everyRead(bearer);
             everyMonthAction(bearer);
         }
@@ -133,7 +135,7 @@ class InvoiceAccessTests extends DocumentsTestSupport {
         forbidden(issue(viewer, own, null));
         noMonthAction(viewer);
         String issuer = customRole("INVOICES_ISSUE");
-        issue(issuer, own, null).andExpect(status().isCreated());
+        issue(issuer, own, null).andExpect(status().isOk());
         everyMonthAction(issuer);
     }
 

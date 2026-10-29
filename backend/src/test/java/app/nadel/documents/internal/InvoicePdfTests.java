@@ -90,7 +90,8 @@ class InvoicePdfTests {
                                 m("74.96"), m("0.00"), m("74.96")),
                         new InvoiceDocument.TypeRow(ELECTRICITY, "ELECTRICITY", "Електроенергія", m("0.00"),
                                 m("338.30"), m("0.00"), m("338.30"))),
-                lines(), List.of(), new InvoiceDocument.Totals(m("413.26"), m(prepayment), m("0.00"), m(due)), qr);
+                lines(), List.of(), List.of(), new InvoiceDocument.Totals(m("413.26"), m(prepayment), m("0.00"),
+                        m(due)), qr);
     }
 
     private static String text(byte[] pdf) throws IOException {
@@ -116,12 +117,12 @@ class InvoicePdfTests {
                 "Дата видачі: 05.11.2026", "Розрахунковий місяць: жовтень 2026", "ділянка № 9, Садова",
                 "Шевченко Тарас Григорович (1/2)", "Шевченко Олена Іванівна (1/2)", "Членський внесок",
                 "Електроенергія", "Борг на початок місяця", "Борг на кінець місяця", "До сплати", "413,26 ₴",
-                "Відскануйте QR-код у застосунку свого банку", "https://qr.bank.gov.ua/",
+                "Відскануйте QR-код у застосунку свого банку", "Оплатити в застосунку банку",
                 "Призначення платежу: Ділянка 9. Внески за жовтень 2026. Рахунок 2026-10/9",
                 "Сплачуйте за реквізитами або QR-кодом; у призначенні вказуйте номер ділянки",
                 "Голова: Бондаренко Іван Іванович", "Казначей: Коваленко Олена Петрівна",
                 "Сформовано в системі Наділ 05.11.2026 11:30");
-        assertThat(text).doesNotContain("?", "(версія", "Станом на", "Аванс");
+        assertThat(text).doesNotContain("?", "(версія", "Станом на", "Аванс", "qr.bank.gov.ua", "(продовження)");
     }
 
     @Test
@@ -129,7 +130,7 @@ class InvoicePdfTests {
         String text = text(InvoiceLayout.render(invoice(1, MonthStatus.CLOSED, "413.26", "0.00")));
 
         assertThat(text).contains("Нарахування за жовтень 2026", "50,00 ₴ × 6,00 сотки / 12",
-                "показники 8 205,000 – 8 543,300 (05.09.2026 – 05.10.2026)", "338,300 кВт·год × 1,00 ₴",
+                "показники 05.09.2026 → 05.10.2026: 8 205,000 → 8 543,300 = 338,300 кВт·год × 1,00 ₴",
                 "Коригування за вересень 2026");
     }
 
@@ -143,8 +144,7 @@ class InvoicePdfTests {
         assertThat(InvoiceLayout.describe(lines.get(1), texts))
                 .isEqualTo("Коригування за вересень 2026; вересень 2026");
         assertThat(InvoiceLayout.describe(lines.get(2), texts).replace('\u00A0', ' ')).isEqualTo(
-                "06.09.2026 – 05.10.2026; показники 8 205,000 – 8 543,300 (05.09.2026 – 05.10.2026); "
-                        + "338,300 кВт·год × 1,00 ₴");
+                "показники 05.09.2026 → 05.10.2026: 8 205,000 → 8 543,300 = 338,300 кВт·год × 1,00 ₴");
         InvoiceLedger.Part plot = new InvoiceLedger.Part("PER_PLOT", "MONTHLY", "1", "PLOT", "75.0000", 16,
                 LocalDate.of(2026, 10, 16), LocalDate.of(2026, 10, 31));
         assertThat(InvoiceLayout.part(plot, texts).replace('\u00A0', ' ')).isEqualTo("75,00 ₴ за ділянку, 16 дн.");
@@ -180,12 +180,12 @@ class InvoicePdfTests {
 
         assertThat(InvoiceLayout.describe(line(LineKind.REGULAR, LineSource.LOSSES, null, List.of(), "5.00",
                 "338.300", null), texts).replace(' ', ' '))
-                .isEqualTo("жовтень 2026; втрати 5,00 % від 338,300 кВт·год");
+                .isEqualTo("втрати 5,00 % від 338,300 кВт·год, жовтень 2026");
         assertThat(InvoiceLayout.describe(line(LineKind.REGULAR, LineSource.LOSSES, null, List.of(), null, null,
-                null), texts)).isEqualTo("жовтень 2026; втрати в мережі");
+                null), texts)).isEqualTo("втрати в мережі, жовтень 2026");
         assertThat(InvoiceLayout.describe(line(LineKind.ADJUSTMENT, LineSource.COMMON_CONSUMER,
                 YearMonth.of(2026, 9), List.of(), null, null, "Насосна станція"), texts))
-                .isEqualTo("Коригування за вересень 2026; жовтень 2026; спільний споживач «Насосна станція»");
+                .isEqualTo("Коригування за вересень 2026; спільний споживач «Насосна станція», жовтень 2026");
         assertThat(InvoiceLayout.describe(line(LineKind.REGULAR, LineSource.COMMON_CONSUMER, null, List.of(), null,
                 null, " "), texts)).isEqualTo("жовтень 2026");
     }

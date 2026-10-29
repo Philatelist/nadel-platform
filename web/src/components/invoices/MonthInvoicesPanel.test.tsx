@@ -10,6 +10,7 @@ let permissions: Permission[];
 const buildMonthInvoices = vi.fn();
 const getMonthInvoicesPrintPdf = vi.fn();
 const downloadBlob = vi.fn();
+const listInvoices = vi.fn();
 
 vi.mock('../../me', () => ({ useCan: (p: Permission) => permissions.includes(p) }));
 vi.mock('../../downloadBlob', () => ({ downloadBlob: (...args: unknown[]) => downloadBlob(...args) }));
@@ -31,7 +32,7 @@ vi.mock('@nadel/api-client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@nadel/api-client')>()),
   buildMonthInvoices: (...args: unknown[]) => buildMonthInvoices(...args),
   getMonthInvoicesPrintPdf: (...args: unknown[]) => getMonthInvoicesPrintPdf(...args),
-  useListInvoices: () => ok({ items: [row], page: 0, size: 20, totalItems: 1, totalPages: 1 }),
+  useListInvoices: (...args: unknown[]) => listInvoices(...args),
   useGetInvoiceReadiness: () => ok({ missing: [] }),
 }));
 
@@ -39,9 +40,14 @@ const previewResult: InvoiceBuild = {
   preview: true,
   invoiceable: 50,
   toBuild: 30,
-  nothingDue: 12,
+  nothingDue: 14,
   existing: 8,
+  built: 28,
+  newVersions: 2,
+  unchanged: 6,
+  skipped: 14,
 };
+const previewLine = 'To be built: 28. New versions: 2. Unchanged: 6. Skipped: 14.';
 
 function renderPanel() {
   renderWithApp(
@@ -58,14 +64,16 @@ describe('MonthInvoicesPanel', () => {
     buildMonthInvoices.mockReset();
     getMonthInvoicesPrintPdf.mockReset();
     downloadBlob.mockReset();
+    listInvoices.mockReset();
+    listInvoices.mockReturnValue(ok({ items: [row], page: 0, size: 20, totalItems: 1, totalPages: 1 }));
     buildMonthInvoices.mockResolvedValue(previewResult);
   });
 
-  it('shows the preview counts and asks for them with the switch value', async () => {
+  it('shows the preview in the categories of the result and asks for it with the switch value', async () => {
     renderPanel();
-    expect(await screen.findByText('To be built: 30')).toBeTruthy();
+    expect(await screen.findByText(previewLine)).toBeTruthy();
     expect(screen.getByText('Plots with an owner: 50')).toBeTruthy();
-    expect(screen.getByText('Nothing due, skipped: 12')).toBeTruthy();
+    expect(screen.getByText('Already invoiced for this month: 8')).toBeTruthy();
     expect(buildMonthInvoices).toHaveBeenCalledWith(
       '2026-10',
       { preview: true },
@@ -94,6 +102,76 @@ describe('MonthInvoicesPanel', () => {
     finish({ preview: false, invoiceable: 50, built: 30, newVersions: 2, unchanged: 6, skipped: 12 });
     expect(await screen.findByText('Built: 30. New versions: 2. Unchanged: 6. Skipped: 12.')).toBeTruthy();
     expect(screen.queryByText('Building invoices…')).toBeNull();
+  });
+
+  it('shows the result in place of the preview after a build until the switch changes', async () => {
+    const after: InvoiceBuild = {
+      ...previewResult,
+      toBuild: 0,
+      existing: 36,
+      built: 0,
+      newVersions: 0,
+      unchanged: 36,
+      skipped: 14,
+    };
+    let built = false;
+    buildMonthInvoices.mockImplementation((_m: string, params: { preview: boolean }) => {
+      if (!params.preview) {
+        built = true;
+        return Promise.resolve({
+          preview: false,
+          invoiceable: 50,
+          built: 28,
+          newVersions: 2,
+          unchanged: 6,
+          skipped: 14,
+        });
+      }
+      return Promise.resolve(built ? after : previewResult);
+    });
+    renderPanel();
+    expect(await screen.findByText(previewLine)).toBeTruthy();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Build invoices for October 2026' }));
+    expect(await screen.findByText('Built: 28. New versions: 2. Unchanged: 6. Skipped: 14.')).toBeTruthy();
+    // the preview is refetched after the build, but it is not shown next to the result
+    await waitFor(() => expect(buildMonthInvoices).toHaveBeenCalledTimes(3));
+    expect(screen.queryByText(previewLine)).toBeNull();
+    expect(screen.queryByRole('list', { name: 'What the build will do' })).toBeNull();
+    expect(screen.queryByText('Already invoiced for this month: 36')).toBeNull();
+
+    // a change of the switch drops the result and shows the current preview
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Include invoices with nothing due' }));
+    expect(await screen.findByText('Already invoiced for this month: 36')).toBeTruthy();
+    expect(screen.queryByText('Built: 28. New versions: 2. Unchanged: 6. Skipped: 14.')).toBeNull();
+  });
+
+  it('lists the latest version per plot with its earlier versions collapsed', async () => {
+    listInvoices.mockImplementation((params: { latestOnly?: boolean }) =>
+      ok({
+        items:
+          params.latestOnly === true
+            ? [{ ...row, version: 2 }]
+            : [
+                { ...row, version: 2 },
+                { ...row, id: 'v1' },
+              ],
+        page: 0,
+        size: 20,
+        totalItems: 1,
+        totalPages: 1,
+      }),
+    );
+    renderPanel();
+    expect(listInvoices).toHaveBeenCalledWith({ month: '2026-10', latestOnly: true, page: 0, size: 20 });
+    const toggle = screen.getByRole('button', { name: 'Earlier versions (1)' });
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    await userEvent.click(toggle);
+    expect(await screen.findByText('(version 1)')).toBeTruthy();
+    expect(listInvoices).toHaveBeenLastCalledWith(
+      { plotId: 'p1', month: '2026-10', page: 0, size: 100 },
+      { query: { enabled: true } },
+    );
   });
 
   it('shows the limit when the build is too large', async () => {

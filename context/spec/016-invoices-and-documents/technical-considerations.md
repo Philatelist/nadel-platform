@@ -73,7 +73,9 @@ All are read-only, `Propagation.MANDATORY`, and return ids, codes and `Money`.
 
 `InvoiceLedger(plotId, month, status, closedAt, types[TypeMovement(chargeTypeId, start, charged, paid, end)],
 lines[InvoiceChargeLine(chargeId, chargeTypeId, kind, source, amount, serviceFrom, serviceTo, parts, readings,
-corrects)], prepaymentAtEnd, receivedAfter[LaterPayment(paymentId, receivedOn, bookedIn, amount)])`. `parts` and
+corrects)], prepaymentAtEnd, receivedAfter[LaterPayment(paymentId, receivedOn, bookedIn, amount)],
+payments[MonthPayment(paymentId, reverses, receivedOn, amount, receiptNumber, bankReference)])`; `payments` are the
+payment rows booked in M and created by `asOf`, a reversal as its own negative row. `parts` and
 `readings` are copied from the stored `charge.calculation` (tariff basis, quantity, unit, rate, days; reading points
 with `takenOn` and `value`; losses percent, common consumer share).
 
@@ -127,8 +129,11 @@ forbids reading another module's tables).
 6. Skip: a plot with nothing due is skipped unless `includeNothingDue` or it already has an invoice this month (then it
    is compared and gets a 0.00 version if its numbers changed).
 7. One `INVOICES_ISSUED` audit event (month, built, newVersions, unchanged, skipped) in the same transaction.
-8. Response `InvoiceBuildResult{invoiceable, built, newVersions, unchanged, skipped}`; the preview returns
-   `InvoiceBuildPreview{invoiceable, toBuild, nothingDue, existing}` and writes nothing.
+8. Response `InvoiceBuildResult{invoiceable, built, newVersions, unchanged, skipped}`; the preview runs steps 4–6
+   without writing (no lock, no audit), the same decision per plot including the content hash of the plots that have
+   an invoice, and returns `InvoiceBuild{invoiceable, built, newVersions, unchanged, skipped}` as predicted plus
+   `toBuild = built + newVersions`, `nothingDue` and `existing = newVersions + unchanged` (PR review 29.10.2026: the
+   earlier preview counted `toBuild` as built or compared, which could not agree with the result).
 
 **Why `REPEATABLE READ` and not the charging lock:** it gives one consistent read for the whole build without blocking
 payment entry or the month run; the 011 charging lock taken shared would also stop a charge from being booked during the
@@ -138,14 +143,17 @@ build but not a payment (payments take the plot lock, not the charging lock). A 
 the persons in plaintext, keys sorted → `PersonalDataCipher.blindIndex(tenantId, DOCUMENT_CONTENT, canonical)`. A keyed
 hash leaks no names.
 
-**On request** `POST /plots/{id}/invoices` (body `{month?}`, default the current billing month): same lock and isolation,
-always a new version, `INVOICE_REISSUED` audit. 409 `PLOT_NOT_INVOICEABLE` for common land, archived or ownerless plots.
+**On request** `POST /plots/{id}/invoices` (body `{month?}`, default the current billing month): same lock and isolation;
+the content hash is compared with the latest version of the plot and month as in the month build: equal → 200 with the
+latest version, nothing written, no audit; different (or no version yet) → 201 with the new version and the
+`INVOICE_REISSUED` audit (PR review 29.10.2026, replacing "always a new version"). 409 `PLOT_NOT_INVOICEABLE` for
+common land, archived or ownerless plots. The web downloads the returned version's PDF right after the call.
 
 **Snapshot (schema 1):** `schema, number, version, month, monthStatus, asOf, issuedOn, cooperative{officialName,
 edrpou, address, bankName, iban}, plot{id, number, street}, owners[{memberId, numerator, denominator}], persons
 (sealed: owners' names, chairman, treasurer; FieldRef("invoice","snapshot.persons",id)), types[...], lines[...],
-receivedAfter[...], totals{endDebt, prepayment, receivedAfter, due}, qr{link, purpose}|null`. Amounts are strings with
-two decimals. The QR link is stored, so later code changes never change an old version.
+payments[...] (optional: written only when the month has payment rows, read as empty when absent), receivedAfter[...],
+totals{endDebt, prepayment, receivedAfter, due}, qr{link, purpose}|null`. Amounts are strings with two decimals. The QR link is stored, so later code changes never change an old version.
 
 ### 2.6 NBU QR (format 003, Annex 4)
 
@@ -207,7 +215,7 @@ kopecks always two digits with the agreeing word; range 0 – 999 999 999 999.99
 | Endpoint | Access | Result |
 |---|---|---|
 | `POST /billing-months/{month}/invoices?preview` | `INVOICES_ISSUE` | `InvoiceBuildPreview` / `InvoiceBuildResult`; 409 `REQUISITES_MISSING`; 422 `INVOICE_BUILD_TOO_LARGE` |
-| `GET /invoices?month&plotId&page&size` | `CHARGES_VIEW` | page of `InvoiceRow` (plot, number, version, due, issuedAt) |
+| `GET /invoices?month&plotId&latestOnly&page&size` | `CHARGES_VIEW` | page of `InvoiceRow` (plot, number, version, due, issuedAt); `latestOnly` = the latest version per plot and month |
 | `GET /invoices/{id}` · `/pdf` · `/qr.png` | `CHARGES_VIEW`, or a current owner and the latest version | `InvoiceSnapshot` / `application/pdf` / `image/png`; else 404 `NOT_FOUND` |
 | `POST /plots/{id}/invoices` | `INVOICES_ISSUE` | `InvoiceRow`; 409 `PLOT_NOT_INVOICEABLE`, `REQUISITES_MISSING` |
 | `GET /billing-months/{month}/invoices/print.pdf?scope=PAPER\|ALL` | `INVOICES_ISSUE` | `application/pdf` (one invoice per A4 page, street and plot order; PAPER = any current owner with PAPER delivery) |
@@ -248,11 +256,16 @@ pipeline records it.
 
 ### 2.11 Web (`web/`, `packages/shared`)
 
-- `ChargesMonthPage` → `components/invoices/MonthInvoicesPanel.tsx`: preview counts with the «Включити рахунки без
-  боргу» switch, build button with a spinner and the result, `InvoiceList` (plot, number, version, due, issued, PDF),
-  «PDF для друку» with a `PAPER | ALL` switch. Build and print need `INVOICES_ISSUE`; the list needs `CHARGES_VIEW`.
-- `PlotPage` → new `PlotTabs` (existing account, «Рахунки» = `PlotInvoices` with «Рахунок на сьогодні», «Довідка» =
-  `CertificateForm` gated by `CERTIFICATES_ISSUE`).
+- `ChargesMonthPage` → `components/invoices/MonthInvoicesPanel.tsx`: the preview (invoiceable, existing, and the
+  predicted built / new versions / unchanged / skipped worded like the result) with the «Включити рахунки без боргу»
+  switch, build button with a spinner and the result (which replaces the preview until the month or the switch
+  changes, so a preview refetched after the build is never shown as the one before it), `InvoiceList`
+  (`latestOnly`: one row per plot with plot, number, version, due, issued, PDF; its earlier versions folded under
+  «Попередні версії (N)», loaded with `plotId` + `month` when expanded), «PDF для друку» with a `PAPER | ALL` switch.
+  Build and print need `INVOICES_ISSUE`; the list needs `CHARGES_VIEW`.
+- `PlotPage` → new `PlotTabs` (existing account, «Рахунки» = `PlotInvoices` with «Рахунок на сьогодні», which issues
+  and then downloads the returned version's PDF through `usePdfAction` with a spinner, and the latest version per month
+  with earlier versions folded; «Довідка» = `CertificateForm` gated by `CERTIFICATES_ISSUE`).
 - `pages/CertificatesPage.tsx`, route `documents/certificates`, nav item «Реєстр довідок» (`CHARGES_VIEW`; annul button
   with `ConfirmDialog` and a reason for `CERTIFICATES_ISSUE`).
 - `components/payments/ReceiptButton.tsx` on `PaymentSaved`, `PaymentGroupSaved` and `PaymentPage` (CASH only).
@@ -323,7 +336,8 @@ pipeline records it.
 - **Assumption:** «До сплати» does not subtract the prepayment (spec §3.1); with auto-allocation off a plot can show both
   a due amount and a prepayment.
 - **Assumption:** a plot goes into the PAPER print set if any current owner chose paper delivery.
-- **Assumption:** an on-request invoice always creates a new version (`INVOICE_REISSUED`, also for version 1).
+- **Changed in PR review (29.10.2026):** an on-request invoice creates a new version (`INVOICE_REISSUED`, also for
+  version 1) only when its content hash differs from the latest version's; otherwise the latest version is returned.
 - **Assumption:** `CHARGES_VIEW` is enough to see owners' names on an invoice (as on the plot account).
 - **Assumption:** the certificate register is visible with `CHARGES_VIEW`; issuing and annulling need
   `CERTIFICATES_ISSUE`.

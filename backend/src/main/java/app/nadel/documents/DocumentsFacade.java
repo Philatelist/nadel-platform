@@ -18,7 +18,8 @@ import java.util.UUID;
  * rules the endpoints apply are the caller's to keep: a member may receive only the latest version of an invoice of a
  * plot they own now ({@code GET /invoices/{id}}) and only a receipt of a payment group whose every plot they own now
  * ({@code GET /payments/{id}/receipt.pdf}). The receipt is drawn without the payer note (the endpoints show it only to
- * a viewer with {@code MEMBERS_VIEW}). Nothing here is audited except {@link #invoiceForToday}, which issues a version.
+ * a viewer with {@code MEMBERS_VIEW}). Nothing here is audited except {@link #invoiceForToday} when it issues a new
+ * version.
  */
 public interface DocumentsFacade {
 
@@ -29,10 +30,12 @@ public interface DocumentsFacade {
     Optional<byte[]> invoicePdf(UUID invoiceId);
 
     /**
-     * Issues the plot's invoice for the current month (Europe/Kyiv) as of now, as a new version («Рахунок на
-     * сьогодні»), and returns its id: the same build as {@code POST /plots/{id}/invoices}, with the same month lock,
-     * the same answers ({@code ApiProblemException} 404 {@code PLOT_NOT_FOUND}, 409 {@code REQUISITES_MISSING} and
-     * {@code PLOT_NOT_INVOICEABLE}) and the audit entry {@code INVOICE_REISSUED}, issued by the system (no member).
+     * Issues the plot's invoice for the current month (Europe/Kyiv) as of now («Рахунок на сьогодні») and returns its
+     * id: the same build as {@code POST /plots/{id}/invoices}, with the same month lock and the same answers
+     * ({@code ApiProblemException} 404 {@code PLOT_NOT_FOUND}, 409 {@code REQUISITES_MISSING} and
+     * {@code PLOT_NOT_INVOICEABLE}). A new version (with the audit entry {@code INVOICE_REISSUED}, issued by the
+     * system, no member) only when its content differs from the latest version of the month; otherwise the latest
+     * version's id, nothing written.
      */
     UUID invoiceForToday(UUID plotId);
 

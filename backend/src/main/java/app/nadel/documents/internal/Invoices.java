@@ -59,11 +59,15 @@ class Invoices {
             from invoice i
             where (:allMonths or i.month = :month)
               and (:allPlots or i.plot_id = :plotId)
+              and (not :latestOnly or i.version = (select max(j.version) from invoice j
+                                                   where j.plot_id = i.plot_id and j.month = i.month))
             order by i.month desc, i.issued_at desc, i.number, i.version desc, i.id
             limit :limit offset :offset
             """;
 
-    /** Every version of one month (optionally of one plot), for the natural order of the plots. */
+    /**
+     * Every version (or only the latest ones) of one month, optionally of one plot, for the natural order of the plots.
+     */
     private static final String MONTH = """
             select i.id, i.plot_id, i.snapshot -> 'plot' ->> 'number' as plot_number, i.month, i.number,
                    i.version, i.due, i.issued_at,
@@ -71,6 +75,8 @@ class Invoices {
             from invoice i
             where i.month = :month
               and (:allPlots or i.plot_id = :plotId)
+              and (not :latestOnly or i.version = (select max(j.version) from invoice j
+                                                   where j.plot_id = i.plot_id and j.month = i.month))
             """;
 
     /** The latest version of every month's invoice of the given plots ({@code GET /me/invoices}). */
@@ -88,6 +94,8 @@ class Invoices {
             from invoice i
             where (:allMonths or i.month = :month)
               and (:allPlots or i.plot_id = :plotId)
+              and (not :latestOnly or i.version = (select max(j.version) from invoice j
+                                                   where j.plot_id = i.plot_id and j.month = i.month))
             """;
 
     /** One row of the list. */
@@ -131,11 +139,13 @@ class Invoices {
      * version; with a month the number is compared in the natural order of the plot numbers
      * ({@code PlotCatalog.inNaturalOrder}: 9 before 10), so the versions of the month are read and paged here (at most
      * the month's plots times their versions).
+     *
+     * @param latestOnly only the latest version of each plot and month (the earlier ones are its version minus 1)
      */
     @Transactional(readOnly = true)
-    Page list(@Nullable YearMonth month, @Nullable UUID plotId, int page, int size) {
+    Page list(@Nullable YearMonth month, @Nullable UUID plotId, boolean latestOnly, int page, int size) {
         if (month != null) {
-            return monthPage(month, plotId, page, size);
+            return monthPage(month, plotId, latestOnly, page, size);
         }
         // a filter that is off is bound to a placeholder value (a null of unknown type is not valid SQL there)
         LocalDate first = month == null ? LocalDate.EPOCH : month.atDay(1);
@@ -145,6 +155,7 @@ class Invoices {
                 .setParameter("month", first)
                 .setParameter("allPlots", plotId == null)
                 .setParameter("plotId", plot)
+                .setParameter("latestOnly", latestOnly)
                 .setParameter("limit", size)
                 .setParameter("offset", (long) page * size)
                 .getResultList();
@@ -153,17 +164,19 @@ class Invoices {
                 .setParameter("month", first)
                 .setParameter("allPlots", plotId == null)
                 .setParameter("plotId", plot)
+                .setParameter("latestOnly", latestOnly)
                 .getSingleResult()).longValue();
         List<Row> items = rows.stream().map(Invoices::row).toList();
         return new Page(items, page, size, total);
     }
 
     /** The versions of one month: newest issue, plot in natural order, newest version, id. */
-    private Page monthPage(YearMonth month, @Nullable UUID plotId, int page, int size) {
+    private Page monthPage(YearMonth month, @Nullable UUID plotId, boolean latestOnly, int page, int size) {
         List<?> found = entityManager.createNativeQuery(MONTH)
                 .setParameter("month", month.atDay(1))
                 .setParameter("allPlots", plotId == null)
                 .setParameter("plotId", plotId == null ? NONE : plotId)
+                .setParameter("latestOnly", latestOnly)
                 .getResultList();
         List<Row> rows = new ArrayList<>(found.stream().map(Invoices::row).toList());
         Map<UUID, Integer> rank = new HashMap<>();

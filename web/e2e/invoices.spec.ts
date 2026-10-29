@@ -3,7 +3,9 @@
 // @regression
 //
 // Invoices, debt certificates and cash receipts in a browser (requirement 016 section 15): (1) the treasurer builds the
-// invoices of the demo closed month and downloads plot 9's PDF; (2) the chairman issues a certificate for plot 9,
+// invoices of the demo closed month and downloads plot 9's PDF; (1a) the treasurer clicks «Invoice for today» on plot 9
+// and gets its PDF, and a second click without a change returns the same version; (2) the chairman issues a
+// certificate for plot 9,
 // finds it in the register and annuls it; (3) the treasurer prints a cash receipt; (4) the member downloads their own
 // invoice. In the dev/demo stack the backend has already built the invoices of the demo closed month and issued the
 // certificate Д-{year}-1 at startup, so nothing here assumes an empty month or a certificate number: the build result
@@ -11,7 +13,7 @@
 // the register. A PDF is asserted by the download event, the `%PDF-` magic bytes and its size.
 import { readFile } from 'node:fs/promises';
 import { expect, test, type Browser, type Download, type Page } from '@playwright/test';
-import { messages } from '@nadel/shared';
+import { format, messages } from '@nadel/shared';
 import {
   api,
   archiveLeftovers,
@@ -75,7 +77,7 @@ test.describe('invoices, certificates and receipts', () => {
     await expect(panel).toBeVisible();
 
     // the preview counts: something to look at, and the demo month already has its invoices
-    const counts = panel.getByRole('list', { name: t.invoices.monthPanel.title }).first();
+    const counts = panel.getByRole('list', { name: t.invoices.monthPanel.previewTitle });
     await expect(counts).toContainText(/Plots with an owner: [1-9]\d*/);
     await expect(counts).toContainText(/Already invoiced .*: [1-9]\d*/);
 
@@ -96,6 +98,58 @@ test.describe('invoices, certificates and receipts', () => {
       row.getByRole('button', { name: t.invoices.download, exact: true }).click(),
     );
     await expectPdf(file, /^invoice_.*plot-9_v\d+\.pdf$/);
+  });
+
+  test('"Invoice for today" on plot 9 downloads its PDF, and a second click makes no new version', async ({
+    page,
+  }) => {
+    await loginAs(page, 'treasurer@demo.local');
+    const plotId = await plotIdByNumber(page, '9');
+    await page.goto(`/plots/${plotId}`);
+    await page.getByRole('tab', { name: t.plot.tabs.invoices, exact: true }).click();
+    const button = page.getByRole('button', { name: t.invoices.issueToday, exact: true });
+
+    /** Clicks «Invoice for today»; the issued row, the PDF response and the downloaded file. */
+    const issueToday = async () => {
+      const issued = page.waitForResponse(
+        (r) => r.request().method() === 'POST' && r.url().endsWith(`/api/v1/plots/${plotId}/invoices`),
+      );
+      const pdf = page.waitForResponse(
+        (r) => r.request().method() === 'GET' && /\/api\/v1\/invoices\/[0-9a-f-]{36}\/pdf$/.test(r.url()),
+      );
+      const file = await download(page, () => button.click());
+      const issuedResponse = await issued;
+      const pdfResponse = await pdf;
+      expect(pdfResponse.status()).toBe(200);
+      expect(pdfResponse.headers()['content-type']).toContain('application/pdf');
+      await expectPdf(file, /^invoice_\d{4}-\d{2}_plot-9_v\d+\.pdf$/);
+      const row = (await issuedResponse.json()) as { id: string; number: string; version: number };
+      expect(pdfResponse.url()).toContain(`/invoices/${row.id}/pdf`);
+      return { status: issuedResponse.status(), row, fileName: file.suggestedFilename() };
+    };
+
+    const first = await issueToday();
+    expect([200, 201]).toContain(first.status);
+    await expect(button).toBeEnabled();
+
+    // nothing was booked meanwhile: the same version comes back (200), nothing new in the list
+    const second = await issueToday();
+    expect(second.status).toBe(200);
+    expect(second.row.id).toBe(first.row.id);
+    expect(second.fileName).toBe(first.fileName);
+    // one row for the month (its latest version), the earlier versions folded
+    const list = page.getByRole('list', { name: t.invoices.plotTitle });
+    const monthRows = list.getByRole('listitem').filter({ hasText: first.row.number });
+    await expect(monthRows).toHaveCount(1);
+    await expect(monthRows).toContainText(format(t.invoices.version, { version: first.row.version }));
+    if (first.row.version > 1) {
+      await expect(
+        monthRows.getByRole('button', {
+          name: format(t.invoices.earlierVersions, { count: first.row.version - 1 }),
+          exact: true,
+        }),
+      ).toHaveAttribute('aria-expanded', 'false');
+    }
   });
 
   test('the treasurer opens the PDF for printing of the closed month', async ({ page }) => {

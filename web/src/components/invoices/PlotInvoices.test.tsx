@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ApiError, type InvoiceRow, type Permission, type RequisiteField } from '@nadel/api-client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -11,8 +11,8 @@ let permissions: Permission[];
 let missing: RequisiteField[];
 const getInvoicePdf = vi.fn();
 const downloadBlob = vi.fn();
-const mutate = vi.fn();
-let issueOptions: { mutation: { onError: (e: unknown) => void } };
+const issuePlotInvoice = vi.fn();
+const listInvoices = vi.fn();
 
 vi.mock('../../me', () => ({ useCan: (p: Permission) => permissions.includes(p) }));
 vi.mock('../../downloadBlob', () => ({ downloadBlob: (...args: unknown[]) => downloadBlob(...args) }));
@@ -29,16 +29,16 @@ const row: InvoiceRow = {
   latest: true,
 };
 const ok = (data: unknown) => ({ data, error: null, isPending: false, isError: false, refetch: vi.fn() });
+const pageOf = (items: InvoiceRow[]) =>
+  ok({ items, page: 0, size: 20, totalItems: items.length, totalPages: 1 });
+const version = (n: number, latest: boolean): InvoiceRow => ({ ...row, id: `inv-v${n}`, version: n, latest });
 
 vi.mock('@nadel/api-client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@nadel/api-client')>()),
   getInvoicePdf: (...args: unknown[]) => getInvoicePdf(...args),
-  useListInvoices: () => ok({ items: [row], page: 0, size: 20, totalItems: 1, totalPages: 1 }),
+  issuePlotInvoice: (...args: unknown[]) => issuePlotInvoice(...args),
+  useListInvoices: (...args: unknown[]) => listInvoices(...args),
   useGetInvoiceReadiness: () => ok({ missing }),
-  useIssuePlotInvoice: (o: typeof issueOptions) => {
-    issueOptions = o;
-    return { mutate, isPending: false };
-  },
 }));
 
 function renderList() {
@@ -55,7 +55,14 @@ describe('PlotInvoices', () => {
     missing = [];
     getInvoicePdf.mockReset();
     downloadBlob.mockReset();
-    mutate.mockReset();
+    issuePlotInvoice.mockReset();
+    listInvoices.mockReset();
+    listInvoices.mockReturnValue(pageOf([row]));
+  });
+
+  it('lists only the latest version of each month', () => {
+    renderList();
+    expect(listInvoices).toHaveBeenCalledWith({ plotId: 'p1', latestOnly: true, page: 0, size: 20 });
   });
 
   it('downloads the PDF under invoice_{month}_plot-{n}_v{N}.pdf', async () => {
@@ -68,10 +75,23 @@ describe('PlotInvoices', () => {
     expect(screen.getByText('(version 2)')).toBeTruthy();
   });
 
-  it('offers "Invoice for today" with INVOICES_ISSUE only', async () => {
+  it('"Invoice for today" issues the invoice and downloads the PDF of the returned version, with a spinner', async () => {
+    let issued: (r: InvoiceRow) => void = () => undefined;
+    issuePlotInvoice.mockReturnValue(new Promise<InvoiceRow>((resolve) => (issued = resolve)));
+    const blob = new Blob(['%PDF']);
+    getInvoicePdf.mockResolvedValue(blob);
     renderList();
+
     await userEvent.click(screen.getByRole('button', { name: 'Invoice for today' }));
-    expect(mutate).toHaveBeenCalledWith({ id: 'p1', data: {} });
+    expect(issuePlotInvoice).toHaveBeenCalledWith('p1', {});
+    const busy = screen.getByRole('button', { name: 'Preparing the invoice…' });
+    expect((busy as HTMLButtonElement).disabled).toBe(true);
+    expect(within(busy).getByRole('status')).toBeTruthy();
+
+    issued({ ...row, id: 'inv3', version: 3 });
+    await waitFor(() => expect(downloadBlob).toHaveBeenCalledWith(blob, 'invoice_2026-10_plot-9_v3.pdf'));
+    expect(getInvoicePdf).toHaveBeenCalledWith('inv3');
+    expect(await screen.findByRole('button', { name: 'Invoice for today' })).toBeTruthy();
   });
 
   it('hides "Invoice for today" without INVOICES_ISSUE', () => {
@@ -81,9 +101,49 @@ describe('PlotInvoices', () => {
   });
 
   it('shows the requisites warning when the server answers REQUISITES_MISSING', async () => {
+    issuePlotInvoice.mockRejectedValue(
+      new ApiError(409, { code: 'REQUISITES_MISSING', missing: ['EDRPOU'] }),
+    );
     renderList();
-    issueOptions.mutation.onError(new ApiError(409, { code: 'REQUISITES_MISSING', missing: ['EDRPOU'] }));
+    await userEvent.click(screen.getByRole('button', { name: 'Invoice for today' }));
     expect(await screen.findByText(/contact the platform operator/)).toBeTruthy();
+    expect(getInvoicePdf).not.toHaveBeenCalled();
+    expect(downloadBlob).not.toHaveBeenCalled();
+  });
+
+  it('keeps the earlier versions collapsed and loads them when expanded', async () => {
+    listInvoices.mockImplementation((params: { latestOnly?: boolean }) =>
+      params.latestOnly === true
+        ? pageOf([version(3, true)])
+        : pageOf([version(3, true), version(2, false), version(1, false)]),
+    );
+    renderList();
+
+    const toggle = screen.getByRole('button', { name: 'Earlier versions (2)' });
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByText('(version 2)')).toBeNull();
+    expect(listInvoices).toHaveBeenCalledWith(
+      { plotId: 'p1', month: '2026-10', page: 0, size: 100 },
+      { query: { enabled: false } },
+    );
+
+    await userEvent.click(toggle);
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(listInvoices).toHaveBeenLastCalledWith(
+      { plotId: 'p1', month: '2026-10', page: 0, size: 100 },
+      { query: { enabled: true } },
+    );
+    const earlier = screen.getByRole('list', { name: 'Earlier versions (2)' });
+    expect(within(earlier).getByText('(version 2)')).toBeTruthy();
+    expect(within(earlier).getByText('(version 1)')).toBeTruthy();
+    expect(within(earlier).queryByText('(version 3)')).toBeNull();
+    expect(within(earlier).getAllByRole('button', { name: 'Download PDF' })).toHaveLength(2);
+  });
+
+  it('shows no earlier versions for a version 1', () => {
+    listInvoices.mockReturnValue(pageOf([version(1, true)]));
+    renderList();
+    expect(screen.queryByRole('button', { name: /Earlier versions/ })).toBeNull();
   });
 
   it('builds the file name from month, plot and version', () => {

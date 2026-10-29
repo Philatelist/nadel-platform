@@ -63,7 +63,7 @@ class InvoiceSnapshotTests extends DocumentsTestSupport {
         owner().update("update ownership set valid_to = current_date - 1 where plot_id = ?", plot);
         owner().update("insert into ownership (id, tenant_id, plot_id, member_id, share_numerator, share_denominator, "
                 + "valid_from) values (?, ?, ?, ?, 1, 1, current_date)", UUID.randomUUID(), tenant, plot, buyer);
-        UUID second = idOf(issued(plot, null));
+        UUID second = idOf(issuedNewVersion(plot, null));
 
         assertThat(snapshot(first).get("owners").get(0).get("name").asString()).isEqualTo(MEMBER_NAME);
         assertThat(snapshot(second).get("owners").get(0).get("name").asString())
@@ -89,11 +89,12 @@ class InvoiceSnapshotTests extends DocumentsTestSupport {
     void theContentHashIsTheSameForTheSameContentAndChangesWithAFigure() throws Exception {
         UUID plot = ownedPlot();
         UUID first = idOf(issued(plot, null));
-        UUID second = idOf(issued(plot, null));
+        UUID second = idOf(issuedUnchanged(plot, null)); // a later issue time alone is the same content
         pay(plot, "CASH", "25.00", null);
-        UUID third = idOf(issued(plot, null));
+        UUID third = idOf(issuedNewVersion(plot, null));
 
-        assertThat(contentHash(first)).hasSize(32).isEqualTo(contentHash(second));
+        assertThat(second).isEqualTo(first);
+        assertThat(contentHash(first)).hasSize(32);
         assertThat(contentHash(third)).isNotEqualTo(contentHash(first));
     }
 }

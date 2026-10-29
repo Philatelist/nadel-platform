@@ -52,7 +52,8 @@ class DocumentsFacadeTests extends DocumentsTestSupport {
     void theLatestInvoiceOfAPlotAndMonthItsPdfAndItsQrLink() throws Exception {
         String month = currentMonth();
         issued(plot, month);
-        UUID latest = idOf(issued(plot, month));
+        pay(plot, "CASH", "10.00", null);
+        UUID latest = idOf(issuedNewVersion(plot, month));
 
         assertThat(asJob(() -> facade.latestInvoice(plot, YearMonth.parse(month)))).contains(latest);
         assertThat(asJob(() -> facade.latestInvoice(plot, YearMonth.parse(month).minusMonths(1)))).isEmpty();
@@ -78,8 +79,10 @@ class DocumentsFacadeTests extends DocumentsTestSupport {
     }
 
     @Test
-    void theSystemIssuesTheInvoiceForTodayAsANewVersion() throws Exception {
-        issued(plot, currentMonth());
+    void theSystemIssuesTheInvoiceForTodayAsANewVersionOnlyWhenSomethingChanged() throws Exception {
+        UUID first = idOf(issued(plot, currentMonth()));
+        assertThat(asJob(() -> facade.invoiceForToday(plot))).isEqualTo(first);
+        pay(plot, "CASH", "10.00", null);
 
         UUID today = asJob(() -> facade.invoiceForToday(plot));
 

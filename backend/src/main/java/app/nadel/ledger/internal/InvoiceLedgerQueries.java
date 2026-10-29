@@ -35,7 +35,8 @@ import tools.jackson.databind.json.JsonMapper;
  * the caller's transaction and under RLS: the billing months (month, status, closing time), the plots' charges booked
  * in or before the month (with the billing month and the source of the charge a correction corrects, and the stored
  * calculation as text), and the plots' payments and allocations together ({@code UNION ALL}, with the billing months
- * of each allocation's payment and charge). Only rows created at or before {@code asOf} are read. The caller passes a
+ * of each allocation's payment and charge, and each payment's receipt number and bank reference for the payment rows
+ * booked in the month). Only rows created at or before {@code asOf} are read. The caller passes a
  * bounded number of plots (a chunk of a month build, or one plot); the plots go 500 per {@code IN} list.
  */
 @Component
@@ -74,14 +75,15 @@ class InvoiceLedgerQueries {
     private static final String MONEY = """
             select 'P' as row_kind, p.id, p.plot_id, cast(null as uuid) as charge_type_id, p.amount,
                    p.billing_month_id as payment_month_id, cast(null as uuid) as charge_month_id,
-                   p.received_on, p.reverses_payment_id, p.created_at
+                   p.received_on, p.reverses_payment_id, p.created_at, p.receipt_number, p.bank_reference
             from payment p
             where p.plot_id in (:plotIds)
               and p.created_at <= :asOf
             union all
             select 'A' as row_kind, a.id, a.plot_id, c.charge_type_id, a.amount,
                    p.billing_month_id as payment_month_id, c.billing_month_id as charge_month_id,
-                   cast(null as date) as received_on, cast(null as uuid) as reverses_payment_id, a.created_at
+                   cast(null as date) as received_on, cast(null as uuid) as reverses_payment_id, a.created_at,
+                   cast(null as bigint) as receipt_number, cast(null as text) as bank_reference
             from allocation a
             join payment p on p.id = a.payment_id
             join charge c on c.id = a.charge_id
@@ -158,6 +160,8 @@ class InvoiceLedgerQueries {
                 if ("P".equals(String.valueOf(v[0]))) {
                     rows.payments.add(new PaymentEntry((UUID) v[1], (UUID) v[8], paymentMonth,
                             Objects.requireNonNull(date(v[7])), amount, createdAt));
+                    Long receipt = v[10] == null ? null : ((Number) v[10]).longValue();
+                    rows.references.put((UUID) v[1], new Reference(receipt, (String) v[11]));
                 } else {
                     rows.allocations.add(new AllocationEntry((UUID) v[3], paymentMonth, monthById.get((UUID) v[6]),
                             amount, createdAt));
@@ -170,9 +174,23 @@ class InvoiceLedgerQueries {
             MonthMovements.Result figures = MonthMovements.of(month, asOf, closed, rows.charges, rows.allocations,
                     rows.payments);
             result.put(plotId, new InvoiceLedger(plotId, month, monthStatus, monthClosedAt, figures.types(),
-                    rows.lines, figures.prepaymentAtEnd(), figures.receivedAfter()));
+                    rows.lines, figures.prepaymentAtEnd(), figures.receivedAfter(), monthPayments(month, asOf, rows)));
         });
         return result;
+    }
+
+    /**
+     * The payment rows booked in the month ({@link MonthMovements#bookedIn}) with their receipt number or bank
+     * reference; a reversal has neither of its own, so it carries those of the payment it reverses (a payment of the
+     * same plot, created before it, so read with it).
+     */
+    private static List<InvoiceLedger.MonthPayment> monthPayments(YearMonth month, Instant asOf, Rows rows) {
+        return MonthMovements.bookedIn(month, asOf, rows.payments).stream().map(payment -> {
+            Reference reference = rows.references.get(payment.reverses() == null ? payment.id() : payment.reverses());
+            return new InvoiceLedger.MonthPayment(payment.id(), payment.reverses(), payment.receivedOn(),
+                    payment.amount(), reference == null ? null : reference.receiptNumber(),
+                    reference == null ? null : reference.bankReference());
+        }).toList();
     }
 
     /** A charge booked in the month with what its stored calculation says. */
@@ -238,8 +256,13 @@ class InvoiceLedgerQueries {
         return Money.of((BigDecimal) value);
     }
 
+    /** The receipt number and the bank reference of a payment row. */
+    private record Reference(@Nullable Long receiptNumber, @Nullable String bankReference) {
+    }
+
     /** The rows of one plot as they come from the queries. */
     private static final class Rows {
+        private final Map<UUID, Reference> references = new HashMap<>();
         private final List<ChargeEntry> charges = new ArrayList<>();
         private final List<AllocationEntry> allocations = new ArrayList<>();
         private final List<PaymentEntry> payments = new ArrayList<>();

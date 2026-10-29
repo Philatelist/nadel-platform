@@ -273,6 +273,71 @@ class PdfDocumentTests {
     }
 
     @Test
+    void measuringDrawsNothingAndKeepTogetherMovesABlockThatDoesNotFitToTheNextPage() throws Exception {
+        byte[] pdf;
+        try (PdfDocument document = PdfDocument.create(PageSize.A5, IDENTITY, TIME)) {
+            Runnable block = () -> {
+                document.text(TextBlock.strong("Разом", 9, Align.LEFT));
+                document.text(TextBlock.plain("До сплати 70,00 ₴", 9));
+            };
+            float before = document.remaining();
+            float height = document.measure(block);
+            assertThat(height).isGreaterThan(0);
+            assertThat(document.remaining()).isEqualTo(before);
+            assertThat(document.pages()).isEqualTo(1);
+            while (document.remaining() >= height) {
+                document.space(10);
+            }
+            document.keepTogether(block);
+            assertThat(document.pages()).isEqualTo(2);
+            pdf = document.toBytes();
+        }
+
+        assertThat(page(pdf, 1)).doesNotContain("Разом", "До сплати");
+        assertThat(page(pdf, 2)).contains("Разом", "До сплати 70,00 ₴");
+    }
+
+    @Test
+    void twoColumnsSideBySideStartAtTheSameTopAndAPageBreakGetsTheContinuationHeader() throws Exception {
+        byte[] pdf;
+        try (PdfDocument document = PdfDocument.create(PageSize.A5, IDENTITY, TIME)) {
+            float width = document.contentWidth();
+            float[] tops = new float[2];
+            float top = document.remaining();
+            document.beside(width / 2, 10, () -> {
+                tops[0] = document.remaining();
+                assertThat(document.contentWidth()).isEqualTo(width / 2);
+                document.text(TextBlock.plain("Ліва колонка", 9));
+                document.text(TextBlock.plain("ще рядок", 9));
+            }, () -> {
+                tops[1] = document.remaining();
+                assertThat(document.contentWidth()).isEqualTo(width / 2 - 10);
+                document.text(TextBlock.plain("Права колонка", 9));
+            });
+            assertThat(tops).containsExactly(top, top);
+            assertThat(document.contentWidth()).isEqualTo(width);
+            assertThat(document.remaining()).as("below the taller column")
+                    .isLessThan(top - 2 * 9 * 1.3f);
+            document.continuation(() -> document.text(TextBlock.strong("Продовження", 9, Align.LEFT)));
+            fillPage(document);
+            document.text(TextBlock.plain("на другій сторінці", 9));
+            document.continuation(null);
+            document.newPage();
+            document.text(TextBlock.plain("третя без заголовка", 9));
+            pdf = document.toBytes();
+        }
+
+        assertThat(page(pdf, 1)).contains("Ліва колонка", "Права колонка").doesNotContain("Продовження");
+        assertThat(page(pdf, 2).strip()).startsWith("Продовження");
+        assertThat(page(pdf, 3)).contains("третя без заголовка").doesNotContain("Продовження");
+        assertThatThrownBy(() -> {
+            try (PdfDocument document = PdfDocument.create(PageSize.A5, IDENTITY, TIME)) {
+                document.beside(document.contentWidth(), 0, () -> { }, () -> { });
+            }
+        }).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void aDrawingIsAboveZeroAndAtMostAPageHighAndItsFailureIsUnchecked() {
         try (PdfDocument document = PdfDocument.create(PageSize.A4, IDENTITY, TIME)) {
             PdfDocument.Drawing nothing = (content, left, bottom, width, height) -> {

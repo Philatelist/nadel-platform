@@ -19,6 +19,7 @@ import { billingMonthLabel } from '../charges/billingMonth';
 import { Pagination } from '../Pagination';
 import { QueryBoundary } from '../QueryBoundary';
 import { Button, Notice, Panel } from '../ui';
+import { BusyLabel } from './BusyLabel';
 import { InvoiceItem, missingRequisites } from './PlotInvoices';
 import { RequisitesWarning } from './RequisitesWarning';
 
@@ -32,7 +33,19 @@ export function monthPrintFileName(month: string, scope: InvoicePrintScope): str
 const previewKey = (month: string, includeNothingDue: boolean) =>
   ['monthInvoicesPreview', month, includeNothingDue] as const;
 
-/** Invoices of one billing month: preview counts, the build, the PDF for printing and the list. */
+/** A finished build with the month and switch it was made for. */
+interface BuildResult {
+  month: string;
+  includeNothingDue: boolean;
+  counts: InvoiceBuild;
+}
+
+/**
+ * Invoices of one billing month: the preview (what a build would do, in the categories of the result), the build, the
+ * PDF for printing and the list (the latest version per plot, its earlier versions collapsed). After a build its
+ * result takes the place of the preview until the month or the switch changes, so a preview counted after the build
+ * is never shown as if it were the one before it.
+ */
 export function MonthInvoicesPanel({ month }: { month: string }) {
   const t = useT();
   const m = t.invoices.monthPanel;
@@ -41,7 +54,11 @@ export function MonthInvoicesPanel({ month }: { month: string }) {
   const [includeNothingDue, setIncludeNothingDue] = useState(false);
   const [scope, setScope] = useState<InvoicePrintScope>(InvoicePrintScope.PAPER);
   const [page, setPage] = useState(0);
-  const [result, setResult] = useState<InvoiceBuild>();
+  const [built, setBuilt] = useState<BuildResult>();
+  const result =
+    built !== undefined && built.month === month && built.includeNothingDue === includeNothingDue
+      ? built.counts
+      : undefined;
   const readiness = useGetInvoiceReadiness({ query: { enabled: canIssue } });
   const preview = useQuery({
     queryKey: previewKey(month, includeNothingDue),
@@ -51,17 +68,17 @@ export function MonthInvoicesPanel({ month }: { month: string }) {
   const build = useMutation({
     mutationFn: () => buildMonthInvoices(month, { preview: false }, { includeNothingDue }),
     onSuccess: async (data) => {
-      setResult(data);
+      setBuilt({ month, includeNothingDue, counts: data });
       setPage(0);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: getListInvoicesQueryKey() }),
         queryClient.invalidateQueries({ queryKey: ['monthInvoicesPreview', month] }),
       ]);
     },
-    onError: () => setResult(undefined),
+    onError: () => setBuilt(undefined),
   });
   const print = usePdfAction();
-  const invoices = useListInvoices({ month, page, size: PAGE_SIZE });
+  const invoices = useListInvoices({ month, latestOnly: true, page, size: PAGE_SIZE });
   const missingFromError = missingRequisites(build.error);
   const missing =
     (readiness.data?.missing ?? []).length > 0 ? (readiness.data?.missing ?? []) : missingFromError;
@@ -80,22 +97,16 @@ export function MonthInvoicesPanel({ month }: { month: string }) {
                 checked={includeNothingDue}
                 onChange={(e) => {
                   setIncludeNothingDue(e.target.checked);
-                  setResult(undefined);
+                  setBuilt(undefined);
                 }}
               />
               {m.includeNothingDue}
             </label>
-            <PreviewCounts query={preview} />
+            {result === undefined && <PreviewCounts query={preview} />}
             <div className="flex flex-wrap items-center gap-3">
               <Button disabled={build.isPending} onClick={() => build.mutate()}>
                 {build.isPending ? (
-                  <span role="status" className="inline-flex items-center gap-2">
-                    <span
-                      aria-hidden="true"
-                      className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent"
-                    />
-                    {m.building}
-                  </span>
+                  <BusyLabel label={m.building} />
                 ) : (
                   format(m.build, { month: billingMonthLabel(month, t) })
                 )}
@@ -156,7 +167,12 @@ export function MonthInvoicesPanel({ month }: { month: string }) {
             <>
               <ul aria-label={m.listTitle} className="divide-y divide-line-subtle">
                 {data.items.map((row) => (
-                  <InvoiceItem key={row.id} row={row} plotLabel={format(m.plot, { plot: row.plotNumber })} />
+                  <InvoiceItem
+                    key={row.id}
+                    row={row}
+                    plotLabel={format(m.plot, { plot: row.plotNumber })}
+                    withEarlier
+                  />
                 ))}
               </ul>
               <Pagination page={data.page} totalPages={data.totalPages} onPageChange={setPage} />
@@ -181,11 +197,17 @@ function PreviewCounts({ query }: { query: { data?: InvoiceBuild; isPending: boo
   const d = query.data;
   if (d === undefined) return <p className="text-ink-muted">{m.previewLoading}</p>;
   return (
-    <ul aria-label={m.title} className="flex flex-col gap-0.5">
+    <ul aria-label={m.previewTitle} className="flex flex-col gap-0.5">
       <li>{format(m.invoiceable, { count: d.invoiceable })}</li>
-      <li>{format(m.toBuild, { count: d.toBuild ?? 0 })}</li>
-      <li>{format(m.nothingDue, { count: d.nothingDue ?? 0 })}</li>
       <li>{format(m.existing, { count: d.existing ?? 0 })}</li>
+      <li>
+        {format(m.preview, {
+          built: d.built ?? 0,
+          newVersions: d.newVersions ?? 0,
+          unchanged: d.unchanged ?? 0,
+          skipped: d.skipped ?? 0,
+        })}
+      </li>
     </ul>
   );
 }

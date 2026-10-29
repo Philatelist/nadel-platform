@@ -32,6 +32,8 @@ import org.jspecify.annotations.Nullable;
  * @param treasurers    the names of the active treasurers
  * @param types         the rows per charge type, in the charge type order
  * @param lines         the charges booked in the month
+ * @param payments      the payment rows booked in the month (a reversal negative), in the order received; empty in a
+ *                      snapshot stored before they were kept
  * @param receivedAfter the payments booked after the month and received before the issue
  * @param totals        the totals
  * @param qr            the payment QR code; null when nothing is due
@@ -39,7 +41,8 @@ import org.jspecify.annotations.Nullable;
 record InvoiceDocument(UUID id, int version, String number, YearMonth month, MonthStatus monthStatus, Instant asOf,
         Instant issuedAt, LocalDate issuedOn, Cooperative cooperative, Plot plot, List<Owner> owners,
         List<String> chairmen, List<String> treasurers, List<TypeRow> types, List<InvoiceLedger.Line> lines,
-        List<InvoiceLedger.LaterPayment> receivedAfter, Totals totals, @Nullable Qr qr) {
+        List<InvoiceLedger.MonthPayment> payments, List<InvoiceLedger.LaterPayment> receivedAfter, Totals totals,
+        @Nullable Qr qr) {
 
     InvoiceDocument {
         Objects.requireNonNull(id, "id");
@@ -59,6 +62,7 @@ record InvoiceDocument(UUID id, int version, String number, YearMonth month, Mon
         treasurers = List.copyOf(treasurers);
         types = List.copyOf(types);
         lines = List.copyOf(lines);
+        payments = List.copyOf(payments);
         receivedAfter = List.copyOf(receivedAfter);
         Objects.requireNonNull(totals, "totals");
     }

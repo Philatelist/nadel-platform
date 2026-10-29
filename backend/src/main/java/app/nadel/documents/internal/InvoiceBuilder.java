@@ -29,13 +29,13 @@ import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
+import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.IntConsumer;
 import java.util.stream.Collectors;
@@ -62,7 +62,10 @@ import org.springframework.transaction.support.TransactionTemplate;
  * every row committed before the snapshot counts whichever clock wrote its {@code created_at} (they may drift apart by
  * milliseconds); only ledger rows created at or before it count.
  * <p>
- * <b>On request</b> (always a new version, also when nothing changed; audit {@code INVOICE_REISSUED}): 400
+ * <b>On request</b>: the invoice as of now is compared with the latest version of the plot and month by its content
+ * hash ({@link InvoiceSnapshots#contentHash}, which leaves out the version, the dates and the QR code), as the month
+ * build compares it: the same hash returns the latest version as it is (nothing written, no audit entry); otherwise
+ * the next version is stored (version 1 when the month has none) with the audit entry {@code INVOICE_REISSUED}. 400
  * {@code VALIDATION_FAILED} on {@code month} for a month after the current one (Kyiv); 404 {@code PLOT_NOT_FOUND} for
  * an unknown plot or one of another cooperative; 409 {@code REQUISITES_MISSING} with the missing {@code IBAN} /
  * {@code EDRPOU}; 409 {@code PLOT_NOT_INVOICEABLE} for common land, an archived plot or a plot without a current
@@ -81,7 +84,9 @@ import org.springframework.transaction.support.TransactionTemplate;
  * flushed and cleared after each chunk. One {@code INVOICES_ISSUED} audit entry with the counts. The build takes the
  * month's lock without waiting ({@code pg_try_advisory_xact_lock}): while another build of the month, or an on-request
  * invoice of it, holds the lock it is 409 {@code INVOICE_BUILD_RUNNING} and nothing is built; the on-request invoice
- * (short) waits for the lock instead. The preview takes no lock and writes nothing.
+ * (short) waits for the lock instead. The preview takes no lock and writes nothing: it walks the plots exactly as the
+ * build does and makes the same decision per plot (built, new version, unchanged, skipped), so its counts are what a
+ * build started next does unless the ledger changes in between.
  */
 @Service
 class InvoiceBuilder {
@@ -95,9 +100,10 @@ class InvoiceBuilder {
     static final int CHUNK = 50;
 
     /**
-     * The counts of a month build: always {@code invoiceable}; a preview has {@code toBuild}, {@code nothingDue} and
-     * {@code existing} (the other counts 0), a build {@code built}, {@code newVersions}, {@code unchanged} and
-     * {@code skipped}.
+     * The counts of a month build: {@code invoiceable}, {@code built}, {@code newVersions}, {@code unchanged} and
+     * {@code skipped} (what a build did, or what a preview predicts it would do); a preview also has
+     * {@code toBuild} ({@code built + newVersions}), {@code nothingDue} (the plots without an invoice of the month
+     * with nothing due) and {@code existing} (the plots with an invoice of the month), a build has them 0.
      */
     record MonthBuild(boolean preview, int invoiceable, int toBuild, int nothingDue, int existing, int built,
             int newVersions, int unchanged, int skipped) {
@@ -111,9 +117,49 @@ class InvoiceBuilder {
     private record Latest(int version, byte[] contentHash) {
     }
 
-    /** The invoice version just stored. */
+    /** What a month build does with one plot. */
+    private enum Outcome {
+        /** Version 1: the month has no invoice of the plot yet. */
+        BUILT,
+        /** The next version: the content hash differs from the latest version's. */
+        NEW_VERSION,
+        /** Nothing written: the latest version has the same content hash. */
+        UNCHANGED,
+        /** Nothing written: no invoice of the month and nothing due, without {@code includeNothingDue}. */
+        SKIPPED
+    }
+
+    /** The decision of a month build for one plot, with the invoice it stores when it writes one. */
+    private record Decision(Outcome outcome, boolean nothingDue, InvoiceDocument document) {
+    }
+
+    /** The counts of a month build or its preview, plot by plot. */
+    private static final class Tally {
+        private int built;
+        private int newVersions;
+        private int unchanged;
+        private int skipped;
+        private int nothingDue;
+
+        void count(Decision decision) {
+            switch (decision.outcome()) {
+                case BUILT -> built++;
+                case NEW_VERSION -> newVersions++;
+                case UNCHANGED -> unchanged++;
+                case SKIPPED -> skipped++;
+            }
+            if (decision.nothingDue()) {
+                nothingDue++;
+            }
+        }
+    }
+
+    /**
+     * The invoice version of an on-request issue: the new version ({@code created}), or the latest one when nothing
+     * changed.
+     */
     record Issued(UUID id, UUID plotId, String plotNumber, YearMonth month, String number, int version, Money due,
-            Instant issuedAt) {
+            Instant issuedAt, boolean created) {
     }
 
     /**
@@ -187,34 +233,27 @@ class InvoiceBuilder {
         UUID tenantId = Objects.requireNonNull(issuer.tenantId(), "tenantId");
         months.requireListed(month, true);
         if (preview) {
-            return Objects.requireNonNull(repeatableRead.execute(status -> preview(month, includeNothingDue)));
+            return Objects.requireNonNull(repeatableRead.execute(status -> preview(tenantId, month,
+                    includeNothingDue)));
         }
         tryLockMonth(tenantId, month);
         return Objects.requireNonNull(repeatableRead.execute(status -> build(tenantId, month, includeNothingDue,
                 issuer)));
     }
 
-    /** The preview inside the {@code REPEATABLE READ} transaction: the counts, nothing written. */
-    private MonthBuild preview(YearMonth month, boolean includeNothingDue) {
+    /**
+     * The preview inside the {@code REPEATABLE READ} transaction: the same decisions as {@link #build}, counted and
+     * nothing written.
+     */
+    private MonthBuild preview(UUID tenantId, YearMonth month, boolean includeNothingDue) {
         Context context = context();
         Invoiceable invoiceable = invoiceable();
-        Set<UUID> invoiced = new HashSet<>(invoices.plotsInvoicedIn(month.atDay(1)));
-        List<UUID> fresh = invoiceable.order().stream().filter(plotId -> !invoiced.contains(plotId)).toList();
-        int existing = invoiceable.order().size() - fresh.size();
         Instant asOf = asOf();
-        int nothingDue = 0;
-        for (int from = 0; from < fresh.size(); from += CHUNK) {
-            List<UUID> chunk = fresh.subList(from, Math.min(fresh.size(), from + CHUNK));
-            for (InvoiceLedger plotLedger : ledger.invoiceLedgers(chunk, month, asOf).values()) {
-                if (!InvoiceCalculator.of(plotLedger, context.types()).payable()) {
-                    nothingDue++;
-                }
-            }
-            entityManager.clear();
-        }
-        int total = invoiceable.order().size();
-        return new MonthBuild(true, total, includeNothingDue ? total : total - nothingDue, nothingDue, existing, 0,
-                0, 0, 0);
+        Tally tally = new Tally();
+        decide(tenantId, month, includeNothingDue, context, invoiceable, asOf, tally::count,
+                index -> entityManager.clear());
+        return new MonthBuild(true, invoiceable.order().size(), tally.built + tally.newVersions, tally.nothingDue,
+                tally.newVersions + tally.unchanged, tally.built, tally.newVersions, tally.unchanged, tally.skipped);
     }
 
     /** The build inside the {@code REPEATABLE READ} transaction, chunk by chunk. */
@@ -222,11 +261,34 @@ class InvoiceBuilder {
         Context context = context();
         Invoiceable invoiceable = invoiceable();
         Instant asOf = asOf();
+        Tally tally = new Tally();
+        decide(tenantId, month, includeNothingDue, context, invoiceable, asOf, decision -> {
+            tally.count(decision);
+            if (decision.outcome() == Outcome.BUILT || decision.outcome() == Outcome.NEW_VERSION) {
+                InvoiceDocument document = decision.document();
+                InvoiceSnapshots.Sealed sealed = snapshots.seal(tenantId, document);
+                entityManager.persist(InvoiceRecord.issue(document.id(), tenantId, document, sealed,
+                        issuer.memberId()));
+            }
+        }, index -> {
+            entityManager.flush();
+            entityManager.clear();
+            afterChunk.accept(index);
+        });
+        audit.issued(issuer, month, tally.built, tally.newVersions, tally.unchanged, tally.skipped, asOf);
+        return new MonthBuild(false, invoiceable.order().size(), 0, 0, 0, tally.built, tally.newVersions,
+                tally.unchanged, tally.skipped);
+    }
+
+    /**
+     * Walks the invoiceable plots in chunks of {@value #CHUNK} and decides for each what the month build does: no
+     * invoice of the month and nothing due without {@code includeNothingDue} → skipped; no invoice → version 1; the
+     * same content hash as the latest version → unchanged; otherwise the next version. {@code afterEachChunk} is
+     * called with the chunk's index once its plots are decided.
+     */
+    private void decide(UUID tenantId, YearMonth month, boolean includeNothingDue, Context context,
+            Invoiceable invoiceable, Instant asOf, Consumer<Decision> onPlot, IntConsumer afterEachChunk) {
         LocalDate first = month.atDay(1);
-        int built = 0;
-        int newVersions = 0;
-        int unchanged = 0;
-        int skipped = 0;
         List<UUID> order = invoiceable.order();
         for (int from = 0, index = 0; from < order.size(); from += CHUNK, index++) {
             List<UUID> chunk = order.subList(from, Math.min(order.size(), from + CHUNK));
@@ -236,33 +298,24 @@ class InvoiceBuilder {
                     .flatMap(plotId -> invoiceable.owners().get(plotId).stream()).toList());
             for (UUID plotId : chunk) {
                 Latest previous = latest.get(plotId);
-                List<OwnerShare> owners = invoiceable.owners().get(plotId);
                 InvoiceDocument document = document(UUID.randomUUID(), previous == null ? 1 : previous.version() + 1,
-                        invoiceable.facts().get(plotId), owners, names, ledgers.get(plotId), context, asOf);
-                if (previous == null && !includeNothingDue && document.totals().due().signum() <= 0) {
-                    skipped++;
-                    continue;
-                }
-                if (previous != null
-                        && Arrays.equals(previous.contentHash(), snapshots.contentHash(tenantId, document))) {
-                    unchanged++;
-                    continue;
-                }
-                InvoiceSnapshots.Sealed sealed = snapshots.seal(tenantId, document);
-                entityManager.persist(InvoiceRecord.issue(document.id(), tenantId, document, sealed,
-                        issuer.memberId()));
-                if (previous == null) {
-                    built++;
+                        invoiceable.facts().get(plotId), invoiceable.owners().get(plotId), names,
+                        ledgers.get(plotId), context, asOf);
+                boolean nothingDue = previous == null && document.totals().due().signum() <= 0;
+                Outcome outcome;
+                if (nothingDue && !includeNothingDue) {
+                    outcome = Outcome.SKIPPED;
+                } else if (previous == null) {
+                    outcome = Outcome.BUILT;
+                } else if (Arrays.equals(previous.contentHash(), snapshots.contentHash(tenantId, document))) {
+                    outcome = Outcome.UNCHANGED;
                 } else {
-                    newVersions++;
+                    outcome = Outcome.NEW_VERSION;
                 }
+                onPlot.accept(new Decision(outcome, nothingDue, document));
             }
-            entityManager.flush();
-            entityManager.clear();
-            afterChunk.accept(index);
+            afterEachChunk.accept(index);
         }
-        audit.issued(issuer, month, built, newVersions, unchanged, skipped, asOf);
-        return new MonthBuild(false, order.size(), 0, 0, 0, built, newVersions, unchanged, skipped);
     }
 
     /**
@@ -291,7 +344,8 @@ class InvoiceBuilder {
     }
 
     /**
-     * Issues the invoice of the plot for the month (the current month when null) as of now, as a new version.
+     * Issues the invoice of the plot for the month (the current month when null) as of now: a new version when its
+     * content hash differs from the latest version's (or the month has none), otherwise the latest version as it is.
      *
      * @param issuer the caller, who holds {@code INVOICES_ISSUE}
      */
@@ -309,7 +363,10 @@ class InvoiceBuilder {
         return Objects.requireNonNull(repeatableRead.execute(status -> issue(tenantId, plotId, target, issuer)));
     }
 
-    /** The build of one plot inside the {@code REPEATABLE READ} transaction. */
+    /**
+     * The build of one plot inside the {@code REPEATABLE READ} transaction: compared with the latest version of the
+     * month as the month build compares it; written and audited only when it differs.
+     */
     private Issued issue(UUID tenantId, UUID plotId, YearMonth month, AccessProfile issuer) {
         PlotFacts plot = plots.find(plotId).orElseThrow(() -> new ApiProblemException(HttpStatus.NOT_FOUND,
                 ProblemCodes.PLOT_NOT_FOUND, "The plot was not found."));
@@ -321,15 +378,23 @@ class InvoiceBuilder {
         }
         Instant asOf = asOf();
         InvoiceLedger plotLedger = ledger.invoiceLedgers(List.of(plotId), month, asOf).get(plotId);
-        int version = invoices.latestVersion(plotId, month.atDay(1)) + 1;
+        Optional<InvoiceRecord> latest = invoices.findFirstByPlotIdAndMonthOrderByVersionDesc(plotId,
+                month.atDay(1));
+        int version = latest.map(InvoiceRecord::getVersion).orElse(0) + 1;
         InvoiceDocument document = document(UUID.randomUUID(), version, plot, owners, ownerNames(owners), plotLedger,
                 context, asOf);
+        if (latest.isPresent()
+                && Arrays.equals(latest.get().getContentHash(), snapshots.contentHash(tenantId, document))) {
+            InvoiceRecord same = latest.get();
+            return new Issued(same.getId(), plotId, plot.number(), month, same.getNumber(), same.getVersion(),
+                    Money.of(same.getDue()), same.getIssuedAt(), false);
+        }
         InvoiceSnapshots.Sealed sealed = snapshots.seal(tenantId, document);
         entityManager.persist(InvoiceRecord.issue(document.id(), tenantId, document, sealed, issuer.memberId()));
         entityManager.flush();
         audit.reissued(issuer, document, asOf);
         return new Issued(document.id(), plotId, plot.number(), month, document.number(), version,
-                document.totals().due(), document.issuedAt());
+                document.totals().due(), document.issuedAt(), true);
     }
 
     /**
@@ -352,7 +417,8 @@ class InvoiceBuilder {
 
     /**
      * The invoice of a plot from its ledger of the month: the figures ({@link InvoiceCalculator}), the type names as
-     * printed, the number {@code YYYY-MM/plot}, the QR code when something is due ({@link NbuQrPayload}).
+     * printed, the number {@code YYYY-MM/plot}, the payment rows booked in the month as the ledger gives them, the QR
+     * code when something is due ({@link NbuQrPayload}).
      */
     static InvoiceDocument document(UUID id, int version, PlotFacts plot, List<OwnerShare> owners,
             Map<UUID, String> ownerNames, InvoiceLedger plotLedger, Context context, Instant asOf) {
@@ -382,7 +448,8 @@ class InvoiceBuilder {
         MonthStatus status = plotLedger.status() == null ? MonthStatus.OPEN : plotLedger.status();
         return new InvoiceDocument(id, version, number, month, status, asOf, asOf, DocumentFormat.dayOf(asOf),
                 cooperative, new InvoiceDocument.Plot(plot.id(), plot.number(), plot.street()), printedOwners,
-                context.chairmen(), context.treasurers(), rows, figures.lines(), figures.receivedAfter(),
+                context.chairmen(), context.treasurers(), rows, figures.lines(), plotLedger.payments(),
+                figures.receivedAfter(),
                 new InvoiceDocument.Totals(figures.endDebt(), figures.prepayment(), figures.received(), figures.due()),
                 qr);
     }

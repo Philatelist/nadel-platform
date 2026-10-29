@@ -266,9 +266,28 @@ abstract class DocumentsTestSupport extends IntegrationTest {
         return send(bearer, post(PLOT_INVOICES.formatted(plot)), month == null ? null : Map.of("month", month));
     }
 
-    /** An invoice issued by the treasurer for the plot and month; returns its row. */
+    /**
+     * An invoice issued by the treasurer on request for the plot and month; returns its row. 201 with a new version, or
+     * 200 with the latest version when nothing changed since it (nothing written); a test that needs one of the two
+     * uses {@link #issuedNewVersion} or {@link #issuedUnchanged}.
+     */
     JsonNode issued(UUID plot, String month) throws Exception {
+        ResultActions call = issue(treasurer, plot, month);
+        int status = call.andReturn().getResponse().getStatus();
+        if (status != 200 && status != 201) {
+            throw new AssertionError("Status expected:<200 or 201> but was:<" + status + ">");
+        }
+        return body(call);
+    }
+
+    /** A new invoice version issued by the treasurer on request for the plot and month (201); returns its row. */
+    JsonNode issuedNewVersion(UUID plot, String month) throws Exception {
         return body(issue(treasurer, plot, month).andExpect(status().isCreated()));
+    }
+
+    /** An on-request invoice without a change since the latest version (200, nothing written); returns its row. */
+    JsonNode issuedUnchanged(UUID plot, String month) throws Exception {
+        return body(issue(treasurer, plot, month).andExpect(status().isOk()));
     }
 
     static UUID idOf(JsonNode row) {

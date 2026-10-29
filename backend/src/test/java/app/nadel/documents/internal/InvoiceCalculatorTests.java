@@ -53,7 +53,7 @@ class InvoiceCalculatorTests {
 
     private static InvoiceLedger ledger(YearMonth month, List<TypeMovement> types, List<Line> lines,
             String prepayment, List<LaterPayment> later) {
-        return new InvoiceLedger(PLOT, month, MonthStatus.CLOSED, null, types, lines, m(prepayment), later);
+        return new InvoiceLedger(PLOT, month, MonthStatus.CLOSED, null, types, lines, m(prepayment), later, List.of());
     }
 
     private static void row(TypeRow row, UUID type, String start, String charged, String paid, String end) {

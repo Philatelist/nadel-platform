@@ -18,7 +18,7 @@ it.
 |---|---|---|
 | `GET /payments/{id}/receipt.pdf` | `getPaymentReceiptPdf` | `PAYMENTS_VIEW`, or a member who owns every plot of the payment's group now |
 | `POST /plots/{id}/invoices` (body `{month?}`) | `issuePlotInvoice` | `INVOICES_ISSUE` |
-| `GET /invoices?month&plotId&page&size` | `listInvoices` | `CHARGES_VIEW` |
+| `GET /invoices?month&plotId&latestOnly&page&size` | `listInvoices` | `CHARGES_VIEW` |
 | `GET /invoices/readiness` | `getInvoiceReadiness` | `CHARGES_VIEW` |
 | `GET /invoices/{id}` · `/pdf` · `/qr.png` | `getInvoice`, `getInvoicePdf`, `getInvoiceQrPng` | `CHARGES_VIEW`, or a current owner of the plot and only the latest version (else 404) |
 | `GET /me/invoices` | `listMyInvoices` | anyone in a cooperative: the latest version per month of the plots they own now (empty without a plot); the operator 403 |
@@ -92,9 +92,11 @@ later month is 400 `VALIDATION_FAILED` on `month`. Then:
    order, a type without figures and lines left out; `endDebt`; `due = max(0.00, endDebt − received after)`); the
    owners' full names (`MemberDirectory`), the chairmen's and treasurers' names (`members.RoleHolders`), the printed
    type names (the bundle's default names of seeded types, or the stored name).
-6. Always a new version (`latestVersion + 1`), number `{YYYY-MM}/{plot number}`; the QR code only when something is
-   due (`NbuQrPayload.of`: the printed official name, the IBAN, «До сплати», the ЄДРПОУ, the plot, the month and the
-   number); the snapshot (`InvoiceSnapshots`) stored as an `InvoiceRecord`; the audit entry `INVOICE_REISSUED`
+6. The next version (`latest + 1`, 1 for the first), number `{YYYY-MM}/{plot number}`; the QR code only when
+   something is due (`NbuQrPayload.of`: the printed official name, the IBAN, «До сплати», the ЄДРПОУ, the plot, the
+   month and the number). Its content hash is compared with the latest version's (as the month build does): the same
+   → answer 200 with the latest version's `InvoiceRow`, nothing written, no audit. Otherwise the snapshot
+   (`InvoiceSnapshots`) is stored as an `InvoiceRecord` with the audit entry `INVOICE_REISSUED`
    (`InvoiceAuditPublisher`, through the outbox: about the plot, label its number, `number`, `month`, `version`,
    `due`). Answer 201 with the `InvoiceRow`.
 
@@ -103,7 +105,10 @@ later month is 400 `VALIDATION_FAILED` on `month`. Then:
 cooperative's name, ЄДРПОУ, address, bank, IBAN), `plot` (id, number, street), `owners` (`memberId`, `numerator`,
 `denominator`), `persons` (base64 of the owners' names, the chairmen and the treasurers as one JSON object sealed with
 `PersonalDataCipher` at `FieldRef("invoice", "snapshot.persons", invoiceId)`), `types` (id, code, printed name, start,
-charged, paid, end), `lines` (the month's charges with the copied calculation and `corrects`), `receivedAfter`,
+charged, paid, end), `lines` (the month's charges with the copied calculation and `corrects`), `payments` (optional,
+written only when the month has any, so older snapshots and invoices without payments keep their canonical form: the
+payment rows booked in the month, `paymentId`, `reverses` for a reversal, `receivedOn`, `amount` with its sign,
+`receiptNumber` and `bankReference` when set; no payer, no note), `receivedAfter`,
 `totals` (`endDebt`, `prepayment`, `receivedAfter`, `due`), `qr` (`link`, `purpose`) or absent. Amounts are strings with
 two decimals. The canonical form (without `version`, `asOf`, `issuedAt`, `issuedOn`, `qr`; persons in plaintext; keys
 sorted; compact JSON) gives `content_hash` = the keyed blind index `privacy.IndexKind.DOCUMENT_CONTENT`, so a change is
@@ -113,7 +118,7 @@ code never changes an old version.
 **Reading** (`Invoices`): the list (newest month, newest issue, number, newest version; with a `month` filter the
 number in the natural order of the plot numbers, `PlotCatalog.inNaturalOrder`, so the month's versions are sorted and
 paged in memory; `latest` from a window over the
-plot and month), one version opened (`GET /invoices/{id}`, the contract's `InvoiceSnapshot`), its PDF and its QR PNG
+plot and month; `latestOnly` keeps only the latest version of each plot and month, for the web's main lists), one version opened (`GET /invoices/{id}`, the contract's `InvoiceSnapshot`), its PDF and its QR PNG
 (8 px per module; 404 when nothing is due), the readiness (`missing`). Who sees a version: `CHARGES_VIEW`; or a
 current owner of its plot and only the latest version of its plot and month; anything else about an id is the same
 404 `NOT_FOUND` as an unknown one; without the permission and without a plot of one's own 403 before the lookup; the
@@ -128,18 +133,26 @@ sold plot is no longer listed); the platform operator 403. Each row's PDF is `GE
 member have only that latest version. A member's cash receipts come from the plot account (`GET /plots/{id}/account`:
 `payments[].id`, `source`, `receiptNumber`) and `GET /payments/{id}/receipt.pdf`.
 
-**The page** (`InvoiceLayout`, A4): the requisites; «Рахунок № {number}» and «(версія N)» from version 2; «Дата
-видачі», «Розрахунковий місяць» and «Станом на {asOf}» for a month that was open; «Платник: ділянка № N, street» and
-the owners with their shares; the table per charge type (start, charged, paid, end, «Разом»); «Нарахування за
-{місяць}» with each charge's details (a tariff part «50,00 ₴ × 6,00 сотки / 12» or «75,00 ₴ за ділянку», «, N дн.» for
-part of a month; a reading interval «показники A – B (day – day)» and «338,300 кВт·год × 4,32 ₴»; losses «втрати 5 % від
-… кВт·год» or «втрати в мережі»; a common consumer's name; «Коригування за» / «Сторнування за» the month corrected);
-«Отримано після {місяця}» with the payments; the totals with «Аванс» when there is one and «До сплати»; the QR block
-(only when something is due: the code at 0.5 mm per module drawn with `PdfDocument.drawing`, «Відскануйте QR-код у
-застосунку свого банку», the link, the recipient and the purpose); the footer «Сплачуйте за реквізитами або QR-кодом;
-у призначенні вказуйте номер ділянки», the chairmen and treasurers, «Сформовано в системі Наділ {дата час}». The file's
-`/ID` is derived from the version's whole snapshot and its dates are `issuedAt`, so a version always gives the same
-bytes.
+**The page** (`InvoiceLayout`, A4, one page per invoice): the requisites with, beside them, «Рахунок № {number}» and
+«(версія N)» from version 2, «Розрахунковий місяць», «Дата видачі» and «Станом на {asOf}» for a month that was open;
+«Платник: ділянка № N, street» and the owners with their shares; the table per charge type (start, charged, paid, end,
+«Разом»); «Нарахування за {місяць}» with each charge's details (a tariff part «50,00 ₴ × 6,00 сотки / 12» or «75,00 ₴
+за ділянку», «, N дн.» for part of a month; a regular charge or an adjustment of a metered source shows one range: a
+reading interval «показники 10.08.2026 → 03.10.2026: 3 435,900 → 3 705,500 = 269,600 кВт·год × 4,32 ₴», fixed-percentage
+losses «показники A → B: втрати 5,00 % від … кВт·год = … кВт·год × …», a losses run «втрати в мережі, A → B: …», a
+common consumer share «спільний споживач «name», A → B: …», where a whole month is its name; «Коригування за» /
+«Сторнування за» the month corrected); «Оплати за {місяць}», the payment rows booked in the month (day, «квитанція № N»
+or «банківський платіж, референс …» or nothing, the amount; a reversal «сторнування платежу (…)» with its negative
+amount); «Отримано після {місяця}» with the payments; then, kept on one page with the footer
+(`PdfDocument.keepTogether`), the totals with «Аванс» when there is one and «До сплати» and beside them
+(`PdfDocument.beside`) the QR block (only when something is due: the code at 0.5 mm per module drawn with
+`PdfDocument.drawing` in the space of a version 17 code, `NbuQrImage.maxSidePoints`; «Відскануйте QR-код у застосунку
+свого банку»; «Оплатити в застосунку банку», a link annotation that opens the code's link, which is not printed
+(`PdfDocument.link`); the recipient and the purpose); the footer «Сплачуйте за реквізитами або QR-кодом; у призначенні
+вказуйте номер ділянки», the chairmen and treasurers, «Сформовано в системі Наділ {дата час}». An invoice too long for
+one page (many reading intervals) goes on on the next page, whose header (`PdfDocument.continuation`) is «Рахунок №
+{number}, ділянка № N, street (продовження)»; a table repeats its header there. The file's `/ID` is derived from the
+version's whole snapshot and its dates are `issuedAt`, so a version always gives the same bytes.
 
 ## The debt certificate (feature 016 §2.7)
 
@@ -213,10 +226,11 @@ with `number` and `reason`. No names. Downloads are not audited.
    the month; fields `month`, `built`, `newVersions`, `unchanged`, `skipped`), through the outbox in the build's
    transaction. Answer 200 `InvoiceBuild{preview: false, invoiceable, built, newVersions, unchanged, skipped}`.
 
-The **preview** (`preview=true`) runs steps 1 and 3 and reads the figures of the plots without an invoice of the month,
-takes no lock and writes nothing: `InvoiceBuild{preview: true, invoiceable, toBuild, nothingDue, existing}` (`existing`
-= plots with an invoice of the month, compared on a build; `nothingDue` = the others with nothing due; `toBuild` =
-`invoiceable - nothingDue`, or `invoiceable` with `includeNothingDue`). The build takes the month's lock without waiting
+The **preview** (`preview=true`) runs steps 1, 3 and 4 with the same decision per plot (`InvoiceBuilder.decide`, the
+content hash included), takes no lock and writes nothing: `InvoiceBuild{preview: true, invoiceable, built,
+newVersions, unchanged, skipped, toBuild, nothingDue, existing}`, the first five what a build started next answers
+(unless something is booked in between); `toBuild = built + newVersions`; `nothingDue` = the plots without an invoice
+of the month with nothing due; `existing = newVersions + unchanged`, the plots with an invoice of the month. The build takes the month's lock without waiting
 (`pg_try_advisory_xact_lock`): while another build of the month, or an on-request invoice of it, holds it, the answer is
 409 `INVOICE_BUILD_RUNNING` and nothing is built (the user waits and refreshes the page). The on-request invoice keeps
 the waiting lock (it is short), so it waits for a running month build.
@@ -225,7 +239,8 @@ the waiting lock (it is short), so it waits for a running month build.
 the current one, before the first) is 404 `NOT_FOUND`. The latest version of each plot's invoice of the month
 (`InvoiceRepository.latestOfMonth`); `scope=PAPER` (the default) keeps the plots with at least one current owner whose
 delivery channel is `PAPER` (`PlotOwners.currentOwnerIds`, `members.MemberDirectory.deliveryChannels`), `ALL` every
-plot; street and plot order; one A4 PDF, each invoice drawn by `InvoiceLayout.draw` from the top of a new page, the
+plot; street and plot order; one A4 PDF, each invoice drawn by `InvoiceLayout.draw` from the top of a new page
+(`PrintBundle.append`; an invoice fits its page, one that cannot goes on with its continuation header), the
 snapshots opened 50 at a time. Without invoices one page «За {місяць} немає рахунків для друку» with the reason of the
 scope (`print.*` in the bundle). Its `/ID` comes from the month, the scope and the printed version ids, its time is the
 latest `issuedAt` among them, so the same set gives the same bytes. File `invoices_{YYYY-MM}_{paper|all}.pdf`.
@@ -259,7 +274,7 @@ bytes only.
 |---|---|
 | `latestInvoice(plotId, month)` | the id of the latest version of the plot's invoice for the month, or empty |
 | `invoicePdf(invoiceId)` | the PDF of a version (the same bytes as `GET /invoices/{id}/pdf`), or empty |
-| `invoiceForToday(plotId)` | a new version for the current month as of now (as `POST /plots/{id}/invoices`, the same lock, problems and `INVOICE_REISSUED` audit), issued by the system: no `issued_by`, audit subject `system:documents` |
+| `invoiceForToday(plotId)` | the current month's invoice as of now (as `POST /plots/{id}/invoices`, the same lock and problems): a new version with the `INVOICE_REISSUED` audit only when its content changed, otherwise the latest version's id; issued by the system: no `issued_by`, audit subject `system:documents` |
 | `receiptPdf(paymentId)` | the cash receipt drawn now, without the payer note; empty for an unknown payment, a reversal row or a bank payment |
 | `printPdf(month, scope)` | the print set (as the endpoint, without the month check: an unknown month is the one page "no invoices") |
 | `qrLink(invoiceId)` | the stored NBU link of a version, or empty (unknown id, nothing due) |
@@ -269,7 +284,7 @@ without one a method throws `IllegalStateException`. Each method runs in a trans
 manager, `REQUIRED` (it joins the caller's, or opens its own, so a job needs none). The facade checks no permission: it
 answers as the system and the caller keeps the endpoints' rules (a member receives only the latest version of an
 invoice of a plot they own now, and only the receipt of a group whose every plot they own now). Only
-`invoiceForToday` writes (and audits).
+`invoiceForToday` writes (and audits), and only when the invoice changed.
 
 ## Amounts in words
 
@@ -361,7 +376,8 @@ hryvnia sign U+20B4. SHA-256: Regular `975dcda37d80f038dcd143c22e33ca2d97a0cc5a9
 - `InvoiceSnapshotTests` (Testcontainers): the names sealed (never plaintext in the database) and opened for the
   reader, an owner change keeps the old names on the old version, the same version downloads to the same bytes, the
   content hash the same for the same content and different after a payment.
-- `InvoiceOnRequestTests` (Testcontainers): a new version per request and after a payment, version 1 unchanged;
+- `InvoiceOnRequestTests` (Testcontainers): a repeated request without a ledger change returns the same version (200,
+  no row, no audit entry), a payment gives exactly one new version (201), version 1 unchanged; `latestOnly` lists;
   example 5 end to end (the closed month's figures unchanged after a later adjustment, the November invoice with
   «Коригування за»; the closed month's end debt equal to `debtsAsOf` of its last day); a payment received after the
   month lowers «До сплати» to 0.00 and removes the QR code; example 6 (409 `REQUISITES_MISSING` with `missing`);
@@ -374,7 +390,8 @@ hryvnia sign U+20B4. SHA-256: Regular `975dcda37d80f038dcd143c22e33ca2d97a0cc5a9
   print set: allowed with `INVOICES_ISSUE`, 403 with `CHARGES_VIEW` only, for a member, the electrician and the
   operator (nothing written), 401 without a token, another cooperative's preview writes nothing here.
 - `InvoiceMonthBuildTests` (Testcontainers): the preview's counts (20 invoiceable, 5 with nothing due, plots without
-  an owner, archived or common land not counted) and nothing written; a build, then a rebuild without a change; a
+  an owner, archived or common land not counted) and nothing written; the preview and the following build agree
+  (built, newVersions, unchanged, skipped) with one plot invoiced before (`existing` 1), and again after a payment; a build, then a rebuild without a change; a
   payment gives one version 2; `includeNothingDue` (invoices without the QR code, compared on the next build); a
   closed and an open month; a future month (409), a month before the first (404), missing requisites (409); a second
   build started while the first runs is 409 `INVOICE_BUILD_RUNNING` (a preview meanwhile is 200) and nothing is built
@@ -383,6 +400,14 @@ hryvnia sign U+20B4. SHA-256: Regular `975dcda37d80f038dcd143c22e33ca2d97a0cc5a9
 - `InvoiceBuildConsistencyTests` (Testcontainers): a payment and a charge committed (with a `created_at` before the
   build) between the first and the second chunk of a 60-plot build, on plots of both chunks, are in none of its
   invoices; the next build gives exactly those four plots a new version.
+- `InvoicePageTests` (unit, the longest demo invoices `DemoInvoices`: plots 15 and 2 of October 2026 from
+  `src/test/resources/documents`): one page per invoice in the print set with its footer; an invoice repeated past a
+  page goes on on pages headed «… (продовження)» with the totals, the QR block and the footer together on its last
+  page; the QR link a link annotation and not in the text; one range per metered charge; the month's payment rows with
+  the receipt number, the bank reference and a reversal; a snapshot without `payments` opens.
+- `InvoicePaymentsTests` (Testcontainers): two cash payments and a reversal of one in the month are stored in the
+  snapshot (the reversal negative, with the reversed payment's receipt number, no payer note) and printed; an invoice
+  without payments in its month stores no `payments`.
 - `InvoicePrintTests` (Testcontainers): one page per latest invoice in street and plot order, `PAPER` (the default)
   with a plot shared by an e-mail and a paper owner, only the latest version, the same bytes twice, the one page of an
   empty set, a month not listed (404), an unknown scope (400).

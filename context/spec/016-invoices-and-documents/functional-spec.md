@@ -62,8 +62,9 @@ What the code carries:
 
 - The purpose is shortened to the allowed length when needed (a long street or plot number); the plot number and the
   invoice number are always kept.
-- The code image is at least 30 × 30 mm in the PDF, with «Відскануйте QR-код у застосунку свого банку» under it and the
-  link text printed under that.
+- The code image is at least 30 × 30 mm in the PDF, beside the totals, with «Відскануйте QR-код у застосунку свого
+  банку» and one short clickable line «Оплатити в застосунку банку» that opens the code's link (a PDF link annotation;
+  the link text itself is not printed: on paper it is noise, on a phone the line is the way to pay without scanning).
 
 **Acceptance Criteria:**
 - [x] When the treasurer opens the QR image of a demo invoice and it is decoded with a QR reader, then it shows a link
@@ -103,7 +104,9 @@ charged in the month (regular charges, adjustments and reversals booked in that 
 (payments placed in that month); debt at the end of the month.
 
 Under the charged amount the invoice shows the details members ask about most:
-- electricity: each reading interval with its start and end readings, the kWh and the price;
+- electricity: each reading interval as one range, the reading dates, with its start and end readings, the kWh and the
+  price («показники 10.08.2026 → 03.10.2026: 3 435,900 → 3 705,500 = 269,600 кВт·год × 4,32 ₴»); losses and common
+  consumer shares likewise show one range;
 - losses and common consumer shares on their own lines;
 - a fixed tariff: its basis, for example «50,00 ₴ × 6,00 сотки / 12»;
 - an adjustment booked in this month for an earlier month: the month it corrects.
@@ -111,10 +114,17 @@ Under the charged amount the invoice shows the details members ask about most:
 **Totals:** debt at the end of the month; prepayment («Аванс»); **«До сплати»** = the end debt minus money received
 after the month but before the issue, never below 0,00.
 
+**Payments of the month:** «Оплати за {місяць}» lists, under the charges, each payment row booked in the billing month
+with its date, the cash receipt number or the bank reference (only the date and the amount when it has neither) and
+its amount, so a member can match it with their bank; a reversed payment shows as the payment and a negative
+«сторнування платежу» row, as the ledger books it.
+
 **Received after the month:** payments received after the billing month but before the issue are listed under the
 table as «Отримано після {місяць}» and lower «До сплати».
 
-**QR block** (2.1), only when «До сплати» is above 0,00.
+**QR block** (2.1), beside the totals, only when «До сплати» is above 0,00. The totals, the QR block and the footer
+are kept together on one page; an invoice fits one A4 page, and one that cannot (many reading intervals) goes on on a
+page whose header repeats the invoice number and the plot.
 
 **Footer:** «Сплачуйте за реквізитами або QR-кодом; у призначенні вказуйте номер ділянки»; the chairman's and the
 treasurer's names (no signature image); «Сформовано в системі Наділ {дата час}».
@@ -147,7 +157,10 @@ is booked in, with the month it corrects; the closed month's invoice and its re-
 - The app keeps every invoice it built with all its numbers and names. Opening it again shows exactly the same document,
   even after an owner change or later payments.
 - **Re-issue:** after a payment, a correction or a recalculation, the treasurer can build the month's invoice again. It
-  keeps the number and gets the next version («версія 2»). Older versions stay readable from the plot's invoice list.
+  keeps the number and gets the next version («версія 2»), but only when something it prints changed; otherwise the
+  latest version stays the invoice. Older versions stay readable from the plot's invoice list: the list shows the
+  latest version of each month, its older versions folded under «Попередні версії (N)» (decided by the owner on
+  29.10.2026, PR review).
 - A member sees only the latest version of each invoice.
 - An invoice is never deleted.
 
@@ -164,21 +177,29 @@ is booked in, with the month it corrects; the closed month's invoice and its re-
 On the billing month screen, a «Рахунки» section.
 
 - **Preview** «Сформувати рахунки за {місяць}»: how many plots get invoices (active plots that are not common land and
-  have a current owner); how many have nothing due and are skipped by default (switch «Включити рахунки без боргу»);
-  how many already have an invoice for this month — they get a new version only if their numbers changed.
+  have a current owner); how many already have an invoice for this month; and what the build would do, in the words of
+  its result: «Буде сформовано: N. Нових версій: N. Без змін: N. Пропущено: N.» (plots with nothing due are skipped by
+  default, switch «Включити рахунки без боргу»; a plot that already has an invoice gets a new version only if its
+  numbers changed). The preview makes the same decision per plot as the build, so the build that follows reports the
+  same numbers unless something was booked in between. After a build its result replaces the preview until the month
+  or the switch changes.
 - **Build:** the treasurer clicks «Сформувати» and waits on the screen (a spinner) until the result appears: built, new
   versions, unchanged, skipped. A cooperative of the largest supported size is built within the time recorded in the
   project's decision record on documents; a progress indicator is shown only if that measured time exceeds a few
   seconds. Running it again builds nothing new when nothing changed. Two builds of the same month at the same time are
   not possible: the second one is told a build is already running.
 - An open month can be invoiced; the board usually invoices right after the month's charges.
-- **List** of the month's invoices: plot, version, «До сплати», issued at, with a PDF link per row.
+- **List** of the month's invoices: one row per plot (its latest version): plot, version, «До сплати», issued at, with a
+  PDF link per row; the older versions of a plot under «Попередні версії (N)», folded.
 - **«PDF для друку»:** one PDF of the latest invoices of the month for the members who chose paper delivery (or all,
   with a switch), one invoice per A4 page, ordered by street and plot.
 
 **Acceptance Criteria:**
 - [x] Given October has 20 invoiceable plots of which 5 have nothing due, when the treasurer opens the preview, then it
       shows 15 to build and 5 skipped.
+- [ ] Given one of those plots already has an October invoice and nothing changed, when the treasurer opens the
+      preview and then builds, then the preview shows «Вже мають рахунок: 1» and «Буде сформовано: 14. Нових версій: 0.
+      Без змін: 1. Пропущено: 5.», and the result says the same.
 - [x] When the treasurer starts the build, then a spinner shows until the result appears, and the list shows one invoice
       per built plot.
 - [x] Given a build of the month is under way, when another user starts a build of the same month, then they see that a
@@ -194,13 +215,20 @@ On the billing month screen, a «Рахунки» section.
 
 ### 2.6 An invoice on request
 
-On the plot card, a «Рахунки» tab lists the plot's invoices (month, version, «До сплати», issued) and has
-«Рахунок на сьогодні»: it builds an invoice as of today for the current billing month with the same number scheme, as
-a new version.
+On the plot card, a «Рахунки» tab lists the plot's invoices (month, version, «До сплати», issued; the latest version of
+each month, older versions folded under «Попередні версії (N)») and has «Рахунок на сьогодні»: it builds an invoice as
+of today for the current billing month with the same number scheme and downloads its PDF (a spinner while it is
+built). It is stored as a new version only when it differs from the month's latest version in anything it prints (the
+issue date alone does not count); otherwise the latest version's PDF downloads and nothing new is stored (decided by
+the owner on 29.10.2026, PR review; it replaces "always a new version").
 
 **Acceptance Criteria:**
 - [x] When the treasurer clicks «Рахунок на сьогодні» on plot 9, then a new invoice (or a new version of this month's
       invoice) appears in the list and its PDF opens with today's date as the issue date.
+- [ ] Given plot 9 has this month's invoice and nothing was booked since, when the treasurer clicks «Рахунок на
+      сьогодні» again, then the PDF of that same version downloads and no new version appears.
+- [ ] Given a payment was entered after the latest version, when the treasurer clicks «Рахунок на сьогодні», then
+      exactly one new version appears and its PDF downloads.
 
 ### 2.7 The debt certificate
 
@@ -362,7 +390,8 @@ Decided by the pipeline (autonomy `minimal`, no blocking questions; recommended 
   (examples 1–4).
 - Invoiceable plots: active, not common land, with a current owner on the issue day.
 - «Змінилися цифри» for a re-build means any printed amount, line or owner differs; the issue date alone does not count.
-- An on-request invoice for the current billing month is a new version of that month's invoice (same number).
+- An on-request invoice for the current billing month is a new version of that month's invoice (same number) when its
+  figures, lines, owners or requisites changed; otherwise it is the latest version as it is.
 - PDFs are not stored; they are rebuilt from the kept data on each download.
 - The month build runs while the treasurer waits, like the month's charges run, and keeps only the documents' data, not
   PDFs (decided by the owner on 28.10.2026). Background jobs come with feature 017. Its duration at the largest supported

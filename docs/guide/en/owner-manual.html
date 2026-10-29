@@ -1259,26 +1259,29 @@ END $$;</pre>
           <tr>
             <td>Charges → Months → month → "Invoices of the month" → preview and "Build invoices for …"</td>
             <td>
-              Preview (plots to build, skipped for no debt, already invoiced), the switch "Include invoices
-              with nothing due", then a build while you wait (a spinner, then the result: built, new versions,
-              unchanged, skipped). Refused with a message when the IBAN or the EDRPOU code is missing, or when
-              a build of the month is already running. Recorded in the audit log
+              Preview (plots with an owner, already invoiced, and what the build will do: to be built, new
+              versions, unchanged, skipped - as the result will say), the switch "Include invoices with
+              nothing due", then a build while you wait (a spinner, then the result in place of the preview:
+              built, new versions, unchanged, skipped). Refused with a message when the IBAN or the EDRPOU
+              code is missing, or when a build of the month is already running. Recorded in the audit log
             </td>
             <td>Issue invoices</td>
           </tr>
           <tr>
             <td>Month → list of invoices, "PDF for printing"</td>
             <td>
-              Plot, version, amount due, issued, a PDF per row. "PDF for printing": the latest invoices on A4
-              pages ordered by street and plot, for paper delivery members or (a switch) all
+              One row per plot (the latest version; older ones under "Earlier versions (N)"): plot, version,
+              amount due, issued, a PDF per row. "PDF for printing": the latest invoices on A4 pages ordered
+              by street and plot, for paper delivery members or (a switch) all
             </td>
             <td>View charges; printing: Issue invoices</td>
           </tr>
           <tr>
             <td>Plot card → "Invoices" → "Invoice for today"</td>
             <td>
-              The plot's invoices with all versions; builds an invoice as of today for the current billing
-              month as a new version
+              The plot's invoices: the latest version of each month, older ones under "Earlier versions (N)";
+              builds an invoice as of today for the current billing month and downloads its PDF; a new version
+              only when something changed, otherwise the latest version's PDF
             </td>
             <td>View charges; build: Issue invoices</td>
           </tr>

@@ -816,9 +816,13 @@ Which balance each number of the invoice is, per charge type:
 | Debt at the end of the month | start + charged − paid |
 | Prepayment («Аванс») | payments booked in or before the month (reversals negative) − allocations counted in or before it, never below 0.00 |
 | Received after the month («Отримано після») | payments booked after the month, received before the invoice and not reversed by then |
+| Payments of the month («Оплати за {місяць}», a list, no total) | every payment row booked in the month and created by the invoice, as the ledger holds it: a payment with its amount, a payment reversal as its own row with the negated amount (and the receipt number or bank reference of the payment it reverses) |
 | **«До сплати»** | Σ end debts − Σ received after the month, never below 0.00; the prepayment does not lower it |
 
-A charge type whose four figures are 0.00 and that has no charge in the month is left out; the rows follow the
+The payments of the month are what a member matches with their bank or cash receipt; they need not add up to «Paid in
+the month», which counts allocations (a payment booked in September and placed on an October charge in October is paid
+in October but listed in September; a payment that stays a prepayment is listed but not paid). A charge type whose four
+figures are 0.00 and that has no charge in the month is left out; the rows follow the
 cooperative's charge type order. The QR code (`docs/domain/nbu-qr.md`) carries «До сплати» and is printed only when it
 is above 0.00. Exact `Money` sums, nothing rounded (1).
 
@@ -846,8 +850,10 @@ The worked examples (plot 9, charge types Membership then Electricity, October 2
    and the release −20.00 in its paid column; the 20.00 becomes the November prepayment.
 
 **Versions.** Every issued version is stored (`invoice`, append-only) with a snapshot of every number and name it
-prints; the PDF is rebuilt from the snapshot and never changes. An on-request invoice is always a new version; the
-number `{YYYY-MM}/{plot number}` is the same for every version.
+prints; the PDF is rebuilt from the snapshot and never changes. A new version is stored only when something the
+invoice prints changed since the latest version (its figures, lines, owners or requisites; the issue date alone does
+not count), on request and in the month build alike; otherwise the latest version stays the invoice. The number
+`{YYYY-MM}/{plot number}` is the same for every version.
 
 **Certificates** (feature 016 §2.7): the debt per charge type, the total and the prepayment as of a day are
 the plot balances of 12 (2, by debt date), not the booking-month rule: `LedgerReadModel.debtsAsOf(asOf, every type)`,

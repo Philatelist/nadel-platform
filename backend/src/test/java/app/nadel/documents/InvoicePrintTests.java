@@ -124,7 +124,8 @@ class InvoicePrintTests extends DocumentsTestSupport {
     @Test
     void onlyTheLatestVersionOfEachPlotIsPrinted() throws Exception {
         built(currentMonth(), false);
-        issued(sadova9, currentMonth()); // version 2 on request
+        pay(sadova9, "CASH", "10.00", null);
+        issuedNewVersion(sadova9, currentMonth()); // version 2 on request
 
         List<String> pages = pages(print("ALL"));
 

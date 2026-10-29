@@ -135,14 +135,17 @@ and retry, and the requirement's `invoice_run` is dropped.
   runs is refused with 409 `INVOICE_BUILD_RUNNING` and builds nothing, so the second user is told a build is already
   running (functional spec §2.5) instead of holding a request thread and two connections for the length of a build.
   The on-request invoice is short and keeps the waiting lock (`pg_advisory_xact_lock`). The preview takes no lock and
-  writes nothing.
+  writes nothing; it makes the build's decision for every plot (it builds and hashes each invoice), so its counts
+  agree with the build that follows and it costs about as much as a rebuild without a change (PR review, 29.10.2026).
+  The on-request invoice compares its content hash with the latest version in the same way and writes a new version
+  only when it differs.
 - **Limit: 2,000 invoiceable plots** per build (the size of the largest supported cooperative, the import's plot
   limit). Above it the build and the preview answer 422 `INVOICE_BUILD_TOO_LARGE` with `limit` and write nothing.
 - **Measurement** (`InvoiceBuildLimitTests`, Testcontainers PostgreSQL, the line `INVOICE_BUILD_MEASURE` on the
   test's output): 2,000 invoiceable plots, two charge types charged in each of 12 months (48,000 charges), a bank
   payment of the month on half of the plots, a tenth of the plots shared by two owners; the first build (2,000 new
   versions), a rebuild without a change (2,000 compared, nothing written) and one on-request invoice. The test checks a
-  loose ceiling (60 s per build, 10 s on request).
+  loose ceiling (30 s per build, 10 s on request; CI measured 12.5 s after the RLS fix, locally 2 to 3.4 s).
   Measured (Testcontainers PostgreSQL on a developer Mac, while the application and the guide screenshots ran in
   parallel): the first build in about 3.7 seconds (3,721 ms), the rebuild without a change in about 3.2 seconds
   (3,221 ms), the on-request invoice in about 0.16 seconds (156 ms). Run alone twice: first build 3.0 s and 3.4 s,
@@ -159,6 +162,21 @@ and retry, and the requirement's `invoice_run` is dropped.
   2.8–3.0 s run alone. Rule: a join on an expression over columns of an RLS table cannot use an index; ledger queries
   join by plain column equality. The limit stays at 2,000 plots; the first build is below the threshold of about 5 s,
   so the web shows a spinner and no progress UI.
+- **The same join in the reports** (`LedgerReportQueries`, feature 013: the corrections list and the electricity and
+  water charged rows) was rewritten the same way (`left join charge orv on orv.id = c.reverses_charge_id`,
+  `left join charge oad on oad.id = c.adjusts_charge_id and c.reverses_charge_id is null`, columns coalesced
+  afterwards); results are unchanged (the existing report tests pass, equal row counts in the measurement). Measured on
+  the 2,000-plot, 48,000-charge fixture of `InvoiceBuildLimitTests` plus 4,800 corrections (an adjustment of every tenth
+  plot's consumption charge, a reversal on every twentieth), Testcontainers PostgreSQL 17 on a developer Mac, other
+  builds running in parallel, `charge` analyzed while empty and autovacuum off (statistics as right after a bulk
+  import), report range of 12 months, limit 10,000 rows. Before: corrections 15.5 s stale and 0.09 s after `ANALYZE`;
+  electricity rows 461 s stale and 0.29 s after `ANALYZE` (one run; the second run was still going after 9 minutes and
+  was stopped). After: corrections 0.21 s and 0.05 s; electricity 12.2 s and 0.64 s (first run; the second run again
+  took over 10 minutes with stale statistics). The rewrite removes the worst case but does not make the reports immune
+  to stale statistics: with `reltuples = 0` the planner still picks `charge_tenant_idx` with the key as a join filter,
+  and the correlated `before_id` subquery scans the cooperative's charges per correction row. These are single
+  measurements, not medians (a stale run takes minutes); a follow-up should add an `ANALYZE` after bulk loads or
+  rework the `before_id` lookup.
 - **Progress UI:** a spinner only while the measured first build at the limit is at most about 5 s; a longer build
   goes back to the owner (a lower limit, or the build as a JobRunr job in 017) instead of a progress bar here.
 

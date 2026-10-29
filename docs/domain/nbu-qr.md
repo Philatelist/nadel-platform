@@ -405,8 +405,13 @@ same joiner.
   the sign's outline has that circle's diameter as its diagonal.
 - In the PDF the code is drawn as vector shapes with a **0.5 mm** module (item 18), so the code alone is at least
   28.5 mm and with the quiet zone at least 32.5 mm (version 10). `qr.png` uses the same geometry at 8 px per module.
-- Annex 1 item 17 (space for the largest code): the invoice layout reserves the space of a version 17 code
-  (`NbuQrImage` reports the side of the code it drew, `sidePoints`).
+- Annex 1 item 17 (space for the largest code): the invoice layout reserves the space of a version 17 code beside
+  the totals (`NbuQrImage.maxSidePoints`) and draws the code at its top right (`NbuQrImage` reports the side of the
+  code it drew, `sidePoints`).
+- The link the code holds is **not printed**: three lines of base64 are noise on paper. Under «Відскануйте QR-код у
+  застосунку свого банку» the invoice prints one line «Оплатити в застосунку банку» (bundle key `invoice.qr.open`),
+  a PDF link annotation with a URI action to the same link, so a member reading the PDF on a phone can open the
+  transfer without scanning. The link stays in the snapshot, in `qr.png` and behind the annotation.
 
 ### The sign
 

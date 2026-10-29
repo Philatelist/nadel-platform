@@ -11,7 +11,7 @@
  */
 
 /**
- * The counts of a month build (`buildMonthInvoices`). Always `preview` and `invoiceable`; a preview adds `toBuild`, `nothingDue` and `existing`, a build adds `built`, `newVersions`, `unchanged` and `skipped`
+ * The counts of a month build (`buildMonthInvoices`). Always `preview`, `invoiceable`, `built`, `newVersions`, `unchanged` and `skipped` (a preview: what the build would do; a build: what it did); a preview adds `toBuild`, `nothingDue` and `existing`
  */
 export interface InvoiceBuild {
   /** Whether this is a preview (nothing written) */
@@ -22,7 +22,7 @@ export interface InvoiceBuild {
      */
   invoiceable: number;
   /**
-     * Preview: the plots that would be built or compared (`invoiceable` minus `nothingDue`, or `invoiceable` with `includeNothingDue`)
+     * Preview, the plots that would get an invoice version written: `built + newVersions`
      * @minimum 0
      */
   toBuild?: number;
@@ -32,27 +32,27 @@ export interface InvoiceBuild {
      */
   nothingDue?: number;
   /**
-     * Preview, the plots that already have an invoice of the month: they get a new version only when their numbers changed
+     * Preview, the plots that already have an invoice of the month (`newVersions + unchanged`): they get a new version only when their numbers changed
      * @minimum 0
      */
   existing?: number;
   /**
-     * Build, the plots that got their first invoice of the month (version 1)
+     * The plots that get (preview) or got (build) their first invoice of the month (version 1)
      * @minimum 0
      */
   built?: number;
   /**
-     * Build, the plots whose invoice changed and got a new version
+     * The plots whose invoice changed and get (preview) or got (build) a new version
      * @minimum 0
      */
   newVersions?: number;
   /**
-     * Build, the plots whose latest invoice is still right (nothing written)
+     * The plots whose latest invoice is still right (nothing written)
      * @minimum 0
      */
   unchanged?: number;
   /**
-     * Build, the plots without an invoice of the month with nothing due (nothing written)
+     * The plots without an invoice of the month with nothing due, without `includeNothingDue` (nothing written)
      * @minimum 0
      */
   skipped?: number;

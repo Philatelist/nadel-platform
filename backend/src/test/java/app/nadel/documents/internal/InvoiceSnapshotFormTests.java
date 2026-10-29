@@ -47,7 +47,7 @@ class InvoiceSnapshotFormTests {
                 LocalDate.of(2026, 11, 3), YearMonth.of(2026, 11), Money.parse("100.00")));
         return new InvoiceDocument(base.id(), base.version(), base.number(), base.month(), base.monthStatus(),
                 base.asOf(), base.issuedAt(), base.issuedOn(), base.cooperative(), base.plot(), base.owners(),
-                base.chairmen(), base.treasurers(), base.types(), lines, later,
+                base.chairmen(), base.treasurers(), base.types(), lines, base.payments(), later,
                 new InvoiceDocument.Totals(Money.parse("413.26"), Money.parse("0.00"), Money.parse("100.00"),
                         Money.parse("313.26")),
                 base.qr());

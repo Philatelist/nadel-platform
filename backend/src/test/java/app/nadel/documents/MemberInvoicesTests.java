@@ -54,7 +54,8 @@ class MemberInvoicesTests extends DocumentsTestSupport {
             charge(plot, "MEMBERSHIP", "75.00", currentMonth());
         }
         nineLastMonthV1 = idOf(issued(nine, previousMonth()));
-        nineLastMonthV2 = idOf(issued(nine, previousMonth()));
+        pay(nine, "CASH", "10.00", null); // received after the month: version 2 of last month's invoice
+        nineLastMonthV2 = idOf(issuedNewVersion(nine, previousMonth()));
         tenLastMonth = idOf(issued(ten, previousMonth()));
         nineThisMonth = idOf(issued(nine, currentMonth()));
         foreignInvoice = idOf(issued(foreign, currentMonth()));
@@ -90,7 +91,7 @@ class MemberInvoicesTests extends DocumentsTestSupport {
                 .andExpect(jsonPath("$[0].plotNumber").value("9"))
                 .andExpect(jsonPath("$[0].number").value(currentMonth() + "/9"))
                 .andExpect(jsonPath("$[0].version").value(1))
-                .andExpect(jsonPath("$[0].due").value("150.00"))
+                .andExpect(jsonPath("$[0].due").value("140.00"))
                 .andExpect(jsonPath("$[0].latest").value(true))
                 .andExpect(jsonPath("$[1].id").value(nineLastMonthV2.toString()))
                 .andExpect(jsonPath("$[1].month").value(previousMonth()))

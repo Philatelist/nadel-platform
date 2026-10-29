@@ -29,7 +29,8 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * The print set of a month's invoices (feature 016 §2.5, {@code GET /billing-months/{month}/invoices/print.pdf}): one
  * A4 PDF with the latest version of each invoice of the month, each drawn by {@link InvoiceLayout#draw} from the top
- * of a new page (an invoice longer than a page goes on on the next one), in street and plot order
+ * of a new page, one page per invoice (an invoice that cannot fit goes on on the next page, whose header repeats its
+ * number and plot), in street and plot order
  * ({@code PlotCatalog.inStreetOrder}). {@link PrintScope#PAPER} keeps the plots with at least one current owner whose
  * delivery channel is {@code PAPER} ({@code PlotOwners.currentOwnerIds}, {@code MemberDirectory.deliveryChannels});
  * {@link PrintScope#ALL} keeps every plot. A set without invoices is one page saying so.
@@ -108,17 +109,26 @@ class PrintBundle {
                 for (Entry entry : chunk) {
                     InvoiceRecord record = Objects.requireNonNull(records.get(entry.id()), "invoice");
                     InvoiceDocument document = snapshots.open(tenantId, record.getId(), record.getSnapshot());
-                    if (!first) {
-                        pdf.newPage();
-                    }
+                    append(pdf, document, texts, first);
                     first = false;
-                    InvoiceLayout.draw(pdf, document, texts);
                 }
                 entityManager.clear();
             }
             content = pdf.toBytes();
         }
         return new Invoices.File(fileName(month, scope), content);
+    }
+
+    /**
+     * Draws one invoice of the set: from the top of a new page, the first one on the page the document starts with.
+     * An invoice fits on its page ({@link InvoiceLayout}); one that cannot goes on on the next with its continuation
+     * header.
+     */
+    static void append(PdfDocument pdf, InvoiceDocument invoice, DocumentTexts texts, boolean first) {
+        if (!first) {
+            pdf.newPage();
+        }
+        InvoiceLayout.draw(pdf, invoice, texts);
     }
 
     /** {@code invoices_2026-10_paper.pdf} / {@code invoices_2026-10_all.pdf}. */

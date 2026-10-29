@@ -1961,13 +1961,15 @@ export const uk: Messages = {
     myTitle: 'Рахунки',
     myEmpty: 'Рахунків ще немає.',
     myOlder: 'Попередні місяці',
+    earlierVersions: 'Попередні версії ({count})',
     monthPanel: {
       title: 'Рахунки за місяць',
       includeNothingDue: 'Включити рахунки без боргу',
       invoiceable: 'Ділянок з власником: {count}',
-      toBuild: 'Буде сформовано: {count}',
-      nothingDue: 'Без боргу, пропущено: {count}',
-      existing: 'Вже мають рахунок (нова версія лише за зміни суми): {count}',
+      existing: 'Вже мають рахунок за цей місяць: {count}',
+      previewTitle: 'Що зробить формування',
+      preview:
+        'Буде сформовано: {built}. Нових версій: {newVersions}. Без змін: {unchanged}. Пропущено: {skipped}.',
       previewLoading: 'Підрахунок…',
       build: 'Сформувати рахунки за {month}',
       building: 'Формування рахунків…',

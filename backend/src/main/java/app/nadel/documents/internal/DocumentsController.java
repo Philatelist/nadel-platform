@@ -91,7 +91,8 @@ class DocumentsController implements DocumentsApi {
     public ResponseEntity<InvoiceRow> issuePlotInvoice(UUID id, @Nullable IssueInvoiceRequest request) {
         YearMonth month = request == null || request.getMonth() == null ? null : YearMonth.parse(request.getMonth());
         InvoiceBuilder.Issued issued = builder.forPlot(id, month, currentUser.profile());
-        return ResponseEntity.status(HttpStatus.CREATED).body(new InvoiceRow(issued.id(), issued.plotId(),
+        // 201 for a new version, 200 for the latest one when nothing changed
+        return ResponseEntity.status(issued.created() ? HttpStatus.CREATED : HttpStatus.OK).body(new InvoiceRow(issued.id(), issued.plotId(),
                 issued.plotNumber(), issued.month().toString(), issued.number(), issued.version(),
                 issued.due().toString(), offset(issued.issuedAt()), true));
     }
@@ -104,11 +105,10 @@ class DocumentsController implements DocumentsApi {
         InvoiceBuilder.MonthBuild result = builder.forMonth(YearMonth.parse(month), includeNothingDue,
                 Boolean.TRUE.equals(preview), currentUser.profile());
         InvoiceBuild body = new InvoiceBuild(result.preview(), result.invoiceable());
+        body.built(result.built()).newVersions(result.newVersions()).unchanged(result.unchanged())
+                .skipped(result.skipped());
         if (result.preview()) {
             body.toBuild(result.toBuild()).nothingDue(result.nothingDue()).existing(result.existing());
-        } else {
-            body.built(result.built()).newVersions(result.newVersions()).unchanged(result.unchanged())
-                    .skipped(result.skipped());
         }
         return ResponseEntity.ok(body);
     }
@@ -125,9 +125,10 @@ class DocumentsController implements DocumentsApi {
 
     @Override
     @PreAuthorize("hasAuthority('PERM_CHARGES_VIEW')")
-    public ResponseEntity<InvoicePage> listInvoices(@Nullable String month, @Nullable UUID plotId, Integer page,
-            Integer size) {
-        Invoices.Page found = invoices.list(month == null ? null : YearMonth.parse(month), plotId, page, size);
+    public ResponseEntity<InvoicePage> listInvoices(@Nullable String month, @Nullable UUID plotId,
+            Boolean latestOnly, Integer page, Integer size) {
+        Invoices.Page found = invoices.list(month == null ? null : YearMonth.parse(month), plotId,
+                Boolean.TRUE.equals(latestOnly), page, size);
         List<InvoiceRow> items = found.items().stream().map(DocumentsController::row).toList();
         return ResponseEntity.ok(new InvoicePage(items, found.page(), found.size(), found.totalItems(),
                 found.totalPages()));

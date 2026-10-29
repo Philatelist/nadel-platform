@@ -102,6 +102,7 @@ class InvoicesAcceptanceTests extends CertificateTestSupport {
         JsonNode preview = body(buildMonth(treasurer, month, true, null).andExpect(status().isOk()));
         assertThat(preview.get("invoiceable").asInt()).isEqualTo(2);
         assertThat(preview.get("toBuild").asInt()).isEqualTo(2);
+        assertThat(preview.get("built").asInt()).isEqualTo(2);
         assertThat(preview.get("existing").asInt()).isZero();
         assertThat(invoiceCount()).isZero();
 

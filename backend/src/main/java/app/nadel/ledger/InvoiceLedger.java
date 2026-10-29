@@ -29,9 +29,14 @@ import org.jspecify.annotations.Nullable;
  *                        month minus allocations counted in or before it, never below {@code 0.00}
  * @param receivedAfter   the payments booked after the month and created at or before {@code asOf} that were not
  *                        reversed by then, oldest first
+ * @param payments        every payment row booked in the month and created at or before {@code asOf}, as the ledger
+ *                        holds them: a payment with its amount and a payment reversal as its own row with the negated
+ *                        amount (and the receipt number or bank reference of the payment it reverses); in the order
+ *                        received, then created
  */
 public record InvoiceLedger(UUID plotId, YearMonth month, @Nullable MonthStatus status, @Nullable Instant closedAt,
-        List<TypeMovement> types, List<Line> lines, Money prepaymentAtEnd, List<LaterPayment> receivedAfter) {
+        List<TypeMovement> types, List<Line> lines, Money prepaymentAtEnd, List<LaterPayment> receivedAfter,
+        List<MonthPayment> payments) {
 
     public InvoiceLedger {
         Objects.requireNonNull(plotId, "plotId");
@@ -40,6 +45,7 @@ public record InvoiceLedger(UUID plotId, YearMonth month, @Nullable MonthStatus 
         lines = List.copyOf(lines);
         Objects.requireNonNull(prepaymentAtEnd, "prepaymentAtEnd");
         receivedAfter = List.copyOf(receivedAfter);
+        payments = List.copyOf(payments);
     }
 
     /**
@@ -165,6 +171,28 @@ public record InvoiceLedger(UUID plotId, YearMonth month, @Nullable MonthStatus 
             Objects.requireNonNull(paymentId, "paymentId");
             Objects.requireNonNull(receivedOn, "receivedOn");
             Objects.requireNonNull(bookedIn, "bookedIn");
+            Objects.requireNonNull(amount, "amount");
+        }
+    }
+
+    /**
+     * A payment row booked in the month of the invoice (feature 016 §2.3, «Оплати за {місяць}»): what a member matches
+     * with their bank or their cash receipt. No payer, no note: only the ids, the day, the amount and the reference.
+     *
+     * @param paymentId     the payment row
+     * @param reverses      for a payment reversal ({@code PAYMENT_REVERSAL}): the payment it reverses; null for a
+     *                      payment
+     * @param receivedOn    the day it was received (a reversal keeps the day of its payment)
+     * @param amount        its amount with its sign: above zero for a payment, below zero for a reversal
+     * @param receiptNumber the cash receipt number (of the reversed payment for a reversal); null for a bank payment
+     * @param bankReference the bank reference (of the reversed payment for a reversal); null when none was entered
+     */
+    public record MonthPayment(UUID paymentId, @Nullable UUID reverses, LocalDate receivedOn, Money amount,
+            @Nullable Long receiptNumber, @Nullable String bankReference) {
+
+        public MonthPayment {
+            Objects.requireNonNull(paymentId, "paymentId");
+            Objects.requireNonNull(receivedOn, "receivedOn");
             Objects.requireNonNull(amount, "amount");
         }
     }
