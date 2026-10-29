@@ -1,11 +1,11 @@
 # Pipeline log — 016 invoices and documents
 
-- Status: running
-- Phase: 5 (publish)
+- Status: finished
+- Phase: 6 (review run running)
 - Branch: 016-invoices-and-documents · Base: main @ 5287657
 - Requirement: document docs/features/016-invoices-and-documents.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
-- Publish: pr+checks · PR: https://github.com/Philatelist/nadel-platform/pull/59 · Checks: red: Backend (run 40793904794)
+- Publish: pr+checks · PR: https://github.com/Philatelist/nadel-platform/pull/59 · Checks: green (run 40795388156 on 75a3aea)
 - Review run: running at http://localhost:5173 (web), :8080 (API), :8180 (Keycloak) (PIDs in /private/tmp/claude-501/-Users-alex-IdeaProjects-nadel-platform/2b5d7728-8708-45b9-b4c7-7c43fe039804/scratchpad/review-run.pids)
 
 ## Project facts
@@ -218,3 +218,6 @@ introduction (tables via Flyway, RLS-free job storage), Supply-chain CI job with
 - Checks on 980d4dd: Backend red — AuditPlaintextScanTests (014 test) line 112: outbox publication still PROCESSING (attempt 2) after the entries were stored → timing race; Clients, E2E, SAST, Security green. First build in CI now 12.4 s (was 54.3 s). CI fix attempt 1 → spring-backend (await eventual completion; assertion unchanged).
 - CI fix attempt 1 (Backend): race confirmed — listener commits entries, Modulith marks the publication completed after return (completion-mode delete); test's final assertion now awaits (unchanged assertion); AuditPlaintextScanTests+AuditOutboxTests 3/3 runs green in a worktree.
 - Fix review (c2de033) round 1: PASS. Pushing.
+- Checks on 75a3aea: all 5 green (run 40795388156). CI first build 12.5 s, rebuild 0.8 s, on request 0.03 s.
+- Phase 6: review run restarted on 75a3aea (make up 14456, java 14747, node 14637); ready.
+- Run finished. Left for the owner: real-bank QR scan; confirm the demo IBAN; official hryvnia sign vector; the 4 render-only [?] checks; follow-ups: same RLS expression join in LedgerReportQueries (013), tighten the 60 s ceiling, minor review notes; /awos:hire for PDF/QR.
