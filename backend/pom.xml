@@ -22,6 +22,8 @@
         <spring-modulith.version>2.1.1</spring-modulith.version>
         <openapi-generator.version>7.26.0</openapi-generator.version>
         <fastexcel.version>0.20.2</fastexcel.version>
+        <pdfbox.version>3.0.8</pdfbox.version>
+        <zxing.version>3.5.4</zxing.version>
         <!-- Security overrides of versions managed by Spring Boot 4.1.1 (OSV advisories fixed in the patch releases below).
              Remove them once the Spring Boot parent manages these versions or newer. -->
         <tomcat.version>11.0.25</tomcat.version>
@@ -99,6 +101,18 @@
             <artifactId>fastexcel-reader</artifactId>
             <version>${fastexcel.version}</version>
         </dependency>
+        <!-- Documents (feature 016, ADR 0017): PDF drawing with embedded font subsets -->
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>${pdfbox.version}</version>
+        </dependency>
+        <!-- Documents (feature 016, ADR 0017): the QR matrix of the NBU payment code; javase only to decode it in tests -->
+        <dependency>
+            <groupId>com.google.zxing</groupId>
+            <artifactId>core</artifactId>
+            <version>${zxing.version}</version>
+        </dependency>
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
@@ -128,6 +142,12 @@
         <dependency>
             <groupId>org.springframework.security</groupId>
             <artifactId>spring-security-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.google.zxing</groupId>
+            <artifactId>javase</artifactId>
+            <version>${zxing.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>

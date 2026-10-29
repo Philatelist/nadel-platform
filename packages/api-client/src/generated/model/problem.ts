@@ -10,6 +10,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ProblemFieldError } from './problemFieldError';
+import type { RequisiteField } from './requisiteField';
 
 /**
  * RFC 9457 Problem Details, served as `application/problem+json`. Error responses also declare `application/json` so that a client sending `Accept: application/json` (the web client does) is never answered with 406; the body is the same. `detail` is English and never contains personal data.
@@ -23,4 +24,14 @@ export interface Problem {
   code: string;
   /** Field-level validation errors */
   errors?: ProblemFieldError[];
+  /**
+     * The requisites that are not set, for `REQUISITES_MISSING` (an invoice needs the IBAN and the ЄДРПОУ); absent on every other problem
+     * @nullable
+     */
+  missing?: RequisiteField[] | null;
+  /**
+     * The most plots one build of a month's invoices takes, for `INVOICE_BUILD_TOO_LARGE`; absent on every other problem
+     * @nullable
+     */
+  limit?: number | null;
 }

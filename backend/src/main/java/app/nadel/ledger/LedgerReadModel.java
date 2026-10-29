@@ -1,11 +1,13 @@
 package app.nadel.ledger;
 
 import app.nadel.money.Money;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -180,6 +182,40 @@ public interface LedgerReadModel {
      * @throws IllegalArgumentException when {@code limit} is below 1
      */
     List<PaymentRow> payments(PaymentFilter filter, int limit);
+
+    /**
+     * The payment group of a payment as a printed cash receipt shows it (feature 016 §2.8): the receipt number, the
+     * day received, who entered it, the payer and every part of the group with its plot, amount, reversal and where its
+     * money is now ({@link CashReceiptData}). Any part of the group may be asked. A bank payment is answered too (with
+     * its source, without a number): the caller refuses it. Without the payer note: that is {@link PaymentNotes}.
+     *
+     * @param paymentId a payment (kind {@code PAYMENT}) of the group
+     * @return empty for an unknown id, a payment of another cooperative (RLS) and the id of a payment reversal row
+     */
+    Optional<CashReceiptData> cashReceipt(UUID paymentId);
+
+    /**
+     * What the invoices of the plots for a billing month need (feature 016 §2.3): per plot the figures of each charge
+     * type by the booking-month rule ({@link InvoiceLedger}: start, charged, paid and end), every charge booked in the
+     * month with what its stored calculation says, the prepayment at the end of the month and the payments booked after
+     * it and received by {@code asOf}. Only rows created at or before {@code asOf} count, so a caller that reads every
+     * plot of a build with the same {@code asOf} in one {@code REPEATABLE READ} transaction gets one consistent picture.
+     * A closed month gives the same figures whatever {@code asOf} after its closing (only {@code receivedAfter} grows).
+     * Three queries per call; the caller passes a bounded number of plots (a chunk of a build).
+     *
+     * @param plotIds the plots; every distinct id is a key of the result, in the order of first appearance (a plot
+     *                without rows, or unknown in the cooperative, gets empty figures)
+     * @param month   the billing month
+     * @param asOf    the moment of the invoice
+     */
+    Map<UUID, InvoiceLedger> invoiceLedgers(Collection<UUID> plotIds, YearMonth month, Instant asOf);
+
+    /**
+     * The first billing month of the cooperative: the month of its earliest billing month row (a row is created by
+     * the first booking in a month or by closing it); empty while it has none. The months {@code GET /billing-months}
+     * lists run from it to the current month (feature 016: the month build of invoices answers 404 before it).
+     */
+    Optional<YearMonth> firstBillingMonth();
 
     /**
      * The electricity charges whose service period overlaps a range of days (the "Charged" sheet of the electricity

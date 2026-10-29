@@ -29,6 +29,8 @@ function monthRange(offset) {
   return { from: first.toISOString().slice(0, 10), to: last.toISOString().slice(0, 10) };
 }
 const augustLike = monthRange(-2);
+/** The demo closed month: the month before the open one (see R__demo_data.sql); its invoices are in the demo data. */
+const closedMonth = monthRange(-1).from.slice(0, 7);
 /** Fills the two dates of a range run page and previews it (a preview writes nothing). */
 const previewRange = [
   { fill: { label: T('З', 'From'), value: augustLike.from } },
@@ -38,7 +40,7 @@ const previewRange = [
 
 /**
  * name, demo user, path, optional link to follow (CSS selector, optional exact text), optional phone viewport.
- * Also optional: `steps` ({ fill: { label, value, within? } }, { check: checkbox label }, { link: link name },
+ * Also optional: `steps` ({ fill: { label, value, within? } }, { check: checkbox label }, { link: link name }, { tab: tab name },
  * { table: caption of a table to wait for } or { click: button name };
  * nothing is ever saved: a recalculation is only previewed, and a correction of a used tariff version or reading stops
  * at its preview) and `element`
@@ -263,6 +265,48 @@ const SHOTS = [
     steps: [{ click: T('Сторнувати', 'Reverse') }],
     element: { css: 'dialog[open]' },
   },
+  // feature 016: invoices, certificates, receipts. Read-only: the screens are opened and never saved or built.
+  // The month's invoices section, with the preview of the demo closed month.
+  {
+    name: 'invoices-month',
+    user: 'treasurer',
+    path: `/charges/months/${closedMonth}`,
+    element: { heading: T('Рахунки за місяць', 'Invoices of the month') },
+  },
+  // Plot 9, the "Invoices" tab with the invoice list and "Invoice for today".
+  {
+    name: 'invoices-plot',
+    user: 'treasurer',
+    path: '/plots',
+    open: { css: 'main a[href^="/plots/"]', text: '9' },
+    steps: [{ tab: T('Рахунки', 'Invoices') }],
+    element: { heading: T('Рахунки ділянки', 'Plot invoices') },
+  },
+  // Plot 9, the "Certificate" tab (the chairman holds "Issue certificates"); the form is not submitted.
+  {
+    name: 'certificate-form',
+    user: 'chairman',
+    path: '/plots',
+    open: { css: 'main a[href^="/plots/"]', text: '9' },
+    steps: [{ tab: T('Довідка', 'Certificate') }],
+    element: { heading: T('Довідка про відсутність або наявність заборгованості', 'Debt certificate') },
+  },
+  { name: 'certificates-register', user: 'chairman', path: '/documents/certificates' },
+  // The Requisites section of the settings. The demo cooperative has an IBAN, so the warning banner shows only after
+  // the IBAN is cleared locally; retake this shot that way when the banner must be visible.
+  {
+    name: 'requisites-warning',
+    user: 'chairman',
+    path: '/settings',
+    element: { heading: T('Реквізити', 'Requisites') },
+  },
+  // The member's invoices: the latest invoice of each own plot first.
+  {
+    name: 'account-invoices',
+    user: 'member',
+    path: '/account',
+    element: { heading: T('Рахунки', 'Invoices') },
+  },
   { name: 'treasurer-charges', user: 'treasurer', path: `/charges/months/${thisMonth}` },
   {
     name: 'member-charges',
@@ -354,6 +398,13 @@ try {
               } else if (step.link) {
                 await page
                   .getByRole('link', { name: step.link[lang], exact: true })
+                  .first()
+                  .click({ timeout: 10000 });
+                await page.waitForLoadState('networkidle');
+              } else if (step.tab) {
+                await page
+                  .getByRole('tab', { name: step.tab[lang], exact: true })
+                  .or(page.getByRole('link', { name: step.tab[lang], exact: true }))
                   .first()
                   .click({ timeout: 10000 });
                 await page.waitForLoadState('networkidle');

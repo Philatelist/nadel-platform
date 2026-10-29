@@ -4,6 +4,7 @@ import { Link } from 'react-router';
 import { useLocale, useT } from '../../i18n';
 import { useCan } from '../../me';
 import { Button, Money, Notice, Panel } from '../ui';
+import { ReceiptButton } from './ReceiptButton';
 
 /**
  * What the treasurer sees after saving a split payment: for cash the one receipt number of the group, large; for a
@@ -25,6 +26,7 @@ export function PaymentGroupSaved({
   const canOpen = useCan('PAYMENTS_VIEW');
   const receipt = payments.find((p) => p.receiptNumber !== undefined)?.receiptNumber;
   const first = payments[0];
+  const cashPart = payments.find((p) => p.receiptNumber !== undefined);
   return (
     <Panel>
       <Notice tone="success">{s.title}</Notice>
@@ -57,7 +59,8 @@ export function PaymentGroupSaved({
           );
         })}
       </ul>
-      <div>
+      <div className="flex flex-wrap items-center gap-2">
+        {cashPart !== undefined && <ReceiptButton payment={cashPart} />}
         <Button onClick={onAnother}>{s.another}</Button>
       </div>
     </Panel>

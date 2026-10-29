@@ -415,9 +415,9 @@ Charge type order used in the examples: Membership, Electricity, Land tax.
 
 ### Out-of-Scope
 
-- Bank statement import and matching (feature 016).
-- The cash book, cash handover to the bank and reconciliation (feature 017).
-- The printed cash receipt order and the debt certificate (phase 4).
+- Bank statement import and matching (a later feature; 016 is invoices and documents, 017 delivery, 018 cash book).
+- The cash book, cash handover to the bank and reconciliation (feature 018).
+- The printed cash receipt and the debt certificate (feature 016).
 - Refunds of prepayment in cash.
 - Online payment (phase 8).
 - Interest or penalties on debts.

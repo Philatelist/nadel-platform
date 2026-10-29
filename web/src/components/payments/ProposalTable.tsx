@@ -142,7 +142,7 @@ export function ProposalTable({
               <th scope="row" colSpan={3} className="px-3 py-2 text-right">
                 {p.allocatedTotal}
               </th>
-              <td className="px-3 py-2 text-right">
+              <td className="whitespace-nowrap px-3 py-2 text-right">
                 <Money amount={part.allocatedTotal} /> {p.of} <Money amount={part.amount} />
               </td>
             </tr>

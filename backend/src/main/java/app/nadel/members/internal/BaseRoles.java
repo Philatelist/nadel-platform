@@ -7,7 +7,7 @@ import java.util.Set;
 
 /**
  * The base roles of every cooperative and their initial permissions, as the application knows them. The SQL function
- * {@code seed_base_roles} (V2, last re-created by V27) writes the same matrix; {@code BaseRolesMatrixTests} fails when
+ * {@code seed_base_roles} (V2, last re-created by V28) writes the same matrix; {@code BaseRolesMatrixTests} fails when
  * the two drift apart.
  * Chairman always has every permission: {@link PermissionUnion} grants them in code whatever rows are stored.
  */
@@ -26,7 +26,8 @@ final class BaseRoles {
             new Definition(TREASURER, "Treasurer", "Read access to members, plots and audit",
                     EnumSet.of(Permission.MEMBERS_VIEW, Permission.PLOTS_VIEW, Permission.AUDIT_VIEW,
                             Permission.TARIFFS_VIEW, Permission.METERS_VIEW, Permission.CHARGES_VIEW,
-                            Permission.REPORTS_VIEW, Permission.PAYMENTS_VIEW, Permission.PAYMENTS_ENTER)),
+                            Permission.REPORTS_VIEW, Permission.PAYMENTS_VIEW, Permission.PAYMENTS_ENTER,
+                            Permission.INVOICES_ISSUE)),
             new Definition(MEMBER, "Member", "Own data only", EnumSet.noneOf(Permission.class)));
 
     private BaseRoles() {

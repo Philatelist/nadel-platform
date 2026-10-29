@@ -43,6 +43,9 @@
         <li><a href="#audit">Audit log</a><span class="tag done">works</span></li>
         <li><a href="#account">The member's account</a><span class="tag done">works</span></li>
         <li><a href="#payments">Payments and cash desk</a><span class="tag done">works</span></li>
+        <li>
+          <a href="#invoices">Invoices, certificates and receipts</a><span class="tag done">works</span>
+        </li>
         <li class="toc-part"><a href="#part-2">Part II. How the system calculates</a></li>
         <li><a href="#r-principles">Core principles</a><span class="tag done">works</span></li>
         <li><a href="#r-tariffs">Tariffs and the expected amount</a><span class="tag done">works</span></li>
@@ -56,6 +59,7 @@
         <li><a href="#r-recalc">Corrections and recalculation</a><span class="tag done">works</span></li>
         <li><a href="#r-reports">Reports and templates</a><span class="tag done">works</span></li>
         <li><a href="#r-payments">Payments and allocation</a><span class="tag done">works</span></li>
+        <li><a href="#r-invoices">Invoice numbers</a><span class="tag done">works</span></li>
         <li><a href="#next">What comes next</a><span class="tag planned">planned</span></li>
       </ol>
     </nav>
@@ -65,7 +69,7 @@
       <p class="lead">
         Nadel keeps the cooperative's records: who the members are, which plots they own, what is charged and
         at which tariffs, how much electricity and water was used. Payments are entered at the cash desk and
-        allocated to charges; invoices and the map come next.
+        allocated to charges; invoices, certificates and receipts are printed as PDF; the map comes next.
       </p>
 
       <h3>Who sees what</h3>
@@ -362,8 +366,8 @@
         </tbody>
       </table>
       <p class="muted small">
-        The colour follows the debt after payments: a charge that has been paid is not a debt (chapters 18 and
-        23).
+        The colour follows the debt after payments: a charge that has been paid is not a debt (chapters 19 and
+        24).
       </p>
 
       <h3>The plot card</h3>
@@ -444,12 +448,12 @@
       <h3>Charging settings</h3>
       <p>
         Below the colour choice: the red status threshold, how losses are charged, the split of common
-        consumers and the water supply of plots. They are described in chapters 18–20.
+        consumers and the water supply of plots. They are described in chapters 19–21.
       </p>
       <h3>Requisites</h3>
       <p>
         The "Requisites" block: official name, legal address, bank, IBAN; the EDRPOU code is read-only. Report
-        templates use them — see chapter 22.
+        templates use them — see chapter 23.
       </p>
     </section>
 
@@ -502,7 +506,7 @@
       <h2><span class="num">8</span> Tariffs</h2>
       <p>
         Here the chairman describes what the cooperative charges for and how much. The charges themselves come
-        later (chapter 18), but every plot card already shows what the plot will be charged.
+        later (chapter 19), but every plot card already shows what the plot will be charged.
       </p>
       <figure>
         <img src="../img/en/tariffs.png" alt="Tariffs" />
@@ -727,7 +731,7 @@
       <h3>Corrections</h3>
       <p>
         On the meter card every reading can be corrected or deleted <strong>while no charge uses it</strong>.
-        Once charged, a correction will go through recalculation (chapter 21).
+        Once charged, a correction will go through recalculation (chapter 22).
       </p>
     </section>
 
@@ -777,7 +781,7 @@
       <h3>My charges</h3>
       <p>
         For each of their plots the member sees the debt per charge type and every charge with its
-        calculation, read-only. See chapter 18. The payments of the plot are there too: date, receipt or bank
+        calculation, read-only. See chapter 19. The payments of the plot are there too: date, receipt or bank
         document number, amount and what it paid, reversed payments with a mark, the prepayment and the debt
         after payments. A member sees neither who entered a payment nor the note about the payer, and never
         the payments of other plots.
@@ -861,7 +865,7 @@
         As soon as the plot and the amount are known, the form shows the <strong>proposal</strong>: a table of
         the plot's unpaid charges (charge, period, open amount, "Allocate") and a "Prepayment" line - what is
         left over the debts. The system pays the oldest debt first; for debts of the same day, in the order of
-        the cooperative's charge types. Examples are in chapter 23.
+        the cooperative's charge types. Examples are in chapter 24.
       </p>
       <ul>
         <li>
@@ -889,8 +893,8 @@
         "Save" records the payment. For cash the screen shows <strong>"Receipt № 42"</strong> large and
         <strong>"Another payment"</strong>; for a bank payment it shows the saved payment. Receipt numbers run
         through the whole cooperative with no gaps and no repeats, even when two treasurers enter cash at the
-        same moment; a number is never changed or used twice. It is an internal receipt, not a fiscal one; the
-        printed cash receipt order comes later.
+        same moment; a number is never changed or used twice. The receipt can be printed (chapter 14); it is
+        an internal receipt, not a fiscal one.
       </p>
       <div class="note">
         <span class="callout-title">A payment for a past month</span>
@@ -907,7 +911,7 @@
         lists the payer's current plots with their debts and proposes the parts
         <strong>in proportion to the debts</strong>. Kopecks that do not divide go to the plots with the
         largest remainders (a tie goes to the plot listed first); an amount above the whole debt goes to the
-        first plot as prepayment. Examples are in chapter 23.
+        first plot as prepayment. Examples are in chapter 24.
       </p>
       <ul>
         <li>
@@ -1002,7 +1006,7 @@
       <p>
         "Charges → Months" has a <strong>"Received"</strong> column next to "Charged". The "Plot balances",
         "Debtors" and "Charges by month" reports take payments into account, and the new
-        <strong>"Payments"</strong> report lists every payment with totals per source (chapter 22).
+        <strong>"Payments"</strong> report lists every payment with totals per source (chapter 23).
       </p>
       <h3>What a member sees</h3>
       <p>
@@ -1011,6 +1015,229 @@
         after payments. They do not see who entered a payment or the note about the payer, nor other plots.
         The electrician sees no payments.
       </p>
+    </section>
+
+    <section class="chapter" id="invoices">
+      <h2>
+        <span class="num">14</span> Invoices, certificates and receipts <span class="tag done">works</span>
+      </h2>
+      <p class="lead">
+        The system turns the accounts into printable documents: a monthly <strong>invoice</strong> for every
+        plot with the bank details and a payment QR code, a <strong>certificate of settlements</strong> for a
+        plot as of a date, and a <strong>receipt</strong> for a cash payment. All documents are PDF files and
+        are always in Ukrainian - they are official documents, whatever language your screens are in. Invoices
+        are for those with "Issue invoices", certificates for those with "Issue certificates"; both lists are
+        seen by those with "View charges".
+      </p>
+
+      <h3>Before the first invoice: bank details</h3>
+      <p>
+        An invoice needs the cooperative's <strong>IBAN</strong> and <strong>EDRPOU code</strong>. The IBAN is
+        entered by the chairman in "Settings → Requisites" (chapter 6); the EDRPOU code is set for the
+        cooperative by the platform operator. While one of them is missing, nothing is built: the message
+        names what is missing and links to the settings, and a warning banner is shown on the Requisites
+        screen and on the invoice screens.
+      </p>
+      <figure>
+        <img src="../img/en/requisites-warning.png" alt="The warning about missing bank details" />
+        <figcaption>Invoices cannot be built until the IBAN and the EDRPOU code are filled in</figcaption>
+      </figure>
+
+      <h3>Building the month's invoices</h3>
+      <p>
+        Open "Charges → Months", choose the month and find the
+        <strong>"Invoices of the month"</strong> section. An open month can be invoiced too; usually the board
+        does it right after the month's charges.
+      </p>
+      <ol>
+        <li>
+          <strong>Preview</strong> "Build invoices for October": how many plots can get an invoice (active
+          plots that are not common land and have a current owner), how many of them already have an invoice
+          for this month, and what the build will do, in the words of its result: "To be built: 18. New
+          versions: 0. Unchanged: 1. Skipped: 6." A plot that already has an invoice gets a new version only
+          when its numbers changed; plots with nothing due are skipped. The switch
+          <strong>"Include invoices with nothing due"</strong> adds the plots without a debt (their invoice
+          has no QR code).
+        </li>
+        <li>
+          Press <strong>"Build invoices for October"</strong> and wait: a spinner is shown until the result
+          appears - how many invoices were built, how many got a new version, how many stayed unchanged and
+          how many were skipped. When nothing was booked between the preview and the build, the result matches
+          the preview. The result takes the place of the preview until you change the month or the switch.
+        </li>
+        <li>
+          Running the build again creates nothing new while nothing has changed. If someone is already
+          building the same month, you are told so and nothing is built twice.
+        </li>
+      </ol>
+      <figure>
+        <img src="../img/en/invoices-month.png" alt="The Invoices section of a billing month" />
+        <figcaption>The month's invoices: preview, result and the list with a PDF per row</figcaption>
+      </figure>
+      <p>
+        Below is the list of the month's invoices: one row per plot with its latest version (plot, version,
+        "Amount due", date of issue and a PDF link); a plot's older versions are folded under
+        <strong>"Earlier versions (N)"</strong>. <strong>"PDF for printing"</strong> downloads one PDF with
+        the latest invoices, one per A4 page, ordered by street and plot - for the members who chose paper
+        delivery; a switch puts in all members.
+      </p>
+
+      <h3>Versions</h3>
+      <p>
+        The system keeps every invoice exactly as it was built: opening it later shows the same numbers and
+        the same owners, even after a payment or a change of owner. After a payment, a correction or a
+        recalculation the treasurer builds the month again: a plot whose numbers changed gets a
+        <strong>new version</strong>
+        ("version 2") under the same invoice number; a plot where nothing changed gets no new version. The
+        older versions stay readable: the lists show the latest version, and "Earlier versions (N)" unfolds
+        the earlier ones. A member sees only the latest version. An invoice is never deleted.
+      </p>
+
+      <h3>An invoice on request</h3>
+      <p>
+        On a plot card the <strong>"Invoices"</strong> tab lists the plot's invoices (month, version, amount
+        due, issued) with the PDF of each: the latest version of each month, the older ones under "Earlier
+        versions (N)". <strong>"Invoice for today"</strong> builds an invoice as of today for the current
+        billing month and downloads its PDF right away (the button shows a spinner while it is prepared). A
+        new version appears only when something changed since the latest version (a payment, a charge, the
+        owners, the requisites); otherwise the PDF of the latest version downloads and nothing new is created.
+      </p>
+      <figure>
+        <img src="../img/en/invoices-plot.png" alt="The Invoices tab of a plot card" />
+        <figcaption>The plot's invoices and "Invoice for today"</figcaption>
+      </figure>
+
+      <h3>What is on an invoice</h3>
+      <ul>
+        <li>
+          The cooperative's name, EDRPOU code, address, bank and IBAN; the number "Invoice № 2026-10/9"
+          (year-month/plot number) and, from the second version on, "(version 2)"; the date of issue.
+        </li>
+        <li>The plot, the street and the current owners with their shares.</li>
+        <li>
+          A table with one row per charge type: debt at the start of the month, charged, paid, debt at the
+          end. Under "Charged" are the details members ask about: each electricity interval as one range of
+          reading dates with both readings, the kWh and the price ("показники 10.08.2026 → 03.10.2026: 3
+          435,900 → 3 705,500 = 269,600 кВт·год × 4,32 ₴"), losses and common consumers, the basis of a fixed
+          tariff, and for an adjustment the month it corrects.
+        </li>
+        <li>
+          "Payments for October" ("Оплати за жовтень 2026"): each payment booked in the month with its date,
+          the cash receipt number or the bank reference, and the amount, so a member can match it with their
+          bank. A reversed payment shows as the payment and a negative "reversal" row.
+        </li>
+        <li>
+          The payments received after the month but before the invoice was issued ("Received after October") -
+          they lower the amount due.
+        </li>
+        <li>
+          The totals: debt at the end of the month, prepayment and <strong>"Amount due"</strong>; beside them
+          the QR code - only when the amount due is above 0.00 - with the line "Pay in the bank app"
+          ("Оплатити в застосунку банку"): on a phone, tapping it opens the bank transfer without scanning.
+        </li>
+      </ul>
+      <p>
+        Each invoice fits on one A4 page. An invoice with very many lines goes on on a second page whose
+        header repeats the invoice number and the plot.
+      </p>
+      <p>
+        An invoice for a month that is not closed yet says "as of" a date. How the numbers are formed is in
+        chapter 25.
+      </p>
+
+      <h3>The QR code and how to check it with a phone</h3>
+      <p>
+        The code follows the rules of the National Bank of Ukraine. A banking app scans it and opens a
+        filled-in transfer. To check a code before you hand invoices out:
+      </p>
+      <ol>
+        <li>
+          Open the QR scanner in your banking app (the payments or "scan QR" section) and point the phone at
+          the code on the screen or the paper.
+        </li>
+        <li>Check the <strong>recipient</strong>: the cooperative's name.</li>
+        <li>Check the <strong>IBAN</strong> against the one in the settings.</li>
+        <li>
+          Check the <strong>purpose</strong>: it must start with "Ділянка" and the number of your plot, then
+          the month and the invoice number.
+        </li>
+        <li>
+          Check the <strong>amount</strong>: it equals "Amount due". The amount can be edited - a member may
+          pay part of it.
+        </li>
+        <li>
+          The other fields (recipient, account, recipient code, purpose) are locked and cannot be changed.
+          Close the form without paying.
+        </li>
+      </ol>
+      <p>
+        A sample invoice of the demo cooperative:
+        <a href="../pdf/sample-invoice.pdf">sample-invoice.pdf</a>.
+      </p>
+
+      <h3>Debt certificates</h3>
+      <p>
+        On the plot card the <strong>"Certificate"</strong> tab asks for a date (today by default); press
+        <strong>"Issue certificate"</strong>. The certificate "Certificate № Д-2026-1" shows the requisites,
+        the plot with its area and current owners, the debt per charge type and in total and the prepayment as
+        of the date - the same numbers as the "Plot balances" report. It says "No debt" when the total debt is
+        0.00, otherwise "The debt is ...". It carries the issuer's name and role, the date of issue and a
+        place for a signature and a stamp. Only those with "Issue certificates" (the chairman by default) can
+        issue. A certificate can also be issued for a plot without an owner (it then lists no owners); common
+        land and archived plots get no certificate.
+      </p>
+      <figure>
+        <img src="../img/en/certificate-form.png" alt="The Certificate tab of a plot card" />
+        <figcaption>Issuing a certificate on the plot card</figcaption>
+      </figure>
+      <p>
+        Numbers run in sequence per cooperative and year, with no gaps and no repeats. An issued certificate
+        never changes. A mistake is answered with a new certificate, and the old one is
+        <strong>annulled</strong>
+        with a reason.
+      </p>
+      <h3>The register of certificates</h3>
+      <p>
+        The <strong>"Certificate register"</strong> menu item lists every certificate: number, plot, as-of
+        date, debt, who and when issued it, and the status. Open its PDF, or press
+        <strong>"Annul"</strong> and enter the reason (required). An annulled certificate stays in the
+        register with its reason, its PDF is marked "ANNULLED", it cannot be annulled twice and its number is
+        not reused.
+      </p>
+      <figure>
+        <img src="../img/en/certificates-register.png" alt="The register of certificates" />
+        <figcaption>The register of certificates</figcaption>
+      </figure>
+
+      <h3>The cash receipt</h3>
+      <p>
+        After you save a cash payment, the screen with the large receipt number has
+        <strong>"Print receipt"</strong>; the payment card has it too. A bank payment has no receipt. The
+        receipt (A5 or half of A4) shows the requisites, the receipt number, the date, the plot, the payer,
+        the amount in figures and in words, what the money was placed on ("Allocation as of" the printing
+        date) and the name of the person who took the money, with a line for a signature. A payment split over
+        several plots gives one receipt that lists every plot. The receipt of a reversed payment carries
+        "REVERSED" with the date. The note about the payer is printed only for users who may see member data.
+        It is an internal receipt, not a fiscal one.
+      </p>
+
+      <h3>What a member sees</h3>
+      <p>
+        In the member's account, <strong>"Invoices"</strong> shows the latest invoice of each of their plots
+        first, each with "Download PDF"; older months are below. Next to a cash payment there is "Receipt". A
+        member never sees certificates, and a document of someone else's plot is "not found" for them.
+      </p>
+      <figure>
+        <img src="../img/en/account-invoices.png" alt="Invoices in the member's account" />
+        <figcaption>The member's invoices</figcaption>
+      </figure>
+      <div class="note">
+        <span class="callout-title">Audit</span>
+        <p>
+          The audit log records the build of a month's invoices (month, built, skipped), a re-issued invoice,
+          an issued certificate and an annulled certificate with its reason. Downloads are not recorded.
+        </p>
+      </div>
     </section>
 
     <section class="part" id="part-2">
@@ -1023,7 +1250,7 @@
     </section>
 
     <section class="chapter" id="r-principles">
-      <h2><span class="num">14</span> Core principles</h2>
+      <h2><span class="num">15</span> Core principles</h2>
       <dl class="terms">
         <dt>Only the server counts money</dt>
         <dd>
@@ -1071,7 +1298,7 @@
     </section>
 
     <section class="chapter" id="r-tariffs">
-      <h2><span class="num">15</span> Tariffs and the expected amount</h2>
+      <h2><span class="num">16</span> Tariffs and the expected amount</h2>
       <p>
         A charge type (membership fee, electricity, land tax, water, special-purpose fees) has one or more
         tariffs. A tariff has <strong>versions</strong>: each applies from its date until the day before the
@@ -1143,13 +1370,13 @@ one-time fee    the whole rate in the month of its due date, 0.00 in other month
       <h3>Correcting a version</h3>
       <p>
         A version can be corrected or deleted <strong>while no charge uses it</strong>. After that a
-        correction goes through recalculation (chapter 21): charges already issued to people never change
+        correction goes through recalculation (chapter 22): charges already issued to people never change
         silently.
       </p>
     </section>
 
     <section class="chapter" id="r-meters">
-      <h2><span class="num">16</span> Meters and the tree</h2>
+      <h2><span class="num">17</span> Meters and the tree</h2>
       <p>
         A meter measures one resource: electricity (kWh) or water (m³). Meter values are not money: up to
         three decimals.
@@ -1231,7 +1458,7 @@ one-time fee    the whole rate in the month of its due date, 0.00 in other month
     </section>
 
     <section class="chapter" id="r-readings">
-      <h2><span class="num">17</span> Readings and consumption</h2>
+      <h2><span class="num">18</span> Readings and consumption</h2>
       <p>
         <strong>A reading is a meter's value on a date</strong>, not "the reading for a month". The
         electrician comes when they can: after a few days or after a few months. The person enters the date;
@@ -1353,7 +1580,7 @@ one-time fee    the whole rate in the month of its due date, 0.00 in other month
     </section>
 
     <section class="chapter" id="r-charges">
-      <h2><span class="num">18</span> Charges and closing months <span class="tag done">works</span></h2>
+      <h2><span class="num">19</span> Charges and closing months <span class="tag done">works</span></h2>
       <p>
         A charge is an entry in the plot's account: charge type, amount, month, the days it pays for (service
         period) and how the amount was obtained (rates, units, kWh, the readings and tariff versions used).
@@ -1384,12 +1611,12 @@ one-time fee    the whole rate in the month of its due date, 0.00 in other month
             <td>Network losses</td>
             <td>
               Depending on the chairman's setting: a percentage on every electricity charge, or a board run
-              for a range (chapter 19).
+              for a range (chapter 20).
             </td>
           </tr>
           <tr>
             <td>Common consumers</td>
-            <td>A separate board run for a range, a separate line in the account (chapter 19).</td>
+            <td>A separate board run for a range, a separate line in the account (chapter 20).</td>
           </tr>
           <tr>
             <td>Opening balance</td>
@@ -1450,7 +1677,7 @@ plot debt              = Σ debts per charge type
 prepayment             = Σ payments (net of reversals) − Σ allocated</pre>
       <p>
         A payment pays specific charges, so the debt is what is still unpaid. How a payment is allocated and
-        what happens when a charge is reversed is in chapter 23.
+        what happens when a charge is reversed is in chapter 24.
       </p>
 
       <h3>On the screen: "Charges"</h3>
@@ -1593,7 +1820,7 @@ prepayment             = Σ payments (net of reversals) − Σ allocated</pre>
 
     <section class="chapter" id="r-losses">
       <h2>
-        <span class="num">19</span> Network losses and common consumers
+        <span class="num">20</span> Network losses and common consumers
         <span class="tag done">works</span>
       </h2>
       <h3>Losses: two modes, the chairman chooses</h3>
@@ -1716,7 +1943,7 @@ prepayment             = Σ payments (net of reversals) − Σ allocated</pre>
     </section>
 
     <section class="chapter" id="r-water">
-      <h2><span class="num">20</span> Water and connections <span class="tag done">works</span></h2>
+      <h2><span class="num">21</span> Water and connections <span class="tag done">works</span></h2>
       <p>
         Water works like electricity:
         <strong>a plot not connected to the well pays nothing for water</strong>.
@@ -1782,7 +2009,7 @@ prepayment             = Σ payments (net of reversals) − Σ allocated</pre>
 
     <section class="chapter" id="r-recalc">
       <h2>
-        <span class="num">21</span> Corrections and recalculation
+        <span class="num">22</span> Corrections and recalculation
         <span class="tag done">works</span>
       </h2>
       <p>A back-dated tariff version, a correction of a used version or of a used reading — one mechanism:</p>
@@ -1918,7 +2145,7 @@ prepayment             = Σ payments (net of reversals) − Σ allocated</pre>
     </section>
 
     <section class="chapter" id="r-reports">
-      <h2><span class="num">22</span> Reports and templates <span class="tag done">works</span></h2>
+      <h2><span class="num">23</span> Reports and templates <span class="tag done">works</span></h2>
       <p>
         Reports put into one table what the system already knows: charges, payments, debts, electricity,
         water, corrections. Every report is shown on screen and can be downloaded as an Excel file. Besides
@@ -1929,7 +2156,7 @@ prepayment             = Σ payments (net of reversals) − Σ allocated</pre>
         <span class="callout-title">Reports introduce no new rules</span>
         <p>
           A report calculates nothing "its own way": it only selects, groups and adds up the amounts already
-          booked under the rules of chapters 14-21 and 23. So any amount in a report can be reconciled to the
+          booked under the rules of chapters 15-22 and 24. So any amount in a report can be reconciled to the
           kopeck with a plot account or the billing months screen. Amounts in reports are always
           <strong>effective</strong>
           amounts: charges plus adjustments minus reversals.
@@ -2105,7 +2332,7 @@ prepayment             = Σ payments (net of reversals) − Σ allocated</pre>
       <div class="warn">
         <span class="callout-title">The same pump share in two reports</span>
         <p>
-          The electricity of a well pump is split among its plots as a common-consumer row (chapter 20). That
+          The electricity of a well pump is split among its plots as a common-consumer row (chapter 21). That
           row is on the "Charged" sheet of the electricity report <em>and</em> in the "Well pump share" column
           of the "Water" report. It is the same amount seen from two sides: do not add the two reports
           together.
@@ -2310,7 +2537,7 @@ prepayment             = Σ payments (net of reversals) − Σ allocated</pre>
     </section>
 
     <section class="chapter" id="r-payments">
-      <h2><span class="num">23</span> Payments and allocation <span class="tag done">works</span></h2>
+      <h2><span class="num">24</span> Payments and allocation <span class="tag done">works</span></h2>
       <p>
         A payment is a row in the ledger that erases nothing: a mistake is corrected by a reversal, and the
         allocation to charges changes only by new rows. How to work with the screens is chapter 13; here are
@@ -2449,8 +2676,93 @@ prepayment             = Σ payments (net of reversals) − Σ allocated</pre>
       </ul>
     </section>
 
+    <section class="chapter" id="r-invoices">
+      <h2><span class="num">25</span> Invoice numbers <span class="tag done">works</span></h2>
+      <p>
+        An invoice does not recalculate anything: it reads the same ledger as the plot account and the
+        reports, and arranges it by billing month. How to work with the screens is chapter 14; here are the
+        rules and the examples.
+      </p>
+      <dl class="terms">
+        <dt>The booking-month rule</dt>
+        <dd>
+          Every row of the ledger belongs to the billing month it is <em>booked</em> in. For an invoice of
+          October, "Charged" is everything booked in October (regular charges, adjustments and reversals), and
+          "Paid" is the payments placed in October. "Debt at the start" is what was open before October, "debt
+          at the end" what is open after it.
+        </dd>
+        <dt>A closed month never changes</dt>
+        <dd>
+          A correction made after October was closed is booked in the month it is made in. So the October
+          invoice and its re-issues keep the same numbers, and the correction shows up in the invoice of the
+          later month, with the month it corrects.
+        </dd>
+        <dt>Amount due</dt>
+        <dd>
+          Debt at the end of the month, minus the money received after the month and before the issue, never
+          below 0.00. Those payments are listed under the table as "Received after October". When the amount
+          due is 0.00 there is no QR code; a prepayment is shown as "Prepayment".
+        </dd>
+        <dt>The invoice number</dt>
+        <dd>
+          Year-month/plot number, for example <code>2026-10/9</code>. A re-issue keeps the number and raises
+          the version.
+        </dd>
+      </dl>
+      <h3>Worked examples</h3>
+      <p>
+        Plot 9, charge types in the order Membership, Electricity. The invoice for October 2026, issued on
+        05.11.2026.
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Situation</th>
+            <th>The October invoice</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>1</td>
+            <td>No debt before. October: membership 75.00, electricity 338.26. No payments</td>
+            <td>Start 0.00; charged 413.26; paid 0.00; end 413.26; due 413.26; QR amount 413.26</td>
+          </tr>
+          <tr>
+            <td>2</td>
+            <td>
+              Electricity debt from September 1,135.08. In October a payment of 1,500.00 went to 1,135.08
+              (September electricity) + 75.00 (membership) + 289.92 (October electricity)
+            </td>
+            <td>Start 1,135.08; charged 413.26; paid 1,500.00; end 48.34 (electricity); due 48.34</td>
+          </tr>
+          <tr>
+            <td>3</td>
+            <td>Example 1 and a payment of 413.26 on 03.11</td>
+            <td>End of October 413.26; "Received after October" 413.26; due 0.00; no QR code</td>
+          </tr>
+          <tr>
+            <td>4</td>
+            <td>Overpaid: no debt at the end, prepayment 100.00</td>
+            <td>Due 0.00; "Prepayment 100.00"; no QR code</td>
+          </tr>
+          <tr>
+            <td>5</td>
+            <td>
+              October was closed on 03.11. On 06.11 a recalculation lowers an October charge by 20.00 (booked
+              in November)
+            </td>
+            <td>
+              The October invoice does not change, and a re-issue gives the same numbers. The November invoice
+              shows the -20.00 adjustment "for October 2026"
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
     <section class="chapter" id="next">
-      <h2><span class="num">24</span> What comes next <span class="tag planned">planned</span></h2>
+      <h2><span class="num">25</span> What comes next <span class="tag planned">planned</span></h2>
       <table>
         <thead>
           <tr>
@@ -2462,14 +2774,15 @@ prepayment             = Σ payments (net of reversals) − Σ allocated</pre>
           <tr>
             <td><strong>Bank and cash book</strong></td>
             <td>
-              Bank statement import with matching payments to plots; the cash book, handing cash over to the
-              bank and reconciliation; the printed cash receipt order.
+              The cash book, handing cash over to the bank and reconciliation; later, bank statement import
+              with matching payments to plots.
             </td>
           </tr>
           <tr>
-            <td><strong>Invoices and delivery</strong></td>
+            <td><strong>Delivery of documents</strong></td>
             <td>
-              PDF invoices with the NBU QR code, no-debt certificates, delivery by email, Telegram, Viber.
+              Sending invoices by e-mail and Telegram (invoices, certificates and receipts themselves already
+              work, chapter 14); Viber later.
             </td>
           </tr>
           <tr>

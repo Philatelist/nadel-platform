@@ -725,6 +725,9 @@ BEGIN
     DELETE FROM payment WHERE tenant_id = demo AND reverses_payment_id IS NOT NULL;
     DELETE FROM payment WHERE tenant_id = demo;
     DELETE FROM receipt_counter WHERE tenant_id = demo;
+    DELETE FROM invoice WHERE tenant_id = demo;
+    DELETE FROM certificate WHERE tenant_id = demo;
+    DELETE FROM document_counter WHERE tenant_id = demo;
     DELETE FROM meter_value_use WHERE tenant_id = demo;
     DELETE FROM charge_part WHERE tenant_id = demo;
     DELETE FROM recalculation_line WHERE tenant_id = demo;
@@ -764,7 +767,7 @@ BEGIN
         official_name = COALESCE(official_name, 'Садівниче товариство «Надія»'),
         legal_address = COALESCE(legal_address, '01001, м. Київ, вул. Садова, 1'),
         bank_name = COALESCE(bank_name, 'АТ «Демо-банк»'),
-        iban = COALESCE(iban, 'UA213223130000026007233566001')
+        iban = CASE WHEN iban IS NULL OR iban = 'UA213223130000026007233566001' THEN 'UA850000000000000000000123456' ELSE iban END
     WHERE tenant_id = demo;
     UPDATE tenant SET edrpou = '12345678' WHERE id = demo AND edrpou IS NULL;
 

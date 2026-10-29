@@ -1246,6 +1246,118 @@ END $$;</pre>
         </tbody>
       </table>
 
+      <h3>Invoices, certificates and receipts</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Element</th>
+            <th>What it does</th>
+            <th>Permission</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Charges → Months → month → "Invoices of the month" → preview and "Build invoices for …"</td>
+            <td>
+              Preview (plots with an owner, already invoiced, and what the build will do: to be built, new
+              versions, unchanged, skipped - as the result will say), the switch "Include invoices with
+              nothing due", then a build while you wait (a spinner, then the result in place of the preview:
+              built, new versions, unchanged, skipped). Refused with a message when the IBAN or the EDRPOU
+              code is missing, or when a build of the month is already running. Recorded in the audit log
+            </td>
+            <td>Issue invoices</td>
+          </tr>
+          <tr>
+            <td>Month → list of invoices, "PDF for printing"</td>
+            <td>
+              One row per plot (the latest version; older ones under "Earlier versions (N)"): plot, version,
+              amount due, issued, a PDF per row. "PDF for printing": the latest invoices on A4 pages ordered
+              by street and plot, for paper delivery members or (a switch) all
+            </td>
+            <td>View charges; printing: Issue invoices</td>
+          </tr>
+          <tr>
+            <td>Plot card → "Invoices" → "Invoice for today"</td>
+            <td>
+              The plot's invoices: the latest version of each month, older ones under "Earlier versions (N)";
+              builds an invoice as of today for the current billing month and downloads its PDF; a new version
+              only when something changed, otherwise the latest version's PDF
+            </td>
+            <td>View charges; build: Issue invoices</td>
+          </tr>
+          <tr>
+            <td>Plot card → "Certificate" → "Issue certificate"</td>
+            <td>
+              A certificate of settlements as of the chosen date, numbered Д-year-N; the PDF opens after
+              issue. Recorded in the audit log
+            </td>
+            <td>Issue certificates</td>
+          </tr>
+          <tr>
+            <td>Menu "Certificate register"</td>
+            <td>
+              All certificates with a status filter; the PDF; "Annul" with a required reason (an annulled
+              certificate keeps its number, its PDF is marked "ANNULLED"; annulling twice is refused).
+              Recorded in the audit log
+            </td>
+            <td>View charges; annul: Issue certificates</td>
+          </tr>
+          <tr>
+            <td>Payment card / the screen after saving cash → "Print receipt"</td>
+            <td>
+              A cash receipt PDF; none for a bank payment; the payer note only for those who also have "View
+              members"
+            </td>
+            <td>View payments</td>
+          </tr>
+          <tr>
+            <td>My account → "Invoices", "Receipt"</td>
+            <td>
+              The latest invoice of each own plot, older months below, a PDF; the receipt of own cash
+              payments. No certificates
+            </td>
+            <td>own plot</td>
+          </tr>
+        </tbody>
+      </table>
+      <h3>Documents: requisites, fonts, the PDF engine</h3>
+      <ul>
+        <li>
+          <strong>Requisites.</strong> The IBAN, the name, the address and the bank are entered by the
+          chairman in Settings. The <strong>EDRPOU code</strong> belongs to the cooperative's own record and
+          only the platform operator sets it; until the operator console exists, the owner writes it into the
+          <code>edrpou</code> column of the cooperative's <code>tenant</code> row as the database owner.
+          Invoices are not built without both.
+        </li>
+        <li>
+          <strong>Language.</strong> Documents are always in Ukrainian, whatever the language of the user's
+          screens: they are official documents. Only the screens follow the language the user chose.
+        </li>
+        <li>
+          <strong>Fonts.</strong> PDFs embed a subset of <strong>IBM Plex Sans</strong> (the font of the app's
+          design), licensed under the SIL Open Font License 1.1. The font files and the licence text are in
+          the backend resources and must travel together. Cyrillic and the hryvnia sign are readable without
+          any font on the reader's computer.
+        </li>
+        <li>
+          <strong>The PDF engine</strong> is Apache PDFBox. A PDF is not stored: it is drawn on each download
+          from the data kept at build time, and the same version always gives the same file (apart from the
+          technical creation date). The QR image is made with ZXing; the layout follows the National Bank of
+          Ukraine rules (format 003).
+        </li>
+        <li>
+          <strong>The build limit.</strong> A month's invoices are built in one request while the treasurer
+          waits. The measured limit for the largest supported cooperative: see ADR 0017
+          (<code>docs/adr/0017-documents.md</code>).
+        </li>
+        <li>
+          <strong>Permissions.</strong> "Issue invoices" (chairman and treasurer by default) builds, re-issues
+          and prints invoices; "Issue certificates" (chairman) issues and annuls certificates. Viewing needs
+          "View charges", and printing a receipt "View payments". Custom roles can be given both on the roles
+          screen.
+        </li>
+      </ul>
+
       <h3>Reports</h3>
       <table>
         <thead>
@@ -1320,8 +1432,9 @@ END $$;</pre>
           <tr>
             <td>Settings → "Requisites" → "Save the requisites"</td>
             <td>
-              Official name, legal address, bank, IBAN (validated); the EDRPOU code is read-only; recorded in
-              the audit log
+              Official name, legal address, bank, IBAN (validated); the EDRPOU code is read-only (it is set by
+              the platform operator, see below); recorded in the audit log. While the IBAN or the EDRPOU code
+              is missing a warning banner is shown here and on the invoice screens
             </td>
             <td>Manage settings</td>
           </tr>
@@ -1526,6 +1639,20 @@ END $$;</pre>
             <td>—</td>
             <td>—</td>
           </tr>
+          <tr>
+            <td>Issue invoices</td>
+            <td>yes</td>
+            <td>yes</td>
+            <td>—</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>Issue certificates</td>
+            <td>yes</td>
+            <td>—</td>
+            <td>—</td>
+            <td>—</td>
+          </tr>
         </tbody>
       </table>
       <ul>
@@ -1553,6 +1680,12 @@ END $$;</pre>
           treasurer who made a mistake asks the chairman. The "Allocate prepayment automatically" switch needs
           "Manage settings". A member sees the payments of their own plots in "My charges"; the electrician
           sees none.
+        </li>
+        <li>
+          Documents: "Issue invoices" (chairman, treasurer) builds, re-issues and prints invoices; "Issue
+          certificates" (the chairman only) issues and annuls certificates; invoices and the register of
+          certificates are seen with "View charges", a cash receipt printed with "View payments". A member
+          gets the invoices and receipts of their own plots only and never certificates.
         </li>
       </ul>
     </section>
@@ -2037,6 +2170,16 @@ END $$;</pre>
               types; prepayment goes automatically to new charges (a setting, on by default); cash gets an
               internal receipt with a running number, not a fiscal receipt; only the chairman reverses a
               payment; the treasurer splits one payer's payment over several plots when entering it.
+            </td>
+          </tr>
+          <tr>
+            <td>28.10.2026</td>
+            <td>
+              Documents (016, ADR 0017): PDFs are drawn with Apache PDFBox and an embedded IBM Plex Sans, are
+              always in Ukrainian and are never stored (rendered again from the kept data); the QR code
+              follows NBU format 003 and ZXing; a month's invoices are built while the treasurer waits,
+              without a job queue (JobRunr comes with delivery, feature 017); the ЄДРПОУ code is set by the
+              platform operator; two new permissions, "Issue invoices" and "Issue certificates".
             </td>
           </tr>
         </tbody>

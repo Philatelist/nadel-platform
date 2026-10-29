@@ -1,5 +1,6 @@
 package app.nadel.ledger.internal;
 
+import app.nadel.ledger.CashReceiptData;
 import app.nadel.ledger.ChargedPart;
 import app.nadel.ledger.ChargedRow;
 import app.nadel.ledger.ChargedRowKind;
@@ -10,6 +11,7 @@ import app.nadel.ledger.CorrectionCause;
 import app.nadel.ledger.CorrectionKind;
 import app.nadel.ledger.CorrectionRow;
 import app.nadel.ledger.CorrectionSource;
+import app.nadel.ledger.InvoiceLedger;
 import app.nadel.ledger.LedgerReadModel;
 import app.nadel.ledger.LossesRunNodeOutcome;
 import app.nadel.ledger.LossesRunNodeRow;
@@ -107,6 +109,10 @@ import org.springframework.transaction.annotation.Transactional;
  * {@link #lossesRunsInRange} and {@link #commonConsumerRunsInRange}: the nodes or consumers of the runs overlapping the
  * range as stored, booked and reversed, with the distinct plots that have a regular charge of the run for the node (a
  * part with its {@code node_meter_id}) or the consumer (its calculation's {@code consumerMeterId}).
+ * <p>
+ * {@link #cashReceipt}: the payment group of a printed cash receipt, read by {@link CashReceiptQueries}.
+ * {@link #invoiceLedgers}: the figures of the invoices of plots for a month by the booking-month rule, read by
+ * {@link InvoiceLedgerQueries} and worked out by {@link MonthMovements}.
  */
 @Component
 class LedgerReportQueries implements LedgerReadModel {
@@ -275,7 +281,10 @@ class LedgerReportQueries implements LedgerReadModel {
      */
     private static final String CORRECTIONS = """
             select c.id, c.kind, c.created_at, to_char(cast(bm.month as timestamp), 'YYYY-MM') as month, c.plot_id,
-                   c.charge_type_id, o.id as original_id, o.service_from, o.service_to, o.amount as original_amount,
+                   c.charge_type_id, coalesce(orv.id, oad.id) as original_id,
+                   coalesce(orv.service_from, oad.service_from) as service_from,
+                   coalesce(orv.service_to, oad.service_to) as service_to,
+                   coalesce(orv.amount, oad.amount) as original_amount,
                    c.amount,
                    case
                        when c.source = 'RECALCULATION' then 'RECALCULATION'
@@ -290,9 +299,11 @@ class LedgerReportQueries implements LedgerReadModel {
                    c.recalculation_id, r.cause, c.reason, c.created_by
             from charge c
             join billing_month bm on bm.id = c.billing_month_id
-            join charge o on o.id = coalesce(c.reverses_charge_id, c.adjusts_charge_id)
+            left join charge orv on orv.id = c.reverses_charge_id
+            left join charge oad on oad.id = c.adjusts_charge_id and c.reverses_charge_id is null
             left join recalculation r on r.id = c.recalculation_id
             where c.kind in (:kinds)
+              and coalesce(orv.id, oad.id) is not null
               and bm.month between :from and :to
               and (:allTypes = true or c.charge_type_id in (:typeIds))
             order by bm.month, c.created_at, c.id
@@ -325,9 +336,14 @@ class LedgerReportQueries implements LedgerReadModel {
      * adjustment of it). {@code before_id} is, for a correction, the state of the charge it starts from: the latest
      * adjustment of the charge booked before it, else the charge itself (an adjustment's parts are the recalculated
      * charge's, so its quantity is its parts minus that state's). The consumer of a common consumer share is the one its
-     * calculation names; the booking times come along for the merge of several plot chunks.
+     * calculation names; the booking times come along for the merge of several plot chunks. The charge {@code o} is
+     * the one {@code orv} (reversed) joined, else {@code oad} (adjusted), else the row itself: two joins by plain
+     * primary-key equality, and every {@code o.column} of this text is turned into
+     * {@code coalesce(orv.column, oad.column, c.column)} by {@link #ofCharge}. A join on
+     * {@code coalesce(c.reverses_charge_id, c.adjusts_charge_id, c.id)} is not leakproof under RLS and cannot use
+     * {@code charge_pkey} (ADR 0017, "Measurement").
      */
-    private static final String CHARGED = """
+    private static final String CHARGED_TEMPLATE = """
             select c.id, c.kind, o.source, c.plot_id, c.charge_type_id,
                    to_char(cast(bm.month as timestamp), 'YYYY-MM') as month, o.service_from, o.service_to,
                    c.accrued_on, case when c.kind = 'REGULAR' then null else o.id end as original_id, o.run_id,
@@ -343,7 +359,8 @@ class LedgerReportQueries implements LedgerReadModel {
                         then cast(o.calculation ->> 'consumerMeterId' as uuid) end as consumer_id,
                    o.created_at as original_at, c.created_at as row_at, o.id as charge_id
             from charge c
-            join charge o on o.id = coalesce(c.reverses_charge_id, c.adjusts_charge_id, c.id)
+            left join charge orv on orv.id = c.reverses_charge_id
+            left join charge oad on oad.id = c.adjusts_charge_id and c.reverses_charge_id is null
             join billing_month bm on bm.id = c.billing_month_id
             where c.kind in ('REGULAR', 'REVERSAL', 'ADJUSTMENT')
               and o.kind = 'REGULAR'
@@ -358,17 +375,22 @@ class LedgerReportQueries implements LedgerReadModel {
      * The electricity rows: consumption and losses of the electricity type, and every common consumer share (whatever
      * its consumer).
      */
-    private static final String ELECTRICITY_CHARGED = CHARGED.formatted(
-            "(o.source in ('CONSUMPTION', 'LOSSES') and o.charge_type_id = :type) or o.source = 'COMMON_CONSUMER'");
+    private static final String ELECTRICITY_CHARGED = ofCharge(CHARGED_TEMPLATE.formatted(
+            "(o.source in ('CONSUMPTION', 'LOSSES') and o.charge_type_id = :type) or o.source = 'COMMON_CONSUMER'"));
 
     /**
      * The water rows of the plots: consumption and the fixed fee of the water type, and the common consumer shares split
      * among the plots connected to the consumer as their water source (a well pump).
      */
-    private static final String WATER_CHARGED = CHARGED.formatted("""
+    private static final String WATER_CHARGED = ofCharge(CHARGED_TEMPLATE.formatted("""
             o.plot_id in (:plotIds)
                    and ((o.source in ('CONSUMPTION', 'TARIFF') and o.charge_type_id = :type)
-                        or (o.source = 'COMMON_CONSUMER' and o.calculation ->> 'split' = 'CONNECTED_PLOTS'))""");
+                        or (o.source = 'COMMON_CONSUMER' and o.calculation ->> 'split' = 'CONNECTED_PLOTS'))"""));
+
+    /** Replaces each {@code o.column} of a {@link #CHARGED_TEMPLATE} text by the column of the charge the row corrects. */
+    private static String ofCharge(String sql) {
+        return sql.replaceAll("\\bo\\.(\\w+)", "coalesce(orv.$1, oad.$1, c.$1)");
+    }
 
     /** The open reading interval items of the queue per meter. */
     private static final String OPEN_INTERVAL_ITEMS = """
@@ -452,11 +474,36 @@ class LedgerReportQueries implements LedgerReadModel {
     private final EntityManager entityManager;
     private final ChargeTypeCatalog chargeTypes;
     private final Clock clock;
+    private final CashReceiptQueries cashReceipts;
+    private final InvoiceLedgerQueries invoiceLedgers;
 
-    LedgerReportQueries(EntityManager entityManager, ChargeTypeCatalog chargeTypes, Clock clock) {
+    LedgerReportQueries(EntityManager entityManager, ChargeTypeCatalog chargeTypes, Clock clock,
+            CashReceiptQueries cashReceipts, InvoiceLedgerQueries invoiceLedgers) {
         this.entityManager = entityManager;
         this.chargeTypes = chargeTypes;
         this.clock = clock;
+        this.cashReceipts = cashReceipts;
+        this.invoiceLedgers = invoiceLedgers;
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Map<UUID, InvoiceLedger> invoiceLedgers(Collection<UUID> plotIds, YearMonth month, Instant asOf) {
+        return invoiceLedgers.find(Objects.requireNonNull(plotIds, "plotIds"), month, asOf);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<YearMonth> firstBillingMonth() {
+        LocalDate first = entityManager.createQuery("select min(m.month) from BillingMonthRecord m", LocalDate.class)
+                .getSingleResult();
+        return Optional.ofNullable(first).map(YearMonth::from);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<CashReceiptData> cashReceipt(UUID paymentId) {
+        return cashReceipts.find(Objects.requireNonNull(paymentId, "paymentId"));
     }
 
     @Override

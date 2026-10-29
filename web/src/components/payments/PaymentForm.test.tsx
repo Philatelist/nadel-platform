@@ -234,7 +234,7 @@ describe('PaymentForm', () => {
     await user.clear(membership);
     await user.type(membership, '900');
 
-    expect(await screen.findByText('Сума перевищує залишок за нарахуванням', {}, wait)).toBeInTheDocument();
+    expect(await screen.findByText(/^Більше, ніж залишок 600,00\s₴$/, {}, wait)).toBeInTheDocument();
     expect(screen.getByText('Розподілено більше, ніж сума платежу')).toBeInTheDocument();
     expect(screen.getByRole('rowheader', { name: 'Розподілено' }).closest('tr')).toHaveTextContent(
       /1\s000,00 ₴ з 700,00 ₴/,
@@ -247,7 +247,7 @@ describe('PaymentForm', () => {
     await user.clear(membership);
     await user.type(membership, '600');
     await waitFor(() => expect(screen.getByRole('button', { name: 'Зберегти' })).toBeEnabled(), wait);
-    expect(screen.queryByText('Сума перевищує залишок за нарахуванням')).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Більше, ніж залишок/)).not.toBeInTheDocument();
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 

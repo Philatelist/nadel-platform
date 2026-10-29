@@ -81,7 +81,7 @@ class RoleDescriptionsAcceptanceTests extends IntegrationTest {
         body.put("name", "Treasurer");
         body.put("description", description);
         body.put("permissions", List.of("MEMBERS_VIEW", "PLOTS_VIEW", "AUDIT_VIEW", "TARIFFS_VIEW", "METERS_VIEW",
-                "CHARGES_VIEW", "REPORTS_VIEW", "PAYMENTS_VIEW", "PAYMENTS_ENTER"));
+                "CHARGES_VIEW", "REPORTS_VIEW", "PAYMENTS_VIEW", "PAYMENTS_ENTER", "INVOICES_ISSUE"));
         if (restore) body.put("useDefaultDescription", true);
         return body;
     }

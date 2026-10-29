@@ -27,4 +27,22 @@ public interface PlotOwners {
      * id unknown in the cooperative) has an empty list.
      */
     Map<UUID, List<UUID>> currentOwnerIds(Collection<UUID> plotIds);
+
+    /**
+     * A current owner of a plot with the share of the ownership, as stored ({@code share_numerator} /
+     * {@code share_denominator}, never reduced here).
+     *
+     * @param memberId    the owner
+     * @param numerator   the numerator of the share, at least 1
+     * @param denominator the denominator of the share, at least the numerator
+     */
+    record OwnerShare(UUID memberId, int numerator, int denominator) {
+    }
+
+    /**
+     * The current owners of each plot with their shares (the invoice of feature 016 prints them), in the order of
+     * {@link #currentOwnerIds}: the earliest owner first. Every distinct id is a key, in the order of first appearance;
+     * a plot without current owners (or an id unknown in the cooperative) has an empty list.
+     */
+    Map<UUID, List<OwnerShare>> currentOwnerShares(Collection<UUID> plotIds);
 }

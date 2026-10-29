@@ -22,6 +22,8 @@ vi.mock('@nadel/api-client', async (importOriginal) => ({
   useRunBillingMonth: () => ({ mutate: vi.fn(), isPending: false }),
   useCloseBillingMonth: () => ({ mutate: vi.fn(), isPending: false }),
   useListChargeTypes: () => queryResult([]),
+  useListInvoices: () => queryResult({ items: [], page: 0, size: 20, totalItems: 0, totalPages: 0 }),
+  useGetInvoiceReadiness: () => queryResult({ missing: [] }),
 }));
 
 function renderPage() {

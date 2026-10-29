@@ -29,7 +29,9 @@ public enum Permission {
     REPORT_TEMPLATES_MANAGE,
     PAYMENTS_VIEW,
     PAYMENTS_ENTER,
-    PAYMENTS_REVERSE;
+    PAYMENTS_REVERSE,
+    INVOICES_ISSUE,
+    CERTIFICATES_ISSUE;
 
     public static final String AUTHORITY_PREFIX = "PERM_";
 

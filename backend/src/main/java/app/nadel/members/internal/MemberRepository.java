@@ -111,6 +111,12 @@ interface MemberRepository extends JpaRepository<Member, UUID> {
     List<MemberRoleRow> findRolesOfMembers(@Param("tenantId") UUID tenantId,
             @Param("memberIds") Collection<UUID> memberIds);
 
+    /** The active members holding a role with the base code, in name order (feature 016, {@code RoleHolders}). */
+    @Query("select distinct m from Member m join MemberRole mr on mr.memberId = m.id "
+            + "join Role r on r.id = mr.roleId "
+            + "where m.archivedAt is null and r.baseCode = :baseCode")
+    List<Member> findActiveHoldersOf(@Param("baseCode") String baseCode);
+
     /** Ids of the active members holding the Chairman base role in a cooperative. */
     @Query("select distinct m.id from Member m join MemberRole mr on mr.memberId = m.id "
             + "join Role r on r.id = mr.roleId "
@@ -138,6 +144,10 @@ interface MemberRepository extends JpaRepository<Member, UUID> {
             order by lower(m.lastName), lower(m.firstName), m.id
             """)
     List<UUID> findIdsByName(@Param("pattern") String pattern, Pageable limit);
+
+    /** The id and the delivery channel of each given member, archived ones included (feature 016). */
+    @Query("select m.id, m.deliveryChannel from Member m where m.id in :ids")
+    List<Object[]> findDeliveryChannels(@Param("ids") Collection<UUID> ids);
 
     /** The given members (archived included) with a shared row lock ({@code FOR SHARE}), in id order. */
     @Lock(LockModeType.PESSIMISTIC_READ)

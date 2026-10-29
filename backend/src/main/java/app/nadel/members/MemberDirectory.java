@@ -42,4 +42,12 @@ public interface MemberDirectory {
      * Nothing here logs the values.
      */
     Map<UUID, MemberContacts> contacts(Collection<UUID> ids);
+
+    /**
+     * How each of the given members receives invoices (feature 016: the paper print set; feature 017: delivery),
+     * archived members included. Ids that do not exist in the cooperative (unknown, or of another cooperative: RLS)
+     * are absent from the map. Runs in the caller's transaction ({@code Propagation.MANDATORY}), so a caller that
+     * reads it in one {@code REPEATABLE READ} transaction with other data sees one snapshot.
+     */
+    Map<UUID, DeliveryChannel> deliveryChannels(Collection<UUID> ids);
 }

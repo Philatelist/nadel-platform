@@ -118,7 +118,7 @@ class DemoReportTemplatesTests extends IntegrationTest {
                     "select official_name, legal_address, bank_name, iban from cooperative_settings where tenant_id = ?",
                     DEMO_TENANT);
             assertThat(settings.values()).doesNotContainNull();
-            assertThat(settings.get("iban")).isEqualTo("UA213223130000026007233566001");
+            assertThat(settings.get("iban")).isEqualTo("UA850000000000000000000123456");
             assertThat(owner.queryForObject("select edrpou from tenant where id = ?", String.class, DEMO_TENANT))
                     .isEqualTo("12345678");
             // a requisite the chairman edited survives the next run

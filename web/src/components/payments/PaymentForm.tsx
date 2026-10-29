@@ -9,7 +9,7 @@ import {
 import { isZeroMoney, normalizeMoneyInput } from '@nadel/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { useT } from '../../i18n';
+import { useLocale, useT } from '../../i18n';
 import { kyivToday } from '../../kyivToday';
 import { problemCode } from '../../problem';
 import type { PickedMember } from '../ownership/MemberPicker';
@@ -69,6 +69,7 @@ function splitParts(edits: SplitEdits | null): {
  */
 export function PaymentForm({ initialPlotId }: { initialPlotId?: string }) {
   const t = useT();
+  const { locale } = useLocale();
   const f = t.payments.form;
   const queryClient = useQueryClient();
   const today = kyivToday();
@@ -118,7 +119,15 @@ export function PaymentForm({ initialPlotId }: { initialPlotId?: string }) {
   const preview = usePaymentPreview(request, owner);
   const enter = useEnterPayment();
   const errors = paymentErrors(t, saveError ?? preview.error);
-  const problems = allocationProblemTexts(t, preview.shown?.problems, isSplit ? undefined : plotId);
+  const problems = allocationProblemTexts(t, preview.shown?.problems, isSplit ? undefined : plotId, {
+    locale,
+    open: Object.fromEntries(
+      (preview.shown?.parts ?? []).map((p) => [
+        p.plotId,
+        Object.fromEntries(p.lines.map((l) => [l.chargeId, l.open])),
+      ]),
+    ),
+  });
   const ready = (isSplit ? splitPayer !== null : plotId !== undefined) && common;
   const part: PaymentPartProposal | undefined = ready && !isSplit ? preview.shown?.parts[0] : undefined;
   const splitShown = ready && isSplit ? preview.shown : undefined;

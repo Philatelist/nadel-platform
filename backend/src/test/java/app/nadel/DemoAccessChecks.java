@@ -43,7 +43,7 @@ public final class DemoAccessChecks {
                         "SETTINGS_MANAGE", "TARIFFS_VIEW", "TARIFFS_MANAGE", "METERS_VIEW", "METERS_MANAGE", "READINGS_ENTER",
                         "READINGS_APPROVE", "CHARGES_VIEW", "CHARGES_RUN", "CHARGES_REVERSE", "PERIODS_CLOSE",
                         "RECALCULATION_RUN", "REPORTS_VIEW", "REPORT_TEMPLATES_MANAGE", "PAYMENTS_VIEW",
-                        "PAYMENTS_ENTER", "PAYMENTS_REVERSE")));
+                        "PAYMENTS_ENTER", "PAYMENTS_REVERSE", "INVOICES_ISSUE", "CERTIFICATES_ISSUE")));
     }
 
     public static void treasurerHasReadPermissions(MockMvc mvc) throws Exception {
@@ -53,7 +53,7 @@ public final class DemoAccessChecks {
                 .andExpect(jsonPath("$.permissions",
                         containsInAnyOrder("MEMBERS_VIEW", "PLOTS_VIEW", "AUDIT_VIEW", "TARIFFS_VIEW",
                                 "METERS_VIEW", "CHARGES_VIEW", "REPORTS_VIEW", "PAYMENTS_VIEW",
-                                "PAYMENTS_ENTER")));
+                                "PAYMENTS_ENTER", "INVOICES_ISSUE")));
     }
 
     public static void memberHasNoPermissions(MockMvc mvc) throws Exception {
@@ -99,6 +99,38 @@ public final class DemoAccessChecks {
         getAs(mvc, treasurer, "/api/v1/roles")
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
+
+        documentsAreEnforcedFromTheMembersRoles(mvc);
+    }
+
+    /**
+     * The documents (feature 016): the invoice list and the certificate register need {@code CHARGES_VIEW}, issuing a
+     * certificate {@code CERTIFICATES_ISSUE} (the chairman only), a member's own invoices need no permission.
+     */
+    public static void documentsAreEnforcedFromTheMembersRoles(MockMvc mvc) throws Exception {
+        String treasurer = demo("treasurer@demo.local");
+        String member = demo("member@demo.local");
+        String chairman = demo("chairman@demo.local");
+
+        getAs(mvc, treasurer, "/api/v1/invoices").andExpect(status().isOk());
+        getAs(mvc, member, "/api/v1/invoices")
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
+        getAs(mvc, member, "/api/v1/me/invoices")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray());
+
+        getAs(mvc, treasurer, "/api/v1/certificates").andExpect(status().isOk());
+        getAs(mvc, member, "/api/v1/certificates")
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
+        // CERTIFICATES_ISSUE guards the issue; an unknown plot shows whether the guard let the call through (404)
+        postAs(mvc, treasurer, "/api/v1/plots/" + UUID.randomUUID() + "/certificates")
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
+        postAs(mvc, chairman, "/api/v1/plots/" + UUID.randomUUID() + "/certificates")
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("PLOT_NOT_FOUND"));
     }
 
     /** A token as Keycloak would issue it for a demo user; the subject is stable per e-mail. */

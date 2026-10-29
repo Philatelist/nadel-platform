@@ -15,6 +15,9 @@ import { Link, useNavigate, useParams } from 'react-router';
 import { QueryBoundary } from '../components/QueryBoundary';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { UserContent, formatUser } from '../components/UserContent';
+import { PlotTabs } from '../components/PlotTabs';
+import { PlotInvoices } from '../components/invoices/PlotInvoices';
+import { CertificateForm } from '../components/certificates/CertificateForm';
 import { PlotAccountPanel } from '../components/charges/PlotAccountPanel';
 import { PlotTariffsPanel } from '../components/tariffs/PlotTariffsPanel';
 import { WaterConnectionPanel } from '../components/water/WaterConnectionPanel';
@@ -66,6 +69,7 @@ function PlotView({ plot }: { plot: PlotDetails }) {
   const canView = useCan('PLOTS_VIEW');
   const canViewCharges = useCan('CHARGES_VIEW');
   const canViewReports = useCan('REPORTS_VIEW');
+  const canIssueCertificates = useCan('CERTIFICATES_ISSUE');
   const canEdit = useCanEditPlots();
   const canEnterPayment = useCan('PAYMENTS_ENTER') && plot.kind !== 'COMMON' && !plot.archived;
   const isOwner = useMe().ownedPlots.some((p) => p.plotId === plot.id);
@@ -187,17 +191,46 @@ function PlotView({ plot }: { plot: PlotDetails }) {
         ) : (
           <OwnersPanel plotId={plot.id} kind={plot.kind} archived={plot.archived} />
         ))}
-      {plot.kind !== 'COMMON' && (canViewCharges || isOwner) && <PlotAccountPanel plotId={plot.id} />}
-      {plot.kind !== 'COMMON' && canViewReports && (
-        <Link to={reportPath('plot-balances', { street: plot.street })} className="text-accent underline">
-          {t.reports.plotBalancesLink}
-        </Link>
-      )}
-      {plot.kind !== 'COMMON' && <PlotTariffsPanel plotId={plot.id} />}
-      {plot.kind !== 'COMMON' && <PlotMeterPanel plotId={plot.id} />}
-      {plot.kind !== 'COMMON' && (canView || isOwner) && (
-        <WaterConnectionPanel plotId={plot.id} archived={plot.archived} />
-      )}
+      <PlotTabs
+        tabs={[
+          {
+            id: 'account',
+            label: t.plot.tabs.account,
+            content: (
+              <>
+                {plot.kind !== 'COMMON' && (canViewCharges || isOwner) && (
+                  <PlotAccountPanel plotId={plot.id} />
+                )}
+                {plot.kind !== 'COMMON' && canViewReports && (
+                  <Link
+                    to={reportPath('plot-balances', { street: plot.street })}
+                    className="text-accent underline"
+                  >
+                    {t.reports.plotBalancesLink}
+                  </Link>
+                )}
+                {plot.kind !== 'COMMON' && <PlotTariffsPanel plotId={plot.id} />}
+                {plot.kind !== 'COMMON' && <PlotMeterPanel plotId={plot.id} />}
+                {plot.kind !== 'COMMON' && (canView || isOwner) && (
+                  <WaterConnectionPanel plotId={plot.id} archived={plot.archived} />
+                )}
+              </>
+            ),
+          },
+          plot.kind !== 'COMMON' &&
+            (canViewCharges || isOwner) && {
+              id: 'invoices',
+              label: t.plot.tabs.invoices,
+              content: <PlotInvoices plotId={plot.id} />,
+            },
+          plot.kind !== 'COMMON' &&
+            canIssueCertificates && {
+              id: 'certificates',
+              label: t.plot.tabs.certificates,
+              content: <CertificateForm plotId={plot.id} />,
+            },
+        ]}
+      />
       {confirmingDelete && (
         <ConfirmDialog
           title={t.plot.deleteTitle}

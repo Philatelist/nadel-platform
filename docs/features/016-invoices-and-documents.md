@@ -88,8 +88,9 @@ the list of missing fields and a link to Settings → Requisites.
 **Generating the code:**
 - The image is built on the server with ZXing (Apache 2.0) at error correction level M, with a quiet zone of at least 4
   modules.
-- In the PDF it is at least 30 × 30 mm, with the text «Відскануйте QR-код у застосунку свого банку» under it and the link
-  text printed under that.
+- In the PDF it is at least 30 × 30 mm, beside the totals, with the text «Відскануйте QR-код у застосунку свого банку»
+  and one short clickable line «Оплатити в застосунку банку» that opens the link (the link text is not printed; owner's
+  review of PR #59).
 
 **Owner's check before merging:** scan the QR code of a demo invoice with two real banking apps. The transfer form must
 open with the recipient, the IBAN, the purpose and the amount filled in, and the locked fields not editable. The result

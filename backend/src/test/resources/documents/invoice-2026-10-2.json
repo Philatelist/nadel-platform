@@ -1,0 +1,311 @@
+{
+  "schema": 1,
+  "number": "2026-10/2",
+  "version": 1,
+  "month": "2026-10",
+  "monthStatus": "OPEN",
+  "asOf": "2026-10-29T09:58:20.327535Z",
+  "issuedAt": "2026-10-29T09:58:20.327535Z",
+  "issuedOn": "2026-10-29",
+  "cooperative": {
+    "iban": "UA850000000000000000000123456",
+    "edrpou": "12345678",
+    "address": "01001, м. Київ, вул. Садова, 1",
+    "bankName": "АТ «Демо-банк»",
+    "officialName": "Садівниче товариство «Надія»"
+  },
+  "plot": {
+    "id": "6241a45c-c205-488c-885c-addad7658571",
+    "number": "2",
+    "street": "вул. Садова"
+  },
+  "owners": [
+    {
+      "memberId": "aaaaaaaa-0000-0000-0000-000000000012",
+      "numerator": 1,
+      "denominator": 1
+    }
+  ],
+  "types": [
+    {
+      "end": "25.00",
+      "code": "MEMBERSHIP",
+      "name": "Членський внесок",
+      "paid": "355.00",
+      "start": "360.00",
+      "charged": "20.00",
+      "chargeTypeId": "0d373c33-eef1-c912-1025-49300e9c10df"
+    },
+    {
+      "end": "978.71",
+      "code": "ELECTRICITY",
+      "name": "Електроенергія",
+      "paid": "427.50",
+      "start": "803.09",
+      "charged": "603.12",
+      "chargeTypeId": "6f3259bf-7eda-e773-62ce-412b914eae8c"
+    },
+    {
+      "end": "17.50",
+      "code": "LAND_TAX",
+      "name": "Земельний податок",
+      "paid": "17.50",
+      "start": "17.50",
+      "charged": "17.50",
+      "chargeTypeId": "1be5adf2-09b0-3ff5-8a6c-1634c74fcfd9"
+    },
+    {
+      "end": "78.18",
+      "code": "COMMON_CONSUMERS",
+      "name": "Спільні споживачі",
+      "paid": "0.00",
+      "start": "0.00",
+      "charged": "78.18",
+      "chargeTypeId": "e1cada69-0e02-90b8-e320-d6b84bbb7d5c"
+    }
+  ],
+  "lines": [
+    {
+      "kind": "ADJUSTMENT",
+      "parts": [],
+      "amount": "-5.00",
+      "source": "TARIFF",
+      "chargeId": "929ea4c4-f7dc-4309-5325-367b1369da33",
+      "corrects": "2026-09",
+      "readings": [],
+      "serviceTo": "2026-09-30",
+      "serviceFrom": "2026-09-01",
+      "chargeTypeId": "0d373c33-eef1-c912-1025-49300e9c10df"
+    },
+    {
+      "kind": "REGULAR",
+      "parts": [
+        {
+          "to": "2026-10-31",
+          "days": 31,
+          "from": "2026-10-01",
+          "rate": "50.0000",
+          "unit": "SOTKA",
+          "basis": "PER_AREA_SOTKA",
+          "quantity": "6.00",
+          "frequency": "YEARLY"
+        }
+      ],
+      "amount": "25.00",
+      "source": "TARIFF",
+      "chargeId": "2fcadcb9-bdce-21a9-1822-bb15f15ff33e",
+      "readings": [],
+      "serviceTo": "2026-10-31",
+      "serviceFrom": "2026-10-01",
+      "chargeTypeId": "0d373c33-eef1-c912-1025-49300e9c10df"
+    },
+    {
+      "kind": "REVERSAL",
+      "parts": [],
+      "amount": "-360.00",
+      "source": "TARIFF",
+      "chargeId": "9b90882f-c15b-49e7-c584-87f7757a3c31",
+      "readings": [],
+      "serviceTo": "2026-10-31",
+      "serviceFrom": "2026-10-01",
+      "chargeTypeId": "0d373c33-eef1-c912-1025-49300e9c10df"
+    },
+    {
+      "kind": "REGULAR",
+      "parts": [
+        {
+          "to": "2026-10-31",
+          "days": 31,
+          "from": "2026-10-01",
+          "rate": "60.0000",
+          "unit": "SOTKA",
+          "basis": "PER_AREA_SOTKA",
+          "quantity": "6.00",
+          "frequency": "MONTHLY"
+        }
+      ],
+      "amount": "360.00",
+      "source": "TARIFF",
+      "chargeId": "d8d2dadb-25c8-44fe-8e31-483d0adfb4fa",
+      "readings": [],
+      "serviceTo": "2026-10-31",
+      "serviceFrom": "2026-10-01",
+      "chargeTypeId": "0d373c33-eef1-c912-1025-49300e9c10df"
+    },
+    {
+      "kind": "REGULAR",
+      "parts": [
+        {
+          "to": "2026-10-03",
+          "days": 7,
+          "from": "2026-09-27",
+          "rate": "4.3200",
+          "unit": "KWH",
+          "basis": "PER_KWH",
+          "quantity": "42.300",
+          "frequency": "MONTHLY"
+        }
+      ],
+      "amount": "182.74",
+      "source": "CONSUMPTION",
+      "chargeId": "b92e6395-7bbc-47f3-a74a-d961b514841b",
+      "readings": [
+        {
+          "value": "2012.100",
+          "meterId": "d11bad3e-83e0-6358-460e-8c82e3624038",
+          "takenOn": "2026-09-26"
+        },
+        {
+          "value": "2054.400",
+          "meterId": "d11bad3e-83e0-6358-460e-8c82e3624038",
+          "takenOn": "2026-10-03"
+        }
+      ],
+      "serviceTo": "2026-10-03",
+      "serviceFrom": "2026-09-27",
+      "chargeTypeId": "6f3259bf-7eda-e773-62ce-412b914eae8c"
+    },
+    {
+      "kind": "REGULAR",
+      "parts": [
+        {
+          "to": "2026-10-18",
+          "days": 15,
+          "from": "2026-10-04",
+          "rate": "4.3200",
+          "unit": "KWH",
+          "basis": "PER_KWH",
+          "quantity": "6.810",
+          "frequency": "MONTHLY"
+        }
+      ],
+      "amount": "29.42",
+      "source": "LOSSES",
+      "chargeId": "892cffa2-e1d9-4f83-afdc-5a76d591f8c2",
+      "readings": [],
+      "serviceTo": "2026-10-18",
+      "serviceFrom": "2026-10-04",
+      "chargeTypeId": "6f3259bf-7eda-e773-62ce-412b914eae8c"
+    },
+    {
+      "kind": "REGULAR",
+      "parts": [
+        {
+          "to": "2026-10-18",
+          "days": 15,
+          "from": "2026-10-04",
+          "rate": "4.3200",
+          "unit": "KWH",
+          "basis": "PER_KWH",
+          "quantity": "90.500",
+          "frequency": "MONTHLY"
+        }
+      ],
+      "amount": "390.96",
+      "source": "CONSUMPTION",
+      "chargeId": "cc6f738e-8354-48fa-ac83-ad2a98905ff5",
+      "readings": [
+        {
+          "value": "2054.400",
+          "meterId": "d11bad3e-83e0-6358-460e-8c82e3624038",
+          "takenOn": "2026-10-03"
+        },
+        {
+          "value": "2144.900",
+          "meterId": "d11bad3e-83e0-6358-460e-8c82e3624038",
+          "takenOn": "2026-10-18"
+        }
+      ],
+      "serviceTo": "2026-10-18",
+      "serviceFrom": "2026-10-04",
+      "chargeTypeId": "6f3259bf-7eda-e773-62ce-412b914eae8c"
+    },
+    {
+      "kind": "REGULAR",
+      "parts": [
+        {
+          "to": "2026-10-31",
+          "days": 31,
+          "from": "2026-10-01",
+          "rate": "35.0000",
+          "unit": "SOTKA",
+          "basis": "PER_AREA_SOTKA",
+          "quantity": "6.00",
+          "frequency": "YEARLY"
+        }
+      ],
+      "amount": "17.50",
+      "source": "TARIFF",
+      "chargeId": "5651a975-be7a-45e2-b76d-fa772d8733b7",
+      "readings": [],
+      "serviceTo": "2026-10-31",
+      "serviceFrom": "2026-10-01",
+      "chargeTypeId": "1be5adf2-09b0-3ff5-8a6c-1634c74fcfd9"
+    },
+    {
+      "kind": "REGULAR",
+      "parts": [
+        {
+          "to": "2026-10-18",
+          "days": 15,
+          "from": "2026-10-04",
+          "rate": "4.3200",
+          "unit": "KWH",
+          "basis": "PER_KWH",
+          "quantity": "14.114",
+          "frequency": "MONTHLY"
+        }
+      ],
+      "amount": "60.97",
+      "source": "COMMON_CONSUMER",
+      "chargeId": "22f61ab8-719a-4236-aeb9-311e0a659c32",
+      "readings": [],
+      "serviceTo": "2026-10-18",
+      "serviceFrom": "2026-10-04",
+      "chargeTypeId": "e1cada69-0e02-90b8-e320-d6b84bbb7d5c",
+      "consumerName": "Свердловина №1"
+    },
+    {
+      "kind": "REGULAR",
+      "parts": [
+        {
+          "to": "2026-10-18",
+          "days": 15,
+          "from": "2026-10-04",
+          "rate": "4.3200",
+          "unit": "KWH",
+          "basis": "PER_KWH",
+          "quantity": "3.983",
+          "frequency": "MONTHLY"
+        }
+      ],
+      "amount": "17.21",
+      "source": "COMMON_CONSUMER",
+      "chargeId": "e4a25b85-81cc-43e6-8aca-6e8da5daf20d",
+      "readings": [],
+      "serviceTo": "2026-10-18",
+      "serviceFrom": "2026-10-04",
+      "chargeTypeId": "e1cada69-0e02-90b8-e320-d6b84bbb7d5c",
+      "consumerName": "Освітлення вул. Вишнева"
+    }
+  ],
+  "payments": [
+    {
+      "paymentId": "2751cf40-54e5-2790-b30e-aea708044db8",
+      "receivedOn": "2026-10-08",
+      "amount": "800.00",
+      "receiptNumber": "2"
+    }
+  ],
+  "receivedAfter": [],
+  "totals": {
+    "due": "1099.39",
+    "endDebt": "1099.39",
+    "prepayment": "0.00",
+    "receivedAfter": "0.00"
+  },
+  "qr": {
+    "link": "https://qr.bank.gov.ua/QkNECjAwMwoyClhDVAoK0eDks-Lt6PflIPLu4uDw6PHy4u4gq83g5LP_uwpVQTg1MDAwMDAwMDAwMDAwMDAwMDAwMDEyMzQ1NgpVQUgxMDk5LjM5CjEyMzQ1Njc4ClNVUFAvU1VQUAoyMDI2LTEwLzIKxLPr_-3q4CAyLiDC7eXx6ugg5-Ag5u7i8uXt_CAyMDI2LiDQ4PXz7e7qIDIwMjYtMTAvMgoKRkVGRgoKCg",
+    "purpose": "Ділянка 2. Внески за жовтень 2026. Рахунок 2026-10/2"
+  }
+}

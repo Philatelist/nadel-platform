@@ -5,6 +5,7 @@ import { useLocale, useT } from '../../i18n';
 import { UserContent } from '../UserContent';
 import { ChargeTypeName } from '../ChargeTypeName';
 import { servicePeriodLabel } from '../payments/paymentLabels';
+import { ReceiptButton } from '../payments/ReceiptButton';
 import { Badge, Money } from '../ui';
 
 function Lines({ lines, label }: { lines: readonly PaymentAllocation[]; label: string }) {
@@ -62,7 +63,10 @@ export function PaymentRow({ payment, canOpen }: { payment: AccountPayment; canO
         )}
         <Lines lines={payment.allocations} label={`${c.paymentEntry} ${day}`} />
       </div>
-      <Money amount={payment.amount} tone="auto" />
+      <div className="flex flex-col items-end gap-2">
+        <Money amount={payment.amount} tone="auto" />
+        {payment.kind === 'PAYMENT' && <ReceiptButton payment={payment} />}
+      </div>
     </li>
   );
 }

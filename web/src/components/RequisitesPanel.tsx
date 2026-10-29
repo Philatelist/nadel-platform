@@ -1,8 +1,14 @@
-import { getGetSettingsQueryKey, useUpdateSettings, type CooperativeSettings } from '@nadel/api-client';
+import {
+  getGetSettingsQueryKey,
+  useUpdateSettings,
+  type CooperativeSettings,
+  type RequisiteField,
+} from '@nadel/api-client';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useT } from '../i18n';
 import { problemCode, problemFieldErrors, problemMessage } from '../problem';
+import { RequisitesWarning } from './invoices/RequisitesWarning';
 import { Button, Notice, Panel, TextField } from './ui';
 
 /** Trims and upper-cases an IBAN; the server also strips inner spaces and does the real check. */
@@ -43,6 +49,11 @@ export function RequisitesPanel({ saved }: { saved: CooperativeSettings }) {
     },
   });
 
+  // the same two requisites the server checks before it builds an invoice
+  const missing: RequisiteField[] = [];
+  if (!(saved.iban ?? '').trim()) missing.push('IBAN');
+  if (!(saved.edrpou ?? '').trim()) missing.push('EDRPOU');
+
   const changed =
     officialName.trim() !== (saved.officialName ?? '') ||
     legalAddress.trim() !== (saved.legalAddress ?? '') ||
@@ -74,6 +85,7 @@ export function RequisitesPanel({ saved }: { saved: CooperativeSettings }) {
           });
         }}
       >
+        <RequisitesWarning missing={missing} showLink={false} />
         <p className="text-sm text-ink-muted">{s.text}</p>
         <TextField label={s.officialName} value={officialName} onChange={edit(setOfficialName)} />
         <TextField label={s.legalAddress} value={legalAddress} onChange={edit(setLegalAddress)} />

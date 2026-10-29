@@ -39,6 +39,25 @@ class JpaPlotOwners implements PlotOwners {
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public Map<UUID, List<UUID>> currentOwnerIds(Collection<UUID> plotIds) {
+        Map<UUID, List<UUID>> owners = new LinkedHashMap<>();
+        current(plotIds).forEach((plotId, rows) -> owners.put(plotId, rows.stream().map(Ownership::getMemberId)
+                .toList()));
+        return owners;
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Map<UUID, List<OwnerShare>> currentOwnerShares(Collection<UUID> plotIds) {
+        Map<UUID, List<OwnerShare>> owners = new LinkedHashMap<>();
+        current(plotIds).forEach((plotId, rows) -> owners.put(plotId, rows.stream()
+                .map(row -> new OwnerShare(row.getMemberId(), row.getShare().numerator(),
+                        row.getShare().denominator()))
+                .toList()));
+        return owners;
+    }
+
+    /** The current ownership rows of each plot, the earliest owner first; every distinct id is a key. */
+    private Map<UUID, List<Ownership>> current(Collection<UUID> plotIds) {
         List<UUID> ids = plotIds.stream().distinct().toList();
         Map<UUID, List<Ownership>> rows = new LinkedHashMap<>();
         ids.forEach(id -> rows.put(id, new ArrayList<>()));
@@ -46,9 +65,7 @@ class JpaPlotOwners implements PlotOwners {
             ownerships.findCurrentByPlotIds(ids.subList(from, Math.min(ids.size(), from + CHUNK)))
                     .forEach(ownership -> rows.get(ownership.getPlotId()).add(ownership));
         }
-        Map<UUID, List<UUID>> owners = new LinkedHashMap<>();
-        rows.forEach((plotId, current) -> owners.put(plotId,
-                current.stream().sorted(EARLIEST_FIRST).map(Ownership::getMemberId).toList()));
-        return owners;
+        rows.replaceAll((plotId, current) -> current.stream().sorted(EARLIEST_FIRST).toList());
+        return rows;
     }
 }
