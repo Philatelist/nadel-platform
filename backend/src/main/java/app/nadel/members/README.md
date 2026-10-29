@@ -9,7 +9,8 @@ cooperative). The contacts of a member are stored encrypted (feature 014, see "E
 `MemberDirectory` and `MemberRef` in the module root: a read-only lookup for other modules, which must never read the
 member tables. `find(ids)` returns the names and the archived flag of the given members (archived included);
 `idsMatchingName(text)` returns the ids of members whose last, first or middle name contains the text (case-insensitive,
-archived included, literal match, at most 200 ids); `lockActive(ids)` pins members for the caller's transaction with a
+archived included, literal match, at most 200 ids); `activeIds()` returns the ids of the members who are not archived
+(transaction mandatory; the audience «усі члени» of an announcement, feature 017); `lockActive(ids)` pins members for the caller's transaction with a
 shared row lock (`FOR SHARE`, in id order, transaction mandatory) and returns those that exist, archived ones included so
 the caller can refuse them (used by the change of owner, so a member cannot be archived while the change commits).
 `MemberRef.shortName()` is "Last First" without the patronymic. `contacts(ids)` returns `MemberContacts` (names,

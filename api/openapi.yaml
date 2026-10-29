@@ -81,7 +81,8 @@ tags:
   - name: notifications
     description: >-
       Delivery to members by e-mail through the cooperative's own mailbox and by Telegram through its own bot: the
-      channel settings and their checks, and the member's own channel choice and Telegram link
+      channel settings and their checks, the member's own channel choice and Telegram link, sending invoices and
+      the delivery screen, and the board's announcements
 
 paths:
   /me:
@@ -766,6 +767,29 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PlotFeatureCollection'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /plots/streets:
+    get:
+      tags: [plots]
+      operationId: listPlotStreets
+      summary: The streets of the cooperative's plots
+      description: |
+        The distinct streets of the active plots that are not common land (feature 017 §2.6: the streets an
+        announcement can be sent to), without surrounding spaces, each once ignoring case, in Ukrainian alphabetical
+        order ignoring case. Plots without a street are left out. Requires `PLOTS_VIEW` or `ANNOUNCEMENTS_SEND`.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -1599,6 +1623,152 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+
+  /announcements:
+    post:
+      tags: [notifications]
+      operationId: sendAnnouncement
+      summary: Preview or send an announcement of the board
+      description: |
+        «Надіслати оголошення» (feature 017 §2.6). The audience is every active member (`streets` empty) or the
+        current owners of the active plots on the chosen streets (the street compared ignoring case and surrounding
+        spaces, as `listPlotStreets` lists them). Each member first gets their own channel by the rule of invoices
+        (`sendMonthInvoices`); the announcement then goes only through a channel in `channels`:
+        - the member's own channel when it is chosen;
+        - otherwise, when the member's own channel is Telegram or e-mail, the other chosen channel when the member can
+          be reached through it (Telegram: linked to the cooperative's bot; e-mail: an e-mail and the cooperative's
+          mailbox);
+        - otherwise paper («на папері»: the board informs them in person). Members who chose paper or Viber are
+          always on paper.
+
+        `text` is plain text as entered (surrounding spaces removed), sent as is: a Telegram message without
+        formatting and a letter whose HTML part escapes it. It must not be blank (400 `VALIDATION_FAILED`, field
+        `text`, code `REQUIRED`) and is at most 2000 characters (Unicode code points; 400 `ANNOUNCEMENT_TOO_LONG`, field
+        `text`, code `TOO_LONG`). A blank street is 400 `VALIDATION_FAILED` (field `streets`, code `INVALID`).
+
+        With `preview=true` nothing is written: the answer has the counts per channel and the members on paper
+        (`paperMembers`, "Last First", in alphabetical order). With `preview=false` the announcement is saved, each
+        member gets one delivery (`kind` `ANNOUNCEMENT`; Telegram and e-mail `QUEUED` and sent in the background,
+        paper `TO_PRINT`, listed so the board can inform them), and the send is written to the audit log as
+        `ANNOUNCEMENT_SENT` (entity type `ANNOUNCEMENT`; fields `audience` (`ALL` or `STREETS`), `streets` (only for
+        `STREETS`, joined by ", "), `channels`, `telegram`, `email`, `paper`; never the text). Requires
+        `ANNOUNCEMENTS_SEND`.
+      parameters:
+        - name: preview
+          in: query
+          required: true
+          description: '`true` counts the recipients without writing anything; `false` sends'
+          schema:
+            type: boolean
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnnouncementRequest'
+      responses:
+        '200':
+          description: The recipients per channel (preview), or the announcement sent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnnouncementSendResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    get:
+      tags: [notifications]
+      operationId: listAnnouncements
+      summary: The announcements sent
+      description: |
+        The announcements of the cooperative (feature 017 §2.6), newest first, each with its date, author, audience,
+        channels and the counts of its deliveries now: sent, failed, still queued and on paper. Not the text (see
+        `getAnnouncement`). Requires `ANNOUNCEMENTS_SEND`.
+      parameters:
+        - name: page
+          in: query
+          required: false
+          description: Zero-based page index
+          schema:
+            type: integer
+            format: int32
+            minimum: 0
+            default: 0
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnnouncementPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /announcements/{id}:
+    get:
+      tags: [notifications]
+      operationId: getAnnouncement
+      summary: One announcement with its deliveries
+      description: |
+        The announcement's text, audience, channels and counts, and a page of its deliveries (the rows of
+        `listDeliveries`, newest first, with their counts per channel and status). 404 `NOT_FOUND` for an unknown
+        announcement or one of another cooperative. Requires `ANNOUNCEMENTS_SEND`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: page
+          in: query
+          required: false
+          description: Zero-based page index of the deliveries
+          schema:
+            type: integer
+            format: int32
+            minimum: 0
+            default: 0
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnnouncementDetails'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /imports/template:
     get:
@@ -6051,7 +6221,7 @@ components:
         Malformed request or failed validation (code `VALIDATION_FAILED` or `MALFORMED_REQUEST`); the allocation lines
         of a payment together exceed the payment (code `ALLOCATION_EXCEEDS_PAYMENT`) or a line exceeds what is open on
         its charge (code `ALLOCATION_EXCEEDS_CHARGE`); the parts of a split payment do not add up to the payment (code
-        `SPLIT_TOTAL_MISMATCH`)
+        `SPLIT_TOTAL_MISMATCH`); an announcement's text is longer than 2000 characters (code `ANNOUNCEMENT_TOO_LONG`)
       content:
         application/problem+json:
           schema:
@@ -6937,6 +7107,7 @@ components:
         - CERTIFICATE_ANNULLED
         - DELIVERY_SETTINGS_CHANGED
         - INVOICES_SENT
+        - ANNOUNCEMENT_SENT
         - TELEGRAM_LINKED
         - TELEGRAM_UNLINKED
 
@@ -6985,7 +7156,11 @@ components:
         linked to another member). `INVOICES_SENT` (feature 017, a send of a month's invoices or of one invoice) is a
         `BILLING_MONTH` entry with the entity id of `INVOICES_ISSUED`; its fields (new values only) are `month`
         (`YYYY-MM`), `telegram`, `email` and `paper` (the deliveries created per channel) and, for one invoice,
-        `number`.
+        `number`. An `ANNOUNCEMENT` entry (`ANNOUNCEMENT_SENT`, feature 017) is about an announcement of the board:
+        its `entityId` is the announcement and its label the code `announcement`; its fields (new values only) are
+        `audience` (`ALL` or `STREETS`), `streets` (only for `STREETS`: the street names joined by ", ", user content),
+        `channels` (the chosen channels, codes joined by ", ") and `telegram`, `email` and `paper` (the deliveries per
+        channel). Never the text.
       enum:
         [
           MEMBER,
@@ -7009,6 +7184,7 @@ components:
           INVOICE,
           CERTIFICATE,
           DELIVERY_SETTINGS,
+          ANNOUNCEMENT,
         ]
 
     AuditFieldChange:
@@ -13045,6 +13221,10 @@ components:
         plotNumber:
           type: string
           description: The plot of the invoice
+        announcementId:
+          type: string
+          format: uuid
+          description: The announcement of an `ANNOUNCEMENT` delivery
         memberName:
           type: string
           description: The member, "Last First"
@@ -13109,3 +13289,162 @@ components:
         printed:
           type: integer
           format: int32
+
+    AnnouncementChannel:
+      type: string
+      description: A channel an announcement may go through
+      enum: [TELEGRAM, EMAIL]
+
+    AnnouncementRequest:
+      type: object
+      required: [text, channels]
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 4000
+          description: >-
+            The announcement as plain text, at most 2000 characters (Unicode code points) after the surrounding spaces
+            are removed; longer is 400 `ANNOUNCEMENT_TOO_LONG`. `maxLength` only bounds the request (2000 characters
+            are at most 4000 UTF-16 units).
+        streets:
+          type: array
+          description: The streets whose plots' current owners get it; empty or absent means every active member
+          maxItems: 500
+          items:
+            type: string
+            minLength: 1
+            maxLength: 200
+        channels:
+          type: array
+          description: The channels the announcement may go through (Telegram, e-mail or both)
+          minItems: 1
+          maxItems: 2
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/AnnouncementChannel'
+
+    AnnouncementPaperMember:
+      type: object
+      required: [memberId, name]
+      properties:
+        memberId:
+          type: string
+          format: uuid
+        name:
+          type: string
+          description: The member, "Last First"
+
+    AnnouncementSendResult:
+      type: object
+      description: What a send of an announcement created, or with `preview` would create
+      required: [counts, paperMembers]
+      properties:
+        announcementId:
+          type: string
+          format: uuid
+          description: The announcement saved; absent for a preview
+        counts:
+          $ref: '#/components/schemas/DeliveryCounts'
+        paperMembers:
+          type: array
+          description: The members no chosen channel reaches («на папері»), to inform in person
+          items:
+            $ref: '#/components/schemas/AnnouncementPaperMember'
+
+    AnnouncementCounts:
+      type: object
+      description: >-
+        The deliveries of an announcement now: `sent` and `failed` (Telegram and e-mail), `queued` (still being sent)
+        and `paper` (the members to inform in person)
+      required: [sent, failed, queued, paper]
+      properties:
+        sent:
+          type: integer
+          format: int32
+        failed:
+          type: integer
+          format: int32
+        queued:
+          type: integer
+          format: int32
+        paper:
+          type: integer
+          format: int32
+
+    AnnouncementSummary:
+      type: object
+      required: [id, createdAt, streets, channels, counts]
+      properties:
+        id:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        authorName:
+          type: string
+          description: The member who sent it, "Last First"; absent when unknown
+        streets:
+          type: array
+          description: The streets it went to; empty means every active member
+          items:
+            type: string
+        channels:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnnouncementChannel'
+        counts:
+          $ref: '#/components/schemas/AnnouncementCounts'
+
+    AnnouncementPage:
+      type: object
+      required: [items, page, size, totalItems, totalPages]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnnouncementSummary'
+        page:
+          type: integer
+          format: int32
+          description: Zero-based page index
+        size:
+          type: integer
+          format: int32
+        totalItems:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+
+    AnnouncementDetails:
+      type: object
+      required: [id, createdAt, text, streets, channels, counts, deliveries]
+      properties:
+        id:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        authorName:
+          type: string
+          description: The member who sent it, "Last First"; absent when unknown
+        text:
+          type: string
+          description: The text as entered (user content)
+        streets:
+          type: array
+          description: The streets it went to; empty means every active member
+          items:
+            type: string
+        channels:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnnouncementChannel'
+        counts:
+          $ref: '#/components/schemas/AnnouncementCounts'
+        deliveries:
+          $ref: '#/components/schemas/DeliveryPage'

@@ -3,7 +3,9 @@ package app.nadel.plots.internal;
 import app.nadel.identity.AccessProfile;
 import app.nadel.identity.CurrentUser;
 import app.nadel.problem.ApiProblemException;
+import app.nadel.plots.PlotCatalog;
 import java.net.URI;
+import java.util.List;
 import java.util.UUID;
 import nadel.contract.api.PlotsApi;
 import nadel.contract.model.PlotDetails;
@@ -23,11 +25,23 @@ class PlotsController implements PlotsApi {
     private final CurrentUser currentUser;
     private final PlotQueries queries;
     private final PlotCommands commands;
+    private final PlotCatalog catalog;
 
-    PlotsController(CurrentUser currentUser, PlotQueries queries, PlotCommands commands) {
+    PlotsController(CurrentUser currentUser, PlotQueries queries, PlotCommands commands, PlotCatalog catalog) {
         this.currentUser = currentUser;
         this.queries = queries;
         this.commands = commands;
+        this.catalog = catalog;
+    }
+
+    /**
+     * The streets of the active plots (feature 017 §2.6: an announcement's streets): for whoever sees plots or sends
+     * announcements. Street names only, no plot or owner data.
+     */
+    @Override
+    @PreAuthorize("hasAnyAuthority('PERM_PLOTS_VIEW', 'PERM_ANNOUNCEMENTS_SEND')")
+    public ResponseEntity<List<String>> listPlotStreets() {
+        return ResponseEntity.ok(catalog.activeStreets());
     }
 
     /** Every member of a cooperative may read the map; the platform operator has no cooperative data. */

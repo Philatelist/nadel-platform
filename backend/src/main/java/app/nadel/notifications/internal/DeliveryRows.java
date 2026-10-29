@@ -10,8 +10,10 @@ import java.time.YearMonth;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -39,24 +41,40 @@ class DeliveryRows {
     static final String PAYMENT = "PAYMENT";
     static final String REVERSAL = "REVERSAL";
 
-    /** One row as the sender reads it: the invoice of an invoice delivery, the payment of a payment message. */
-    record Queued(UUID id, String kind, @Nullable UUID invoiceId, @Nullable UUID paymentId, UUID memberId,
-            Channel channel, int attempts) {
+    /** The kind of an announcement's delivery. */
+    static final String ANNOUNCEMENT = "ANNOUNCEMENT";
+
+    /**
+     * One row as the sender reads it: the invoice of an invoice delivery, the payment of a payment message, the
+     * announcement of an announcement's delivery.
+     */
+    record Queued(UUID id, String kind, @Nullable UUID invoiceId, @Nullable UUID paymentId,
+            @Nullable UUID announcementId, UUID memberId, Channel channel, int attempts) {
     }
 
     /** One row of the delivery screen. */
-    record Listed(UUID id, String kind, @Nullable YearMonth month, @Nullable UUID invoiceId, UUID memberId,
-            Channel channel, String status, @Nullable String failureCode, @Nullable String note, int attempts,
-            @Nullable Instant sentAt) {
+    record Listed(UUID id, String kind, @Nullable YearMonth month, @Nullable UUID invoiceId,
+            @Nullable UUID announcementId, UUID memberId, Channel channel, String status,
+            @Nullable String failureCode, @Nullable String note, int attempts, @Nullable Instant sentAt) {
+    }
+
+    /** The deliveries of one announcement now: sent, failed, still queued, and on paper. */
+    record AnnouncementCounts(int sent, int failed, int queued, int paper) {
+
+        static final AnnouncementCounts NONE = new AnnouncementCounts(0, 0, 0, 0);
     }
 
     /** How many rows have a channel and a status. */
     record Count(Channel channel, String status, int count) {
     }
 
-    /** The filters of the delivery screen; null is "any". */
+    /** The filters of the delivery screen, and the announcement of its detail page; null is "any". */
     record Filter(@Nullable YearMonth month, @Nullable String kind, @Nullable String status,
-            @Nullable Channel channel) {
+            @Nullable Channel channel, @Nullable UUID announcementId) {
+
+        Filter(@Nullable YearMonth month, @Nullable String kind, @Nullable String status, @Nullable Channel channel) {
+            this(month, kind, status, channel, null);
+        }
     }
 
     /** A row of the retry: its channel and status. */
@@ -118,17 +136,49 @@ class DeliveryRows {
     }
 
     /**
+     * Creates the delivery of an announcement to the member through the channel, unless it exists already (the unique
+     * key {@code (tenant_id, announcement_id, member_id, channel)}); true when it was created. E-mail and Telegram rows
+     * are queued due at {@code now}; a paper row waits as {@code TO_PRINT}: the board informs the member in person.
+     * An announcement has no billing month.
+     */
+    boolean insertAnnouncement(UUID tenantId, UUID announcementId, UUID memberId, Channel channel,
+            @Nullable String note, Instant now) {
+        boolean paper = channel == Channel.PAPER;
+        return jdbc.update("insert into delivery (tenant_id, kind, announcement_id, member_id, channel, note, status, "
+                + "next_attempt_at, created_at) values (?, 'ANNOUNCEMENT', ?, ?, ?, ?, ?, ?, ?) on conflict do nothing",
+                tenantId, announcementId, memberId, channel.name(), note, paper ? TO_PRINT : QUEUED,
+                paper ? null : utc(now), utc(now)) == 1;
+    }
+
+    /** The counts of each given announcement's deliveries; an announcement without any is absent. */
+    Map<UUID, AnnouncementCounts> announcementCounts(Collection<UUID> announcementIds) {
+        Map<UUID, AnnouncementCounts> counts = new HashMap<>();
+        if (announcementIds.isEmpty()) {
+            return counts;
+        }
+        jdbc.query("select announcement_id, count(*) filter (where status = 'SENT'), "
+                + "count(*) filter (where status = 'FAILED'), count(*) filter (where status = 'QUEUED'), "
+                + "count(*) filter (where channel = 'PAPER') from delivery "
+                + "where kind = 'ANNOUNCEMENT' and announcement_id = any(?::uuid[]) group by announcement_id",
+                (ResultSet rs) -> {
+                    counts.put(rs.getObject(1, UUID.class), new AnnouncementCounts(rs.getInt(2), rs.getInt(3),
+                            rs.getInt(4), rs.getInt(5)));
+                }, array(announcementIds));
+        return counts;
+    }
+
+    /**
      * The queued rows of the channel and kinds due at {@code now} (no next attempt time, or one not after now), the longest
      * waiting first, without the ones in {@code skip}.
      */
     List<Queued> due(Channel channel, Instant now, int limit, Collection<UUID> skip, Collection<String> kinds) {
-        return jdbc.query("select id, kind, invoice_id, payment_id, member_id, channel, attempts from delivery "
-                + "where status = 'QUEUED' and channel = ? and kind = any(?::text[]) "
+        return jdbc.query("select id, kind, invoice_id, payment_id, announcement_id, member_id, channel, attempts "
+                + "from delivery where status = 'QUEUED' and channel = ? and kind = any(?::text[]) "
                 + "and (next_attempt_at is null or next_attempt_at <= ?) "
                 + "and not (id = any(?::uuid[])) order by next_attempt_at nulls first, created_at, id limit ?",
                 (rs, n) -> new Queued(rs.getObject(1, UUID.class), rs.getString(2), rs.getObject(3, UUID.class),
-                        rs.getObject(4, UUID.class), rs.getObject(5, UUID.class), Channel.valueOf(rs.getString(6)),
-                        rs.getInt(7)),
+                        rs.getObject(4, UUID.class), rs.getObject(5, UUID.class), rs.getObject(6, UUID.class),
+                        Channel.valueOf(rs.getString(7)), rs.getInt(8)),
                 channel.name(), texts(kinds), utc(now), array(skip), limit);
     }
 
@@ -191,14 +241,16 @@ class DeliveryRows {
         String where = where(filter, params, true);
         params.add(size);
         params.add((long) page * size);
-        return jdbc.query("select id, kind, billing_month, invoice_id, member_id, channel, status, failure_code, note, "
-                + "attempts, sent_at from delivery" + where + " order by created_at desc, id limit ? offset ?",
+        return jdbc.query("select id, kind, billing_month, invoice_id, announcement_id, member_id, channel, status, "
+                + "failure_code, note, attempts, sent_at from delivery" + where
+                + " order by created_at desc, id limit ? offset ?",
                 (rs, n) -> {
                     LocalDate month = rs.getObject(3, LocalDate.class);
                     return new Listed(rs.getObject(1, UUID.class), rs.getString(2),
                             month == null ? null : YearMonth.from(month), rs.getObject(4, UUID.class),
-                            rs.getObject(5, UUID.class), Channel.valueOf(rs.getString(6)), rs.getString(7),
-                            rs.getString(8), rs.getString(9), rs.getInt(10), instant(rs, 11));
+                            rs.getObject(5, UUID.class), rs.getObject(6, UUID.class),
+                            Channel.valueOf(rs.getString(7)), rs.getString(8), rs.getString(9), rs.getString(10),
+                            rs.getInt(11), instant(rs, 12));
                 }, params.toArray());
     }
 
@@ -229,6 +281,10 @@ class DeliveryRows {
         if (filter.kind() != null) {
             conditions.add("kind = ?");
             params.add(filter.kind());
+        }
+        if (filter.announcementId() != null) {
+            conditions.add("announcement_id = ?");
+            params.add(filter.announcementId());
         }
         if (all && filter.status() != null) {
             conditions.add("status = ?");

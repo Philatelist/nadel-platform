@@ -81,6 +81,9 @@ abstract class DeliveryTestSupport extends IntegrationTest {
     PaymentMessages paymentMessages;
 
     @Autowired
+    AnnouncementMessages announcementMessages;
+
+    @Autowired
     DeliverySettingsService settingsService;
 
     @Autowired
@@ -160,7 +163,7 @@ abstract class DeliveryTestSupport extends IntegrationTest {
         // the jobs a send or a run scheduled for this cooperative
         ownerJdbc().update("delete from jobrunr_jobs where jobasjson like ?", "%" + id + "%");
         asLedgerOwner(sql -> {
-            for (String table : List.of("delivery", "telegram_link_code", "telegram_link", "delivery_lane",
+            for (String table : List.of("delivery", "announcement", "telegram_link_code", "telegram_link", "delivery_lane",
                     "bot_poll_state", "delivery_settings")) {
                 sql.update("delete from " + table + " where tenant_id = ?", id);
             }
@@ -228,11 +231,16 @@ abstract class DeliveryTestSupport extends IntegrationTest {
         return id;
     }
 
-    /** A plot with its owners (equal shares). */
+    /** A plot on the street Садова with its owners (equal shares). */
     UUID plot(String number, UUID... owners) {
+        return plotOn("Садова", number, owners);
+    }
+
+    /** A plot on the street with its owners (equal shares). */
+    UUID plotOn(String street, String number, UUID... owners) {
         UUID id = UUID.randomUUID();
-        ownerJdbc().update("insert into plot (id, tenant_id, number, street, kind, area_m2) values (?, ?, ?, 'Садова', "
-                + "'PLOT', 600)", id, tenant, number);
+        ownerJdbc().update("insert into plot (id, tenant_id, number, street, kind, area_m2) values (?, ?, ?, ?, "
+                + "'PLOT', 600)", id, tenant, number, street);
         ownerJdbc().update("insert into plot_status (plot_id, tenant_id, status) values (?, ?, 'GREY')", id, tenant);
         for (UUID owner : owners) {
             ownerJdbc().update("insert into ownership (id, tenant_id, plot_id, member_id, share_numerator, "
@@ -339,7 +347,7 @@ abstract class DeliveryTestSupport extends IntegrationTest {
             clock.advance(pause);
         }, Duration.ofSeconds(1), 20);
         return new DeliveryDispatcher(instanceId, rows, lanes, lanesQueue, invoices, paymentMessages,
-                settingsService, memberDirectory, telegramLinks, mailChannel, telegramChannel, limiters, clock,
+                announcementMessages, settingsService, memberDirectory, telegramLinks, mailChannel, telegramChannel, limiters, clock,
                 DeliveryProperties.defaults(), jdbc, transactionManager);
     }
 

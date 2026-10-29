@@ -12,7 +12,7 @@ import org.springframework.web.util.HtmlUtils;
 
 /**
  * Sends a delivery as a letter through the cooperative's mailbox (feature 017 §2.4): plain text and HTML with the same
- * words (the message, the payment link, the line naming the attachment such as «Рахунок у вкладенні (PDF)», the
+ * words (the message, escaped and with its line breaks kept, the payment link, the line naming the attachment such as «Рахунок у вкладенні (PDF)», the
  * board's signature), the PDF attached when the message has one, from the mailbox's sender name. The server's refusal of the sign-in is permanent ({@code SMTP_AUTH_FAILED}); a refused
  * letter ({@code SMTP_REJECTED}) or no connection ({@code CONNECTION_FAILED}) is tried again. Runs outside any
  * transaction.
@@ -45,7 +45,7 @@ class MailChannel {
         String attached = message.attachedLine();
         String signature = texts.text("invoice.email.signature", Map.of("cooperative", message.sender()));
         StringBuilder text = new StringBuilder(message.text()).append("\n\n");
-        StringBuilder html = new StringBuilder("<p>").append(HtmlUtils.htmlEscape(message.text())).append("</p>");
+        StringBuilder html = new StringBuilder("<p>").append(paragraph(message.text())).append("</p>");
         if (message.payUrl() != null) {
             text.append(texts.text("invoice.email.payLine", Map.of("link", message.payUrl()))).append("\n\n");
             html.append("<p><a href=\"").append(HtmlUtils.htmlEscape(message.payUrl())).append("\">")
@@ -59,5 +59,10 @@ class MailChannel {
         html.append("<p>").append(HtmlUtils.htmlEscape(signature)).append("</p>");
         return new Letter(to, message.subject(), text.toString(), "<html><body>" + html + "</body></html>",
                 message.fileName(), message.pdf());
+    }
+
+    /** The text escaped for HTML, its line breaks kept as {@code <br>} (an announcement has several lines). */
+    static String paragraph(String text) {
+        return HtmlUtils.htmlEscape(text).replace("\r\n", "\n").replace("\n", "<br>\n");
     }
 }

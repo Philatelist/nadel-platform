@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
 import org.springframework.stereotype.Component;
 
 /**
@@ -30,6 +31,25 @@ class RecipientChannels {
 
     /** The channel of each given member that exists in the cooperative, in the order given. */
     Map<UUID, Resolution> resolve(Collection<UUID> memberIds, DeliverySettingsValues settings) {
+        return resolve(memberIds, facts -> ChannelResolver.resolve(facts.preferred(), facts.hasEmail(),
+                facts.linked(), settings.emailConfigured(), settings.botConfigured()));
+    }
+
+    /**
+     * The channel of each given member that exists in the cooperative for an announcement through the {@code chosen}
+     * channels ({@link ChannelResolver#forAnnouncement}), in the order given.
+     */
+    Map<UUID, Resolution> resolveForAnnouncement(Collection<UUID> memberIds, DeliverySettingsValues settings,
+            Set<Channel> chosen) {
+        return resolve(memberIds, facts -> ChannelResolver.forAnnouncement(facts.preferred(), facts.hasEmail(),
+                facts.linked(), settings.emailConfigured(), settings.botConfigured(), chosen));
+    }
+
+    /** What decides a member's channel. */
+    private record Facts(DeliveryChannel preferred, boolean hasEmail, boolean linked) {
+    }
+
+    private Map<UUID, Resolution> resolve(Collection<UUID> memberIds, Function<Facts, Resolution> rule) {
         List<UUID> ids = memberIds.stream().distinct().toList();
         Map<UUID, Resolution> resolved = new LinkedHashMap<>();
         if (ids.isEmpty()) {
@@ -45,8 +65,7 @@ class RecipientChannels {
             }
             MemberContacts contact = contacts.get(id);
             boolean hasEmail = contact != null && contact.email() != null && !contact.email().isBlank();
-            resolved.put(id, ChannelResolver.resolve(channel, hasEmail, linked.contains(id),
-                    settings.emailConfigured(), settings.botConfigured()));
+            resolved.put(id, rule.apply(new Facts(channel, hasEmail, linked.contains(id))));
         }
         return resolved;
     }

@@ -33,3 +33,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `346a693..3be8723` | PASS | — | 64 tests green in the review worktree. minor: overlong lines in `MailChannel` javadoc and `notifications/README.md`; a payment message sent after its payment was reversed still attaches the receipt with today's balance (consistent with send-time texts; README sentence) |
+
+## Slice 5 — the bot answers «Борг», «Рахунок», «Показання»
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `053feb8..46121a6` | PASS | — | compile only in the review worktree (tests run by builder 395 / orchestrator 28). minor: `DocumentsFacadeService.java` Javadoc line > 120 chars; `ReadingMessages` in-memory dedup covers one instance (accepted choice) |

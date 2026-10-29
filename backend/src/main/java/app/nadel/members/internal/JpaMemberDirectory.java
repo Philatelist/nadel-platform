@@ -46,6 +46,12 @@ class JpaMemberDirectory implements MemberDirectory {
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
+    public List<UUID> activeIds() {
+        return members.findActiveIds();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
     public Map<UUID, MemberRef> lockActive(Collection<UUID> ids) {
         if (ids.isEmpty()) {
             return Map.of();

@@ -29,7 +29,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  *   <li>binds the cooperative ({@code TenantContext.runAs}) and claims the lane's lease ({@link DeliveryLanes},
  *       {@code nadel.delivery.lane-lease}); a lane held elsewhere is tried again after {@code busy-retry} (5 s);</li>
  *   <li>takes the due rows a few at a time in a short transaction, and for each: prepares the message in a short
- *       read-only transaction (the documents or the payment, the opened mailbox or bot token, the member's address or
+ *       read-only transaction (the documents, the payment or the announcement, the opened mailbox or bot token, the member's address or
  *       chat), waits for its slot ({@link RateLimiters}), sends it outside any transaction, and records the outcome
  *       in a short transaction;</li>
  *   <li>stops after {@code run-limit} (60 s) and wakes the lane again at once, or when nothing is due and wakes it at
@@ -52,8 +52,9 @@ class DeliveryDispatcher {
     /** This JVM's id as a lane holder. */
     static final String INSTANCE_ID = "delivery-" + UUID.randomUUID();
 
-    /** The kinds sent so far (announcements follow). */
-    static final List<String> KINDS = List.of("INVOICE", DeliveryRows.PAYMENT, DeliveryRows.REVERSAL);
+    /** The kinds sent: invoices, payment and reversal messages, announcements. */
+    static final List<String> KINDS = List.of("INVOICE", DeliveryRows.PAYMENT, DeliveryRows.REVERSAL,
+            DeliveryRows.ANNOUNCEMENT);
 
     private static final Logger log = LoggerFactory.getLogger(DeliveryDispatcher.class);
     private static final int BATCH = 20;
@@ -77,6 +78,7 @@ class DeliveryDispatcher {
     private final DeliveryQueue queue;
     private final InvoiceMessages invoices;
     private final PaymentMessages payments;
+    private final AnnouncementMessages announcements;
     private final DeliverySettingsService settings;
     private final MemberDirectory members;
     private final TelegramLinks links;
@@ -91,25 +93,27 @@ class DeliveryDispatcher {
 
     @Autowired
     DeliveryDispatcher(DeliveryRows rows, DeliveryLanes lanes, DeliveryQueue queue, InvoiceMessages invoices,
-            PaymentMessages payments, DeliverySettingsService settings, MemberDirectory members, TelegramLinks links,
-            MailChannel mail, TelegramChannel telegram, RateLimiters limiters, Clock clock,
-            DeliveryProperties properties, JdbcTemplate jdbc, PlatformTransactionManager transactionManager) {
-        this(INSTANCE_ID, rows, lanes, queue, invoices, payments, settings, members, links, mail, telegram, limiters,
-                clock, properties, jdbc, transactionManager);
+            PaymentMessages payments, AnnouncementMessages announcements, DeliverySettingsService settings,
+            MemberDirectory members, TelegramLinks links, MailChannel mail, TelegramChannel telegram,
+            RateLimiters limiters, Clock clock, DeliveryProperties properties, JdbcTemplate jdbc,
+            PlatformTransactionManager transactionManager) {
+        this(INSTANCE_ID, rows, lanes, queue, invoices, payments, announcements, settings, members, links, mail,
+                telegram, limiters, clock, properties, jdbc, transactionManager);
     }
 
     /** A dispatcher with its own holder id, clock and pace (the tests). */
     DeliveryDispatcher(String instanceId, DeliveryRows rows, DeliveryLanes lanes, DeliveryQueue queue,
-            InvoiceMessages invoices, PaymentMessages payments, DeliverySettingsService settings,
-            MemberDirectory members, TelegramLinks links, MailChannel mail, TelegramChannel telegram,
-            RateLimiters limiters, Clock clock, DeliveryProperties properties, JdbcTemplate jdbc,
-            PlatformTransactionManager transactionManager) {
+            InvoiceMessages invoices, PaymentMessages payments, AnnouncementMessages announcements,
+            DeliverySettingsService settings, MemberDirectory members, TelegramLinks links, MailChannel mail,
+            TelegramChannel telegram, RateLimiters limiters, Clock clock, DeliveryProperties properties,
+            JdbcTemplate jdbc, PlatformTransactionManager transactionManager) {
         this.instanceId = instanceId;
         this.rows = rows;
         this.lanes = lanes;
         this.queue = queue;
         this.invoices = invoices;
         this.payments = payments;
+        this.announcements = announcements;
         this.settings = settings;
         this.members = members;
         this.links = links;
@@ -284,13 +288,19 @@ class DeliveryDispatcher {
         return new Prepared(message, null, null, 0, token.get().token(), chat.get(), null);
     }
 
-    /** The message of the row: an invoice, or a payment or reversal message; null when its source is gone. */
+    /**
+     * The message of the row: an invoice, a payment or reversal message, or an announcement; null when its source is
+     * gone.
+     */
     private @Nullable DeliveryMessage message(Queued row) {
         if (row.invoiceId() != null) {
             return invoices.of(row.invoiceId()).orElse(null);
         }
         if (row.paymentId() != null) {
             return payments.of(row.paymentId(), row.kind()).orElse(null);
+        }
+        if (row.announcementId() != null) {
+            return announcements.of(row.announcementId()).orElse(null);
         }
         return null;
     }

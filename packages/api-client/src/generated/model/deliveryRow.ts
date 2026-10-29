@@ -22,6 +22,8 @@ export interface DeliveryRow {
   month?: string;
   /** The plot of the invoice */
   plotNumber?: string;
+  /** The announcement of an `ANNOUNCEMENT` delivery */
+  announcementId?: string;
   /** The member, "Last First" */
   memberName?: string;
   channel: DeliveryMethod;

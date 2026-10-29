@@ -93,4 +93,12 @@ public interface PlotCatalog {
      * blank means every street (then the result equals {@link #findChargeable()}).
      */
     List<PlotFacts> findActive(@Nullable String street);
+
+    /**
+     * The distinct streets of the active (not archived) plots that are not common land, the plots an announcement of
+     * feature 017 reaches through {@link #findActive}: without surrounding spaces, each once ignoring case (of two
+     * spellings the one with capitals), in Ukrainian alphabetical order ignoring case (ICU collation
+     * {@code uk-x-icu}, as {@link #inStreetOrder}). Plots without a street, or with a blank one, are left out.
+     */
+    List<String> activeStreets();
 }

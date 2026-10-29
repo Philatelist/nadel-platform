@@ -1,5 +1,6 @@
 import type { DeliveryRow, DeliveryStatus } from '@nadel/api-client';
 import { formatDateTime } from '@nadel/shared';
+import { Link } from 'react-router';
 import { useLocale, useT } from '../../i18n';
 import { UserContent } from '../UserContent';
 import { Badge, Button, DataTable, type BadgeTone, type Column } from '../ui';
@@ -22,10 +23,13 @@ export function DeliveryTable({
   rows,
   onRetry,
   retryingId,
+  linkAnnouncements = false,
 }: {
   rows: readonly DeliveryRow[];
   onRetry?: (row: DeliveryRow) => void;
   retryingId?: string;
+  /** Rows of an announcement link to it (the viewer may open announcements). */
+  linkAnnouncements?: boolean;
 }) {
   const t = useT();
   const { locale } = useLocale();
@@ -64,6 +68,18 @@ export function DeliveryTable({
       cell: (r) => (r.sentAt === undefined ? '—' : formatDateTime(r.sentAt, locale)),
     },
   ];
+  if (linkAnnouncements) {
+    columns.push({
+      key: 'announcement',
+      header: t.announcements.detail.open,
+      cell: (r) =>
+        r.announcementId === undefined ? null : (
+          <Link className="text-accent underline" to={`/announcements/${r.announcementId}`}>
+            {t.announcements.detail.open}
+          </Link>
+        ),
+    });
+  }
   if (onRetry !== undefined) {
     columns.push({
       key: 'actions',

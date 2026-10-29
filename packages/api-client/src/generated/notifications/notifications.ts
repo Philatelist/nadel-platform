@@ -29,6 +29,10 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AnnouncementDetails,
+  AnnouncementPage,
+  AnnouncementRequest,
+  AnnouncementSendResult,
   BadRequestResponse,
   ConflictResponse,
   DeliveryPage,
@@ -37,13 +41,16 @@ import type {
   DeliveryTestEmailResult,
   DeliveryTestTelegramResult,
   ForbiddenResponse,
+  GetAnnouncementParams,
   InvoiceSendRequest,
   InvoiceSendResult,
+  ListAnnouncementsParams,
   ListDeliveriesParams,
   MyNotifications,
   MyNotificationsUpdate,
   NotFoundResponse,
   PrintDoneResult,
+  SendAnnouncementParams,
   SendMonthInvoicesParams,
   TelegramLinkOffer,
   UnauthorizedResponse
@@ -1257,3 +1264,349 @@ export const useMarkMonthPrinted = <TError = BadRequestResponse | UnauthorizedRe
       > => {
       return useMutation(getMarkMonthPrintedMutationOptions(options), queryClient);
     }
+    export const getSendAnnouncementUrl = (params: SendAnnouncementParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/v1/announcements?${stringifiedParams}` : `/api/v1/announcements`
+}
+
+/**
+ * «Надіслати оголошення» (feature 017 §2.6). The audience is every active member (`streets` empty) or the
+ * current owners of the active plots on the chosen streets (the street compared ignoring case and surrounding
+ * spaces, as `listPlotStreets` lists them). Each member first gets their own channel by the rule of invoices
+ * (`sendMonthInvoices`); the announcement then goes only through a channel in `channels`:
+ * - the member's own channel when it is chosen;
+ * - otherwise, when the member's own channel is Telegram or e-mail, the other chosen channel when the member can
+ *   be reached through it (Telegram: linked to the cooperative's bot; e-mail: an e-mail and the cooperative's
+ *   mailbox);
+ * - otherwise paper («на папері»: the board informs them in person). Members who chose paper or Viber are
+ *   always on paper.
+ *
+ * `text` is plain text as entered (surrounding spaces removed), sent as is: a Telegram message without
+ * formatting and a letter whose HTML part escapes it. It must not be blank (400 `VALIDATION_FAILED`, field
+ * `text`, code `REQUIRED`) and is at most 2000 characters (Unicode code points; 400 `ANNOUNCEMENT_TOO_LONG`, field
+ * `text`, code `TOO_LONG`). A blank street is 400 `VALIDATION_FAILED` (field `streets`, code `INVALID`).
+ *
+ * With `preview=true` nothing is written: the answer has the counts per channel and the members on paper
+ * (`paperMembers`, "Last First", in alphabetical order). With `preview=false` the announcement is saved, each
+ * member gets one delivery (`kind` `ANNOUNCEMENT`; Telegram and e-mail `QUEUED` and sent in the background,
+ * paper `TO_PRINT`, listed so the board can inform them), and the send is written to the audit log as
+ * `ANNOUNCEMENT_SENT` (entity type `ANNOUNCEMENT`; fields `audience` (`ALL` or `STREETS`), `streets` (only for
+ * `STREETS`, joined by ", "), `channels`, `telegram`, `email`, `paper`; never the text). Requires
+ * `ANNOUNCEMENTS_SEND`.
+ * @summary Preview or send an announcement of the board
+ */
+export const sendAnnouncement = async (announcementRequest: AnnouncementRequest,
+    params: SendAnnouncementParams, options?: Parameters<typeof nadelFetch>[1]): Promise<AnnouncementSendResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return nadelFetch<AnnouncementSendResult>(getSendAnnouncementUrl(params),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(announcementRequest)
+  }
+);}
+
+
+
+
+
+export const getSendAnnouncementMutationKey = () => ['sendAnnouncement'] as const;
+
+export const getSendAnnouncementMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendAnnouncement>>, TError,SendAnnouncementMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof sendAnnouncement>>, TError,SendAnnouncementMutationVariables, TContext> => {
+
+const mutationKey = getSendAnnouncementMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof sendAnnouncement>>, SendAnnouncementMutationVariables> = (props) => {
+          const {data,params} = props ?? {};
+
+          return  sendAnnouncement(data,params,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SendAnnouncementMutationResult = NonNullable<Awaited<ReturnType<typeof sendAnnouncement>>>
+    export type SendAnnouncementMutationBody = AnnouncementRequest
+    export type SendAnnouncementMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse
+    export type SendAnnouncementMutationVariables = {data: AnnouncementRequest;params: SendAnnouncementParams}
+
+    /**
+ * @summary Preview or send an announcement of the board
+ */
+export const useSendAnnouncement = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendAnnouncement>>, TError,SendAnnouncementMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof sendAnnouncement>>,
+        TError,
+        SendAnnouncementMutationVariables,
+        TContext
+      > => {
+      return useMutation(getSendAnnouncementMutationOptions(options), queryClient);
+    }
+    export const getListAnnouncementsUrl = (params?: ListAnnouncementsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/v1/announcements?${stringifiedParams}` : `/api/v1/announcements`
+}
+
+/**
+ * The announcements of the cooperative (feature 017 §2.6), newest first, each with its date, author, audience,
+ * channels and the counts of its deliveries now: sent, failed, still queued and on paper. Not the text (see
+ * `getAnnouncement`). Requires `ANNOUNCEMENTS_SEND`.
+ * @summary The announcements sent
+ */
+export const listAnnouncements = async (params?: ListAnnouncementsParams, options?: Parameters<typeof nadelFetch>[1]): Promise<AnnouncementPage> => {
+
+  return nadelFetch<AnnouncementPage>(getListAnnouncementsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAnnouncementsQueryKey = (params?: ListAnnouncementsParams,) => {
+    return [
+    `/api/v1/announcements`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListAnnouncementsQueryOptions = <TData = Awaited<ReturnType<typeof listAnnouncements>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>(params?: ListAnnouncementsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAnnouncements>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAnnouncementsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAnnouncements>>> = ({ signal }) => listAnnouncements(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAnnouncements>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListAnnouncementsQueryResult = NonNullable<Awaited<ReturnType<typeof listAnnouncements>>>
+export type ListAnnouncementsQueryError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse
+
+
+export function useListAnnouncements<TData = Awaited<ReturnType<typeof listAnnouncements>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>(
+ params: undefined |  ListAnnouncementsParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAnnouncements>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listAnnouncements>>,
+          TError,
+          Awaited<ReturnType<typeof listAnnouncements>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListAnnouncements<TData = Awaited<ReturnType<typeof listAnnouncements>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>(
+ params?: ListAnnouncementsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAnnouncements>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listAnnouncements>>,
+          TError,
+          Awaited<ReturnType<typeof listAnnouncements>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListAnnouncements<TData = Awaited<ReturnType<typeof listAnnouncements>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>(
+ params?: ListAnnouncementsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAnnouncements>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary The announcements sent
+ */
+
+export function useListAnnouncements<TData = Awaited<ReturnType<typeof listAnnouncements>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>(
+ params?: ListAnnouncementsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAnnouncements>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListAnnouncementsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export const getGetAnnouncementUrl = (id: string,
+    params?: GetAnnouncementParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/v1/announcements/${id}?${stringifiedParams}` : `/api/v1/announcements/${id}`
+}
+
+/**
+ * The announcement's text, audience, channels and counts, and a page of its deliveries (the rows of
+ * `listDeliveries`, newest first, with their counts per channel and status). 404 `NOT_FOUND` for an unknown
+ * announcement or one of another cooperative. Requires `ANNOUNCEMENTS_SEND`.
+ * @summary One announcement with its deliveries
+ */
+export const getAnnouncement = async (id: string,
+    params?: GetAnnouncementParams, options?: Parameters<typeof nadelFetch>[1]): Promise<AnnouncementDetails> => {
+
+  return nadelFetch<AnnouncementDetails>(getGetAnnouncementUrl(id,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAnnouncementQueryKey = (id: string,
+    params?: GetAnnouncementParams,) => {
+    return [
+    `/api/v1/announcements/${id}`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetAnnouncementQueryOptions = <TData = Awaited<ReturnType<typeof getAnnouncement>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(id: string,
+    params?: GetAnnouncementParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAnnouncement>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAnnouncementQueryKey(id,params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAnnouncement>>> = ({ signal }) => getAnnouncement(id,params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAnnouncement>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetAnnouncementQueryResult = NonNullable<Awaited<ReturnType<typeof getAnnouncement>>>
+export type GetAnnouncementQueryError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse
+
+
+export function useGetAnnouncement<TData = Awaited<ReturnType<typeof getAnnouncement>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string,
+    params: undefined |  GetAnnouncementParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAnnouncement>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getAnnouncement>>,
+          TError,
+          Awaited<ReturnType<typeof getAnnouncement>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetAnnouncement<TData = Awaited<ReturnType<typeof getAnnouncement>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string,
+    params?: GetAnnouncementParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAnnouncement>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getAnnouncement>>,
+          TError,
+          Awaited<ReturnType<typeof getAnnouncement>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetAnnouncement<TData = Awaited<ReturnType<typeof getAnnouncement>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string,
+    params?: GetAnnouncementParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAnnouncement>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary One announcement with its deliveries
+ */
+
+export function useGetAnnouncement<TData = Awaited<ReturnType<typeof getAnnouncement>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string,
+    params?: GetAnnouncementParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAnnouncement>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetAnnouncementQueryOptions(id,params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+

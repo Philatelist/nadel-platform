@@ -233,6 +233,8 @@ const CHAIRMAN_SCREENS = [
   '/documents/certificates',
   // feature 017: the delivery screen
   '/deliveries',
+  '/announcements',
+  '/announcements/new',
   '/no-such-screen',
 ];
 

@@ -238,6 +238,24 @@ const router = createBrowserRouter([
         ],
       },
       {
+        element: <RequirePermission permission="ANNOUNCEMENTS_SEND" />,
+        children: [
+          {
+            path: 'announcements',
+            lazy: () => import('./pages/AnnouncementsPage').then((m) => ({ Component: m.AnnouncementsPage })),
+          },
+          {
+            path: 'announcements/new',
+            lazy: () =>
+              import('./pages/AnnouncementFormPage').then((m) => ({ Component: m.AnnouncementFormPage })),
+          },
+          {
+            path: 'announcements/:id',
+            lazy: () => import('./pages/AnnouncementPage').then((m) => ({ Component: m.AnnouncementPage })),
+          },
+        ],
+      },
+      {
         element: <RequirePermission permission="AUDIT_VIEW" />,
         children: [
           {

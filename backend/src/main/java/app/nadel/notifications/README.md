@@ -1,22 +1,23 @@
 # notifications
 
 Delivery to members (feature 017, `context/spec/017-delivery-email-telegram/`): e-mail through the cooperative's own
-mailbox (SMTP) and Telegram through its own bot. **Draft (slices 1–5):** the channel settings and their checks, the
+mailbox (SMTP) and Telegram through its own bot. **Draft (slices 1–6):** the channel settings and their checks, the
 member's own channel choice, Telegram links and the bot with its menu («Борг», «Рахунок», «Показання»), sending the
 month's invoices with the delivery register and worker, the paper copies with a link QR code, the payment and reversal
-messages, and the messages about the board's decision on a reading. Announcements follow in a later slice and are
-added here when they land. Design decisions: ADR 0018.
+messages, the messages about the board's decision on a reading, and the board's announcements. Design decisions: ADR
+0018.
 
 ## Public API
 
 None. No module calls `notifications`; it reads other modules through their public APIs, implements their SPIs and
 listens to their events. Allowed dependencies (`package-info.java`): `members`, `documents`, `ledger`,
 `meters`, `plots`, `identity`, `privacy`, `audit`, `tenancy`, `tariffs`, `money`, `settings`, `problem`. Used now:
-`members` (`MemberDirectory`: names, contacts and channels; `MemberChannels`: the member's own channel choice; the SPI
+`members` (`MemberDirectory`: names, contacts and channels, `activeIds` for an announcement to every member; `MemberChannels`: the member's own channel choice; the SPI
 `TelegramLinkStatus` is implemented here by `TelegramLinkStatusProvider`), `documents` (`DocumentsFacade`:
 `latestInvoices`, `invoiceSummary`, `invoicePdf`, `invoiceForDay` for the bot's «Рахунок»; `DocumentFormats` for the
 texts; the SPI `PaperRecipients` is implemented here by `PaperCopiesProvider`), `meters` (`MemberReadings`: the bot's
-«Показання»; the event `ReadingDecided`), `tariffs` (`ChargeTypeCatalog`: the charge type names of «Борг»), `plots` (`PlotOwners`: the current owners of a plot; `PlotCatalog`: the plot number of a payment message), `ledger`
+«Показання»; the event `ReadingDecided`), `tariffs` (`ChargeTypeCatalog`: the charge type names of «Борг»), `plots` (`PlotOwners`: the current owners of a plot; `PlotCatalog`: the plot number of a payment message,
+`findActive(street)` for an announcement's streets), `ledger`
 (the events `PaymentRecorded` and `PaymentReversed`; `LedgerReadModel.paymentsByIds` and `debtsAsOf` for the payment
 messages and the bot's «Борг»; `DocumentsFacade.receiptPdf` for the cash receipt), `tenancy` (`TenantContext`,
 `TenantDirectory`: the cooperative's name), `privacy` (`PersonalDataCipher`, `FieldRef`, `IndexKind.TELEGRAM_CHAT`),
@@ -40,6 +41,11 @@ plot numbers of the bot's greeting and the plots its menu reaches) and `problem`
 | `GET /deliveries?month&kind&status&channel&page&size` | `listDeliveries` | `INVOICES_ISSUE` |
 | `POST /deliveries/{id}/retry` | `retryDelivery` | `INVOICES_ISSUE` |
 | `POST /billing-months/{month}/print-done` | `markMonthPrinted` | `INVOICES_ISSUE` |
+| `POST /announcements?preview=` | `sendAnnouncement` | `ANNOUNCEMENTS_SEND` |
+| `GET /announcements?page&size` | `listAnnouncements` | `ANNOUNCEMENTS_SEND` |
+| `GET /announcements/{id}?page&size` | `getAnnouncement` | `ANNOUNCEMENTS_SEND` |
+
+The streets an announcement can go to come from `GET /plots/streets` (`plots`, `PLOTS_VIEW` or `ANNOUNCEMENTS_SEND`).
 
 One controller implements the generated `NotificationsApi` (`NotificationsController`). The platform operator has no
 permissions and no member, so every endpoint answers it 403 `PERMISSION_DENIED`. The `/me` endpoints act on the member
@@ -233,7 +239,7 @@ transaction.
   its owners. One row per (payment, kind `PAYMENT` or `REVERSAL`, member, channel), `QUEUED`, with the payment's billing
   month: `INSERT … ON CONFLICT DO NOTHING` on `delivery_payment_uq`, so a redelivered event creates nothing and nothing
   is sent twice. The lanes with new rows are woken after the commit. Not audited (the payment itself is).
-- **Sending:** the dispatcher sends kinds `INVOICE`, `PAYMENT` and `REVERSAL` (`DeliveryDispatcher.KINDS`); the
+- **Sending:** the dispatcher sends kinds `INVOICE`, `PAYMENT`, `REVERSAL` and `ANNOUNCEMENT` (`DeliveryDispatcher.KINDS`); the
   message is written at send time (`PaymentMessages.of`), never stored: «Отримано 500,00 ₴ по ділянці 9 (28.10.2026).
   Борг: 1 234,56 ₴», with «Аванс: …» instead of «Борг: …» when the plot owes nothing and has a prepayment; after a
   reversal «Платіж від 28.10.2026 на 500,00 ₴ сторновано. Борг: …» (the same balance rule). The day is the day the
@@ -243,6 +249,44 @@ transaction.
   «Квитанція у вкладенні (PDF).»; a bank payment and a reversal go as a text message (`sendMessage`) or a letter
   without an attachment. Letter subjects «Платіж по ділянці 9 отримано» / «… сторновано». Texts `payment.*` in
   `messages_uk.properties`. The delivery screen lists these rows under their kind; they have no plot number there.
+
+## Announcements (`Announcements`, feature 017 §2.6, §2.7)
+
+- **The request:** the text (plain text; surrounding spaces removed; not blank, else 400 `VALIDATION_FAILED` field
+  `text` `REQUIRED`; at most 2000 characters counted as Unicode code points like the table's CHECK, else 400
+  `ANNOUNCEMENT_TOO_LONG` with the field code `TOO_LONG`; the contract's `maxLength` 4000 only bounds the request,
+  since 2000 characters are at most 4000 UTF-16 units), the streets (empty = every active member; each stripped and
+  kept once ignoring case; a blank one is 400 `VALIDATION_FAILED` field `streets` `INVALID`) and the channels
+  (`TELEGRAM` and/or `EMAIL`, at least one).
+- **The audience:** every member who is not archived (`MemberDirectory.activeIds`), or the current owners
+  (`PlotOwners.currentOwnerIds`) of the active plots that are not common land on the chosen streets
+  (`PlotCatalog.findActive(street)`: the street compared ignoring case and surrounding spaces); one delivery per member
+  however many plots they own there; archived members left out.
+- **The channel rule** (`ChannelResolver.forAnnouncement`, through `RecipientChannels.resolveForAnnouncement`): a member
+  who prefers paper or Viber is on paper (Viber with the note `VIBER_UNSUPPORTED`). Otherwise the member's preferred
+  channel, then the other one, the first that the board chose and that reaches the member (Telegram: linked and the bot
+  set up; e-mail: an e-mail and the mailbox set up); otherwise paper. So a member who prefers Telegram and is linked
+  gets Telegram when Telegram is chosen, else e-mail when e-mail is chosen and they have one, else paper; a member who
+  prefers e-mail but whose only reachable chosen channel is Telegram gets Telegram. With both channels chosen this is
+  the rule of invoices, except that a member who prefers e-mail but has none gets Telegram when linked.
+- **Preview** (`preview=true`): the counts per channel and the members on paper ("Last First", Ukrainian alphabetical
+  order) to inform in person; nothing is written.
+- **Send:** one transaction saves the `announcement` row (the text as user content, not sealed; `audience`
+  `{"streets": [...]}`; `channels` the chosen ones; `created_by` the caller) and one `delivery` row per member
+  (`ANNOUNCEMENT`, no billing month): e-mail and Telegram `QUEUED`, paper **`TO_PRINT`** — the announcement keeps its
+  paper list and the «на папері» count this way (the row is the board's reminder to tell the member in person; the
+  month's «Роздруковано» marks invoice rows only, and a paper row cannot be sent again). The lanes with queued rows are
+  woken after the commit. The send publishes `ANNOUNCEMENT_SENT` (entity type `ANNOUNCEMENT`, the announcement's id,
+  label `announcement`; fields `audience` `ALL`/`STREETS`, `streets` for `STREETS` joined by ", ", `channels`,
+  `telegram`, `email`, `paper`) — **never the text**, so it is not in the audit log or the outbox; no log carries it.
+- **The message** (`AnnouncementMessages`, at send time): Telegram `sendMessage` with the text exactly as entered (no
+  `parse_mode`, so nothing is read as formatting); e-mail with the subject «Оголошення правління {cooperative}»
+  (`announcement.email.subject`), the text as the plain part and, HTML-escaped with its line breaks as `<br>`, as the
+  HTML part, signed «Правління {cooperative}». The delivery screen lists these rows under the kind `ANNOUNCEMENT`
+  (with `announcementId`, no month or plot); «Надіслати ще раз» works on them as on any e-mail or Telegram row.
+- **List and detail:** the list (newest first) has the date, the author ("Last First"), the streets, the channels and
+  the counts now: `sent`, `failed`, `queued` (Telegram and e-mail rows by status) and `paper`; the detail adds the text
+  and a page of its deliveries in the shape of `listDeliveries`. 404 `NOT_FOUND` for another cooperative's.
 
 ## Paper copies (`PaperCopiesProvider`, documents SPI `PaperRecipients`)
 
@@ -313,7 +357,12 @@ nothing due without the button), `BotReadingTests` (a `PENDING` reading dated to
 question, the update taken; a value below the previous one refused with the account's code and typed again, a text
 that is no number, too many decimals; the approval and rejection messages, a redelivered decision told once; another
 member's plot and meter unreachable), and, in the meters and documents tests, `MemberReadingsPortTests` and
-`InvoiceForDayTests`. No test reaches Telegram or a real mailbox: `app.nadel.notifications.FakeBotApi`
+`InvoiceForDayTests`; slice 6: `AnnouncementsTests` (a street's audience is its active plots' owners only; the chosen
+channels and the fallback; the paper list and counts; the preview writes nothing; the Telegram text equals the entered
+one without `parse_mode`; the letter through Mailpit with escaped HTML; too long, blank text, no channel, blank street;
+the text never in the audit values, the outbox or the logs; a failed row counted and sent again),
+`AnnouncementsAccessTests` (the chairman; the treasurer, a member and the operator 403; another cooperative 404),
+`ChannelResolverTests` (the announcement rule) and, in the plots tests, `StreetsTests`. No test reaches Telegram or a real mailbox: `app.nadel.notifications.FakeBotApi`
 (test sources) is an in-JVM Bot API on a random port that every Spring test context points `nadel.telegram.api-url` at
 (`IntegrationTest`, which also turns the schedule off and sets a 1 s poll), with a long-poll `getUpdates` over updates
 a test pushes per token, a recorded `sendMessage` and multipart `sendDocument` (caption, file, URL buttons; 403 for a

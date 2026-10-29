@@ -7,8 +7,18 @@ import app.nadel.notifications.internal.mail.SmtpSecurity;
 import java.time.YearMonth;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import nadel.contract.api.NotificationsApi;
+import nadel.contract.model.AnnouncementChannel;
+import nadel.contract.model.AnnouncementCounts;
+import nadel.contract.model.AnnouncementDetails;
+import nadel.contract.model.AnnouncementPage;
+import nadel.contract.model.AnnouncementPaperMember;
+import nadel.contract.model.AnnouncementRequest;
+import nadel.contract.model.AnnouncementSendResult;
+import nadel.contract.model.AnnouncementSummary;
 import nadel.contract.model.DeliveryChannel;
 import nadel.contract.model.DeliveryCounts;
 import nadel.contract.model.DeliveryKind;
@@ -48,6 +58,7 @@ import org.springframework.web.bind.annotation.RestController;
  *       the member behind the token ({@link MemberNotifications}); the platform operator gets 403.</li>
  *   <li>Sending invoices and the delivery screen: every one needs {@code INVOICES_ISSUE} ({@link DeliveryPlanner},
  *       {@link DeliveryRegister}).</li>
+ *   <li>Announcements: every one needs {@code ANNOUNCEMENTS_SEND} ({@link Announcements}).</li>
  * </ul>
  */
 @RestController
@@ -60,15 +71,61 @@ class NotificationsController implements NotificationsApi {
     private final MemberNotifications mine;
     private final DeliveryPlanner planner;
     private final DeliveryRegister register;
+    private final Announcements announcements;
 
     NotificationsController(CurrentUser currentUser, DeliverySettingsService service, DeliveryChecks checks,
-            MemberNotifications mine, DeliveryPlanner planner, DeliveryRegister register) {
+            MemberNotifications mine, DeliveryPlanner planner, DeliveryRegister register,
+            Announcements announcements) {
         this.currentUser = currentUser;
         this.service = service;
         this.checks = checks;
         this.mine = mine;
         this.planner = planner;
         this.register = register;
+        this.announcements = announcements;
+    }
+
+    @Override
+    @PreAuthorize("hasAuthority('PERM_ANNOUNCEMENTS_SEND')")
+    public ResponseEntity<AnnouncementSendResult> sendAnnouncement(Boolean preview, AnnouncementRequest request) {
+        var plan = announcements.send(new Announcements.Request(request.getText(), request.getStreets(),
+                request.getChannels().stream().map(channel -> Channel.valueOf(channel.getValue()))
+                        .collect(Collectors.toSet())), Boolean.TRUE.equals(preview),
+                currentUser.profile());
+        var dto = new AnnouncementSendResult(new DeliveryCounts(plan.telegram(), plan.email(), plan.paper()),
+                plan.paperMembers().stream().map(member -> new AnnouncementPaperMember(member.memberId(),
+                        member.name())).toList());
+        dto.setAnnouncementId(plan.announcementId());
+        return ResponseEntity.ok(dto);
+    }
+
+    @Override
+    @PreAuthorize("hasAuthority('PERM_ANNOUNCEMENTS_SEND')")
+    public ResponseEntity<AnnouncementPage> listAnnouncements(Integer page, Integer size) {
+        Announcements.Page found = announcements.list(page, size);
+        List<AnnouncementSummary> items = found.items().stream().map(view -> {
+            AnnouncementRows.Stored a = view.announcement();
+            var dto = new AnnouncementSummary(a.id(), a.createdAt().atOffset(ZoneOffset.UTC), a.streets(),
+                    channels(a.channels()), toDto(view.counts()));
+            dto.setAuthorName(view.authorName());
+            return dto;
+        }).toList();
+        int totalPages = (int) ((found.total() + size - 1) / size);
+        return ResponseEntity.ok(new AnnouncementPage(items, page, size, found.total(), totalPages));
+    }
+
+    @Override
+    @PreAuthorize("hasAuthority('PERM_ANNOUNCEMENTS_SEND')")
+    public ResponseEntity<AnnouncementDetails> getAnnouncement(UUID id, Integer page, Integer size) {
+        Announcements.View view = announcements.find(id);
+        AnnouncementRows.Stored a = view.announcement();
+        DeliveryPage deliveries = toDto(register.list(new DeliveryRows.Filter(null, DeliveryRows.ANNOUNCEMENT, null,
+                null, a.id()), page, size), page, size);
+        var dto = new AnnouncementDetails(a.id(), a.createdAt().atOffset(ZoneOffset.UTC),
+                Objects.requireNonNull(a.text()), a.streets(), channels(a.channels()), toDto(view.counts()),
+                deliveries);
+        dto.setAuthorName(view.authorName());
+        return ResponseEntity.ok(dto);
     }
 
     @Override
@@ -93,13 +150,7 @@ class NotificationsController implements NotificationsApi {
         var filter = new DeliveryRows.Filter(month == null ? null : YearMonth.parse(month),
                 kind == null ? null : kind.getValue(), status == null ? null : status.getValue(),
                 channel == null ? null : Channel.valueOf(channel.getValue()));
-        DeliveryRegister.Page found = register.list(filter, page, size);
-        List<DeliveryRow> items = found.rows().stream().map(NotificationsController::toDto).toList();
-        List<DeliverySummaryCount> summary = found.summary().stream().map(count -> new DeliverySummaryCount(
-                DeliveryMethod.fromValue(count.channel().name()), DeliveryStatus.fromValue(count.status()),
-                count.count())).toList();
-        int totalPages = (int) ((found.total() + size - 1) / size);
-        return ResponseEntity.ok(new DeliveryPage(items, page, size, found.total(), totalPages, summary));
+        return ResponseEntity.ok(toDto(register.list(filter, page, size), page, size));
     }
 
     @Override
@@ -179,6 +230,23 @@ class NotificationsController implements NotificationsApi {
         return ResponseEntity.noContent().build();
     }
 
+    private static DeliveryPage toDto(DeliveryRegister.Page found, int page, int size) {
+        List<DeliveryRow> items = found.rows().stream().map(NotificationsController::toDto).toList();
+        List<DeliverySummaryCount> summary = found.summary().stream().map(count -> new DeliverySummaryCount(
+                DeliveryMethod.fromValue(count.channel().name()), DeliveryStatus.fromValue(count.status()),
+                count.count())).toList();
+        int totalPages = (int) ((found.total() + size - 1) / size);
+        return new DeliveryPage(items, page, size, found.total(), totalPages, summary);
+    }
+
+    private static AnnouncementCounts toDto(DeliveryRows.AnnouncementCounts counts) {
+        return new AnnouncementCounts(counts.sent(), counts.failed(), counts.queued(), counts.paper());
+    }
+
+    private static List<AnnouncementChannel> channels(List<Channel> channels) {
+        return channels.stream().map(channel -> AnnouncementChannel.fromValue(channel.name())).toList();
+    }
+
     private static InvoiceSendResult toDto(DeliveryPlanner.Plan plan) {
         return new InvoiceSendResult(new DeliveryCounts(plan.telegram(), plan.email(), plan.paper()), plan.queued());
     }
@@ -189,6 +257,7 @@ class NotificationsController implements NotificationsApi {
                 DeliveryStatus.fromValue(d.status()), d.attempts());
         dto.setMonth(d.month() == null ? null : d.month().toString());
         dto.setPlotNumber(row.plotNumber());
+        dto.setAnnouncementId(d.announcementId());
         dto.setMemberName(row.memberName());
         dto.setFailureCode(d.failureCode() == null ? null : DeliveryFailureCode.fromValue(d.failureCode()));
         dto.setNote(d.note() == null ? null : DeliveryNote.fromValue(d.note()));

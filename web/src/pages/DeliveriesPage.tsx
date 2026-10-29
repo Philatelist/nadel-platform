@@ -25,6 +25,7 @@ import { QueryBoundary } from '../components/QueryBoundary';
 import { Button, Notice, PageHeader, Panel } from '../components/ui';
 import { kyivToday } from '../kyivToday';
 import { useT } from '../i18n';
+import { useOptionalMe } from '../me';
 import { problemMessage } from '../problem';
 import { useDocumentTitle } from '../useDocumentTitle';
 
@@ -38,6 +39,7 @@ export function DeliveriesPage() {
   const d = t.deliveries;
   useDocumentTitle(d.title);
   const queryClient = useQueryClient();
+  const canOpenAnnouncements = useOptionalMe()?.permissions.includes('ANNOUNCEMENTS_SEND') ?? false;
   const [params, setParams] = useSearchParams();
   const monthParam = params.get('month');
   const month = monthParam !== null && MONTH.test(monthParam) ? monthParam : kyivToday().slice(0, 7);
@@ -125,6 +127,7 @@ export function DeliveriesPage() {
               <>
                 <DeliveryTable
                   rows={data.items}
+                  linkAnnouncements={canOpenAnnouncements}
                   retryingId={retry.isPending ? retry.variables?.id : undefined}
                   onRetry={(row: DeliveryRow) => retry.mutate({ id: row.id })}
                 />

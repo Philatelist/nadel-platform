@@ -25,6 +25,7 @@ interface NavItem {
     | 'reports'
     | 'certificates'
     | 'deliveries'
+    | 'announcements'
     | 'imports'
     | 'roles'
     | 'audit'
@@ -47,6 +48,7 @@ const NAV_ITEMS: readonly NavItem[] = [
   { to: '/reports', label: 'reports', permission: 'REPORTS_VIEW' },
   { to: '/documents/certificates', label: 'certificates', permission: 'CHARGES_VIEW' },
   { to: '/deliveries', label: 'deliveries', permission: 'INVOICES_ISSUE' },
+  { to: '/announcements', label: 'announcements', permission: 'ANNOUNCEMENTS_SEND' },
   { to: '/imports', label: 'imports', permission: 'IMPORT_RUN' },
   { to: '/roles', label: 'roles', permission: 'ROLES_MANAGE' },
   { to: '/audit', label: 'audit', permission: 'AUDIT_VIEW' },
