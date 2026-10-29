@@ -51,3 +51,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `1a3a928..a2ac7bf` | PASS | — | relied on the orchestrator's 25 tests, guide build and prettier; referenced images exist. minor: owner manual (en:2454, uk:~2438) 016 history row "JobRunr comes with delivery, feature 017" → "arrived with"; a guide line that re-running demo data resets delivery settings; 20/s per bot vs FS "at most 25" (recorded) |
+
+## Slice 8 — feature testing and regression
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `a2ac7bf..ff8ae11` | PASS | — | DeliveryAcceptanceTests green in the review worktree; e2e judged by reading. minor: `delivery-payment-message.spec.ts:98` fixed 5 s wait for a negative assertion; `telegram-link.spec.ts:37` also @smoke (section 15 asks for one); invoice-send spec leaves rows on the demo closed month (append-only); `acceptance-coverage.md:74` says 54 criteria, table has 52 rows |

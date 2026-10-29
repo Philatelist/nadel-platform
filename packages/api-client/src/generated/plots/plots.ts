@@ -389,9 +389,8 @@ export const getListPlotStreetsUrl = () => {
 
 /**
  * The distinct streets of the active plots that are not common land (feature 017 §2.6: the streets an
- * announcement can be sent to), without surrounding spaces, each once ignoring case (the first spelling in
- * alphabetical order), in Ukrainian alphabetical order ignoring case. Plots without a street are left out.
- * Requires `PLOTS_VIEW` or `ANNOUNCEMENTS_SEND`.
+ * announcement can be sent to), without surrounding spaces, each once ignoring case, in Ukrainian alphabetical
+ * order ignoring case. Plots without a street are left out. Requires `PLOTS_VIEW` or `ANNOUNCEMENTS_SEND`.
  * @summary The streets of the cooperative's plots
  */
 export const listPlotStreets = async ( options?: Parameters<typeof nadelFetch>[1]): Promise<string[]> => {

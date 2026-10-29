@@ -1,7 +1,7 @@
 # Pipeline log — 017 delivery by e-mail and Telegram
 
 - Status: running
-- Phase: 3 — implement, Slice 1
+- Phase: 4 — verify
 - Branch: 017-delivery-email-telegram (planned) · Base: main @ 1fef5d0
 - Requirement: docs/features/017-delivery-email-telegram.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
@@ -117,3 +117,8 @@
 - Slice 7 commit a2ac7bf; review round 1 started (1a3a928..a2ac7bf).
 - Slice 7 review round 1: PASS. All slice reviews 1–7 PASS → Slice 8 (Feature Testing & Regression) may start.
 - S8 done (testing-expert): acceptance-coverage.md maps 54 criteria (51 proved by tests, 2 documentation-only FS 2.9, 1 manual FS 2.10; no gaps); DeliveryAcceptanceTests (10 journeys); e2e specs delivery-invoices (@smoke), telegram-link (@smoke), delivery-payment-message, delivery-announcement, delivery-demo + support/fakeTelegram.ts, support/mailpit.ts. Own specs 5 passed; --grep @smoke 20 passed (scratch DB). RED: backend (announcement limit) and e2e (TelegramChannel mutation) failed as expected; delivery-demo not RED-validated. Orchestrator re-run: DeliveryAcceptanceTests 10 green, typecheck and lint green. e2e specs use the English UI like existing specs; they never reset the fake Telegram server (unique chat ids instead).
+- Slice 8 commit ff8ae11; review round 1 started (a2ac7bf..ff8ae11).
+- Slice 8 review round 1: PASS. Every slice review PASS. Phase 4 started; full suite (make check) running in the background.
+- Phase 4 full suite (make check on ff8ae11): gen, format-check, lint green; backend 3839 tests, 1 failure + 2 errors → stopped before the client tests. Regressions (none in the baseline): `InvoiceDeliveryTests.noAddressAndNoMailboxFailAtOnceWithTheirCodes` (QUEUED instead of FAILED — passes in slice runs, fails in the full suite); `SealImportPlansMigrationTests` and `EncryptMemberContactsMigrationTests` (context at an old migration target: JobRunr storage provider "Not all required tables are available"). Regression fix attempt 1 → spring-backend.
+- Regression fix attempt 1 (spring-backend), test setup only: migration tests that boot at an old Flyway target run JobRunr with in-memory storage (`jobrunr.database.type=mem` unless target is latest); `@DirtiesContext` on DeliveryJobTests so its background job server stops (its cached context kept dispatching other tests' jobs and held the lane lease → the QUEUED failure). 5 targeted + 752 module tests green.
+- Also found: `make gen` (part of make check) changed `packages/api-client/src/generated/plots/plots.ts` — the committed client was stale against an edited description in api/openapi.yaml (Slice 6). CI's "Generated API client is up to date" step would have failed; the regenerated file goes into the fix commit.

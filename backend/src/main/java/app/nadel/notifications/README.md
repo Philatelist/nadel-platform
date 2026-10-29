@@ -329,7 +329,8 @@ JobRunr 9.0.1 (`jobrunr-spring-boot-4-starter`, Jackson 3) on the application's 
 from Flyway V30 (`jobrunr.database.skip-create=true`, default prefix, schema `public`, no RLS: job arguments are a
 cooperative id and a channel). Dashboard off, no usage data sent, the background job server on
 (`jobrunr.background-job-server.enabled`; the tests turn it off and call the dispatcher, `DeliveryJobTests` turns it
-on). The job's body binds the cooperative itself (`TenantContext.runAs` in `DeliveryDispatcher`) before any
+on and closes its context afterwards so the server does not run the later classes' jobs; the tests that boot the
+application at an older Flyway target, before V30, keep JobRunr's jobs in memory, `jobrunr.database.type=mem`). The job's body binds the cooperative itself (`TenantContext.runAs` in `DeliveryDispatcher`) before any
 transaction. JobRunr only wakes lanes and retries a crashed run; the attempts, the backoff and the pace belong to the
 delivery rows and the lane lease (ADR 0018).
 

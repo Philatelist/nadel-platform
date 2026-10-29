@@ -9,14 +9,17 @@ import java.util.UUID;
 import org.jobrunr.server.BackgroundJobServer;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.TestPropertySource;
 
 /**
  * The delivery worker on JobRunr 9 (feature 017, ADR 0007): JobRunr starts on Spring Boot 4.1 with Jackson 3 on the
  * tables of Flyway V30 (it creates none: {@code skip-create}), as the application role, and its background job server
  * runs the {@link DispatchDeliveries} job a send wakes, which delivers the letter. The other integration tests run
- * without the server and call the dispatcher themselves.
+ * without the server and call the dispatcher themselves. The context is closed after the class: a cached context would
+ * keep its server polling the shared database and run the jobs the later classes enqueue, racing their own dispatchers.
  */
+@DirtiesContext
 @TestPropertySource(properties = {"nadel.test.job-server=true",
         "jobrunr.background-job-server.poll-interval-in-seconds=5"})
 class DeliveryJobTests extends DeliveryTestSupport {
