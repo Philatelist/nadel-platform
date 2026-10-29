@@ -45,3 +45,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `46121a6..1a3a928` | PASS | — | 26 tests green in the review worktree. minor: `Announcements.java:124` streets without owners → an announcement with zero deliveries reported as sent (preview shows 0/0/0; a "no recipients" refusal later); `PlotsController.java:6` import order; `MailChannel.java:14-16` Javadoc line length |
+
+## Slice 7 — demo data, documentation, guides and the leaflet
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `1a3a928..a2ac7bf` | PASS | — | relied on the orchestrator's 25 tests, guide build and prettier; referenced images exist. minor: owner manual (en:2454, uk:~2438) 016 history row "JobRunr comes with delivery, feature 017" → "arrived with"; a guide line that re-running demo data resets delivery settings; 20/s per bot vs FS "at most 25" (recorded) |
