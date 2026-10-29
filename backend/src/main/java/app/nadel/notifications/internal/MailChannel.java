@@ -12,10 +12,10 @@ import org.springframework.web.util.HtmlUtils;
 
 /**
  * Sends a delivery as a letter through the cooperative's mailbox (feature 017 §2.4): plain text and HTML with the same
- * words (the message, escaped and with its line breaks kept, the payment link, the line naming the attachment such as «Рахунок у вкладенні (PDF)», the
- * board's signature), the PDF attached when the message has one, from the mailbox's sender name. The server's refusal of the sign-in is permanent ({@code SMTP_AUTH_FAILED}); a refused
- * letter ({@code SMTP_REJECTED}) or no connection ({@code CONNECTION_FAILED}) is tried again. Runs outside any
- * transaction.
+ * words (the message, escaped and with its line breaks kept, the payment link, the line naming the attachment such as
+ * «Рахунок у вкладенні (PDF)», the board's signature), the PDF attached when the message has one, from the mailbox's
+ * sender name. The server's refusal of the sign-in is permanent ({@code SMTP_AUTH_FAILED}); a refused letter
+ * ({@code SMTP_REJECTED}) or no connection ({@code CONNECTION_FAILED}) is tried again. Runs outside any transaction.
  */
 @Component
 class MailChannel {

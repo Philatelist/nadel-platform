@@ -275,7 +275,9 @@ write them); on start-up the runner, under `TenantContext.runAs` for the demo co
   already has a certificate.
 
 Idempotent: the next start finds both and writes nothing. A refusal (requisites missing, a running build) or any
-failure is logged with its problem code or class only and never stops the application; the log has counts only.
+failure is logged with its problem code or class only and never stops the application; the log has counts only. It
+runs before the other demo runners (`@Order`): the demo delivery of `notifications` (feature 017, `DemoNotifications`)
+marks the invoices of that month as sent, and the demo ledger block deletes those delivery rows before the invoices.
 
 ## Public API: `DocumentsFacade` (for feature 017)
 

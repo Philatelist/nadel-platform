@@ -39,3 +39,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `053feb8..46121a6` | PASS | — | compile only in the review worktree (tests run by builder 395 / orchestrator 28). minor: `DocumentsFacadeService.java` Javadoc line > 120 chars; `ReadingMessages` in-memory dedup covers one instance (accepted choice) |
+
+## Slice 6 — announcements to all members or chosen streets
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `46121a6..1a3a928` | PASS | — | 26 tests green in the review worktree. minor: `Announcements.java:124` streets without owners → an announcement with zero deliveries reported as sent (preview shows 0/0/0; a "no recipients" refusal later); `PlotsController.java:6` import order; `MailChannel.java:14-16` Javadoc line length |

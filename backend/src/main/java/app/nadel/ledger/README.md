@@ -1265,8 +1265,10 @@ open, the month before it closed (September and October 2026 on the first load).
 - **The plot status cache:** every plot's debt and oldest debt date, and the colour as the refresher would record it.
 
 So "Не нараховано" shows two items: exactly one "Немає тарифу на всі дні" (plot 25) and quarter Б's unknown value.
-Re-runnable: the block first deletes every ledger row of the demo cooperative (as `nadel_owner` with
-`app.ledger_maintenance = 'on'`), its water connections and common consumer settings, then books everything again; a
+Re-runnable: the block first deletes the demo cooperative's delivery rows and other feature 017 rows (`delivery`
+points at invoices and payments; `notifications.internal.DemoNotifications` writes them again on the next start), then
+every ledger row of the demo cooperative (as `nadel_owner` with `app.ledger_maintenance = 'on'`), its water
+connections and common consumer settings, then books everything again; a
 change made to the demo ledger by hand is lost on a re-run. It assumes one version per demo tariff and real readings
 at both ends of the runs (it raises an exception otherwise).
 

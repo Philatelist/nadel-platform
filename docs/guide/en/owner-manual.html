@@ -20,7 +20,7 @@
         <dt>State</dt>
         <dd>Chapters marked "works" describe the system as it is; "planned" — decided but not built yet</dd>
         <dt>Edition</dt>
-        <dd>27 October 2026</dd>
+        <dd>29 October 2026</dd>
       </dl>
     </div>
 
@@ -248,8 +248,89 @@ make e2e-install    # once: the browser for end-to-end tests</pre>
               <code>nadel_app</code>
             </td>
           </tr>
+          <tr>
+            <td>Test mail (Mailpit)</td>
+            <td><code>http://localhost:8025</code>, SMTP <code>localhost:1025</code></td>
+            <td>no sign-in; letters live in memory</td>
+          </tr>
+          <tr>
+            <td>Fake Telegram</td>
+            <td><code>http://localhost:8091</code></td>
+            <td>no sign-in; any token except one starting with <code>bad</code></td>
+          </tr>
         </tbody>
       </table>
+      <h3>Mail, Telegram and background jobs in development</h3>
+      <p>
+        Delivery (feature 017) does not leave the local environment: Mailpit catches the letters, and a fake
+        Bot API server stands in for the real Telegram. <code>make infra</code> starts both (the services
+        <code>mailpit</code> and <code>fake-telegram</code> in <code>infra/docker-compose.yml</code>).
+      </p>
+      <ul>
+        <li>
+          <strong>Mailpit.</strong> SMTP is <code>localhost:1025</code> (no encryption, no password), the web
+          page and the API are <code>http://localhost:8025</code>;
+          <code>curl localhost:8025/api/v1/messages</code> lists the letters. Letters live in memory and
+          disappear after a restart. This is where the test letter of "Delivery" and the invoices with their
+          PDF attached show up.
+        </li>
+        <li>
+          <strong>Fake Telegram</strong> (<code>infra/fake-telegram/server.mjs</code>, port 8091) keeps the
+          updates and the messages the bot sent per token, so two cooperatives' bots do not mix. A token
+          starting with <code>bad</code> gets 401 (this is how "The token is not valid" is tried). Controls:
+        </li>
+      </ul>
+      <pre class="formula">
+# a member "presses Start" with a link code (chat 555)
+curl -s -X POST localhost:8091/control/updates -H 'content-type: application/json' \
+  -d '{"token":"123:demo","chatId":555,"text":"/start ABC123","firstName":"Olena"}'
+
+# what the bot sent to chat 555 (method, text, document name, buttons, time)
+curl -s 'localhost:8091/control/sent?token=123:demo&chatId=555'
+
+# a member blocked the bot (sendMessage answers 403), and undo it
+curl -s -X POST localhost:8091/control/block/555
+curl -s -X DELETE localhost:8091/control/block/555
+
+# forget everything
+curl -s -X POST localhost:8091/control/reset</pre>
+      <ul>
+        <li>
+          <strong>The <code>NADEL_TELEGRAM_API_URL</code> variable</strong> is the Bot API address. In the
+          <code>dev</code> profile it defaults to <code>http://localhost:8091</code> (the fake server),
+          everywhere else to <code>https://api.telegram.org</code>. To check with a real bot set
+          <code>NADEL_TELEGRAM_API_URL=https://api.telegram.org</code>, save the real token in the demo
+          cooperative's "Delivery" and stop the fake service (<code
+            >docker compose -f infra/docker-compose.yml stop fake-telegram</code
+          >). The variable is to be added to <code>.env.example</code> - the owner does it before merging;
+          without it the defaults apply.
+        </li>
+        <li>
+          <strong>Demo data.</strong> The <code>dev</code> profile fills the demo cooperative by itself: the
+          mailbox points at Mailpit (sender <code>board@demo.local</code>), the bot is set up against the fake
+          Telegram (token <code>123456:DEMO-fake-telegram-token</code>, name <code>nadel_demo_bot</code>), two
+          members are connected (<code>member@demo.local</code> and Dmytro Kravchenko), and the invoices of
+          the closed month are already "Sent" (one attempt) or "To print". Nothing is queued, so a start never
+          floods Mailpit. The second demo cooperative stays unconfigured.
+        </li>
+        <li>
+          <strong>JobRunr</strong> wakes the delivery work and recovers it after a failure. Its tables are
+          created by Flyway (migration <code>V30__jobrunr.sql</code>, because the <code>nadel_app</code> role
+          cannot create tables), the dashboard is off and no usage data is sent. JobRunr's tables, like
+          <code>event_publication</code>, have no <code>tenant_id</code> and no RLS: the job arguments are
+          only a cooperative id and a channel.
+        </li>
+        <li>
+          <strong>The bot and long polling.</strong> The system polls each cooperative's bot itself
+          (<code>getUpdates</code>, 25 seconds), with no public address and no webhooks.
+          <em>One</em> application instance polls: it holds a "lease" (the cooperative's row in
+          <code>bot_poll_state</code>, 60 seconds, by database time). A second instance waits and takes the
+          bot over about a minute after the first stopped; a clean shutdown gives the lease up at once. Each
+          update is taken "at most once": after a crash one reply may be lost (the member just presses again),
+          but a meter reading from the bot is never submitted twice. If the fake server is not running the
+          application still works, and the bot retries with a growing pause.
+        </li>
+      </ul>
       <h3>Demo users (password <code>nadel</code>)</h3>
       <table>
         <thead>
@@ -1320,6 +1401,101 @@ END $$;</pre>
           </tr>
         </tbody>
       </table>
+      <h3>Delivery and announcements</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Element</th>
+            <th>What it does</th>
+            <th>Permission</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              Settings → "Delivery" → e-mail: server, port, encryption, user, password, sender; "Save the
+              mailbox"
+            </td>
+            <td>
+              Saves the cooperative's mailbox. The password is sealed with the cooperative's key and never
+              shown again ("saved"); an empty field keeps the old password. Written to the change history (the
+              field "changed", without the value)
+            </td>
+            <td>Manage cooperative settings</td>
+          </tr>
+          <tr>
+            <td>"Send a test letter"</td>
+            <td>
+              A letter to the user's own address from the member card; shows "accepted by the server" or the
+              refusal in plain words and the server's reply. Works with the saved settings
+            </td>
+            <td>Manage cooperative settings</td>
+          </tr>
+          <tr>
+            <td>"Telegram bot" → "Bot token", "Save the token", "Check the bot"</td>
+            <td>
+              The token is sealed; only its last 4 characters are shown. The check asks Telegram and shows the
+              bot's
+              <code>@name</code> or "The token is not valid" / "Telegram is unavailable". A new token restarts
+              the cooperative's bot within about a minute
+            </td>
+            <td>Manage cooperative settings</td>
+          </tr>
+          <tr>
+            <td>
+              "General options": "Letters per second" (1-10, default 1), "Notify about payments", "Save the
+              options"
+            </td>
+            <td>The letter rate and the messages about payments and their reversals</td>
+            <td>Manage cooperative settings</td>
+          </tr>
+          <tr>
+            <td>My account → "Notifications"</td>
+            <td>
+              The preferred way among the available ones ("Save"), "Connect Telegram" (a one-time link for 30
+              minutes), "Disconnect Telegram". Without a bot there is no connect button
+            </td>
+            <td>own data</td>
+          </tr>
+          <tr>
+            <td>Member card → "Telegram"</td>
+            <td>Only "connected" or "not connected"</td>
+            <td>View members</td>
+          </tr>
+          <tr>
+            <td>
+              Charges → Months → a month → "Send invoices for …" → "Also send invoices with nothing due",
+              "Send"
+            </td>
+            <td>
+              A preview (Telegram, e-mail, paper), then queueing. Next to an invoice in the list is "Send" for
+              the owners of one plot. "PDF for print" now prints one copy per paper recipient with the QR code
+              "Отримувати рахунки в Telegram" (a code valid 90 days). Written to the change history ("Invoices
+              sent")
+            </td>
+            <td>Issue invoices</td>
+          </tr>
+          <tr>
+            <td>"Deliveries" menu → filters "Month", "Kind", "Status", "Channel", "Send again", "Printed"</td>
+            <td>
+              The summary by channel and the list with reasons. "Send again" repeats a send from "Sent" or
+              "Failed"; "Printed" removes the "to print" mark from the month's paper invoices. These actions
+              are not written to the change history
+            </td>
+            <td>Issue invoices</td>
+          </tr>
+          <tr>
+            <td>"Announcements" menu → "New announcement" → "Preview", "Send"</td>
+            <td>
+              The list of past announcements and a card with the text and its deliveries. A new one: text up
+              to 2000 characters, "All members" or streets, channels Telegram / e-mail, a preview with the
+              list of members "on paper". Written to the change history ("Announcement sent")
+            </td>
+            <td>Send announcements</td>
+          </tr>
+        </tbody>
+      </table>
+
       <h3>Documents: requisites, fonts, the PDF engine</h3>
       <ul>
         <li>
@@ -1653,6 +1829,13 @@ END $$;</pre>
             <td>—</td>
             <td>—</td>
           </tr>
+          <tr>
+            <td>Send announcements</td>
+            <td>yes</td>
+            <td>-</td>
+            <td>-</td>
+            <td>-</td>
+          </tr>
         </tbody>
       </table>
       <ul>
@@ -1686,6 +1869,13 @@ END $$;</pre>
           certificates" (the chairman only) issues and annuls certificates; invoices and the register of
           certificates are seen with "View charges", a cash receipt printed with "View payments". A member
           gets the invoices and receipts of their own plots only and never certificates.
+        </li>
+        <li>
+          Delivery: "Manage cooperative settings" (chairman) sets up the mailbox and the bot and opens the
+          "Delivery" panel; "Issue invoices" (chairman, treasurer) also sends invoices, opens the "Deliveries"
+          screen, repeats sends and marks paper as printed; "Send announcements" (the chairman only) opens
+          "Announcements" and sends them. A member chooses the way to receive invoices and connects Telegram
+          in "Notifications" themselves, with no separate permission.
         </li>
       </ul>
     </section>
@@ -1729,6 +1919,33 @@ END $$;</pre>
           audit log has the actions <code>REPORT_GENERATED</code> (the report or the template with its
           version, the filters, the row count — never the content), <code>REPORT_TEMPLATE_UPLOADED</code> and
           <code>REPORT_TEMPLATE_ARCHIVED</code>; a change of requisites is recorded with the changed fields.
+        </dd>
+        <dt>Cooperative secrets: the one exception</dt>
+        <dd>
+          The mailbox password and the bot token belong to the cooperative and are entered by its board, so
+          they are cooperative data, not environment variables (ADR 0018). They are sealed with the
+          cooperative's own key (AES-256-GCM, the master key comes from the environment), cannot be read back
+          through the API ("saved" and the last 4 characters of the token) and never reach the change history,
+          events or logs. The platform's own secrets (the database, the master key, Keycloak) stay in
+          environment variables only. The platform operator does not see the cooperatives' mailboxes and bots.
+          Losing the master key means the chairman enters the password and the token again.
+        </dd>
+        <dt>Two functions across cooperatives</dt>
+        <dd>
+          The bot poller and the minute-by-minute check of the queue must know which cooperatives have a bot
+          or waiting messages before they have a current cooperative. Two database functions exist for that
+          (<code>notifications_bot_tenants()</code> and <code>notifications_due_lanes()</code>): they return
+          only cooperative ids and a channel code, never a row, an address or a text, and only
+          <code>nadel_app</code> may run them. They are the only functions of the platform that cross
+          cooperatives; every read of data after them runs inside its own cooperative under RLS. A new such
+          function needs its own ADR.
+        </dd>
+        <dt>Where letters are sent</dt>
+        <dd>
+          The chairman types the mail server address, and the test letter connects to it from the server. This
+          is a deliberately accepted limit (ADR 0018): only the chairman holds "Manage cooperative settings",
+          the connection has 10-second timeouts, and the answer carries only a code and the last line of the
+          server's reply.
         </dd>
         <dt>Dependencies</dt>
         <dd>CI checks known vulnerabilities (pnpm audit, OSV) and the code (Semgrep).</dd>
@@ -2062,6 +2279,62 @@ END $$;</pre>
             </td>
           </tr>
           <tr>
+            <td>"The token is not valid" in "Delivery", or the bot stopped answering</td>
+            <td>
+              The token was mistyped, the bot was deleted or the token reissued in @BotFather. Telegram
+              answers 401 and the system
+              <strong>stops the cooperative's bot until the token is changed</strong>. Copy the token from
+              @BotFather again, save it in "Delivery" and press "Check the bot"; the bot starts working in
+              about a minute. Locally a token starting with "bad" gives this on purpose.
+            </td>
+          </tr>
+          <tr>
+            <td>The bot is silent although the token is right</td>
+            <td>
+              One instance polls the bot: if two were running, the second takes it over about a minute after
+              the first stopped - wait. Locally check that <code>fake-telegram</code> is running (<code
+                >docker compose -f infra/docker-compose.yml ps</code
+              >), that <code>NADEL_TELEGRAM_API_URL</code> points at it (it does in <code>dev</code> by
+              default) and that the demo cooperative's token is not a real one while the address is the fake
+              (and the other way round). When Telegram is unreachable the bot retries with a pause and the
+              application does not fail.
+            </td>
+          </tr>
+          <tr>
+            <td>"Wrong mailbox login or password" (<code>SMTP_AUTH_FAILED</code>)</td>
+            <td>
+              The ordinary password instead of an app password, 2-step verification (Gmail) or access for mail
+              programs (Ukr.net) not turned on, the app password revoked, or the mailbox blocked by the
+              provider for suspicious activity. Create a new app password, save it, send a test letter and
+              press "Send again" on the failed rows. There are no automatic retries, because the password does
+              not fit.
+            </td>
+          </tr>
+          <tr>
+            <td>"The mail server refused the letter" (<code>SMTP_REJECTED</code>) on many letters</td>
+            <td>
+              A free mailbox reached its daily limit or refuses a send that is too fast. The system retries
+              twice (at once, after 1 and 5 minutes); if it persists, lower "Letters per second" (default 1),
+              wait for the next day and send again. A single refused row is often an invalid recipient
+              address.
+            </td>
+          </tr>
+          <tr>
+            <td>Telegram answers "too many requests" (429)</td>
+            <td>
+              Nothing to do: the row is moved to the time Telegram named, the attempt is not used up, and the
+              sending lane pauses for that time. The system keeps its pace below Telegram's limits by itself.
+            </td>
+          </tr>
+          <tr>
+            <td>No letters visible locally</td>
+            <td>
+              Open <code>http://localhost:8025</code>; letters are in Mailpit's memory and vanish when the
+              container restarts. Check that the demo cooperative's "Delivery" points at
+              <code>localhost:1025</code>.
+            </td>
+          </tr>
+          <tr>
             <td>The pipeline stopped</td>
             <td><code>/feature-pipeline resume</code> continues where it stopped, from its log.</td>
           </tr>
@@ -2180,6 +2453,18 @@ END $$;</pre>
               follows NBU format 003 and ZXing; a month's invoices are built while the treasurer waits,
               without a job queue (JobRunr comes with delivery, feature 017); the ЄДРПОУ code is set by the
               platform operator; two new permissions, "Issue invoices" and "Issue certificates".
+            </td>
+          </tr>
+          <tr>
+            <td>29.10.2026</td>
+            <td>
+              Delivery (017, ADR 0018): letters go from the cooperative's own mailbox and Telegram messages
+              through its own bot (no shared platform bot or mail service); their secrets live in the
+              cooperative's data, sealed with its key (the one exception to "secrets only in the
+              environment"); the bot works by long polling with a lease per instance, no webhooks; two
+              database functions that cross cooperatives return ids only; sending is a delivery register
+              worked by JobRunr (three attempts, the pace kept in memory); a new permission "Send
+              announcements".
             </td>
           </tr>
         </tbody>

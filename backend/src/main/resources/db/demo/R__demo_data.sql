@@ -718,6 +718,16 @@ BEGIN
     END IF;
     PERFORM set_config('app.ledger_maintenance', 'on', true);
 
+    -- Remove the delivery of the demo cooperative first (feature 017): its rows point at invoices, payments and
+    -- announcements. The application's demo delivery runner (DemoNotifications) sets it up again on the next start.
+    DELETE FROM delivery WHERE tenant_id = demo;
+    DELETE FROM announcement WHERE tenant_id = demo;
+    DELETE FROM delivery_lane WHERE tenant_id = demo;
+    DELETE FROM telegram_link_code WHERE tenant_id = demo;
+    DELETE FROM telegram_link WHERE tenant_id = demo;
+    DELETE FROM bot_poll_state WHERE tenant_id = demo;
+    DELETE FROM delivery_settings WHERE tenant_id = demo;
+
     -- Remove the ledger of the demo cooperative (reversals before what they reverse; payments and allocations first,
     -- they point at charges and billing months).
     DELETE FROM allocation WHERE tenant_id = demo AND releases_allocation_id IS NOT NULL;

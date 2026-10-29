@@ -21,7 +21,8 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Serves the public {@link DocumentsFacade} with the services of the endpoints: the stored versions
  * ({@link InvoiceRepository}, {@link InvoiceSnapshots}, {@link InvoiceLayout}), the on-request build
- * ({@link InvoiceBuilder#forPlot}, {@link InvoiceBuilder#forDay}), the cash receipt ({@link CashReceipts}) and the print set ({@link PrintBundle}).
+ * ({@link InvoiceBuilder#forPlot}, {@link InvoiceBuilder#forDay}), the cash receipt ({@link CashReceipts}) and the
+ * print set ({@link PrintBundle}).
  * It acts as the system: no member, subject {@value #SYSTEM}, no permission check (the facade's comment says what the
  * caller keeps). Nothing it reads is logged.
  */

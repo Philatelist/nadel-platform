@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="uk">
+  <head>
+    <meta charset="utf-8" />
+    <title>Як отримувати рахунки в Telegram</title>
+    <link rel="stylesheet" href="../guide.css" />
+    <style>
+      /* A one-page leaflet for members: big friendly text, A4, no running footer (see scripts/build-pdf.mjs). */
+      @page {
+        size: A4;
+        margin: 14mm 16mm;
+      }
+      @page :first {
+        margin: 14mm 16mm;
+      }
+      body {
+        font-size: 12pt;
+        line-height: 1.4;
+      }
+      .brandline {
+        font-size: 11pt;
+        color: var(--ink-subtle);
+        margin: 0 0 2mm;
+      }
+      .brandline b {
+        color: var(--accent);
+      }
+      h1 {
+        font-family: var(--serif);
+        font-size: 24pt;
+        line-height: 1.15;
+        margin: 0 0 3mm;
+        color: var(--accent);
+      }
+      .intro {
+        font-size: 13pt;
+        margin: 0 0 3mm;
+      }
+      h2 {
+        font-family: var(--serif);
+        font-size: 15pt;
+        margin: 4mm 0 2mm;
+        color: var(--ink);
+      }
+      .ways {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 5mm;
+      }
+      .way {
+        background: var(--accent-soft);
+        border-radius: 4mm;
+        padding: 4mm 5mm;
+      }
+      .way h3 {
+        margin: 0 0 2mm;
+        font-size: 13pt;
+        color: var(--accent);
+      }
+      .way ol {
+        margin: 0;
+        padding-left: 6mm;
+      }
+      .way li {
+        margin-bottom: 1.5mm;
+      }
+      table.bot {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12pt;
+      }
+      table.bot td {
+        padding: 1.2mm 3mm;
+        border-bottom: 1px solid var(--line);
+        vertical-align: top;
+      }
+      table.bot td:first-child {
+        width: 34mm;
+        font-weight: 700;
+        white-space: nowrap;
+      }
+      .own {
+        margin-top: 4mm;
+        border: 1.5px solid var(--accent);
+        border-radius: 4mm;
+        padding: 3mm 5mm;
+        background: var(--tint);
+      }
+      .own p {
+        margin: 0;
+      }
+      .help {
+        margin: 3mm 0 0;
+        font-size: 11pt;
+        color: var(--ink-muted);
+      }
+    </style>
+  </head>
+  <body>
+    <p class="brandline"><b>Наділ</b> · ваше садове товариство</p>
+    <h1>Як отримувати рахунки в Telegram</h1>
+    <p class="intro">
+      Рахунок за місяць, повідомлення про ваш платіж і оголошення правління можуть приходити вам прямо в
+      Telegram, у застосунок, яким ви вже користуєтеся. Не треба нічого шукати в пошті й чекати папір.
+    </p>
+
+    <h2>Два способи підключити</h2>
+    <div class="ways">
+      <div class="way">
+        <h3>1. З вашого кабінету</h3>
+        <ol>
+          <li>Увійдіть у «Мій кабінет».</li>
+          <li>Знайдіть розділ «Сповіщення».</li>
+          <li>Натисніть «Підключити Telegram».</li>
+          <li>У Telegram натисніть «Почати».</li>
+        </ol>
+      </div>
+      <div class="way">
+        <h3>2. З паперового рахунку</h3>
+        <ol>
+          <li>Знайдіть на рахунку маленький QR-код «Отримувати рахунки в Telegram».</li>
+          <li>Наведіть на нього камеру телефону.</li>
+          <li>Відкрийте бота й натисніть «Почати».</li>
+        </ol>
+      </div>
+    </div>
+    <p class="help">
+      Бот привітає вас по імені й покаже кнопки. Посилання з кабінету діє 30 хвилин, а QR-код на рахунку — 90
+      днів. Кожне посилання спрацьовує один раз.
+    </p>
+
+    <h2>Що вміє бот</h2>
+    <table class="bot">
+      <tbody>
+        <tr>
+          <td>Борг</td>
+          <td>Скільки ви винні по кожній вашій ділянці і чи є аванс.</td>
+        </tr>
+        <tr>
+          <td>Рахунок</td>
+          <td>
+            Свіжий рахунок на сьогодні з PDF і кнопкою «Оплатити», яка відкриває застосунок вашого банку.
+          </td>
+        </tr>
+        <tr>
+          <td>Показання</td>
+          <td>
+            Передайте показання лічильника: оберіть ділянку й лічильник та надішліть число. Правління його
+            перевірить.
+          </td>
+        </tr>
+        <tr>
+          <td>Відключити</td>
+          <td>Більше не отримувати рахунки в Telegram.</td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="help">
+      Після кожного вашого платежу бот надішле повідомлення про нього. Бот бачить лише ваші ділянки.
+    </p>
+
+    <h2>Як відключити</h2>
+    <p>
+      Надішліть боту «Відключити» або натисніть «Відключити Telegram» у кабінеті. Тоді рахунки приходитимуть
+      вам іншим способом: поштою або на папері.
+    </p>
+
+    <div class="own">
+      <p>
+        <strong>Це бот вашого товариства.</strong> Його створило й веде саме правління, а не сторонній сервіс:
+        ваші дані лишаються в товаристві. Якщо щось не виходить, зверніться до правління.
+      </p>
+    </div>
+  </body>
+</html>

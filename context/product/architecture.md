@@ -88,7 +88,19 @@
     own plots on the plot account. Audited as `PAYMENT_RECORDED`, `PAYMENT_REVERSED`, `PAYMENT_REALLOCATED`,
     `PREPAYMENT_ALLOCATED` (entity type `PAYMENT`); automatic allocations and releases are ledger rows only.
   - `reports` (feature 013, ADR 0015; tables `report_template` and `report_template_version` in V20, under RLS `tenant_isolation`): nine built-in reports (`charges-by-month`, `plot-balances`, `debtors`, `electricity-tree`, `water`, `missing-readings`, `land-tax`, `corrections`, and since feature 015 `payments`) shown as a preview and downloaded as `.xlsx`, and report templates (uploaded `.xlsx` files, versioned, archived, never deleted) filled by an own streaming OOXML filler from a field catalog. No public API, no domain events and no money rule: it only reads, through the read facades `ledger.LedgerReadModel`, `meters.MeterReports`, `plots.PlotCatalog`/`PlotOwners`/`PlotStatuses`, `members.MemberDirectory`, `settings.CooperativeSettings`, `tariffs.ChargeTypeCatalog`/`ExpectedAmounts`, `tenancy.TenantDirectory`, and `xlsx.WorkbookGuard` for uploads; it audits through `audit` (`REPORT_GENERATED`, `REPORT_TEMPLATE_UPLOADED`, `REPORT_TEMPLATE_ARCHIVED`). Permissions `REPORTS_VIEW` (a report with personal data, Debtors, also needs `MEMBERS_VIEW`) and `REPORT_TEMPLATES_MANAGE`. Endpoints (tags `reports`, `report-templates`): `GET /reports`, `GET /reports/{code}`, `GET /reports/{code}.xlsx`, `/report-templates` (list, upload, versions, archive, file, catalog, generate). No module depends on `reports`. Details in `backend/src/main/java/app/nadel/reports/README.md`.
-  - Modules: `documents` (in code since feature 016); planned: `notifications` (payments live in `ledger` since feature 015).
+  - `notifications` (feature 017, ADR 0018; tables `delivery_settings`, `telegram_link`, `telegram_link_code`,
+    `announcement`, `delivery`, `delivery_lane`, `bot_poll_state` in V29, all under RLS `tenant_isolation`): delivery to
+    members by e-mail through each cooperative's own mailbox (SMTP) and by Telegram through its own bot, the delivery
+    register and its worker, the bot (linking a member's chat, «Борг», «Рахунок», «Показання») and the board's
+    announcements. The mailbox password and the bot token are sealed with the cooperative's data key and write-only in
+    the API. No public API: it implements the SPIs `members.TelegramLinkStatus` and `documents.PaperRecipients`, listens
+    to `ledger.PaymentRecorded`/`PaymentReversed` and `meters.ReadingDecided`, and reads `members`, `documents`,
+    `ledger`, `meters`, `plots`, `tariffs`, `identity`, `privacy`, `tenancy` through their public APIs. Permissions
+    `SETTINGS_MANAGE` (channels), `INVOICES_ISSUE` (sending invoices, the delivery screen) and `ANNOUNCEMENTS_SEND`
+    (Chairman). Delivery jobs run on JobRunr; the bot is polled with `getUpdates` under a lease. Details in
+    `backend/src/main/java/app/nadel/notifications/README.md`.
+  - Modules: `documents` (in code since feature 016) and `notifications` (in code since feature 017); payments live in
+    `ledger` since feature 015.
   - The `plots` module keeps plots as records from phase 1; polygon import, coordinate conversion and the map view arrive in roadmap phase 6. `plot.boundary` is nullable, and every feature before phase 6 must work for plots without a polygon.
 - **Security:** Spring Security as an OAuth2 JWT resource server **[in code]**.
   - Starter: `spring-boot-starter-security-oauth2-resource-server` (the Boot 4 name). The issuer URI is in `application.yml`.
@@ -173,7 +185,7 @@
   - The backend should use only the S3 API, so the product can be swapped later.
 - **Event outbox:** the Spring Modulith Event Publication Registry (`spring-modulith-starter-jpa`) **[in code, since spec 002]**. Domain events are stored in the same transaction as the change that raised them and redelivered until their listeners finish; outstanding ones are resubmitted at startup, completed ones are deleted. All cross-module side effects (notifications, recalculations, status cache refresh) go through it. See ADR 0007.
   - The table `event_publication` (`V3__audit_and_event_publication.sql`) is the one table without `tenant_id` and RLS: startup resubmission runs without a tenant. Listeners bind the event's `tenantId` with `TenantContext.runAs` before opening their transaction (ADR 0007 implementation notes).
-- **Background jobs:** JobRunr with PostgreSQL storage **[planned, arrives with feature 017, delivery by e-mail and Telegram]**. It runs scheduled and retryable jobs: monthly runs on a schedule, delivery retries to external channels. It is not the event outbox. See ADR 0007. Features 011 and 016 need none (the month's invoices are built while the treasurer waits, in one transaction): month, losses and common consumer runs are started by the board and run synchronously in the request transaction; charges of readings are event listeners.
+- **Background jobs:** JobRunr 9.0.1 (`org.jobrunr:jobrunr-spring-boot-4-starter`) with PostgreSQL storage **[in code, since feature 017]**. Its tables come from Flyway (`V30__jobrunr.sql`, `jobrunr.database.skip-create=true`; no `tenant_id` and no RLS, like `event_publication`: a job's arguments are a cooperative id and a channel); dashboard off. It runs the delivery workers (`DispatchDeliveries(tenantId, channel)`, which binds the cooperative with `TenantContext.runAs`); the delivery attempts and their backoff live on the delivery rows, JobRunr only wakes and retries a crashed run. It is not the event outbox. See ADR 0007 and ADR 0018. Features 011 and 016 need none (the month's invoices are built while the treasurer waits, in one transaction): month, losses and common consumer runs are started by the board and run synchronously in the request transaction; charges of readings are event listeners.
 - **Cash receipts:** a cash payment carries a receipt number from a per-cooperative counter **[planned, phase 3]**. The counter row is locked in the same transaction as the payment insert, so numbers are sequential, never reused and never changed; a reversed cash payment keeps its receipt number in history.
 - **Caching:** none beyond `plot_status` **[assumption]**. The load is small (tens to hundreds of cooperatives), so Redis is not justified.
 
@@ -203,16 +215,16 @@
 - **Platform operator:** sees no cooperative rows (no `tenant_id`, so RLS returns nothing). Platform reports use aggregate views without personal or financial detail through a separate read-only role; support access is granted by the chairman for a limited time and audited. See ADR 0008.
 - **Audit:** every admin action that changes data is written to the audit log **[in code, `audit` module]**. The changing module publishes an `AuditEvent` in its transaction; a listener writes `audit_entry` through the outbox (idempotent by event id). `nadel_app` has only `SELECT` and `INSERT` on `audit_entry`. Read with `GET /audit` (`AUDIT_VIEW`). So far members, roles, role assignments, plots, ownership, imports, cooperative settings, charge types, tariffs, tariff versions, tariff scopes, meters, readings, charge reversals and opening balances are audited.
 - **Logging hygiene:** names, phone numbers, emails and addresses never appear in logs.
-- **Secrets:** only from environment variables. The repository contains only dev values for the local docker-compose (`.env.example`, gitleaks allowlist in `.gitleaks.toml`).
+- **Secrets:** only from environment variables. The repository contains only dev values for the local docker-compose (`.env.example`, gitleaks allowlist in `.gitleaks.toml`). The one exception (ADR 0018, feature 017): a cooperative's own mailbox password and bot token, entered by its board, are cooperative data, sealed with the cooperative's data key in `delivery_settings` and never returned by the API.
 
 ---
 
 ## 4. External Services & APIs
 
-- **Email:** a transactional provider **[to decide: Postmark or Amazon SES]**. Locally, a test mail server is planned for phase 4 (comment in `infra/docker-compose.yml`).
-- **Messaging:** Telegram Bot API and Viber Bot API **[planned, phase 4]**. Viber charges for business messages, so its terms must be checked before committing.
+- **Email:** each cooperative's own mailbox over SMTP (often a free mailbox with an app password), not a transactional provider **[in code, feature 017, ADR 0018]**: members see the cooperative as the sender. Jakarta Mail through `spring-boot-starter-mail`, one `JavaMailSenderImpl` per cooperative; no application-wide mail server. The sending rate per mailbox is the cooperative's `email_rate_per_second` (1–10). Locally Mailpit (`infra/docker-compose.yml`, SMTP :1025, web UI :8025).
+- **Messaging:** the Telegram Bot API through each cooperative's own bot (created with @BotFather), called with the JDK `HttpClient` and polled with long polling (`getUpdates`) under a lease in `bot_poll_state`, no webhooks **[in code, feature 017, ADR 0018]**. The base URL is `NADEL_TELEGRAM_API_URL` (default `https://api.telegram.org`; the `dev` profile defaults to the fake Bot API of `infra/fake-telegram` on :8091). Viber Bot API **[later]**: Viber charges for business messages, so its terms must be checked before committing; a Viber member gets paper with a note until then.
 - **Push notifications:** Expo Push Service, which delivers to APNs and FCM **[planned, phase 5]**.
-- **Delivery pattern:** every channel sits behind the `notifications` module. Other modules trigger delivery through domain events and the outbox, never through direct calls.
+- **Delivery pattern:** every channel sits behind the `notifications` module **[in code, feature 017]**. Other modules trigger delivery through domain events and the outbox (`ledger.PaymentRecorded`, `ledger.PaymentReversed`, `meters.ReadingDecided` → `notifications`), never through direct calls; the board's sends (the month's invoices, announcements) are requests to `notifications` itself. Each message is a row of the delivery register (`delivery`), sent by a worker per cooperative and channel; the bot's own replies (and the reading decisions) go straight to the chat.
 - **Payments, now:** the NBU payment QR code (Resolution No. 97, format version 003) printed on invoices, prefilled with recipient, IBAN, ЄДРПОУ, amount and a purpose with the plot number; the payer may only change the amount **[in code, feature 016]**. The image is generated with ZXing (`core`); the layout is in `docs/domain/nbu-qr.md`.
 - **Payments, later:**
   - Bank APIs (PrivatBank, monobank business) for statement retrieval **[later, out of scope for v1]**.
@@ -224,7 +236,7 @@
 
 ## 5. Infrastructure & Delivery
 
-- **Local development:** docker-compose with PostGIS and Keycloak (port 8180) **[in code]**: `infra/docker-compose.yml`. Run it with `make infra` / `make up`.
+- **Local development:** docker-compose with PostGIS, Keycloak (port 8180), Mailpit (SMTP 1025, web UI 8025) and a fake Telegram Bot API (`infra/fake-telegram`, port 8091) **[in code]**: `infra/docker-compose.yml`. Run it with `make infra` / `make up`. The `dev` profile's demo data gives the demo cooperative a mailbox on Mailpit and a bot on the fake server (feature 017), so nothing reaches a real mailbox or Telegram.
 - **Hosting:** an EU VM running Docker Compose behind Caddy, which handles automatic TLS **[planned]**.
   - Move to Kubernetes only if load requires it.
   - Where personal data may live must be confirmed with a lawyer before selling to other cooperatives.
@@ -279,4 +291,4 @@ Resolved:
 Open:
 
 8. **Nothing exists for delivery yet.** Dockerfiles, a Caddyfile, a deploy workflow, `eas.json`, release-please and OpenTelemetry/Sentry dependencies are all missing. Everything in sections 5 and 6 marked [planned] is unimplemented.
-9. **ADRs still to write:** S3-compatible storage product, email provider, Keycloak Organizations, basemap tile source, backup tooling, data residency.
+9. **ADRs still to write:** S3-compatible storage product, Keycloak Organizations, basemap tile source, backup tooling, data residency. (Email: each cooperative's own mailbox, ADR 0018.)
