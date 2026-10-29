@@ -197,7 +197,7 @@ On the billing month screen, a «Рахунки» section.
 **Acceptance Criteria:**
 - [x] Given October has 20 invoiceable plots of which 5 have nothing due, when the treasurer opens the preview, then it
       shows 15 to build and 5 skipped.
-- [ ] Given one of those plots already has an October invoice and nothing changed, when the treasurer opens the
+- [x] Given one of those plots already has an October invoice and nothing changed, when the treasurer opens the
       preview and then builds, then the preview shows «Вже мають рахунок: 1» and «Буде сформовано: 14. Нових версій: 0.
       Без змін: 1. Пропущено: 5.», and the result says the same.
 - [x] When the treasurer starts the build, then a spinner shows until the result appears, and the list shows one invoice
@@ -225,9 +225,9 @@ the owner on 29.10.2026, PR review; it replaces "always a new version").
 **Acceptance Criteria:**
 - [x] When the treasurer clicks «Рахунок на сьогодні» on plot 9, then a new invoice (or a new version of this month's
       invoice) appears in the list and its PDF opens with today's date as the issue date.
-- [ ] Given plot 9 has this month's invoice and nothing was booked since, when the treasurer clicks «Рахунок на
+- [x] Given plot 9 has this month's invoice and nothing was booked since, when the treasurer clicks «Рахунок на
       сьогодні» again, then the PDF of that same version downloads and no new version appears.
-- [ ] Given a payment was entered after the latest version, when the treasurer clicks «Рахунок на сьогодні», then
+- [x] Given a payment was entered after the latest version, when the treasurer clicks «Рахунок на сьогодні», then
       exactly one new version appears and its PDF downloads.
 
 ### 2.7 The debt certificate

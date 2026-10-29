@@ -92,8 +92,8 @@ class DocumentsController implements DocumentsApi {
         YearMonth month = request == null || request.getMonth() == null ? null : YearMonth.parse(request.getMonth());
         InvoiceBuilder.Issued issued = builder.forPlot(id, month, currentUser.profile());
         // 201 for a new version, 200 for the latest one when nothing changed
-        return ResponseEntity.status(issued.created() ? HttpStatus.CREATED : HttpStatus.OK).body(new InvoiceRow(issued.id(), issued.plotId(),
-                issued.plotNumber(), issued.month().toString(), issued.number(), issued.version(),
+        return ResponseEntity.status(issued.created() ? HttpStatus.CREATED : HttpStatus.OK)
+                .body(new InvoiceRow(issued.id(), issued.plotId(), issued.plotNumber(), issued.month().toString(), issued.number(), issued.version(),
                 issued.due().toString(), offset(issued.issuedAt()), true));
     }
 

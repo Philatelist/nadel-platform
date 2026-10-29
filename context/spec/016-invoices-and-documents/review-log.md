@@ -49,3 +49,9 @@ Reviews deferred by the owner (28.10.2026) until after the combined verify run; 
 | Round | Commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `c2de033` | PASS | — | waiting for an asynchronous completion with the unchanged assertion is not a retry or weakening; diagnosis matches AuditListener, completion-mode delete and audit/README; 5 tests green. minor: comment wording |
+
+## Fix — owner review of PR #59 (items 1–6 of the owner's notes)
+
+| Round | Commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `ab8328a` | PASS | — | on-request hash compare and 200/201, latestOnly paging, shared preview/build decision, old snapshots open (payments optional), PK joins keep report semantics. minor: controller line over 120 columns (wrapped); stored invoices of a month with payments get one new version after deploy (real content change); `InvoiceLayout.heading` hand-estimated row height; `EarlierVersions` page size 100 |
