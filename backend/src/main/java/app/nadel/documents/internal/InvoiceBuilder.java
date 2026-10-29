@@ -27,6 +27,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.YearMonth;
+import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -480,7 +481,10 @@ class InvoiceBuilder {
             default -> throw new IllegalStateException("Unexpected database time " + value.getClass().getName());
         };
         Instant application = clock.instant();
-        return application.isAfter(database) ? application : database;
+        // to the microsecond the database stores, so a stored version reads back with the issue time it was answered
+        // with (a clock with nanoseconds, as on Linux, would differ); still not before the database time, which has
+        // microseconds only
+        return (application.isAfter(database) ? application : database).truncatedTo(ChronoUnit.MICROS);
     }
 
     /**

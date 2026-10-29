@@ -37,7 +37,7 @@ import tools.jackson.databind.json.JsonMapper;
  * calculation as text), and the plots' payments and allocations together ({@code UNION ALL}, with the billing months
  * of each allocation's payment and charge, and each payment's receipt number and bank reference for the payment rows
  * booked in the month). Only rows created at or before {@code asOf} are read. The caller passes a
- * bounded number of plots (a chunk of a month build, or one plot); the plots go 500 per {@code IN} list.
+ * bounded number of plots (a chunk of a month build, or one plot); the plots go 500 per array.
  */
 @Component
 class InvoiceLedgerQueries {
@@ -50,45 +50,54 @@ class InvoiceLedgerQueries {
             """;
 
     /**
-     * The charge a correction corrects is joined twice by its primary key, once per reference column (the reversed one
-     * only when the charge adjusts none, as {@code coalesce(adjusts, reverses)}): each join condition is a plain
-     * column equality, so it is an index condition on {@code charge_pkey}. A join on
-     * {@code coalesce(c.adjusts_charge_id, c.reverses_charge_id)} is not leakproof under RLS, so PostgreSQL checks the
-     * cooperative first and reads every charge of the cooperative for it, per chunk or per row (ADR 0017,
-     * "Measurement").
+     * Every lookup is a nested loop that the planner cannot turn into anything else, so the plan does not depend on
+     * table statistics: the plots come from {@code unnest} of the id array, and each of their rows is found by a
+     * {@code LATERAL} subquery with {@code OFFSET 0} (a fence the planner does not flatten) on one plain column
+     * equality, the plot's own ({@code charge_plot_type_idx}) or a primary key ({@code charge_pkey},
+     * {@code billing_month}). Under row-level security the cooperative policy is not leakproof for the planner, and
+     * right after a bulk load (statistics taken while the tables were empty, estimates of one row) the planner saw
+     * the join order and the access paths as a tie: it read every charge of the cooperative for each chunk through
+     * {@code charge_month_type_idx} (about 29,000 buffers per chunk against 265 here) or hashed all of them for the
+     * corrected charge. A join on {@code coalesce(adjusts_charge_id, reverses_charge_id)} cannot use an index at all,
+     * so the corrected charge is looked up twice, once per reference column (the reversed one only when the charge
+     * adjusts none). ADR 0017, "Measurement".
      */
     private static final String CHARGES = """
             select c.id, c.plot_id, c.charge_type_id, c.billing_month_id, c.kind, c.source, c.amount,
                    c.service_from, c.service_to, cast(c.calculation as text) as calculation,
                    coalesce(ta.billing_month_id, tr.billing_month_id) as target_month_id,
                    coalesce(ta.source, tr.source) as target_source, c.created_at
-            from charge c
-            join billing_month b on b.id = c.billing_month_id
-            left join charge ta on ta.id = c.adjusts_charge_id
-            left join charge tr on tr.id = c.reverses_charge_id and c.adjusts_charge_id is null
-            where c.plot_id in (:plotIds)
-              and c.created_at <= :asOf
-              and b.month <= :month
+            from unnest(cast(:plotIds as uuid[])) as ids(plot_id)
+            cross join lateral (select x.* from charge x
+                                where x.plot_id = ids.plot_id and x.created_at <= :asOf offset 0) c
+            cross join lateral (select b.id from billing_month b
+                                where b.id = c.billing_month_id and b.month <= :month offset 0) b
+            left join lateral (select t.billing_month_id, t.source from charge t
+                               where t.id = c.adjusts_charge_id offset 0) ta on true
+            left join lateral (select t.billing_month_id, t.source from charge t
+                               where t.id = c.reverses_charge_id and c.adjusts_charge_id is null offset 0) tr on true
             order by c.plot_id, c.service_from, c.created_at, c.id
             """;
 
+    /** The same shape for the payments and the allocations (with the payment and the charge by primary key). */
     private static final String MONEY = """
             select 'P' as row_kind, p.id, p.plot_id, cast(null as uuid) as charge_type_id, p.amount,
                    p.billing_month_id as payment_month_id, cast(null as uuid) as charge_month_id,
                    p.received_on, p.reverses_payment_id, p.created_at, p.receipt_number, p.bank_reference
-            from payment p
-            where p.plot_id in (:plotIds)
-              and p.created_at <= :asOf
+            from unnest(cast(:plotIds as uuid[])) as ids(plot_id)
+            cross join lateral (select x.* from payment x
+                                where x.plot_id = ids.plot_id and x.created_at <= :asOf offset 0) p
             union all
             select 'A' as row_kind, a.id, a.plot_id, c.charge_type_id, a.amount,
-                   p.billing_month_id as payment_month_id, c.billing_month_id as charge_month_id,
+                   pm.billing_month_id as payment_month_id, c.billing_month_id as charge_month_id,
                    cast(null as date) as received_on, cast(null as uuid) as reverses_payment_id, a.created_at,
                    cast(null as bigint) as receipt_number, cast(null as text) as bank_reference
-            from allocation a
-            join payment p on p.id = a.payment_id
-            join charge c on c.id = a.charge_id
-            where a.plot_id in (:plotIds)
-              and a.created_at <= :asOf
+            from unnest(cast(:plotIds as uuid[])) as ids(plot_id)
+            cross join lateral (select x.* from allocation x
+                                where x.plot_id = ids.plot_id and x.created_at <= :asOf offset 0) a
+            cross join lateral (select p.billing_month_id from payment p where p.id = a.payment_id offset 0) pm
+            cross join lateral (select x.charge_type_id, x.billing_month_id from charge x
+                                where x.id = a.charge_id offset 0) c
             """;
 
     private final EntityManager entityManager;
@@ -134,7 +143,7 @@ class InvoiceLedgerQueries {
         for (int from = 0; from < ids.size(); from += CHUNK) {
             List<UUID> chunk = ids.subList(from, Math.min(ids.size(), from + CHUNK));
             for (Object row : entityManager.createNativeQuery(CHARGES)
-                    .setParameter("plotIds", chunk)
+                    .setParameter("plotIds", chunk.toArray(new UUID[0]))
                     .setParameter("asOf", asOf)
                     .setParameter("month", month.atDay(1))
                     .getResultList()) {
@@ -149,7 +158,7 @@ class InvoiceLedgerQueries {
                 }
             }
             for (Object row : entityManager.createNativeQuery(MONEY)
-                    .setParameter("plotIds", chunk)
+                    .setParameter("plotIds", chunk.toArray(new UUID[0]))
                     .setParameter("asOf", asOf)
                     .getResultList()) {
                 Object[] v = (Object[]) row;

@@ -162,6 +162,16 @@ and retry, and the requirement's `invoice_run` is dropped.
   2.8–3.0 s run alone. Rule: a join on an expression over columns of an RLS table cannot use an index; ledger queries
   join by plain column equality. The limit stays at 2,000 plots; the first build is below the threshold of about 5 s,
   so the web shows a spinner and no progress UI.
+- **Plans that do not depend on statistics** (owner review, CI run 40866127534): with the 30 s ceiling the first build
+  took 36.0 s in CI. With statistics taken while the tables were empty, the RLS policy's estimate is 1 row and the
+  planner tied: `CHARGES` used `charge_month_type_idx` (tenant, billing month) and applied `plot_id in (...)` only as a
+  filter, so each 50-plot chunk read all 48,000 charges (28,870 buffers, 35 ms per chunk locally; far more on a slow
+  runner); the allocation leg of `MONEY` scanned all allocations per chunk in the same way. Both queries now take the
+  chunk as `unnest(cast(:plotIds as uuid[]))` and reach every table through `LATERAL (...) offset 0` lookups by plot
+  or by primary key, which the planner cannot flatten or reorder: one chunk with stale statistics now costs 265
+  buffers and 3.8 ms (`CHARGES`) and 711 buffers and 1.9 ms (`MONEY`); the first build of the fixture 1.7 s locally
+  (was 3.2–3.4 s), the rebuild 0.6 s (was 2.3 s); results unchanged. Rule for ledger reads in chunks: drive from the
+  given ids and look rows up by an index whose leading columns are fixed, so the plan holds with any statistics.
 - **The same join in the reports** (`LedgerReportQueries`, feature 013: the corrections list and the electricity and
   water charged rows) was rewritten the same way (`left join charge orv on orv.id = c.reverses_charge_id`,
   `left join charge oad on oad.id = c.adjusts_charge_id and c.reverses_charge_id is null`, columns coalesced
