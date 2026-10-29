@@ -1,11 +1,14 @@
 package app.nadel.notifications.internal;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 import app.nadel.documents.DocumentFormats;
+import app.nadel.notifications.FakeBotApi.Reply;
 import app.nadel.notifications.FakeBotApi.Sent;
 import app.nadel.notifications.FakeBotApi.SentDocument;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -13,7 +16,9 @@ import org.junit.jupiter.api.Test;
 /**
  * The bot's «Рахунок» (feature 017 §2.5): the plot (asked only when the member has several), then the invoice of the
  * day as the PDF with its caption and «Оплатити» when something is due. The same day gives the same invoice whatever
- * changed meanwhile; the next day gives a new version only when the invoice would differ.
+ * changed meanwhile; the next day gives a new version only when the invoice would differ. When no invoice can be made
+ * (no requisites) the member is told to ask the board; a plot gone before it is chosen is not served; a PDF Telegram
+ * failed to take leaves the link as it is.
  */
 class BotInvoiceTests extends BotCommandsTestSupport {
 
@@ -116,6 +121,65 @@ class BotInvoiceTests extends BotCommandsTestSupport {
         assertThat(cancelled.text()).isEqualTo("Рахунок за яку ділянку?");
         Sent menu = lastReply(chat, "Скасувати", 5);
         assertThat(menu.buttons()).containsExactly(MENU_ROW_1, MENU_ROW_2);
+    }
+
+    @Test
+    void withoutTheRequisitesTheMemberIsToldToAskTheBoard() throws Exception {
+        startBot();
+        Member owner = member("Без реквізитів");
+        UUID plot = plot("9", owner.id());
+        charge(plot, "MEMBERSHIP", "100.00");
+        ownerJdbc().update("update cooperative_settings set iban = null where tenant_id = ?", tenant);
+        long chat = link(owner.id());
+
+        Sent reply = lastReply(chat, "Рахунок", 1);
+
+        assertThat(reply.text()).isEqualTo("Рахунок за ділянку 9 зараз не вдається підготувати. Зверніться, будь "
+                + "ласка, до правління.");
+        assertThat(reply.buttons()).containsExactly(MENU_ROW_1, MENU_ROW_2);
+        assertThat(telegram.documents(chat)).isEmpty();
+        assertThat(versions(plot)).isZero();
+    }
+
+    @Test
+    void plotsGoneBeforeOneIsChosenAreNotServed() throws Exception {
+        startBot();
+        Member owner = member("Продав");
+        UUID eleven = plot("11", owner.id());
+        UUID twelve = plot("12", owner.id());
+        long chat = link(owner.id());
+        assertThat(lastReply(chat, "Рахунок", 1).buttons()).containsExactly("Ділянка 11", "Ділянка 12", "Скасувати");
+
+        // both plots are sold before the member answers
+        ownerJdbc().update("delete from ownership where plot_id in (?, ?)", eleven, twelve);
+        Sent reply = lastReply(chat, "Ділянка 11", 2);
+
+        assertThat(reply.text()).startsWith("Зараз за вами не записано жодної ділянки");
+        assertThat(reply.buttons()).containsExactly(MENU_ROW_1, MENU_ROW_2);
+        assertThat(lastReply(chat, "Рахунок", 3).text()).startsWith("Зараз за вами не записано жодної ділянки");
+        assertThat(telegram.documents(chat)).isEmpty();
+        assertThat(versions(eleven) + versions(twelve)).isZero();
+    }
+
+    @Test
+    void aPdfTelegramFailedToTakeLeavesTheLinkAndTheNextRequestGetsTheSameInvoice() throws Exception {
+        startBot();
+        Member owner = member("Невдача");
+        UUID plot = plot("9", owner.id());
+        charge(plot, "MEMBERSHIP", "100.00");
+        long chat = link(owner.id());
+        telegram.failNext("sendDocument", Reply.error(502, "Bad Gateway"));
+
+        long update = telegram.pushMessage(TOKEN, chat, "Рахунок");
+        awaitTaken(update);
+        await().atMost(Duration.ofSeconds(10)).until(() -> telegram.calls("sendDocument").size() == 1);
+
+        assertThat(telegram.documents(chat)).isEmpty();
+        assertThat(linked(owner.id())).isTrue();
+        telegram.pushMessage(TOKEN, chat, "Рахунок");
+        SentDocument retried = awaitDocuments(chat, 1).getFirst();
+        assertThat(retried.caption()).endsWith("до сплати 100,00" + NBSP + "₴");
+        assertThat(versions(plot)).isEqualTo(1);
     }
 
     /** How many versions of this month's invoice the plot has. */

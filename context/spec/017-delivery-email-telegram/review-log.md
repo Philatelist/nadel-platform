@@ -57,3 +57,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `a2ac7bf..ff8ae11` | PASS | — | DeliveryAcceptanceTests green in the review worktree; e2e judged by reading. minor: `delivery-payment-message.spec.ts:98` fixed 5 s wait for a negative assertion; `telegram-link.spec.ts:37` also @smoke (section 15 asks for one); invoice-send spec leaves rows on the demo closed month (append-only); `acceptance-coverage.md:74` says 54 criteria, table has 52 rows |
+
+## Fix — full-suite regressions (EncryptMemberContactsMigrationTests, SealImportPlansMigrationTests, InvoiceDeliveryTests.noAddressAndNoMailboxFailAtOnceWithTheirCodes) and the stale generated plots client
+
+| Round | Commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `ff8ae11..573158f` | PASS | — | read-only review. minor: `notifications/README.md:332-333` long sentence; old-target boots still start a background server on in-memory storage (harmless; could pass `background-job-server.enabled=false`) |

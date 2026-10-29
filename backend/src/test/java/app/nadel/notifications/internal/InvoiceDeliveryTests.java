@@ -1,6 +1,8 @@
 package app.nadel.notifications.internal;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -12,13 +14,18 @@ import app.nadel.tenancy.TenantContext;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -28,6 +35,9 @@ import tools.jackson.databind.JsonNode;
  * and pauses (the clock moved by the test), the retry and «Роздруковано», the list and the sweep.
  */
 class InvoiceDeliveryTests extends DeliveryTestSupport {
+
+    @Autowired
+    BotSupervisor supervisor;
 
     @Test
     void thePreviewCountsPerChannelAndWritesNothing() throws Exception {
@@ -405,6 +415,199 @@ class InvoiceDeliveryTests extends DeliveryTestSupport {
     }
 
     @Test
+    void telegramRefusingTheTokenOrTheChatFailsAtOnceAndAnOutageIsTriedAgain() throws Exception {
+        bot();
+        UUID refusedToken = member("Токен", "TELEGRAM", null);
+        UUID refusedChat = member("Чат", "TELEGRAM", null);
+        UUID outage = member("Збій", "TELEGRAM", null);
+        long tokenChat = link(refusedToken);
+        long badChat = link(refusedChat);
+        long outageChat = link(outage);
+        charge(plot("9", refusedToken), "10.00");
+        charge(plot("10", refusedChat), "10.00");
+        charge(plot("11", outage), "10.00");
+        buildInvoices();
+        sentMonth(false, false);
+        telegram.handle("sendDocument", (token, body) -> {
+            if (body.contains("\r\n\r\n" + tokenChat + "\r\n")) {
+                return FakeBotApi.Reply.error(401, "Unauthorized");
+            }
+            if (body.contains("\r\n\r\n" + badChat + "\r\n")) {
+                return FakeBotApi.Reply.error(400, "Bad Request: chat not found");
+            }
+            return FakeBotApi.Reply.error(502, "Bad Gateway");
+        });
+
+        DeliveryDispatcher.Run run = dispatch("TELEGRAM");
+
+        assertThat(run.sent()).isZero();
+        assertThat(run.failed()).isEqualTo(2);
+        assertThat(run.retried()).isEqualTo(1);
+        assertThat(deliveriesOf(refusedToken)).singleElement().satisfies(row -> assertThat(row)
+                .containsEntry("status", "FAILED").containsEntry("failure_code", "CHANNEL_NOT_CONFIGURED")
+                .containsEntry("attempts", 1));
+        assertThat(deliveriesOf(refusedChat)).singleElement().satisfies(row -> assertThat(row)
+                .containsEntry("status", "FAILED").containsEntry("failure_code", "NO_CONTACT")
+                .containsEntry("attempts", 1));
+        assertThat(deliveriesOf(outage)).singleElement().satisfies(row -> assertThat(row)
+                .containsEntry("status", "QUEUED").containsEntry("failure_code", "CONNECTION_FAILED")
+                .containsEntry("attempts", 1));
+        // only a member who blocked the bot loses the link
+        assertThat(List.of(linked(refusedToken), linked(refusedChat), linked(outage))).containsOnly(true);
+        assertThat(telegram.documents(outageChat)).isEmpty();
+    }
+
+    @Test
+    void anAddressRemovedAndABotRemovedAfterTheSendFailAtOnce() throws Exception {
+        mailbox(Mailpit.PASSWORD);
+        bot();
+        UUID onEmail = member("Пошта", "EMAIL", "mail@delivery.test");
+        UUID onTelegram = member("Телеграм", "TELEGRAM", null);
+        link(onTelegram);
+        charge(plot("10", onEmail), "100.00");
+        charge(plot("11", onTelegram), "100.00");
+        buildInvoices();
+        sentMonth(false, false);
+        // after the send: the member switches to paper and erases the e-mail, the cooperative's bot token is gone
+        ownerJdbc().update("update member set delivery_channel = 'PAPER' where id = ?", onEmail);
+        insertContacts(tenant, onEmail, null);
+        ownerJdbc().update("update delivery_settings set bot_token_enc = null, bot_token_last4 = null "
+                + "where tenant_id = ?", tenant);
+
+        dispatch("EMAIL");
+        dispatch("TELEGRAM");
+
+        assertThat(deliveriesOf(onEmail)).singleElement().satisfies(row -> assertThat(row)
+                .containsEntry("status", "FAILED").containsEntry("failure_code", "NO_CONTACT"));
+        assertThat(deliveriesOf(onTelegram)).singleElement().satisfies(row -> assertThat(row)
+                .containsEntry("status", "FAILED").containsEntry("failure_code", "CHANNEL_NOT_CONFIGURED"));
+        assertThat(mailpit.letters()).isEmpty();
+        assertThat(telegram.documents()).isEmpty();
+    }
+
+    @Test
+    void anInvoiceWhoseMessageIsGoneFailsAtOnceWithoutContact() throws Exception {
+        mailbox(Mailpit.PASSWORD);
+        UUID onEmail = member("Пошта", "EMAIL", "mail@delivery.test");
+        charge(plot("10", onEmail), "100.00");
+        buildInvoices();
+        sentMonth(false, false);
+        InvoiceMessages gone = new InvoiceMessages(null, null) {
+            @Override
+            Optional<DeliveryMessage> of(UUID invoiceId) {
+                return Optional.empty();
+            }
+        };
+
+        DeliveryDispatcher.Run run = dispatcher("gone", gone, queue).dispatch(tenant, Channel.EMAIL);
+
+        assertThat(run.failed()).isEqualTo(1);
+        assertThat(state()).containsEntry("status", "FAILED").containsEntry("failure_code", "NO_CONTACT")
+                .containsEntry("attempts", 1);
+        assertThat(mailpit.letters()).isEmpty();
+    }
+
+    @Test
+    void aRunPastItsTimeLimitHandsTheLaneToANewRunAtOnce() throws Exception {
+        mailbox(Mailpit.PASSWORD);
+        UUID onEmail = member("Пошта", "EMAIL", "mail@delivery.test");
+        charge(plot("10", onEmail), "100.00");
+        buildInvoices();
+        sentMonth(false, false);
+        List<Instant> wakes = new ArrayList<>();
+        DeliveryQueue recording = new DeliveryQueue(null, clock) {
+            @Override
+            void schedule(UUID tenantId, Channel channel, Instant at) {
+                wakes.add(at);
+            }
+        };
+        clock.start();
+        RateLimiters limiters = new RateLimiters(clock, clock::advance, Duration.ofSeconds(1), 20);
+        DeliveryProperties noTime = new DeliveryProperties(null, null, null, Duration.ZERO, null, null, null, null);
+        DeliveryDispatcher dispatcher = new DeliveryDispatcher("limited", rows, lanes, recording, invoiceMessages,
+                paymentMessages, announcementMessages, settingsService, memberDirectory, telegramLinks, mailChannel,
+                telegramChannel, limiters, clock, noTime, jdbc, transactionManager);
+
+        DeliveryDispatcher.Run run = dispatcher.dispatch(tenant, Channel.EMAIL);
+
+        assertThat(run.busy()).isFalse();
+        assertThat(run.sent()).isZero();
+        assertThat(state()).containsEntry("status", "QUEUED").containsEntry("attempts", 0);
+        assertThat(wakes).containsExactly(clock.instant());
+        assertThat(mailpit.letters()).isEmpty();
+        // the lane is free again: the next run sends it
+        assertThat(dispatch("EMAIL").sent()).isEqualTo(1);
+    }
+
+    @Test
+    void aRunThatLosesItsLaneStopsBeforeTheNextMessageAndLeavesItQueued() throws Exception {
+        mailbox(Mailpit.PASSWORD);
+        UUID first = member("Перша", "EMAIL", "first@delivery.test");
+        UUID second = member("Друга", "EMAIL", "second@delivery.test");
+        charge(plot("10", first), "100.00");
+        charge(plot("11", second), "100.00");
+        buildInvoices();
+        sentMonth(false, false);
+        List<Instant> wakes = new ArrayList<>();
+        DeliveryQueue recording = new DeliveryQueue(null, clock) {
+            @Override
+            void schedule(UUID tenantId, Channel channel, Instant at) {
+                wakes.add(at);
+            }
+        };
+        // the lease holds for the run's start and the first message, then another instance has the lane
+        java.util.concurrent.atomic.AtomicInteger claims = new java.util.concurrent.atomic.AtomicInteger();
+        DeliveryLanes losing = new DeliveryLanes(jdbc) {
+            @Override
+            boolean claim(UUID tenantId, Channel channel, String owner, Duration lease) {
+                return claims.incrementAndGet() <= 2 && super.claim(tenantId, channel, owner, lease);
+            }
+        };
+        clock.start();
+        DeliveryDispatcher dispatcher = new DeliveryDispatcher("losing", rows, losing, recording, invoiceMessages,
+                paymentMessages, announcementMessages, settingsService, memberDirectory, telegramLinks, mailChannel,
+                telegramChannel, new RateLimiters(clock, clock::advance, Duration.ofSeconds(1), 20), clock,
+                DeliveryProperties.defaults(), jdbc, transactionManager);
+
+        DeliveryDispatcher.Run run = dispatcher.dispatch(tenant, Channel.EMAIL);
+
+        assertThat(run.sent()).isEqualTo(1);
+        assertThat(deliveries()).extracting(row -> row.get("status")).containsExactlyInAnyOrder("SENT", "QUEUED");
+        assertThat(deliveries()).filteredOn(row -> "QUEUED".equals(row.get("status")))
+                .singleElement().satisfies(row -> assertThat(row).containsEntry("attempts", 0));
+        assertThat(mailpit.letters()).hasSize(1);
+        // the lane is woken for what is left, which is due already
+        assertThat(wakes).singleElement().satisfies(at -> assertThat(at).isBeforeOrEqualTo(clock.instant()));
+    }
+
+    @Test
+    void aSweepThatCannotListTheLanesWakesNothingAndDoesNotFail() throws Exception {
+        mailbox(Mailpit.PASSWORD);
+        UUID onEmail = member("Пошта", "EMAIL", "mail@delivery.test");
+        charge(plot("10", onEmail), "100.00");
+        buildInvoices();
+        sentMonth(false, false);
+        List<Instant> wakes = new ArrayList<>();
+        DeliveryQueue recording = new DeliveryQueue(null, clock) {
+            @Override
+            void schedule(UUID tenantId, Channel channel, Instant at) {
+                wakes.add(at);
+            }
+        };
+        JdbcTemplate unreachable = new JdbcTemplate(new DriverManagerDataSource("jdbc:postgresql://127.0.0.1:"
+                + closedPort() + "/nadel"));
+        DeliveryDispatcher dispatcher = new DeliveryDispatcher("sweeper", rows, lanes, recording, invoiceMessages,
+                paymentMessages, announcementMessages, settingsService, memberDirectory, telegramLinks, mailChannel,
+                telegramChannel, new RateLimiters(clock, clock::advance, Duration.ofSeconds(1), 20), clock,
+                DeliveryProperties.defaults(), unreachable, transactionManager);
+
+        assertThatCode(dispatcher::sweep).doesNotThrowAnyException();
+
+        assertThat(wakes).isEmpty();
+        assertThat(state()).containsEntry("status", "QUEUED");
+    }
+
+    @Test
     void oneInvoiceGoesToItsOwnersAlsoWithNothingDue() throws Exception {
         bot();
         UUID owner = member("Один", "TELEGRAM", null);
@@ -468,6 +671,8 @@ class InvoiceDeliveryTests extends DeliveryTestSupport {
         printDone(treasurer).andExpect(status().isOk()).andExpect(jsonPath("$.printed").value(0));
 
         assertThat(deliveries()).extracting(row -> row.get("status")).containsOnly("PRINTED");
+        // paper is printed by the board, never sent by a lane
+        assertThatThrownBy(() -> dispatch("PAPER")).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
@@ -508,6 +713,10 @@ class InvoiceDeliveryTests extends DeliveryTestSupport {
         // the job the send created is gone (as after a lost wake-up); the sweep creates one
         ownerJdbc().update("delete from jobrunr_jobs where jobasjson like ?", "%" + tenant + "%");
         dispatcher("sweeper").sweep();
+        assertThat(jobsOf(tenant)).isEqualTo(1);
+        // the schedule's minute sweep does the same after the job is lost again
+        ownerJdbc().update("delete from jobrunr_jobs where jobasjson like ?", "%" + tenant + "%");
+        new BotSchedule(supervisor, dispatcher("sweeper")).sweepDeliveries();
         assertThat(jobsOf(tenant)).isEqualTo(1);
 
         // a lane held by another instance waits

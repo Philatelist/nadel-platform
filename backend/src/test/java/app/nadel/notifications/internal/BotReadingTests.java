@@ -2,12 +2,16 @@ package app.nadel.notifications.internal;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import app.nadel.documents.DocumentFormats;
+import app.nadel.meters.MemberReadings.MemberMeter;
+import app.nadel.meters.MemberReadings.Problem;
+import app.nadel.meters.MeterResource;
 import app.nadel.meters.ReadingDecided;
 import app.nadel.meters.ReadingStatus;
 import app.nadel.notifications.FakeBotApi.Sent;
@@ -25,12 +29,15 @@ import org.springframework.beans.factory.annotation.Autowired;
  * The bot's «Показання» (feature 017 §2.5): the plot (asked only when there are several), the meter, the value; the
  * reading waits for the board's approval dated today, exactly as from the account (the same refusals, in plain words,
  * and the member types again); the board's approval or rejection reaches the member's chat; another member's plot or
- * meter is never reachable.
+ * meter is never reachable. «Скасувати» ends the dialogue, and so does a plot or meter that is gone by the next step.
  */
 class BotReadingTests extends BotCommandsTestSupport {
 
     @Autowired
     ReadingMessages readingMessages;
+
+    @Autowired
+    BotCommands commands;
 
     @Test
     void aReadingIsSubmittedForApprovalDatedTodayAndAOnePlotMemberIsNotAskedForThePlot() throws Exception {
@@ -140,6 +147,28 @@ class BotReadingTests extends BotCommandsTestSupport {
     }
 
     @Test
+    void aMemberWhoUnlinkedBeforeTheDecisionIsNotTold() throws Exception {
+        startBot();
+        Member owner = member("Відключилась");
+        UUID plot = plot("9", owner.id());
+        UUID meter = meter(plot, "ЕЛ-9/2", "ELECTRICITY");
+        long chat = link(owner.id());
+        say(chat, "Показання", 1);
+        say(chat, "⚡ ЕЛ-9/2", 2);
+        say(chat, "12345", 3);
+        UUID reading = (UUID) readingsOf(meter).stream().filter(row -> "PENDING".equals(row.get("status")))
+                .findFirst().orElseThrow().get("id");
+        send(owner.bearer(), delete("/api/v1/me/telegram-link"), null).andExpect(status().isNoContent());
+
+        send(chairman, post("/api/v1/readings/" + reading + "/approve"), null).andExpect(status().isOk());
+
+        assertThat(readingMessages.tell(new ReadingDecided(tenant, reading, plot, owner.id(),
+                ReadingStatus.APPROVED))).isFalse();
+        await().pollDelay(Duration.ofMillis(300)).atMost(Duration.ofSeconds(2))
+                .until(() -> telegram.sent(chat).size() == 3);
+    }
+
+    @Test
     void aMemberWithSeveralPlotsChoosesOneAndNeverReachesAnotherMembersPlotOrMeter() throws Exception {
         startBot();
         Member owner = member("Кравець");
@@ -166,5 +195,78 @@ class BotReadingTests extends BotCommandsTestSupport {
         assertThat(again.buttons()).containsExactly("⚡ ЕЛ-1", "Скасувати");
         say(chat, "12345", 7);
         assertThat(readingsOf(theirMeter)).isEmpty();
+    }
+
+    @Test
+    void cancellingOrAPlotOrMeterGoneByTheNextStepEndsTheDialogueWithTheMenu() throws Exception {
+        startBot();
+        Member owner = member("Остапенко");
+        UUID plot = plot("9", owner.id());
+        UUID first = meter(plot, "ЕЛ-9/1", "ELECTRICITY");
+        long chat = link(owner.id());
+
+        say(chat, "Показання", 1);
+        Sent cancelled = lastReply(chat, "Скасувати", 2);
+        assertThat(cancelled.text()).isEqualTo("Гаразд, нічого не змінено.");
+        assertThat(cancelled.buttons()).containsExactly(MENU_ROW_1, MENU_ROW_2);
+        assertThat(lastReply(chat, "12345", 3).text()).startsWith("Це бот кооперативу");
+
+        // the only meter is removed while the member chooses it
+        say(chat, "Показання", 4);
+        removed(first);
+        Sent noMeters = lastReply(chat, "⚡ ЕЛ-9/1", 5);
+        assertThat(noMeters.text()).isEqualTo("На ділянці 9 немає лічильників, показання яких можна передати.");
+        assertThat(noMeters.buttons()).containsExactly(MENU_ROW_1, MENU_ROW_2);
+
+        // the chosen meter is removed while the member types the value: nothing is submitted
+        UUID second = meter(plot, "ЕЛ-9/2", "ELECTRICITY");
+        say(chat, "Показання", 6);
+        say(chat, "⚡ ЕЛ-9/2", 7);
+        removed(second);
+        Sent gone = lastReply(chat, "12345", 8);
+        assertThat(gone.text()).isEqualTo("Цього лічильника вже немає на ділянці.");
+        assertThat(gone.buttons()).containsExactly(MENU_ROW_1, MENU_ROW_2);
+        assertThat(readingsOf(second)).noneMatch(row -> "PENDING".equals(row.get("status")));
+
+        // the plot is no longer the member's when they choose the meter
+        UUID third = meter(plot, "ЕЛ-9/3", "ELECTRICITY");
+        say(chat, "Показання", 9);
+        ownerJdbc().update("delete from ownership where plot_id = ?", plot);
+        Sent notTheirs = lastReply(chat, "⚡ ЕЛ-9/3", 10);
+        assertThat(notTheirs.text()).isEqualTo("Цієї ділянки вже немає серед ваших.");
+        assertThat(notTheirs.buttons()).containsExactly(MENU_ROW_1, MENU_ROW_2);
+        assertThat(readingsOf(third)).noneMatch(row -> "PENDING".equals(row.get("status")));
+        // and «Показання» now says the member has no plot
+        assertThat(lastReply(chat, "Показання", 11).text())
+                .startsWith("Зараз за вами не записано жодної ділянки");
+    }
+
+    @Test
+    void aRefusalNamesTheNextReadingTheMetersWorkingPeriodAndTodayAsTheAccountDoes() {
+        MemberMeter meter = new MemberMeter(UUID.randomUUID(), MeterResource.ELECTRICITY, "ЕЛ-1");
+        LocalDate may = LocalDate.of(2026, 5, 1);
+        LocalDate june = LocalDate.of(2026, 6, 30);
+
+        assertThat(commands.problemText(new Problem("READING_OUT_OF_ORDER", Map.of("nextValue", "12500.000",
+                "nextTakenOn", may.toString())), meter)).isEqualTo("Показання менше за попереднє або більше за "
+                        + "наступне. Наступне показання: 12" + NBSP + "500 кВт·год, " + DocumentFormats.day(may) + ".");
+        assertThat(commands.problemText(new Problem("READING_DATE_OUTSIDE_METER", Map.of("installedOn",
+                may.toString(), "removedOn", june.toString())), meter)).isEqualTo("Сьогодні лічильник не працює. "
+                        + "Лічильник працював з " + DocumentFormats.day(may) + " по " + DocumentFormats.day(june) + ".");
+        assertThat(commands.problemText(new Problem("READING_DATE_OUTSIDE_METER", Map.of("installedOn",
+                june.toString())), meter)).isEqualTo("Сьогодні лічильник не працює. Лічильник працює з "
+                        + DocumentFormats.day(june) + ".");
+        assertThat(commands.problemText(new Problem("READING_DATE_IN_FUTURE", Map.of("today", may.toString())),
+                new MemberMeter(UUID.randomUUID(), MeterResource.WATER, "В-1")))
+                .isEqualTo("Дата показання не може бути в майбутньому. Сьогодні " + DocumentFormats.day(may) + ".");
+        // a code the bot has no sentence for: the general refusal, never the code itself
+        assertThat(commands.problemText(new Problem("SOMETHING_NEW", Map.of()), meter))
+                .isEqualTo("Показання не прийнято. Зверніться, будь ласка, до правління.");
+    }
+
+    /** The meter is taken off its plot today (removal date and final value come together). */
+    private void removed(UUID meter) {
+        ownerJdbc().update("update meter set removed_on = installed_on + 1, final_value = initial_value "
+                + "where id = ?", meter);
     }
 }

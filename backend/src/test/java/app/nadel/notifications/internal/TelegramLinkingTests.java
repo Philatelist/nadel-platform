@@ -86,6 +86,19 @@ class TelegramLinkingTests extends BotTestSupport {
     }
 
     @Test
+    void aMemberWithoutPlotsIsGreetedWithoutNumbers() throws Exception {
+        startBot();
+        Owner owner = owner("Галина", 0);
+        long chat = chat();
+
+        Sent greeting = lastReply(chat, "/start " + accountCode(owner.id()), 1);
+
+        assertThat(greeting.text()).isEqualTo("Вітаємо, Галина! Тепер повідомлення кооперативу приходитимуть сюди.");
+        assertThat(greeting.buttons()).containsExactly(MENU_ROW_1, MENU_ROW_2);
+        assertThat(linkedMember(chat)).isEqualTo(owner.id());
+    }
+
+    @Test
     void aCodeWorksOnce() throws Exception {
         startBot();
         Owner owner = owner("Іван", 1);
@@ -115,6 +128,43 @@ class TelegramLinkingTests extends BotTestSupport {
 
         assertThat(lastReply(chat, "/start " + code, 1).text()).isEqualTo(INVALID);
         assertThat(linkedMember(chat)).isNull();
+    }
+
+    @Test
+    void aNewCodeSentFromTheChatAlreadyLinkedKeepsTheLinkAndIsUsedUp() throws Exception {
+        startBot();
+        Owner owner = owner("Марія", 1);
+        long chat = chat();
+        link(chat, owner.id());
+        String again = accountCode(owner.id());
+
+        Sent greeting = lastReply(chat, "/start " + again, 2);
+
+        assertThat(greeting.text()).startsWith("Вітаємо, Марія!");
+        assertThat(greeting.buttons()).containsExactly(MENU_ROW_1, MENU_ROW_2);
+        assertThat(linkedMember(chat)).isEqualTo(owner.id());
+        // the same link, nothing moved
+        assertThat(linkHistory(owner.id())).containsExactly("ACTIVE");
+        // and the code cannot link another chat
+        long other = chat();
+        assertThat(lastReply(other, "/start " + again, 1).text()).isEqualTo(INVALID);
+        assertThat(linkedMember(other)).isNull();
+    }
+
+    @Test
+    void theCodeOfAMemberArchivedMeanwhileIsInvalid() throws Exception {
+        startBot();
+        Owner owner = owner("Архівний", 1);
+        String code = accountCode(owner.id());
+        ownerJdbc().update("update member set archived_at = now() where id = ?", owner.id());
+        long chat = chat();
+
+        Sent reply = lastReply(chat, "/start " + code, 1);
+
+        assertThat(reply.text()).isEqualTo(INVALID);
+        assertThat(reply.buttons()).isEmpty();
+        assertThat(linkedMember(chat)).isNull();
+        assertThat(linkHistory(owner.id())).isEmpty();
     }
 
     @Test

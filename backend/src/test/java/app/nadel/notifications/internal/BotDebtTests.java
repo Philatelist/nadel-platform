@@ -63,12 +63,20 @@ class BotDebtTests extends BotCommandsTestSupport {
     }
 
     @Test
-    void aMemberWithoutPlotsIsToldSo() throws Exception {
+    void aMemberWithoutPlotsIsToldSoByEveryAction() throws Exception {
         startBot();
         Member owner = member("Безземельний");
         long chat = link(owner.id());
 
         assertThat(lastReply(chat, "Борг", 1).text()).startsWith("Зараз за вами не записано жодної ділянки");
+        // the other actions say the same and offer no plot to choose
+        Sent invoice = lastReply(chat, "Рахунок", 2);
+        assertThat(invoice.text()).startsWith("Зараз за вами не записано жодної ділянки");
+        assertThat(invoice.buttons()).containsExactly(MENU_ROW_1, MENU_ROW_2);
+        Sent readings = lastReply(chat, "Показання", 3);
+        assertThat(readings.text()).startsWith("Зараз за вами не записано жодної ділянки");
+        assertThat(readings.buttons()).containsExactly(MENU_ROW_1, MENU_ROW_2);
+        assertThat(telegram.documents(chat)).isEmpty();
     }
 
     /** The bot's block of a plot built from the account's own figures. */

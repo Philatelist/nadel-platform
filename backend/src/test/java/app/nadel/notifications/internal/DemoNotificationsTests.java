@@ -1,6 +1,7 @@
 package app.nadel.notifications.internal;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.awaitility.Awaitility.await;
 
 import app.nadel.documents.DocumentsFacade;
@@ -20,7 +21,10 @@ import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.context.ApplicationContext;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -31,8 +35,10 @@ import org.springframework.transaction.PlatformTransactionManager;
  * uses, and writes the deliveries of its first billing month as sent (e-mail, Telegram) or waiting to be printed
  * (paper) without sending anything; a second run writes nothing; the second demo cooperative stays without delivery
  * settings. The runner is not registered in the tests (the demo ledger placeholder is off), so it is built here from
- * the module's beans, and the month's invoices are inserted directly for four demo plots.
+ * the module's beans, and the month's invoices are inserted directly for four demo plots. The start run logs counts
+ * only, and a failure to set the demo up is logged by its class and never stops the application.
  */
+@ExtendWith(OutputCaptureExtension.class)
 class DemoNotificationsTests extends NotificationsTestSupport {
 
     private static final YearMonth MONTH = YearMonth.of(2031, 3);
@@ -206,6 +212,33 @@ class DemoNotificationsTests extends NotificationsTestSupport {
         assertThat(seeded.bot()).isFalse();
         assertThat(owner.queryForMap("select bot_token_last4, bot_username from delivery_settings where tenant_id = ?",
                 DEMO_TENANT)).containsEntry("bot_token_last4", "1234").containsEntry("bot_username", "demo_bot");
+    }
+
+    @Test
+    void theStartRunSetsTheDemoUpAndLogsCountsOnly(CapturedOutput output) {
+        demo().run(null);
+
+        assertThat(output.getAll()).contains("Demo delivery: mailbox saved: true, bot saved: true, 2 Telegram links "
+                + "made, month " + MONTH + ",");
+        assertThat(owner.queryForObject("select count(*) from telegram_link where tenant_id = ? and ended_at is null",
+                Integer.class, DEMO_TENANT)).isEqualTo(2);
+        assertThat(output.getAll()).doesNotContain(DemoNotifications.BOT_TOKEN)
+                .doesNotContain(Long.toString(DemoNotifications.MEMBER_CHAT))
+                .doesNotContain(Long.toString(DemoNotifications.TELEGRAM_CHAT));
+    }
+
+    @Test
+    void aStartRunThatCannotSetTheDemoUpIsLoggedAndTheApplicationStarts(CapturedOutput output) {
+        DemoNotifications broken = new DemoNotifications(transactionManager, null, codes, links, members, ledger,
+                documents, owners, recipients, tenants, jdbc, clock);
+
+        assertThatCode(() -> broken.run(null)).doesNotThrowAnyException();
+
+        assertThat(output.getAll()).contains("Demo delivery not set up: java.lang.NullPointerException");
+        assertThat(owner.queryForObject("select count(*) from delivery_settings where tenant_id = ?", Integer.class,
+                DEMO_TENANT)).isZero();
+        assertThat(owner.queryForObject("select count(*) from telegram_link where tenant_id = ?", Integer.class,
+                DEMO_TENANT)).isZero();
     }
 
     private UUID plotId(String number) {
