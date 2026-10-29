@@ -48,6 +48,6 @@ class InvoiceMessages {
         String fileName = "invoice_" + invoice.number().replaceAll("[^A-Za-z0-9-]", "_") + ".pdf";
         String sender = tenants.current().map(TenantSummary::name).orElse("");
         return Optional.of(new DeliveryMessage(subject, text, due ? invoice.qrLink().orElse(null) : null, fileName,
-                pdf, sender));
+                pdf, texts.text("invoice.email.attached"), sender));
     }
 }

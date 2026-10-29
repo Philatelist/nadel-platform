@@ -78,6 +78,9 @@ abstract class DeliveryTestSupport extends IntegrationTest {
     InvoiceMessages invoiceMessages;
 
     @Autowired
+    PaymentMessages paymentMessages;
+
+    @Autowired
     DeliverySettingsService settingsService;
 
     @Autowired
@@ -161,8 +164,12 @@ abstract class DeliveryTestSupport extends IntegrationTest {
                     "bot_poll_state", "delivery_settings")) {
                 sql.update("delete from " + table + " where tenant_id = ?", id);
             }
+            // releases point at their allocation, reversals at their payment: the pointing rows first
+            sql.update("delete from allocation where tenant_id = ? and releases_allocation_id is not null", id);
             sql.update("delete from allocation where tenant_id = ?", id);
+            sql.update("delete from payment where tenant_id = ? and reverses_payment_id is not null", id);
             sql.update("delete from payment where tenant_id = ?", id);
+            sql.update("delete from receipt_counter where tenant_id = ?", id);
             sql.update("delete from charge where tenant_id = ?", id);
             sql.update("delete from invoice where tenant_id = ?", id);
             sql.update("delete from document_counter where tenant_id = ?", id);
@@ -326,8 +333,8 @@ abstract class DeliveryTestSupport extends IntegrationTest {
             pauses.add(pause);
             clock.advance(pause);
         }, Duration.ofSeconds(1), 20);
-        return new DeliveryDispatcher(instanceId, rows, lanes, queue, invoiceMessages, settingsService,
-                memberDirectory, telegramLinks, mailChannel, telegramChannel, limiters, clock,
+        return new DeliveryDispatcher(instanceId, rows, lanes, queue, invoiceMessages, paymentMessages,
+                settingsService, memberDirectory, telegramLinks, mailChannel, telegramChannel, limiters, clock,
                 DeliveryProperties.defaults(), jdbc, transactionManager);
     }
 

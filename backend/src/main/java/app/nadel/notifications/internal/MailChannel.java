@@ -12,8 +12,8 @@ import org.springframework.web.util.HtmlUtils;
 
 /**
  * Sends a delivery as a letter through the cooperative's mailbox (feature 017 §2.4): plain text and HTML with the same
- * words (the message, the payment link, «Рахунок у вкладенні (PDF)», the board's signature), the PDF attached, from
- * the mailbox's sender name. The server's refusal of the sign-in is permanent ({@code SMTP_AUTH_FAILED}); a refused
+ * words (the message, the payment link, the line naming the attachment such as «Рахунок у вкладенні (PDF)», the
+ * board's signature), the PDF attached when the message has one, from the mailbox's sender name. The server's refusal of the sign-in is permanent ({@code SMTP_AUTH_FAILED}); a refused
  * letter ({@code SMTP_REJECTED}) or no connection ({@code CONNECTION_FAILED}) is tried again. Runs outside any
  * transaction.
  */
@@ -42,7 +42,7 @@ class MailChannel {
     /** The letter of a message. */
     static Letter letter(String to, DeliveryMessage message) {
         NotificationTexts texts = NotificationTexts.uk();
-        String attached = texts.text("invoice.email.attached");
+        String attached = message.attachedLine();
         String signature = texts.text("invoice.email.signature", Map.of("cooperative", message.sender()));
         StringBuilder text = new StringBuilder(message.text()).append("\n\n");
         StringBuilder html = new StringBuilder("<p>").append(HtmlUtils.htmlEscape(message.text())).append("</p>");
@@ -51,9 +51,12 @@ class MailChannel {
             html.append("<p><a href=\"").append(HtmlUtils.htmlEscape(message.payUrl())).append("\">")
                     .append(HtmlUtils.htmlEscape(texts.text("invoice.pay"))).append("</a></p>");
         }
-        text.append(attached).append("\n\n").append(signature).append('\n');
-        html.append("<p>").append(HtmlUtils.htmlEscape(attached)).append("</p><p>")
-                .append(HtmlUtils.htmlEscape(signature)).append("</p>");
+        if (attached != null) {
+            text.append(attached).append("\n\n");
+            html.append("<p>").append(HtmlUtils.htmlEscape(attached)).append("</p>");
+        }
+        text.append(signature).append('\n');
+        html.append("<p>").append(HtmlUtils.htmlEscape(signature)).append("</p>");
         return new Letter(to, message.subject(), text.toString(), "<html><body>" + html + "</body></html>",
                 message.fileName(), message.pdf());
     }

@@ -9,13 +9,15 @@
  * It has no public API: other modules never call it. It reads other modules only through their public APIs
  * ({@code members.MemberDirectory}, {@code members.MemberChannels}, {@code identity.OwnedPlotsSource},
  * {@code tenancy.TenantDirectory}, {@code documents.DocumentsFacade}, {@code plots.PlotOwners}), implements their SPIs
- * ({@code members.TelegramLinkStatus}, {@code documents.PaperRecipients}) and, later, listens to their events. Everything is internal: the endpoints of tag {@code notifications} ({@code NotificationsController}),
+ * ({@code members.TelegramLinkStatus}, {@code documents.PaperRecipients}) and listens to their events (the ledger's
+ * {@code PaymentRecorded} and {@code PaymentReversed}). Everything is internal: the endpoints of tag
+ * {@code notifications} ({@code NotificationsController}),
  * {@code DeliverySettingsService}, {@code DeliveryChecks}, {@code MemberNotifications}, {@code LinkCodes},
  * {@code TelegramLinks}, the bot ({@code BotSupervisor}, {@code BotWorker}, {@code BotConversation},
  * {@code BotDialogue}, {@code BotInputLimiter}, {@code BotPollState}), the sending ({@code ChannelResolver},
  * {@code RecipientChannels}, {@code DeliveryPlanner}, {@code DeliveryRows}, {@code DeliveryRegister},
  * {@code DeliveryDispatcher} with its job {@code DispatchDeliveries}, {@code DeliveryLanes}, {@code DeliveryQueue},
- * {@code RateLimiters}, {@code InvoiceMessages}, {@code MailChannel}, {@code TelegramChannel},
+ * {@code RateLimiters}, {@code InvoiceMessages}, {@code PaymentMessages}, {@code MailChannel}, {@code TelegramChannel},
  * {@code PaperCopiesProvider}), the texts ({@code NotificationTexts}), the mail layer ({@code internal.mail}) and the
  * Telegram Bot API client ({@code internal.telegram}). See the module README.
  */

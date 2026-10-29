@@ -3,11 +3,13 @@ package app.nadel.notifications.internal;
 import app.nadel.notifications.internal.telegram.ReplyMarkup;
 import app.nadel.notifications.internal.telegram.TelegramClient;
 import app.nadel.notifications.internal.telegram.TelegramException;
+import java.util.Objects;
 import org.springframework.stereotype.Component;
 
 /**
- * Sends a delivery through the cooperative's bot (feature 017 §2.4): the PDF with the message as its caption and, when
- * something is due, the button «Оплатити» opening the invoice's payment link. Telegram's answer decides the outcome:
+ * Sends a delivery through the cooperative's bot (feature 017 §2.4): the PDF with the message as its caption (a
+ * message without a PDF as a text message) and, when something is due, the button «Оплатити» opening the invoice's
+ * payment link. Telegram's answer decides the outcome:
  * 403 (the member blocked the bot) is permanent {@code TELEGRAM_BLOCKED} and the caller ends the link; 429 waits as
  * Telegram asks; 401 is {@code CHANNEL_NOT_CONFIGURED} (the token stopped working) and another refusal
  * {@code NO_CONTACT} (the chat cannot be written to), both permanent; no answer is {@code CONNECTION_FAILED}, tried
@@ -26,7 +28,12 @@ class TelegramChannel {
         ReplyMarkup pay = message.payUrl() == null ? null
                 : new ReplyMarkup.UrlButton(NotificationTexts.uk().text("invoice.pay"), message.payUrl());
         try {
-            telegram.sendDocument(token, chatId, message.fileName(), message.pdf(), message.text(), pay);
+            if (message.hasPdf()) {
+                telegram.sendDocument(token, chatId, Objects.requireNonNull(message.fileName()),
+                        Objects.requireNonNull(message.pdf()), message.text(), pay);
+            } else {
+                telegram.sendMessage(token, chatId, message.text(), pay);
+            }
             return new SendOutcome.Sent();
         } catch (TelegramException e) {
             return switch (e.kind()) {

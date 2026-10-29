@@ -20,3 +20,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `515ec7b..b811a37` | PASS | — | 38 new tests green in the review worktree. minor: `BotWorker.handle` takes the update before answering, so a failed answer is lost (recorded "at most once" deviation); `MemberNotifications.askBotName` logs `e.getMessage()` (safe while TelegramException messages stay fixed); `TelegramLinks.redeem` concurrent double link → unique-index error logged, not answered (rare); `BotInputLimiter` map cleaned only above 10,000 entries; `V29_1` naming departs from `V{N}` (recorded) |
+
+## Slice 3 — send the month's invoices, the delivery screen, paper copies with a link QR
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `b811a37..346a693` | MAJOR_ISSUES | M1 `DeliveryDispatcher.run`: an unexpected exception while preparing/sending a row is logged and skipped; the row stays QUEUED with attempts and next_attempt_at unchanged, `nextDue` returns now → a new job every second, never FAILED, 3-attempt rule bypassed | 38 slice tests green. minor: `DeliveryQueue.schedule` job id per second drops a wake in the same second as a finished job (sweep catches it within a minute); `DeliveryRows.markMonthPrinted` marks all TO_PRINT rows (document it in OpenAPI); Telegram 400 → NO_CONTACT (recorded deviation) |

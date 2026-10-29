@@ -35,8 +35,13 @@ class DeliveryRows {
     static final String TO_PRINT = "TO_PRINT";
     static final String PRINTED = "PRINTED";
 
-    /** One row as the sender reads it. */
-    record Queued(UUID id, String kind, @Nullable UUID invoiceId, UUID memberId, Channel channel, int attempts) {
+    /** The kinds of a payment message: a payment received, a payment reversed. */
+    static final String PAYMENT = "PAYMENT";
+    static final String REVERSAL = "REVERSAL";
+
+    /** One row as the sender reads it: the invoice of an invoice delivery, the payment of a payment message. */
+    record Queued(UUID id, String kind, @Nullable UUID invoiceId, @Nullable UUID paymentId, UUID memberId,
+            Channel channel, int attempts) {
     }
 
     /** One row of the delivery screen. */
@@ -94,16 +99,36 @@ class DeliveryRows {
     }
 
     /**
+     * Creates a payment or reversal message ({@link #PAYMENT}, {@link #REVERSAL}) of the payment to the member through
+     * an e-mail or Telegram channel, queued due at {@code now}, unless it exists already (the unique key
+     * {@code (tenant_id, payment_id, kind, member_id, channel)}); true when it was created. The month is the payment's
+     * billing month, so the delivery screen lists it with that month.
+     */
+    boolean insertPayment(UUID tenantId, String kind, UUID paymentId, YearMonth month, UUID memberId,
+            Channel channel, Instant now) {
+        if (!PAYMENT.equals(kind) && !REVERSAL.equals(kind)) {
+            throw new IllegalArgumentException("Not a payment message: " + kind);
+        }
+        if (channel == Channel.PAPER) {
+            throw new IllegalArgumentException("Payment messages are never printed");
+        }
+        return jdbc.update("insert into delivery (tenant_id, kind, payment_id, billing_month, member_id, channel, "
+                + "status, next_attempt_at, created_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?) on conflict do nothing",
+                tenantId, kind, paymentId, month.atDay(1), memberId, channel.name(), QUEUED, utc(now), utc(now)) == 1;
+    }
+
+    /**
      * The queued rows of the channel and kinds due at {@code now} (no next attempt time, or one not after now), the longest
      * waiting first, without the ones in {@code skip}.
      */
     List<Queued> due(Channel channel, Instant now, int limit, Collection<UUID> skip, Collection<String> kinds) {
-        return jdbc.query("select id, kind, invoice_id, member_id, channel, attempts from delivery "
+        return jdbc.query("select id, kind, invoice_id, payment_id, member_id, channel, attempts from delivery "
                 + "where status = 'QUEUED' and channel = ? and kind = any(?::text[]) "
                 + "and (next_attempt_at is null or next_attempt_at <= ?) "
                 + "and not (id = any(?::uuid[])) order by next_attempt_at nulls first, created_at, id limit ?",
                 (rs, n) -> new Queued(rs.getObject(1, UUID.class), rs.getString(2), rs.getObject(3, UUID.class),
-                        rs.getObject(4, UUID.class), Channel.valueOf(rs.getString(5)), rs.getInt(6)),
+                        rs.getObject(4, UUID.class), rs.getObject(5, UUID.class), Channel.valueOf(rs.getString(6)),
+                        rs.getInt(7)),
                 channel.name(), texts(kinds), utc(now), array(skip), limit);
     }
 

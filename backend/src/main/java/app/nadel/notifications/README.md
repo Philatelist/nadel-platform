@@ -1,20 +1,22 @@
 # notifications
 
 Delivery to members (feature 017, `context/spec/017-delivery-email-telegram/`): e-mail through the cooperative's own
-mailbox (SMTP) and Telegram through its own bot. **Draft (slices 1–3):** the channel settings and their checks, the
+mailbox (SMTP) and Telegram through its own bot. **Draft (slices 1–4):** the channel settings and their checks, the
 member's own channel choice, Telegram links and the bot, sending the month's invoices with the delivery register and
-worker, and the paper copies with a link QR code. Payment messages, the bot's commands and announcements follow in
-later slices and are added here as they land. Design decisions: ADR 0018.
+worker, the paper copies with a link QR code, and the payment and reversal messages. The bot's commands and
+announcements follow in later slices and are added here as they land. Design decisions: ADR 0018.
 
 ## Public API
 
 None. No module calls `notifications`; it reads other modules through their public APIs, implements their SPIs and
-(later) listens to their events. Allowed dependencies (`package-info.java`): `members`, `documents`, `ledger`,
+listens to their events. Allowed dependencies (`package-info.java`): `members`, `documents`, `ledger`,
 `meters`, `plots`, `identity`, `privacy`, `audit`, `tenancy`, `tariffs`, `money`, `settings`, `problem`. Used now:
 `members` (`MemberDirectory`: names, contacts and channels; `MemberChannels`: the member's own channel choice; the SPI
 `TelegramLinkStatus` is implemented here by `TelegramLinkStatusProvider`), `documents` (`DocumentsFacade`:
 `latestInvoices`, `invoiceSummary`, `invoicePdf`; `DocumentFormats` for the texts; the SPI `PaperRecipients` is
-implemented here by `PaperCopiesProvider`), `plots` (`PlotOwners`: the current owners of a plot), `tenancy` (`TenantContext`,
+implemented here by `PaperCopiesProvider`), `plots` (`PlotOwners`: the current owners of a plot; `PlotCatalog`: the plot number of a payment message), `ledger`
+(the events `PaymentRecorded` and `PaymentReversed`; `LedgerReadModel.paymentsByIds` and `debtsAsOf` for the payment
+messages; `DocumentsFacade.receiptPdf` for the cash receipt), `tenancy` (`TenantContext`,
 `TenantDirectory`: the cooperative's name), `privacy` (`PersonalDataCipher`, `FieldRef`, `IndexKind.TELEGRAM_CHAT`),
 `audit` (`AuditEvent`, `FieldChange`, `Actor`), `identity` (`CurrentUser`, `AccessProfile`, `OwnedPlotsSource` for the
 plot numbers of the bot's greeting) and `problem`.
@@ -184,6 +186,29 @@ transaction.
   subject «Рахунок за жовтень 2026, ділянка 9», plain text and HTML with the same words, the payment link, «Рахунок у
   вкладенні (PDF).» and «Правління {cooperative}», the PDF attached, from the mailbox's sender name.
 
+## Payment and reversal messages (`PaymentMessages`, feature 017 §2.4)
+
+- **Planning:** `@Async @TransactionalEventListener` on `ledger.PaymentRecorded` (every payment entry: one event per
+  save with every payment written) and `ledger.PaymentReversed` (the reversed payment's id, not its reversal row), the
+  ADR 0007 pattern (`TenantContext.runAs(event.tenantId())`, then a `TransactionTemplate`). Nothing while
+  `delivery_settings.notify_payments` («Повідомляти про платежі») is off. Otherwise each payment of the event
+  (`LedgerReadModel.paymentsByIds`) goes to every current owner of its plot (`PlotOwners.currentOwnerIds`) whose
+  channel comes out as e-mail or Telegram by the rule of invoices (`RecipientChannels`); paper (and Viber) owners get
+  nothing. A payment row is always of one plot, so a split over several plots gives one message per plot to each of
+  its owners. One row per (payment, kind `PAYMENT` or `REVERSAL`, member, channel), `QUEUED`, with the payment's billing
+  month: `INSERT … ON CONFLICT DO NOTHING` on `delivery_payment_uq`, so a redelivered event creates nothing and nothing
+  is sent twice. The lanes with new rows are woken after the commit. Not audited (the payment itself is).
+- **Sending:** the dispatcher sends kinds `INVOICE`, `PAYMENT` and `REVERSAL` (`DeliveryDispatcher.KINDS`); the
+  message is written at send time (`PaymentMessages.of`), never stored: «Отримано 500,00 ₴ по ділянці 9 (28.10.2026).
+  Борг: 1 234,56 ₴», with «Аванс: …» instead of «Борг: …» when the plot owes nothing and has a prepayment; after a
+  reversal «Платіж від 28.10.2026 на 500,00 ₴ сторновано. Борг: …» (the same balance rule). The day is the day the
+  money was received, the balance the plot's as of today in Kyiv (`debtsAsOf`, every charge type), so it matches the
+  account when the message goes. A cash payment (not its reversal) carries the cash receipt of its group
+  (`DocumentsFacade.receiptPdf`): Telegram `sendDocument` with the text as the caption, e-mail with the PDF attached and
+  «Квитанція у вкладенні (PDF).»; a bank payment and a reversal go as a text message (`sendMessage`) or a letter
+  without an attachment. Letter subjects «Платіж по ділянці 9 отримано» / «… сторновано». Texts `payment.*` in
+  `messages_uk.properties`. The delivery screen lists these rows under their kind; they have no plot number there.
+
 ## Paper copies (`PaperCopiesProvider`, documents SPI `PaperRecipients`)
 
 The print PDF of a month (`scope=PAPER`) prints one copy per owner whose channel comes out as paper by the rule above,
@@ -242,7 +267,10 @@ cooperative id and a channel). Dashboard off, no usage data sent, the background
 database), `MeNotificationsTests`; slice 3: `ChannelResolverTests` (one per row of the rule), `InvoiceDeliveryTests`
 (a throw-away cooperative, `DeliveryTestSupport`: Mailpit and the fake Bot API, a dispatcher with a movable clock),
 `DeliveryRateLimitTests`, `DeliveryAccessTests`, `DeliveryJobTests` (JobRunr's server on: the job a send wakes
-delivers the letter; the V30 tables) and, in the documents tests, `PrintCopiesTests`. No test reaches Telegram or a real mailbox: `app.nadel.notifications.FakeBotApi`
+delivers the letter; the V30 tables) and, in the documents tests, `PrintCopiesTests`; slice 4: `PaymentMessagesTests`
+(cash with the receipt by Telegram and by e-mail, a bank payment without an attachment and with the prepayment, the
+reversal text, the switch off, a paper co-owner, a redelivered event, the outbox payload) and, in the ledger tests,
+`PaymentEventsTests`. No test reaches Telegram or a real mailbox: `app.nadel.notifications.FakeBotApi`
 (test sources) is an in-JVM Bot API on a random port that every Spring test context points `nadel.telegram.api-url` at
 (`IntegrationTest`, which also turns the schedule off and sets a 1 s poll), with a long-poll `getUpdates` over updates
 a test pushes per token, a recorded `sendMessage` and multipart `sendDocument` (caption, file, URL buttons; 403 for a
