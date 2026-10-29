@@ -69,3 +69,9 @@
 | Round | Commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `573158f..35b7ced` | PASS | — | 13 classes green in the review worktree. minor: `BotSingleWorkerTests.java:448,503,578` Thread.sleep before negative checks (could be Awaitility pollDelay); fully qualified Mockito/AtomicInteger names; the sweeper test relies on a just-closed local port |
+
+## Fix — CI run 40971589846 (Backend: InvoiceDeliveryTests nanosecond mismatch; SAST: Semgrep unencrypted-socket)
+
+| Round | Commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `681ff85..f6d2445` | PASS | — | reviewer ran Semgrep p/java on backend/src: 0 findings. minor: ClosedPort port reuse window (same as before) |
