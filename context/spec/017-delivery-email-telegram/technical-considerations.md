@@ -1,7 +1,7 @@
 # Technical Specification: Delivery by e-mail and Telegram, the cooperative's bot
 
 - **Functional Specification:** [functional-spec.md](functional-spec.md)
-- **Status:** Draft
+- **Status:** Implemented — pending manual check
 - **Author(s):** Alex Usov
 - **Inputs:** `docs/features/017-delivery-email-telegram.md`, ADR 0002, 0007, 0009, 0012, 0016, 0017; design input from
   the spring-backend, postgres-database, react-frontend and devops-infra specialists (pipeline run, 2026-10-29).

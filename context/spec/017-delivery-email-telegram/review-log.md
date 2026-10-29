@@ -63,3 +63,9 @@
 | Round | Commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `ff8ae11..573158f` | PASS | — | read-only review. minor: `notifications/README.md:332-333` long sentence; old-target boots still start a background server on in-memory storage (harmless; could pass `background-job-server.enabled=false`) |
+
+## Fix — JaCoCo line floor (tests for the uncovered delivery and bot paths)
+
+| Round | Commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `573158f..35b7ced` | PASS | — | 13 classes green in the review worktree. minor: `BotSingleWorkerTests.java:448,503,578` Thread.sleep before negative checks (could be Awaitility pollDelay); fully qualified Mockito/AtomicInteger names; the sweeper test relies on a just-closed local port |

@@ -3,7 +3,7 @@
 - **Topic:** The cooperative sends invoices, payment messages with cash receipts and board announcements to members by
   e-mail (the cooperative's own mailbox) and Telegram (the cooperative's own bot), and sees the outcome of every send.
   The bot also answers members: what they owe, the invoice as of today, and it takes meter readings for approval.
-- **Status:** Draft
+- **Status:** Implemented — pending manual check
 - **Author:** Alex Usov
 - **Source:** `docs/features/017-delivery-email-telegram.md` (roadmap phase 4, feature 2 of 2)
 
@@ -60,21 +60,21 @@ history records only that a secret was changed, never its value.
 A channel without settings is shown as «не налаштовано», and nothing is sent through it.
 
 - **Acceptance Criteria:**
-  - [ ] Given a chairman on Settings, when they open «Розсилка» for a cooperative that never set it up, then both
+  - [x] Given a chairman on Settings, when they open «Розсилка» for a cooperative that never set it up, then both
         channels show «не налаштовано».
-  - [ ] When the chairman saves the mailbox settings and reopens the page, then the password field shows «збережено» and
+  - [x] When the chairman saves the mailbox settings and reopens the page, then the password field shows «збережено» and
         never the password.
-  - [ ] When the chairman saves a bot token and reopens the page, then only the last 4 characters of the token are
+  - [x] When the chairman saves a bot token and reopens the page, then only the last 4 characters of the token are
         shown.
-  - [ ] When the chairman clicks «Надіслати тестовий лист» with working settings, then they see that the server accepted
+  - [x] When the chairman clicks «Надіслати тестовий лист» with working settings, then they see that the server accepted
         the letter, and the letter arrives at their own e-mail.
-  - [ ] When the chairman clicks «Надіслати тестовий лист» with a wrong password, then they see the server's refusal in
+  - [x] When the chairman clicks «Надіслати тестовий лист» with a wrong password, then they see the server's refusal in
         plain words and nothing else changes.
-  - [ ] When the chairman clicks «Перевірити бота» with a valid token, then they see the bot's @name; with an invalid
+  - [x] When the chairman clicks «Перевірити бота» with a valid token, then they see the bot's @name; with an invalid
         token, then they see «Токен недійсний».
-  - [ ] Given a treasurer without the right to manage settings, when they open Settings, then the «Розсилка» section is
+  - [x] Given a treasurer without the right to manage settings, when they open Settings, then the «Розсилка» section is
         not shown and saving it is refused.
-  - [ ] When the chairman changes the mailbox password, then the change history shows «змінено» for the password and not
+  - [x] When the chairman changes the mailbox password, then the change history shows «змінено» for the password and not
         the value.
 
 ### 2.2 Linking a member to Telegram
@@ -97,23 +97,23 @@ A bot cannot write first to a person by phone or @username: the member opens the
   account details.
 
 - **Acceptance Criteria:**
-  - [ ] Given a member with the bot set up, when they click «Підключити Telegram» and open the bot, then the bot greets
+  - [x] Given a member with the bot set up, when they click «Підключити Telegram» and open the bot, then the bot greets
         them by name with their plot numbers and shows the menu, and the account shows «Telegram підключено».
-  - [ ] When someone opens the bot with a link that was already used, then the bot answers «Посилання недійсне,
+  - [x] When someone opens the bot with a link that was already used, then the bot answers «Посилання недійсне,
         отримайте нове в кабінеті або в правлінні» and nothing is linked.
-  - [ ] When a member opens the bot with an account link older than 30 minutes, then the bot answers that the link is
+  - [x] When a member opens the bot with an account link older than 30 minutes, then the bot answers that the link is
         invalid.
-  - [ ] Given a printed invoice copy of a paper member, when the member scans its QR code within 90 days and opens the
+  - [x] Given a printed invoice copy of a paper member, when the member scans its QR code within 90 days and opens the
         bot, then their Telegram is linked.
-  - [ ] Given a Telegram account linked to member A, when member B opens the bot with B's valid link, then the bot asks
+  - [x] Given a Telegram account linked to member A, when member B opens the bot with B's valid link, then the bot asks
         for confirmation, and only after «Так, це я» the link moves to B.
-  - [ ] When the member sends «Відключити» in the bot, then the account shows «Telegram не підключено» and the next
+  - [x] When the member sends «Відключити» in the bot, then the account shows «Telegram не підключено» and the next
         invoice goes by the fallback channel.
-  - [ ] Given a linked member who blocked the bot, when the next message to them is sent, then the link ends and the
+  - [x] Given a linked member who blocked the bot, when the next message to them is sent, then the link ends and the
         delivery is shown as failed «Бот заблоковано».
-  - [ ] Given a cooperative without a bot, when the member opens «Сповіщення», then «Підключити Telegram» is not
+  - [x] Given a cooperative without a bot, when the member opens «Сповіщення», then «Підключити Telegram» is not
         offered.
-  - [ ] When the board opens a member card, then it shows only «Telegram: підключено» or «не підключено».
+  - [x] When the board opens a member card, then it shows only «Telegram: підключено» or «не підключено».
 
 ### 2.3 Who gets what, through which channel
 
@@ -136,15 +136,15 @@ member may choose Telegram without a Telegram username.
 several plots gets one message per plot.
 
 - **Acceptance Criteria:**
-  - [ ] When the channel rule is checked for each row of the table above, then each case gives the channel in the
+  - [x] When the channel rule is checked for each row of the table above, then each case gives the channel in the
         table.
-  - [ ] Given a plot with two current owners, one on Telegram and one on paper, when the month's invoices are sent, then
+  - [x] Given a plot with two current owners, one on Telegram and one on paper, when the month's invoices are sent, then
         one gets a Telegram message and the other appears among «до друку».
-  - [ ] Given a member who owns plots 9 and 10, when invoices are sent, then they get two messages, one per plot, each
+  - [x] Given a member who owns plots 9 and 10, when invoices are sent, then they get two messages, one per plot, each
         with its own PDF.
-  - [ ] When a member changes their channel to e-mail in «Сповіщення», then the next invoice comes by e-mail, and the
+  - [x] When a member changes their channel to e-mail in «Сповіщення», then the next invoice comes by e-mail, and the
         board sees the new channel on the member form.
-  - [ ] Given a member without an e-mail, when they open «Сповіщення», then e-mail is not offered.
+  - [x] Given a member without an e-mail, when they open «Сповіщення», then e-mail is not offered.
 
 ### 2.4 Sending invoices, payment messages and the delivery screen
 
@@ -177,23 +177,23 @@ filtered by kind (рахунок, платіж, оголошення), status an
 раз».
 
 - **Acceptance Criteria:**
-  - [ ] Given October invoices built, when the treasurer clicks «Надіслати рахунки за жовтень», then they see the preview
+  - [x] Given October invoices built, when the treasurer clicks «Надіслати рахунки за жовтень», then they see the preview
         counts per channel before anything is sent.
-  - [ ] When the treasurer confirms, then the delivery screen shows sent, failed and to print per channel for October.
-  - [ ] When the treasurer sends October invoices a second time, then no member gets the same invoice again.
-  - [ ] Given a member who blocked the bot, when invoices are sent, then their row shows «помилка: Бот заблоковано».
-  - [ ] Given a mailbox that refuses letters, when invoices are sent, then the e-mail rows end as «помилка: Сервер пошти
+  - [x] When the treasurer confirms, then the delivery screen shows sent, failed and to print per channel for October.
+  - [x] When the treasurer sends October invoices a second time, then no member gets the same invoice again.
+  - [x] Given a member who blocked the bot, when invoices are sent, then their row shows «помилка: Бот заблоковано».
+  - [x] Given a mailbox that refuses letters, when invoices are sent, then the e-mail rows end as «помилка: Сервер пошти
         відмовив» after 3 attempts.
-  - [ ] When the treasurer clicks «Надіслати ще раз» on a failed row after fixing the cause, then the row becomes
+  - [x] When the treasurer clicks «Надіслати ще раз» on a failed row after fixing the cause, then the row becomes
         «надіслано».
-  - [ ] When the treasurer clicks «Роздруковано» for October, then the paper rows stop showing as «до друку».
-  - [ ] Given a linked member and the switch on, when the cashier saves a cash payment of 500,00 ₴ for their plot, then
+  - [x] When the treasurer clicks «Роздруковано» for October, then the paper rows stop showing as «до друку».
+  - [x] Given a linked member and the switch on, when the cashier saves a cash payment of 500,00 ₴ for their plot, then
         the member gets «Отримано 500,00 ₴ по ділянці 9 (…)» with the debt and the cash receipt PDF.
-  - [ ] Given the switch off, when a payment is saved, then no payment message is sent.
-  - [ ] When a payment is reversed, then the member gets «Платіж від … на … сторновано» with the new debt.
-  - [ ] Given a user without the right to issue invoices, when they try to send invoices or open the delivery screen,
+  - [x] Given the switch off, when a payment is saved, then no payment message is sent.
+  - [x] When a payment is reversed, then the member gets «Платіж від … на … сторновано» with the new debt.
+  - [x] Given a user without the right to issue invoices, when they try to send invoices or open the delivery screen,
         then it is refused.
-  - [ ] Given a Viber member, when invoices are sent, then they are listed «до друку» with «Viber ще не підтримується».
+  - [x] Given a Viber member, when invoices are sent, then they are listed «до друку» with «Viber ще не підтримується».
 
 ### 2.5 The bot
 
@@ -221,20 +221,20 @@ kept, except a reading value submitted for approval.
 copy waits and takes over if the first stops. Changing the bot token restarts that cooperative's bot within a minute.
 
 - **Acceptance Criteria:**
-  - [ ] Given a linked member with plot 9, when they press «Борг», then they see the debt per charge type, the total and
+  - [x] Given a linked member with plot 9, when they press «Борг», then they see the debt per charge type, the total and
         the prepayment matching the account.
-  - [ ] When the member presses «Рахунок» twice on the same day, then both answers carry the same invoice number.
-  - [ ] When the member sends a reading 12 345 for meter ЕЛ-9/2 through «Показання», then the bot answers «… передано на
+  - [x] When the member presses «Рахунок» twice on the same day, then both answers carry the same invoice number.
+  - [x] When the member sends a reading 12 345 for meter ЕЛ-9/2 through «Показання», then the bot answers «… передано на
         перевірку» and the reading appears for the board's approval.
-  - [ ] When the board approves the reading, then the member gets «… прийнято»; when the board rejects it with a reason,
+  - [x] When the board approves the reading, then the member gets «… прийнято»; when the board rejects it with a reason,
         then the member gets «… відхилено: {причина}».
-  - [ ] When the member types a reading below the previous one, then the bot answers with the same validation message as
+  - [x] When the member types a reading below the previous one, then the bot answers with the same validation message as
         the account and asks again.
-  - [ ] When the member sends any other text, then the bot answers with the help text.
-  - [ ] When a chat sends 25 messages in one minute, then it gets «Забагато повідомлень…» once and the rest are not
+  - [x] When the member sends any other text, then the bot answers with the help text.
+  - [x] When a chat sends 25 messages in one minute, then it gets «Забагато повідомлень…» once and the rest are not
         answered.
-  - [ ] Given two copies of the application running, when a member writes to the bot, then exactly one answer arrives.
-  - [ ] Given an unlinked chat, when it presses «Борг», then it gets the invitation to link and no amounts.
+  - [x] Given two copies of the application running, when a member writes to the bot, then exactly one answer arrives.
+  - [x] Given an unlinked chat, when it presses «Борг», then it gets the invitation to link and no amounts.
 
 ### 2.6 Announcements
 
@@ -248,12 +248,12 @@ Only a user with the new right «Надсилати оголошення» (the 
   failed and on paper; opening one shows its text and its deliveries.
 
 - **Acceptance Criteria:**
-  - [ ] When the chairman writes an announcement for the street «Вишнева» with Telegram only and opens the preview, then
+  - [x] When the chairman writes an announcement for the street «Вишнева» with Telegram only and opens the preview, then
         they see the count by Telegram and the list of the street's members without Telegram.
-  - [ ] When the chairman clicks «Надіслати», then the street's linked members get the text in Telegram and the
+  - [x] When the chairman clicks «Надіслати», then the street's linked members get the text in Telegram and the
         announcement appears in the list with its counts.
-  - [ ] When the text is longer than 2000 characters, then «Надіслати» is refused with «Не більше 2000 символів».
-  - [ ] Given a treasurer without the right «Надсилати оголошення», when they open announcements, then sending is not
+  - [x] When the text is longer than 2000 characters, then «Надіслати» is refused with «Не більше 2000 символів».
+  - [x] Given a treasurer without the right «Надсилати оголошення», when they open announcements, then sending is not
         available and is refused.
 
 ### 2.7 Change history
@@ -263,8 +263,8 @@ counts per channel), announcement sent (audience and counts), Telegram linked an
 account details). Single sends are not history entries; they are on the delivery screen.
 
 - **Acceptance Criteria:**
-  - [ ] When the treasurer sends October invoices, then the history shows «Рахунки надіслано» with the month and counts.
-  - [ ] When a member links or unlinks Telegram, then the history shows it for that member without any Telegram details.
+  - [x] When the treasurer sends October invoices, then the history shows «Рахунки надіслано» with the month and counts.
+  - [x] When a member links or unlinks Telegram, then the history shows it for that member without any Telegram details.
 
 ### 2.8 Local development and demo
 
@@ -274,9 +274,9 @@ account details). Single sends are not history entries; they are on the delivery
   two demo members are linked, and last month's invoices are already sent.
 
 - **Acceptance Criteria:**
-  - [ ] When the developer starts the local environment and signs in as the chairman, then «Розсилка» shows both
+  - [x] When the developer starts the local environment and signs in as the chairman, then «Розсилка» shows both
         channels set up, and the delivery screen shows last month's invoices sent.
-  - [ ] When the test letter is sent locally, then it appears in the mail catcher's page.
+  - [x] When the test letter is sent locally, then it appears in the mail catcher's page.
 
 ### 2.9 Documentation
 
@@ -287,8 +287,8 @@ account details). Single sends are not history entries; they are on the delivery
 - A one-page leaflet for members «Як отримувати рахунки в Telegram» as a printable PDF.
 
 - **Acceptance Criteria:**
-  - [ ] When the owner opens the guides in both languages, then the new sections are present and marked as working.
-  - [ ] When the board opens the leaflet PDF, then it fits on one page and explains linking from the account and from the
+  - [x] When the owner opens the guides in both languages, then the new sections are present and marked as working.
+  - [x] When the board opens the leaflet PDF, then it fits on one page and explains linking from the account and from the
         paper QR code.
 
 ### 2.10 The owner's check before merging
@@ -298,7 +298,26 @@ invoice, asks «Борг», sends a reading, sends a test e-mail through a real 
 request.
 
 - **Acceptance Criteria:**
-  - [ ] When the owner performs the real bot and mailbox check, then the result is written in the pull request.
+  - [?] When the owner performs the real bot and mailbox check, then the result is written in the pull request.
+
+---
+
+## Verification (pipeline, 2026-10-30)
+
+- Every criterion except 2.10 is checked by tests: see `acceptance-coverage.md` (acceptance tests `DeliveryAcceptanceTests`,
+  the e2e specs `delivery-invoices`, `telegram-link`, `delivery-payment-message`, `delivery-announcement`, `delivery-demo`,
+  and the slice tests). Full suite on 35b7ced: `make check` green (backend 3887 tests, coverage met; clients green).
+- Rendered in Chrome against the local stack (`make up`, demo data, Mailpit and the fake Telegram server):
+  - `docs/screenshots/017-delivery-email-telegram-settings-mailbox.png` — «Розсилка» with both channels «налаштовано»;
+  - `docs/screenshots/017-delivery-email-telegram-settings-test-results.png` — test letter accepted (Mailpit reply),
+    «Перевірити бота» → @nadel_demo_bot, token shown as the last 4 characters only; the letter arrived in Mailpit;
+  - `docs/screenshots/017-delivery-email-telegram-deliveries.png` — the delivery screen with counts per channel,
+    «до друку», the Viber note and «Надіслати ще раз»;
+  - `docs/screenshots/017-delivery-email-telegram-announcement-preview.png` — street audience, preview counts and the
+    paper list (nothing sent);
+  - `docs/screenshots/017-delivery-email-telegram-member-card-telegram.png` — «Telegram: підключено» on the member card.
+- `[?]` 2.10: the owner's check with a real bot and a real mailbox needs real credentials and is done by the owner
+  before merging.
 
 ---
 

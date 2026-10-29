@@ -1,7 +1,7 @@
 # Pipeline log — 017 delivery by e-mail and Telegram
 
 - Status: running
-- Phase: 4 — verify
+- Phase: 5 — publish
 - Branch: 017-delivery-email-telegram (planned) · Base: main @ 1fef5d0
 - Requirement: docs/features/017-delivery-email-telegram.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
@@ -126,3 +126,18 @@
 - Regression fix review round 1: PASS.
 - Full suite re-run (573158f): all 3839 backend tests green, but the JaCoCo floor fails: line coverage 0.973 < coverage.minimum 0.977 (~84 lines short). notifications.internal has 155 missed lines (BotWorker 29, BotCommands 26, DeliveryDispatcher 15, BotSupervisor 10, DemoNotifications 10, TelegramClient 8). The floor is never lowered (CLAUDE.md) → regression fix attempt 2: tests for the uncovered 017 code.
 - Regression fix attempt 2 (spring-backend): tests only, +117 covered lines; `./mvnw verify` 3887 tests green, JaCoCo 0.97825 ≥ 0.977 (orchestrator confirmed from jacoco.csv); RED on 8 key tests; no production change; floor not raised (margin ~33 lines — owner may raise it).
+- Coverage fix commit 35b7ced; fix review started; full make check re-run started.
+- Coverage fix review round 1: PASS.
+- Full suite (make check on 35b7ced): green — contract/gen, format, lint, backend 3887 tests 0 failures, coverage met, clients typecheck + tests (web 906). No regressions vs baseline; the 3 baseline web timeouts (RunPreviewDialog, RecalculationStep ×2) now pass.
+- /awos:verify: 53 criteria [x] (tests per acceptance-coverage.md + Chrome render of the key screens, 5 screenshots in docs/screenshots/017-delivery-email-telegram-*.png), 1 [?] (FS 2.10, the owner's real bot and mailbox check). Status: Implemented — pending manual check (functional spec and technical considerations). Product docs: architecture.md already updated in Slice 7; no /awos:product or /awos:architecture command needed.
+- Clean-up: only the main worktree remains. The 017 app is running from `make up` (pid file scratchpad/review-run.pids) for the review run.
+
+## Final report (Phase 4)
+
+- Branch `017-delivery-email-telegram` from main @ 1fef5d0. Commits: b91832e specs · 515ec7b S1 · b811a37 S2 · 346a693 S3 · 3be8723 S4 · 053feb8 S3 review fix · 46121a6 S5 · 1a3a928 S6 · a2ac7bf S7 · ff8ae11 S8 · 573158f regression fix · 35b7ced coverage fix · (this commit) verify.
+- Acceptance criteria: 53 of 54 verified; [?] FS 2.10 (owner's real bot and mailbox check, manual by design).
+- Reviews: S1 PASS r1 · S2 PASS r1 · S3 MAJOR r1 (dispatcher loop) → PASS r2 · S4–S8 PASS r1 · regression fix PASS · coverage fix PASS. Minor notes in review-log.md.
+- Full suite: make check green on 35b7ced (backend 3887 tests, JaCoCo 0.978 ≥ 0.977, clients green); baseline had 3 web timeouts that now pass; regressions found on the way (2 migration tests, 1 order-dependent test, coverage floor, stale generated client) fixed.
+- Decided automatically: see every `AUTO:` entry above (Phase 1 and tech decisions) plus the builder choices logged per slice.
+- Staffing gap: guides/leaflet ran under general-purpose (no guides specialist). Suggested: `/awos:hire cover 017-delivery-email-telegram: need Telegram Bot API, SMTP/Jakarta Mail, JobRunr`.
+- Owner follow-ups: add `NADEL_TELEGRAM_API_URL` to `.env.example` (owner decision); CLAUDE.md `make infra` line (Mailpit, fake Telegram) — protected file; the real bot/mailbox check (FS 2.10) in the PR; optionally raise `coverage.minimum` (now 0.978); SSRF note (SMTP host free text) for a later restriction.
