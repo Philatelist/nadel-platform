@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import app.nadel.notifications.ClosedPort;
 import app.nadel.notifications.FakeBotApi;
 import app.nadel.notifications.FakeBotApi.SentDocument;
 import app.nadel.notifications.Mailpit;
@@ -241,7 +242,7 @@ class InvoiceDeliveryTests extends DeliveryTestSupport {
 
     @Test
     void anUnreachableServerIsTriedThreeTimesNowAfterOneAndAfterFiveMinutes() throws Exception {
-        mailbox("127.0.0.1", closedPort(), Mailpit.PASSWORD);
+        mailbox("127.0.0.1", ClosedPort.next(), Mailpit.PASSWORD);
         UUID onEmail = member("Пошта", "EMAIL", "mail@delivery.test");
         charge(plot("10", onEmail), "100.00");
         buildInvoices();
@@ -595,7 +596,7 @@ class InvoiceDeliveryTests extends DeliveryTestSupport {
             }
         };
         JdbcTemplate unreachable = new JdbcTemplate(new DriverManagerDataSource("jdbc:postgresql://127.0.0.1:"
-                + closedPort() + "/nadel"));
+                + ClosedPort.next() + "/nadel"));
         DeliveryDispatcher dispatcher = new DeliveryDispatcher("sweeper", rows, lanes, recording, invoiceMessages,
                 paymentMessages, announcementMessages, settingsService, memberDirectory, telegramLinks, mailChannel,
                 telegramChannel, new RateLimiters(clock, clock::advance, Duration.ofSeconds(1), 20), clock,

@@ -5,7 +5,7 @@
 - Branch: 017-delivery-email-telegram (planned) · Base: main @ 1fef5d0
 - Requirement: docs/features/017-delivery-email-telegram.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
-- Publish: pr+checks · PR: — · Checks: —
+- Publish: pr+checks · PR: https://github.com/Philatelist/nadel-platform/pull/61 · Checks: red: Backend, SAST
 - Review run: on (pending)
 
 ## Project facts
@@ -141,3 +141,6 @@
 - Decided automatically: see every `AUTO:` entry above (Phase 1 and tech decisions) plus the builder choices logged per slice.
 - Staffing gap: guides/leaflet ran under general-purpose (no guides specialist). Suggested: `/awos:hire cover 017-delivery-email-telegram: need Telegram Bot API, SMTP/Jakarta Mail, JobRunr`.
 - Owner follow-ups: add `NADEL_TELEGRAM_API_URL` to `.env.example` (owner decision); CLAUDE.md `make infra` line (Mailpit, fake Telegram) — protected file; the real bot/mailbox check (FS 2.10) in the PR; optionally raise `coverage.minimum` (now 0.978); SSRF note (SMTP host free text) for a later restriction.
+- Phase 5: pushed 017-delivery-email-telegram; PR #61 opened (feat(notifications): delivery by e-mail and Telegram, the cooperative's bot). Waiting for checks.
+- CI run 40971589846: Clients, Security, End-to-end green; Backend red — 3 InvoiceDeliveryTests compare an Instant with nanoseconds (Linux runner clock) against the value read back from Postgres (microseconds): `expected …486526872Z but was …486527Z`; macOS clocks give microseconds, so it did not reproduce locally. SAST red — Semgrep `java.lang.security.audit.crypto.unencrypted-socket` (blocking) on `new ServerSocket(0)` used to find a free port in DeliveryTestSupport.java:330, TestEmailTests.java, TelegramClientTests.java. Both are branch failures → CI fix attempt 1 (spring-backend).
+- CI fix attempt 1 (spring-backend), test code only: MovableClock starts at a microsecond-truncated instant (RED reproduced on macOS with +789 ns); shared test helper ClosedPort (ServerSocketChannel on loopback) replaces three new ServerSocket(0); local Semgrep 1.178.0: 0 findings on backend/src (3 blocking on the old files); 54 tests green.

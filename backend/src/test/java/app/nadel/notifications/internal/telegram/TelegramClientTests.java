@@ -4,11 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
+import app.nadel.notifications.ClosedPort;
 import app.nadel.notifications.FakeBotApi;
 import app.nadel.notifications.FakeBotApi.Reply;
 import app.nadel.notifications.internal.telegram.TelegramException.Kind;
-import java.io.IOException;
-import java.net.ServerSocket;
 import java.net.URI;
 import java.time.Duration;
 import org.junit.jupiter.api.AfterEach;
@@ -73,8 +72,8 @@ class TelegramClientTests {
     }
 
     @Test
-    void aServerThatCannotBeReachedIsUnavailableAndTheMessageNeverHoldsTheToken() throws IOException {
-        TelegramClient client = client("http://127.0.0.1:" + closedPort());
+    void aServerThatCannotBeReachedIsUnavailableAndTheMessageNeverHoldsTheToken() {
+        TelegramClient client = client("http://127.0.0.1:" + ClosedPort.next());
 
         TelegramException refused = catchThrowableOfType(TelegramException.class, () -> client.getMe(TOKEN));
 
@@ -106,11 +105,5 @@ class TelegramClientTests {
     private static TelegramClient client(String url) {
         return new TelegramClient(new TelegramProperties(URI.create(url), Duration.ofSeconds(2), Duration.ofSeconds(5),
                 Duration.ZERO, false, null, null), JsonMapper.shared());
-    }
-
-    private static int closedPort() throws IOException {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
-        }
     }
 }

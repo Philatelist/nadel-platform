@@ -6,9 +6,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import app.nadel.TestTokens;
+import app.nadel.notifications.ClosedPort;
 import app.nadel.notifications.Mailpit;
-import java.io.IOException;
-import java.net.ServerSocket;
 import java.time.Duration;
 import java.util.Map;
 import java.util.UUID;
@@ -70,7 +69,7 @@ class TestEmailTests extends DeliverySettingsTestSupport {
 
     @Test
     void aClosedPortIsAConnectionFailureWithoutAServerReply() throws Exception {
-        save(chairman(), Map.of("email", mailbox("127.0.0.1", closedPort(), Mailpit.USER, Mailpit.PASSWORD)))
+        save(chairman(), Map.of("email", mailbox("127.0.0.1", ClosedPort.next(), Mailpit.USER, Mailpit.PASSWORD)))
                 .andExpect(status().isOk());
 
         testEmail(chairman()).andExpect(status().isOk())
@@ -111,11 +110,5 @@ class TestEmailTests extends DeliverySettingsTestSupport {
     private Map<String, Object> settingsRow() {
         return ownerJdbc().queryForMap("select smtp_host, smtp_port, smtp_user, encode(smtp_password_enc, 'hex') as pw, "
                 + "settings_version, updated_at from delivery_settings where tenant_id = ?", DEMO_TENANT);
-    }
-
-    private static int closedPort() throws IOException {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
-        }
     }
 }

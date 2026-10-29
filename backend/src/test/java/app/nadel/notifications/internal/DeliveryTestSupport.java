@@ -12,9 +12,7 @@ import app.nadel.members.MemberDirectory;
 import app.nadel.notifications.FakeBotApi;
 import app.nadel.notifications.Mailpit;
 import app.nadel.tenancy.TenantContext;
-import java.io.IOException;
 import java.math.BigDecimal;
-import java.net.ServerSocket;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -22,6 +20,7 @@ import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -326,12 +325,6 @@ abstract class DeliveryTestSupport extends IntegrationTest {
         return TenantContext.runAs(tenant, () -> telegramLinks.linked(member));
     }
 
-    static int closedPort() throws IOException {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
-        }
-    }
-
     // ---- sending
 
     /** A dispatcher of this test: the movable clock, a pause that moves it, the given holder id. */
@@ -426,10 +419,14 @@ abstract class DeliveryTestSupport extends IntegrationTest {
             this.now = now;
         }
 
-        /** Starts at the real time unless started. */
+        /**
+         * Starts at the real time unless started, cut to microseconds: PostgreSQL keeps {@code timestamptz} in
+         * microseconds, and the system clock of Linux has nanoseconds, so an instant of a finer clock would not read
+         * back equal to what was stored.
+         */
         void start() {
             if (now == null) {
-                now = Instant.now();
+                now = Instant.now().truncatedTo(ChronoUnit.MICROS);
             }
         }
 
