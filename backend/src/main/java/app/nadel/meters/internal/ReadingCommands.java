@@ -10,6 +10,8 @@ import app.nadel.meters.InvalidMeterValueException;
 import app.nadel.meters.MeterValue;
 import app.nadel.meters.PlotMeterPointsChanged;
 import app.nadel.meters.PlotMeterPointsChanged.Cause;
+import app.nadel.meters.ReadingDecided;
+import app.nadel.meters.ReadingStatus;
 import app.nadel.meters.ReadingUsage;
 import app.nadel.meters.internal.MeterReadingRecord.Status;
 import app.nadel.meters.internal.ReadingValidator.MeterSpan;
@@ -40,6 +42,7 @@ import nadel.contract.model.ReadingRowResult;
 import nadel.contract.model.ReadingSaved;
 import nadel.contract.model.ReadingSubmission;
 import org.jspecify.annotations.Nullable;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -82,6 +85,7 @@ class ReadingCommands {
     private final List<ReadingUsage> usages;
     private final MeterAuditPublisher audit;
     private final MeterPointEvents pointEvents;
+    private final ApplicationEventPublisher events;
     private final Clock clock;
     private final TransactionTemplate rowTransaction;
 
@@ -89,14 +93,15 @@ class ReadingCommands {
     private EntityManager entityManager;
 
     ReadingCommands(MeterRepository meters, MeterReadingRepository readings, MeterAccess access,
-            List<ReadingUsage> usages, MeterAuditPublisher audit, MeterPointEvents pointEvents, Clock clock,
-            PlatformTransactionManager transactions) {
+            List<ReadingUsage> usages, MeterAuditPublisher audit, MeterPointEvents pointEvents,
+            ApplicationEventPublisher events, Clock clock, PlatformTransactionManager transactions) {
         this.meters = meters;
         this.readings = readings;
         this.access = access;
         this.usages = usages;
         this.audit = audit;
         this.pointEvents = pointEvents;
+        this.events = events;
         this.clock = clock;
         this.rowTransaction = new TransactionTemplate(transactions);
     }
@@ -355,6 +360,7 @@ class ReadingCommands {
                 new FieldChange("takenOn", sameDate == null ? null : date.toString(), date.toString()),
                 new FieldChange("value", sameDate == null ? null : sameDate.getValue().toString(), value.toString())));
         pointEvents.changed(meter, date, Cause.READING_APPROVED);
+        decided(meter, reading, ReadingStatus.APPROVED);
         Interval interval = ReadingValidator.intervalEndingAt(span, counted, date, value).orElse(null);
         return new ReadingSaved(ReadingDtoMapper.toDto(reading, interval, actor.can(Permission.READINGS_ENTER)),
                 sameDate == null ? List.of() : List.of(sameDate.getId()),
@@ -383,6 +389,7 @@ class ReadingCommands {
                 new FieldChange("takenOn", null, reading.getTakenOn().toString()),
                 new FieldChange("value", null, reading.getValue().toString()),
                 new FieldChange("reason", null, reason)));
+        decided(meter, reading, ReadingStatus.REJECTED);
         return ReadingDtoMapper.toDto(reading, null, false);
     }
 
@@ -442,6 +449,19 @@ class ReadingCommands {
     }
 
     // ---- helpers
+
+    /**
+     * Publishes {@link ReadingDecided} in the decision's transaction for a reading a member submitted (the bot tells
+     * them, feature 017 §2.5); ids and the status only, never the reason.
+     */
+    private void decided(MeterRecord meter, MeterReadingRecord reading, ReadingStatus status) {
+        UUID submitter = reading.getEnteredByMemberId();
+        if (reading.getSource() == MeterReadingRecord.Source.MEMBER && submitter != null
+                && meter.getPlotId() != null) {
+            events.publishEvent(new ReadingDecided(meter.getTenantId(), reading.getId(), meter.getPlotId(),
+                    submitter, status));
+        }
+    }
 
     /**
      * Supersedes the old rows and inserts the new one, in the order the partial unique index of approved readings needs:

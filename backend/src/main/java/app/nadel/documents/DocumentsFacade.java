@@ -1,6 +1,7 @@
 package app.nadel.documents;
 
 import java.time.YearMonth;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -18,13 +19,25 @@ import java.util.UUID;
  * rules the endpoints apply are the caller's to keep: a member may receive only the latest version of an invoice of a
  * plot they own now ({@code GET /invoices/{id}}) and only a receipt of a payment group whose every plot they own now
  * ({@code GET /payments/{id}/receipt.pdf}). The receipt is drawn without the payer note (the endpoints show it only to
- * a viewer with {@code MEMBERS_VIEW}). Nothing here is audited except {@link #invoiceForToday} when it issues a new
- * version.
+ * a viewer with {@code MEMBERS_VIEW}). Nothing here is audited except {@link #invoiceForToday} and
+ * {@link #invoiceForDay} when they issue a new version.
  */
 public interface DocumentsFacade {
 
     /** The latest version of the plot's invoice for the month; empty when the month has none for the plot. */
     Optional<UUID> latestInvoice(UUID plotId, YearMonth month);
+
+    /**
+     * The latest version of each plot's invoice for the month (feature 017: sending the month's invoices), in the order
+     * of the invoice numbers; empty when the month has none.
+     */
+    List<MonthInvoice> latestInvoices(YearMonth month);
+
+    /**
+     * What a message about the invoice version needs: its plot and number, month, version, «До сплати» and payment
+     * link; empty for an unknown id.
+     */
+    Optional<InvoiceSummary> invoiceSummary(UUID invoiceId);
 
     /** The PDF of an invoice version, rendered from its snapshot (always the same bytes); empty for an unknown id. */
     Optional<byte[]> invoicePdf(UUID invoiceId);
@@ -40,6 +53,14 @@ public interface DocumentsFacade {
     UUID invoiceForToday(UUID plotId);
 
     /**
+     * The plot's invoice of the day (feature 017 §2.5, the bot's «Рахунок»): the latest version of the current month
+     * (Europe/Kyiv) when it was issued today, otherwise {@link #invoiceForToday}; under the month's build lock, so one
+     * day gives the same invoice every time and at most one new version per plot. The same answers as
+     * {@link #invoiceForToday}.
+     */
+    UUID invoiceForDay(UUID plotId);
+
+    /**
      * The printed cash receipt of the payment's group, drawn now; empty for an unknown payment, a reversal row and a
      * bank payment (which has no receipt).
      */
@@ -48,7 +69,8 @@ public interface DocumentsFacade {
     /**
      * The print set of the month's invoices ({@code GET /billing-months/{month}/invoices/print.pdf}): the latest
      * version of each invoice in the scope, one per page, in street and plot order; one page saying so when there is
-     * none.
+     * none. For {@link PrintScope#PAPER} with a {@link PaperRecipients} implementation, one copy per paper recipient
+     * (which may create their link codes).
      */
     byte[] printPdf(YearMonth month, PrintScope scope);
 

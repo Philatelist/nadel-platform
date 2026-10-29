@@ -140,6 +140,19 @@ public final class ProblemCodes {
      * it) runs; nothing is built (feature 016 §2.5).
      */
     public static final String INVOICE_BUILD_RUNNING = "INVOICE_BUILD_RUNNING";
+    /** 409: a check of the cooperative's mailbox or bot is asked while it is not set up (feature 017 §2.1). */
+    public static final String DELIVERY_NOT_CONFIGURED = "DELIVERY_NOT_CONFIGURED";
+    /** 409: a test letter is asked by a member who has no e-mail of their own to receive it (feature 017 §2.1). */
+    public static final String NO_OWN_EMAIL = "NO_OWN_EMAIL";
+    /** 409: a Telegram link is asked while the cooperative has no working bot (feature 017 §2.2). */
+    public static final String TELEGRAM_NOT_CONFIGURED = "TELEGRAM_NOT_CONFIGURED";
+    /** 409: a paper delivery, or one that is still queued, is sent again (feature 017 §2.4). */
+    public static final String DELIVERY_NOT_RETRYABLE = "DELIVERY_NOT_RETRYABLE";
+    /**
+     * 400: an announcement's text is longer than 2000 characters (Unicode code points, after the surrounding spaces are
+     * removed; feature 017 §2.6); also with the field code {@code TOO_LONG} of {@code text} in {@code errors[]}.
+     */
+    public static final String ANNOUNCEMENT_TOO_LONG = "ANNOUNCEMENT_TOO_LONG";
     /** 409: the plot's prepayment is allocated by hand while it has no prepayment or no open charge. */
     public static final String NOTHING_TO_ALLOCATE = "NOTHING_TO_ALLOCATE";
     /** 409: the charge was reversed before; a charge is reversed at most once. */

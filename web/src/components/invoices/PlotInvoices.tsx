@@ -20,6 +20,7 @@ import { QueryBoundary } from '../QueryBoundary';
 import { Pagination } from '../Pagination';
 import { Button, Money, Notice, Panel } from '../ui';
 import { BusyLabel } from './BusyLabel';
+import { InvoiceSendButton } from './InvoiceSendButton';
 import { RequisitesWarning } from './RequisitesWarning';
 
 const PAGE_SIZE = 20;
@@ -86,7 +87,7 @@ export function PlotInvoices({ plotId }: { plotId: string }) {
             <>
               <ul aria-label={i.plotTitle} className="divide-y divide-line-subtle">
                 {data.items.map((row) => (
-                  <InvoiceItem key={row.id} row={row} withEarlier />
+                  <InvoiceItem key={row.id} row={row} withEarlier canSend={canIssue} />
                 ))}
               </ul>
               <Pagination page={data.page} totalPages={data.totalPages} onPageChange={setPage} />
@@ -106,10 +107,13 @@ export function InvoiceItem({
   row,
   plotLabel,
   withEarlier = false,
+  canSend = false,
 }: {
   row: InvoiceRow;
   plotLabel?: string;
   withEarlier?: boolean;
+  /** Shows «Send» on the latest version (the caller has `INVOICES_ISSUE`). */
+  canSend?: boolean;
 }) {
   const t = useT();
   const { locale } = useLocale();
@@ -136,6 +140,7 @@ export function InvoiceItem({
       >
         {pending ? i.downloading : i.download}
       </Button>
+      {canSend && row.latest && <InvoiceSendButton row={row} />}
       {withEarlier && row.version > 1 && <EarlierVersions row={row} />}
     </li>
   );

@@ -7,16 +7,19 @@
  * is rebuilt from it on every download. The module adds no money rule (an invoice's figures are the ledger's
  * booking-month rule) and reads only through the public APIs of the modules that own the data, never their tables.
  * <p>
- * The public API is {@code DocumentsFacade} with {@code PrintScope}: ids, links and PDF bytes for feature 017 (the
- * delivery of invoices), for the cooperative the caller bound, without permission checks of its own. Everything else is
- * internal:
+ * The public API is {@code DocumentsFacade} with {@code PrintScope}, {@code MonthInvoice} and {@code InvoiceSummary}:
+ * ids, links and PDF bytes for feature 017 (the delivery of invoices), for the cooperative the caller bound, without
+ * permission checks of its own; {@code DocumentFormats} (amounts, days, months and readings as the documents write them); and the
+ * SPI {@code PaperRecipients} with {@code PaperCopy} (one paper copy per recipient with a link QR code, implemented by
+ * the notifications module; the print PDF then creates link codes). Everything else is internal:
  * the PDF layer ({@code internal.pdf}: {@code PdfDocument}, {@code TextBlock}, {@code Table}, {@code PdfFonts}), the
  * texts and formats ({@code DocumentTexts}, {@code DocumentFormat}, {@code AmountInWords}), the NBU payment QR code
  * ({@code internal.nbu}: {@code NbuQrPayload}, {@code NbuQrImage}, {@code HryvniaSign}; ZXing core), the receipt
  * ({@code CashReceipts}, {@code ReceiptContent}, {@code ReceiptLayout}), the invoice ({@code InvoiceBuilder},
  * {@code InvoiceCalculator}, {@code InvoiceFigures}, {@code InvoiceDocument}, {@code InvoiceSnapshots},
  * {@code InvoiceLayout}, {@code Invoices}, {@code RequisitesCheck}, {@code InvoiceRecord}, {@code InvoiceAuditPublisher},
- * the month build's {@code ListedMonths} and the print set {@code PrintBundle}; {@code DocumentsFacadeService})
+ * the month build's {@code ListedMonths} and the print set {@code PrintBundle} with {@code LinkQrImage};
+ * {@code DocumentsFacadeService})
  * and the endpoints of tag {@code documents} ({@code DocumentsController}). Depends on {@code ledger}
  * ({@code LedgerReadModel#cashReceipt}, {@code #invoiceLedgers}, {@code #firstBillingMonth}; {@code PaymentNotes}: the payer note, only for a viewer
  * with {@code MEMBERS_VIEW}), {@code plots} ({@code PlotCatalog}, {@code PlotOwners}), {@code members}

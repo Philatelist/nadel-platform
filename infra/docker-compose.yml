@@ -53,7 +53,39 @@ services:
       postgres:
         condition: service_healthy
 
-  # Object storage (invoices, meter photos) and a test mail server arrive in phase 4.
+  # Test mail server: SMTP on :1025, web UI and API on :8025. Messages are kept in memory only.
+  mailpit:
+    image: axllent/mailpit:v1.27.8
+    environment:
+      MP_MAX_MESSAGES: 500
+      MP_SMTP_AUTH_ACCEPT_ANY: 1
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1
+    ports:
+      - '1025:1025'
+      - '8025:8025'
+    healthcheck:
+      test: ['CMD', '/mailpit', 'readyz']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # Fake Telegram Bot API for local development and e2e (see infra/README.md). No real network access.
+  fake-telegram:
+    image: node:22.12.0-alpine3.21
+    command: ['node', '/app/server.mjs']
+    environment:
+      PORT: 8091
+    ports:
+      - '8091:8091'
+    volumes:
+      - ./fake-telegram:/app:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -q -O - http://127.0.0.1:8091/control/health >/dev/null']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # Object storage (invoices, meter photos) arrives in phase 4.
   # The S3-compatible storage choice gets its own ADR: MinIO stopped publishing
   # community images; candidates are Garage and SeaweedFS.
 

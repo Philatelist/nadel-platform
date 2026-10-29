@@ -334,3 +334,9 @@ write can only be sent by bypassing the UI), §2.12 #1 (no other-cooperative dem
 ## Change Log
 
 _Dated amendments made after the spec was first written. Leave empty until the first amendment._
+
+- 2026-10-29 — source: feature 017 (`context/spec/017-delivery-email-telegram/`). A Telegram username is no longer
+  required for the Telegram channel (§2.6: the rule "Telegram needs a Telegram username" and its acceptance
+  criterion no longer apply, also in the Excel import): the member links Telegram through the cooperative's bot from the account or a paper invoice, which
+  replaces it. The username stays an optional note on the member form and in the import. Email still needs an email
+  and Viber a Viber phone.

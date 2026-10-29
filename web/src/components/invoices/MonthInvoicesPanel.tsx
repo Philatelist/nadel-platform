@@ -21,6 +21,7 @@ import { QueryBoundary } from '../QueryBoundary';
 import { Button, Notice, Panel } from '../ui';
 import { BusyLabel } from './BusyLabel';
 import { InvoiceItem, missingRequisites } from './PlotInvoices';
+import { SendInvoicesDialog } from './SendInvoicesDialog';
 import { RequisitesWarning } from './RequisitesWarning';
 
 const PAGE_SIZE = 20;
@@ -55,6 +56,7 @@ export function MonthInvoicesPanel({ month }: { month: string }) {
   const [scope, setScope] = useState<InvoicePrintScope>(InvoicePrintScope.PAPER);
   const [page, setPage] = useState(0);
   const [built, setBuilt] = useState<BuildResult>();
+  const [sending, setSending] = useState(false);
   const result =
     built !== undefined && built.month === month && built.includeNothingDue === includeNothingDue
       ? built.counts
@@ -111,6 +113,11 @@ export function MonthInvoicesPanel({ month }: { month: string }) {
                   format(m.build, { month: billingMonthLabel(month, t) })
                 )}
               </Button>
+              {(invoices.data?.items.length ?? 0) > 0 && (
+                <Button variant="secondary" onClick={() => setSending(true)}>
+                  {format(m.send, { month: billingMonthLabel(month, t) })}
+                </Button>
+              )}
             </div>
             {showError && (
               <Notice tone="danger">
@@ -172,6 +179,7 @@ export function MonthInvoicesPanel({ month }: { month: string }) {
                     row={row}
                     plotLabel={format(m.plot, { plot: row.plotNumber })}
                     withEarlier
+                    canSend={canIssue}
                   />
                 ))}
               </ul>
@@ -180,6 +188,7 @@ export function MonthInvoicesPanel({ month }: { month: string }) {
           )}
         </QueryBoundary>
       </div>
+      {sending && <SendInvoicesDialog month={month} onClose={() => setSending(false)} />}
     </Panel>
   );
 }

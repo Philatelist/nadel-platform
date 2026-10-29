@@ -149,6 +149,10 @@ interface MemberRepository extends JpaRepository<Member, UUID> {
     @Query("select m.id, m.deliveryChannel from Member m where m.id in :ids")
     List<Object[]> findDeliveryChannels(@Param("ids") Collection<UUID> ids);
 
+    /** The ids of the members who are not archived (RLS limits them to the cooperative), in id order. */
+    @Query("select m.id from Member m where m.archivedAt is null order by m.id")
+    List<UUID> findActiveIds();
+
     /** The given members (archived included) with a shared row lock ({@code FOR SHARE}), in id order. */
     @Lock(LockModeType.PESSIMISTIC_READ)
     @Query("select m from Member m where m.id in :ids order by m.id")

@@ -16,6 +16,9 @@
  * meters over a range), the event
  * {@link app.nadel.meters.PlotMeterPointsChanged} (the points of a plot meter changed; the ledger charges the intervals),
  * the read API {@link app.nadel.meters.WaterConnections} (the days plots are connected to water, for the ledger),
+ * the port {@link app.nadel.meters.MemberReadings} (a member's meters, submission and the board's decision for the
+ * cooperative's Telegram bot, feature 017) with the event {@link app.nadel.meters.ReadingDecided} (the board approved
+ * or rejected a member's reading; ids only) and {@link app.nadel.meters.ReadingStatus},
  * the read facade of the reports {@link app.nadel.meters.MeterReports} (the tree of {@code GET /meter-tree} with the
  * children's sum, the losses and the plots fed, as {@link app.nadel.meters.MeterTreeReport} rows, the water use per
  * plot and source as {@link app.nadel.meters.WaterUseRow} and the meters without a reading in a range as

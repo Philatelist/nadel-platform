@@ -231,6 +231,8 @@ export function auditValue(
       return catalog({ ...t.recalculation.causeKind, ...t.recalculation.causeType });
     case 'outcome':
       return catalog(a.outcome);
+    case 'endReason':
+      return catalog(a.endReason);
     case 'output':
       return catalog(a.output);
     case 'report':

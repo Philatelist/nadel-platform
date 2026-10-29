@@ -13,6 +13,7 @@ export * from './generated/members/members';
 export * from './generated/meter-tree/meter-tree';
 export * from './generated/meters/meters';
 export * from './generated/not-charged/not-charged';
+export * from './generated/notifications/notifications';
 export * from './generated/ownerships/ownerships';
 export * from './generated/payments/payments';
 export * from './generated/permissions/permissions';

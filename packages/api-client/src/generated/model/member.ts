@@ -32,4 +32,6 @@ export interface Member {
   roles: RoleRef[];
   archived: boolean;
   archivedAt?: string;
+  /** Whether the member has linked Telegram through the cooperative's bot (feature 017 §2.2). Always present in responses; read-only. Only this flag is shown: never the member's Telegram account details */
+  readonly telegramLinked?: boolean;
 }

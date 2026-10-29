@@ -78,6 +78,11 @@ tags:
     description: >-
       Debt certificates of plots as of a date: issued with a gap-free number per cooperative and year, kept in a
       register, printed as PDF files and annulled once with a reason
+  - name: notifications
+    description: >-
+      Delivery to members by e-mail through the cooperative's own mailbox and by Telegram through its own bot: the
+      channel settings and their checks, the member's own channel choice and Telegram link, sending invoices and
+      the delivery screen, and the board's announcements
 
 paths:
   /me:
@@ -767,6 +772,29 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
 
+  /plots/streets:
+    get:
+      tags: [plots]
+      operationId: listPlotStreets
+      summary: The streets of the cooperative's plots
+      description: |
+        The distinct streets of the active plots that are not common land (feature 017 §2.6: the streets an
+        announcement can be sent to), without surrounding spaces, each once ignoring case, in Ukrainian alphabetical
+        order ignoring case. Plots without a street are left out. Requires `PLOTS_VIEW` or `ANNOUNCEMENTS_SEND`.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
   /plots/{id}:
     get:
       tags: [plots]
@@ -1162,6 +1190,586 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
 
+  /settings/delivery:
+    get:
+      tags: [notifications]
+      operationId: getDeliverySettings
+      summary: The cooperative's mailbox and bot
+      description: |
+        The delivery settings of the current cooperative: its own mailbox (SMTP) for e-mail and its own Telegram bot,
+        the e-mail sending rate and whether members are told about their payments. Requires the `SETTINGS_MANAGE`
+        permission (403 `PERMISSION_DENIED` otherwise; the platform operator has no cooperative data). A cooperative
+        that never saved them has no mailbox and no bot (`configured` false for both), `emailRatePerSecond` 1 and
+        `notifyPayments` true.
+
+        The secrets are write-only: the mailbox password and the bot token are never returned. The answer says only
+        whether a password is saved (`passwordSet`) and shows the last four characters of the token (`tokenLast4`).
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliverySettings'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    put:
+      tags: [notifications]
+      operationId: updateDeliverySettings
+      summary: Change the cooperative's mailbox and bot
+      description: |
+        Changes the delivery settings of the current cooperative. Requires `SETTINGS_MANAGE`. Each top-level field is
+        optional and a field left out keeps its value, so the mailbox form and the bot form save separately:
+
+        - `email` present replaces every mailbox field (a field absent or empty in it is cleared), except the
+          password: an absent or empty `password` keeps the saved one. Clearing `user` (no sign-in to the server)
+          also removes the saved password.
+        - `telegram.botToken` absent or empty keeps the saved token. A new token is saved sealed, its last four
+          characters are shown from then on, the bot's @name is forgotten until the next `testDeliveryTelegram`, and
+          the bot of the cooperative restarts with it.
+        - `emailRatePerSecond` (letters a second, 1 to 10) and `notifyPayments` change only when present.
+
+        A change is written to the audit log as `DELIVERY_SETTINGS_CHANGED` (entity type `DELIVERY_SETTINGS`, label
+        `delivery-settings`) with the old and the new value of every changed field (`host`, `port`, `security`,
+        `user`, `fromAddress`, `fromName`, `emailRatePerSecond`, `notifyPayments`); a changed secret is listed as the
+        field `password` or `botToken` with neither value, so the history shows only that it changed. Saving the
+        current values writes nothing. 400 `VALIDATION_FAILED` for a value outside its limits.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeliverySettingsUpdate'
+      responses:
+        '200':
+          description: The saved settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliverySettings'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /settings/delivery/test-email:
+    post:
+      tags: [notifications]
+      operationId: testDeliveryEmail
+      summary: Send a test letter through the cooperative's mailbox
+      description: |
+        Sends a short test letter through the saved mailbox to the signed-in member's own e-mail and answers what the
+        mail server said. Requires `SETTINGS_MANAGE`. Nothing is saved and nothing else changes.
+
+        `accepted` true: the server took the letter; `serverReply` is its last answer (for example
+        `250 2.0.0 Ok: queued`). `accepted` false: `failureCode` says why (`SMTP_AUTH_FAILED` the server refused the
+        user name or password, `SMTP_REJECTED` it refused the letter, `CONNECTION_FAILED` it could not be reached or
+        did not answer in time) and `serverReply` is the server's own refusal when there was one. `serverReply` is
+        text from the mail server, never an error of this application, and is shown as received.
+
+        409 `DELIVERY_NOT_CONFIGURED` when the cooperative has no mailbox (`email.configured` false); 409
+        `NO_OWN_EMAIL` when the signed-in member has no e-mail of their own.
+      responses:
+        '200':
+          description: What the mail server answered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryTestEmailResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /settings/delivery/test-telegram:
+    post:
+      tags: [notifications]
+      operationId: testDeliveryTelegram
+      summary: Ask Telegram about the cooperative's bot
+      description: |
+        Asks Telegram about the saved bot token (`getMe`). Requires `SETTINGS_MANAGE`. `ok` true with the bot's
+        `botUsername` (without `@`), which is also kept for the settings and the bot's links; `ok` false with `code`
+        `TOKEN_INVALID` when Telegram does not accept the token, or `TELEGRAM_UNAVAILABLE` when Telegram could not be
+        reached. 409 `DELIVERY_NOT_CONFIGURED` when no token is saved.
+      responses:
+        '200':
+          description: What Telegram answered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryTestTelegramResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /me/notifications:
+    get:
+      tags: [notifications]
+      operationId: getMyNotifications
+      summary: How the signed-in member receives invoices
+      description: |
+        The member account's «Сповіщення» (feature 017 §2.2, §2.3): the signed-in member's preferred channel, the
+        channels they may choose and whether their Telegram is linked. No permission is needed; the member is always
+        the one behind the token (never a request parameter). The platform operator has no cooperative data: 403.
+
+        `available` lists, in the order `EMAIL`, `TELEGRAM`, `PAPER`: `EMAIL` when the member has an e-mail and the
+        cooperative's mailbox is set up, `TELEGRAM` when the cooperative's bot is set up, `PAPER` always. `channel` is
+        the stored preference, which may be outside `available` (a `VIBER` member, or `TELEGRAM` after the bot was
+        removed). `botAvailable` says whether the cooperative has a bot, so the account offers «Підключити Telegram».
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MyNotifications'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    put:
+      tags: [notifications]
+      operationId: updateMyNotifications
+      summary: Choose how the signed-in member receives invoices
+      description: |
+        Sets the signed-in member's preferred channel to one of `available` (see `getMyNotifications`); the board sees
+        it on the member form. 400 `VALIDATION_FAILED` with `errors[{field: channel, code: INVALID}]` for a channel
+        that is not available to the member. A change is written to the audit log as `MEMBER_UPDATED` of the member
+        (field `deliveryChannel`); choosing the current channel writes nothing.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MyNotificationsUpdate'
+      responses:
+        '200':
+          description: The saved choice
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MyNotifications'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /me/telegram-link:
+    post:
+      tags: [notifications]
+      operationId: createMyTelegramLink
+      summary: A personal link that connects the signed-in member's Telegram
+      description: |
+        «Підключити Telegram» (feature 017 §2.2): a deep link to the cooperative's bot with a personal one-time code of
+        the signed-in member, valid 30 minutes (`expiresAt`). Opening it in Telegram and pressing Start links the chat
+        to the member; the code works once. Only the hash of the code is stored. 409 `TELEGRAM_NOT_CONFIGURED` when
+        the cooperative has no bot, or Telegram does not accept its token. The platform operator: 403.
+      responses:
+        '200':
+          description: The deep link
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TelegramLinkOffer'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    delete:
+      tags: [notifications]
+      operationId: deleteMyTelegramLink
+      summary: Unlink the signed-in member's Telegram
+      description: |
+        «Відключити Telegram» (feature 017 §2.2): ends the signed-in member's Telegram link; documents then go by the
+        fallback channel. Written to the audit log as `TELEGRAM_UNLINKED` (`endReason` `UNLINKED`). 204 also when
+        nothing was linked. The platform operator: 403.
+      responses:
+        '204':
+          description: Unlinked (or nothing was linked)
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /billing-months/{month}/invoices/send:
+    post:
+      tags: [notifications]
+      operationId: sendMonthInvoices
+      summary: Preview or send the invoices of a billing month to the members
+      description: |
+        «Надіслати рахунки за {місяць}» (feature 017 §2.3, §2.4): for the latest version of each invoice of the month
+        (only those with something due unless `includeNothingDue`), every current owner of the plot gets the plot's
+        invoice through their own channel: Telegram when they chose it, their Telegram is linked and the cooperative
+        has a bot; e-mail when they chose it (or chose Telegram without a link or a bot) and have an e-mail and the
+        cooperative has a mailbox; otherwise paper. A `VIBER` member gets paper with the note `VIBER_UNSUPPORTED`. An
+        owner of two plots gets two messages.
+
+        Each (invoice version, member, channel) is created once: sending the month again creates only what is new
+        (a new version, a new owner, a changed channel), so nobody gets the same invoice twice. E-mail and Telegram
+        deliveries are queued (`QUEUED`) and sent in the background at a limited pace (`listDeliveries` shows the
+        outcome); paper deliveries wait as `TO_PRINT` until `markMonthPrinted`.
+
+        `counts` are the deliveries this send creates per channel (with `preview=true`, would create; nothing is
+        written); `queued` is the number of e-mail and Telegram deliveries queued (0 for a preview). A send that
+        creates something is written to the audit log as `INVOICES_SENT` (entity type `BILLING_MONTH`, label
+        `YYYY-MM`, the entity id of `INVOICES_ISSUED`; fields `month`, `telegram`, `email`, `paper`, new values
+        only). A month without invoices answers zero counts. Requires `INVOICES_ISSUE`.
+      parameters:
+        - name: month
+          in: path
+          required: true
+          description: The billing month, `YYYY-MM`
+          schema:
+            type: string
+            pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+        - name: preview
+          in: query
+          required: true
+          description: '`true` counts what the send would create without writing anything; `false` sends'
+          schema:
+            type: boolean
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvoiceSendRequest'
+      responses:
+        '200':
+          description: What the send would create (preview) or created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceSendResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /invoices/{id}/send:
+    post:
+      tags: [notifications]
+      operationId: sendInvoice
+      summary: Send one invoice to the plot's owners
+      description: |
+        «Надіслати» on one invoice (feature 017 §2.4): the invoice version goes to every current owner of its plot
+        through their own channel, by the rules of `sendMonthInvoices`, also when nothing is due on it. A delivery
+        that exists already (the same version to the same member through the same channel) is not created again.
+        Answers the deliveries created per channel and the number queued; written to the audit log as
+        `INVOICES_SENT` like a month send, with the invoice `number` as a further field, when something was created.
+        404 `NOT_FOUND` for an unknown invoice or one of another cooperative. Requires `INVOICES_ISSUE`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The deliveries created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceSendResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /deliveries:
+    get:
+      tags: [notifications]
+      operationId: listDeliveries
+      summary: The deliveries of the cooperative and their outcome
+      description: |
+        The delivery screen (Документи → «Розсилка», feature 017 §2.4): a page of deliveries, newest first, each one
+        message to one member through one channel with its status (`QUEUED` in the queue, `SENT` the mail server or
+        Telegram accepted it, `FAILED` with `failureCode` after the last attempt, `TO_PRINT` a paper copy not yet
+        printed, `PRINTED`), the attempts so far and when it was sent. `plotNumber` is the plot of an invoice;
+        `memberName` the member ("Last First"). The filters are optional and combine. `summary` counts the
+        deliveries per channel and status for `month` and `kind` (the other filters do not narrow it), so the screen
+        shows sent, failed and to print per channel. A delivery holds no address, chat or text. Requires
+        `INVOICES_ISSUE`.
+      parameters:
+        - name: month
+          in: query
+          required: false
+          description: Only the deliveries of this billing month, `YYYY-MM`
+          schema:
+            type: string
+            pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+        - name: kind
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/DeliveryKind'
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/DeliveryStatus'
+        - name: channel
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/DeliveryMethod'
+        - name: page
+          in: query
+          required: false
+          description: Zero-based page index
+          schema:
+            type: integer
+            format: int32
+            minimum: 0
+            default: 0
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /deliveries/{id}/retry:
+    post:
+      tags: [notifications]
+      operationId: retryDelivery
+      summary: Send a delivery once more
+      description: |
+        «Надіслати ще раз» (feature 017 §2.4) on a `FAILED` or `SENT` e-mail or Telegram delivery: it is queued again
+        with its attempts from zero and sent in the background (`resends` counts how often this was asked). 409
+        `DELIVERY_NOT_RETRYABLE` for a paper delivery or one that is still queued; 404 `NOT_FOUND` for an unknown
+        delivery or one of another cooperative. Single sends are not written to the audit log. Requires
+        `INVOICES_ISSUE`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Queued again
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /billing-months/{month}/print-done:
+    post:
+      tags: [notifications]
+      operationId: markMonthPrinted
+      summary: Mark the month's paper invoices as printed
+      description: |
+        «Роздруковано» (feature 017 §2.4): every invoice delivery of the month waiting as `TO_PRINT` becomes `PRINTED`;
+        `printed` is how many. Paper copies created later (a new version, a new owner) wait again. Requires
+        `INVOICES_ISSUE`.
+      parameters:
+        - name: month
+          in: path
+          required: true
+          description: The billing month, `YYYY-MM`
+          schema:
+            type: string
+            pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+      responses:
+        '200':
+          description: How many paper deliveries were marked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrintDoneResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /announcements:
+    post:
+      tags: [notifications]
+      operationId: sendAnnouncement
+      summary: Preview or send an announcement of the board
+      description: |
+        «Надіслати оголошення» (feature 017 §2.6). The audience is every active member (`streets` empty) or the
+        current owners of the active plots on the chosen streets (the street compared ignoring case and surrounding
+        spaces, as `listPlotStreets` lists them). Each member first gets their own channel by the rule of invoices
+        (`sendMonthInvoices`); the announcement then goes only through a channel in `channels`:
+        - the member's own channel when it is chosen;
+        - otherwise, when the member's own channel is Telegram or e-mail, the other chosen channel when the member can
+          be reached through it (Telegram: linked to the cooperative's bot; e-mail: an e-mail and the cooperative's
+          mailbox);
+        - otherwise paper («на папері»: the board informs them in person). Members who chose paper or Viber are
+          always on paper.
+
+        `text` is plain text as entered (surrounding spaces removed), sent as is: a Telegram message without
+        formatting and a letter whose HTML part escapes it. It must not be blank (400 `VALIDATION_FAILED`, field
+        `text`, code `REQUIRED`) and is at most 2000 characters (Unicode code points; 400 `ANNOUNCEMENT_TOO_LONG`, field
+        `text`, code `TOO_LONG`). A blank street is 400 `VALIDATION_FAILED` (field `streets`, code `INVALID`).
+
+        With `preview=true` nothing is written: the answer has the counts per channel and the members on paper
+        (`paperMembers`, "Last First", in alphabetical order). With `preview=false` the announcement is saved, each
+        member gets one delivery (`kind` `ANNOUNCEMENT`; Telegram and e-mail `QUEUED` and sent in the background,
+        paper `TO_PRINT`, listed so the board can inform them), and the send is written to the audit log as
+        `ANNOUNCEMENT_SENT` (entity type `ANNOUNCEMENT`; fields `audience` (`ALL` or `STREETS`), `streets` (only for
+        `STREETS`, joined by ", "), `channels`, `telegram`, `email`, `paper`; never the text). Requires
+        `ANNOUNCEMENTS_SEND`.
+      parameters:
+        - name: preview
+          in: query
+          required: true
+          description: '`true` counts the recipients without writing anything; `false` sends'
+          schema:
+            type: boolean
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnnouncementRequest'
+      responses:
+        '200':
+          description: The recipients per channel (preview), or the announcement sent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnnouncementSendResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    get:
+      tags: [notifications]
+      operationId: listAnnouncements
+      summary: The announcements sent
+      description: |
+        The announcements of the cooperative (feature 017 §2.6), newest first, each with its date, author, audience,
+        channels and the counts of its deliveries now: sent, failed, still queued and on paper. Not the text (see
+        `getAnnouncement`). Requires `ANNOUNCEMENTS_SEND`.
+      parameters:
+        - name: page
+          in: query
+          required: false
+          description: Zero-based page index
+          schema:
+            type: integer
+            format: int32
+            minimum: 0
+            default: 0
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnnouncementPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /announcements/{id}:
+    get:
+      tags: [notifications]
+      operationId: getAnnouncement
+      summary: One announcement with its deliveries
+      description: |
+        The announcement's text, audience, channels and counts, and a page of its deliveries (the rows of
+        `listDeliveries`, newest first, with their counts per channel and status). 404 `NOT_FOUND` for an unknown
+        announcement or one of another cooperative. Requires `ANNOUNCEMENTS_SEND`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: page
+          in: query
+          required: false
+          description: Zero-based page index of the deliveries
+          schema:
+            type: integer
+            format: int32
+            minimum: 0
+            default: 0
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnnouncementDetails'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
   /imports/template:
     get:
       tags: [imports]
@@ -1288,8 +1896,8 @@ paths:
           has a lasting water connection);
         - member rules, as when a member is entered by hand: `REQUIRED`, `TOO_LONG`, `INVALID` (an e-mail that is
           not an address, an unknown `delivery_channel`), `PHONE_INVALID` (`phones` or `viber_phone`),
-          `CHANNEL_CONTACT_MISSING` (the contact the delivery channel needs is empty: `email`, `telegram_username` or
-          `viber_phone`);
+          `CHANNEL_CONTACT_MISSING` (the contact the delivery channel needs is empty: `email` or `viber_phone`; the
+          `TELEGRAM` channel needs no contact, the member links Telegram through the cooperative's bot);
         - member matching: `MEMBER_KEY_MISSING` (`email`: the row has neither an e-mail nor a phone, so a later import
           could not recognise the member), `MEMBER_AMBIGUOUS` (`phones`: the last name, first name and first phone match
           two or more members), `EMAIL_TAKEN` (`email`: the e-mail belongs to a member other than the one the name and
@@ -3598,9 +4206,13 @@ paths:
         One PDF (A4, Ukrainian) with the latest version of each invoice of the month, one invoice per page (an invoice
         that needs more than one page continues on the next, and the next invoice starts on a new page), in street and
         plot order (the Ukrainian alphabet of the street, plots without a street last, then the natural order of the
-        plot number). `scope=PAPER` (the default) takes the plots that have at least one current owner who chose
-        paper delivery; `scope=ALL` every latest invoice of the month. A month without such invoices gives one page
-        saying so. The file is not stored; the same invoices give the same bytes. A month that is not listed (before
+        plot number). `scope=PAPER` (the default) prints one copy per owner who gets the invoice on paper by the
+        channel rule of `sendMonthInvoices` (paper chosen, Viber, or e-mail or Telegram that cannot be used), each
+        closed with «Примірник для: {name}» and, when the cooperative has a bot, a small QR code «Отримувати рахунки в
+        Telegram» with the owner's personal link (feature 017): printing creates these one-time link codes (valid 90
+        days) for the owners who are not linked yet. `scope=ALL` prints every latest invoice of the month once, without
+        names or codes. A month without such invoices gives one page saying so. The file is not stored; the same
+        invoices give the same bytes, except a set with link codes, which has new codes on every print. A month that is not listed (before
         the first month of the cooperative, after the current one) is 404 `NOT_FOUND`. Requires `INVOICES_ISSUE`.
       parameters:
         - name: month
@@ -5609,7 +6221,7 @@ components:
         Malformed request or failed validation (code `VALIDATION_FAILED` or `MALFORMED_REQUEST`); the allocation lines
         of a payment together exceed the payment (code `ALLOCATION_EXCEEDS_PAYMENT`) or a line exceeds what is open on
         its charge (code `ALLOCATION_EXCEEDS_CHARGE`); the parts of a split payment do not add up to the payment (code
-        `SPLIT_TOTAL_MISMATCH`)
+        `SPLIT_TOTAL_MISMATCH`); an announcement's text is longer than 2000 characters (code `ANNOUNCEMENT_TOO_LONG`)
       content:
         application/problem+json:
           schema:
@@ -5735,7 +6347,11 @@ components:
         after the current one are built (code `PERIOD_IN_FUTURE`), or a build of a month's invoices is started while
         another build of the same month runs (code `INVOICE_BUILD_RUNNING`), or a debt certificate is issued for common
         land (code `PLOT_COMMON_LAND`) or an archived plot (code `PLOT_ARCHIVED`), or a certificate that is already
-        annulled is annulled again (code `CERTIFICATE_ALREADY_ANNULLED`)
+        annulled is annulled again (code `CERTIFICATE_ALREADY_ANNULLED`), or a check of the cooperative's mailbox or bot
+        is asked while it is not set up (code `DELIVERY_NOT_CONFIGURED`), or a test letter is asked by a member without
+        an e-mail of their own (code `NO_OWN_EMAIL`), or a Telegram link is asked while the cooperative has no working
+        bot (code `TELEGRAM_NOT_CONFIGURED`), or a paper delivery or one still queued is sent again (code
+        `DELIVERY_NOT_RETRYABLE`)
       content:
         application/problem+json:
           schema:
@@ -5997,6 +6613,7 @@ components:
         - PAYMENTS_REVERSE
         - INVOICES_ISSUE
         - CERTIFICATES_ISSUE
+        - ANNOUNCEMENTS_SEND
 
     PlotStatusVisibility:
       type: string
@@ -6306,6 +6923,12 @@ components:
         archivedAt:
           type: string
           format: date-time
+        telegramLinked:
+          type: boolean
+          readOnly: true
+          description: >-
+            Whether the member has linked Telegram through the cooperative's bot (feature 017 §2.2). Always present in
+            responses; read-only. Only this flag is shown: never the member's Telegram account details
 
     MemberInput:
       type: object
@@ -6346,11 +6969,13 @@ components:
             - $ref: '#/components/schemas/DeliveryChannel'
           default: PAPER
           description: >-
-            Preferred invoice channel, `PAPER` when omitted. `EMAIL` requires `email`, `TELEGRAM` requires
-            `telegramUsername`, `VIBER` requires `viberPhone` (otherwise `CHANNEL_CONTACT_MISSING`).
+            Preferred invoice channel, `PAPER` when omitted. `EMAIL` requires `email`, `VIBER` requires `viberPhone`
+            (otherwise `CHANNEL_CONTACT_MISSING`). `TELEGRAM` needs no contact: the member links Telegram through the
+            cooperative's bot (feature 017), `telegramUsername` is an optional note.
         telegramUsername:
           type: string
           maxLength: 64
+          description: Optional note; not needed for the `TELEGRAM` channel
         viberPhone:
           type: string
           maxLength: 32
@@ -6480,6 +7105,11 @@ components:
         - INVOICES_ISSUED
         - CERTIFICATE_ISSUED
         - CERTIFICATE_ANNULLED
+        - DELIVERY_SETTINGS_CHANGED
+        - INVOICES_SENT
+        - ANNOUNCEMENT_SENT
+        - TELEGRAM_LINKED
+        - TELEGRAM_UNLINKED
 
     AuditEntityType:
       type: string
@@ -6516,7 +7146,21 @@ components:
         `CERTIFICATE_ANNULLED`) is about a debt certificate: its `entityId` is the certificate and its label the
         certificate number (`Д-2026-1`); `CERTIFICATE_ISSUED` has `plot` (the plot number), `number`, `asOf` (ISO date)
         and `totalDebt` (two decimals), `CERTIFICATE_ANNULLED` has `number` and `reason` (user content). Never the
-        names on the certificate (they stay sealed in it).
+        names on the certificate (they stay sealed in it). A `DELIVERY_SETTINGS` entry (`DELIVERY_SETTINGS_CHANGED`)
+        is about the cooperative's mailbox and bot: its `entityId` is the cooperative and its label the code
+        `delivery-settings`; it lists the changed fields with old and new values, and a changed secret (`password`,
+        `botToken`) with neither value. `TELEGRAM_LINKED` and `TELEGRAM_UNLINKED` (feature 017) are `MEMBER` entries
+        about the member whose Telegram was linked or unlinked (label "Last First"), never with Telegram account
+        details: `TELEGRAM_LINKED` has no fields, `TELEGRAM_UNLINKED` has `endReason` (new value only: `UNLINKED` the
+        member unlinked it in the bot or the account, `BLOCKED` the member blocked the bot, `MOVED` the chat was
+        linked to another member). `INVOICES_SENT` (feature 017, a send of a month's invoices or of one invoice) is a
+        `BILLING_MONTH` entry with the entity id of `INVOICES_ISSUED`; its fields (new values only) are `month`
+        (`YYYY-MM`), `telegram`, `email` and `paper` (the deliveries created per channel) and, for one invoice,
+        `number`. An `ANNOUNCEMENT` entry (`ANNOUNCEMENT_SENT`, feature 017) is about an announcement of the board:
+        its `entityId` is the announcement and its label the code `announcement`; its fields (new values only) are
+        `audience` (`ALL` or `STREETS`), `streets` (only for `STREETS`: the street names joined by ", ", user content),
+        `channels` (the chosen channels, codes joined by ", ") and `telegram`, `email` and `paper` (the deliveries per
+        channel). Never the text.
       enum:
         [
           MEMBER,
@@ -6539,6 +7183,8 @@ components:
           REPORT_TEMPLATE,
           INVOICE,
           CERTIFICATE,
+          DELIVERY_SETTINGS,
+          ANNOUNCEMENT,
         ]
 
     AuditFieldChange:
@@ -12280,3 +12926,525 @@ components:
           description: What was changed in the stored file; an upload lists only `EXTERNAL_LINKS_REMOVED`
           items:
             $ref: '#/components/schemas/ReportTemplateWarningCode'
+
+    SmtpSecurity:
+      type: string
+      description: >-
+        How the connection to the mail server is protected: `STARTTLS` (usually port 587, the connection must switch
+        to TLS or the letter is not sent) or `SSL` (TLS from the start, usually port 465). Absent: no encryption (only
+        for a local test server)
+      enum: [STARTTLS, SSL]
+
+    DeliveryEmailSettings:
+      type: object
+      description: >-
+        The cooperative's mailbox as saved. Never the password: `passwordSet` says whether one is saved. `configured`
+        is true when the server address, port and sender address are set, so letters can be sent
+      required: [passwordSet, configured]
+      properties:
+        host:
+          type: string
+        port:
+          type: integer
+          format: int32
+        security:
+          $ref: '#/components/schemas/SmtpSecurity'
+        user:
+          type: string
+        fromAddress:
+          type: string
+        fromName:
+          type: string
+        passwordSet:
+          type: boolean
+        configured:
+          type: boolean
+
+    DeliveryTelegramSettings:
+      type: object
+      description: >-
+        The cooperative's bot as saved. Never the token: `tokenLast4` is its last four characters, absent when no
+        token is saved. `botUsername` is the bot's @name (without `@`) as Telegram last reported it, absent until the
+        bot is checked. `configured` is true when a token is saved
+      required: [configured]
+      properties:
+        tokenLast4:
+          type: string
+          minLength: 4
+          maxLength: 4
+        botUsername:
+          type: string
+        configured:
+          type: boolean
+
+    DeliverySettings:
+      type: object
+      description: The delivery settings of the cooperative (`getDeliverySettings`)
+      required: [email, telegram, emailRatePerSecond, notifyPayments]
+      properties:
+        email:
+          $ref: '#/components/schemas/DeliveryEmailSettings'
+        telegram:
+          $ref: '#/components/schemas/DeliveryTelegramSettings'
+        emailRatePerSecond:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 10
+          description: Letters sent a second at most, so a free mailbox is not blocked (default 1)
+        notifyPayments:
+          type: boolean
+          description: Tell members about their payments and reversals (default true)
+
+    DeliveryEmailSettingsUpdate:
+      type: object
+      description: >-
+        The mailbox, replacing the saved one: a field absent or empty is cleared, except `password` (absent or empty
+        keeps the saved password). Clearing `user` also removes the saved password
+      properties:
+        host:
+          type: string
+          maxLength: 255
+          pattern: '^[^\s/]*$'
+          description: The mail server's address, for example `smtp.gmail.com`
+        port:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 65535
+        security:
+          $ref: '#/components/schemas/SmtpSecurity'
+        user:
+          type: string
+          maxLength: 320
+        password:
+          type: string
+          maxLength: 500
+          writeOnly: true
+          description: Write-only; never returned. Absent or empty keeps the saved password
+        fromAddress:
+          type: string
+          format: email
+          maxLength: 320
+          description: The sender's address, usually the mailbox itself
+        fromName:
+          type: string
+          maxLength: 200
+          description: The sender's name members see, for example the cooperative's name
+
+    DeliveryTelegramSettingsUpdate:
+      type: object
+      properties:
+        botToken:
+          type: string
+          maxLength: 200
+          pattern: '^([A-Za-z0-9:_-]{8,})?$'
+          writeOnly: true
+          description: >-
+            The token @BotFather gave for the cooperative's bot (letters, digits, `:`, `_` and `-`, at least 8
+            characters). Write-only; never returned. Absent or empty keeps the saved token
+
+    DeliverySettingsUpdate:
+      type: object
+      description: >-
+        A change of the delivery settings: each field present is changed, a field left out keeps its value (see
+        `updateDeliverySettings`)
+      properties:
+        email:
+          $ref: '#/components/schemas/DeliveryEmailSettingsUpdate'
+        telegram:
+          $ref: '#/components/schemas/DeliveryTelegramSettingsUpdate'
+        emailRatePerSecond:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 10
+        notifyPayments:
+          type: boolean
+
+    DeliveryFailureCode:
+      type: string
+      description: >-
+        Why a message was not delivered: `SMTP_REJECTED` the mail server refused the letter, `SMTP_AUTH_FAILED` it
+        refused the mailbox's user name or password, `CONNECTION_FAILED` the server could not be reached or did not
+        answer in time, `TELEGRAM_BLOCKED` the member blocked the bot, `CHANNEL_NOT_CONFIGURED` the cooperative's
+        mailbox or bot is not set up, `NO_CONTACT` the member has no address for the channel. The test letter
+        (`testDeliveryEmail`) uses only the first three
+      enum:
+        [
+          SMTP_REJECTED,
+          SMTP_AUTH_FAILED,
+          CONNECTION_FAILED,
+          TELEGRAM_BLOCKED,
+          CHANNEL_NOT_CONFIGURED,
+          NO_CONTACT,
+        ]
+
+    DeliveryTestEmailResult:
+      type: object
+      description: What the mail server answered to the test letter (`testDeliveryEmail`)
+      required: [accepted]
+      properties:
+        accepted:
+          type: boolean
+          description: Whether the server took the letter
+        serverReply:
+          type: string
+          description: >-
+            The mail server's last answer as received, absent when there was none (the server could not be reached)
+        failureCode:
+          $ref: '#/components/schemas/DeliveryFailureCode'
+
+    DeliveryTestTelegramResult:
+      type: object
+      description: What Telegram answered about the bot (`testDeliveryTelegram`)
+      required: [ok]
+      properties:
+        ok:
+          type: boolean
+        botUsername:
+          type: string
+          description: The bot's @name without `@`, when `ok`
+        code:
+          type: string
+          description: >-
+            Why the check failed, when not `ok`: `TOKEN_INVALID` Telegram does not accept the token,
+            `TELEGRAM_UNAVAILABLE` Telegram could not be reached
+          enum: [TOKEN_INVALID, TELEGRAM_UNAVAILABLE]
+
+    MyNotifications:
+      type: object
+      description: How the signed-in member receives invoices (`getMyNotifications`)
+      required: [channel, available, telegramLinked, botAvailable]
+      properties:
+        channel:
+          $ref: '#/components/schemas/DeliveryChannel'
+        available:
+          type: array
+          description: The channels the member may choose, in the order `EMAIL`, `TELEGRAM`, `PAPER`
+          items:
+            $ref: '#/components/schemas/DeliveryChannel'
+        telegramLinked:
+          type: boolean
+          description: Whether the member's Telegram is linked to the cooperative's bot
+        botAvailable:
+          type: boolean
+          description: Whether the cooperative has a bot, so «Підключити Telegram» can be offered
+
+    MyNotificationsUpdate:
+      type: object
+      required: [channel]
+      properties:
+        channel:
+          $ref: '#/components/schemas/DeliveryChannel'
+
+    TelegramLinkOffer:
+      type: object
+      description: A personal deep link to the cooperative's bot (`createMyTelegramLink`)
+      required: [deepLink, expiresAt]
+      properties:
+        deepLink:
+          type: string
+          description: '`https://t.me/<bot>?start=<code>`; the code is personal, works once and is valid 30 minutes'
+        expiresAt:
+          type: string
+          format: date-time
+
+    InvoiceSendRequest:
+      type: object
+      properties:
+        includeNothingDue:
+          type: boolean
+          description: Also send the invoices with nothing due («Надсилати й рахунки без боргу»); default false
+
+    DeliveryCounts:
+      type: object
+      description: Deliveries per channel
+      required: [telegram, email, paper]
+      properties:
+        telegram:
+          type: integer
+          format: int32
+        email:
+          type: integer
+          format: int32
+        paper:
+          type: integer
+          format: int32
+
+    InvoiceSendResult:
+      type: object
+      description: What a send of invoices created, or with `preview` would create (`sendMonthInvoices`, `sendInvoice`)
+      required: [counts, queued]
+      properties:
+        counts:
+          $ref: '#/components/schemas/DeliveryCounts'
+        queued:
+          type: integer
+          format: int32
+          description: The e-mail and Telegram deliveries queued for sending; 0 for a preview
+
+    DeliveryKind:
+      type: string
+      description: 'What a delivery carries: an invoice, a payment message, a reversal message or an announcement'
+      enum: [INVOICE, PAYMENT, REVERSAL, ANNOUNCEMENT]
+
+    DeliveryStatus:
+      type: string
+      description: >-
+        `QUEUED` waiting to be sent (or to be tried again), `SENT` the mail server or Telegram accepted it, `FAILED`
+        not delivered (see `failureCode`), `TO_PRINT` a paper copy not yet printed, `PRINTED` printed
+      enum: [QUEUED, SENT, FAILED, TO_PRINT, PRINTED]
+
+    DeliveryMethod:
+      type: string
+      description: The channel a delivery goes through (Viber members get paper)
+      enum: [EMAIL, TELEGRAM, PAPER]
+
+    DeliveryNote:
+      type: string
+      description: '`VIBER_UNSUPPORTED`: the member chose Viber, which is not supported yet, so they get paper'
+      enum: [VIBER_UNSUPPORTED]
+
+    DeliveryRow:
+      type: object
+      required: [id, kind, channel, status, attempts]
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          $ref: '#/components/schemas/DeliveryKind'
+        month:
+          type: string
+          description: The billing month, `YYYY-MM`
+        plotNumber:
+          type: string
+          description: The plot of the invoice
+        announcementId:
+          type: string
+          format: uuid
+          description: The announcement of an `ANNOUNCEMENT` delivery
+        memberName:
+          type: string
+          description: The member, "Last First"
+        channel:
+          $ref: '#/components/schemas/DeliveryMethod'
+        status:
+          $ref: '#/components/schemas/DeliveryStatus'
+        failureCode:
+          $ref: '#/components/schemas/DeliveryFailureCode'
+        note:
+          $ref: '#/components/schemas/DeliveryNote'
+        attempts:
+          type: integer
+          format: int32
+        sentAt:
+          type: string
+          format: date-time
+
+    DeliverySummaryCount:
+      type: object
+      required: [channel, status, count]
+      properties:
+        channel:
+          $ref: '#/components/schemas/DeliveryMethod'
+        status:
+          $ref: '#/components/schemas/DeliveryStatus'
+        count:
+          type: integer
+          format: int32
+
+    DeliveryPage:
+      type: object
+      required: [items, page, size, totalItems, totalPages, summary]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/DeliveryRow'
+        page:
+          type: integer
+          format: int32
+          description: Zero-based page index
+        size:
+          type: integer
+          format: int32
+        totalItems:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+        summary:
+          type: array
+          description: The deliveries per channel and status for the `month` and `kind` filters
+          items:
+            $ref: '#/components/schemas/DeliverySummaryCount'
+
+    PrintDoneResult:
+      type: object
+      required: [printed]
+      properties:
+        printed:
+          type: integer
+          format: int32
+
+    AnnouncementChannel:
+      type: string
+      description: A channel an announcement may go through
+      enum: [TELEGRAM, EMAIL]
+
+    AnnouncementRequest:
+      type: object
+      required: [text, channels]
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 4000
+          description: >-
+            The announcement as plain text, at most 2000 characters (Unicode code points) after the surrounding spaces
+            are removed; longer is 400 `ANNOUNCEMENT_TOO_LONG`. `maxLength` only bounds the request (2000 characters
+            are at most 4000 UTF-16 units).
+        streets:
+          type: array
+          description: The streets whose plots' current owners get it; empty or absent means every active member
+          maxItems: 500
+          items:
+            type: string
+            minLength: 1
+            maxLength: 200
+        channels:
+          type: array
+          description: The channels the announcement may go through (Telegram, e-mail or both)
+          minItems: 1
+          maxItems: 2
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/AnnouncementChannel'
+
+    AnnouncementPaperMember:
+      type: object
+      required: [memberId, name]
+      properties:
+        memberId:
+          type: string
+          format: uuid
+        name:
+          type: string
+          description: The member, "Last First"
+
+    AnnouncementSendResult:
+      type: object
+      description: What a send of an announcement created, or with `preview` would create
+      required: [counts, paperMembers]
+      properties:
+        announcementId:
+          type: string
+          format: uuid
+          description: The announcement saved; absent for a preview
+        counts:
+          $ref: '#/components/schemas/DeliveryCounts'
+        paperMembers:
+          type: array
+          description: The members no chosen channel reaches («на папері»), to inform in person
+          items:
+            $ref: '#/components/schemas/AnnouncementPaperMember'
+
+    AnnouncementCounts:
+      type: object
+      description: >-
+        The deliveries of an announcement now: `sent` and `failed` (Telegram and e-mail), `queued` (still being sent)
+        and `paper` (the members to inform in person)
+      required: [sent, failed, queued, paper]
+      properties:
+        sent:
+          type: integer
+          format: int32
+        failed:
+          type: integer
+          format: int32
+        queued:
+          type: integer
+          format: int32
+        paper:
+          type: integer
+          format: int32
+
+    AnnouncementSummary:
+      type: object
+      required: [id, createdAt, streets, channels, counts]
+      properties:
+        id:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        authorName:
+          type: string
+          description: The member who sent it, "Last First"; absent when unknown
+        streets:
+          type: array
+          description: The streets it went to; empty means every active member
+          items:
+            type: string
+        channels:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnnouncementChannel'
+        counts:
+          $ref: '#/components/schemas/AnnouncementCounts'
+
+    AnnouncementPage:
+      type: object
+      required: [items, page, size, totalItems, totalPages]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnnouncementSummary'
+        page:
+          type: integer
+          format: int32
+          description: Zero-based page index
+        size:
+          type: integer
+          format: int32
+        totalItems:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+
+    AnnouncementDetails:
+      type: object
+      required: [id, createdAt, text, streets, channels, counts, deliveries]
+      properties:
+        id:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        authorName:
+          type: string
+          description: The member who sent it, "Last First"; absent when unknown
+        text:
+          type: string
+          description: The text as entered (user content)
+        streets:
+          type: array
+          description: The streets it went to; empty means every active member
+          items:
+            type: string
+        channels:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnnouncementChannel'
+        counts:
+          $ref: '#/components/schemas/AnnouncementCounts'
+        deliveries:
+          $ref: '#/components/schemas/DeliveryPage'

@@ -245,6 +245,18 @@ snapshots opened 50 at a time. Without invoices one page «За {місяць} �
 scope (`print.*` in the bundle). Its `/ID` comes from the month, the scope and the printed version ids, its time is the
 latest `issuedAt` among them, so the same set gives the same bytes. File `invoices_{YYYY-MM}_{paper|all}.pdf`.
 
+**Copies per recipient (feature 017 §2.2, §2.3).** When a `PaperRecipients` implementation exists (the notifications
+module's `PaperCopiesProvider`), `scope=PAPER` prints one copy per recipient it names for a plot instead of one per
+plot: the owners whose channel comes out as paper by the channel rule (paper chosen, Viber, an e-mail or Telegram that
+cannot be used), in street and plot order and the owners' order. Each copy closes with «Примірник для: {Last First}»
+and, when the entry has a link, the small QR code «Отримувати рахунки в Telegram» (24 mm, `LinkQrImage`: plain QR,
+error correction M) beside how to use it (`print.copyFor`, `print.telegram.*`). **The print PDF now creates link
+codes:** the notifications module issues a 90-day `PAPER` code per unlinked recipient when the cooperative has a bot
+(only its hash is stored, so the code exists only on the paper), which is why the print runs in a read-write
+`REPEATABLE READ` transaction; a set with link codes differs from print to print, one without stays byte-stable (the
+recipients join the `/ID`). `scope=ALL` stays one copy per plot without names or codes; without an implementation
+`scope=PAPER` is the feature 016 filter above.
+
 ## Demo documents
 
 `DemoDocuments` (an `ApplicationRunner`, registered only when `spring.flyway.locations` contains `db/demo` and the
@@ -263,20 +275,28 @@ write them); on start-up the runner, under `TenantContext.runAs` for the demo co
   already has a certificate.
 
 Idempotent: the next start finds both and writes nothing. A refusal (requisites missing, a running build) or any
-failure is logged with its problem code or class only and never stops the application; the log has counts only.
+failure is logged with its problem code or class only and never stops the application; the log has counts only. It
+runs before the other demo runners (`@Order`): the demo delivery of `notifications` (feature 017, `DemoNotifications`)
+marks the invoices of that month as sent, and the demo ledger block deletes those delivery rows before the invoices.
 
 ## Public API: `DocumentsFacade` (for feature 017)
 
-`DocumentsFacade` (implemented by `internal.DocumentsFacadeService`) with `PrintScope` (`PAPER`, `ALL`): ids, links and
-bytes only.
+`DocumentsFacade` (implemented by `internal.DocumentsFacadeService`) with `PrintScope` (`PAPER`, `ALL`), the records
+`MonthInvoice` and `InvoiceSummary` and the SPI `PaperRecipients` with `PaperCopy`: ids, links and bytes only.
+`DocumentFormats` writes amounts, days and months as the documents do (`1 234,56 ₴`, `28.10.2026`, «жовтень 2026»;
+over the internal `DocumentFormat`) and, with `number`, a decimal that is not money (a meter reading `12 345`,
+`12 345,5`: trailing zeros dropped, nothing rounded) for the other modules' message texts.
 
 | Method | What |
 |---|---|
 | `latestInvoice(plotId, month)` | the id of the latest version of the plot's invoice for the month, or empty |
+| `latestInvoices(month)` | the latest version of each plot's invoice of the month (`MonthInvoice`: id, plot, version, number, «До сплати», month), in number order (feature 017: sending the month's invoices) |
+| `invoiceSummary(invoiceId)` | what a message about a version needs (`InvoiceSummary`: plot and its number as printed, number, month, version, «До сплати», the payment link), or empty |
 | `invoicePdf(invoiceId)` | the PDF of a version (the same bytes as `GET /invoices/{id}/pdf`), or empty |
 | `invoiceForToday(plotId)` | the current month's invoice as of now (as `POST /plots/{id}/invoices`, the same lock and problems): a new version with the `INVOICE_REISSUED` audit only when its content changed, otherwise the latest version's id; issued by the system: no `issued_by`, audit subject `system:documents` |
+| `invoiceForDay(plotId)` | the bot's «Рахунок» (feature 017 §2.5): under the month's build lock, taken first, the latest version of the current month (Europe/Kyiv) when it was issued today (by any path: the month build, an on-request invoice, an earlier call), otherwise `invoiceForToday`. One day, one invoice per plot; the next day a new version only when the content changed; two calls at once issue at most one new version. The same problems as `invoiceForToday` |
 | `receiptPdf(paymentId)` | the cash receipt drawn now, without the payer note; empty for an unknown payment, a reversal row or a bank payment |
-| `printPdf(month, scope)` | the print set (as the endpoint, without the month check: an unknown month is the one page "no invoices") |
+| `printPdf(month, scope)` | the print set (as the endpoint, without the month check: an unknown month is the one page "no invoices"); read-write, as the paper recipients may create link codes |
 | `qrLink(invoiceId)` | the stored NBU link of a version, or empty (unknown id, nothing due) |
 
 The cooperative is the one the caller bound (the request's token, or `TenantContext.runAs` in a job or a listener);
@@ -284,7 +304,12 @@ without one a method throws `IllegalStateException`. Each method runs in a trans
 manager, `REQUIRED` (it joins the caller's, or opens its own, so a job needs none). The facade checks no permission: it
 answers as the system and the caller keeps the endpoints' rules (a member receives only the latest version of an
 invoice of a plot they own now, and only the receipt of a group whose every plot they own now). Only
-`invoiceForToday` writes (and audits), and only when the invoice changed.
+`invoiceForToday` and `invoiceForDay` write (and audit), and only when the invoice changed; `printPdf` lets the `PaperRecipients`
+implementation write its link codes.
+
+**SPI `PaperRecipients`** (implemented by the notifications module): `copiesFor(month, plotIds)` answers the paper
+copies of each plot (`PaperCopy`: member, label "Last First", optional link QR payload). Called in the print's
+transaction; optional (`ObjectProvider`): without it the print keeps the feature 016 filter.
 
 ## Amounts in words
 
@@ -419,6 +444,10 @@ hryvnia sign U+20B4. SHA-256: Regular `975dcda37d80f038dcd143c22e33ca2d97a0cc5a9
   equal to the endpoint's, the QR link (none when nothing is due), the system's invoice for today (no member, audit
   subject), the receipt without the payer note and none for a bank payment, the print set equal to the endpoint's,
   another cooperative finds nothing, no bound cooperative fails.
+- `InvoiceForDayTests` (Testcontainers, feature 017): the first request issues the invoice and the same day gives it
+  again after a payment; a version the month build issued today is the invoice of the day; the next day (the stored
+  versions moved one day back) the same invoice when nothing changed and one new version after a payment; two requests
+  at once issue one new version; the refusals of `invoiceForToday`.
 - `CertificateTests` (Testcontainers): the debt text with the per-type amounts and the no-debt text, the figures
   equal to the plot balances report for today and for the end of last month, the names sealed, a future day (400, no
   number taken), common land, an archived plot, an unknown plot and missing requisites, a plot without owners, the

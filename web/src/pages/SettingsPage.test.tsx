@@ -21,6 +21,7 @@ const refetch = vi.fn();
 vi.mock('@nadel/api-client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@nadel/api-client')>()),
   useGetSettings: () => ({ ...settingsQuery, refetch }),
+  useGetDeliverySettings: () => ({ data: undefined, error: null, isPending: true, isError: false, refetch }),
   useUpdateSettings: (o: { mutation: Options }) => {
     calls.push(o.mutation);
     return { mutate, isPending };

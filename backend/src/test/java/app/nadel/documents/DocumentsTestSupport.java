@@ -105,6 +105,11 @@ abstract class DocumentsTestSupport extends IntegrationTest {
         }
         UUID id = tenant;
         asLedgerOwner(sql -> {
+            // feature 017: deliveries of the invoices, the link codes a print created, the delivery settings
+            for (String table : List.of("delivery", "telegram_link_code", "telegram_link", "delivery_lane",
+                    "bot_poll_state", "delivery_settings")) {
+                sql.update("delete from " + table + " where tenant_id = ?", id);
+            }
             sql.update("delete from allocation where tenant_id = ? and releases_allocation_id is not null", id);
             sql.update("delete from allocation where tenant_id = ?", id);
             sql.update("delete from payment where tenant_id = ? and reverses_payment_id is not null", id);

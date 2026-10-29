@@ -1,8 +1,11 @@
 package app.nadel.documents.internal;
 
+import app.nadel.documents.PaperCopy;
+import app.nadel.documents.PaperRecipients;
 import app.nadel.documents.PrintScope;
 import app.nadel.documents.internal.pdf.PdfDocument;
 import app.nadel.documents.internal.pdf.PdfDocument.PageSize;
+import app.nadel.documents.internal.pdf.PdfFonts.Face;
 import app.nadel.documents.internal.pdf.TextBlock;
 import app.nadel.documents.internal.pdf.TextBlock.Align;
 import app.nadel.members.DeliveryChannel;
@@ -22,6 +25,8 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,9 +40,17 @@ import org.springframework.transaction.annotation.Transactional;
  * delivery channel is {@code PAPER} ({@code PlotOwners.currentOwnerIds}, {@code MemberDirectory.deliveryChannels});
  * {@link PrintScope#ALL} keeps every plot. A set without invoices is one page saying so.
  * <p>
- * Byte-stable: the file's identity is the month, the scope and the ids of the printed versions in their order (a
- * version never changes), its time the latest {@code issuedAt} among them (the first moment of the month in Kyiv for an
- * empty set), and every invoice is drawn from its stored snapshot. Snapshots are read and opened 50 at a time, the
+ * <b>Copies per recipient (feature 017 §2.2, §2.3).</b> When a {@link PaperRecipients} implementation exists (the
+ * notifications module), {@link PrintScope#PAPER} prints one copy per entry it gives for a plot instead: each copy
+ * closes with «Примірник для: {name}» and, when the entry has a link, the small QR code «Отримувати рахунки в
+ * Telegram» with the recipient's personal deep link. Asking for the entries may create one-time link codes, so the
+ * print runs in a read-write transaction. Without an implementation the feature 016 filter above applies.
+ * {@link PrintScope#ALL} always prints one copy per plot without names or links.
+ * <p>
+ * Byte-stable: the file's identity is the month, the scope and the ids of the printed versions (and recipients) in
+ * their order (a version never changes), its time the latest {@code issuedAt} among them (the first moment of the
+ * month in Kyiv for an empty set), and every invoice is drawn from its stored snapshot; a copy with a link QR code
+ * holds a new code on every print, so only such a set differs from print to print. Snapshots are read and opened 50 at a time, the
  * persistence context cleared in between. Nothing is stored; the caller checks the permission ({@code INVOICES_ISSUE}
  * on the endpoint); {@link #printListed} also checks the month ({@link ListedMonths}), {@link #print} (the facade)
  * prints whatever the month has.
@@ -48,8 +61,12 @@ class PrintBundle {
     /** The snapshots read together. */
     static final int CHUNK = 50;
 
-    /** One latest version of the month. */
-    private record Entry(UUID id, UUID plotId, Instant issuedAt) {
+    /** The side of the link QR code of a paper copy, in millimetres. */
+    static final float LINK_QR_MM = 24f;
+    private static final float COPY_TEXT = 8f;
+
+    /** One latest version of the month, for one recipient when {@code copy} is set. */
+    private record Entry(UUID id, UUID plotId, Instant issuedAt, @Nullable PaperCopy copy) {
     }
 
     private final EntityManager entityManager;
@@ -59,9 +76,11 @@ class PrintBundle {
     private final PlotOwners plotOwners;
     private final MemberDirectory members;
     private final ListedMonths months;
+    private final ObjectProvider<PaperRecipients> recipients;
 
     PrintBundle(EntityManager entityManager, InvoiceRepository invoices, InvoiceSnapshots snapshots, PlotCatalog plots,
-            PlotOwners plotOwners, MemberDirectory members, ListedMonths months) {
+            PlotOwners plotOwners, MemberDirectory members, ListedMonths months,
+            ObjectProvider<PaperRecipients> recipients) {
         this.entityManager = entityManager;
         this.invoices = invoices;
         this.snapshots = snapshots;
@@ -69,20 +88,21 @@ class PrintBundle {
         this.plotOwners = plotOwners;
         this.members = members;
         this.months = months;
+        this.recipients = recipients;
     }
 
     /**
      * The print set of a listed month (the endpoint): a month after the current one, before the first billing month or
      * while the cooperative has none is 404 {@code NOT_FOUND}.
      */
-    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    @Transactional(isolation = Isolation.REPEATABLE_READ)
     Invoices.File printListed(UUID tenantId, YearMonth month, PrintScope scope) {
         months.requireListed(month, false);
         return print(tenantId, month, scope);
     }
 
     /** The print set of the cooperative's month, {@code invoices_2026-10_paper.pdf}. */
-    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    @Transactional(isolation = Isolation.REPEATABLE_READ)
     Invoices.File print(UUID tenantId, YearMonth month, PrintScope scope) {
         Objects.requireNonNull(tenantId, "tenantId");
         Objects.requireNonNull(month, "month");
@@ -90,7 +110,12 @@ class PrintBundle {
         List<Entry> entries = entries(month, scope);
         DocumentTexts texts = DocumentTexts.uk();
         StringBuilder identity = new StringBuilder("print:").append(month).append(':').append(scope.name());
-        entries.forEach(entry -> identity.append(':').append(entry.id()));
+        entries.forEach(entry -> {
+            identity.append(':').append(entry.id());
+            if (entry.copy() != null) {
+                identity.append('/').append(entry.copy().memberId());
+            }
+        });
         Instant time = entries.stream().map(Entry::issuedAt).max(Instant::compareTo)
                 .orElseGet(() -> month.atDay(1).atStartOfDay(DocumentFormat.ZONE).toInstant());
         byte[] content;
@@ -110,6 +135,9 @@ class PrintBundle {
                     InvoiceRecord record = Objects.requireNonNull(records.get(entry.id()), "invoice");
                     InvoiceDocument document = snapshots.open(tenantId, record.getId(), record.getSnapshot());
                     append(pdf, document, texts, first);
+                    if (entry.copy() != null) {
+                        copy(pdf, entry.copy(), texts);
+                    }
                     first = false;
                 }
                 entityManager.clear();
@@ -131,19 +159,48 @@ class PrintBundle {
         InvoiceLayout.draw(pdf, invoice, texts);
     }
 
+    /**
+     * The close of a paper copy: «Примірник для: {name}» and, with a link, the small QR code beside «Отримувати рахунки
+     * в Telegram» and how to use it; kept together on one page.
+     */
+    static void copy(PdfDocument pdf, PaperCopy copy, DocumentTexts texts) {
+        pdf.keepTogether(() -> {
+            pdf.space(COPY_TEXT * 0.6f);
+            pdf.text(new TextBlock(texts.text("print.copyFor", Map.of("name", copy.label())), Face.SEMIBOLD,
+                    COPY_TEXT, Align.LEFT, 1f));
+            copy.linkQrPayload().ifPresent(link -> {
+                LinkQrImage image = LinkQrImage.of(link);
+                float side = LinkQrImage.points(LINK_QR_MM);
+                pdf.beside(side, 8f, () -> pdf.drawing(side, (content, left, bottom, width, height) ->
+                        image.drawPdf(content, left, bottom + height - side, side)), () -> {
+                            pdf.text(new TextBlock(texts.text("print.telegram.title"), Face.SEMIBOLD, COPY_TEXT + 1f,
+                                    Align.LEFT, 1f));
+                            pdf.text(TextBlock.plain(texts.text("print.telegram.hint"), COPY_TEXT));
+                        });
+            });
+        });
+    }
+
     /** {@code invoices_2026-10_paper.pdf} / {@code invoices_2026-10_all.pdf}. */
     static String fileName(YearMonth month, PrintScope scope) {
         return "invoices_" + month + "_" + scope.name().toLowerCase(Locale.ROOT) + ".pdf";
     }
 
-    /** The latest versions of the month in the scope, in street and plot order. */
+    /**
+     * The latest versions of the month in the scope, in street and plot order; for {@link PrintScope#PAPER} with
+     * {@link PaperRecipients}, one entry per copy, in the order the recipients come.
+     */
     private List<Entry> entries(YearMonth month, PrintScope scope) {
         Map<UUID, Entry> byPlot = new HashMap<>();
         for (Object[] row : invoices.latestOfMonth(month.atDay(1))) {
-            byPlot.put((UUID) row[1], new Entry((UUID) row[0], (UUID) row[1], (Instant) row[2]));
+            byPlot.put((UUID) row[1], new Entry((UUID) row[0], (UUID) row[1], (Instant) row[2], null));
         }
         if (byPlot.isEmpty()) {
             return List.of();
+        }
+        PaperRecipients paper = scope == PrintScope.PAPER ? recipients.getIfAvailable() : null;
+        if (paper != null) {
+            return copies(month, byPlot, paper);
         }
         Set<UUID> chosen = scope == PrintScope.ALL ? byPlot.keySet() : onPaper(byPlot.keySet());
         if (chosen.isEmpty()) {
@@ -152,6 +209,20 @@ class PrintBundle {
         List<Entry> ordered = new ArrayList<>();
         plots.inStreetOrder(chosen).forEach(plotId -> ordered.add(byPlot.get(plotId)));
         return ordered;
+    }
+
+    /** One entry per paper copy of each plot, the plots in street and plot order. */
+    private List<Entry> copies(YearMonth month, Map<UUID, Entry> byPlot, PaperRecipients paper) {
+        List<UUID> ordered = plots.inStreetOrder(byPlot.keySet());
+        Map<UUID, List<PaperCopy>> copies = paper.copiesFor(month, ordered);
+        List<Entry> entries = new ArrayList<>();
+        for (UUID plotId : ordered) {
+            Entry plot = byPlot.get(plotId);
+            for (PaperCopy copy : copies.getOrDefault(plotId, List.of())) {
+                entries.add(new Entry(plot.id(), plotId, plot.issuedAt(), copy));
+            }
+        }
+        return entries;
     }
 
     /** The plots with at least one current owner who receives invoices on paper. */

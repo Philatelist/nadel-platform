@@ -200,6 +200,9 @@ class EncryptMemberContactsMigrationTests {
                         // the entities map the latest schema (import_run.plan_enc of V25), so a context stopped at an
                         // earlier version cannot validate it
                         "--spring.jpa.hibernate.ddl-auto=" + ("latest".equals(target) ? "validate" : "none"),
+                        // JobRunr's tables come only from V30 (jobrunr.database.skip-create), so a context stopped at
+                        // an earlier version keeps its jobs in memory; the latest run uses the real tables
+                        "--jobrunr.database.type=" + ("latest".equals(target) ? "sql" : "mem"),
                         "--spring.security.oauth2.resourceserver.jwt.issuer-uri=http://localhost:0/realms/test",
                         "--server.port=0",
                         "--spring.main.banner-mode=off");

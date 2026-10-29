@@ -172,6 +172,11 @@ class MeterReadingRecord {
         return status;
     }
 
+    /** The member who entered or submitted it; null for an import or a system write. */
+    @Nullable UUID getEnteredByMemberId() {
+        return enteredByMemberId;
+    }
+
     @Nullable String getRejectReason() {
         return rejectReason;
     }

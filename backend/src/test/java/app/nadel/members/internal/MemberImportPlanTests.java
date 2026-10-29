@@ -425,14 +425,16 @@ class MemberImportPlanTests extends IntegrationTest {
         assertThat(fromTheMember.changedFields()).containsExactly("deliveryChannel");
     }
 
+    /** Feature 017: the member links Telegram through the bot, so the username is an optional note. */
     @Test
-    void theTelegramChannelNeedsAUsername() {
+    void theTelegramChannelNeedsNoUsername() {
         MemberImportItem without = plan(rowWithChannel(2, "M-1", last("Tg"), "Without", email("tg1"), "TELEGRAM",
                 null, null)).getFirst();
         MemberImportItem with = plan(rowWithChannel(3, "M-2", last("Tg"), "With", email("tg2"), "Telegram",
                 "@someone", null)).getFirst();
 
-        assertThat(problems(without)).containsExactly("telegramUsername:CHANNEL_CONTACT_MISSING");
+        assertThat(without.action()).isEqualTo(MemberImportAction.NEW);
+        assertThat(without.problems()).isEmpty();
         assertThat(with.action()).isEqualTo(MemberImportAction.NEW);
         assertThat(with.problems()).isEmpty();
     }

@@ -379,6 +379,109 @@ export function useGetPlotMap<TData = Awaited<ReturnType<typeof getPlotMap>>, TE
 
 
 
+export const getListPlotStreetsUrl = () => {
+
+
+
+
+  return `/api/v1/plots/streets`
+}
+
+/**
+ * The distinct streets of the active plots that are not common land (feature 017 §2.6: the streets an
+ * announcement can be sent to), without surrounding spaces, each once ignoring case, in Ukrainian alphabetical
+ * order ignoring case. Plots without a street are left out. Requires `PLOTS_VIEW` or `ANNOUNCEMENTS_SEND`.
+ * @summary The streets of the cooperative's plots
+ */
+export const listPlotStreets = async ( options?: Parameters<typeof nadelFetch>[1]): Promise<string[]> => {
+
+  return nadelFetch<string[]>(getListPlotStreetsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListPlotStreetsQueryKey = () => {
+    return [
+    `/api/v1/plots/streets`
+    ] as const;
+    }
+
+
+export const getListPlotStreetsQueryOptions = <TData = Awaited<ReturnType<typeof listPlotStreets>>, TError = UnauthorizedResponse | ForbiddenResponse>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listPlotStreets>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListPlotStreetsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listPlotStreets>>> = ({ signal }) => listPlotStreets({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listPlotStreets>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListPlotStreetsQueryResult = NonNullable<Awaited<ReturnType<typeof listPlotStreets>>>
+export type ListPlotStreetsQueryError = UnauthorizedResponse | ForbiddenResponse
+
+
+export function useListPlotStreets<TData = Awaited<ReturnType<typeof listPlotStreets>>, TError = UnauthorizedResponse | ForbiddenResponse>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listPlotStreets>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listPlotStreets>>,
+          TError,
+          Awaited<ReturnType<typeof listPlotStreets>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListPlotStreets<TData = Awaited<ReturnType<typeof listPlotStreets>>, TError = UnauthorizedResponse | ForbiddenResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listPlotStreets>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listPlotStreets>>,
+          TError,
+          Awaited<ReturnType<typeof listPlotStreets>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListPlotStreets<TData = Awaited<ReturnType<typeof listPlotStreets>>, TError = UnauthorizedResponse | ForbiddenResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listPlotStreets>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary The streets of the cooperative's plots
+ */
+
+export function useListPlotStreets<TData = Awaited<ReturnType<typeof listPlotStreets>>, TError = UnauthorizedResponse | ForbiddenResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listPlotStreets>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListPlotStreetsQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 export const getGetPlotUrl = (id: string,) => {
 
 

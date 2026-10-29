@@ -200,8 +200,7 @@ class MembersWriteTests extends IntegrationTest {
 
     @Test
     void channelNeedsItsContact() throws Exception {
-        for (String[] channel : new String[][] {
-                {"EMAIL", "email"}, {"TELEGRAM", "telegramUsername"}, {"VIBER", "viberPhone"}}) {
+        for (String[] channel : new String[][] {{"EMAIL", "email"}, {"VIBER", "viberPhone"}}) {
             Map<String, Object> body = body("Channel", "Person", null);
             body.put("deliveryChannel", channel[0]);
 
@@ -212,6 +211,19 @@ class MembersWriteTests extends IntegrationTest {
                     .andExpect(jsonPath("$.errors[0].field").value(channel[1]))
                     .andExpect(jsonPath("$.errors[0].code").value("CHANNEL_CONTACT_MISSING"));
         }
+    }
+
+    /** Feature 017: the member links Telegram through the bot, so the username is an optional note. */
+    @Test
+    void telegramNeedsNoUsername() throws Exception {
+        Map<String, Object> body = body("Channel", "TelegramOnly", null);
+        body.put("deliveryChannel", "TELEGRAM");
+
+        create(chairman(), body).actions
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.deliveryChannel").value("TELEGRAM"))
+                .andExpect(jsonPath("$.telegramUsername").doesNotExist())
+                .andExpect(jsonPath("$.telegramLinked").value(false));
     }
 
     @Test

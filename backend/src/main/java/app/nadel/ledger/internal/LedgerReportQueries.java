@@ -271,6 +271,20 @@ class LedgerReportQueries implements LedgerReadModel {
             limit :limit
             """;
 
+    /** The payments (never a reversal row) with the given ids, as {@link #PAYMENTS} reads them. */
+    private static final String PAYMENTS_BY_IDS = """
+            select p.id, p.receipt_number, p.bank_reference, p.received_on,
+                   to_char(cast(bm.month as timestamp), 'YYYY-MM') as month, p.plot_id, p.payer_member_id, p.source,
+                   p.amount,
+                   coalesce((select sum(a.amount) from allocation a where a.payment_id = p.id), 0) as allocated,
+                   exists (select 1 from payment r where r.reverses_payment_id = p.id) as reversed, p.group_id
+            from payment p
+            join billing_month bm on bm.id = p.billing_month_id
+            where p.kind = 'PAYMENT'
+              and p.id in (:ids)
+            order by p.received_on, p.created_at, p.id
+            """;
+
     /** Bound to a date parameter that a flag switches off. */
     private static final LocalDate NO_DATE = LocalDate.of(2000, 1, 1);
 
@@ -696,6 +710,20 @@ class LedgerReportQueries implements LedgerReadModel {
                 .setParameter("limit", limit)
                 .getResultList();
         return rows.stream().map(row -> payment((Object[]) row)).toList();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public List<PaymentRow> paymentsByIds(Collection<UUID> paymentIds) {
+        List<UUID> ids = paymentIds.stream().map(id -> Objects.requireNonNull(id, "paymentId")).distinct().toList();
+        List<Object[]> found = new ArrayList<>();
+        for (int from = 0; from < ids.size(); from += CHUNK) {
+            List<?> rows = entityManager.createNativeQuery(PAYMENTS_BY_IDS)
+                    .setParameter("ids", ids.subList(from, Math.min(ids.size(), from + CHUNK)))
+                    .getResultList();
+            rows.forEach(row -> found.add((Object[]) row));
+        }
+        return found.stream().map(LedgerReportQueries::payment).toList();
     }
 
     private static PaymentRow payment(Object[] v) {
