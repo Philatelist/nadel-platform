@@ -48,13 +48,23 @@ class InvoiceLedgerQueries {
             from billing_month b
             """;
 
+    /**
+     * The charge a correction corrects is joined twice by its primary key, once per reference column (the reversed one
+     * only when the charge adjusts none, as {@code coalesce(adjusts, reverses)}): each join condition is a plain
+     * column equality, so it is an index condition on {@code charge_pkey}. A join on
+     * {@code coalesce(c.adjusts_charge_id, c.reverses_charge_id)} is not leakproof under RLS, so PostgreSQL checks the
+     * cooperative first and reads every charge of the cooperative for it, per chunk or per row (ADR 0017,
+     * "Measurement").
+     */
     private static final String CHARGES = """
             select c.id, c.plot_id, c.charge_type_id, c.billing_month_id, c.kind, c.source, c.amount,
                    c.service_from, c.service_to, cast(c.calculation as text) as calculation,
-                   t.billing_month_id as target_month_id, t.source as target_source, c.created_at
+                   coalesce(ta.billing_month_id, tr.billing_month_id) as target_month_id,
+                   coalesce(ta.source, tr.source) as target_source, c.created_at
             from charge c
             join billing_month b on b.id = c.billing_month_id
-            left join charge t on t.id = coalesce(c.adjusts_charge_id, c.reverses_charge_id)
+            left join charge ta on ta.id = c.adjusts_charge_id
+            left join charge tr on tr.id = c.reverses_charge_id and c.adjusts_charge_id is null
             where c.plot_id in (:plotIds)
               and c.created_at <= :asOf
               and b.month <= :month

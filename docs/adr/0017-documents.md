@@ -146,10 +146,19 @@ and retry, and the requirement's `invoice_run` is dropped.
   Measured (Testcontainers PostgreSQL on a developer Mac, while the application and the guide screenshots ran in
   parallel): the first build in about 3.7 seconds (3,721 ms), the rebuild without a change in about 3.2 seconds
   (3,221 ms), the on-request invoice in about 0.16 seconds (156 ms). Run alone twice: first build 3.0 s and 3.4 s,
-  rebuild 2.4 s, on-request 0.12 s. Inside one full `./mvnw verify` run (shared JVM after 3,600 other tests, load
-  average above 8) one first build took 47.6 s; isolated reruns did not reproduce it, so it is treated as contention,
-  and the test's 60 s ceiling is watched in CI. The limit stays at 2,000 plots; the first build is below the threshold
-  of about 5 s, so the web shows a spinner and no progress UI.
+  rebuild 2.4 s, on-request 0.12 s. Inside the full suite the first build took 47.6 s (54.3 s in CI); this was not
+  contention. The invoice ledger query (`InvoiceLedgerQueries.CHARGES`) joined the corrected charge on
+  `t.id = coalesce(c.adjusts_charge_id, c.reverses_charge_id)`. Under row-level security PostgreSQL treats that
+  condition as not leakproof, applies the cooperative policy first and cannot use `charge_pkey`, so every chunk read all
+  of the cooperative's charges. With statistics taken while `charge` was nearly empty (earlier tests, or a real
+  cooperative right after a bulk load, before autoanalyze) the planner turned this into a nested loop over all 48,000
+  charges for each of the chunk's 1,200 rows (57.6 million rows filtered per chunk). The rebuild was fast only because
+  autoanalyze had run in between. The query now joins the corrected charge twice by plain primary-key equality
+  (`ta.id = c.adjusts_charge_id`, `tr.id = c.reverses_charge_id and c.adjusts_charge_id is null`), with the same result.
+  In the test sequence that reproduced 47.9 s, the first build now takes 2.0 s (rebuild 1.0 s, on request 0.02 s), and
+  2.8–3.0 s run alone. Rule: a join on an expression over columns of an RLS table cannot use an index; ledger queries
+  join by plain column equality. The limit stays at 2,000 plots; the first build is below the threshold of about 5 s,
+  so the web shows a spinner and no progress UI.
 - **Progress UI:** a spinner only while the measured first build at the limit is at most about 5 s; a longer build
   goes back to the owner (a lower limit, or the build as a JobRunr job in 017) instead of a progress bar here.
 

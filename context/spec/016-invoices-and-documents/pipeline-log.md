@@ -6,7 +6,7 @@
 - Requirement: document docs/features/016-invoices-and-documents.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
 - Publish: pr+checks · PR: https://github.com/Philatelist/nadel-platform/pull/59 · Checks: green (run 40788506178 on 676eca8)
-- Review run: off until Phase 6 (reviewRun: on)
+- Review run: running at http://localhost:5173 (web), :8080 (API), :8180 (Keycloak) (PIDs in /private/tmp/claude-501/-Users-alex-IdeaProjects-nadel-platform/2b5d7728-8708-45b9-b4c7-7c43fe039804/scratchpad/review-run.pids)
 
 ## Project facts
 
@@ -211,3 +211,6 @@ introduction (tables via Flyway, RLS-free job storage), Supply-chain CI job with
 - Phase 5: pushed 016-invoices-and-documents (no force); PR #59 opened (feat(documents): …). Waiting for checks.
 - Checks: all 5 green (run 40788506178): Backend 8m54s, Clients 3m13s, End-to-end 4m26s, SAST 1m13s, Security 2m25s.
 - Finding: inside the full suite the first month build at 2,000 plots is slow and repeatable — local 47.6 s, CI 54.3 s (ceiling 60 s) — vs 3.0–3.4 s alone. Root-cause investigation started (spring-backend, worktree scratchpad/perf-016); Phase 6 review run started in parallel.
+- Phase 6: make up started detached from the spec branch (make up 90999, java 91366, node 91200); ready (health 200, web 200).
+- Root cause (spring-backend, perf-016 worktree): InvoiceLedgerQueries.CHARGES joined the corrected charge on coalesce(...) — not leakproof under RLS → no charge_pkey use → every chunk read all charges; with stale stats (after bulk load) a nested loop (57.6 M rows filtered per chunk). Production-relevant (a cooperative right after a bulk import). Fix: two plain PK joins, same result; heavy sequence 47.9 s → 2.0 s; documents tests 324/324, ledger tests green with the fix. No migration, no test change, ceiling unchanged.
+- Follow-up (not changed, 013 code): the same expression join in LedgerReportQueries lines ~299 and ~352 (reports). Option for the owner: tighten the 60 s ceiling of InvoiceBuildLimitTests.
