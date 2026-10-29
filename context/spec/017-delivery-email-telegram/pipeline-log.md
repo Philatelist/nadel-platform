@@ -1,12 +1,12 @@
 # Pipeline log — 017 delivery by e-mail and Telegram
 
-- Status: running
-- Phase: 5 — publish
-- Branch: 017-delivery-email-telegram (planned) · Base: main @ 1fef5d0
+- Status: finished
+- Phase: 6 — review run (done)
+- Branch: 017-delivery-email-telegram · Base: main @ 1fef5d0
 - Requirement: docs/features/017-delivery-email-telegram.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
-- Publish: pr+checks · PR: https://github.com/Philatelist/nadel-platform/pull/61 · Checks: red: Backend, SAST
-- Review run: on (pending)
+- Publish: pr+checks · PR: https://github.com/Philatelist/nadel-platform/pull/61 · Checks: green (run 40973703903)
+- Review run: running at http://localhost:5173 (PIDs in scratchpad/review-run.pids)
 
 ## Project facts
 
@@ -145,3 +145,10 @@
 - CI run 40971589846: Clients, Security, End-to-end green; Backend red — 3 InvoiceDeliveryTests compare an Instant with nanoseconds (Linux runner clock) against the value read back from Postgres (microseconds): `expected …486526872Z but was …486527Z`; macOS clocks give microseconds, so it did not reproduce locally. SAST red — Semgrep `java.lang.security.audit.crypto.unencrypted-socket` (blocking) on `new ServerSocket(0)` used to find a free port in DeliveryTestSupport.java:330, TestEmailTests.java, TelegramClientTests.java. Both are branch failures → CI fix attempt 1 (spring-backend).
 - CI fix attempt 1 (spring-backend), test code only: MovableClock starts at a microsecond-truncated instant (RED reproduced on macOS with +789 ns); shared test helper ClosedPort (ServerSocketChannel on loopback) replaces three new ServerSocket(0); local Semgrep 1.178.0: 0 findings on backend/src (3 blocking on the old files); 54 tests green.
 - CI fix review round 1: PASS. Pushing.
+
+## Final report addendum (Phase 5 and 6)
+
+- PR #61 "feat(notifications): delivery by e-mail and Telegram, the cooperative's bot": https://github.com/Philatelist/nadel-platform/pull/61
+- Checks: run 40971589846 red (Backend: nanosecond vs microsecond timestamps in 3 InvoiceDeliveryTests on Linux; SAST: Semgrep unencrypted-socket on `new ServerSocket(0)` in tests) → CI fix f6d2445 (test code only, fix review PASS) → run 40973703903 all 5 checks green (Backend, Clients, Security, SAST, End-to-end). No re-runs of infrastructure failures were needed.
+- Left for the owner: review and merge; `.env.example` line for NADEL_TELEGRAM_API_URL; CLAUDE.md `make infra` line; FS 2.10 real bot/mailbox check in the PR.
+- Review run: the spec branch runs locally from `make up` (no runtime code changed since it started at 35b7ced): web http://localhost:5173, API http://localhost:8080, Keycloak http://localhost:8180, Mailpit http://localhost:8025, fake Telegram http://localhost:8091. Logs: scratchpad/review-run.log. Stop: `kill 62851 63013 63122` (scratchpad/review-run.pids), infra `make down`.
