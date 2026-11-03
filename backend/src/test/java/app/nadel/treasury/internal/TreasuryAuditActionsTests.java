@@ -19,12 +19,16 @@ class TreasuryAuditActionsTests {
         var contract = Arrays.stream(AuditAction.values()).map(AuditAction::getValue).toList();
 
         assertThat(Arrays.stream(TreasuryAuditPublisher.Action.values()).map(Enum::name)).isSubsetOf(contract)
-                .contains("OPENING_BALANCE_SET");
+                .contains("OPENING_BALANCE_SET", "EXPENSE_RECORDED", "EXPENSE_REVERSED", "CASHBOOK_CATEGORY_ADDED",
+                        "CASHBOOK_CATEGORY_RENAMED", "CASHBOOK_CATEGORY_REORDERED", "CASHBOOK_CATEGORY_ARCHIVED");
     }
 
     @Test
-    void theMoneyAccountEntityTypeIsAnAuditEntityTypeOfTheContract() {
+    void theTreasuryEntityTypesAreAuditEntityTypesOfTheContract() {
         assertThat(AuditEntityType.fromValue(TreasuryAuditPublisher.MONEY_ACCOUNT))
                 .isEqualTo(AuditEntityType.MONEY_ACCOUNT);
+        assertThat(AuditEntityType.fromValue(TreasuryAuditPublisher.EXPENSE)).isEqualTo(AuditEntityType.EXPENSE);
+        assertThat(AuditEntityType.fromValue(TreasuryAuditPublisher.CASHBOOK_CATEGORY))
+                .isEqualTo(AuditEntityType.CASHBOOK_CATEGORY);
     }
 }

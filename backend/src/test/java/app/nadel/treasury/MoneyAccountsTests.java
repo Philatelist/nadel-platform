@@ -231,10 +231,4 @@ class MoneyAccountsTests extends TreasuryApiSupport {
         return new ArrayList<>(ownerJdbc().queryForList("select action, entity_type, entity_label, actor_member_id, "
                 + "changes from audit_entry where entity_id = ?", entity));
     }
-
-    private static Map<String, Object> with(Map<String, Object> body, String field, Object value) {
-        Map<String, Object> copy = new java.util.LinkedHashMap<>(body);
-        copy.put(field, value);
-        return copy;
-    }
 }

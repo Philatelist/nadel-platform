@@ -12,6 +12,6 @@
 import type { Problem } from './problem';
 
 /**
- * The uploaded file is over the size limit of 10 MB (code `FILE_TOO_LARGE`)
+ * The uploaded file is over the size limit of 10 MB, or an expense attachment over 5 MB (code `FILE_TOO_LARGE`; for an attachment with `errors[{field: files[i]}]`)
  */
 export type PayloadTooLargeResponse = Problem;

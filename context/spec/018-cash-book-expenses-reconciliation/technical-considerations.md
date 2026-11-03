@@ -236,10 +236,7 @@ Tag `documents`: the two PDFs. All amounts are strings. Problem codes: 409 `CASH
 - `components/cashbook/*`: `ExpenseForm`, `AttachmentPicker` (`accept="image/jpeg,image/png,image/heic,image/heif,
   application/pdf"`, plus a camera button with `capture="environment"`), `AttachmentList`, `MovementsTable`,
   `MoneyAccountCard`, `ReasonDialog`; `lib/heicToJpeg.ts`.
-- **HEIC:** a HEIC/HEIF file is converted to JPEG in the browser with `heic-to` (MIT, libheif wasm), pinned to an exact
-  version and loaded by dynamic import only when a HEIC file is chosen; if it cannot run, the canvas path is used where
-  the browser decodes HEIC (Safari), otherwise the user sees the type error. New client dependency, noted in the PR;
-  `pnpm audit`/OSV must stay green.
+- **HEIC:** a HEIC/HEIF file is converted to JPEG in the browser with the browser's own decoder only (`createImageBitmap` → canvas → JPEG 0.85), which Safari/iOS support; iOS usually hands over JPEG anyway. Where the browser cannot decode HEIC, the user sees the type error. No new client dependency: the HEIC libraries on npm (`heic-to`, `heic2any`) bundle LGPL-3.0 libheif, which needs the owner's licence decision (amended in Slice 2).
 - Settings: `components/settings/ExpenseCategoriesPanel.tsx` (expense and income lists; rename, reorder, archive, add;
   `CASHBOOK_APPROVE`), the `ChargeTypesPage` pattern.
 - Plot card: `ReconciliationActForm` tab in `PlotTabs` (`CHARGES_VIEW`); member account: «Акт звірки» per own plot.
@@ -291,7 +288,7 @@ backfill; the «planned» row becomes «works»; fix the duplicate chapter numbe
     malformed files.
   - `seed_base_roles` redefinition. → Copy the V29 body; `SeedBaseRolesTests` matrices.
   - Column grants vs Hibernate updates. → Entities update only granted columns; integration tests.
-  - HEIC library (wasm size, CSP, Vite chunking). → Lazy chunk, canvas fallback, clear error.
+  - HEIC from browsers without a native decoder (Chrome/Firefox desktop files) is refused with the type error. → Owner may later accept an LGPL library.
   - Coverage floor 0.977. → Unit tests for parsers and calculators with all error branches.
   - e2e state (reconciled months are sticky). → Specs pick months at runtime, assert deltas, run serially, never before
     `zz-closing` ordering is broken.
@@ -328,7 +325,7 @@ backfill; the «planned» row becomes «works»; fix the duplicate chapter numbe
    month)`.
 4. Seeded categories carry a system code and are translated by the catalogs until renamed (i18n rule).
 5. Categories are managed with `CASHBOOK_APPROVE`, not `SETTINGS_MANAGE`, although the panel sits on the settings page.
-6. `heic-to` as a new pinned client dependency, lazy-loaded; no backend image library.
+6. No HEIC library (LGPL-3.0); browser-native decoding only; no backend image library (amended in Slice 2).
 7. A bank difference is dated the month's last day (or today if earlier); a count difference the count day.
 8. Difference reversals get their own audit actions (`COUNT_DIFFERENCE_REVERSED`, `BANK_DIFFERENCE_REVERSED`).
 9. The act's closing sentence uses the net balance (debt − prepayment).

@@ -329,5 +329,6 @@ export function auditRecordLabel(
   if (entityType === 'REPORT') return reportTexts(t, label)?.title ?? label;
   if (entityType === 'ROLE') return baseToken(label, t.roles);
   if (entityType === 'CHARGE_TYPE') return auditChargeTypeName(label, t);
+  if (entityType === 'CASHBOOK_CATEGORY') return baseToken(label, t.expenseCategories.system);
   return user(label);
 }

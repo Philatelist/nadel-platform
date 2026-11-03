@@ -163,6 +163,38 @@ public final class ProblemCodes {
      * §2.1).
      */
     public static final String OPENING_BALANCE_ALREADY_SET = "OPENING_BALANCE_ALREADY_SET";
+    /**
+     * 409: a cash book entry other than a member payment is made on an account that has no opening balance yet (feature
+     * 018 §2.1).
+     */
+    public static final String OPENING_BALANCE_MISSING = "OPENING_BALANCE_MISSING";
+    /**
+     * 400: a cash book entry other than a member payment is dated before the account's opening date (feature 018 §2.1);
+     * {@code errors[]} names the date field.
+     */
+    public static final String BEFORE_OPENING_BALANCE = "BEFORE_OPENING_BALANCE";
+    /**
+     * 409: a cash book entry would make the cash balance negative on its date or a later day (feature 018 §2.2); the
+     * problem carries the lowest balance and its day in {@code balance} and {@code date}.
+     */
+    public static final String CASH_INSUFFICIENT = "CASH_INSUFFICIENT";
+    /** 409: the cash book entry was reversed before; an entry is reversed once (feature 018 §2.8). */
+    public static final String ENTRY_ALREADY_REVERSED = "ENTRY_ALREADY_REVERSED";
+    /**
+     * 409: another expense or income category of the same list has the name, ignoring case (feature 018 §2.9); also
+     * the code of the field {@code name} in {@code errors[]}.
+     */
+    public static final String CATEGORY_NAME_TAKEN = "CATEGORY_NAME_TAKEN";
+    /**
+     * 400: an expense attachment is not a JPEG, PNG or PDF by its content, or a JPEG or PNG that cannot be read
+     * (feature 018 §2.3); also the code of the field {@code files[i]} in {@code errors[]}.
+     */
+    public static final String FILE_TYPE_NOT_ALLOWED = "FILE_TYPE_NOT_ALLOWED";
+    /**
+     * 400: more files come with an expense than it takes (five, reused ones included; feature 018 §2.3); also the code
+     * of the field {@code files} in {@code errors[]}.
+     */
+    public static final String TOO_MANY = "TOO_MANY";
     /** 409: the plot's prepayment is allocated by hand while it has no prepayment or no open charge. */
     public static final String NOTHING_TO_ALLOCATE = "NOTHING_TO_ALLOCATE";
     /** 409: the charge was reversed before; a charge is reversed at most once. */
@@ -251,6 +283,8 @@ public final class ProblemCodes {
     public static final String REQUIRED = "REQUIRED";
     public static final String TOO_LONG = "TOO_LONG";
     public static final String INVALID = "INVALID";
+    /** An archived record (an expense category) named for a new entry; it stays only on old ones. */
+    public static final String ARCHIVED = "ARCHIVED";
     public static final String PHONE_INVALID = "PHONE_INVALID";
     public static final String CHANNEL_CONTACT_MISSING = "CHANNEL_CONTACT_MISSING";
     public static final String CADASTRAL_INVALID = "CADASTRAL_INVALID";

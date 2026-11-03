@@ -45,9 +45,11 @@ spring:
   servlet:
     multipart:
       # Excel import: one workbook of at most 10 MB per request. The service checks the size again for clients that
-      # bypass the container, and xlsx.WorkbookGuard limits what the archive unpacks to.
+      # bypass the container, and xlsx.WorkbookGuard limits what the archive unpacks to. An expense (feature 018)
+      # takes up to five files of at most 5 MB each (checked per file by treasury AttachmentUploads) plus its JSON
+      # part, hence the larger request.
       max-file-size: 10MB
-      max-request-size: 11MB
+      max-request-size: 27MB
   jackson:
     # The contract has no nullable properties: an unset optional property is absent, never null
     default-property-inclusion: non_null
@@ -55,8 +57,8 @@ spring:
 server:
   tomcat:
     # An upload over the limit is read to the end (up to this size) so that the client receives the 413 answer
-    # instead of a broken connection
-    max-swallow-size: 20MB
+    # instead of a broken connection; at least the multipart request limit above
+    max-swallow-size: 30MB
 
 logging:
   level:

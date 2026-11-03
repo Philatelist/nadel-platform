@@ -1,10 +1,14 @@
 package app.nadel.treasury;
 
+import static org.awaitility.Awaitility.await;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import app.nadel.TestTokens;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.LinkedHashMap;
@@ -14,9 +18,12 @@ import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.mock.web.MockPart;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
-import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import org.springframework.test.web.servlet.request.AbstractMockHttpServletRequestBuilder;
+import org.springframework.test.web.servlet.request.MockMultipartHttpServletRequestBuilder;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -30,6 +37,8 @@ abstract class TreasuryApiSupport extends TreasuryTestSupport {
 
     static final String ACCOUNTS = "/api/v1/money-accounts";
     static final String PAYMENTS = "/api/v1/payments";
+    static final String EXPENSES = "/api/v1/expenses";
+    static final String CATEGORIES = "/api/v1/expense-categories";
 
     @Autowired
     MockMvc mvc;
@@ -156,7 +165,90 @@ abstract class TreasuryApiSupport extends TreasuryTestSupport {
                 .param("to", to.toString()), null);
     }
 
-    ResultActions send(String bearer, MockHttpServletRequestBuilder request, Object body) throws Exception {
+    // ---- expenses and categories
+
+    /** The fields of a new expense. */
+    static Map<String, Object> expense(String account, LocalDate date, String amount, UUID category) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("account", account);
+        body.put("date", date.toString());
+        body.put("amount", amount);
+        body.put("categoryId", category.toString());
+        return body;
+    }
+
+    static Map<String, Object> with(Map<String, Object> body, String field, Object value) {
+        Map<String, Object> copy = new LinkedHashMap<>(body);
+        copy.put(field, value);
+        return copy;
+    }
+
+    /** A receipt file part. */
+    static MockMultipartFile file(String name, String contentType, byte[] content) {
+        return new MockMultipartFile("files", name, contentType, content);
+    }
+
+    /**
+     * {@code POST /expenses} as the generated web client sends it: the {@code expense} part a plain form field (JSON
+     * text, no content type) and the files.
+     */
+    ResultActions createExpense(String bearer, Map<String, Object> expense, MockMultipartFile... files)
+            throws Exception {
+        MockMultipartHttpServletRequestBuilder request = multipart(EXPENSES);
+        request.part(new MockPart("expense", json.writeValueAsBytes(expense)));
+        for (MockMultipartFile file : files) {
+            request.file(file);
+        }
+        return send(bearer, request, null);
+    }
+
+    /** Records an expense and returns its id. */
+    UUID recordExpense(String bearer, Map<String, Object> expense, MockMultipartFile... files) throws Exception {
+        return UUID.fromString(body(createExpense(bearer, expense, files).andExpect(status().isCreated())).get("id")
+                .asString());
+    }
+
+    ResultActions reverseExpense(String bearer, UUID expense, String reason) throws Exception {
+        return send(bearer, post(EXPENSES + "/" + expense + "/reverse"), Map.of("reason", reason));
+    }
+
+    ResultActions expenseCard(String bearer, UUID expense) throws Exception {
+        return send(bearer, get(EXPENSES + "/" + expense), null);
+    }
+
+    ResultActions download(String bearer, UUID expense, int n) throws Exception {
+        return send(bearer, get(EXPENSES + "/" + expense + "/attachments/" + n), null);
+    }
+
+    ResultActions categories(String bearer, String kind, boolean includeArchived) throws Exception {
+        return send(bearer, get(CATEGORIES).param("kind", kind).param("includeArchived",
+                Boolean.toString(includeArchived)), null);
+    }
+
+    ResultActions addCategory(String bearer, String kind, String name) throws Exception {
+        return send(bearer, post(CATEGORIES), Map.of("kind", kind, "name", name));
+    }
+
+    ResultActions updateCategory(String bearer, UUID category, Map<String, Object> body) throws Exception {
+        return send(bearer, put(CATEGORIES + "/" + category), body);
+    }
+
+    ResultActions reorderCategories(String bearer, String kind, List<UUID> ids) throws Exception {
+        return send(bearer, put(CATEGORIES + "/order"), Map.of("kind", kind, "ids", ids));
+    }
+
+    /** The audit entries about the entity with the action, once {@code count} of them are written. */
+    List<Map<String, Object>> awaitAudit(UUID entity, String action, int count) {
+        await().atMost(Duration.ofSeconds(10)).until(() -> ownerJdbc()
+                .queryForObject("select count(*) from audit_entry where entity_id = ? and action = ?", Integer.class,
+                        entity, action) >= count);
+        return ownerJdbc().queryForList("select action, entity_type, entity_label, actor_member_id, "
+                + "cast(changes as text) as changes from audit_entry where entity_id = ? and action = ? "
+                + "order by occurred_at", entity, action);
+    }
+
+    ResultActions send(String bearer, AbstractMockHttpServletRequestBuilder<?> request, Object body)
+            throws Exception {
         if (bearer != null) {
             request.header(HttpHeaders.AUTHORIZATION, bearer);
         }

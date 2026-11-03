@@ -202,6 +202,23 @@ const router = createBrowserRouter([
             path: 'cashbook',
             lazy: () => import('./pages/CashbookPage').then((m) => ({ Component: m.CashbookPage })),
           },
+          {
+            path: 'cashbook/expenses',
+            lazy: () => import('./pages/ExpensesPage').then((m) => ({ Component: m.ExpensesPage })),
+          },
+          {
+            element: <RequirePermission permission="CASHBOOK_ENTER" />,
+            children: [
+              {
+                path: 'cashbook/expenses/new',
+                lazy: () => import('./pages/ExpenseFormPage').then((m) => ({ Component: m.ExpenseFormPage })),
+              },
+            ],
+          },
+          {
+            path: 'cashbook/expenses/:id',
+            lazy: () => import('./pages/ExpenseCardPage').then((m) => ({ Component: m.ExpenseCardPage })),
+          },
         ],
       },
       {

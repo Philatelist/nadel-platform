@@ -8,42 +8,114 @@ import app.nadel.money.Money;
 import app.nadel.treasury.MoneyAccountKind;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 
 /**
  * Publishes the audit events of the treasury (feature 018 §2.14, technical considerations 2.9) inside the transaction
- * that stores the change, so the Spring Modulith outbox keeps them with it ({@code audit/README.md}). Entity type
- * {@code MONEY_ACCOUNT}: the entity id is the account, the label its kind code ({@code CASH} or {@code BANK}; the client
- * names it). {@code OPENING_BALANCE_SET} has, new values only, {@code kind}, {@code amount} (two decimals) and
- * {@code date} (ISO). Codes and amounts only, no names.
+ * that stores the change, so the Spring Modulith outbox keeps them with it ({@code audit/README.md}). Codes, ids and
+ * amounts only; personal texts are sealed before the event exists.
+ * <ul>
+ *   <li>{@code MONEY_ACCOUNT} (entity the account, label its kind code {@code CASH}/{@code BANK}):
+ *       {@code OPENING_BALANCE_SET} with {@code kind}, {@code amount} (two decimals), {@code date} (ISO).</li>
+ *   <li>{@code EXPENSE} (entity the expense, label the expense date, ISO): {@code EXPENSE_RECORDED} and
+ *       {@code EXPENSE_REVERSED} with {@code amount}, {@code account} (the kind code), {@code category} (the category
+ *       id), {@code date} (the expense date), a reversal's {@code reversedOn} and {@code reason} (user content), and the
+ *       counterparty and description as {@code counterparty} and {@code description}, sealed by
+ *       {@link TreasuryCipher#auditValue} ({@code sealed = true}: opened only for readers with
+ *       {@code MEMBERS_VIEW}). New values only.</li>
+ *   <li>{@code CASHBOOK_CATEGORY} (entity the category, label {@code base:<CODE>} for a seeded category never renamed,
+ *       otherwise its name): {@code CASHBOOK_CATEGORY_ADDED} ({@code kind}, {@code name}),
+ *       {@code CASHBOOK_CATEGORY_RENAMED} ({@code name} old and new), {@code CASHBOOK_CATEGORY_REORDERED}
+ *       ({@code position} old and new), {@code CASHBOOK_CATEGORY_ARCHIVED} ({@code archived} old and new).</li>
+ * </ul>
  */
 @Component
 class TreasuryAuditPublisher {
 
     static final String MONEY_ACCOUNT = "MONEY_ACCOUNT";
+    static final String EXPENSE = "EXPENSE";
+    static final String CASHBOOK_CATEGORY = "CASHBOOK_CATEGORY";
 
     /** Every action the treasury writes; each is a value of the contract's {@code AuditAction}. */
     enum Action {
-        OPENING_BALANCE_SET
+        OPENING_BALANCE_SET,
+        EXPENSE_RECORDED,
+        EXPENSE_REVERSED,
+        CASHBOOK_CATEGORY_ADDED,
+        CASHBOOK_CATEGORY_RENAMED,
+        CASHBOOK_CATEGORY_REORDERED,
+        CASHBOOK_CATEGORY_ARCHIVED
+    }
+
+    /** What an expense entry records (the expense as entered; the texts in the clear, sealed here). */
+    record ExpenseFacts(UUID expenseId, MoneyAccountKind account, Money amount, UUID categoryId, LocalDate date,
+            @Nullable String counterparty, @Nullable String description) {
     }
 
     private final ApplicationEventPublisher events;
+    private final TreasuryCipher cipher;
 
-    TreasuryAuditPublisher(ApplicationEventPublisher events) {
+    TreasuryAuditPublisher(ApplicationEventPublisher events, TreasuryCipher cipher) {
         this.events = events;
+        this.cipher = cipher;
     }
 
     void openingBalanceSet(AccessProfile actor, UUID accountId, MoneyAccountKind kind, Money amount, LocalDate date,
             Instant at) {
         UUID tenantId = Objects.requireNonNull(actor.tenantId(), "tenantId");
-        events.publishEvent(new AuditEvent(UUID.randomUUID(), tenantId, at,
-                new Actor(actor.memberId(), actor.subject(), actor.displayName()), Action.OPENING_BALANCE_SET.name(),
-                MONEY_ACCOUNT, accountId, kind.name(), List.of(new FieldChange("kind", null, kind.name()),
+        events.publishEvent(new AuditEvent(UUID.randomUUID(), tenantId, at, actorOf(actor),
+                Action.OPENING_BALANCE_SET.name(), MONEY_ACCOUNT, accountId, kind.name(),
+                List.of(new FieldChange("kind", null, kind.name()),
                         new FieldChange("amount", null, amount.toString()),
                         new FieldChange("date", null, date.toString()))));
+    }
+
+    void expenseRecorded(AccessProfile actor, ExpenseFacts expense, Instant at) {
+        publishExpense(actor, Action.EXPENSE_RECORDED, expense, List.of(), at);
+    }
+
+    void expenseReversed(AccessProfile actor, ExpenseFacts expense, LocalDate reversedOn, String reason, Instant at) {
+        publishExpense(actor, Action.EXPENSE_REVERSED, expense,
+                List.of(new FieldChange("reversedOn", null, reversedOn.toString()),
+                        new FieldChange("reason", null, reason)), at);
+    }
+
+    void category(AccessProfile actor, Action action, UUID categoryId, String label, List<FieldChange> changes,
+            Instant at) {
+        UUID tenantId = Objects.requireNonNull(actor.tenantId(), "tenantId");
+        events.publishEvent(new AuditEvent(UUID.randomUUID(), tenantId, at, actorOf(actor), action.name(),
+                CASHBOOK_CATEGORY, categoryId, label, changes));
+    }
+
+    private void publishExpense(AccessProfile actor, Action action, ExpenseFacts expense, List<FieldChange> more,
+            Instant at) {
+        UUID tenantId = Objects.requireNonNull(actor.tenantId(), "tenantId");
+        UUID eventId = UUID.randomUUID();
+        List<FieldChange> changes = new ArrayList<>(List.of(
+                new FieldChange("amount", null, expense.amount().toString()),
+                new FieldChange("account", null, expense.account().name()),
+                new FieldChange("category", null, expense.categoryId().toString()),
+                new FieldChange("date", null, expense.date().toString())));
+        changes.addAll(more);
+        FieldChange counterparty = cipher.auditValue(tenantId, eventId, "counterparty", expense.counterparty());
+        if (counterparty != null) {
+            changes.add(counterparty);
+        }
+        FieldChange description = cipher.auditValue(tenantId, eventId, "description", expense.description());
+        if (description != null) {
+            changes.add(description);
+        }
+        events.publishEvent(new AuditEvent(eventId, tenantId, at, actorOf(actor), action.name(), EXPENSE,
+                expense.expenseId(), expense.date().toString(), changes));
+    }
+
+    private static Actor actorOf(AccessProfile actor) {
+        return new Actor(actor.memberId(), actor.subject(), actor.displayName());
     }
 }

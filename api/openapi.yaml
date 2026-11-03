@@ -5803,6 +5803,398 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /expenses:
+    get:
+      tags: [treasury]
+      operationId: listExpenses
+      summary: The expenses of the cooperative, newest first
+      description: |
+        The expenses («Витрати», feature 018 §2.3), newest first (by date, then the time entered, then id), with the
+        filters `from` and `to` (the expense date, inclusive; each optional), `account` and `categoryId`. A reversal
+        is not a line of its own: the reversed expense is listed with `reversed: true`. Each line has the date, the
+        account, the category, the counterparty (user content, personal data: shown to everyone with the right to view
+        the cash book), the amount, the number of attachments and whether it is reversed. The files themselves are
+        never part of the list. `from` after `to` is 400 `VALIDATION_FAILED` with `errors[{field: from, code:
+        INVALID}]`. Requires `CASHBOOK_VIEW`.
+      parameters:
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: account
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/MoneyAccountKind'
+        - name: categoryId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: page
+          in: query
+          required: false
+          description: Zero-based page index
+          schema:
+            type: integer
+            format: int32
+            minimum: 0
+            default: 0
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 200
+            default: 50
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExpensePage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [treasury]
+      operationId: createExpense
+      summary: Record an expense with up to five receipt files
+      description: |
+        Records an expense (feature 018 §2.3): a spending line on the cash or the bank account dated `date`, in the
+        billing month of that date or, when it is closed, the earliest open month (the date is kept). The request is
+        `multipart/form-data` with the part `expense` (JSON, `ExpenseInput`) and 0 to 5 parts `files` (a JPEG, PNG or
+        PDF each, at most 5 MB each). `reuseAttachments` copies files of an earlier expense (the «Сторнувати і внести
+        заново» flow) on the server; they count towards the five. Stored files come first in the order of
+        `reuseAttachments`, then the uploaded ones; their numbers `n` are 1 to 5.
+
+        The type of a file is decided by its content, never by its name or the declared type. Location and camera data
+        are removed from photos before they are stored, without re-encoding: a JPEG keeps only its image data, JFIF,
+        Adobe and ICC segments and, when it had one, the Orientation tag; a PNG keeps only its image, colour and
+        animation chunks (no `eXIf`, `tEXt`, `iTXt`, `zTXt`, `tIME`). A PDF is stored as received.
+
+        Refusals (nothing is stored):
+        - 400 `VALIDATION_FAILED`: `amount` 0.00 or less (`AMOUNT_NOT_POSITIVE`) or more than 12 integer digits
+          (`INVALID`); `date` after today in Europe/Kyiv (`DATE_IN_FUTURE`); `categoryId` unknown or not an expense
+          category (`INVALID`) or archived (`ARCHIVED`); a text too long (`TOO_LONG`); a required field missing
+          (`REQUIRED`); a `reuseAttachments[i]` that names no file (`INVALID`);
+        - 400 `TOO_MANY` with `errors[{field: files, code: TOO_MANY}]`: more than five files, reused ones included;
+        - 413 `FILE_TOO_LARGE` with `errors[{field: files[i], code: FILE_TOO_LARGE}]`: a file over 5 MB (a request
+          over the server's upload limit is 413 `FILE_TOO_LARGE` without `errors`);
+        - 400 `FILE_TYPE_NOT_ALLOWED` with `errors[{field: files[i], code: FILE_TYPE_NOT_ALLOWED}]`: a file that is
+          not a JPEG, PNG or PDF by content, or a JPEG or PNG that cannot be read;
+        - 409 `OPENING_BALANCE_MISSING`: the account has no opening balance;
+        - 400 `BEFORE_OPENING_BALANCE` with `errors[{field: date}]`: `date` is before the account's opening date;
+        - 409 `CASH_INSUFFICIENT` with `balance` and `date`: a cash expense would make the cash balance negative on its
+          date or on a later day; `balance` is the lowest balance from that date on (before this expense) and `date`
+          the earliest day it is reached («Недостатньо готівки в касі: залишок 200,00 ₴ на 07.10.2026»). A bank
+          expense is never refused for the balance.
+
+        The counterparty and the description are personal data: stored encrypted, and in the audit log
+        (`EXPENSE_RECORDED`, with `amount`, `account`, `category` and `date`) shown only to readers with
+        `MEMBERS_VIEW`. Two expenses saved at the same moment never together take the cash below zero. Requires
+        `CASHBOOK_ENTER`.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [expense]
+              properties:
+                expense:
+                  $ref: '#/components/schemas/ExpenseInput'
+                files:
+                  type: array
+                  maxItems: 5
+                  items:
+                    type: string
+                    format: binary
+                  description: The receipt files (JPEG, PNG or PDF, at most 5 MB each)
+            encoding:
+              expense:
+                contentType: application/json
+      responses:
+        '201':
+          description: The recorded expense
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Expense'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+
+  /expenses/{id}:
+    get:
+      tags: [treasury]
+      operationId: getExpense
+      summary: The card of an expense
+      description: |
+        The expense with its counterparty, description, document, attachments (number, name, type and size; the files
+        are downloaded with `downloadExpenseAttachment`) and, once reversed, its reversal (date, reason, who and
+        when). 404 `NOT_FOUND` for an unknown expense, a reversal row or one of another cooperative. Requires
+        `CASHBOOK_VIEW`.
+      parameters:
+        - $ref: '#/components/parameters/ExpenseIdPath'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Expense'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /expenses/{id}/attachments/{n}:
+    get:
+      tags: [treasury]
+      operationId: downloadExpenseAttachment
+      summary: Download a receipt file of an expense
+      description: |
+        The stored file `n` (1 to 5) of the expense as an attachment (`Content-Disposition: attachment` with the
+        stored file name), with its stored type, `X-Content-Type-Options: nosniff` and `Cache-Control: no-store`. A
+        photo carries no location or camera data. 404 `NOT_FOUND` for an unknown expense or file, or one of another
+        cooperative. Downloads are not audited. Requires `CASHBOOK_VIEW`.
+      parameters:
+        - $ref: '#/components/parameters/ExpenseIdPath'
+        - name: n
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 5
+      responses:
+        '200':
+          description: The file
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /expenses/{id}/reverse:
+    post:
+      tags: [treasury]
+      operationId: reverseExpense
+      summary: Reverse an expense
+      description: |
+        Reverses the expense with a reason (feature 018 §2.8): a new journal line of the opposite amount on the same
+        account, dated today (Europe/Kyiv) in today's open billing month; the expense stays, marked reversed. An
+        expense is reversed once: 409 `ENTRY_ALREADY_REVERSED` (also when two reversals arrive at once). A reversal
+        gives the money back to the account, so it is never refused for the cash balance. A missing or blank reason
+        is 400 `VALIDATION_FAILED` with `errors[{field: reason, code: REQUIRED}]`. Written to the audit log as
+        `EXPENSE_REVERSED`. «Сторнувати і внести заново» is this reversal followed by `createExpense` with
+        `reuseAttachments`. 404 `NOT_FOUND` for an unknown expense, a reversal row or one of another cooperative.
+        Requires `CASHBOOK_APPROVE`.
+      parameters:
+        - $ref: '#/components/parameters/ExpenseIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EntryReversal'
+      responses:
+        '200':
+          description: The expense, now reversed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Expense'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /expense-categories:
+    get:
+      tags: [treasury]
+      operationId: listExpenseCategories
+      summary: The expense or income categories of the cooperative
+      description: |
+        The categories of one list (feature 018 §2.9), in their order (`sortOrder`, then id): `EXPENSE` (for
+        expenses) or `INCOME` (for other income). A seeded category has its `systemCode` and no `name` until it is
+        renamed: the client shows the name of its code from the catalogs. Archived categories are left out unless
+        `includeArchived` is true. Requires `CASHBOOK_VIEW`.
+      parameters:
+        - name: kind
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/ExpenseCategoryKind'
+        - name: includeArchived
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ExpenseCategory'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [treasury]
+      operationId: createExpenseCategory
+      summary: Add a category
+      description: |
+        Adds a category at the end of its list. Two categories of one list never have the same name, ignoring case
+        and surrounding spaces, archived ones included: 409 `CATEGORY_NAME_TAKEN` with `errors[{field: name, code:
+        CATEGORY_NAME_TAKEN}]` (the name of a seeded category that was never renamed is its code, so it does not
+        collide). Written to the audit log as `CASHBOOK_CATEGORY_ADDED`. Requires `CASHBOOK_APPROVE`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExpenseCategoryCreate'
+      responses:
+        '201':
+          description: The new category
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExpenseCategory'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /expense-categories/order:
+    put:
+      tags: [treasury]
+      operationId: reorderExpenseCategories
+      summary: Change the order of a category list
+      description: |
+        Sets the order of the non-archived categories of one list. `ids` must be exactly those categories, each once,
+        in the new order; otherwise (the list changed since the client read it) the answer is 400
+        `VALIDATION_FAILED` with `errors[{field: ids, code: INVALID}]` and nothing changes. Archived categories keep
+        their positions. One `CASHBOOK_CATEGORY_REORDERED` audit entry is written for every category whose
+        position changed. Requires `CASHBOOK_APPROVE`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExpenseCategoryOrder'
+      responses:
+        '204':
+          description: The new order is saved
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /expense-categories/{id}:
+    put:
+      tags: [treasury]
+      operationId: updateExpenseCategory
+      summary: Rename or archive a category
+      description: |
+        Renames the category (`name`; the rule of `createExpenseCategory`, 409 `CATEGORY_NAME_TAKEN`; a seeded
+        category keeps its `systemCode` and shows the new name from now on, also on its old entries) and/or archives
+        it (`archived: true`: it is no longer offered for new entries and stays on the old ones; `archived: false`
+        offers it again). A category is never deleted. A field left out is not changed; the current values change
+        nothing and write no audit entry. Written to the audit log as `CASHBOOK_CATEGORY_RENAMED` and
+        `CASHBOOK_CATEGORY_ARCHIVED`. 404 `NOT_FOUND` for an unknown category or one of another cooperative. Requires
+        `CASHBOOK_APPROVE`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExpenseCategoryUpdate'
+      responses:
+        '200':
+          description: The category
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExpenseCategory'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
   /reports:
     get:
       tags: [reports]
@@ -6405,7 +6797,10 @@ components:
         of a payment together exceed the payment (code `ALLOCATION_EXCEEDS_PAYMENT`) or a line exceeds what is open on
         its charge (code `ALLOCATION_EXCEEDS_CHARGE`); the parts of a split payment do not add up to the payment (code
         `SPLIT_TOTAL_MISMATCH`); an announcement's text is longer than 2000 characters (code `ANNOUNCEMENT_TOO_LONG`); a
-        mailbox names a mail server the server may not connect to (code `SMTP_HOST_NOT_ALLOWED`)
+        mailbox names a mail server the server may not connect to (code `SMTP_HOST_NOT_ALLOWED`); a cash book entry is
+        dated before the account's opening date (code `BEFORE_OPENING_BALANCE`, with `errors[{field: date}]`); more
+        than five files come with an expense (code `TOO_MANY`, with `errors[{field: files}]`) or a file is not a JPEG,
+        PNG or PDF by its content (code `FILE_TYPE_NOT_ALLOWED`, with `errors[{field: files[i]}]`)
       content:
         application/problem+json:
           schema:
@@ -6448,7 +6843,9 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
     PayloadTooLarge:
-      description: The uploaded file is over the size limit of 10 MB (code `FILE_TOO_LARGE`)
+      description: >-
+        The uploaded file is over the size limit of 10 MB, or an expense attachment over 5 MB (code
+        `FILE_TOO_LARGE`; for an attachment with `errors[{field: files[i]}]`)
       content:
         application/problem+json:
           schema:
@@ -6535,7 +6932,12 @@ components:
         is asked while it is not set up (code `DELIVERY_NOT_CONFIGURED`), or a test letter is asked by a member without
         an e-mail of their own (code `NO_OWN_EMAIL`), or a Telegram link is asked while the cooperative has no working
         bot (code `TELEGRAM_NOT_CONFIGURED`), or a paper delivery or one still queued is sent again (code
-        `DELIVERY_NOT_RETRYABLE`)
+        `DELIVERY_NOT_RETRYABLE`), or the opening balance of a money account is entered again (code
+        `OPENING_BALANCE_ALREADY_SET`), a cash book entry needs the account's opening balance (code
+        `OPENING_BALANCE_MISSING`) or would take the cash below zero on its date or a later day (code
+        `CASH_INSUFFICIENT`, with `balance` and `date`), a cash book entry is reversed again (code
+        `ENTRY_ALREADY_REVERSED`), or an expense or income category name is taken (code `CATEGORY_NAME_TAKEN`, with
+        `errors[{field: name}]`)
       content:
         application/problem+json:
           schema:
@@ -6601,6 +7003,14 @@ components:
             $ref: '#/components/schemas/Problem'
 
   parameters:
+    ExpenseIdPath:
+      name: id
+      in: path
+      required: true
+      description: Id of an expense of the cooperative
+      schema:
+        type: string
+        format: uuid
     ReportTemplateIdPath:
       name: id
       in: path
@@ -7298,6 +7708,12 @@ components:
         - TELEGRAM_LINKED
         - TELEGRAM_UNLINKED
         - OPENING_BALANCE_SET
+        - EXPENSE_RECORDED
+        - EXPENSE_REVERSED
+        - CASHBOOK_CATEGORY_ADDED
+        - CASHBOOK_CATEGORY_RENAMED
+        - CASHBOOK_CATEGORY_REORDERED
+        - CASHBOOK_CATEGORY_ARCHIVED
 
     AuditEntityType:
       type: string
@@ -7350,7 +7766,15 @@ components:
         `channels` (the chosen channels, codes joined by ", ") and `telegram`, `email` and `paper` (the deliveries per
         channel). Never the text. A `MONEY_ACCOUNT` entry (`OPENING_BALANCE_SET`, feature 018) is about the cash or
         the bank account: its `entityId` is the account and its label the account kind code (`CASH` or `BANK`); its
-        fields (new values only) are `kind`, `amount` (two decimals) and `date` (ISO date).
+        fields (new values only) are `kind`, `amount` (two decimals) and `date` (ISO date). An `EXPENSE` entry
+        (`EXPENSE_RECORDED`, `EXPENSE_REVERSED`) is about an expense: its `entityId` is the expense and its label the
+        expense date (ISO); its fields (new values only) are `amount` (two decimals), `account` (`CASH` or `BANK`),
+        `category` (the category id), `date` (the expense date), the reversal's `reason` and `reversedOn`, and the
+        counterparty `counterparty` and description `description` (personal data, sealed). A `CASHBOOK_CATEGORY`
+        entry (`CASHBOOK_CATEGORY_ADDED`, `_RENAMED`, `_REORDERED`, `_ARCHIVED`) is about an expense or income
+        category: its `entityId` is the category and its label `base:<CODE>` for a seeded category never renamed,
+        otherwise its name; its fields are `kind` and `name` (added), `name` (renamed, old and new, `base:<CODE>`
+        for a seeded name), `position` (reordered, old and new) and `archived` (old and new).
       enum:
         [
           MEMBER,
@@ -7376,6 +7800,8 @@ components:
           DELIVERY_SETTINGS,
           ANNOUNCEMENT,
           MONEY_ACCOUNT,
+          EXPENSE,
+          CASHBOOK_CATEGORY,
         ]
 
     AuditFieldChange:
@@ -8135,6 +8561,18 @@ components:
           description: >-
             The most plots one build of a month's invoices takes, for `INVOICE_BUILD_TOO_LARGE`; absent on every
             other problem
+        balance:
+          type: [string, 'null']
+          pattern: '^-?\d+\.\d{2}$'
+          description: >-
+            For `CASH_INSUFFICIENT`: the lowest cash balance from the entry's date on, before the entry (two
+            decimals); absent on every other problem
+        date:
+          type: [string, 'null']
+          format: date
+          description: >-
+            For `CASH_INSUFFICIENT`: the earliest day that lowest cash balance is reached; absent on every other
+            problem
 
     InvoiceBuildRequest:
       type: object
@@ -10392,6 +10830,275 @@ components:
         totalPages:
           type: integer
           format: int32
+
+    ExpenseCategoryKind:
+      type: string
+      description: 'Which list a category belongs to: `EXPENSE` for expenses, `INCOME` for other income'
+      enum: [EXPENSE, INCOME]
+
+    ExpenseCategory:
+      type: object
+      description: >-
+        An expense or income category. A seeded category has a `systemCode` (expense: `ELECTRICITY_SUPPLIER`,
+        `WATER`, `PAYROLL_TAXES`, `NETWORK_REPAIR`, `MATERIALS`, `WASTE`, `BANK_FEES`, `TAXES_FEES`, `OFFICE_COMMS`,
+        `OTHER`; income: `BANK_INTEREST`, `GRANTS`, `SALES`, `OTHER`) and no `name` until it is renamed (the client
+        shows the name of its code); a category added by the cooperative has a `name` and no `systemCode`
+      required: [id, kind, sortOrder, archived]
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          $ref: '#/components/schemas/ExpenseCategoryKind'
+        systemCode:
+          type: string
+          description: The code of a seeded category
+        name:
+          type: string
+          description: The name given by the cooperative (user content); absent for a seeded category never renamed
+        sortOrder:
+          type: integer
+          format: int32
+        archived:
+          type: boolean
+          description: Not offered for new entries; stays on old ones
+
+    ExpenseCategoryCreate:
+      type: object
+      required: [kind, name]
+      properties:
+        kind:
+          $ref: '#/components/schemas/ExpenseCategoryKind'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: User content; surrounding whitespace is trimmed
+
+    ExpenseCategoryUpdate:
+      type: object
+      description: The fields to change; a field left out is not changed
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: The new name (user content); surrounding whitespace is trimmed
+        archived:
+          type: boolean
+
+    ExpenseCategoryOrder:
+      type: object
+      required: [kind, ids]
+      properties:
+        kind:
+          $ref: '#/components/schemas/ExpenseCategoryKind'
+        ids:
+          type: array
+          maxItems: 500
+          description: Every non-archived category of the list, each once, in the new order
+          items:
+            type: string
+            format: uuid
+
+    AttachmentRef:
+      type: object
+      description: A stored file of an earlier expense, copied to the new one on the server
+      required: [expenseId, n]
+      properties:
+        expenseId:
+          type: string
+          format: uuid
+        n:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 5
+
+    ExpenseInput:
+      type: object
+      description: The fields of a new expense (the `expense` part of `createExpense`)
+      required: [account, date, amount, categoryId]
+      properties:
+        account:
+          $ref: '#/components/schemas/MoneyAccountKind'
+        date:
+          type: string
+          format: date
+          description: The day the money was spent; not after today (Europe/Kyiv)
+        amount:
+          $ref: '#/components/schemas/Money'
+        categoryId:
+          type: string
+          format: uuid
+          description: A non-archived expense category
+        counterparty:
+          type: string
+          maxLength: 200
+          description: Who was paid (user content, personal data); surrounding whitespace is trimmed, blank is none
+        description:
+          type: string
+          maxLength: 500
+          description: User content, personal data; surrounding whitespace is trimmed, blank is none
+        documentNumber:
+          type: string
+          maxLength: 64
+          description: The number of the supplier's invoice or receipt (user content)
+        documentDate:
+          type: string
+          format: date
+          description: The date of the supplier's invoice or receipt
+        reuseAttachments:
+          type: array
+          maxItems: 5
+          description: Files of an earlier expense to copy to this one («Сторнувати і внести заново»)
+          items:
+            $ref: '#/components/schemas/AttachmentRef'
+
+    ExpenseAttachment:
+      type: object
+      description: A stored receipt file of an expense (without its content)
+      required: [n, fileName, contentType, sizeBytes]
+      properties:
+        n:
+          type: integer
+          format: int32
+          description: The number of the file, 1 to 5
+        fileName:
+          type: string
+          description: The name the file was uploaded with (user content)
+        contentType:
+          type: string
+          enum: [image/jpeg, image/png, application/pdf]
+        sizeBytes:
+          type: integer
+          format: int64
+
+    ExpenseReversalInfo:
+      type: object
+      description: How an expense was reversed
+      required: [date, reason, createdAt]
+      properties:
+        date:
+          type: string
+          format: date
+          description: The day of the reversal line
+        reason:
+          type: string
+          description: User content
+        createdByName:
+          type: string
+          description: The current name of the member who reversed it; absent for an unknown member
+        createdAt:
+          type: string
+          format: date-time
+
+    Expense:
+      type: object
+      description: The card of an expense
+      required: [id, account, date, amount, bookingMonth, category, attachments, reversed, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        account:
+          $ref: '#/components/schemas/MoneyAccountKind'
+        date:
+          type: string
+          format: date
+        amount:
+          $ref: '#/components/schemas/Money'
+        bookingMonth:
+          type: string
+          pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+          description: The billing month the expense belongs to, `YYYY-MM`
+        category:
+          $ref: '#/components/schemas/ExpenseCategory'
+        counterparty:
+          type: string
+          description: User content, personal data
+        description:
+          type: string
+          description: User content, personal data
+        documentNumber:
+          type: string
+        documentDate:
+          type: string
+          format: date
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExpenseAttachment'
+        reversed:
+          type: boolean
+          description: The expense is reversed («Сторновано»)
+        reversal:
+          $ref: '#/components/schemas/ExpenseReversalInfo'
+        createdByName:
+          type: string
+          description: The current name of the member who recorded it; absent for an unknown member
+        createdAt:
+          type: string
+          format: date-time
+
+    ExpenseSummary:
+      type: object
+      description: One line of the expense list
+      required: [id, account, date, amount, category, attachmentCount, reversed]
+      properties:
+        id:
+          type: string
+          format: uuid
+        account:
+          $ref: '#/components/schemas/MoneyAccountKind'
+        date:
+          type: string
+          format: date
+        amount:
+          $ref: '#/components/schemas/Money'
+        category:
+          $ref: '#/components/schemas/ExpenseCategory'
+        counterparty:
+          type: string
+          description: User content, personal data
+        attachmentCount:
+          type: integer
+          format: int32
+        reversed:
+          type: boolean
+
+    ExpensePage:
+      type: object
+      required: [items, page, size, totalItems, totalPages]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExpenseSummary'
+        page:
+          type: integer
+          format: int32
+          description: Zero-based page index
+        size:
+          type: integer
+          format: int32
+        totalItems:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+
+    EntryReversal:
+      type: object
+      description: Why a cash book entry is reversed
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+          description: User content, stored as typed; surrounding whitespace is trimmed
 
     CertificateAnnulment:
       type: object

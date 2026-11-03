@@ -32,12 +32,23 @@ import type {
   AccountMovementPage,
   BadRequestResponse,
   ConflictResponse,
+  CreateExpenseBody,
+  EntryReversal,
+  Expense,
+  ExpenseCategory,
+  ExpenseCategoryCreate,
+  ExpenseCategoryOrder,
+  ExpenseCategoryUpdate,
+  ExpensePage,
   ForbiddenResponse,
   ListAccountMovementsParams,
+  ListExpenseCategoriesParams,
+  ListExpensesParams,
   ListMoneyAccountsParams,
   MoneyAccount,
   NotFoundResponse,
   OpeningBalanceRequest,
+  PayloadTooLargeResponse,
   UnauthorizedResponse
 } from '../model';
 
@@ -408,3 +419,929 @@ export function useListAccountMovements<TData = Awaited<ReturnType<typeof listAc
 
 
 
+export const getListExpensesUrl = (params?: ListExpensesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/v1/expenses?${stringifiedParams}` : `/api/v1/expenses`
+}
+
+/**
+ * The expenses («Витрати», feature 018 §2.3), newest first (by date, then the time entered, then id), with the
+ * filters `from` and `to` (the expense date, inclusive; each optional), `account` and `categoryId`. A reversal
+ * is not a line of its own: the reversed expense is listed with `reversed: true`. Each line has the date, the
+ * account, the category, the counterparty (user content, personal data: shown to everyone with the right to view
+ * the cash book), the amount, the number of attachments and whether it is reversed. The files themselves are
+ * never part of the list. `from` after `to` is 400 `VALIDATION_FAILED` with `errors[{field: from, code:
+ * INVALID}]`. Requires `CASHBOOK_VIEW`.
+ * @summary The expenses of the cooperative, newest first
+ */
+export const listExpenses = async (params?: ListExpensesParams, options?: Parameters<typeof nadelFetch>[1]): Promise<ExpensePage> => {
+
+  return nadelFetch<ExpensePage>(getListExpensesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListExpensesQueryKey = (params?: ListExpensesParams,) => {
+    return [
+    `/api/v1/expenses`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListExpensesQueryOptions = <TData = Awaited<ReturnType<typeof listExpenses>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>(params?: ListExpensesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listExpenses>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListExpensesQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listExpenses>>> = ({ signal }) => listExpenses(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listExpenses>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListExpensesQueryResult = NonNullable<Awaited<ReturnType<typeof listExpenses>>>
+export type ListExpensesQueryError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse
+
+
+export function useListExpenses<TData = Awaited<ReturnType<typeof listExpenses>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>(
+ params: undefined |  ListExpensesParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listExpenses>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listExpenses>>,
+          TError,
+          Awaited<ReturnType<typeof listExpenses>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListExpenses<TData = Awaited<ReturnType<typeof listExpenses>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>(
+ params?: ListExpensesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listExpenses>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listExpenses>>,
+          TError,
+          Awaited<ReturnType<typeof listExpenses>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListExpenses<TData = Awaited<ReturnType<typeof listExpenses>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>(
+ params?: ListExpensesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listExpenses>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary The expenses of the cooperative, newest first
+ */
+
+export function useListExpenses<TData = Awaited<ReturnType<typeof listExpenses>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>(
+ params?: ListExpensesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listExpenses>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListExpensesQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export const getCreateExpenseUrl = () => {
+
+
+
+
+  return `/api/v1/expenses`
+}
+
+/**
+ * Records an expense (feature 018 §2.3): a spending line on the cash or the bank account dated `date`, in the
+ * billing month of that date or, when it is closed, the earliest open month (the date is kept). The request is
+ * `multipart/form-data` with the part `expense` (JSON, `ExpenseInput`) and 0 to 5 parts `files` (a JPEG, PNG or
+ * PDF each, at most 5 MB each). `reuseAttachments` copies files of an earlier expense (the «Сторнувати і внести
+ * заново» flow) on the server; they count towards the five. Stored files come first in the order of
+ * `reuseAttachments`, then the uploaded ones; their numbers `n` are 1 to 5.
+ *
+ * The type of a file is decided by its content, never by its name or the declared type. Location and camera data
+ * are removed from photos before they are stored, without re-encoding: a JPEG keeps only its image data, JFIF,
+ * Adobe and ICC segments and, when it had one, the Orientation tag; a PNG keeps only its image, colour and
+ * animation chunks (no `eXIf`, `tEXt`, `iTXt`, `zTXt`, `tIME`). A PDF is stored as received.
+ *
+ * Refusals (nothing is stored):
+ * - 400 `VALIDATION_FAILED`: `amount` 0.00 or less (`AMOUNT_NOT_POSITIVE`) or more than 12 integer digits
+ *   (`INVALID`); `date` after today in Europe/Kyiv (`DATE_IN_FUTURE`); `categoryId` unknown or not an expense
+ *   category (`INVALID`) or archived (`ARCHIVED`); a text too long (`TOO_LONG`); a required field missing
+ *   (`REQUIRED`); a `reuseAttachments[i]` that names no file (`INVALID`);
+ * - 400 `TOO_MANY` with `errors[{field: files, code: TOO_MANY}]`: more than five files, reused ones included;
+ * - 413 `FILE_TOO_LARGE` with `errors[{field: files[i], code: FILE_TOO_LARGE}]`: a file over 5 MB (a request
+ *   over the server's upload limit is 413 `FILE_TOO_LARGE` without `errors`);
+ * - 400 `FILE_TYPE_NOT_ALLOWED` with `errors[{field: files[i], code: FILE_TYPE_NOT_ALLOWED}]`: a file that is
+ *   not a JPEG, PNG or PDF by content, or a JPEG or PNG that cannot be read;
+ * - 409 `OPENING_BALANCE_MISSING`: the account has no opening balance;
+ * - 400 `BEFORE_OPENING_BALANCE` with `errors[{field: date}]`: `date` is before the account's opening date;
+ * - 409 `CASH_INSUFFICIENT` with `balance` and `date`: a cash expense would make the cash balance negative on its
+ *   date or on a later day; `balance` is the lowest balance from that date on (before this expense) and `date`
+ *   the earliest day it is reached («Недостатньо готівки в касі: залишок 200,00 ₴ на 07.10.2026»). A bank
+ *   expense is never refused for the balance.
+ *
+ * The counterparty and the description are personal data: stored encrypted, and in the audit log
+ * (`EXPENSE_RECORDED`, with `amount`, `account`, `category` and `date`) shown only to readers with
+ * `MEMBERS_VIEW`. Two expenses saved at the same moment never together take the cash below zero. Requires
+ * `CASHBOOK_ENTER`.
+ * @summary Record an expense with up to five receipt files
+ */
+export const createExpense = async (createExpenseBody: CreateExpenseBody, options?: Parameters<typeof nadelFetch>[1]): Promise<Expense> => {
+    const formData = new FormData();
+formData.append(`expense`, JSON.stringify(createExpenseBody.expense));
+if(createExpenseBody.files !== undefined) {
+ createExpenseBody.files.forEach(value => formData.append(`files`, value));
+ }
+
+  return nadelFetch<Expense>(getCreateExpenseUrl(),
+  {
+    ...options,
+    method: 'POST'
+    ,
+    body: formData
+  }
+);}
+
+
+
+
+
+export const getCreateExpenseMutationKey = () => ['createExpense'] as const;
+
+export const getCreateExpenseMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse | PayloadTooLargeResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createExpense>>, TError,CreateExpenseMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createExpense>>, TError,CreateExpenseMutationVariables, TContext> => {
+
+const mutationKey = getCreateExpenseMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createExpense>>, CreateExpenseMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  createExpense(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateExpenseMutationResult = NonNullable<Awaited<ReturnType<typeof createExpense>>>
+    export type CreateExpenseMutationBody = CreateExpenseBody
+    export type CreateExpenseMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse | PayloadTooLargeResponse
+    export type CreateExpenseMutationVariables = {data: CreateExpenseBody}
+
+    /**
+ * @summary Record an expense with up to five receipt files
+ */
+export const useCreateExpense = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse | PayloadTooLargeResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createExpense>>, TError,CreateExpenseMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof createExpense>>,
+        TError,
+        CreateExpenseMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateExpenseMutationOptions(options), queryClient);
+    }
+    export const getGetExpenseUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/expenses/${id}`
+}
+
+/**
+ * The expense with its counterparty, description, document, attachments (number, name, type and size; the files
+ * are downloaded with `downloadExpenseAttachment`) and, once reversed, its reversal (date, reason, who and
+ * when). 404 `NOT_FOUND` for an unknown expense, a reversal row or one of another cooperative. Requires
+ * `CASHBOOK_VIEW`.
+ * @summary The card of an expense
+ */
+export const getExpense = async (id: string, options?: Parameters<typeof nadelFetch>[1]): Promise<Expense> => {
+
+  return nadelFetch<Expense>(getGetExpenseUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetExpenseQueryKey = (id: string,) => {
+    return [
+    `/api/v1/expenses/${id}`
+    ] as const;
+    }
+
+
+export const getGetExpenseQueryOptions = <TData = Awaited<ReturnType<typeof getExpense>>, TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getExpense>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetExpenseQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getExpense>>> = ({ signal }) => getExpense(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getExpense>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetExpenseQueryResult = NonNullable<Awaited<ReturnType<typeof getExpense>>>
+export type GetExpenseQueryError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse
+
+
+export function useGetExpense<TData = Awaited<ReturnType<typeof getExpense>>, TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getExpense>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getExpense>>,
+          TError,
+          Awaited<ReturnType<typeof getExpense>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetExpense<TData = Awaited<ReturnType<typeof getExpense>>, TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getExpense>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getExpense>>,
+          TError,
+          Awaited<ReturnType<typeof getExpense>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetExpense<TData = Awaited<ReturnType<typeof getExpense>>, TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getExpense>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary The card of an expense
+ */
+
+export function useGetExpense<TData = Awaited<ReturnType<typeof getExpense>>, TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getExpense>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetExpenseQueryOptions(id,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export const getDownloadExpenseAttachmentUrl = (id: string,
+    n: number,) => {
+
+
+
+
+  return `/api/v1/expenses/${id}/attachments/${n}`
+}
+
+/**
+ * The stored file `n` (1 to 5) of the expense as an attachment (`Content-Disposition: attachment` with the
+ * stored file name), with its stored type, `X-Content-Type-Options: nosniff` and `Cache-Control: no-store`. A
+ * photo carries no location or camera data. 404 `NOT_FOUND` for an unknown expense or file, or one of another
+ * cooperative. Downloads are not audited. Requires `CASHBOOK_VIEW`.
+ * @summary Download a receipt file of an expense
+ */
+export const downloadExpenseAttachment = async (id: string,
+    n: number, options?: Parameters<typeof nadelFetch>[1]): Promise<Blob> => {
+
+  return nadelFetch<Blob>(getDownloadExpenseAttachmentUrl(id,n),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getDownloadExpenseAttachmentQueryKey = (id: string,
+    n: number,) => {
+    return [
+    `/api/v1/expenses/${id}/attachments/${n}`
+    ] as const;
+    }
+
+
+export const getDownloadExpenseAttachmentQueryOptions = <TData = Awaited<ReturnType<typeof downloadExpenseAttachment>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(id: string,
+    n: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadExpenseAttachment>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getDownloadExpenseAttachmentQueryKey(id,n);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof downloadExpenseAttachment>>> = ({ signal }) => downloadExpenseAttachment(id,n, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined && n !== null && n !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof downloadExpenseAttachment>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type DownloadExpenseAttachmentQueryResult = NonNullable<Awaited<ReturnType<typeof downloadExpenseAttachment>>>
+export type DownloadExpenseAttachmentQueryError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse
+
+
+export function useDownloadExpenseAttachment<TData = Awaited<ReturnType<typeof downloadExpenseAttachment>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string,
+    n: number, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadExpenseAttachment>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof downloadExpenseAttachment>>,
+          TError,
+          Awaited<ReturnType<typeof downloadExpenseAttachment>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useDownloadExpenseAttachment<TData = Awaited<ReturnType<typeof downloadExpenseAttachment>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string,
+    n: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadExpenseAttachment>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof downloadExpenseAttachment>>,
+          TError,
+          Awaited<ReturnType<typeof downloadExpenseAttachment>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useDownloadExpenseAttachment<TData = Awaited<ReturnType<typeof downloadExpenseAttachment>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string,
+    n: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadExpenseAttachment>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Download a receipt file of an expense
+ */
+
+export function useDownloadExpenseAttachment<TData = Awaited<ReturnType<typeof downloadExpenseAttachment>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string,
+    n: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadExpenseAttachment>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getDownloadExpenseAttachmentQueryOptions(id,n,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export const getReverseExpenseUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/expenses/${id}/reverse`
+}
+
+/**
+ * Reverses the expense with a reason (feature 018 §2.8): a new journal line of the opposite amount on the same
+ * account, dated today (Europe/Kyiv) in today's open billing month; the expense stays, marked reversed. An
+ * expense is reversed once: 409 `ENTRY_ALREADY_REVERSED` (also when two reversals arrive at once). A reversal
+ * gives the money back to the account, so it is never refused for the cash balance. A missing or blank reason
+ * is 400 `VALIDATION_FAILED` with `errors[{field: reason, code: REQUIRED}]`. Written to the audit log as
+ * `EXPENSE_REVERSED`. «Сторнувати і внести заново» is this reversal followed by `createExpense` with
+ * `reuseAttachments`. 404 `NOT_FOUND` for an unknown expense, a reversal row or one of another cooperative.
+ * Requires `CASHBOOK_APPROVE`.
+ * @summary Reverse an expense
+ */
+export const reverseExpense = async (id: string,
+    entryReversal: EntryReversal, options?: Parameters<typeof nadelFetch>[1]): Promise<Expense> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return nadelFetch<Expense>(getReverseExpenseUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(entryReversal)
+  }
+);}
+
+
+
+
+
+export const getReverseExpenseMutationKey = () => ['reverseExpense'] as const;
+
+export const getReverseExpenseMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reverseExpense>>, TError,ReverseExpenseMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reverseExpense>>, TError,ReverseExpenseMutationVariables, TContext> => {
+
+const mutationKey = getReverseExpenseMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reverseExpense>>, ReverseExpenseMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  reverseExpense(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReverseExpenseMutationResult = NonNullable<Awaited<ReturnType<typeof reverseExpense>>>
+    export type ReverseExpenseMutationBody = EntryReversal
+    export type ReverseExpenseMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse
+    export type ReverseExpenseMutationVariables = {id: string;data: EntryReversal}
+
+    /**
+ * @summary Reverse an expense
+ */
+export const useReverseExpense = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reverseExpense>>, TError,ReverseExpenseMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof reverseExpense>>,
+        TError,
+        ReverseExpenseMutationVariables,
+        TContext
+      > => {
+      return useMutation(getReverseExpenseMutationOptions(options), queryClient);
+    }
+    export const getListExpenseCategoriesUrl = (params?: ListExpenseCategoriesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/v1/expense-categories?${stringifiedParams}` : `/api/v1/expense-categories`
+}
+
+/**
+ * The categories of one list (feature 018 §2.9), in their order (`sortOrder`, then id): `EXPENSE` (for
+ * expenses) or `INCOME` (for other income). A seeded category has its `systemCode` and no `name` until it is
+ * renamed: the client shows the name of its code from the catalogs. Archived categories are left out unless
+ * `includeArchived` is true. Requires `CASHBOOK_VIEW`.
+ * @summary The expense or income categories of the cooperative
+ */
+export const listExpenseCategories = async (params?: ListExpenseCategoriesParams, options?: Parameters<typeof nadelFetch>[1]): Promise<ExpenseCategory[]> => {
+
+  return nadelFetch<ExpenseCategory[]>(getListExpenseCategoriesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListExpenseCategoriesQueryKey = (params?: ListExpenseCategoriesParams,) => {
+    return [
+    `/api/v1/expense-categories`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListExpenseCategoriesQueryOptions = <TData = Awaited<ReturnType<typeof listExpenseCategories>>, TError = UnauthorizedResponse | ForbiddenResponse>(params?: ListExpenseCategoriesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listExpenseCategories>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListExpenseCategoriesQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listExpenseCategories>>> = ({ signal }) => listExpenseCategories(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listExpenseCategories>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListExpenseCategoriesQueryResult = NonNullable<Awaited<ReturnType<typeof listExpenseCategories>>>
+export type ListExpenseCategoriesQueryError = UnauthorizedResponse | ForbiddenResponse
+
+
+export function useListExpenseCategories<TData = Awaited<ReturnType<typeof listExpenseCategories>>, TError = UnauthorizedResponse | ForbiddenResponse>(
+ params: undefined |  ListExpenseCategoriesParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listExpenseCategories>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listExpenseCategories>>,
+          TError,
+          Awaited<ReturnType<typeof listExpenseCategories>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListExpenseCategories<TData = Awaited<ReturnType<typeof listExpenseCategories>>, TError = UnauthorizedResponse | ForbiddenResponse>(
+ params?: ListExpenseCategoriesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listExpenseCategories>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listExpenseCategories>>,
+          TError,
+          Awaited<ReturnType<typeof listExpenseCategories>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListExpenseCategories<TData = Awaited<ReturnType<typeof listExpenseCategories>>, TError = UnauthorizedResponse | ForbiddenResponse>(
+ params?: ListExpenseCategoriesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listExpenseCategories>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary The expense or income categories of the cooperative
+ */
+
+export function useListExpenseCategories<TData = Awaited<ReturnType<typeof listExpenseCategories>>, TError = UnauthorizedResponse | ForbiddenResponse>(
+ params?: ListExpenseCategoriesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listExpenseCategories>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListExpenseCategoriesQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export const getCreateExpenseCategoryUrl = () => {
+
+
+
+
+  return `/api/v1/expense-categories`
+}
+
+/**
+ * Adds a category at the end of its list. Two categories of one list never have the same name, ignoring case
+ * and surrounding spaces, archived ones included: 409 `CATEGORY_NAME_TAKEN` with `errors[{field: name, code:
+ * CATEGORY_NAME_TAKEN}]` (the name of a seeded category that was never renamed is its code, so it does not
+ * collide). Written to the audit log as `CASHBOOK_CATEGORY_ADDED`. Requires `CASHBOOK_APPROVE`.
+ * @summary Add a category
+ */
+export const createExpenseCategory = async (expenseCategoryCreate: ExpenseCategoryCreate, options?: Parameters<typeof nadelFetch>[1]): Promise<ExpenseCategory> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return nadelFetch<ExpenseCategory>(getCreateExpenseCategoryUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(expenseCategoryCreate)
+  }
+);}
+
+
+
+
+
+export const getCreateExpenseCategoryMutationKey = () => ['createExpenseCategory'] as const;
+
+export const getCreateExpenseCategoryMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createExpenseCategory>>, TError,CreateExpenseCategoryMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createExpenseCategory>>, TError,CreateExpenseCategoryMutationVariables, TContext> => {
+
+const mutationKey = getCreateExpenseCategoryMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createExpenseCategory>>, CreateExpenseCategoryMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  createExpenseCategory(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateExpenseCategoryMutationResult = NonNullable<Awaited<ReturnType<typeof createExpenseCategory>>>
+    export type CreateExpenseCategoryMutationBody = ExpenseCategoryCreate
+    export type CreateExpenseCategoryMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse
+    export type CreateExpenseCategoryMutationVariables = {data: ExpenseCategoryCreate}
+
+    /**
+ * @summary Add a category
+ */
+export const useCreateExpenseCategory = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createExpenseCategory>>, TError,CreateExpenseCategoryMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof createExpenseCategory>>,
+        TError,
+        CreateExpenseCategoryMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateExpenseCategoryMutationOptions(options), queryClient);
+    }
+    export const getReorderExpenseCategoriesUrl = () => {
+
+
+
+
+  return `/api/v1/expense-categories/order`
+}
+
+/**
+ * Sets the order of the non-archived categories of one list. `ids` must be exactly those categories, each once,
+ * in the new order; otherwise (the list changed since the client read it) the answer is 400
+ * `VALIDATION_FAILED` with `errors[{field: ids, code: INVALID}]` and nothing changes. Archived categories keep
+ * their positions. One `CASHBOOK_CATEGORY_REORDERED` audit entry is written for every category whose
+ * position changed. Requires `CASHBOOK_APPROVE`.
+ * @summary Change the order of a category list
+ */
+export const reorderExpenseCategories = async (expenseCategoryOrder: ExpenseCategoryOrder, options?: Parameters<typeof nadelFetch>[1]): Promise<void> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return nadelFetch<void>(getReorderExpenseCategoriesUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(expenseCategoryOrder)
+  }
+);}
+
+
+
+
+
+export const getReorderExpenseCategoriesMutationKey = () => ['reorderExpenseCategories'] as const;
+
+export const getReorderExpenseCategoriesMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reorderExpenseCategories>>, TError,ReorderExpenseCategoriesMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reorderExpenseCategories>>, TError,ReorderExpenseCategoriesMutationVariables, TContext> => {
+
+const mutationKey = getReorderExpenseCategoriesMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reorderExpenseCategories>>, ReorderExpenseCategoriesMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  reorderExpenseCategories(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReorderExpenseCategoriesMutationResult = NonNullable<Awaited<ReturnType<typeof reorderExpenseCategories>>>
+    export type ReorderExpenseCategoriesMutationBody = ExpenseCategoryOrder
+    export type ReorderExpenseCategoriesMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse
+    export type ReorderExpenseCategoriesMutationVariables = {data: ExpenseCategoryOrder}
+
+    /**
+ * @summary Change the order of a category list
+ */
+export const useReorderExpenseCategories = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reorderExpenseCategories>>, TError,ReorderExpenseCategoriesMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof reorderExpenseCategories>>,
+        TError,
+        ReorderExpenseCategoriesMutationVariables,
+        TContext
+      > => {
+      return useMutation(getReorderExpenseCategoriesMutationOptions(options), queryClient);
+    }
+    export const getUpdateExpenseCategoryUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/expense-categories/${id}`
+}
+
+/**
+ * Renames the category (`name`; the rule of `createExpenseCategory`, 409 `CATEGORY_NAME_TAKEN`; a seeded
+ * category keeps its `systemCode` and shows the new name from now on, also on its old entries) and/or archives
+ * it (`archived: true`: it is no longer offered for new entries and stays on the old ones; `archived: false`
+ * offers it again). A category is never deleted. A field left out is not changed; the current values change
+ * nothing and write no audit entry. Written to the audit log as `CASHBOOK_CATEGORY_RENAMED` and
+ * `CASHBOOK_CATEGORY_ARCHIVED`. 404 `NOT_FOUND` for an unknown category or one of another cooperative. Requires
+ * `CASHBOOK_APPROVE`.
+ * @summary Rename or archive a category
+ */
+export const updateExpenseCategory = async (id: string,
+    expenseCategoryUpdate: ExpenseCategoryUpdate, options?: Parameters<typeof nadelFetch>[1]): Promise<ExpenseCategory> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return nadelFetch<ExpenseCategory>(getUpdateExpenseCategoryUrl(id),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(expenseCategoryUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateExpenseCategoryMutationKey = () => ['updateExpenseCategory'] as const;
+
+export const getUpdateExpenseCategoryMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateExpenseCategory>>, TError,UpdateExpenseCategoryMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateExpenseCategory>>, TError,UpdateExpenseCategoryMutationVariables, TContext> => {
+
+const mutationKey = getUpdateExpenseCategoryMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateExpenseCategory>>, UpdateExpenseCategoryMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateExpenseCategory(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateExpenseCategoryMutationResult = NonNullable<Awaited<ReturnType<typeof updateExpenseCategory>>>
+    export type UpdateExpenseCategoryMutationBody = ExpenseCategoryUpdate
+    export type UpdateExpenseCategoryMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse
+    export type UpdateExpenseCategoryMutationVariables = {id: string;data: ExpenseCategoryUpdate}
+
+    /**
+ * @summary Rename or archive a category
+ */
+export const useUpdateExpenseCategory = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateExpenseCategory>>, TError,UpdateExpenseCategoryMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof updateExpenseCategory>>,
+        TError,
+        UpdateExpenseCategoryMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateExpenseCategoryMutationOptions(options), queryClient);
+    }

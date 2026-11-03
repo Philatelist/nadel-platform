@@ -212,7 +212,7 @@ class MoneyAccounts {
         return view;
     }
 
-    private static int integerDigits(Money amount) {
+    static int integerDigits(Money amount) {
         BigDecimal value = amount.value().abs();
         return value.precision() - value.scale();
     }

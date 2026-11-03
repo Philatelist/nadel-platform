@@ -3,8 +3,9 @@
 The cooperative's own money (feature 018, «Каса і банк»): the **cash account** («Каса», the cash the treasurer
 holds) and the **bank account** («Банківський рахунок»), their **opening balances**, the **journal** of every move of
 money and the **balance** of an account on any day. Members' debts never change here: the module only shows where the
-money they paid went. Draft: slice 1 of the feature (accounts, opening balances, member payments in the journal);
-expenses, handovers, other income, cash counts, bank reconciliations, the reports and the acts come with later slices.
+money they paid went. Draft: slices 1 and 2 of the feature (accounts, opening balances, member payments in the journal;
+expenses with receipt files, categories, the no-negative-cash rule); handovers, other income, cash counts, bank
+reconciliations, the reports and the acts come with later slices.
 The money rules are `docs/domain/money-rules.md` §14 (written with the feature); the decisions are ADR 0019.
 
 Tables (`V32__treasury.sql`, all under RLS `tenant_isolation`, an index leading with `tenant_id`, `UNIQUE (tenant_id,
@@ -14,7 +15,10 @@ id)` and composite foreign keys on `(tenant_id, x_id)`):
 |---|---|---|
 | `money_account` | One `CASH` and one `BANK` account per cooperative (`seed_treasury`, called by `seed_base_roles`; deterministic id `md5(tenant || ':ACCOUNT:CASH' / ':ACCOUNT:BANK')`), the opening balance `opening_amount` (≥ 0), `opening_date`, `opening_set_by`, `opening_set_at` (all null or all set) | `nadel_app` may update only the `opening_*` columns (column grant), and the trigger `money_account_guard` lets them go from null to a value once |
 | `account_movement` | The journal: `account_id`, `kind` (`MovementKind`), signed `amount` (in positive, out negative, never 0), `moved_on`, `booking_month` (the first day of the billing month, mapped to `YearMonth`), `source_type`/`source_id` (what caused it), `payment_row_id` (a `MEMBER_PAYMENT` line: the ledger payment row, a payment or its reversal; unique), `reverses_movement_id` + `reason` (a reversal: same kind and account, negated amount, reversed once), `created_by`, `created_at` | append-only (`ledger_append_only` triggers, `UPDATE`/`DELETE`/`TRUNCATE` revoked); only `MovementWriter` inserts |
-| `expense`, `expense_attachment`, `expense_category`, `other_income`, `handover`, `cash_count`, `bank_reconciliation` | Created by V32 with their guards; no writer yet (later slices) | see V32 |
+| `expense_category` | Expense and income categories (`kind` `EXPENSE`/`INCOME`); a seeded one has `system_code` and `name` null until renamed; unique `lower(name)` per kind (`expense_category_name_uq`, archived ones included) | `nadel_app` may update only `name`, `sort_order`, `archived`; never deleted; written by `Categories` |
+| `expense` | An expense: account, category, `amount` (> 0), `expense_date`, `counterparty_enc`/`description_enc` (sealed), document number and date, `movement_id`; a reversal is a second row with `reverses_expense_id` and `reason`, dated the day of the reversal | append-only; written by `Expenses` (`ExpenseQueries`) |
+| `expense_attachment` | Up to five receipt files per expense (`position` 1..5): stored type, name, `size_bytes`, `sha256` and `content` (`STORAGE EXTERNAL`) | append-only; two JPA entities: `ExpenseAttachmentRecord` (no content: lists, counts, the card) and `ExpenseAttachmentContent` (insert of an upload, the download); a reused file is copied inside the database |
+| `other_income`, `handover`, `cash_count`, `bank_reconciliation` | Created by V32 with their guards; no writer yet (later slices) | see V32 |
 
 V32 also backfilled one movement per payment row that existed when the feature was installed (the one sanctioned
 migration-time read of `payment`, between the `BACKFILL BEGIN`/`END` markers): a payment on its `received_on` in its
@@ -37,7 +41,80 @@ Everything else is in `internal`.
 | `POST /money-accounts/{id}/opening-balance` | `setOpeningBalance` `{amount, date}`: once (409 `OPENING_BALANCE_ALREADY_SET`); `amount` 0.00 or more with at most 12 integer digits (400 `amount` `INVALID`), `date` not after today (400 `date` `DATE_IN_FUTURE`); 404 `NOT_FOUND`. Audit `OPENING_BALANCE_SET`. Answers the account with today's balance | `CASHBOOK_APPROVE` |
 | `GET /money-accounts/{id}/movements?from&to&page&size` | `listAccountMovements`: the lines dated `from..to` (default the current month up to today; `from` after `to` is 400 `from` `INVALID`), oldest first (date, time entered, id), with `openingBalance` (end of `from − 1`) and `closingBalance` (end of `to`) over the whole period, `negative` (closing below 0.00). Each line: date, kind, amount, `bookingMonth`, `beforeOpening`, `source {type, id}`, `reversed`, `reversesMovementId`/`reason` (a reversal), `createdByName` (the author's current name through `audit.ActorNames`, as the payment card shows it to the board), `createdAt`; a member payment line adds `plotId` and `receiptNumber` (cash) or `documentNumber` (the bank reference) through `LedgerReadModel.paymentRefs`. 404 `NOT_FOUND` | `CASHBOOK_VIEW` |
 
-A member and the platform operator hold neither permission (403); another cooperative's account is 404 (RLS).
+| `POST /expenses` (multipart: part `expense` JSON, parts `files`) | `createExpense`: see "Expenses" below; 201 with the card | `CASHBOOK_ENTER` |
+| `GET /expenses?from&to&account&categoryId&page&size` | `listExpenses`: originals only, newest first (date, time entered, id), each with account, category, counterparty, amount, `attachmentCount` and `reversed`; `from` after `to` is 400 `from` `INVALID` | `CASHBOOK_VIEW` |
+| `GET /expenses/{id}` | `getExpense`: the card with counterparty, description, document, the files (number, name, type, size) and the reversal (date, reason, who, when); 404 for a reversal row | `CASHBOOK_VIEW` |
+| `GET /expenses/{id}/attachments/{n}` | `downloadExpenseAttachment`: the stored file with its stored type, `Content-Disposition: attachment` (ASCII `filename` and UTF-8 `filename*`), `X-Content-Type-Options: nosniff`, `Cache-Control: no-store`; not audited | `CASHBOOK_VIEW` |
+| `POST /expenses/{id}/reverse` `{reason}` | `reverseExpense`: 200 with the card, now reversed | `CASHBOOK_APPROVE` |
+| `GET /expense-categories?kind&includeArchived` | `listExpenseCategories` (kind default `EXPENSE`), by `sortOrder` | `CASHBOOK_VIEW` |
+| `POST /expense-categories`, `PUT /expense-categories/{id}`, `PUT /expense-categories/order` | add, rename/archive (`archived: false` offers it again), reorder the non-archived of a kind (a list that is not exactly them is 400 `ids` `INVALID`) | `CASHBOOK_APPROVE` |
+
+A member and the platform operator hold none of the permissions (403); another cooperative's account, expense or
+category is 404 (RLS).
+
+## The no-negative-cash rule (`CashGuard`, pure)
+
+An entry that takes money out of the cash dated *t* (a cash expense; later: handovers, shortages, reversals of cash
+income) is refused with 409 `CASH_INSUFFICIENT` when the lowest balance from *t* on (the running balance at the end of
+*t* and of every later movement day) plus the entry is below 0.00; the problem carries that lowest balance (`balance`,
+before the entry) and the earliest day it is reached (`date`). So a back-dated entry is refused when a later day would
+go negative although its own day stays positive (FS 2.17 #5). The caller locks the cash account `FOR UPDATE` (after
+the billing month) before it reads the day totals (READ COMMITTED), so two entries at the same moment are checked one
+after the other (`ExpenseConcurrencyTests`). A bank expense and an expense reversal are never checked; member payment
+reversals are exempt (slice 1).
+
+## Expenses (`Expenses`)
+
+Recording, in this order (the first refusal answers, nothing is stored): the fields (400 `VALIDATION_FAILED`:
+`amount` `AMOUNT_NOT_POSITIVE` or more than 12 integer digits `INVALID`, `date` `DATE_IN_FUTURE`, `categoryId`
+`INVALID` (unknown, another cooperative's, or an income category: the database does not enforce the kind) or
+`ARCHIVED`, `reuseAttachments[i]` `INVALID`, the contract's `REQUIRED`/`TOO_LONG`); the files (`AttachmentUploads`:
+more than five, reused ones included, 400 `TOO_MANY` on `files`; per file `files[i]` over 5 MiB 413 `FILE_TOO_LARGE`,
+not a JPEG/PNG/PDF by its first bytes (`FileSniffer`) or an unreadable JPEG/PNG 400 `FILE_TYPE_NOT_ALLOWED`), before
+any lock; then `ledger.BookingMonths.bookFor(date)` (a closed month books in the earliest open month, the date is
+kept), the account `FOR UPDATE`, 409 `OPENING_BALANCE_MISSING`, 400 `BEFORE_OPENING_BALANCE` (`date`), and for the
+cash `CashGuard`. Then `MovementWriter.writeEntry` (`EXPENSE`, the negated amount, source `EXPENSE`), the expense row,
+the files (reused ones first, copied by `INSERT … SELECT`, then the uploads) and `EXPENSE_RECORDED`, in one transaction.
+
+Reversing («Сторнувати»): a blank reason is 400 `reason` `REQUIRED`; `bookFor(today)`, the account `FOR UPDATE`, 409
+`ENTRY_ALREADY_REVERSED` (the unique keys `expense_reversed_once_uq` and `account_movement_reversed_once_uq` are the
+backstop); `MovementWriter.writeReversal` (same account and kind, the negated amount, dated today, with the reason), the
+reversal row and `EXPENSE_REVERSED`. «Сторнувати і внести заново» is the reversal and then `createExpense` with
+`reuseAttachments`.
+
+The `expense` part may come without a content type (the generated web client appends it as a plain form field):
+`ExpensePartConverter` reads it as JSON; a part sent as `application/json` is read by the standard converter.
+`spring.servlet.multipart.max-request-size` is 27MB (five files of 5 MB and the JSON) and `server.tomcat.max-swallow-size`
+30MB; `max-file-size` stays 10MB (the imports).
+
+### Attachments (JDK only, no image library)
+
+- `JpegMetadataStripper`: segment by segment without re-encoding; keeps APP0, APP14, APP2 `ICC_PROFILE`, the tables,
+  frames and every scan (progressive files included); drops APP1 (Exif with GPS and camera IFDs, XMP), other APP2
+  (MPF, FlashPix), APP3–APP13, APP15 and COM; re-adds a minimal big-endian APP1 Exif holding only the Orientation (1–8)
+  when the original had one, after SOI and the leading APP0; cuts after the first EOI (MPF's extra images, trailing
+  data). No SOI, a segment past the end, no frame, scan or EOI: refused.
+- `PngMetadataStripper`: keeps IHDR, PLTE, IDAT, IEND, tRNS, gAMA, cHRM, sRGB, iCCP, sBIT, bKGD, pHYs, acTL, fcTL,
+  fdAT byte for byte; drops every other ancillary chunk (eXIf, tEXt, iTXt, zTXt, tIME, …); cuts after IEND. A wrong
+  CRC, a chunk past the end, no IHDR first, no IDAT/IEND or an unknown critical chunk: refused.
+- A PDF is stored as received. The stored name is the client's base name without control and invisible characters, at
+  most 255 characters (`receipt.jpg`/`.png`/`.pdf` when nothing is left); `size_bytes` and `sha256` are those of the
+  stored bytes. No name and nothing read from a file is logged or answered.
+
+### Personal data
+
+The counterparty and the description are sealed (`TreasuryCipher`, `privacy.PersonalDataCipher`) at
+`FieldRef("expense", "counterparty_enc" | "description_enc", expenseId)`; screens with `CASHBOOK_VIEW` show them. In the
+audit they are `counterparty`/`description` sealed at `FieldChange.newValueRef(eventId, field)` (`sealed = true`), so
+neither `audit_entry` nor `event_publication` holds them in the clear and the log opens them only with `MEMBERS_VIEW`.
+
+## Categories (`Categories`)
+
+The list of one kind by `sort_order`; seeded categories come with `systemCode` and without `name` (the client names
+them from the catalogs). Adding puts a category at the end of its list. A name is unique per kind ignoring case,
+archived ones included (exactly the index on `lower(name)`), so a new name equal to the catalog name of a seeded
+category that was never renamed does not collide (it has no stored name). 409 `CATEGORY_NAME_TAKEN` (`errors[{field:
+name}]`) from a quick check, the index being the guarantee. Only `name`, `sort_order` and `archived` are written.
 
 ## Balances (`AccountBalances`, pure)
 
@@ -81,21 +158,26 @@ cash account → the bank account → `bank_reconciliation`. See the ledger READ
 ## Audit
 
 `TreasuryAuditPublisher` publishes `AuditEvent`s in the changing transaction. Entity type `MONEY_ACCOUNT` (entity id the
-account, label its kind code). `OPENING_BALANCE_SET`: `kind`, `amount`, `date` (new values only). Every action is a
-value of the contract's `AuditAction` (`TreasuryAuditActionsTests`).
+account, label its kind code). `OPENING_BALANCE_SET`: `kind`, `amount`, `date` (new values only). Entity type
+`EXPENSE` (entity id the expense, label the expense date): `EXPENSE_RECORDED` and `EXPENSE_REVERSED` with `amount`,
+`account`, `category` (id), `date`, the reversal's `reversedOn` and `reason`, and `counterparty`/`description` sealed.
+Entity type `CASHBOOK_CATEGORY` (label `base:<CODE>` for a seeded category never renamed, else its name):
+`CASHBOOK_CATEGORY_ADDED` (`kind`, `name`), `_RENAMED` (`name` old/new), `_REORDERED` (`position` old/new, one entry per
+moved category), `_ARCHIVED` (`archived` old/new). Every action is a value of the contract's `AuditAction`
+(`TreasuryAuditActionsTests`).
 
 ## Dependencies
 
-`ledger` (`PaymentMoneyMoved`, `PaymentSource`, `LedgerReadModel#paymentRefs`; the entries of later slices
-`BookingMonths`), `settings`
-(`CooperativeSettings`: the IBAN), `audit` (`AuditEvent`, `ActorNames`), `identity` (`CurrentUser`, `AccessProfile`),
-`tenancy` (`TenantContext`), `problem`, `money`. It never reads another module's tables. No module depends on it yet.
+`ledger` (`PaymentMoneyMoved`, `PaymentSource`, `LedgerReadModel#paymentRefs`, `BookingMonths`), `settings`
+(`CooperativeSettings`: the IBAN), `audit` (`AuditEvent`, `ActorNames`, `FieldChange`), `privacy`
+(`PersonalDataCipher`, `FieldRef`), `identity` (`CurrentUser`, `AccessProfile`), `tenancy` (`TenantContext`),
+`problem`, `money`. It never reads another module's tables. No module depends on it yet.
 
 ## Permissions
 
-`CASHBOOK_VIEW` (chairman, treasurer): accounts and journals. `CASHBOOK_ENTER` (chairman, treasurer): entries of later
-slices. `CASHBOOK_APPROVE` (chairman): opening balances (later: differences, reversals, categories). Custom roles can
-hold any of them.
+`CASHBOOK_VIEW` (chairman, treasurer): accounts, journals, expenses and their files, categories. `CASHBOOK_ENTER`
+(chairman, treasurer): expenses (later: handovers, other income, counts, statements). `CASHBOOK_APPROVE` (chairman):
+opening balances, reversals, categories (later: differences). Custom roles can hold any of them.
 
 ## Tests
 
@@ -106,4 +188,11 @@ the tenant check), `MoneyAccountsTests` (list, opening once and audited, validat
 the journal with refs, paging and both balances, a reversal below zero flags the cash negative), `MoneyAccountsAccessTests`
 (VIEW and APPROVE allowed and denied, custom roles, member, operator, 401, another cooperative 404),
 `TreasuryAuditActionsTests`; the V32 tests `TreasuryTenantIsolationTests`, `TreasuryGuardsTests`,
-`TreasuryBackfillTests`.
+`TreasuryBackfillTests`. Slice 2: `CashGuardTests` (FS 2.17 #2, #4, #5, the suffix minimum and its earliest day),
+`CashBookExamplesTests` (one test per FS 2.17 row implemented so far: #1–#5), `FileSnifferTests`,
+`JpegMetadataStripperTests` (GPS/camera/XMP/MPF/IPTC/comment fixture built in memory by `TestImages`, progressive,
+ICC/Adobe kept, orientation kept, malformed), `PngMetadataStripperTests`, `AttachmentUploadsTests`, `ExpensesTests`
+(photo without GPS on download, limits, validation, opening balance, cash rule, closed month, reverse and re-enter with
+reused files, list filters, no plaintext in `expense`, `audit_entry`, `event_publication`, hidden in the log without
+`MEMBERS_VIEW`), `ExpenseConcurrencyTests` (two 150.00 on 200.00 with a lock barrier: exactly one saved),
+`CategoriesTests`, `ExpensesAccessTests`.

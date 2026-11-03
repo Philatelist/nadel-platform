@@ -2,6 +2,7 @@ package app.nadel.problem;
 
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.time.LocalDate;
 import java.util.List;
 import nadel.contract.model.Problem;
 import nadel.contract.model.ProblemFieldError;
@@ -46,6 +47,15 @@ public class ProblemWriter {
      */
     public static Problem body(HttpStatusCode status, String code, String detail, List<FieldProblem> errors,
             List<String> missing, @Nullable Integer limit) {
+        return body(status, code, detail, errors, missing, limit, null, null);
+    }
+
+    /**
+     * The response body with, besides {@code missing} and {@code limit}, the lowest cash balance ({@code balance}) and
+     * its day ({@code date}) of {@code CASH_INSUFFICIENT}, each left out when null.
+     */
+    public static Problem body(HttpStatusCode status, String code, String detail, List<FieldProblem> errors,
+            List<String> missing, @Nullable Integer limit, @Nullable String balance, @Nullable LocalDate date) {
         var problem = new Problem();
         problem.setType("about:blank");
         problem.setTitle(title(status));
@@ -62,6 +72,12 @@ public class ProblemWriter {
         }
         if (limit != null) {
             problem.setLimit(limit);
+        }
+        if (balance != null) {
+            problem.setBalance(balance);
+        }
+        if (date != null) {
+            problem.setDate(date);
         }
         return problem;
     }
