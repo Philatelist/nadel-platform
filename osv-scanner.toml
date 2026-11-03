@@ -2,10 +2,6 @@
 # Revisit on every Expo SDK upgrade and remove entries once a patched version is in the lockfile.
 
 [[IgnoredVulns]]
-id = "GHSA-86w9-cpqp-85rv"
-reason = "node-forge via @expo/cli: local Expo dev server only, not shipped in the app; no patched version yet"
-
-[[IgnoredVulns]]
 id = "GHSA-vfj7-8cjw-p6xm"
 reason = "braces via metro-file-map: build-time only, input is our own source tree; no patched version yet"
 
@@ -16,6 +12,14 @@ reason = "uuid via @expo/config-plugins (xcode project tooling): build-time only
 [[IgnoredVulns]]
 id = "GHSA-mrhx-c7xc-m3w5"
 reason = "zod 3.x via @expo/cli: Expo CLI dev/build tooling only, never shipped in the app or the server; no patched 3.x yet; revisit when Expo moves @expo/cli to zod 4 or a patched 3.x appears"
+
+[[IgnoredVulns]]
+id = "GHSA-3g3m-2fjr-6pw4"
+reason = "glob 13.0.6 via @expo/cli: Expo CLI dev/build tooling only, globs our own source tree, never shipped in the app or the server; the fix (14.0.2) is a major version @expo/cli does not accept; revisit on the next Expo SDK upgrade"
+
+[[IgnoredVulns]]
+id = "GHSA-g3hv-75wg-m249"
+reason = "minimatch 10.2.6 via glob in @expo/cli: Expo CLI dev/build tooling only, patterns are our own, never user input; the fix (11.0.1) is a major version @expo/cli does not accept; revisit on the next Expo SDK upgrade"
 
 [[IgnoredVulns]]
 id = "GHSA-gcqx-w48m-w2h4"
