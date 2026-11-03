@@ -180,6 +180,15 @@ public final class ProblemCodes {
     public static final String CASH_INSUFFICIENT = "CASH_INSUFFICIENT";
     /** 409: the cash book entry was reversed before; an entry is reversed once (feature 018 §2.8). */
     public static final String ENTRY_ALREADY_REVERSED = "ENTRY_ALREADY_REVERSED";
+    /** 409: the difference of a cash count is booked again; a difference is booked once (feature 018 §2.6). */
+    public static final String DIFFERENCE_ALREADY_BOOKED = "DIFFERENCE_ALREADY_BOOKED";
+    /** 409: the difference of a cash count that matches the books (0.00) is booked (feature 018 §2.6). */
+    public static final String NO_DIFFERENCE = "NO_DIFFERENCE";
+    /**
+     * 409: a journal line is reversed directly that is not a booked difference, or is a reversal line itself; other
+     * entries are reversed through their own records (feature 018 §2.8).
+     */
+    public static final String MOVEMENT_NOT_REVERSIBLE = "MOVEMENT_NOT_REVERSIBLE";
     /**
      * 409: another expense or income category of the same list has the name, ignoring case (feature 018 §2.9); also
      * the code of the field {@code name} in {@code errors[]}.

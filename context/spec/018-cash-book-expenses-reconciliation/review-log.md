@@ -16,3 +16,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `64b6fcf..bcae29e` | PASS | — | minor: IOException on upload read → 500; JFXX thumbnail / ICC kept whole (theoretical); list decrypts up to 200 counterparties per page; reversal reason stored as plain audit value (user content, as other reversals) |
+
+## Slice 3 — Handovers to the bank and other income
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `bcae29e..cd1e699` | PASS | — | minor: TreasuryController Javadoc wrapping; a missing bank account would give 500 not 409 (accounts are always seeded); `useState` import order in CashbookPage |

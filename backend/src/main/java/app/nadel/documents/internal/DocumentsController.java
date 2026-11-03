@@ -58,8 +58,9 @@ import org.springframework.web.bind.annotation.RestController;
  * current owner and the latest version, decided by {@link Invoices}), {@code GET /me/invoices} (the caller's own
  * plots, no permission, {@link Invoices#mine}). The month: {@code POST
  * /billing-months/{month}/invoices} ({@code INVOICES_ISSUE}, {@link InvoiceBuilder#forMonth}) and {@code GET
- * /billing-months/{month}/invoices/print.pdf} ({@code INVOICES_ISSUE}, {@link PrintBundle}). Files are sent as
- * attachments and never cached.
+ * /billing-months/{month}/invoices/print.pdf} ({@code INVOICES_ISSUE}, {@link PrintBundle}). The act of a cash count
+ * {@code GET /cash-counts/{id}/act.pdf} ({@code CASHBOOK_VIEW}, {@link CashCountActDocuments}; feature 018). Files are
+ * sent as attachments and never cached.
  */
 @RestController
 @RequestMapping("/api/v1")
@@ -70,19 +71,29 @@ class DocumentsController implements DocumentsApi {
     private final InvoiceBuilder builder;
     private final Invoices invoices;
     private final PrintBundle printBundle;
+    private final CashCountActDocuments cashCountActs;
 
     DocumentsController(CurrentUser currentUser, CashReceipts receipts, InvoiceBuilder builder, Invoices invoices,
-            PrintBundle printBundle) {
+            PrintBundle printBundle, CashCountActDocuments cashCountActs) {
         this.currentUser = currentUser;
         this.receipts = receipts;
         this.builder = builder;
         this.invoices = invoices;
         this.printBundle = printBundle;
+        this.cashCountActs = cashCountActs;
     }
 
     @Override
     public ResponseEntity<Resource> getPaymentReceiptPdf(UUID id) {
         ReceiptFile file = receipts.receipt(id, currentUser.profile());
+        return pdf(file.fileName(), file.content());
+    }
+
+    /** The act of a cash count (feature 018 §2.6), for whoever may view the cash book. */
+    @Override
+    @PreAuthorize("hasAuthority('PERM_CASHBOOK_VIEW')")
+    public ResponseEntity<Resource> getCashCountActPdf(UUID id) {
+        CashCountActDocuments.ActFile file = cashCountActs.act(id);
         return pdf(file.fileName(), file.content());
     }
 

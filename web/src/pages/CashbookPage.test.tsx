@@ -116,6 +116,33 @@ describe('CashbookPage', () => {
     expect(screen.queryByText('Залишок банку від’ємний')).not.toBeInTheDocument();
   });
 
+  it('shows the last count and the unresolved difference with a link to the count', () => {
+    useListMoneyAccounts.mockReturnValue(
+      queryResult([
+        {
+          ...cash,
+          lastCount: {
+            id: 'c1',
+            countedAt: '2026-11-03T10:00:00Z',
+            countedOn: '2026-11-03',
+            counted: '480.00',
+            bookBalance: '500.00',
+            difference: '-20.00',
+            status: 'UNRESOLVED',
+            createdAt: '2026-11-03T10:00:00Z',
+          },
+          unresolvedDifference: '-20.00',
+        },
+        bank,
+      ]),
+    );
+    renderPage();
+    expect(plain(screen.getByTestId('last-count-CASH').textContent)).toContain('різниця');
+    const link = screen.getByRole('link', { name: /Неврегульована різниця/ });
+    expect(link).toHaveAttribute('href', '/cashbook/counts/c1');
+    expect(plain(link.textContent)).toContain('20,00');
+  });
+
   it('warns about a negative bank balance with the bank text', () => {
     useListMoneyAccounts.mockReturnValue(
       queryResult([

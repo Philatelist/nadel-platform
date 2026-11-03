@@ -6,6 +6,7 @@ import app.nadel.treasury.MovementKind;
 import app.nadel.treasury.internal.AccountBalances.DayTotal;
 import app.nadel.treasury.internal.AccountBalances.Opening;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.Query;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -63,7 +64,7 @@ class TreasuryQueries {
      * number of a handover line and the category of an expense or other income line (a reversal line's entry row
      * carries the same values).
      */
-    private static final String MOVEMENTS = """
+    private static final String MOVEMENT_LINES = """
             select m.id, m.kind, m.amount, m.moved_on, m.booking_month, m.source_type, m.source_id, m.payment_row_id,
                    m.reverses_movement_id, m.reason, m.created_by, m.created_at, r.id is not null as reversed,
                    h.document_number, coalesce(e.category_id, o.category_id)
@@ -73,10 +74,38 @@ class TreasuryQueries {
             left join expense e on m.source_type = 'EXPENSE' and e.tenant_id = m.tenant_id and e.id = m.source_id
             left join other_income o on m.source_type = 'OTHER_INCOME' and o.tenant_id = m.tenant_id
                                         and o.id = m.source_id
-            where m.account_id = :account
+            """;
+
+    private static final String OLDEST_FIRST = " order by m.moved_on, m.created_at, m.id";
+
+    private static final String MOVEMENTS = MOVEMENT_LINES + """
+             where m.account_id = :account
               and m.moved_on between :from and :to
-            order by m.moved_on, m.created_at, m.id
-            offset :offset limit :limit
+            """ + OLDEST_FIRST + " offset :offset limit :limit";
+
+    /** One line of the journal, as {@link #MOVEMENTS} gives it. */
+    private static final String MOVEMENT_LINE = MOVEMENT_LINES + " where m.id = :id";
+
+    /**
+     * The lines a cash count's book balance has and the previous count's did not (feature 018 §2.6): dated from the
+     * opening date to the count's day, entered up to {@code :upTo}, and dated after the previous count's day or entered
+     * after it was saved. Without a previous count the last condition is left out.
+     */
+    private static final String SINCE = """
+             where m.account_id = :account
+              and m.moved_on between :from and :to
+              and m.created_at <= :upTo
+            """;
+
+    private static final String SINCE_PREVIOUS = " and (m.moved_on > :previousDay or m.created_at > :previousSaved)";
+
+    /** One movement with its account and whether a reversal points at it. */
+    private static final String MOVEMENT = """
+            select m.id, m.account_id, m.kind, m.amount, m.moved_on, m.source_type, m.source_id,
+                   m.reverses_movement_id, exists (select 1 from account_movement r
+                                                   where r.tenant_id = m.tenant_id and r.reverses_movement_id = m.id)
+            from account_movement m
+            where m.id = :id
             """;
 
     /** The movement written for a ledger payment row ({@code account_movement_payment_row_uq}). */
@@ -108,6 +137,15 @@ class TreasuryQueries {
 
     /** The movement of a ledger payment row and its account. */
     record PaymentMovement(UUID id, UUID accountId) {
+    }
+
+    /** A movement as stored, with its account and whether it is reversed. */
+    record MovementFacts(UUID id, UUID accountId, MovementKind kind, Money amount, LocalDate movedOn,
+            String sourceType, UUID sourceId, @Nullable UUID reversesMovementId, boolean reversed) {
+    }
+
+    /** The previous cash count a count's lines are counted from: its day and the moment it was saved. */
+    record SinceCount(LocalDate day, Instant saved) {
     }
 
     /** The accounts of the cooperative, cash first. */
@@ -170,14 +208,66 @@ class TreasuryQueries {
                 .setParameter("offset", offset)
                 .setParameter("limit", limit)
                 .getResultList().stream()
-                .map(row -> {
-                    Object[] v = (Object[]) row;
-                    return new MovementRow((UUID) v[0], MovementKind.valueOf((String) v[1]),
-                            Money.of((BigDecimal) v[2]), date(v[3]), YearMonth.from(date(v[4])), (String) v[5],
-                            (UUID) v[6], (UUID) v[7], (UUID) v[8], (String) v[9], (UUID) v[10], (Instant) v[11],
-                            (Boolean) v[12], (String) v[13], (UUID) v[14]);
-                })
+                .map(row -> movementRow((Object[]) row))
                 .toList();
+    }
+
+    private static MovementRow movementRow(Object[] v) {
+        return new MovementRow((UUID) v[0], MovementKind.valueOf((String) v[1]), Money.of((BigDecimal) v[2]),
+                date(v[3]), YearMonth.from(date(v[4])), (String) v[5], (UUID) v[6], (UUID) v[7], (UUID) v[8],
+                (String) v[9], (UUID) v[10], (Instant) v[11], (Boolean) v[12], (String) v[13], (UUID) v[14]);
+    }
+
+    /** One line of the journal; empty when unknown or of another cooperative. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    Optional<MovementRow> movementLine(UUID id) {
+        return entityManager.createNativeQuery(MOVEMENT_LINE).setParameter("id", id).getResultList().stream()
+                .map(row -> movementRow((Object[]) row)).findFirst();
+    }
+
+    /** The movement with its account; empty when unknown or of another cooperative. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    Optional<MovementFacts> movement(UUID id) {
+        List<?> rows = entityManager.createNativeQuery(MOVEMENT).setParameter("id", id).getResultList();
+        if (rows.isEmpty()) {
+            return Optional.empty();
+        }
+        Object[] v = (Object[]) rows.getFirst();
+        return Optional.of(new MovementFacts((UUID) v[0], (UUID) v[1], MovementKind.valueOf((String) v[2]),
+                Money.of((BigDecimal) v[3]), date(v[4]), (String) v[5], (UUID) v[6], (UUID) v[7], (Boolean) v[8]));
+    }
+
+    /**
+     * The first {@code limit} lines of the account since the previous count (see {@link #SINCE}), oldest first.
+     *
+     * @param previous null without a previous count
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    List<MovementRow> movementsSince(UUID accountId, LocalDate from, LocalDate to, @Nullable SinceCount previous,
+            Instant upTo, int limit) {
+        String sql = MOVEMENT_LINES + SINCE + (previous == null ? "" : SINCE_PREVIOUS) + OLDEST_FIRST + " limit :limit";
+        Query query = since(entityManager.createNativeQuery(sql), accountId, from, to, previous,
+                upTo).setParameter("limit", limit);
+        return query.getResultList().stream().map(row -> movementRow((Object[]) row)).toList();
+    }
+
+    /** How many lines {@link #movementsSince} has without its limit. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    long countMovementsSince(UUID accountId, LocalDate from, LocalDate to, @Nullable SinceCount previous,
+            Instant upTo) {
+        String sql = "select count(*) from account_movement m" + SINCE + (previous == null ? "" : SINCE_PREVIOUS);
+        return ((Number) since(entityManager.createNativeQuery(sql), accountId, from, to, previous, upTo)
+                .getSingleResult()).longValue();
+    }
+
+    private static Query since(Query query, UUID accountId, LocalDate from,
+            LocalDate to, @Nullable SinceCount previous, Instant upTo) {
+        query.setParameter("account", accountId).setParameter("from", from).setParameter("to", to)
+                .setParameter("upTo", upTo);
+        if (previous != null) {
+            query.setParameter("previousDay", previous.day()).setParameter("previousSaved", previous.saved());
+        }
+        return query;
     }
 
     /** The movement written for the ledger payment row; empty when it has none. */

@@ -9,7 +9,12 @@ import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import nadel.contract.api.TreasuryApi;
+import nadel.contract.model.AccountMovement;
 import nadel.contract.model.AccountMovementPage;
+import nadel.contract.model.CashCount;
+import nadel.contract.model.CashCountBookingRequest;
+import nadel.contract.model.CashCountInput;
+import nadel.contract.model.CashCountPage;
 import nadel.contract.model.EntryReversal;
 import nadel.contract.model.Expense;
 import nadel.contract.model.ExpenseCategory;
@@ -38,11 +43,11 @@ import org.springframework.web.multipart.MultipartFile;
 
 /**
  * The endpoints of tag {@code treasury} (feature 018 §2.13, technical considerations 2.10): reads (accounts, journals,
- * expenses and their files, categories) need {@code CASHBOOK_VIEW}; entries (an expense, a handover, other income)
- * {@code CASHBOOK_ENTER}; the
- * opening balance, reversals and the categories' changes {@code CASHBOOK_APPROVE}. Permissions, never role names; a
+ * expenses and their files, categories, cash counts) need {@code CASHBOOK_VIEW}; entries (an expense, a handover,
+ * other income, a cash count and its preview) {@code CASHBOOK_ENTER}; the opening balance, reversals (also of a booked
+ * difference line), booking a count's difference and the categories' changes {@code CASHBOOK_APPROVE}. Permissions, never role names; a
  * member and the platform operator (who hold none of them) are 403. The work is done by {@link MoneyAccounts},
- * {@link Expenses}, {@link Handovers}, {@link OtherIncomes} and {@link Categories}.
+ * {@link Expenses}, {@link Handovers}, {@link OtherIncomes}, {@link Categories} and {@link CashCounts}.
  */
 @RestController
 @RequestMapping("/api/v1")
@@ -54,15 +59,17 @@ class TreasuryController implements TreasuryApi {
     private final Handovers handovers;
     private final OtherIncomes otherIncomes;
     private final Categories categories;
+    private final CashCounts cashCounts;
 
     TreasuryController(CurrentUser currentUser, MoneyAccounts accounts, Expenses expenses, Handovers handovers,
-            OtherIncomes otherIncomes, Categories categories) {
+            OtherIncomes otherIncomes, Categories categories, CashCounts cashCounts) {
         this.currentUser = currentUser;
         this.accounts = accounts;
         this.expenses = expenses;
         this.handovers = handovers;
         this.otherIncomes = otherIncomes;
         this.categories = categories;
+        this.cashCounts = cashCounts;
     }
 
     @Override
@@ -181,6 +188,42 @@ class TreasuryController implements TreasuryApi {
     @PreAuthorize("hasAuthority('PERM_CASHBOOK_APPROVE')")
     public ResponseEntity<ExpenseCategory> updateExpenseCategory(UUID id, ExpenseCategoryUpdate request) {
         return ResponseEntity.ok(categories.update(id, request, currentUser.profile()));
+    }
+
+    @Override
+    @PreAuthorize("hasAuthority('PERM_CASHBOOK_APPROVE')")
+    public ResponseEntity<AccountMovement> reverseAccountMovement(UUID id, UUID movementId, EntryReversal request) {
+        return ResponseEntity.ok(cashCounts.reverseMovement(id, movementId, request.getReason(),
+                currentUser.profile()));
+    }
+
+    /** {@code preview=true}: 200 with the figures, nothing saved; otherwise 201 with the saved count. */
+    @Override
+    @PreAuthorize("hasAuthority('PERM_CASHBOOK_ENTER')")
+    public ResponseEntity<CashCount> enterCashCount(CashCountInput request, Boolean preview) {
+        if (Boolean.TRUE.equals(preview)) {
+            return ResponseEntity.ok(cashCounts.preview(request));
+        }
+        CashCount saved = cashCounts.save(request, currentUser.profile());
+        return ResponseEntity.created(URI.create("/api/v1/cash-counts/" + saved.getId())).body(saved);
+    }
+
+    @Override
+    @PreAuthorize("hasAuthority('PERM_CASHBOOK_VIEW')")
+    public ResponseEntity<CashCountPage> listCashCounts(Integer page, Integer size) {
+        return ResponseEntity.ok(cashCounts.list(page, size));
+    }
+
+    @Override
+    @PreAuthorize("hasAuthority('PERM_CASHBOOK_VIEW')")
+    public ResponseEntity<CashCount> getCashCount(UUID id) {
+        return ResponseEntity.ok(cashCounts.get(id));
+    }
+
+    @Override
+    @PreAuthorize("hasAuthority('PERM_CASHBOOK_APPROVE')")
+    public ResponseEntity<CashCount> bookCashCountDifference(UUID id, CashCountBookingRequest request) {
+        return ResponseEntity.ok(cashCounts.bookDifference(id, request.getReason(), currentUser.profile()));
     }
 
     private UUID tenantId() {

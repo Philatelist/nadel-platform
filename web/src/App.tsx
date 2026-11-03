@@ -216,6 +216,19 @@ const router = createBrowserRouter([
             ],
           },
           {
+            element: <RequirePermission permission="CASHBOOK_ENTER" />,
+            children: [
+              {
+                path: 'cashbook/counts/new',
+                lazy: () => import('./pages/CashCountPage').then((m) => ({ Component: m.CashCountNewPage })),
+              },
+            ],
+          },
+          {
+            path: 'cashbook/counts/:id',
+            lazy: () => import('./pages/CashCountPage').then((m) => ({ Component: m.CashCountPage })),
+          },
+          {
             path: 'cashbook/expenses/:id',
             lazy: () => import('./pages/ExpenseCardPage').then((m) => ({ Component: m.ExpenseCardPage })),
           },

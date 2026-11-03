@@ -9,12 +9,13 @@
  *
  * OpenAPI spec version: 0.1.0
  */
+import type { CashCountRow } from './cashCountRow';
 import type { Money } from './money';
 import type { MoneyAccountKind } from './moneyAccountKind';
 import type { OpeningBalance } from './openingBalance';
 
 /**
- * One money account of the cooperative and its balance on a day. Later features add optional fields (the last cash count, an unresolved difference, the bank months and their reconciliation status).
+ * One money account of the cooperative and its balance on a day. Only the cash account has `lastCount` (its latest count by `countedAt`, absent before the first) and `unresolvedDifference` (the difference of that last count while it is `UNRESOLVED`: «Неврегульована різниця −20,00 ₴»; absent once it is booked or when it matches; an earlier count's difference is superseded by the later count). Neither depends on `asOf`. Later features add optional fields (the bank months and their reconciliation status).
  */
 export interface MoneyAccount {
   id: string;
@@ -27,4 +28,6 @@ export interface MoneyAccount {
   balance?: Money;
   /** The balance is below 0.00; false without an opening balance */
   negative: boolean;
+  lastCount?: CashCountRow;
+  unresolvedDifference?: Money;
 }

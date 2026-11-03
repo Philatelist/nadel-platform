@@ -3,6 +3,7 @@ package app.nadel.treasury.internal;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import app.nadel.money.Money;
+import app.nadel.treasury.CashCountAct;
 import app.nadel.treasury.internal.AccountBalances.DayTotal;
 import app.nadel.treasury.internal.AccountBalances.Opening;
 import app.nadel.treasury.internal.CashGuard.Shortfall;
@@ -78,6 +79,23 @@ class CashBookExamplesTests {
                 .isEqualTo(money("800.00"));
         assertThat(CashGuard.shortfall(CASH, cashAfterRow(3), day("2026-10-06"), money("-400.00")))
                 .contains(new Shortfall(money("200.00"), day("2026-10-07")));
+    }
+
+    @Test
+    void row6ACountOf180On10OctoberAgainstTheBook200IsMinus20AndTheBookedShortageLeavesTheCash180() {
+        CashCountFigures.Figures figures = CashCountFigures.of(CASH, cashAfterRow(3), day("2026-10-10"),
+                money("180.00"));
+
+        assertThat(figures.bookBalance()).isEqualTo(money("200.00"));
+        assertThat(figures.difference()).isEqualTo(money("-20.00"));
+        assertThat(CashCountFigures.status(figures.difference(), false)).isEqualTo(CashCountAct.Status.UNRESOLVED);
+        // the chairman books «Нестача» −20,00 dated the count day: it fits, and the cash is 180,00
+        assertThat(CashGuard.shortfall(CASH, cashAfterRow(3), day("2026-10-10"), figures.difference())).isEmpty();
+        List<DayTotal> booked = new ArrayList<>(cashAfterRow(3));
+        booked.add(total("2026-10-10", "-20.00"));
+        assertThat(AccountBalances.balanceAt(CASH, booked, day("2026-10-10"))).isEqualTo(money("180.00"));
+        assertThat(CashCountFigures.status(figures.difference(), true)).isEqualTo(CashCountAct.Status.BOOKED);
+        assertThat(CashCountFigures.status(money("0.00"), false)).isEqualTo(CashCountAct.Status.MATCHES);
     }
 
     /** The cash day totals after the events of rows 1 to {@code row}. */

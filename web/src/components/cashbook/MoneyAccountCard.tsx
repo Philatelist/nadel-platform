@@ -1,7 +1,8 @@
 import { getListMoneyAccountsQueryKey, setOpeningBalance, type MoneyAccount } from '@nadel/api-client';
-import { format, formatDay, normalizeMoneyInput } from '@nadel/shared';
+import { format, formatDateTime, formatDay, formatSignedMoney, normalizeMoneyInput } from '@nadel/shared';
 import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
+import { Link } from 'react-router';
 import { useLocale, useT } from '../../i18n';
 import { kyivToday } from '../../kyivToday';
 import { useCan } from '../../me';
@@ -116,6 +117,30 @@ export function MoneyAccountCard({ account }: { account: MoneyAccount }) {
           </div>
         ) : (
           <p className="text-lg font-semibold text-ink">{t.cashbook.enterOpening}</p>
+        )}
+        {account.lastCount !== undefined && (
+          <p className="text-[15px] text-ink-muted" data-testid={`last-count-${account.kind}`}>
+            <Link to={`/cashbook/counts/${account.lastCount.id}`} className="text-accent underline">
+              {format(t.cashbook.count.lastCount, {
+                date: formatDateTime(account.lastCount.countedAt, locale),
+              })}
+            </Link>
+            {': '}
+            {account.lastCount.status === 'MATCHES'
+              ? t.cashbook.count.lastCountMatches
+              : format(t.cashbook.count.lastCountDifference, {
+                  amount: formatSignedMoney(account.lastCount.difference, locale),
+                })}
+          </p>
+        )}
+        {account.unresolvedDifference !== undefined && account.lastCount !== undefined && (
+          <Notice tone="warning">
+            <Link to={`/cashbook/counts/${account.lastCount.id}`} className="underline">
+              {format(t.cashbook.count.unresolved, {
+                amount: formatSignedMoney(account.unresolvedDifference, locale),
+              })}
+            </Link>
+          </Notice>
         )}
         {account.negative && <Notice tone="danger">{t.cashbook.negative[account.kind]}</Notice>}
         {account.opening === undefined && canApprove && <OpeningBalanceForm account={account} />}

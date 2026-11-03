@@ -2,8 +2,6 @@ package app.nadel.treasury.internal;
 
 import app.nadel.audit.ActorNames;
 import app.nadel.identity.AccessProfile;
-import app.nadel.ledger.LedgerReadModel;
-import app.nadel.ledger.PaymentRef;
 import app.nadel.money.Money;
 import app.nadel.problem.ApiProblemException;
 import app.nadel.problem.FieldProblem;
@@ -19,20 +17,14 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 import nadel.contract.model.AccountMovement;
 import nadel.contract.model.AccountMovementPage;
+import nadel.contract.model.CashCountRow;
+import nadel.contract.model.CashCountStatus;
 import nadel.contract.model.MoneyAccount;
-import nadel.contract.model.MovementKind;
-import nadel.contract.model.MovementSource;
-import nadel.contract.model.MovementSourceType;
 import nadel.contract.model.OpeningBalance;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -53,6 +45,10 @@ import org.springframework.transaction.annotation.Transactional;
  * has one is 409 {@code OPENING_BALANCE_ALREADY_SET} (two requests at once: the second waits on the lock and then sees
  * it; the trigger {@code money_account_guard} is the database's backstop). Only the granted {@code opening_*} columns
  * are written. Audit {@code OPENING_BALANCE_SET}. Logs ids only.
+ * <p>
+ * The cash account also shows its last count ({@link CashCountQueries#latest}: the newest by the moment of the count)
+ * and, while that count is {@code UNRESOLVED}, its difference as the unresolved difference; an earlier count's
+ * difference is superseded by a later count (the later count already sees the cash as it is).
  */
 @Service
 class MoneyAccounts {
@@ -69,17 +65,20 @@ class MoneyAccounts {
             """;
 
     private final TreasuryQueries queries;
-    private final LedgerReadModel ledger;
+    private final JournalLines journalLines;
+    private final CashCountQueries counts;
     private final CooperativeSettings settings;
     private final ActorNames actorNames;
     private final TreasuryAuditPublisher audit;
     private final EntityManager entityManager;
     private final Clock clock;
 
-    MoneyAccounts(TreasuryQueries queries, LedgerReadModel ledger, CooperativeSettings settings,
-            ActorNames actorNames, TreasuryAuditPublisher audit, EntityManager entityManager, Clock clock) {
+    MoneyAccounts(TreasuryQueries queries, JournalLines journalLines, CashCountQueries counts,
+            CooperativeSettings settings, ActorNames actorNames, TreasuryAuditPublisher audit,
+            EntityManager entityManager, Clock clock) {
         this.queries = queries;
-        this.ledger = ledger;
+        this.journalLines = journalLines;
+        this.counts = counts;
         this.settings = settings;
         this.actorNames = actorNames;
         this.audit = audit;
@@ -155,7 +154,7 @@ class MoneyAccounts {
         }
         long total = queries.countMovements(accountId, first, last);
         List<MovementRow> rows = queries.movements(accountId, first, last, (long) page * size, size);
-        List<AccountMovement> items = items(rows, opening);
+        List<AccountMovement> items = journalLines.items(rows, opening);
         AccountMovementPage result = new AccountMovementPage(accountId,
                 nadel.contract.model.MoneyAccountKind.fromValue(account.kind().name()), first, last,
                 AccountBalances.negative(closingBalance), items, page, size, total,
@@ -163,38 +162,6 @@ class MoneyAccounts {
         result.setOpeningBalance(openingBalance == null ? null : openingBalance.toString());
         result.setClosingBalance(closingBalance == null ? null : closingBalance.toString());
         return result;
-    }
-
-    /** The contract form of the lines, with the payment refs and the authors' current names. */
-    private List<AccountMovement> items(List<MovementRow> rows, @Nullable Opening opening) {
-        Set<UUID> paymentRows = rows.stream().map(MovementRow::paymentRowId).filter(Objects::nonNull)
-                .collect(Collectors.toSet());
-        Map<UUID, PaymentRef> refs = paymentRows.isEmpty() ? Map.of() : ledger.paymentRefs(paymentRows);
-        Set<UUID> authors = rows.stream().map(MovementRow::createdBy).filter(Objects::nonNull)
-                .collect(Collectors.toSet());
-        Map<UUID, String> names = authors.isEmpty() ? Map.of() : actorNames.displayNames(authors);
-        List<AccountMovement> items = new ArrayList<>();
-        for (MovementRow row : rows) {
-            AccountMovement item = new AccountMovement(row.id(), row.movedOn(), MovementKind.fromValue(row.kind().name()),
-                    row.amount().toString(), row.bookingMonth().toString(),
-                    AccountBalances.beforeOpening(opening, row.movedOn()),
-                    new MovementSource(MovementSourceType.fromValue(row.sourceType()), row.sourceId()), row.reversed(),
-                    row.createdAt().atOffset(ZoneOffset.UTC));
-            PaymentRef ref = row.paymentRowId() == null ? null : refs.get(row.paymentRowId());
-            if (ref != null) {
-                item.setPlotId(ref.plotId());
-                item.setReceiptNumber(ref.receiptNumber());
-                item.setDocumentNumber(ref.bankReference());
-            } else {
-                item.setDocumentNumber(row.documentNumber());
-            }
-            item.setCategoryId(row.categoryId());
-            item.setReversesMovementId(row.reversesMovementId());
-            item.setReason(row.reason());
-            item.setCreatedByName(row.createdBy() == null ? null : names.get(row.createdBy()));
-            items.add(item);
-        }
-        return items;
     }
 
     /** The contract form of an account with its balance at the end of {@code day}. */
@@ -211,6 +178,17 @@ class MoneyAccounts {
                     day);
             view.setBalance(balance == null ? null : balance.toString());
             view.setNegative(AccountBalances.negative(balance));
+        }
+        if (account.kind() == MoneyAccountKind.CASH) {
+            counts.latest().ifPresent(last -> {
+                String author = last.createdBy() == null ? null
+                        : actorNames.displayNames(List.of(last.createdBy())).get(last.createdBy());
+                CashCountRow row = CashCounts.row(last, author);
+                view.setLastCount(row);
+                if (row.getStatus() == CashCountStatus.UNRESOLVED) {
+                    view.setUnresolvedDifference(last.difference().toString());
+                }
+            });
         }
         return view;
     }

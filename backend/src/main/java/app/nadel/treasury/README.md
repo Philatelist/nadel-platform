@@ -4,8 +4,9 @@ The cooperative's own money (feature 018, «Каса і банк»): the **cash 
 holds) and the **bank account** («Банківський рахунок»), their **opening balances**, the **journal** of every move of
 money and the **balance** of an account on any day. Members' debts never change here: the module only shows where the
 money they paid went. Draft: slices 1 to 3 of the feature (accounts, opening balances, member payments in the journal;
-expenses with receipt files, categories, the no-negative-cash rule; handovers to the bank and other income); cash
-counts, bank reconciliations, the reports and the acts come with later slices.
+expenses with receipt files, categories, the no-negative-cash rule; handovers to the bank and other income; cash
+counts with their act and the booked difference); bank reconciliations, the reports and the reconciliation act come
+with later slices.
 The money rules are `docs/domain/money-rules.md` §14 (written with the feature); the decisions are ADR 0019.
 
 Tables (`V32__treasury.sql`, all under RLS `tenant_isolation`, an index leading with `tenant_id`, `UNIQUE (tenant_id,
@@ -20,7 +21,8 @@ id)` and composite foreign keys on `(tenant_id, x_id)`):
 | `expense_attachment` | Up to five receipt files per expense (`position` 1..5): stored type, name, `size_bytes`, `sha256` and `content` (`STORAGE EXTERNAL`) | append-only; two JPA entities: `ExpenseAttachmentRecord` (no content: lists, counts, the card) and `ExpenseAttachmentContent` (insert of an upload, the download); a reused file is copied inside the database |
 | `handover` | Cash taken to the bank: `amount` (> 0), `handed_on`, `document_number` (the deposit slip, required), `out_movement_id` (the cash line) and `in_movement_id` (the bank line); a reversal is a second row with `reverses_handover_id`, `reason`, the original's document number and its own two reversing movements, dated the day of the reversal | append-only; written by `Handovers` (`HandoverQueries`) |
 | `other_income` | Income not from members: account, income category, `amount` (> 0), `received_on`, `description_enc` (sealed), `movement_id`; a reversal is a second row with `reverses_other_income_id`, `reason` and the category, without a description | append-only; written by `OtherIncomes` (`OtherIncomeQueries`) |
-| `cash_count`, `bank_reconciliation` | Created by V32 with their guards; no writer yet (later slices) | see V32 |
+| `cash_count` | A count of the cash: `counted_at`, `counted_on` (its Kyiv day), `counted_amount` (≥ 0), the `book_balance` computed when it was saved, `difference` (= counted − book), `explanation` (required for a difference; user content in the clear), `booked_movement_id` and `booking_reason` (V33) once the difference is booked | `nadel_app` may update only `booked_movement_id` and `booking_reason` (column grants), and `cash_count_guard` lets that happen once, in one update; written by `CashCounts` (`CashCountQueries`) |
+| `bank_reconciliation` | Created by V32 with its guard; no writer yet (a later slice) | see V32 |
 
 V32 also backfilled one movement per payment row that existed when the feature was installed (the one sanctioned
 migration-time read of `payment`, between the `BACKFILL BEGIN`/`END` markers): a payment on its `received_on` in its
@@ -32,6 +34,7 @@ billing month, a reversal on the Kyiv day it was made in `greatest(its month, th
 |---|---|
 | `MoneyAccountKind` (`CASH`, `BANK`) | The two accounts |
 | `MovementKind` (`MEMBER_PAYMENT`, `EXPENSE`, `OTHER_INCOME`, `HANDOVER_OUT`, `HANDOVER_IN`, `COUNT_DIFFERENCE`, `BANK_DIFFERENCE`) | What moved the money of a journal line; a reversal has the kind of the line it reverses |
+| `CashCountActs.act(countId)` → `CashCountAct` (with `Status`, `Booking`, `Reversal`) | The figures of a count for its act (`documents`): moment, day, book, counted, difference, explanation, booking and its reversal; `MANDATORY`, no permission check of its own (the caller checks `CASHBOOK_VIEW`); empty for an unknown count |
 
 Everything else is in `internal`.
 
@@ -52,6 +55,11 @@ Everything else is in `internal`.
 | `POST /handovers/{id}/reverse` `{reason}` | `reverseHandover`: 200 with the handover, now reversed; the id is the `source.id` of a handover line | `CASHBOOK_APPROVE` |
 | `POST /other-income` `{account, date, amount, categoryId, description?}` | `createOtherIncome`: see "Other income" below; 201 with the income | `CASHBOOK_ENTER` |
 | `POST /other-income/{id}/reverse` `{reason}` | `reverseOtherIncome`: 200 with the income, now reversed | `CASHBOOK_APPROVE` |
+| `POST /cash-counts?preview` `{countedAt, counted, explanation?}` | `enterCashCount`: see "Cash counts" below; `preview=true` 200 (nothing saved), otherwise 201 with the card | `CASHBOOK_ENTER` |
+| `GET /cash-counts?page&size` | `listCashCounts`: newest first (moment of the count, time saved, id) | `CASHBOOK_VIEW` |
+| `GET /cash-counts/{id}` | `getCashCount`: the card with the lines since the previous count and the booking | `CASHBOOK_VIEW` |
+| `POST /cash-counts/{id}/book-difference` `{reason}` | `bookCashCountDifference`: 200 with the card, now `BOOKED` | `CASHBOOK_APPROVE` |
+| `POST /money-accounts/{id}/movements/{movementId}/reverse` `{reason}` | `reverseAccountMovement`: reverses a booked count difference line; 200 with the reversal line | `CASHBOOK_APPROVE` |
 | `GET /expense-categories?kind&includeArchived` | `listExpenseCategories` (kind default `EXPENSE`), by `sortOrder` | `CASHBOOK_VIEW` |
 | `POST /expense-categories`, `PUT /expense-categories/{id}`, `PUT /expense-categories/order` | add, rename/archive (`archived: false` offers it again), reorder the non-archived of a kind (a list that is not exactly them is 400 `ids` `INVALID`) | `CASHBOOK_APPROVE` |
 
@@ -139,6 +147,47 @@ incomeId)` and `OTHER_INCOME_RECORDED` (the description sealed like an expense's
 reversal takes the money out again, so a cash income's reversal goes through `CashGuard` dated today (409
 `CASH_INSUFFICIENT`); a bank income's reversal may take the bank below zero.
 
+## Cash counts (`CashCounts`)
+
+A count (`countedAt`, its Kyiv day `countedOn`, the counted cash): the **book balance** is the cash balance at the end
+of `countedOn` with every line entered so far (`CashCountFigures`, pure, over `AccountBalances`); the **difference** is
+counted − book. Checks, in order: 400 `counted` `INVALID` (below 0.00 or more than 12 integer digits), `countedAt`
+`DATE_IN_FUTURE` (more than 5 minutes after the server's now, or on a later Kyiv day), `explanation` `TOO_LONG`
+(> 500); the cash account (`FOR UPDATE` on a save; a preview takes no lock); 409 `OPENING_BALANCE_MISSING`, 400
+`BEFORE_OPENING_BALANCE` on `countedAt`; on a save a difference without an explanation is 400 `explanation`
+`REQUIRED`. The save computes the figures again under the lock (a line entered after the preview counts) and stores the
+book balance: a line entered later for an earlier day never changes a saved count. Status `MATCHES` (0.00),
+`UNRESOLVED`, `BOOKED`. Audit `CASH_COUNTED`. The explanation is user content in the clear (V32 has a plain
+`explanation` column, no sealed one): it describes the cash, like a reversal's reason, and is not treated as personal
+data.
+
+**Lines since the previous count.** The previous count is the newest saved count at or before `countedAt` (for a saved
+count, the one just before it in the list order). The lines are those this book balance counts and the previous count's
+did not: cash lines dated from the opening date to `countedOn`, entered up to now (for a saved count up to its save),
+and dated after the previous count's day or entered after it was saved; so previous book + Σ lines = book (a member
+payment saved at the very moment of a count is the one race where this can be off, since its line carries the time of
+the payment row). Oldest first, at most 500, with `movementsSinceTotal`.
+
+**The cash card** (`GET /money-accounts`): `lastCount` is the newest count by `countedAt`; `unresolvedDifference` is
+its difference while it is `UNRESOLVED`. An earlier unresolved count is superseded by a later count (which already sees
+the cash as it is).
+
+**Booking a difference** (`CASHBOOK_APPROVE`): reason required (400); `bookFor(countedOn)`, the cash locked, the count
+read again; 409 `NO_DIFFERENCE` for a matching count, 409 `DIFFERENCE_ALREADY_BOOKED` for a booked one (the trigger
+`cash_count_guard` is the backstop: without the check the second booking fails in the database, 500); a shortage goes
+through `CashGuard` on the count's day (409 `CASH_INSUFFICIENT`). Then a `COUNT_DIFFERENCE` line of the difference
+(source `CASH_COUNT`, the count) dated the count's day, `booked_movement_id` and `booking_reason` written together, and
+`COUNT_DIFFERENCE_BOOKED`. The booking reason lives on the count because `account_movement.reason` is only for
+reversals (V33).
+
+**Reversing a booked difference line** (`POST /money-accounts/{id}/movements/{movementId}/reverse`): reason required;
+`bookFor(today)`, the account locked (404), the line of that account (404); 409 `MOVEMENT_NOT_REVERSIBLE` unless it is
+an original `COUNT_DIFFERENCE` line (expenses, handovers and other income have their own reverse endpoints, payments are
+reversed in 015; `BANK_DIFFERENCE` joins with the bank reconciliation); 409 `ENTRY_ALREADY_REVERSED`; the reversal of a
+surplus goes through `CashGuard` on today. The reversal (source `MOVEMENT`, the reversed line) is dated today;
+`COUNT_DIFFERENCE_REVERSED` about the count. The count stays `BOOKED` (`booked_movement_id` is written once): its card
+and act show the reversal, and the next count sees the cash as it is.
+
 ## Categories (`Categories`)
 
 The list of one kind by `sort_order`; seeded categories come with `systemCode` and without `name` (the client names
@@ -195,20 +244,25 @@ account, label its kind code). `OPENING_BALANCE_SET`: `kind`, `amount`, `date` (
 Entity type `CASHBOOK_CATEGORY` (label `base:<CODE>` for a seeded category never renamed, else its name):
 `CASHBOOK_CATEGORY_ADDED` (`kind`, `name`), `_RENAMED` (`name` old/new), `_REORDERED` (`position` old/new, one entry per
 moved category), `_ARCHIVED` (`archived` old/new). Every action is a value of the contract's `AuditAction`
-(`TreasuryAuditActionsTests`).
+(`TreasuryAuditActionsTests`). Entity type `CASH_COUNT` (entity id the count, label the moment of the count as an ISO
+instant): `CASH_COUNTED` (`countedAt`, `counted`, `bookBalance`, `difference`, `explanation` when given),
+`COUNT_DIFFERENCE_BOOKED` (`amount` signed, `date` the count's day, `reason`), `COUNT_DIFFERENCE_REVERSED` (`amount`,
+`date`, `reversedOn`, `reason`).
 
 ## Dependencies
 
 `ledger` (`PaymentMoneyMoved`, `PaymentSource`, `LedgerReadModel#paymentRefs`, `BookingMonths`), `settings`
 (`CooperativeSettings`: the IBAN), `audit` (`AuditEvent`, `ActorNames`, `FieldChange`), `privacy`
 (`PersonalDataCipher`, `FieldRef`), `identity` (`CurrentUser`, `AccessProfile`), `tenancy` (`TenantContext`),
-`problem`, `money`. It never reads another module's tables. No module depends on it yet.
+`problem`, `money`. It never reads another module's tables. `documents` depends on it (`CashCountActs`, the cash count
+act); it never depends on `documents`.
 
 ## Permissions
 
 `CASHBOOK_VIEW` (chairman, treasurer): accounts, journals, expenses and their files, categories. `CASHBOOK_ENTER`
-(chairman, treasurer): expenses (later: handovers, other income, counts, statements). `CASHBOOK_APPROVE` (chairman):
-opening balances, reversals, categories (later: differences). Custom roles can hold any of them.
+(chairman, treasurer): expenses, handovers, other income, cash counts (later: statements). `CASHBOOK_APPROVE`
+(chairman): opening balances, reversals, categories, booking a count difference and reversing its line (later: bank
+differences). The act of a count needs `CASHBOOK_VIEW`. Custom roles can hold any of them.
 
 ## Tests
 
@@ -226,4 +280,8 @@ ICC/Adobe kept, orientation kept, malformed), `PngMetadataStripperTests`, `Attac
 (photo without GPS on download, limits, validation, opening balance, cash rule, closed month, reverse and re-enter with
 reused files, list filters, no plaintext in `expense`, `audit_entry`, `event_publication`, hidden in the log without
 `MEMBERS_VIEW`), `ExpenseConcurrencyTests` (two 150.00 on 200.00 with a lock barrier: exactly one saved),
-`CategoriesTests`, `ExpensesAccessTests`.
+`CategoriesTests`, `ExpensesAccessTests`. Slice 4: `CashCountsTests` (FS 2.17 #6 end to end, «Збігається», explanation
+required on a save only, the save recomputes the book balance after a preview, a saved count keeps its book balance
+after a back-dated entry and the next count lists it, surplus booked and its line reversed once, shortage refused by the
+cash rule, refusals, list order), `CashCountActTests` (the PDF text: balances, difference, result, booking, signers),
+`CashCountsAccessTests`, `CashBookExamplesTests` row 6, `TreasuryGuardsTests` (the V33 booking reason).

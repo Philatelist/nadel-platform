@@ -187,6 +187,32 @@ class TreasuryGuardsTests extends TreasuryTestSupport {
     }
 
     @Test
+    void theBookingReasonIsWrittenOnlyWithTheBookingAndNeverChanged() {
+        UUID count = cashCount(tenantA);
+        UUID booked = movement(tenantA, cash, "COUNT_DIFFERENCE", "-5.00", "2033-01-16", "2033-01-01");
+
+        // V33: no reason without a booking (the guard refuses any update that does not book)
+        assertThatThrownBy(() -> inTenant(tenantA, sql -> sql.update(
+                "update cash_count set booking_reason = 'Too early' where id = ?", count)))
+                .satisfies(e -> assertThat(sqlState(e)).isEqualTo(CHECK));
+        assertThat(intIn(tenantA, sql -> sql.update("update cash_count set booked_movement_id = ?, "
+                + "booking_reason = 'Shortage' where id = ?", booked, count))).isEqualTo(1);
+
+        assertThatThrownBy(() -> inTenant(tenantA, sql -> sql.update(
+                "update cash_count set booking_reason = 'Edited' where id = ?", count)))
+                .satisfies(e -> assertThat(sqlState(e)).isEqualTo(CHECK))
+                .hasMessageContaining("the difference is booked once");
+        assertThat(ownerJdbc().queryForObject("select booking_reason from cash_count where id = ?", String.class,
+                count)).isEqualTo("Shortage");
+        UUID other = cashCount(tenantA);
+        assertThatThrownBy(() -> ownerJdbc().update("update cash_count set booked_movement_id = ?, "
+                + "booking_reason = ' ' where id = ?", movement(tenantA, cash, "COUNT_DIFFERENCE", "-5.00",
+                "2033-01-17", "2033-01-01"), other))
+                .satisfies(e -> assertThat(sqlState(e)).isEqualTo(CHECK))
+                .hasMessageContaining("cash_count_booking_reason_ck");
+    }
+
+    @Test
     void aCountKeepsItsFiguresAndAnExplanationIsRequiredForADifference() {
         UUID count = cashCount(tenantA);
 

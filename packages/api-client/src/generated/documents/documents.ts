@@ -178,6 +178,113 @@ export function useGetPaymentReceiptPdf<TData = Awaited<ReturnType<typeof getPay
 
 
 
+export const getGetCashCountActPdfUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/cash-counts/${id}/act.pdf`
+}
+
+/**
+ * «Акт перерахунку каси» (A4, Ukrainian, feature 018 §2.6): the cooperative's name and requisites, the date and
+ * time of the count (Europe/Kyiv), the book balance, the counted balance, the difference with «Збігається»,
+ * «Нестача» or «Надлишок», the explanation, how the difference was booked (the day, the line and the reason, and
+ * its reversal) or that it is not booked yet, and signature lines for the cashier (treasurer) and the chairman
+ * of the board, each with the name of the first active holder of that base role, or an empty line without one.
+ * Made on request from the count and not stored; not written to the audit log. 404 `NOT_FOUND` for an unknown
+ * count or one of another cooperative. Requires `CASHBOOK_VIEW`.
+ * @summary The act of a cash count as a PDF file
+ */
+export const getCashCountActPdf = async (id: string, options?: Parameters<typeof nadelFetch>[1]): Promise<Blob> => {
+
+  return nadelFetch<Blob>(getGetCashCountActPdfUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCashCountActPdfQueryKey = (id: string,) => {
+    return [
+    `/api/v1/cash-counts/${id}/act.pdf`
+    ] as const;
+    }
+
+
+export const getGetCashCountActPdfQueryOptions = <TData = Awaited<ReturnType<typeof getCashCountActPdf>>, TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCashCountActPdf>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCashCountActPdfQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCashCountActPdf>>> = ({ signal }) => getCashCountActPdf(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCashCountActPdf>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetCashCountActPdfQueryResult = NonNullable<Awaited<ReturnType<typeof getCashCountActPdf>>>
+export type GetCashCountActPdfQueryError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse
+
+
+export function useGetCashCountActPdf<TData = Awaited<ReturnType<typeof getCashCountActPdf>>, TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCashCountActPdf>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getCashCountActPdf>>,
+          TError,
+          Awaited<ReturnType<typeof getCashCountActPdf>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetCashCountActPdf<TData = Awaited<ReturnType<typeof getCashCountActPdf>>, TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCashCountActPdf>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getCashCountActPdf>>,
+          TError,
+          Awaited<ReturnType<typeof getCashCountActPdf>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetCashCountActPdf<TData = Awaited<ReturnType<typeof getCashCountActPdf>>, TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCashCountActPdf>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary The act of a cash count as a PDF file
+ */
+
+export function useGetCashCountActPdf<TData = Awaited<ReturnType<typeof getCashCountActPdf>>, TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCashCountActPdf>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetCashCountActPdfQueryOptions(id,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 export const getIssuePlotInvoiceUrl = (id: string,) => {
 
 

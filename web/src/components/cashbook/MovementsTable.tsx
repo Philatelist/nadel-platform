@@ -1,5 +1,6 @@
 import {
   reverseHandover,
+  reverseAccountMovement,
   reverseOtherIncome,
   useListAccountMovements,
   type AccountMovement,
@@ -104,7 +105,12 @@ export function MovementsTable({ accountId }: { accountId: string }) {
           );
         }
         if (row.reversesMovementId !== undefined || row.reversed) return null;
-        if (canApprove && (row.source.type === 'HANDOVER' || row.source.type === 'OTHER_INCOME')) {
+        if (
+          canApprove &&
+          (row.source.type === 'HANDOVER' ||
+            row.source.type === 'OTHER_INCOME' ||
+            row.kind === 'COUNT_DIFFERENCE')
+        ) {
           return (
             <Button variant="secondary" onClick={() => setReversing(row)}>
               {t.cashbook.reverse.action}
@@ -177,14 +183,18 @@ export function MovementsTable({ accountId }: { accountId: string }) {
       {reversing && (
         <ReasonDialog
           labels={
-            reversing.source.type === 'HANDOVER'
-              ? t.cashbook.reverse.handover
-              : t.cashbook.reverse.otherIncome
+            reversing.kind === 'COUNT_DIFFERENCE'
+              ? t.cashbook.count.reverseDialog
+              : reversing.source.type === 'HANDOVER'
+                ? t.cashbook.reverse.handover
+                : t.cashbook.reverse.otherIncome
           }
           onSubmit={(reason) =>
-            reversing.source.type === 'HANDOVER'
-              ? reverseHandover(reversing.source.id, { reason })
-              : reverseOtherIncome(reversing.source.id, { reason })
+            reversing.kind === 'COUNT_DIFFERENCE'
+              ? reverseAccountMovement(accountId, reversing.id, { reason })
+              : reversing.source.type === 'HANDOVER'
+                ? reverseHandover(reversing.source.id, { reason })
+                : reverseOtherIncome(reversing.source.id, { reason })
           }
           onDone={() => {
             setReversing(undefined);

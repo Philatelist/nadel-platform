@@ -14,7 +14,8 @@ import org.springframework.http.HttpStatus;
 /**
  * The rules every entry of the cash book shares (feature 018 §2.2, §2.8; technical considerations 2.5): the amount of
  * an entry, the opening balance of its account, the reason of a reversal and the refusal of a second reversal. Pure;
- * the writers ({@link Expenses}, {@link Handovers}, {@link OtherIncomes}) apply them in their own order.
+ * the writers ({@link Expenses}, {@link Handovers}, {@link OtherIncomes}, {@link CashCounts}) apply them in their own
+ * order.
  */
 final class EntryChecks {
 
@@ -47,6 +48,14 @@ final class EntryChecks {
 
     /** The account's opening balance; 409 {@code OPENING_BALANCE_MISSING} without one, 400 when dated before it. */
     static Opening requireOpening(AccountRow account, LocalDate date) {
+        return requireOpening(account, date, "date");
+    }
+
+    /**
+     * The account's opening balance; 409 {@code OPENING_BALANCE_MISSING} without one, 400
+     * {@code BEFORE_OPENING_BALANCE} naming {@code field} when {@code date} is before it.
+     */
+    static Opening requireOpening(AccountRow account, LocalDate date, String field) {
         Opening opening = account.opening();
         if (opening == null) {
             throw new ApiProblemException(HttpStatus.CONFLICT, ProblemCodes.OPENING_BALANCE_MISSING,
@@ -55,7 +64,7 @@ final class EntryChecks {
         if (date.isBefore(opening.date())) {
             throw new ApiProblemException(HttpStatus.BAD_REQUEST, ProblemCodes.BEFORE_OPENING_BALANCE,
                     "The entry is dated before the opening balance of the account.",
-                    List.of(new FieldProblem("date", ProblemCodes.BEFORE_OPENING_BALANCE)));
+                    List.of(new FieldProblem(field, ProblemCodes.BEFORE_OPENING_BALANCE)));
         }
         return opening;
     }

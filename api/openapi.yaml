@@ -3865,6 +3865,41 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
 
+  /cash-counts/{id}/act.pdf:
+    get:
+      tags: [documents]
+      operationId: getCashCountActPdf
+      summary: The act of a cash count as a PDF file
+      description: |
+        «Акт перерахунку каси» (A4, Ukrainian, feature 018 §2.6): the cooperative's name and requisites, the date and
+        time of the count (Europe/Kyiv), the book balance, the counted balance, the difference with «Збігається»,
+        «Нестача» or «Надлишок», the explanation, how the difference was booked (the day, the line and the reason, and
+        its reversal) or that it is not booked yet, and signature lines for the cashier (treasurer) and the chairman
+        of the board, each with the name of the first active holder of that base role, or an empty line without one.
+        Made on request from the count and not stored; not written to the audit log. 404 `NOT_FOUND` for an unknown
+        count or one of another cooperative. Requires `CASHBOOK_VIEW`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The act, sent as an attachment
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
   /plots/{id}/invoices:
     post:
       tags: [documents]
@@ -5803,6 +5838,64 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /money-accounts/{id}/movements/{movementId}/reverse:
+    post:
+      tags: [treasury]
+      operationId: reverseAccountMovement
+      summary: Reverse a booked difference line of the journal
+      description: |
+        Reverses a booked count difference («Надлишок» or «Нестача» of a cash count, kind `COUNT_DIFFERENCE`) with a
+        reason (feature 018 §2.8): a new journal line of the opposite amount on the same account, of the same kind,
+        dated today (Europe/Kyiv) in today's open billing month, with `source {type: MOVEMENT, id: <the reversed
+        line>}`; the reversed line stays, marked `reversed`. Expenses, handovers and other income are reversed through
+        their own endpoints and member payments on the payments screen: any other line, and a reversal line itself,
+        is 409 `MOVEMENT_NOT_REVERSIBLE` (bank differences join with the bank reconciliation).
+
+        The reversal of a surplus takes money out of the cash: 409 `CASH_INSUFFICIENT` with `balance` and `date` when
+        it would make the cash balance negative today or on a later day; the reversal of a shortage gives the money
+        back and is never refused for the balance. A line is reversed once: 409 `ENTRY_ALREADY_REVERSED` (also when two
+        reversals arrive at once). A missing or blank reason is 400 `VALIDATION_FAILED` with `errors[{field: reason,
+        code: REQUIRED}]`. The count stays booked (its difference is booked once) and its card shows the reversal; the
+        cash book differs from the counted cash again until the next count. Written to the audit log as
+        `COUNT_DIFFERENCE_REVERSED` (about the count). 404 `NOT_FOUND` for an unknown account, a line of another
+        account and anything of another cooperative. Requires `CASHBOOK_APPROVE`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: movementId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EntryReversal'
+      responses:
+        '200':
+          description: The reversal line
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountMovement'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
   /expenses:
     get:
       tags: [treasury]
@@ -6226,6 +6319,200 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OtherIncome'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /cash-counts:
+    get:
+      tags: [treasury]
+      operationId: listCashCounts
+      summary: The cash counts of the cooperative, newest first
+      description: |
+        A page of the saved cash counts (feature 018 §2.6), newest first (by `countedAt`, then the time saved, then
+        id), each with its counted amount, the book balance it kept, the difference and its status. Requires
+        `CASHBOOK_VIEW`.
+      parameters:
+        - name: page
+          in: query
+          required: false
+          description: Zero-based page index
+          schema:
+            type: integer
+            format: int32
+            minimum: 0
+            default: 0
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CashCountPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [treasury]
+      operationId: enterCashCount
+      summary: Preview or save a cash count
+      description: |
+        A count of the cash («Перерахунок каси», feature 018 §2.6). `countedAt` is the moment of the count; its day in
+        Europe/Kyiv is `countedOn`. The **book balance** is the cash balance at the end of `countedOn` with every
+        journal line entered so far (the opening amount plus every cash line dated from the opening date to
+        `countedOn`); the **difference** is `counted − bookBalance` (negative: a shortage, positive: a surplus). The
+        server computes both; the client never subtracts.
+
+        With `preview=true` nothing is written and no lock is taken: the answer (200, `preview: true`, no `id`) has the
+        book balance, the difference, the status the count would get and the journal lines since the previous count;
+        a missing explanation is not refused. Without it the count is saved (201): the book balance is computed again
+        under the cash account lock, so a line entered between the preview and the save is included, and the count
+        keeps that book balance for good (a line entered later for an earlier day never changes a saved count).
+        Status `MATCHES` («Збігається») when the difference is 0.00, otherwise `UNRESOLVED` until the difference is
+        booked (`book-difference`).
+
+        **Lines since the previous count** (`movementsSince`, oldest first, at most 500; `movementsSinceTotal` counts
+        them all): the previous count is the latest saved count with an earlier `countedAt` (for a save or preview:
+        `countedAt` not later than this one's), the one in `previousCount`. The lines are the cash lines this book
+        balance counts and the previous count's did not: dated from the opening date to `countedOn`, and either dated
+        after the previous count's day or entered after it was saved. So `previousCount.bookBalance` plus the lines'
+        amounts is `bookBalance`. Without a previous count: every counted line since the opening date. A saved count's
+        card lists the lines entered up to the moment it was saved.
+
+        Refusals (nothing is stored):
+        - 400 `VALIDATION_FAILED`: `counted` below 0.00 or more than 12 integer digits (`INVALID`); `countedAt` after
+          now (a 5-minute allowance for clock differences) or on a day after today in Europe/Kyiv (`DATE_IN_FUTURE`);
+          on a save, a difference other than 0.00 without an explanation (`explanation` `REQUIRED`: «Вкажіть пояснення
+          різниці.»); `explanation` longer than 500 characters (`TOO_LONG`);
+        - 409 `OPENING_BALANCE_MISSING`: the cash has no opening balance;
+        - 400 `BEFORE_OPENING_BALANCE` with `errors[{field: countedAt}]`: `countedOn` is before the cash opening date.
+
+        The explanation is stored and shown as typed (it is not treated as personal data; it should say what happened
+        to the cash, not about whom). A save is written to the audit log as `CASH_COUNTED` with `counted`,
+        `bookBalance`, `difference`, `countedAt` and `explanation`. Requires `CASHBOOK_ENTER`.
+      parameters:
+        - name: preview
+          in: query
+          required: false
+          description: Compute without saving
+          schema:
+            type: boolean
+            default: false
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CashCountInput'
+      responses:
+        '200':
+          description: The preview (nothing saved)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CashCount'
+        '201':
+          description: The saved count
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CashCount'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /cash-counts/{id}:
+    get:
+      tags: [treasury]
+      operationId: getCashCount
+      summary: The card of a cash count
+      description: |
+        The saved count with the book balance it kept, the difference, the explanation, the lines since the previous
+        count (as they were when it was saved) and, once booked, how its difference was booked and whether that line
+        was reversed. 404 `NOT_FOUND` for an unknown count or one of another cooperative. Requires `CASHBOOK_VIEW`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CashCount'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /cash-counts/{id}/book-difference:
+    post:
+      tags: [treasury]
+      operationId: bookCashCountDifference
+      summary: Book the difference of a cash count
+      description: |
+        «Оформити різницю» (feature 018 §2.6): a journal line of kind `COUNT_DIFFERENCE` on the cash for the count's
+        difference, dated the count's day (`countedOn`) in that day's billing month or, when it is closed, the
+        earliest open month: a surplus («Надлишок») is a receipt of the difference, a shortage («Нестача») a spending
+        of it (`source {type: CASH_COUNT, id: <the count>}`). The count becomes `BOOKED` and the cash card no longer
+        shows its unresolved difference. A shortage is refused with 409 `CASH_INSUFFICIENT` (with `balance` and
+        `date`) when it would make the cash negative on the count's day or a later day.
+
+        A difference is booked once: 409 `DIFFERENCE_ALREADY_BOOKED` (also when two arrive at once, and after the
+        booked line was reversed). A count that matches: 409 `NO_DIFFERENCE`. A missing or blank reason: 400
+        `VALIDATION_FAILED` with `errors[{field: reason, code: REQUIRED}]`. Written to the audit log as
+        `COUNT_DIFFERENCE_BOOKED` with `amount`, `date` and `reason`. 404 `NOT_FOUND` for an unknown count or one of
+        another cooperative. Requires `CASHBOOK_APPROVE`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CashCountBookingRequest'
+      responses:
+        '200':
+          description: The count, now booked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CashCount'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -7116,7 +7403,9 @@ components:
         `OPENING_BALANCE_MISSING`) or would take the cash below zero on its date or a later day (code
         `CASH_INSUFFICIENT`, with `balance` and `date`), a cash book entry is reversed again (code
         `ENTRY_ALREADY_REVERSED`), or an expense or income category name is taken (code `CATEGORY_NAME_TAKEN`, with
-        `errors[{field: name}]`)
+        `errors[{field: name}]`), or the difference of a cash count is booked again (code `DIFFERENCE_ALREADY_BOOKED`)
+        or a count without a difference is booked (code `NO_DIFFERENCE`), or a journal line that is not a booked
+        difference, or a reversal line, is reversed directly (code `MOVEMENT_NOT_REVERSIBLE`)
       content:
         application/problem+json:
           schema:
@@ -7897,6 +8186,9 @@ components:
         - HANDOVER_REVERSED
         - OTHER_INCOME_RECORDED
         - OTHER_INCOME_REVERSED
+        - CASH_COUNTED
+        - COUNT_DIFFERENCE_BOOKED
+        - COUNT_DIFFERENCE_REVERSED
 
     AuditEntityType:
       type: string
@@ -7960,7 +8252,12 @@ components:
         `OTHER_INCOME` entry (`OTHER_INCOME_RECORDED`, `OTHER_INCOME_REVERSED`) is about an other income: its
         `entityId` is the income and its label the income date (ISO); its fields (new values only) are `amount`,
         `account`, `category` (the category id), `date`, the reversal's `reason` and `reversedOn`, and the description
-        `description` (personal data, sealed). A `CASHBOOK_CATEGORY`
+        `description` (personal data, sealed). A `CASH_COUNT` entry (`CASH_COUNTED`, `COUNT_DIFFERENCE_BOOKED`,
+        `COUNT_DIFFERENCE_REVERSED`) is about a cash count: its `entityId` is the count and its label the moment of
+        the count (ISO instant); `CASH_COUNTED` has `countedAt`, `counted`, `bookBalance`, `difference` (two decimals)
+        and `explanation` (user content, when given); `COUNT_DIFFERENCE_BOOKED` has `amount` (the booked line, signed),
+        `date` (the count's day) and `reason`; `COUNT_DIFFERENCE_REVERSED` has `amount` (the reversed line), `date`,
+        `reversedOn` and `reason` (new values only). A `CASHBOOK_CATEGORY`
         entry (`CASHBOOK_CATEGORY_ADDED`, `_RENAMED`, `_REORDERED`, `_ARCHIVED`) is about an expense or income
         category: its `entityId` is the category and its label `base:<CODE>` for a seeded category never renamed,
         otherwise its name; its fields are `kind` and `name` (added), `name` (renamed, old and new, `base:<CODE>`
@@ -7994,6 +8291,7 @@ components:
           CASHBOOK_CATEGORY,
           HANDOVER,
           OTHER_INCOME,
+          CASH_COUNT,
         ]
 
     AuditFieldChange:
@@ -10892,8 +11190,11 @@ components:
     MoneyAccount:
       type: object
       description: >-
-        One money account of the cooperative and its balance on a day. Later features add optional fields (the last
-        cash count, an unresolved difference, the bank months and their reconciliation status).
+        One money account of the cooperative and its balance on a day. Only the cash account has `lastCount` (its
+        latest count by `countedAt`, absent before the first) and `unresolvedDifference` (the difference of that last
+        count while it is `UNRESOLVED`: «Неврегульована різниця −20,00 ₴»; absent once it is booked or when it
+        matches; an earlier count's difference is superseded by the later count). Neither depends on `asOf`. Later
+        features add optional fields (the bank months and their reconciliation status).
       required: [id, kind, asOf, negative]
       properties:
         id:
@@ -10915,6 +11216,10 @@ components:
         negative:
           type: boolean
           description: The balance is below 0.00; false without an opening balance
+        lastCount:
+          $ref: '#/components/schemas/CashCountRow'
+        unresolvedDifference:
+          $ref: '#/components/schemas/Money'
 
     MovementSource:
       type: object
@@ -11404,6 +11709,200 @@ components:
         createdAt:
           type: string
           format: date-time
+
+    CashCountStatus:
+      type: string
+      description: >-
+        `MATCHES` the difference is 0.00 («Збігається»), `UNRESOLVED` a difference not booked yet («Неврегульована
+        різниця»), `BOOKED` the difference is booked as a journal line (it stays `BOOKED` when that line is reversed)
+      enum: [MATCHES, UNRESOLVED, BOOKED]
+
+    CashCountDifferenceKind:
+      type: string
+      description: '`SURPLUS` more cash than in the books («Надлишок»), `SHORTAGE` less («Нестача»)'
+      enum: [SURPLUS, SHORTAGE]
+
+    CashCountInput:
+      type: object
+      description: A count of the cash
+      required: [countedAt, counted]
+      properties:
+        countedAt:
+          type: string
+          format: date-time
+          description: The moment of the count; not in the future
+        counted:
+          $ref: '#/components/schemas/Money'
+        explanation:
+          type: string
+          maxLength: 500
+          description: >-
+            Why the counted cash differs from the books (user content, surrounding whitespace trimmed); required on a
+            save when the difference is not 0.00
+
+    CashCountBookingRequest:
+      type: object
+      description: Why the difference of a count is booked
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+          description: User content, stored as typed; surrounding whitespace is trimmed
+
+    CashCountRow:
+      type: object
+      description: A saved cash count in a list
+      required: [id, countedAt, countedOn, counted, bookBalance, difference, status, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        countedAt:
+          type: string
+          format: date-time
+        countedOn:
+          type: string
+          format: date
+          description: The day of `countedAt` in Europe/Kyiv
+        counted:
+          $ref: '#/components/schemas/Money'
+        bookBalance:
+          $ref: '#/components/schemas/Money'
+        difference:
+          $ref: '#/components/schemas/Money'
+        status:
+          $ref: '#/components/schemas/CashCountStatus'
+        createdByName:
+          type: string
+          description: The current name of the member who saved it; absent for an unknown member
+        createdAt:
+          type: string
+          format: date-time
+
+    CashCountPage:
+      type: object
+      required: [items, page, size, totalItems, totalPages]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CashCountRow'
+        page:
+          type: integer
+          format: int32
+        size:
+          type: integer
+          format: int32
+        totalItems:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+
+    CashCountBooking:
+      type: object
+      description: How the difference of a count was booked
+      required: [movementId, date, bookingMonth, kind, amount, reason, reversed, createdAt]
+      properties:
+        movementId:
+          type: string
+          format: uuid
+          description: The `COUNT_DIFFERENCE` line of the cash journal (reversed with `POST /money-accounts/{id}/movements/{movementId}/reverse`)
+        date:
+          type: string
+          format: date
+          description: The day of the line, the count's day
+        bookingMonth:
+          type: string
+          pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+          description: The billing month the line belongs to, `YYYY-MM`
+        kind:
+          $ref: '#/components/schemas/CashCountDifferenceKind'
+        amount:
+          $ref: '#/components/schemas/Money'
+        reason:
+          type: string
+          description: User content
+        reversed:
+          type: boolean
+          description: The line is reversed («Сторновано»)
+        reversal:
+          $ref: '#/components/schemas/ExpenseReversalInfo'
+        createdByName:
+          type: string
+          description: The current name of the member who booked it; absent for an unknown member
+        createdAt:
+          type: string
+          format: date-time
+
+    CashCount:
+      type: object
+      description: >-
+        A cash count: a preview (`preview: true`, no `id`, nothing saved) or a saved count with the book balance it
+        kept
+      required:
+        - preview
+        - accountId
+        - countedAt
+        - countedOn
+        - counted
+        - bookBalance
+        - difference
+        - status
+        - movementsSince
+        - movementsSinceTotal
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Absent on a preview
+        preview:
+          type: boolean
+        accountId:
+          type: string
+          format: uuid
+          description: The cash account
+        countedAt:
+          type: string
+          format: date-time
+        countedOn:
+          type: string
+          format: date
+          description: The day of `countedAt` in Europe/Kyiv; the book balance is the balance at its end
+        counted:
+          $ref: '#/components/schemas/Money'
+        bookBalance:
+          $ref: '#/components/schemas/Money'
+        difference:
+          $ref: '#/components/schemas/Money'
+        status:
+          $ref: '#/components/schemas/CashCountStatus'
+        explanation:
+          type: string
+          description: User content
+        previousCount:
+          $ref: '#/components/schemas/CashCountRow'
+        movementsSince:
+          type: array
+          description: The cash lines since the previous count, oldest first, at most 500
+          items:
+            $ref: '#/components/schemas/AccountMovement'
+        movementsSinceTotal:
+          type: integer
+          format: int64
+          description: How many lines there are since the previous count (more than listed when above 500)
+        booking:
+          $ref: '#/components/schemas/CashCountBooking'
+        createdByName:
+          type: string
+          description: The current name of the member who saved it; absent on a preview and for an unknown member
+        createdAt:
+          type: string
+          format: date-time
+          description: When it was saved; absent on a preview
 
     CertificateAnnulment:
       type: object

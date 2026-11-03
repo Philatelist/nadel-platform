@@ -29,10 +29,16 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AccountMovement,
   AccountMovementPage,
   BadRequestResponse,
+  CashCount,
+  CashCountBookingRequest,
+  CashCountInput,
+  CashCountPage,
   ConflictResponse,
   CreateExpenseBody,
+  EnterCashCountParams,
   EntryReversal,
   Expense,
   ExpenseCategory,
@@ -44,6 +50,7 @@ import type {
   Handover,
   HandoverInput,
   ListAccountMovementsParams,
+  ListCashCountsParams,
   ListExpenseCategoriesParams,
   ListExpensesParams,
   ListMoneyAccountsParams,
@@ -423,7 +430,112 @@ export function useListAccountMovements<TData = Awaited<ReturnType<typeof listAc
 
 
 
-export const getListExpensesUrl = (params?: ListExpensesParams,) => {
+export const getReverseAccountMovementUrl = (id: string,
+    movementId: string,) => {
+
+
+
+
+  return `/api/v1/money-accounts/${id}/movements/${movementId}/reverse`
+}
+
+/**
+ * Reverses a booked count difference («Надлишок» or «Нестача» of a cash count, kind `COUNT_DIFFERENCE`) with a
+ * reason (feature 018 §2.8): a new journal line of the opposite amount on the same account, of the same kind,
+ * dated today (Europe/Kyiv) in today's open billing month, with `source {type: MOVEMENT, id: <the reversed
+ * line>}`; the reversed line stays, marked `reversed`. Expenses, handovers and other income are reversed through
+ * their own endpoints and member payments on the payments screen: any other line, and a reversal line itself,
+ * is 409 `MOVEMENT_NOT_REVERSIBLE` (bank differences join with the bank reconciliation).
+ *
+ * The reversal of a surplus takes money out of the cash: 409 `CASH_INSUFFICIENT` with `balance` and `date` when
+ * it would make the cash balance negative today or on a later day; the reversal of a shortage gives the money
+ * back and is never refused for the balance. A line is reversed once: 409 `ENTRY_ALREADY_REVERSED` (also when two
+ * reversals arrive at once). A missing or blank reason is 400 `VALIDATION_FAILED` with `errors[{field: reason,
+ * code: REQUIRED}]`. The count stays booked (its difference is booked once) and its card shows the reversal; the
+ * cash book differs from the counted cash again until the next count. Written to the audit log as
+ * `COUNT_DIFFERENCE_REVERSED` (about the count). 404 `NOT_FOUND` for an unknown account, a line of another
+ * account and anything of another cooperative. Requires `CASHBOOK_APPROVE`.
+ * @summary Reverse a booked difference line of the journal
+ */
+export const reverseAccountMovement = async (id: string,
+    movementId: string,
+    entryReversal: EntryReversal, options?: Parameters<typeof nadelFetch>[1]): Promise<AccountMovement> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return nadelFetch<AccountMovement>(getReverseAccountMovementUrl(id,movementId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(entryReversal)
+  }
+);}
+
+
+
+
+
+export const getReverseAccountMovementMutationKey = () => ['reverseAccountMovement'] as const;
+
+export const getReverseAccountMovementMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reverseAccountMovement>>, TError,ReverseAccountMovementMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reverseAccountMovement>>, TError,ReverseAccountMovementMutationVariables, TContext> => {
+
+const mutationKey = getReverseAccountMovementMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reverseAccountMovement>>, ReverseAccountMovementMutationVariables> = (props) => {
+          const {id,movementId,data} = props ?? {};
+
+          return  reverseAccountMovement(id,movementId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReverseAccountMovementMutationResult = NonNullable<Awaited<ReturnType<typeof reverseAccountMovement>>>
+    export type ReverseAccountMovementMutationBody = EntryReversal
+    export type ReverseAccountMovementMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse
+    export type ReverseAccountMovementMutationVariables = {id: string;movementId: string;data: EntryReversal}
+
+    /**
+ * @summary Reverse a booked difference line of the journal
+ */
+export const useReverseAccountMovement = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reverseAccountMovement>>, TError,ReverseAccountMovementMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof reverseAccountMovement>>,
+        TError,
+        ReverseAccountMovementMutationVariables,
+        TContext
+      > => {
+      return useMutation(getReverseAccountMovementMutationOptions(options), queryClient);
+    }
+    export const getListExpensesUrl = (params?: ListExpensesParams,) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
@@ -1358,6 +1470,447 @@ export const useReverseOtherIncome = <TError = BadRequestResponse | Unauthorized
         TContext
       > => {
       return useMutation(getReverseOtherIncomeMutationOptions(options), queryClient);
+    }
+    export const getListCashCountsUrl = (params?: ListCashCountsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/v1/cash-counts?${stringifiedParams}` : `/api/v1/cash-counts`
+}
+
+/**
+ * A page of the saved cash counts (feature 018 §2.6), newest first (by `countedAt`, then the time saved, then
+ * id), each with its counted amount, the book balance it kept, the difference and its status. Requires
+ * `CASHBOOK_VIEW`.
+ * @summary The cash counts of the cooperative, newest first
+ */
+export const listCashCounts = async (params?: ListCashCountsParams, options?: Parameters<typeof nadelFetch>[1]): Promise<CashCountPage> => {
+
+  return nadelFetch<CashCountPage>(getListCashCountsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListCashCountsQueryKey = (params?: ListCashCountsParams,) => {
+    return [
+    `/api/v1/cash-counts`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListCashCountsQueryOptions = <TData = Awaited<ReturnType<typeof listCashCounts>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>(params?: ListCashCountsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listCashCounts>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListCashCountsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listCashCounts>>> = ({ signal }) => listCashCounts(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listCashCounts>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListCashCountsQueryResult = NonNullable<Awaited<ReturnType<typeof listCashCounts>>>
+export type ListCashCountsQueryError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse
+
+
+export function useListCashCounts<TData = Awaited<ReturnType<typeof listCashCounts>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>(
+ params: undefined |  ListCashCountsParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listCashCounts>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listCashCounts>>,
+          TError,
+          Awaited<ReturnType<typeof listCashCounts>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListCashCounts<TData = Awaited<ReturnType<typeof listCashCounts>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>(
+ params?: ListCashCountsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listCashCounts>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listCashCounts>>,
+          TError,
+          Awaited<ReturnType<typeof listCashCounts>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListCashCounts<TData = Awaited<ReturnType<typeof listCashCounts>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>(
+ params?: ListCashCountsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listCashCounts>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary The cash counts of the cooperative, newest first
+ */
+
+export function useListCashCounts<TData = Awaited<ReturnType<typeof listCashCounts>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>(
+ params?: ListCashCountsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listCashCounts>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListCashCountsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export const getEnterCashCountUrl = (params?: EnterCashCountParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/v1/cash-counts?${stringifiedParams}` : `/api/v1/cash-counts`
+}
+
+/**
+ * A count of the cash («Перерахунок каси», feature 018 §2.6). `countedAt` is the moment of the count; its day in
+ * Europe/Kyiv is `countedOn`. The **book balance** is the cash balance at the end of `countedOn` with every
+ * journal line entered so far (the opening amount plus every cash line dated from the opening date to
+ * `countedOn`); the **difference** is `counted − bookBalance` (negative: a shortage, positive: a surplus). The
+ * server computes both; the client never subtracts.
+ *
+ * With `preview=true` nothing is written and no lock is taken: the answer (200, `preview: true`, no `id`) has the
+ * book balance, the difference, the status the count would get and the journal lines since the previous count;
+ * a missing explanation is not refused. Without it the count is saved (201): the book balance is computed again
+ * under the cash account lock, so a line entered between the preview and the save is included, and the count
+ * keeps that book balance for good (a line entered later for an earlier day never changes a saved count).
+ * Status `MATCHES` («Збігається») when the difference is 0.00, otherwise `UNRESOLVED` until the difference is
+ * booked (`book-difference`).
+ *
+ * **Lines since the previous count** (`movementsSince`, oldest first, at most 500; `movementsSinceTotal` counts
+ * them all): the previous count is the latest saved count with an earlier `countedAt` (for a save or preview:
+ * `countedAt` not later than this one's), the one in `previousCount`. The lines are the cash lines this book
+ * balance counts and the previous count's did not: dated from the opening date to `countedOn`, and either dated
+ * after the previous count's day or entered after it was saved. So `previousCount.bookBalance` plus the lines'
+ * amounts is `bookBalance`. Without a previous count: every counted line since the opening date. A saved count's
+ * card lists the lines entered up to the moment it was saved.
+ *
+ * Refusals (nothing is stored):
+ * - 400 `VALIDATION_FAILED`: `counted` below 0.00 or more than 12 integer digits (`INVALID`); `countedAt` after
+ *   now (a 5-minute allowance for clock differences) or on a day after today in Europe/Kyiv (`DATE_IN_FUTURE`);
+ *   on a save, a difference other than 0.00 without an explanation (`explanation` `REQUIRED`: «Вкажіть пояснення
+ *   різниці.»); `explanation` longer than 500 characters (`TOO_LONG`);
+ * - 409 `OPENING_BALANCE_MISSING`: the cash has no opening balance;
+ * - 400 `BEFORE_OPENING_BALANCE` with `errors[{field: countedAt}]`: `countedOn` is before the cash opening date.
+ *
+ * The explanation is stored and shown as typed (it is not treated as personal data; it should say what happened
+ * to the cash, not about whom). A save is written to the audit log as `CASH_COUNTED` with `counted`,
+ * `bookBalance`, `difference`, `countedAt` and `explanation`. Requires `CASHBOOK_ENTER`.
+ * @summary Preview or save a cash count
+ */
+export const enterCashCount = async (cashCountInput: CashCountInput,
+    params?: EnterCashCountParams, options?: Parameters<typeof nadelFetch>[1]): Promise<CashCount> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return nadelFetch<CashCount>(getEnterCashCountUrl(params),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(cashCountInput)
+  }
+);}
+
+
+
+
+
+export const getEnterCashCountMutationKey = () => ['enterCashCount'] as const;
+
+export const getEnterCashCountMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof enterCashCount>>, TError,EnterCashCountMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof enterCashCount>>, TError,EnterCashCountMutationVariables, TContext> => {
+
+const mutationKey = getEnterCashCountMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof enterCashCount>>, EnterCashCountMutationVariables> = (props) => {
+          const {data,params} = props ?? {};
+
+          return  enterCashCount(data,params,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type EnterCashCountMutationResult = NonNullable<Awaited<ReturnType<typeof enterCashCount>>>
+    export type EnterCashCountMutationBody = CashCountInput
+    export type EnterCashCountMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse
+    export type EnterCashCountMutationVariables = {data: CashCountInput;params?: EnterCashCountParams}
+
+    /**
+ * @summary Preview or save a cash count
+ */
+export const useEnterCashCount = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof enterCashCount>>, TError,EnterCashCountMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof enterCashCount>>,
+        TError,
+        EnterCashCountMutationVariables,
+        TContext
+      > => {
+      return useMutation(getEnterCashCountMutationOptions(options), queryClient);
+    }
+    export const getGetCashCountUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/cash-counts/${id}`
+}
+
+/**
+ * The saved count with the book balance it kept, the difference, the explanation, the lines since the previous
+ * count (as they were when it was saved) and, once booked, how its difference was booked and whether that line
+ * was reversed. 404 `NOT_FOUND` for an unknown count or one of another cooperative. Requires `CASHBOOK_VIEW`.
+ * @summary The card of a cash count
+ */
+export const getCashCount = async (id: string, options?: Parameters<typeof nadelFetch>[1]): Promise<CashCount> => {
+
+  return nadelFetch<CashCount>(getGetCashCountUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCashCountQueryKey = (id: string,) => {
+    return [
+    `/api/v1/cash-counts/${id}`
+    ] as const;
+    }
+
+
+export const getGetCashCountQueryOptions = <TData = Awaited<ReturnType<typeof getCashCount>>, TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCashCount>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCashCountQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCashCount>>> = ({ signal }) => getCashCount(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCashCount>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetCashCountQueryResult = NonNullable<Awaited<ReturnType<typeof getCashCount>>>
+export type GetCashCountQueryError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse
+
+
+export function useGetCashCount<TData = Awaited<ReturnType<typeof getCashCount>>, TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCashCount>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getCashCount>>,
+          TError,
+          Awaited<ReturnType<typeof getCashCount>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetCashCount<TData = Awaited<ReturnType<typeof getCashCount>>, TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCashCount>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getCashCount>>,
+          TError,
+          Awaited<ReturnType<typeof getCashCount>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetCashCount<TData = Awaited<ReturnType<typeof getCashCount>>, TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCashCount>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary The card of a cash count
+ */
+
+export function useGetCashCount<TData = Awaited<ReturnType<typeof getCashCount>>, TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCashCount>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetCashCountQueryOptions(id,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export const getBookCashCountDifferenceUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/cash-counts/${id}/book-difference`
+}
+
+/**
+ * «Оформити різницю» (feature 018 §2.6): a journal line of kind `COUNT_DIFFERENCE` on the cash for the count's
+ * difference, dated the count's day (`countedOn`) in that day's billing month or, when it is closed, the
+ * earliest open month: a surplus («Надлишок») is a receipt of the difference, a shortage («Нестача») a spending
+ * of it (`source {type: CASH_COUNT, id: <the count>}`). The count becomes `BOOKED` and the cash card no longer
+ * shows its unresolved difference. A shortage is refused with 409 `CASH_INSUFFICIENT` (with `balance` and
+ * `date`) when it would make the cash negative on the count's day or a later day.
+ *
+ * A difference is booked once: 409 `DIFFERENCE_ALREADY_BOOKED` (also when two arrive at once, and after the
+ * booked line was reversed). A count that matches: 409 `NO_DIFFERENCE`. A missing or blank reason: 400
+ * `VALIDATION_FAILED` with `errors[{field: reason, code: REQUIRED}]`. Written to the audit log as
+ * `COUNT_DIFFERENCE_BOOKED` with `amount`, `date` and `reason`. 404 `NOT_FOUND` for an unknown count or one of
+ * another cooperative. Requires `CASHBOOK_APPROVE`.
+ * @summary Book the difference of a cash count
+ */
+export const bookCashCountDifference = async (id: string,
+    cashCountBookingRequest: CashCountBookingRequest, options?: Parameters<typeof nadelFetch>[1]): Promise<CashCount> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return nadelFetch<CashCount>(getBookCashCountDifferenceUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(cashCountBookingRequest)
+  }
+);}
+
+
+
+
+
+export const getBookCashCountDifferenceMutationKey = () => ['bookCashCountDifference'] as const;
+
+export const getBookCashCountDifferenceMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof bookCashCountDifference>>, TError,BookCashCountDifferenceMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof bookCashCountDifference>>, TError,BookCashCountDifferenceMutationVariables, TContext> => {
+
+const mutationKey = getBookCashCountDifferenceMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof bookCashCountDifference>>, BookCashCountDifferenceMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  bookCashCountDifference(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type BookCashCountDifferenceMutationResult = NonNullable<Awaited<ReturnType<typeof bookCashCountDifference>>>
+    export type BookCashCountDifferenceMutationBody = CashCountBookingRequest
+    export type BookCashCountDifferenceMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse
+    export type BookCashCountDifferenceMutationVariables = {id: string;data: CashCountBookingRequest}
+
+    /**
+ * @summary Book the difference of a cash count
+ */
+export const useBookCashCountDifference = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof bookCashCountDifference>>, TError,BookCashCountDifferenceMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof bookCashCountDifference>>,
+        TError,
+        BookCashCountDifferenceMutationVariables,
+        TContext
+      > => {
+      return useMutation(getBookCashCountDifferenceMutationOptions(options), queryClient);
     }
     export const getListExpenseCategoriesUrl = (params?: ListExpenseCategoriesParams,) => {
   const normalizedParams = new URLSearchParams();

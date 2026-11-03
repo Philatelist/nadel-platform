@@ -17,6 +17,7 @@ it.
 | Endpoint | Operation | Who |
 |---|---|---|
 | `GET /payments/{id}/receipt.pdf` | `getPaymentReceiptPdf` | `PAYMENTS_VIEW`, or a member who owns every plot of the payment's group now |
+| `GET /cash-counts/{id}/act.pdf` | `getCashCountActPdf` (feature 018) | `CASHBOOK_VIEW`; another cooperative's count 404 |
 | `POST /plots/{id}/invoices` (body `{month?}`) | `issuePlotInvoice` | `INVOICES_ISSUE` |
 | `GET /invoices?month&plotId&latestOnly&page&size` | `listInvoices` | `CHARGES_VIEW` |
 | `GET /invoices/readiness` | `getInvoiceReadiness` | `CHARGES_VIEW` |
@@ -71,6 +72,19 @@ now), names it and draws it with `ReceiptLayout` on one A5 page:
 The number and the amounts never change; the placement is the one at the moment of printing. Nothing is stored. The
 file's `/ID` is derived from the content and its dates are the moment it was printed, so the same payment printed at
 the same moment gives the same bytes.
+
+## The cash count act (feature 018 §2.6)
+
+`CashCountActDocuments` reads the count through `treasury.CashCountActs#act` (the treasury module's public facade:
+moment, day, book balance, counted, difference, explanation, booking and its reversal; `documents → treasury`, never
+the other way), the requisites as for the receipt, and the signers through `members.RoleHolders` (the first active
+holder of the `TREASURER` and of the `CHAIRMAN` base role, in name order, «Last First Middle»; an empty line without
+one). `CashCountActLayout` draws one A4 page: the requisites; «Акт перерахунку каси»; «Дата і час перерахунку» (Kyiv);
+a table of «Залишок готівки за касовою книгою», «Фактична наявність готівки (перераховано)» and «Різниця»; «Результат:
+збігається / нестача … / надлишок …»; «Пояснення»; for a difference «Різницю не оформлено.» or how it was booked (the
+day booked, the line's date and month, the reason) and «Оформлення різниці сторновано …»; the signature lines «Касир
+(скарбник)» and «Голова правління»; the footer. Made on request, not stored and not audited; the file's `/ID` comes
+from the content and its dates are the moment it is printed.
 
 ## The invoice (feature 016 §2.3 to §2.6)
 

@@ -29,6 +29,9 @@ export function CashbookPage() {
             </Link>
             {canEnter && (
               <>
+                <Link to="/cashbook/counts/new" className={buttonClass('secondary')}>
+                  {t.cashbook.count.action}
+                </Link>
                 <Button variant="secondary" onClick={() => setDialog('handover')}>
                   {t.cashbook.handover.action}
                 </Button>

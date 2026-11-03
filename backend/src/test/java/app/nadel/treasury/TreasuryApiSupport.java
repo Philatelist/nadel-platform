@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import app.nadel.TestTokens;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.LinkedHashMap;
@@ -41,6 +42,7 @@ abstract class TreasuryApiSupport extends TreasuryTestSupport {
     static final String CATEGORIES = "/api/v1/expense-categories";
     static final String HANDOVERS = "/api/v1/handovers";
     static final String OTHER_INCOME = "/api/v1/other-income";
+    static final String COUNTS = "/api/v1/cash-counts";
 
     @Autowired
     MockMvc mvc;
@@ -286,6 +288,58 @@ abstract class TreasuryApiSupport extends TreasuryTestSupport {
 
     ResultActions reverseOtherIncome(String bearer, UUID income, String reason) throws Exception {
         return send(bearer, post(OTHER_INCOME + "/" + income + "/reverse"), Map.of("reason", reason));
+    }
+
+    // ---- cash counts
+
+    /** The fields of a cash count. */
+    static Map<String, Object> count(Instant countedAt, String counted, String explanation) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("countedAt", countedAt.toString());
+        body.put("counted", counted);
+        if (explanation != null) {
+            body.put("explanation", explanation);
+        }
+        return body;
+    }
+
+    /** {@code day} at {@code hour}:30 in Kyiv. */
+    static Instant kyiv(LocalDate day, int hour) {
+        return day.atTime(hour, 30).atZone(ZoneId.of("Europe/Kyiv")).toInstant();
+    }
+
+    ResultActions previewCount(String bearer, Map<String, Object> count) throws Exception {
+        return send(bearer, post(COUNTS).param("preview", "true"), count);
+    }
+
+    ResultActions enterCount(String bearer, Map<String, Object> count) throws Exception {
+        return send(bearer, post(COUNTS), count);
+    }
+
+    /** Saves a count and returns its id. */
+    UUID saveCount(String bearer, Map<String, Object> count) throws Exception {
+        return UUID.fromString(body(enterCount(bearer, count).andExpect(status().isCreated())).get("id").asString());
+    }
+
+    ResultActions countCard(String bearer, UUID count) throws Exception {
+        return send(bearer, get(COUNTS + "/" + count), null);
+    }
+
+    ResultActions counts(String bearer) throws Exception {
+        return send(bearer, get(COUNTS), null);
+    }
+
+    ResultActions bookDifference(String bearer, UUID count, String reason) throws Exception {
+        return send(bearer, post(COUNTS + "/" + count + "/book-difference"), Map.of("reason", reason));
+    }
+
+    ResultActions reverseMovement(String bearer, UUID account, UUID movement, String reason) throws Exception {
+        return send(bearer, post(ACCOUNTS + "/" + account + "/movements/" + movement + "/reverse"),
+                Map.of("reason", reason));
+    }
+
+    ResultActions countAct(String bearer, UUID count) throws Exception {
+        return send(bearer, get(COUNTS + "/" + count + "/act.pdf"), null);
     }
 
     /** The lines of the account's journal from {@code from} to today. */
