@@ -27,7 +27,7 @@ Use the root `Makefile` (`make help` lists everything):
 
 ```bash
 make install        # pnpm install
-make infra          # Postgres + PostGIS and Keycloak (docker compose), waits until healthy
+make infra          # Postgres + PostGIS, Keycloak, Mailpit (e-mail, http://localhost:8025) and the fake Telegram API (:8091) (docker compose), waits until healthy
 make up             # infra + backend (:8080) + web (:5173) in one terminal
 make backend        # backend only: ./mvnw spring-boot:run
 make web            # web only
