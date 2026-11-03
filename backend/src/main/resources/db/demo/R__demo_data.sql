@@ -641,8 +641,10 @@ DROP TABLE pg_temp.demo_anchor;
 -- BEGIN demo ledger
 -- The ledger of the demo cooperative (spec 011): what the board would have booked by now, so every screen of the
 -- feature has something to show. Dates follow the demo meters: the anchor is the day their readings count from (read back from
--- plot 20's stored reading, as in the meters block), "the open month" is the anchor's month and "the closed month" the
--- one before it (on the first load, October and September 2026):
+-- plot 20's stored reading, as in the meters block), "the open month" is the month of the latest round of readings (5 days
+-- before the anchor: the anchor's month, or the month before during the first five days of a month, so the open month
+-- always holds the runs and the electricity of that round) and "the closed month" the one before it (on the first
+-- load, October and September 2026):
 --  - the closed month: its month run (membership and land tax), the electricity charges of the readings taken in it,
 --    plot 12's opening balance of 1 500,00 (membership, "Борг за 2025 рік") on its first day; closed by the chairman;
 --  - the open month: its month run, the electricity charges of its readings, one proportional losses run and one
@@ -757,7 +759,8 @@ BEGIN
     anchor := coalesce((SELECT r.taken_on + 75 FROM meter_reading r
                         WHERE r.id = md5('demo-reading:' || md5('demo-meter:' || demo || ':20:ELECTRICITY')::uuid
                                          || ':75')::uuid), CURRENT_DATE);
-    open_month := date_trunc('month', anchor)::date;
+    -- the month of the latest round of readings (run_to), so a load in the first days of a month still shows the runs
+    open_month := date_trunc('month', anchor - 5)::date;
     closed_month := (open_month - interval '1 month')::date;
     run_from := anchor - 19;
     run_to := anchor - 5;
