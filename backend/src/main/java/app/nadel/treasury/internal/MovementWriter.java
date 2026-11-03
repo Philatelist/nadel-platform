@@ -41,8 +41,8 @@ import org.springframework.transaction.annotation.Transactional;
  * accounts and backfills every payment): an {@link IllegalStateException}, which rolls the payment back. Logs ids and
  * counts only.
  * <p>
- * <b>Entries of the cash book</b> ({@link #writeEntry}, {@link #writeReversal}: an expense and its reversal; later
- * slices add handovers, other income and differences): the caller has booked the month with
+ * <b>Entries of the cash book</b> ({@link #writeEntry}, {@link #writeReversal}: an expense, a handover (two lines), an
+ * other income and their reversals; later slices add differences): the caller has booked the month with
  * {@code ledger.BookingMonths.bookFor} and holds the account row {@code FOR UPDATE} (the treasury lock order), and has
  * checked the entry (opening balance, the no-negative-cash rule). A reversal has the kind and account of the line it
  * reverses, the negated amount, the reason, and the day and month the caller gives (today and its open month).

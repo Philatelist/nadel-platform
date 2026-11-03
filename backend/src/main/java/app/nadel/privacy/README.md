@@ -35,7 +35,8 @@ personal data but are kept with the same key (ADR 0018): the mailbox password at
 the chat id of a member's Telegram link at `FieldRef("telegram_link", "chat_id_enc", linkId)` with the blind index
 `TELEGRAM_CHAT` in `telegram_link.chat_id_bidx` (see the notifications README).
 The `treasury` module (feature 018) seals the counterparty and the description of an expense at
-`FieldRef("expense", "counterparty_enc" | "description_enc", expenseId)` and their audit values at the audit entry's
+`FieldRef("expense", "counterparty_enc" | "description_enc", expenseId)`, the description of an other income at
+`FieldRef("other_income", "description_enc", incomeId)`, and their audit values at the audit entry's
 `changes.counterparty.new` / `changes.description.new` (see the treasury README).
 
 ## Formats

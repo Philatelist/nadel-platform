@@ -29,6 +29,13 @@ import org.springframework.stereotype.Component;
  *       counterparty and description as {@code counterparty} and {@code description}, sealed by
  *       {@link TreasuryCipher#auditValue} ({@code sealed = true}: opened only for readers with
  *       {@code MEMBERS_VIEW}). New values only.</li>
+ *   <li>{@code HANDOVER} (entity the handover, label its deposit slip number: a bank document number, not personal
+ *       data): {@code HANDOVER_RECORDED} and {@code HANDOVER_REVERSED} with {@code amount}, {@code date} (the handover
+ *       date), {@code documentNumber}, and a reversal's {@code reversedOn} and {@code reason}. New values only.</li>
+ *   <li>{@code OTHER_INCOME} (entity the income, label the income date, ISO): {@code OTHER_INCOME_RECORDED} and
+ *       {@code OTHER_INCOME_REVERSED} with {@code amount}, {@code account}, {@code category}, {@code date}, a
+ *       reversal's {@code reversedOn} and {@code reason}, and the description as {@code description}, sealed like an
+ *       expense's. New values only.</li>
  *   <li>{@code CASHBOOK_CATEGORY} (entity the category, label {@code base:<CODE>} for a seeded category never renamed,
  *       otherwise its name): {@code CASHBOOK_CATEGORY_ADDED} ({@code kind}, {@code name}),
  *       {@code CASHBOOK_CATEGORY_RENAMED} ({@code name} old and new), {@code CASHBOOK_CATEGORY_REORDERED}
@@ -41,6 +48,8 @@ class TreasuryAuditPublisher {
     static final String MONEY_ACCOUNT = "MONEY_ACCOUNT";
     static final String EXPENSE = "EXPENSE";
     static final String CASHBOOK_CATEGORY = "CASHBOOK_CATEGORY";
+    static final String HANDOVER = "HANDOVER";
+    static final String OTHER_INCOME = "OTHER_INCOME";
 
     /** Every action the treasury writes; each is a value of the contract's {@code AuditAction}. */
     enum Action {
@@ -50,12 +59,25 @@ class TreasuryAuditPublisher {
         CASHBOOK_CATEGORY_ADDED,
         CASHBOOK_CATEGORY_RENAMED,
         CASHBOOK_CATEGORY_REORDERED,
-        CASHBOOK_CATEGORY_ARCHIVED
+        CASHBOOK_CATEGORY_ARCHIVED,
+        HANDOVER_RECORDED,
+        HANDOVER_REVERSED,
+        OTHER_INCOME_RECORDED,
+        OTHER_INCOME_REVERSED
     }
 
     /** What an expense entry records (the expense as entered; the texts in the clear, sealed here). */
     record ExpenseFacts(UUID expenseId, MoneyAccountKind account, Money amount, UUID categoryId, LocalDate date,
             @Nullable String counterparty, @Nullable String description) {
+    }
+
+    /** What a handover entry records. */
+    record HandoverFacts(UUID handoverId, Money amount, LocalDate date, String documentNumber) {
+    }
+
+    /** What an other income entry records (the description in the clear, sealed here). */
+    record OtherIncomeFacts(UUID incomeId, MoneyAccountKind account, Money amount, UUID categoryId, LocalDate date,
+            @Nullable String description) {
     }
 
     private final ApplicationEventPublisher events;
@@ -86,6 +108,24 @@ class TreasuryAuditPublisher {
                         new FieldChange("reason", null, reason)), at);
     }
 
+    void handoverRecorded(AccessProfile actor, HandoverFacts handover, Instant at) {
+        publishHandover(actor, Action.HANDOVER_RECORDED, handover, List.of(), at);
+    }
+
+    void handoverReversed(AccessProfile actor, HandoverFacts handover, LocalDate reversedOn, String reason,
+            Instant at) {
+        publishHandover(actor, Action.HANDOVER_REVERSED, handover, reversal(reversedOn, reason), at);
+    }
+
+    void otherIncomeRecorded(AccessProfile actor, OtherIncomeFacts income, Instant at) {
+        publishOtherIncome(actor, Action.OTHER_INCOME_RECORDED, income, List.of(), at);
+    }
+
+    void otherIncomeReversed(AccessProfile actor, OtherIncomeFacts income, LocalDate reversedOn, String reason,
+            Instant at) {
+        publishOtherIncome(actor, Action.OTHER_INCOME_REVERSED, income, reversal(reversedOn, reason), at);
+    }
+
     void category(AccessProfile actor, Action action, UUID categoryId, String label, List<FieldChange> changes,
             Instant at) {
         UUID tenantId = Objects.requireNonNull(actor.tenantId(), "tenantId");
@@ -113,6 +153,41 @@ class TreasuryAuditPublisher {
         }
         events.publishEvent(new AuditEvent(eventId, tenantId, at, actorOf(actor), action.name(), EXPENSE,
                 expense.expenseId(), expense.date().toString(), changes));
+    }
+
+    private void publishHandover(AccessProfile actor, Action action, HandoverFacts handover, List<FieldChange> more,
+            Instant at) {
+        UUID tenantId = Objects.requireNonNull(actor.tenantId(), "tenantId");
+        List<FieldChange> changes = new ArrayList<>(List.of(
+                new FieldChange("amount", null, handover.amount().toString()),
+                new FieldChange("date", null, handover.date().toString()),
+                new FieldChange("documentNumber", null, handover.documentNumber())));
+        changes.addAll(more);
+        events.publishEvent(new AuditEvent(UUID.randomUUID(), tenantId, at, actorOf(actor), action.name(), HANDOVER,
+                handover.handoverId(), handover.documentNumber(), changes));
+    }
+
+    private void publishOtherIncome(AccessProfile actor, Action action, OtherIncomeFacts income,
+            List<FieldChange> more, Instant at) {
+        UUID tenantId = Objects.requireNonNull(actor.tenantId(), "tenantId");
+        UUID eventId = UUID.randomUUID();
+        List<FieldChange> changes = new ArrayList<>(List.of(
+                new FieldChange("amount", null, income.amount().toString()),
+                new FieldChange("account", null, income.account().name()),
+                new FieldChange("category", null, income.categoryId().toString()),
+                new FieldChange("date", null, income.date().toString())));
+        changes.addAll(more);
+        FieldChange description = cipher.auditValue(tenantId, eventId, "description", income.description());
+        if (description != null) {
+            changes.add(description);
+        }
+        events.publishEvent(new AuditEvent(eventId, tenantId, at, actorOf(actor), action.name(), OTHER_INCOME,
+                income.incomeId(), income.date().toString(), changes));
+    }
+
+    private static List<FieldChange> reversal(LocalDate reversedOn, String reason) {
+        return List.of(new FieldChange("reversedOn", null, reversedOn.toString()),
+                new FieldChange("reason", null, reason));
     }
 
     private static Actor actorOf(AccessProfile actor) {

@@ -39,6 +39,8 @@ abstract class TreasuryApiSupport extends TreasuryTestSupport {
     static final String PAYMENTS = "/api/v1/payments";
     static final String EXPENSES = "/api/v1/expenses";
     static final String CATEGORIES = "/api/v1/expense-categories";
+    static final String HANDOVERS = "/api/v1/handovers";
+    static final String OTHER_INCOME = "/api/v1/other-income";
 
     @Autowired
     MockMvc mvc;
@@ -235,6 +237,60 @@ abstract class TreasuryApiSupport extends TreasuryTestSupport {
 
     ResultActions reorderCategories(String bearer, String kind, List<UUID> ids) throws Exception {
         return send(bearer, put(CATEGORIES + "/order"), Map.of("kind", kind, "ids", ids));
+    }
+
+    // ---- handovers and other income
+
+    /** The fields of a new handover. */
+    static Map<String, Object> handover(LocalDate date, String amount, String documentNumber) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("date", date.toString());
+        body.put("amount", amount);
+        body.put("documentNumber", documentNumber);
+        return body;
+    }
+
+    ResultActions createHandover(String bearer, Map<String, Object> handover) throws Exception {
+        return send(bearer, post(HANDOVERS), handover);
+    }
+
+    /** Records a handover and returns its id. */
+    UUID recordHandover(String bearer, Map<String, Object> handover) throws Exception {
+        return UUID.fromString(body(createHandover(bearer, handover).andExpect(status().isCreated())).get("id")
+                .asString());
+    }
+
+    ResultActions reverseHandover(String bearer, UUID handover, String reason) throws Exception {
+        return send(bearer, post(HANDOVERS + "/" + handover + "/reverse"), Map.of("reason", reason));
+    }
+
+    /** The fields of a new other income. */
+    static Map<String, Object> otherIncome(String account, LocalDate date, String amount, UUID category) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("account", account);
+        body.put("date", date.toString());
+        body.put("amount", amount);
+        body.put("categoryId", category.toString());
+        return body;
+    }
+
+    ResultActions createOtherIncome(String bearer, Map<String, Object> income) throws Exception {
+        return send(bearer, post(OTHER_INCOME), income);
+    }
+
+    /** Records an other income and returns its id. */
+    UUID recordOtherIncome(String bearer, Map<String, Object> income) throws Exception {
+        return UUID.fromString(body(createOtherIncome(bearer, income).andExpect(status().isCreated())).get("id")
+                .asString());
+    }
+
+    ResultActions reverseOtherIncome(String bearer, UUID income, String reason) throws Exception {
+        return send(bearer, post(OTHER_INCOME + "/" + income + "/reverse"), Map.of("reason", reason));
+    }
+
+    /** The lines of the account's journal from {@code from} to today. */
+    JsonNode journal(String bearer, UUID account, LocalDate from) throws Exception {
+        return body(movements(bearer, account, from, today()).andExpect(status().isOk())).get("items");
     }
 
     /** The audit entries about the entity with the action, once {@code count} of them are written. */

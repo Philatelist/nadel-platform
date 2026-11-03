@@ -3,9 +3,9 @@
 The cooperative's own money (feature 018, «Каса і банк»): the **cash account** («Каса», the cash the treasurer
 holds) and the **bank account** («Банківський рахунок»), their **opening balances**, the **journal** of every move of
 money and the **balance** of an account on any day. Members' debts never change here: the module only shows where the
-money they paid went. Draft: slices 1 and 2 of the feature (accounts, opening balances, member payments in the journal;
-expenses with receipt files, categories, the no-negative-cash rule); handovers, other income, cash counts, bank
-reconciliations, the reports and the acts come with later slices.
+money they paid went. Draft: slices 1 to 3 of the feature (accounts, opening balances, member payments in the journal;
+expenses with receipt files, categories, the no-negative-cash rule; handovers to the bank and other income); cash
+counts, bank reconciliations, the reports and the acts come with later slices.
 The money rules are `docs/domain/money-rules.md` §14 (written with the feature); the decisions are ADR 0019.
 
 Tables (`V32__treasury.sql`, all under RLS `tenant_isolation`, an index leading with `tenant_id`, `UNIQUE (tenant_id,
@@ -18,7 +18,9 @@ id)` and composite foreign keys on `(tenant_id, x_id)`):
 | `expense_category` | Expense and income categories (`kind` `EXPENSE`/`INCOME`); a seeded one has `system_code` and `name` null until renamed; unique `lower(name)` per kind (`expense_category_name_uq`, archived ones included) | `nadel_app` may update only `name`, `sort_order`, `archived`; never deleted; written by `Categories` |
 | `expense` | An expense: account, category, `amount` (> 0), `expense_date`, `counterparty_enc`/`description_enc` (sealed), document number and date, `movement_id`; a reversal is a second row with `reverses_expense_id` and `reason`, dated the day of the reversal | append-only; written by `Expenses` (`ExpenseQueries`) |
 | `expense_attachment` | Up to five receipt files per expense (`position` 1..5): stored type, name, `size_bytes`, `sha256` and `content` (`STORAGE EXTERNAL`) | append-only; two JPA entities: `ExpenseAttachmentRecord` (no content: lists, counts, the card) and `ExpenseAttachmentContent` (insert of an upload, the download); a reused file is copied inside the database |
-| `other_income`, `handover`, `cash_count`, `bank_reconciliation` | Created by V32 with their guards; no writer yet (later slices) | see V32 |
+| `handover` | Cash taken to the bank: `amount` (> 0), `handed_on`, `document_number` (the deposit slip, required), `out_movement_id` (the cash line) and `in_movement_id` (the bank line); a reversal is a second row with `reverses_handover_id`, `reason`, the original's document number and its own two reversing movements, dated the day of the reversal | append-only; written by `Handovers` (`HandoverQueries`) |
+| `other_income` | Income not from members: account, income category, `amount` (> 0), `received_on`, `description_enc` (sealed), `movement_id`; a reversal is a second row with `reverses_other_income_id`, `reason` and the category, without a description | append-only; written by `OtherIncomes` (`OtherIncomeQueries`) |
+| `cash_count`, `bank_reconciliation` | Created by V32 with their guards; no writer yet (later slices) | see V32 |
 
 V32 also backfilled one movement per payment row that existed when the feature was installed (the one sanctioned
 migration-time read of `payment`, between the `BACKFILL BEGIN`/`END` markers): a payment on its `received_on` in its
@@ -39,13 +41,17 @@ Everything else is in `internal`.
 |---|---|---|
 | `GET /money-accounts?asOf` | `listMoneyAccounts`: both accounts, cash first: id, kind, the bank's IBAN from the requisites (`settings.CooperativeSettings`), `opening {amount, date}`, `balance` on `asOf` (absent without an opening balance), `negative`, `asOf` (default today in Europe/Kyiv; a later day is 400 `asOf` `INVALID`). Later slices add optional fields (last count, unresolved difference, months) | `CASHBOOK_VIEW` |
 | `POST /money-accounts/{id}/opening-balance` | `setOpeningBalance` `{amount, date}`: once (409 `OPENING_BALANCE_ALREADY_SET`); `amount` 0.00 or more with at most 12 integer digits (400 `amount` `INVALID`), `date` not after today (400 `date` `DATE_IN_FUTURE`); 404 `NOT_FOUND`. Audit `OPENING_BALANCE_SET`. Answers the account with today's balance | `CASHBOOK_APPROVE` |
-| `GET /money-accounts/{id}/movements?from&to&page&size` | `listAccountMovements`: the lines dated `from..to` (default the current month up to today; `from` after `to` is 400 `from` `INVALID`), oldest first (date, time entered, id), with `openingBalance` (end of `from − 1`) and `closingBalance` (end of `to`) over the whole period, `negative` (closing below 0.00). Each line: date, kind, amount, `bookingMonth`, `beforeOpening`, `source {type, id}`, `reversed`, `reversesMovementId`/`reason` (a reversal), `createdByName` (the author's current name through `audit.ActorNames`, as the payment card shows it to the board), `createdAt`; a member payment line adds `plotId` and `receiptNumber` (cash) or `documentNumber` (the bank reference) through `LedgerReadModel.paymentRefs`. 404 `NOT_FOUND` | `CASHBOOK_VIEW` |
+| `GET /money-accounts/{id}/movements?from&to&page&size` | `listAccountMovements`: the lines dated `from..to` (default the current month up to today; `from` after `to` is 400 `from` `INVALID`), oldest first (date, time entered, id), with `openingBalance` (end of `from − 1`) and `closingBalance` (end of `to`) over the whole period, `negative` (closing below 0.00). Each line: date, kind, amount, `bookingMonth`, `beforeOpening`, `source {type, id}`, `reversed`, `reversesMovementId`/`reason` (a reversal), `createdByName` (the author's current name through `audit.ActorNames`, as the payment card shows it to the board), `createdAt`; a member payment line adds `plotId` and `receiptNumber` (cash) or `documentNumber` (the bank reference) through `LedgerReadModel.paymentRefs`; a handover line adds `documentNumber` (the deposit slip), an expense or other income line `categoryId` (a reversal line its entry's). 404 `NOT_FOUND` | `CASHBOOK_VIEW` |
 
 | `POST /expenses` (multipart: part `expense` JSON, parts `files`) | `createExpense`: see "Expenses" below; 201 with the card | `CASHBOOK_ENTER` |
 | `GET /expenses?from&to&account&categoryId&page&size` | `listExpenses`: originals only, newest first (date, time entered, id), each with account, category, counterparty, amount, `attachmentCount` and `reversed`; `from` after `to` is 400 `from` `INVALID` | `CASHBOOK_VIEW` |
 | `GET /expenses/{id}` | `getExpense`: the card with counterparty, description, document, the files (number, name, type, size) and the reversal (date, reason, who, when); 404 for a reversal row | `CASHBOOK_VIEW` |
 | `GET /expenses/{id}/attachments/{n}` | `downloadExpenseAttachment`: the stored file with its stored type, `Content-Disposition: attachment` (ASCII `filename` and UTF-8 `filename*`), `X-Content-Type-Options: nosniff`, `Cache-Control: no-store`; not audited | `CASHBOOK_VIEW` |
 | `POST /expenses/{id}/reverse` `{reason}` | `reverseExpense`: 200 with the card, now reversed | `CASHBOOK_APPROVE` |
+| `POST /handovers` `{date, amount, documentNumber}` | `createHandover`: see "Handovers" below; 201 with the handover | `CASHBOOK_ENTER` |
+| `POST /handovers/{id}/reverse` `{reason}` | `reverseHandover`: 200 with the handover, now reversed; the id is the `source.id` of a handover line | `CASHBOOK_APPROVE` |
+| `POST /other-income` `{account, date, amount, categoryId, description?}` | `createOtherIncome`: see "Other income" below; 201 with the income | `CASHBOOK_ENTER` |
+| `POST /other-income/{id}/reverse` `{reason}` | `reverseOtherIncome`: 200 with the income, now reversed | `CASHBOOK_APPROVE` |
 | `GET /expense-categories?kind&includeArchived` | `listExpenseCategories` (kind default `EXPENSE`), by `sortOrder` | `CASHBOOK_VIEW` |
 | `POST /expense-categories`, `PUT /expense-categories/{id}`, `PUT /expense-categories/order` | add, rename/archive (`archived: false` offers it again), reorder the non-archived of a kind (a list that is not exactly them is 400 `ids` `INVALID`) | `CASHBOOK_APPROVE` |
 
@@ -54,14 +60,14 @@ category is 404 (RLS).
 
 ## The no-negative-cash rule (`CashGuard`, pure)
 
-An entry that takes money out of the cash dated *t* (a cash expense; later: handovers, shortages, reversals of cash
-income) is refused with 409 `CASH_INSUFFICIENT` when the lowest balance from *t* on (the running balance at the end of
+An entry that takes money out of the cash dated *t* (a cash expense, a handover, the reversal of a cash other income;
+later: shortages) is refused with 409 `CASH_INSUFFICIENT` when the lowest balance from *t* on (the running balance at the end of
 *t* and of every later movement day) plus the entry is below 0.00; the problem carries that lowest balance (`balance`,
 before the entry) and the earliest day it is reached (`date`). So a back-dated entry is refused when a later day would
 go negative although its own day stays positive (FS 2.17 #5). The caller locks the cash account `FOR UPDATE` (after
 the billing month) before it reads the day totals (READ COMMITTED), so two entries at the same moment are checked one
-after the other (`ExpenseConcurrencyTests`). A bank expense and an expense reversal are never checked; member payment
-reversals are exempt (slice 1).
+after the other (`ExpenseConcurrencyTests`). A bank expense, other income, an expense reversal and a handover reversal
+(money back into the cash) are never checked; member payment reversals are exempt (slice 1).
 
 ## Expenses (`Expenses`)
 
@@ -107,6 +113,31 @@ The counterparty and the description are sealed (`TreasuryCipher`, `privacy.Pers
 `FieldRef("expense", "counterparty_enc" | "description_enc", expenseId)`; screens with `CASHBOOK_VIEW` show them. In the
 audit they are `counterparty`/`description` sealed at `FieldChange.newValueRef(eventId, field)` (`sealed = true`), so
 neither `audit_entry` nor `event_publication` holds them in the clear and the log opens them only with `MEMBERS_VIEW`.
+
+## Handovers (`Handovers`)
+
+Recording, in this order (the first refusal answers, nothing is stored): the fields (400 `VALIDATION_FAILED`: `amount`
+`AMOUNT_NOT_POSITIVE`/`INVALID`, `date` `DATE_IN_FUTURE`, `documentNumber` `REQUIRED` when blank after trimming, the
+contract's `TOO_LONG`); `bookFor(date)`, the cash and then the bank account `FOR UPDATE`, for each 409
+`OPENING_BALANCE_MISSING` and 400 `BEFORE_OPENING_BALANCE`, then `CashGuard` on the cash. Then two
+`MovementWriter.writeEntry` lines of the same date and month (`HANDOVER_OUT` the negated amount on the cash,
+`HANDOVER_IN` the amount on the bank, both source `HANDOVER` with the handover id), the handover row and
+`HANDOVER_RECORDED`. Reversing: a blank reason is 400 `reason` `REQUIRED`; `bookFor(today)`, the cash and the bank
+locked, 409 `ENTRY_ALREADY_REVERSED` (backstops `handover_reversed_once_uq`, `account_movement_reversed_once_uq`); the
+reversal of each line dated today (the cash gets the money back, the bank may go below zero: never refused for a
+balance), the reversal row and `HANDOVER_REVERSED`. The deposit slip number is a bank document number, not personal
+data: it is stored, audited (also as the entry label) and shown in the clear.
+
+## Other income (`OtherIncomes`)
+
+Recording: the fields (400 `VALIDATION_FAILED`: `amount`, `date` as for an expense, `categoryId` `INVALID` (unknown,
+another cooperative's, or an expense category: the database does not enforce the kind) or `ARCHIVED`, the contract's
+`TOO_LONG` for `description`); `bookFor(date)`, the account `FOR UPDATE`, 409 `OPENING_BALANCE_MISSING`, 400
+`BEFORE_OPENING_BALANCE`; money comes in, so no balance rule. Then the `OTHER_INCOME` line (the amount, source
+`OTHER_INCOME`), the income row with the description sealed at `FieldRef("other_income", "description_enc",
+incomeId)` and `OTHER_INCOME_RECORDED` (the description sealed like an expense's). Reversing: as an expense, but the
+reversal takes the money out again, so a cash income's reversal goes through `CashGuard` dated today (409
+`CASH_INSUFFICIENT`); a bank income's reversal may take the bank below zero.
 
 ## Categories (`Categories`)
 

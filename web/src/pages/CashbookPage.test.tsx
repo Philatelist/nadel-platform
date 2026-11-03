@@ -10,6 +10,11 @@ import { CashbookPage } from './CashbookPage';
 const useListMoneyAccounts = vi.fn();
 const useListAccountMovements = vi.fn();
 const setOpeningBalance = vi.fn();
+const useListExpenseCategories = vi.fn();
+const createHandover = vi.fn();
+const createOtherIncome = vi.fn();
+const reverseHandover = vi.fn();
+const reverseOtherIncome = vi.fn();
 let permissions: string[] = [];
 
 vi.mock('../me', () => ({
@@ -22,6 +27,11 @@ vi.mock('@nadel/api-client', async (importOriginal) => ({
   useListMoneyAccounts: (...args: unknown[]) => useListMoneyAccounts(...args),
   useListAccountMovements: (...args: unknown[]) => useListAccountMovements(...args),
   setOpeningBalance: (...args: unknown[]) => setOpeningBalance(...args),
+  useListExpenseCategories: (...args: unknown[]) => useListExpenseCategories(...args),
+  createHandover: (...args: unknown[]) => createHandover(...args),
+  createOtherIncome: (...args: unknown[]) => createOtherIncome(...args),
+  reverseHandover: (...args: unknown[]) => reverseHandover(...args),
+  reverseOtherIncome: (...args: unknown[]) => reverseOtherIncome(...args),
 }));
 
 const cash = {
@@ -172,5 +182,118 @@ describe('CashbookPage', () => {
     expect(within(table).getByText('Витрата')).toBeInTheDocument();
     expect(within(table).getByText('до вхідного залишку')).toBeInTheDocument();
     expect(within(table).getByRole('link', { name: '№ 7' })).toHaveAttribute('href', '/payments/pay1');
+  });
+});
+
+describe('CashbookPage handovers and other income', () => {
+  beforeEach(() => {
+    window.localStorage.setItem('nadel.locale', 'uk');
+    permissions = ['CASHBOOK_VIEW'];
+    reverseHandover.mockReset();
+    reverseOtherIncome.mockReset();
+    createHandover.mockReset();
+    createOtherIncome.mockReset();
+    useListMoneyAccounts.mockReturnValue(queryResult([cash, bank]));
+    useListExpenseCategories.mockReturnValue(
+      queryResult([
+        { id: 'c1', kind: 'INCOME', systemCode: 'BANK_INTEREST', archived: false },
+        { id: 'c2', kind: 'INCOME', systemCode: 'GRANTS', archived: true },
+      ]),
+    );
+    useListAccountMovements.mockReturnValue(
+      page([
+        movement({
+          id: 'h1',
+          kind: 'HANDOVER_OUT',
+          amount: '-300.00',
+          source: { type: 'HANDOVER', id: 'hid' },
+          receiptNumber: undefined,
+          plotId: undefined,
+        }),
+        movement({
+          id: 'e1',
+          kind: 'EXPENSE',
+          amount: '-20.00',
+          source: { type: 'EXPENSE', id: 'eid' },
+          receiptNumber: undefined,
+          plotId: undefined,
+        }),
+      ]),
+    );
+  });
+
+  it('shows the entry buttons only with CASHBOOK_ENTER', () => {
+    renderPage();
+    expect(screen.queryByRole('button', { name: 'Здати в банк' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Інший прихід' })).not.toBeInTheDocument();
+  });
+
+  it('records a handover with the typed values', async () => {
+    permissions = ['CASHBOOK_VIEW', 'CASHBOOK_ENTER'];
+    createHandover.mockResolvedValue({});
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(screen.getByRole('button', { name: 'Здати в банк' }));
+    await user.type(screen.getByLabelText('Сума'), '1 500,5');
+    await user.type(screen.getByLabelText('Номер квитанції банку'), 'КВ-123');
+    await user.click(screen.getByRole('button', { name: 'Записати здачу' }));
+    await waitFor(() => expect(createHandover).toHaveBeenCalledTimes(1));
+    expect(createHandover.mock.calls[0]?.[0]).toMatchObject({ amount: '1500.50', documentNumber: 'КВ-123' });
+  });
+
+  it('requires the slip number for a handover', async () => {
+    permissions = ['CASHBOOK_VIEW', 'CASHBOOK_ENTER'];
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(screen.getByRole('button', { name: 'Здати в банк' }));
+    await user.type(screen.getByLabelText('Сума'), '10');
+    await user.click(screen.getByRole('button', { name: 'Записати здачу' }));
+    expect(screen.getByText('Вкажіть номер квитанції.')).toBeInTheDocument();
+    expect(createHandover).not.toHaveBeenCalled();
+  });
+
+  it('records other income with a non-archived category', async () => {
+    permissions = ['CASHBOOK_VIEW', 'CASHBOOK_ENTER'];
+    createOtherIncome.mockResolvedValue({});
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(screen.getByRole('button', { name: 'Інший прихід' }));
+    expect(screen.queryByRole('option', { name: 'Гранти' })).not.toBeInTheDocument();
+    await user.type(screen.getByLabelText('Сума'), '40');
+    await user.selectOptions(screen.getByLabelText('Стаття доходу'), 'c1');
+    await user.click(screen.getByRole('button', { name: 'Записати прихід' }));
+    await waitFor(() => expect(createOtherIncome).toHaveBeenCalledTimes(1));
+    expect(createOtherIncome.mock.calls[0]?.[0]).toMatchObject({
+      account: 'BANK',
+      amount: '40.00',
+      categoryId: 'c1',
+    });
+  });
+
+  it('offers reversal of a handover only with CASHBOOK_APPROVE, and sends the source id', async () => {
+    permissions = ['CASHBOOK_VIEW'];
+    const { unmount } = renderPage();
+    expect(screen.queryByRole('button', { name: 'Сторнувати' })).not.toBeInTheDocument();
+    unmount();
+
+    permissions = ['CASHBOOK_VIEW', 'CASHBOOK_APPROVE'];
+    reverseHandover.mockResolvedValue({});
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(screen.getAllByRole('button', { name: 'Сторнувати' })[0] as HTMLElement);
+    const dialog = screen.getByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Сторнувати' }));
+    expect(screen.getByText('Вкажіть причину сторнування.')).toBeInTheDocument();
+    await user.type(screen.getByLabelText('Причина'), 'помилка');
+    await user.click(within(dialog).getByRole('button', { name: 'Сторнувати' }));
+    await waitFor(() => expect(reverseHandover).toHaveBeenCalledWith('hid', { reason: 'помилка' }));
+  });
+
+  it('links an expense row to its card', () => {
+    renderPage();
+    expect(screen.getAllByRole('link', { name: 'Відкрити витрату' })[0]).toHaveAttribute(
+      'href',
+      '/cashbook/expenses/eid',
+    );
   });
 });

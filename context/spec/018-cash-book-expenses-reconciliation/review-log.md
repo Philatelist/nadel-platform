@@ -10,3 +10,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `2ad657e..64b6fcf` | PASS | — | minor: movements `closingBalance` not capped at today for a future `to` (harmless, no future movements); offset pagination with a self left-join for `reversed` — revisit at scale |
+
+## Slice 2 — Expenses with receipt attachments, categories, no negative cash
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `64b6fcf..bcae29e` | PASS | — | minor: IOException on upload read → 500; JFXX thumbnail / ICC kept whole (theoretical); list decrypts up to 200 counterparties per page; reversal reason stored as plain audit value (user content, as other reversals) |

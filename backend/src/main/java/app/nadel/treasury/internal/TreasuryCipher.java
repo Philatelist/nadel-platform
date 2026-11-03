@@ -11,8 +11,9 @@ import org.springframework.stereotype.Component;
 /**
  * Seals and opens the personal texts of the treasury (feature 018 §2.3, technical considerations 2.6; ADR 0016, the 014
  * mechanism of {@code members/internal/ContactCipher}): the counterparty and the description of an expense at
- * {@code FieldRef("expense", "counterparty_enc" | "description_enc", expenseId)}, so a value sealed for one expense never
- * opens for another, and their audit values at {@link FieldChange#newValueRef} of the audit event id (shown only to
+ * {@code FieldRef("expense", "counterparty_enc" | "description_enc", expenseId)} and the description of an other income
+ * at {@code FieldRef("other_income", "description_enc", incomeId)}, so a value sealed for one row never opens for
+ * another, and their audit values at {@link FieldChange#newValueRef} of the audit event id (shown only to
  * readers with {@code MEMBERS_VIEW}). Never log a value. Runs in the cooperative's transaction ({@code tenantId} is the
  * current cooperative).
  */
@@ -20,6 +21,7 @@ import org.springframework.stereotype.Component;
 class TreasuryCipher {
 
     static final String EXPENSE = "expense";
+    static final String OTHER_INCOME = "other_income";
     static final String COUNTERPARTY = "counterparty_enc";
     static final String DESCRIPTION = "description_enc";
 

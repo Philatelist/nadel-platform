@@ -101,3 +101,8 @@
 - AUTO (licence, conservative choice): heic-to 1.6.7 is LGPL-3.0, not MIT as TC assumed; heic2any bundles libheif (LGPL) too. No LGPL dependency added: heic-to removed; HEIC handled only by the browser's own decoder (createImageBitmap → canvas → JPEG; Safari/iOS), otherwise the type error. TC 2.11 to be amended. Owner decision for the PR: accept an LGPL library if HEIC from Chrome/Android desktop files matters.
 - Known minor: server field errors AMOUNT_NOT_POSITIVE / DATE_IN_FUTURE show the existing validation catalog wording, not the FS 2.3 wording (client-side checks use FS wording); the HEIC failure path has no automated test.
 - S2 Verify (orchestrator): backend 108 green; clients green (web 931); pnpm audit OK; package.json/lockfile unchanged vs main. TC 2.11 and tasks amended for the HEIC decision.
+- Slice 2 commit bcae29e (backend 108 + clients green); review round 1 started (64b6fcf..bcae29e).
+- Slice 2 review round 1: PASS (4 minor notes in review-log.md).
+- S3 web task done (react-frontend): HandoverDialog, OtherIncomeDialog, journal «Сторнувати» for HANDOVER/OTHER_INCOME (APPROVE), expense rows link to the card; i18n. Reported web 937 green, RED on the gate. Both handover lines offer reversal (same source id).
+- S3 backend task done (spring-backend): Handovers, OtherIncomes (+queries), EntryChecks (shared rules, Expenses refactored onto it, ExpensesTests unchanged green), journal categoryId and handover documentNumber; audit HANDOVER_*/OTHER_INCOME_*; contract + gen. RED on 2. Deviations accepted: unknown/wrong-kind category → 400 categoryId INVALID (as expenses); handover needs both opening balances; handover reversal never refused.
+- S3 Verify (orchestrator): backend 126 green; clients green (web 937).

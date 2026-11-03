@@ -41,6 +41,31 @@ class CashBookExamplesTests {
     }
 
     @Test
+    void row3TheHandoverReversedOn8OctoberGivesTheCash1200AndTheBank20000Back() {
+        // the reversal lines: the cash gets the 1 000,00 back, the bank gives it; the cash rule only checks money out
+        List<DayTotal> cash = new ArrayList<>(cashAfterRow(3));
+        cash.add(total("2026-10-08", "1000.00"));
+        List<DayTotal> bank = List.of(total("2026-10-07", "1000.00"), total("2026-10-08", "-1000.00"));
+
+        assertThat(AccountBalances.balanceAt(CASH, cash, day("2026-10-08"))).isEqualTo(money("1200.00"));
+        assertThat(AccountBalances.balanceAt(BANK, bank, day("2026-10-08"))).isEqualTo(money("20000.00"));
+        assertThat(AccountBalances.balanceAt(CASH, cash, day("2026-10-07")))
+                .as("the handover day keeps its balance").isEqualTo(money("200.00"));
+    }
+
+    @Test
+    void row3AfterTheHandoverReversingA300CashIncomeOf6OctoberIsRefusedWithTheBalance200() {
+        // a cash other income of 300,00 on 06.10 instead of the expense: cash 1 800,00, then 800,00 after the handover;
+        // an expense of 600,00 on 07.10 leaves 200,00, so taking the 300,00 back on 08.10 would make it −100,00
+        List<DayTotal> cash = List.of(total("2026-10-05", "500.00"), total("2026-10-06", "300.00"),
+                total("2026-10-07", "-1600.00"));
+
+        assertThat(CashGuard.shortfall(CASH, cash, day("2026-10-08"), money("-300.00")))
+                .contains(new Shortfall(money("200.00"), day("2026-10-08")));
+        assertThat(CashGuard.shortfall(CASH, cash, day("2026-10-08"), money("-200.00"))).isEmpty();
+    }
+
+    @Test
     void row4ACashExpenseOf250On7OctoberIsRefusedWithTheBalance200() {
         assertThat(CashGuard.shortfall(CASH, cashAfterRow(3), day("2026-10-07"), money("-250.00")))
                 .contains(new Shortfall(money("200.00"), day("2026-10-07")));

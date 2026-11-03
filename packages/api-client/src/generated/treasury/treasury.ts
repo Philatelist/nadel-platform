@@ -41,6 +41,8 @@ import type {
   ExpenseCategoryUpdate,
   ExpensePage,
   ForbiddenResponse,
+  Handover,
+  HandoverInput,
   ListAccountMovementsParams,
   ListExpenseCategoriesParams,
   ListExpensesParams,
@@ -48,6 +50,8 @@ import type {
   MoneyAccount,
   NotFoundResponse,
   OpeningBalanceRequest,
+  OtherIncome,
+  OtherIncomeInput,
   PayloadTooLargeResponse,
   UnauthorizedResponse
 } from '../model';
@@ -955,6 +959,405 @@ export const useReverseExpense = <TError = BadRequestResponse | UnauthorizedResp
         TContext
       > => {
       return useMutation(getReverseExpenseMutationOptions(options), queryClient);
+    }
+    export const getCreateHandoverUrl = () => {
+
+
+
+
+  return `/api/v1/handovers`
+}
+
+/**
+ * Records a handover of cash to the bank («Здати в банк», feature 018 §2.4): one record with two journal lines of
+ * the same date and amount, a spending line on the cash account (`HANDOVER_OUT`) and a receipt line on the bank
+ * account (`HANDOVER_IN`), both with the bank's document number (the cash deposit slip). Both lines belong to the
+ * billing month of `date` or, when it is closed, the earliest open month (the date is kept).
+ *
+ * Refusals (nothing is stored):
+ * - 400 `VALIDATION_FAILED`: `amount` 0.00 or less (`AMOUNT_NOT_POSITIVE`) or more than 12 integer digits
+ *   (`INVALID`); `date` after today in Europe/Kyiv (`DATE_IN_FUTURE`); `documentNumber` blank (`REQUIRED`) or
+ *   longer than 64 characters (`TOO_LONG`); a required field missing (`REQUIRED`);
+ * - 409 `OPENING_BALANCE_MISSING`: the cash or the bank account has no opening balance;
+ * - 400 `BEFORE_OPENING_BALANCE` with `errors[{field: date}]`: `date` is before the opening date of the cash or
+ *   of the bank account;
+ * - 409 `CASH_INSUFFICIENT` with `balance` and `date`: the handover would make the cash balance negative on its
+ *   date or on a later day (as for a cash expense).
+ *
+ * Written to the audit log as `HANDOVER_RECORDED` (with `amount`, `date` and `documentNumber`). Requires
+ * `CASHBOOK_ENTER`.
+ * @summary Record a handover of cash to the bank
+ */
+export const createHandover = async (handoverInput: HandoverInput, options?: Parameters<typeof nadelFetch>[1]): Promise<Handover> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return nadelFetch<Handover>(getCreateHandoverUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(handoverInput)
+  }
+);}
+
+
+
+
+
+export const getCreateHandoverMutationKey = () => ['createHandover'] as const;
+
+export const getCreateHandoverMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createHandover>>, TError,CreateHandoverMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createHandover>>, TError,CreateHandoverMutationVariables, TContext> => {
+
+const mutationKey = getCreateHandoverMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createHandover>>, CreateHandoverMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  createHandover(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateHandoverMutationResult = NonNullable<Awaited<ReturnType<typeof createHandover>>>
+    export type CreateHandoverMutationBody = HandoverInput
+    export type CreateHandoverMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse
+    export type CreateHandoverMutationVariables = {data: HandoverInput}
+
+    /**
+ * @summary Record a handover of cash to the bank
+ */
+export const useCreateHandover = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createHandover>>, TError,CreateHandoverMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof createHandover>>,
+        TError,
+        CreateHandoverMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateHandoverMutationOptions(options), queryClient);
+    }
+    export const getReverseHandoverUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/handovers/${id}/reverse`
+}
+
+/**
+ * Reverses the handover with a reason (feature 018 §2.8): two new journal lines of the opposite amounts, a receipt
+ * line on the cash account and a spending line on the bank account, dated today (Europe/Kyiv) in today's open
+ * billing month; the handover stays, marked reversed. The cash goes up, so the reversal is never refused for the
+ * cash balance; the bank may go below zero (it is not refused, the bank card warns). A handover is reversed once:
+ * 409 `ENTRY_ALREADY_REVERSED` (also when two reversals arrive at once). A missing or blank reason is 400
+ * `VALIDATION_FAILED` with `errors[{field: reason, code: REQUIRED}]`. Written to the audit log as
+ * `HANDOVER_REVERSED`. 404 `NOT_FOUND` for an unknown handover, a reversal record or one of another cooperative.
+ * The id is the `source.id` of a handover line of the journal. Requires `CASHBOOK_APPROVE`.
+ * @summary Reverse a handover
+ */
+export const reverseHandover = async (id: string,
+    entryReversal: EntryReversal, options?: Parameters<typeof nadelFetch>[1]): Promise<Handover> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return nadelFetch<Handover>(getReverseHandoverUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(entryReversal)
+  }
+);}
+
+
+
+
+
+export const getReverseHandoverMutationKey = () => ['reverseHandover'] as const;
+
+export const getReverseHandoverMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reverseHandover>>, TError,ReverseHandoverMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reverseHandover>>, TError,ReverseHandoverMutationVariables, TContext> => {
+
+const mutationKey = getReverseHandoverMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reverseHandover>>, ReverseHandoverMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  reverseHandover(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReverseHandoverMutationResult = NonNullable<Awaited<ReturnType<typeof reverseHandover>>>
+    export type ReverseHandoverMutationBody = EntryReversal
+    export type ReverseHandoverMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse
+    export type ReverseHandoverMutationVariables = {id: string;data: EntryReversal}
+
+    /**
+ * @summary Reverse a handover
+ */
+export const useReverseHandover = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reverseHandover>>, TError,ReverseHandoverMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof reverseHandover>>,
+        TError,
+        ReverseHandoverMutationVariables,
+        TContext
+      > => {
+      return useMutation(getReverseHandoverMutationOptions(options), queryClient);
+    }
+    export const getCreateOtherIncomeUrl = () => {
+
+
+
+
+  return `/api/v1/other-income`
+}
+
+/**
+ * Records income that is not a member payment («Інший прихід», feature 018 §2.5): bank interest, a grant, a sale
+ * of scrap. A receipt line (`OTHER_INCOME`) on the cash or the bank account dated `date`, in the billing month of
+ * that date or, when it is closed, the earliest open month (the date is kept).
+ *
+ * Refusals (nothing is stored):
+ * - 400 `VALIDATION_FAILED`: `amount` 0.00 or less (`AMOUNT_NOT_POSITIVE`) or more than 12 integer digits
+ *   (`INVALID`); `date` after today in Europe/Kyiv (`DATE_IN_FUTURE`); `categoryId` unknown or not an income
+ *   category (`INVALID`) or archived (`ARCHIVED`); `description` too long (`TOO_LONG`); a required field missing
+ *   (`REQUIRED`);
+ * - 409 `OPENING_BALANCE_MISSING`: the account has no opening balance;
+ * - 400 `BEFORE_OPENING_BALANCE` with `errors[{field: date}]`: `date` is before the account's opening date.
+ *
+ * The description is personal data: stored encrypted, and in the audit log (`OTHER_INCOME_RECORDED`, with
+ * `amount`, `account`, `category` and `date`) shown only to readers with `MEMBERS_VIEW`. Requires
+ * `CASHBOOK_ENTER`.
+ * @summary Record other income
+ */
+export const createOtherIncome = async (otherIncomeInput: OtherIncomeInput, options?: Parameters<typeof nadelFetch>[1]): Promise<OtherIncome> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return nadelFetch<OtherIncome>(getCreateOtherIncomeUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(otherIncomeInput)
+  }
+);}
+
+
+
+
+
+export const getCreateOtherIncomeMutationKey = () => ['createOtherIncome'] as const;
+
+export const getCreateOtherIncomeMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createOtherIncome>>, TError,CreateOtherIncomeMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createOtherIncome>>, TError,CreateOtherIncomeMutationVariables, TContext> => {
+
+const mutationKey = getCreateOtherIncomeMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createOtherIncome>>, CreateOtherIncomeMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  createOtherIncome(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateOtherIncomeMutationResult = NonNullable<Awaited<ReturnType<typeof createOtherIncome>>>
+    export type CreateOtherIncomeMutationBody = OtherIncomeInput
+    export type CreateOtherIncomeMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse
+    export type CreateOtherIncomeMutationVariables = {data: OtherIncomeInput}
+
+    /**
+ * @summary Record other income
+ */
+export const useCreateOtherIncome = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createOtherIncome>>, TError,CreateOtherIncomeMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof createOtherIncome>>,
+        TError,
+        CreateOtherIncomeMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateOtherIncomeMutationOptions(options), queryClient);
+    }
+    export const getReverseOtherIncomeUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/other-income/${id}/reverse`
+}
+
+/**
+ * Reverses the income with a reason (feature 018 §2.8): a new journal line of the opposite amount on the same
+ * account, dated today (Europe/Kyiv) in today's open billing month; the income stays, marked reversed. A cash
+ * income's reversal takes money out of the cash: 409 `CASH_INSUFFICIENT` with `balance` and `date` when it would
+ * make the cash balance negative today or on a later day; a bank income's reversal is never refused for the
+ * balance. An income is reversed once: 409 `ENTRY_ALREADY_REVERSED` (also when two reversals arrive at once). A
+ * missing or blank reason is 400 `VALIDATION_FAILED` with `errors[{field: reason, code: REQUIRED}]`. Written to
+ * the audit log as `OTHER_INCOME_REVERSED`. 404 `NOT_FOUND` for an unknown income, a reversal record or one of
+ * another cooperative. The id is the `source.id` of an other income line of the journal. Requires
+ * `CASHBOOK_APPROVE`.
+ * @summary Reverse other income
+ */
+export const reverseOtherIncome = async (id: string,
+    entryReversal: EntryReversal, options?: Parameters<typeof nadelFetch>[1]): Promise<OtherIncome> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return nadelFetch<OtherIncome>(getReverseOtherIncomeUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(entryReversal)
+  }
+);}
+
+
+
+
+
+export const getReverseOtherIncomeMutationKey = () => ['reverseOtherIncome'] as const;
+
+export const getReverseOtherIncomeMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reverseOtherIncome>>, TError,ReverseOtherIncomeMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reverseOtherIncome>>, TError,ReverseOtherIncomeMutationVariables, TContext> => {
+
+const mutationKey = getReverseOtherIncomeMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reverseOtherIncome>>, ReverseOtherIncomeMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  reverseOtherIncome(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReverseOtherIncomeMutationResult = NonNullable<Awaited<ReturnType<typeof reverseOtherIncome>>>
+    export type ReverseOtherIncomeMutationBody = EntryReversal
+    export type ReverseOtherIncomeMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse
+    export type ReverseOtherIncomeMutationVariables = {id: string;data: EntryReversal}
+
+    /**
+ * @summary Reverse other income
+ */
+export const useReverseOtherIncome = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reverseOtherIncome>>, TError,ReverseOtherIncomeMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof reverseOtherIncome>>,
+        TError,
+        ReverseOtherIncomeMutationVariables,
+        TContext
+      > => {
+      return useMutation(getReverseOtherIncomeMutationOptions(options), queryClient);
     }
     export const getListExpenseCategoriesUrl = (params?: ListExpenseCategoriesParams,) => {
   const normalizedParams = new URLSearchParams();

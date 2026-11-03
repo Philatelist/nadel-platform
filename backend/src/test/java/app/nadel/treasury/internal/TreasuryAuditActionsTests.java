@@ -20,7 +20,8 @@ class TreasuryAuditActionsTests {
 
         assertThat(Arrays.stream(TreasuryAuditPublisher.Action.values()).map(Enum::name)).isSubsetOf(contract)
                 .contains("OPENING_BALANCE_SET", "EXPENSE_RECORDED", "EXPENSE_REVERSED", "CASHBOOK_CATEGORY_ADDED",
-                        "CASHBOOK_CATEGORY_RENAMED", "CASHBOOK_CATEGORY_REORDERED", "CASHBOOK_CATEGORY_ARCHIVED");
+                        "CASHBOOK_CATEGORY_RENAMED", "CASHBOOK_CATEGORY_REORDERED", "CASHBOOK_CATEGORY_ARCHIVED",
+                        "HANDOVER_RECORDED", "HANDOVER_REVERSED", "OTHER_INCOME_RECORDED", "OTHER_INCOME_REVERSED");
     }
 
     @Test
@@ -30,5 +31,8 @@ class TreasuryAuditActionsTests {
         assertThat(AuditEntityType.fromValue(TreasuryAuditPublisher.EXPENSE)).isEqualTo(AuditEntityType.EXPENSE);
         assertThat(AuditEntityType.fromValue(TreasuryAuditPublisher.CASHBOOK_CATEGORY))
                 .isEqualTo(AuditEntityType.CASHBOOK_CATEGORY);
+        assertThat(AuditEntityType.fromValue(TreasuryAuditPublisher.HANDOVER)).isEqualTo(AuditEntityType.HANDOVER);
+        assertThat(AuditEntityType.fromValue(TreasuryAuditPublisher.OTHER_INCOME))
+                .isEqualTo(AuditEntityType.OTHER_INCOME);
     }
 }

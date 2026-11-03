@@ -6058,6 +6058,185 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
 
+  /handovers:
+    post:
+      tags: [treasury]
+      operationId: createHandover
+      summary: Record a handover of cash to the bank
+      description: |
+        Records a handover of cash to the bank («Здати в банк», feature 018 §2.4): one record with two journal lines of
+        the same date and amount, a spending line on the cash account (`HANDOVER_OUT`) and a receipt line on the bank
+        account (`HANDOVER_IN`), both with the bank's document number (the cash deposit slip). Both lines belong to the
+        billing month of `date` or, when it is closed, the earliest open month (the date is kept).
+
+        Refusals (nothing is stored):
+        - 400 `VALIDATION_FAILED`: `amount` 0.00 or less (`AMOUNT_NOT_POSITIVE`) or more than 12 integer digits
+          (`INVALID`); `date` after today in Europe/Kyiv (`DATE_IN_FUTURE`); `documentNumber` blank (`REQUIRED`) or
+          longer than 64 characters (`TOO_LONG`); a required field missing (`REQUIRED`);
+        - 409 `OPENING_BALANCE_MISSING`: the cash or the bank account has no opening balance;
+        - 400 `BEFORE_OPENING_BALANCE` with `errors[{field: date}]`: `date` is before the opening date of the cash or
+          of the bank account;
+        - 409 `CASH_INSUFFICIENT` with `balance` and `date`: the handover would make the cash balance negative on its
+          date or on a later day (as for a cash expense).
+
+        Written to the audit log as `HANDOVER_RECORDED` (with `amount`, `date` and `documentNumber`). Requires
+        `CASHBOOK_ENTER`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HandoverInput'
+      responses:
+        '201':
+          description: The recorded handover
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Handover'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /handovers/{id}/reverse:
+    post:
+      tags: [treasury]
+      operationId: reverseHandover
+      summary: Reverse a handover
+      description: |
+        Reverses the handover with a reason (feature 018 §2.8): two new journal lines of the opposite amounts, a receipt
+        line on the cash account and a spending line on the bank account, dated today (Europe/Kyiv) in today's open
+        billing month; the handover stays, marked reversed. The cash goes up, so the reversal is never refused for the
+        cash balance; the bank may go below zero (it is not refused, the bank card warns). A handover is reversed once:
+        409 `ENTRY_ALREADY_REVERSED` (also when two reversals arrive at once). A missing or blank reason is 400
+        `VALIDATION_FAILED` with `errors[{field: reason, code: REQUIRED}]`. Written to the audit log as
+        `HANDOVER_REVERSED`. 404 `NOT_FOUND` for an unknown handover, a reversal record or one of another cooperative.
+        The id is the `source.id` of a handover line of the journal. Requires `CASHBOOK_APPROVE`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EntryReversal'
+      responses:
+        '200':
+          description: The handover, now reversed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Handover'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /other-income:
+    post:
+      tags: [treasury]
+      operationId: createOtherIncome
+      summary: Record other income
+      description: |
+        Records income that is not a member payment («Інший прихід», feature 018 §2.5): bank interest, a grant, a sale
+        of scrap. A receipt line (`OTHER_INCOME`) on the cash or the bank account dated `date`, in the billing month of
+        that date or, when it is closed, the earliest open month (the date is kept).
+
+        Refusals (nothing is stored):
+        - 400 `VALIDATION_FAILED`: `amount` 0.00 or less (`AMOUNT_NOT_POSITIVE`) or more than 12 integer digits
+          (`INVALID`); `date` after today in Europe/Kyiv (`DATE_IN_FUTURE`); `categoryId` unknown or not an income
+          category (`INVALID`) or archived (`ARCHIVED`); `description` too long (`TOO_LONG`); a required field missing
+          (`REQUIRED`);
+        - 409 `OPENING_BALANCE_MISSING`: the account has no opening balance;
+        - 400 `BEFORE_OPENING_BALANCE` with `errors[{field: date}]`: `date` is before the account's opening date.
+
+        The description is personal data: stored encrypted, and in the audit log (`OTHER_INCOME_RECORDED`, with
+        `amount`, `account`, `category` and `date`) shown only to readers with `MEMBERS_VIEW`. Requires
+        `CASHBOOK_ENTER`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OtherIncomeInput'
+      responses:
+        '201':
+          description: The recorded income
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OtherIncome'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /other-income/{id}/reverse:
+    post:
+      tags: [treasury]
+      operationId: reverseOtherIncome
+      summary: Reverse other income
+      description: |
+        Reverses the income with a reason (feature 018 §2.8): a new journal line of the opposite amount on the same
+        account, dated today (Europe/Kyiv) in today's open billing month; the income stays, marked reversed. A cash
+        income's reversal takes money out of the cash: 409 `CASH_INSUFFICIENT` with `balance` and `date` when it would
+        make the cash balance negative today or on a later day; a bank income's reversal is never refused for the
+        balance. An income is reversed once: 409 `ENTRY_ALREADY_REVERSED` (also when two reversals arrive at once). A
+        missing or blank reason is 400 `VALIDATION_FAILED` with `errors[{field: reason, code: REQUIRED}]`. Written to
+        the audit log as `OTHER_INCOME_REVERSED`. 404 `NOT_FOUND` for an unknown income, a reversal record or one of
+        another cooperative. The id is the `source.id` of an other income line of the journal. Requires
+        `CASHBOOK_APPROVE`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EntryReversal'
+      responses:
+        '200':
+          description: The income, now reversed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OtherIncome'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
   /expense-categories:
     get:
       tags: [treasury]
@@ -7714,6 +7893,10 @@ components:
         - CASHBOOK_CATEGORY_RENAMED
         - CASHBOOK_CATEGORY_REORDERED
         - CASHBOOK_CATEGORY_ARCHIVED
+        - HANDOVER_RECORDED
+        - HANDOVER_REVERSED
+        - OTHER_INCOME_RECORDED
+        - OTHER_INCOME_REVERSED
 
     AuditEntityType:
       type: string
@@ -7770,7 +7953,14 @@ components:
         (`EXPENSE_RECORDED`, `EXPENSE_REVERSED`) is about an expense: its `entityId` is the expense and its label the
         expense date (ISO); its fields (new values only) are `amount` (two decimals), `account` (`CASH` or `BANK`),
         `category` (the category id), `date` (the expense date), the reversal's `reason` and `reversedOn`, and the
-        counterparty `counterparty` and description `description` (personal data, sealed). A `CASHBOOK_CATEGORY`
+        counterparty `counterparty` and description `description` (personal data, sealed). A `HANDOVER` entry
+        (`HANDOVER_RECORDED`, `HANDOVER_REVERSED`) is about a handover of cash to the bank: its `entityId` is the
+        handover and its label the deposit slip number (user content); its fields (new values only) are `amount` (two
+        decimals), `date` (the handover date), `documentNumber` and the reversal's `reason` and `reversedOn`. An
+        `OTHER_INCOME` entry (`OTHER_INCOME_RECORDED`, `OTHER_INCOME_REVERSED`) is about an other income: its
+        `entityId` is the income and its label the income date (ISO); its fields (new values only) are `amount`,
+        `account`, `category` (the category id), `date`, the reversal's `reason` and `reversedOn`, and the description
+        `description` (personal data, sealed). A `CASHBOOK_CATEGORY`
         entry (`CASHBOOK_CATEGORY_ADDED`, `_RENAMED`, `_REORDERED`, `_ARCHIVED`) is about an expense or income
         category: its `entityId` is the category and its label `base:<CODE>` for a seeded category never renamed,
         otherwise its name; its fields are `kind` and `name` (added), `name` (renamed, old and new, `base:<CODE>`
@@ -7802,6 +7992,8 @@ components:
           MONEY_ACCOUNT,
           EXPENSE,
           CASHBOOK_CATEGORY,
+          HANDOVER,
+          OTHER_INCOME,
         ]
 
     AuditFieldChange:
@@ -10771,7 +10963,13 @@ components:
           description: The receipt number of a cash member payment (a reversal line shows its payment's)
         documentNumber:
           type: string
-          description: The bank document number of a bank member payment when entered (user content)
+          description: >-
+            The bank document number of a bank member payment when entered, or the deposit slip number of a handover
+            line (user content)
+        categoryId:
+          type: string
+          format: uuid
+          description: The category of an expense or other income line (a reversal line shows its entry's)
         reversed:
           type: boolean
           description: A reversal points at this line («Сторновано»)
@@ -10976,7 +11174,7 @@ components:
 
     ExpenseReversalInfo:
       type: object
-      description: How an expense was reversed
+      description: How an expense, a handover or an other income was reversed
       required: [date, reason, createdAt]
       properties:
         date:
@@ -11099,6 +11297,113 @@ components:
           minLength: 1
           maxLength: 500
           description: User content, stored as typed; surrounding whitespace is trimmed
+
+    HandoverInput:
+      type: object
+      description: The fields of a new handover of cash to the bank
+      required: [date, amount, documentNumber]
+      properties:
+        date:
+          type: string
+          format: date
+          description: The day the cash was handed over; not after today (Europe/Kyiv)
+        amount:
+          $ref: '#/components/schemas/Money'
+        documentNumber:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: The number of the bank's cash deposit slip (user content); surrounding whitespace is trimmed
+
+    Handover:
+      type: object
+      description: A handover of cash to the bank
+      required: [id, date, amount, bookingMonth, documentNumber, reversed, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        date:
+          type: string
+          format: date
+        amount:
+          $ref: '#/components/schemas/Money'
+        bookingMonth:
+          type: string
+          pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+          description: The billing month the handover belongs to, `YYYY-MM`
+        documentNumber:
+          type: string
+          description: The number of the bank's cash deposit slip (user content)
+        reversed:
+          type: boolean
+          description: The handover is reversed («Сторновано»)
+        reversal:
+          $ref: '#/components/schemas/ExpenseReversalInfo'
+        createdByName:
+          type: string
+          description: The current name of the member who recorded it; absent for an unknown member
+        createdAt:
+          type: string
+          format: date-time
+
+    OtherIncomeInput:
+      type: object
+      description: The fields of a new other income
+      required: [account, date, amount, categoryId]
+      properties:
+        account:
+          $ref: '#/components/schemas/MoneyAccountKind'
+        date:
+          type: string
+          format: date
+          description: The day the money was received; not after today (Europe/Kyiv)
+        amount:
+          $ref: '#/components/schemas/Money'
+        categoryId:
+          type: string
+          format: uuid
+          description: A non-archived income category
+        description:
+          type: string
+          maxLength: 500
+          description: User content, personal data; surrounding whitespace is trimmed, blank is none
+
+    OtherIncome:
+      type: object
+      description: An income that is not a member payment
+      required: [id, account, date, amount, bookingMonth, category, reversed, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        account:
+          $ref: '#/components/schemas/MoneyAccountKind'
+        date:
+          type: string
+          format: date
+        amount:
+          $ref: '#/components/schemas/Money'
+        bookingMonth:
+          type: string
+          pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+          description: The billing month the income belongs to, `YYYY-MM`
+        category:
+          $ref: '#/components/schemas/ExpenseCategory'
+        description:
+          type: string
+          description: User content, personal data
+        reversed:
+          type: boolean
+          description: The income is reversed («Сторновано»)
+        reversal:
+          $ref: '#/components/schemas/ExpenseReversalInfo'
+        createdByName:
+          type: string
+          description: The current name of the member who recorded it; absent for an unknown member
+        createdAt:
+          type: string
+          format: date-time
 
     CertificateAnnulment:
       type: object

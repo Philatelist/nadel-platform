@@ -1,13 +1,21 @@
-import { useListAccountMovements, type AccountMovement } from '@nadel/api-client';
+import {
+  reverseHandover,
+  reverseOtherIncome,
+  useListAccountMovements,
+  type AccountMovement,
+} from '@nadel/api-client';
 import { format, formatDay } from '@nadel/shared';
-import { keepPreviousData } from '@tanstack/react-query';
+import { keepPreviousData, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { useLocale, useT } from '../../i18n';
+import { useCan } from '../../me';
 import { Pagination } from '../Pagination';
 import { QueryBoundary } from '../QueryBoundary';
 import { UserContent } from '../UserContent';
-import { Badge, DataTable, Money, TextField, type Column } from '../ui';
+import { Badge, Button, DataTable, Money, TextField, type Column } from '../ui';
+import { invalidateCashbook } from './cashbookInvalidation';
+import { ReasonDialog } from './ReasonDialog';
 
 const PAGE_SIZE = 100;
 
@@ -16,6 +24,9 @@ export function MovementsTable({ accountId }: { accountId: string }) {
   const t = useT();
   const { locale } = useLocale();
   const m = t.cashbook.movements;
+  const canApprove = useCan('CASHBOOK_APPROVE');
+  const queryClient = useQueryClient();
+  const [reversing, setReversing] = useState<AccountMovement>();
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [page, setPage] = useState(0);
@@ -81,6 +92,28 @@ export function MovementsTable({ accountId }: { accountId: string }) {
       cell: (row) =>
         row.createdByName !== undefined ? <UserContent>{row.createdByName}</UserContent> : null,
     },
+    {
+      key: 'actions',
+      header: m.columns.actions,
+      cell: (row) => {
+        if (row.source.type === 'EXPENSE') {
+          return (
+            <Link to={`/cashbook/expenses/${row.source.id}`} className="text-accent underline">
+              {t.cashbook.reverse.expense}
+            </Link>
+          );
+        }
+        if (row.reversesMovementId !== undefined || row.reversed) return null;
+        if (canApprove && (row.source.type === 'HANDOVER' || row.source.type === 'OTHER_INCOME')) {
+          return (
+            <Button variant="secondary" onClick={() => setReversing(row)}>
+              {t.cashbook.reverse.action}
+            </Button>
+          );
+        }
+        return null;
+      },
+    },
   ];
 
   return (
@@ -141,6 +174,25 @@ export function MovementsTable({ accountId }: { accountId: string }) {
           </>
         )}
       </QueryBoundary>
+      {reversing && (
+        <ReasonDialog
+          labels={
+            reversing.source.type === 'HANDOVER'
+              ? t.cashbook.reverse.handover
+              : t.cashbook.reverse.otherIncome
+          }
+          onSubmit={(reason) =>
+            reversing.source.type === 'HANDOVER'
+              ? reverseHandover(reversing.source.id, { reason })
+              : reverseOtherIncome(reversing.source.id, { reason })
+          }
+          onDone={() => {
+            setReversing(undefined);
+            void invalidateCashbook(queryClient);
+          }}
+          onClose={() => setReversing(undefined)}
+        />
+      )}
     </section>
   );
 }

@@ -34,8 +34,10 @@ export interface AccountMovement {
   plotId?: string;
   /** The receipt number of a cash member payment (a reversal line shows its payment's) */
   receiptNumber?: number;
-  /** The bank document number of a bank member payment when entered (user content) */
+  /** The bank document number of a bank member payment when entered, or the deposit slip number of a handover line (user content) */
   documentNumber?: string;
+  /** The category of an expense or other income line (a reversal line shows its entry's) */
+  categoryId?: string;
   /** A reversal points at this line («Сторновано») */
   reversed: boolean;
   /** The line this reversal reverses; only on a reversal */

@@ -185,7 +185,10 @@ class MoneyAccounts {
                 item.setPlotId(ref.plotId());
                 item.setReceiptNumber(ref.receiptNumber());
                 item.setDocumentNumber(ref.bankReference());
+            } else {
+                item.setDocumentNumber(row.documentNumber());
             }
+            item.setCategoryId(row.categoryId());
             item.setReversesMovementId(row.reversesMovementId());
             item.setReason(row.reason());
             item.setCreatedByName(row.createdBy() == null ? null : names.get(row.createdBy()));

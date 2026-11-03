@@ -19,8 +19,12 @@ import nadel.contract.model.ExpenseCategoryOrder;
 import nadel.contract.model.ExpenseCategoryUpdate;
 import nadel.contract.model.ExpenseInput;
 import nadel.contract.model.ExpensePage;
+import nadel.contract.model.Handover;
+import nadel.contract.model.HandoverInput;
 import nadel.contract.model.MoneyAccount;
 import nadel.contract.model.OpeningBalanceRequest;
+import nadel.contract.model.OtherIncome;
+import nadel.contract.model.OtherIncomeInput;
 import org.jspecify.annotations.Nullable;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
@@ -34,10 +38,11 @@ import org.springframework.web.multipart.MultipartFile;
 
 /**
  * The endpoints of tag {@code treasury} (feature 018 §2.13, technical considerations 2.10): reads (accounts, journals,
- * expenses and their files, categories) need {@code CASHBOOK_VIEW}; entries (an expense) {@code CASHBOOK_ENTER}; the
+ * expenses and their files, categories) need {@code CASHBOOK_VIEW}; entries (an expense, a handover, other income)
+ * {@code CASHBOOK_ENTER}; the
  * opening balance, reversals and the categories' changes {@code CASHBOOK_APPROVE}. Permissions, never role names; a
  * member and the platform operator (who hold none of them) are 403. The work is done by {@link MoneyAccounts},
- * {@link Expenses} and {@link Categories}.
+ * {@link Expenses}, {@link Handovers}, {@link OtherIncomes} and {@link Categories}.
  */
 @RestController
 @RequestMapping("/api/v1")
@@ -46,12 +51,17 @@ class TreasuryController implements TreasuryApi {
     private final CurrentUser currentUser;
     private final MoneyAccounts accounts;
     private final Expenses expenses;
+    private final Handovers handovers;
+    private final OtherIncomes otherIncomes;
     private final Categories categories;
 
-    TreasuryController(CurrentUser currentUser, MoneyAccounts accounts, Expenses expenses, Categories categories) {
+    TreasuryController(CurrentUser currentUser, MoneyAccounts accounts, Expenses expenses, Handovers handovers,
+            OtherIncomes otherIncomes, Categories categories) {
         this.currentUser = currentUser;
         this.accounts = accounts;
         this.expenses = expenses;
+        this.handovers = handovers;
+        this.otherIncomes = otherIncomes;
         this.categories = categories;
     }
 
@@ -118,6 +128,32 @@ class TreasuryController implements TreasuryApi {
     @PreAuthorize("hasAuthority('PERM_CASHBOOK_APPROVE')")
     public ResponseEntity<Expense> reverseExpense(UUID id, EntryReversal request) {
         return ResponseEntity.ok(expenses.reverse(id, request.getReason(), currentUser.profile()));
+    }
+
+    @Override
+    @PreAuthorize("hasAuthority('PERM_CASHBOOK_ENTER')")
+    public ResponseEntity<Handover> createHandover(HandoverInput request) {
+        Handover created = handovers.create(request, currentUser.profile());
+        return ResponseEntity.created(URI.create("/api/v1/handovers/" + created.getId())).body(created);
+    }
+
+    @Override
+    @PreAuthorize("hasAuthority('PERM_CASHBOOK_APPROVE')")
+    public ResponseEntity<Handover> reverseHandover(UUID id, EntryReversal request) {
+        return ResponseEntity.ok(handovers.reverse(id, request.getReason(), currentUser.profile()));
+    }
+
+    @Override
+    @PreAuthorize("hasAuthority('PERM_CASHBOOK_ENTER')")
+    public ResponseEntity<OtherIncome> createOtherIncome(OtherIncomeInput request) {
+        OtherIncome created = otherIncomes.create(request, currentUser.profile());
+        return ResponseEntity.created(URI.create("/api/v1/other-income/" + created.getId())).body(created);
+    }
+
+    @Override
+    @PreAuthorize("hasAuthority('PERM_CASHBOOK_APPROVE')")
+    public ResponseEntity<OtherIncome> reverseOtherIncome(UUID id, EntryReversal request) {
+        return ResponseEntity.ok(otherIncomes.reverse(id, request.getReason(), currentUser.profile()));
     }
 
     @Override

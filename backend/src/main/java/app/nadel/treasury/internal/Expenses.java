@@ -77,10 +77,6 @@ class Expenses {
 
     private static final Logger log = LoggerFactory.getLogger(Expenses.class);
 
-    /** {@code numeric(14,2)}: twelve digits before the point. */
-    private static final int MAX_INTEGER_DIGITS = 12;
-    /** The upper end of the day totals the cash rule reads: every movement from the opening date on. */
-    private static final LocalDate LAST_DAY = LocalDate.of(9999, 12, 31);
     private static final String SOURCE = "EXPENSE";
     private static final String EXPENSE_CATEGORY = "EXPENSE";
     private static final Set<String> REVERSED_ONCE = Set.of("expense_reversed_once_uq",
@@ -129,10 +125,9 @@ class Expenses {
 
         Money amount = Money.parse(input.getAmount());
         List<FieldProblem> errors = new ArrayList<>();
-        if (amount.signum() <= 0) {
-            errors.add(new FieldProblem("amount", ProblemCodes.AMOUNT_NOT_POSITIVE));
-        } else if (MoneyAccounts.integerDigits(amount) > MAX_INTEGER_DIGITS) {
-            errors.add(new FieldProblem("amount", ProblemCodes.INVALID));
+        FieldProblem amountProblem = EntryChecks.amountProblem(amount);
+        if (amountProblem != null) {
+            errors.add(amountProblem);
         }
         if (input.getDate().isAfter(today)) {
             errors.add(new FieldProblem("date", ProblemCodes.DATE_IN_FUTURE));
@@ -149,10 +144,7 @@ class Expenses {
                 errors.add(new FieldProblem("reuseAttachments[" + i + "]", ProblemCodes.INVALID));
             }
         }
-        if (!errors.isEmpty()) {
-            throw new ApiProblemException(HttpStatus.BAD_REQUEST, ProblemCodes.VALIDATION_FAILED,
-                    "The request is not valid.", errors);
-        }
+        EntryChecks.refuse(errors);
         AttachmentUploads.requireCount(reuse.size(), uploaded.size());
         List<AttachmentUploads.Prepared> prepared = AttachmentUploads.prepare(uploaded);
 
@@ -161,9 +153,9 @@ class Expenses {
         MoneyAccountKind kind = MoneyAccountKind.valueOf(input.getAccount().getValue());
         AccountRow account = accounts.lockAccountOfKind(kind)
                 .orElseThrow(() -> new IllegalStateException("The cooperative has no " + kind + " account"));
-        Opening opening = requireOpening(account, date);
+        Opening opening = EntryChecks.requireOpening(account, date);
         if (kind == MoneyAccountKind.CASH) {
-            CashGuard.check(opening, accounts.dayTotals(account.id(), opening.date(), LAST_DAY), date,
+            CashGuard.check(opening, accounts.dayTotals(account.id(), opening.date(), EntryChecks.LAST_DAY), date,
                     amount.negate());
         }
 
@@ -199,11 +191,7 @@ class Expenses {
     Expense reverse(UUID id, @Nullable String rawReason, AccessProfile actor) {
         UUID tenantId = Objects.requireNonNull(actor.tenantId(), "tenantId");
         UUID memberId = Objects.requireNonNull(actor.memberId(), "memberId");
-        String reason = blankToNull(rawReason);
-        if (reason == null) {
-            throw new ApiProblemException(HttpStatus.BAD_REQUEST, ProblemCodes.VALIDATION_FAILED,
-                    "The request is not valid.", List.of(new FieldProblem("reason", ProblemCodes.REQUIRED)));
-        }
+        String reason = EntryChecks.requireReason(rawReason);
         ExpenseRow expense = expenses.card(id).orElseThrow(ApiProblemException::notFound);
         LocalDate today = LocalDate.now(clock);
         YearMonth month = bookingMonths.bookFor(today);
@@ -272,21 +260,6 @@ class Expenses {
         return new AttachmentFile(file.fileName(), file.contentType(), file.content());
     }
 
-    /** The account's opening balance; 409 without one, 400 when the entry is dated before it. */
-    private static Opening requireOpening(AccountRow account, LocalDate date) {
-        Opening opening = account.opening();
-        if (opening == null) {
-            throw new ApiProblemException(HttpStatus.CONFLICT, ProblemCodes.OPENING_BALANCE_MISSING,
-                    "The account has no opening balance yet.");
-        }
-        if (date.isBefore(opening.date())) {
-            throw new ApiProblemException(HttpStatus.BAD_REQUEST, ProblemCodes.BEFORE_OPENING_BALANCE,
-                    "The entry is dated before the opening balance of the account.",
-                    List.of(new FieldProblem("date", ProblemCodes.BEFORE_OPENING_BALANCE)));
-        }
-        return opening;
-    }
-
     /** The contract form of the card: the category, the opened texts, the files without content, the names. */
     private Expense card(UUID tenantId, ExpenseRow row) {
         CategoryRow category = categories.find(row.categoryId()).orElseThrow();
@@ -331,15 +304,10 @@ class Expenses {
     }
 
     private static @Nullable String blankToNull(@Nullable String value) {
-        if (value == null) {
-            return null;
-        }
-        String stripped = value.strip();
-        return stripped.isEmpty() ? null : stripped;
+        return EntryChecks.blankToNull(value);
     }
 
     private static ApiProblemException alreadyReversed() {
-        return new ApiProblemException(HttpStatus.CONFLICT, ProblemCodes.ENTRY_ALREADY_REVERSED,
-                "The entry has already been reversed.");
+        return EntryChecks.alreadyReversed();
     }
 }

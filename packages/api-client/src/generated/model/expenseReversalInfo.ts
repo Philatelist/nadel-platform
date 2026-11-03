@@ -11,7 +11,7 @@
  */
 
 /**
- * How an expense was reversed
+ * How an expense, a handover or an other income was reversed
  */
 export interface ExpenseReversalInfo {
   /** The day of the reversal line */
