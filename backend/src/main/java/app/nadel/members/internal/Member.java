@@ -104,6 +104,12 @@ class Member {
         deliveryChannel = data.deliveryChannel();
     }
 
+    /** The member's own choice of channel (feature 017); {@link MemberChannelCommands} checks the contact first. */
+    void choose(DeliveryChannel channel, Instant now) {
+        deliveryChannel = channel;
+        updatedAt = now;
+    }
+
     /** The sealed value of a contact field; null when the field is empty. */
     byte[] sealed(ContactField field) {
         return switch (field) {

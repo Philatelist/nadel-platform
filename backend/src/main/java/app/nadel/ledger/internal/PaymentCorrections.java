@@ -2,6 +2,7 @@ package app.nadel.ledger.internal;
 
 import app.nadel.audit.FieldChange;
 import app.nadel.identity.AccessProfile;
+import app.nadel.ledger.PaymentReversed;
 import app.nadel.ledger.PaymentsChanged;
 import app.nadel.ledger.internal.AllocationPlanner.Line;
 import app.nadel.ledger.internal.AllocationPlanner.Paired;
@@ -58,7 +59,8 @@ import org.springframework.transaction.annotation.Transactional;
  * 409). Allowed on an archived plot. Booked in {@code BillingMonths.openForBooking(received_on)}: the payment's own
  * month while it is open, otherwise the earliest open month. Every live allocation of the payment is released
  * ({@code PAYMENT_REVERSED}) before the reversal row; the other parts of a split group are untouched. The receipt
- * number stays on the payment. Audit {@code PAYMENT_REVERSED}.</li>
+ * number stays on the payment. Audit {@code PAYMENT_REVERSED}; {@link PaymentReversed} with the reversed payment's
+ * id (the reversal messages of feature 017).</li>
  * <li><b>Reallocate</b>: the payment (404; 409 {@code PAYMENT_ALREADY_REVERSED} for a reversed payment or a reversal
  * row); the plot's state as if every live allocation of the payment were released; the digest
  * ({@link PaymentDigest#reallocation}, 409 {@code PREVIEW_OUTDATED}); the proposal or the caller's lines checked
@@ -157,6 +159,7 @@ class PaymentCorrections {
         audit.publishPayment(actor, LedgerAuditPublisher.Action.PAYMENT_REVERSED, plot.id(), plot.number(), changes,
                 null);
         events.publishEvent(new PaymentsChanged(tenantId, Set.of(plot.id())));
+        events.publishEvent(new PaymentReversed(tenantId, List.of(paymentId)));
         log.debug("Payment {} reversed, {} allocations released", paymentId, releases.size());
     }
 

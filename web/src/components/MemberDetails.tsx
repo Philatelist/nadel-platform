@@ -20,6 +20,10 @@ export function MemberDetails({ member, title, large }: { member: Member; title?
     [f.deliveryChannel, t.channel[member.deliveryChannel]],
   ];
   if (member.telegramUsername) rows.push([f.telegramUsername, userText(member.telegramUsername)]);
+  rows.push([
+    t.telegramLink.memberLine,
+    member.telegramLinked ? t.telegramLink.memberLinked : t.telegramLink.memberNotLinked,
+  ]);
   if (member.viberPhone) rows.push([f.viberPhone, userText(member.viberPhone)]);
   if (member.notes) rows.push([f.notes, userText(member.notes)]);
   rows.push([f.roles, member.roles.length > 0 ? <RoleNameList roles={member.roles} /> : f.none]);

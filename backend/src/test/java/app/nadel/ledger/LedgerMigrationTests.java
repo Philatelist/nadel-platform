@@ -59,9 +59,9 @@ class LedgerMigrationTests {
             for (UUID tenant : List.of(first, second)) {
                 // V13 adds the four ledger permissions, V19 RECALCULATION_RUN, V20 the two report permissions, V27 the
                 // three payment permissions, V28 the two document permissions
-                assertThat(permissions(sql, tenant, "CHAIRMAN")).hasSize(27).containsAll(LEDGER_PERMISSIONS)
+                assertThat(permissions(sql, tenant, "CHAIRMAN")).hasSize(28).containsAll(LEDGER_PERMISSIONS)
                         .contains("RECALCULATION_RUN", "REPORTS_VIEW", "REPORT_TEMPLATES_MANAGE", "PAYMENTS_VIEW",
-                                "PAYMENTS_ENTER", "PAYMENTS_REVERSE", "INVOICES_ISSUE", "CERTIFICATES_ISSUE");
+                                "PAYMENTS_ENTER", "PAYMENTS_REVERSE", "INVOICES_ISSUE", "CERTIFICATES_ISSUE", "ANNOUNCEMENTS_SEND");
                 assertThat(permissions(sql, tenant, "MEMBER")).isEmpty();
                 assertThat(sql.queryForList("select code from charge_type where tenant_id = ? and code is not null order by position",
                         String.class, tenant)).containsExactly("MEMBERSHIP", "ELECTRICITY", "LAND_TAX", "WATER",
@@ -92,7 +92,7 @@ class LedgerMigrationTests {
             UUID fresh = UUID.randomUUID();
             sql.update("insert into tenant (id, name) values (?, 'New Cooperative')", fresh);
             sql.queryForList("select seed_base_roles(?)", fresh);
-            assertThat(permissions(sql, fresh, "CHAIRMAN")).hasSize(27);
+            assertThat(permissions(sql, fresh, "CHAIRMAN")).hasSize(28);
             assertThat(permissions(sql, fresh, "TREASURER")).containsExactlyInAnyOrder("MEMBERS_VIEW", "PLOTS_VIEW",
                     "AUDIT_VIEW", "TARIFFS_VIEW", "METERS_VIEW", "CHARGES_VIEW", "REPORTS_VIEW", "PAYMENTS_VIEW",
                     "PAYMENTS_ENTER", "INVOICES_ISSUE");

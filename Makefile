@@ -16,7 +16,7 @@ help: ## Show available targets
 install: ## Install client dependencies
 	pnpm install --frozen-lockfile
 
-infra: ## Start Postgres + PostGIS and Keycloak and wait until healthy
+infra: ## Start Postgres + PostGIS, Keycloak, Mailpit and the fake Telegram API and wait until healthy
 	$(COMPOSE) up -d --wait
 
 down: ## Stop local infrastructure
@@ -68,7 +68,7 @@ e2e-install: ## Install the Playwright browser (chromium) for the end-to-end spe
 # so the demo database `nadel` of `make up` is never touched. Keycloak keeps its own database.
 E2E_DB ?= nadel_e2e
 
-# Needs JDK 25 on PATH/JAVA_HOME (as the backend build does). Ports 8080 and 5173 must be free. Not part of `check`.
+# Needs JDK 25 on PATH/JAVA_HOME (as the backend build does). Ports 8080 and 5173 must be free (infra also uses 5432, 8180, 1025, 8025, 8091). Not part of `check`.
 e2e: infra infra/.env ## End-to-end specs: starts infra, backend jar and web, runs Playwright, stops them
 	cd backend && ./mvnw -B -q -DskipTests package
 	@set -e -m; mkdir -p backend/target; \

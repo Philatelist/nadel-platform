@@ -15,5 +15,10 @@ public enum IndexKind {
      * The canonical content of a document (feature 016: an invoice snapshot with its names in plaintext), so a change
      * is detected without a hash of plaintext names.
      */
-    DOCUMENT_CONTENT
+    DOCUMENT_CONTENT,
+    /**
+     * A Telegram chat id (feature 017: the chat a member linked to the cooperative's bot), as the decimal text Telegram
+     * sends, so the bot finds the link of an incoming chat without opening every sealed chat id.
+     */
+    TELEGRAM_CHAT
 }

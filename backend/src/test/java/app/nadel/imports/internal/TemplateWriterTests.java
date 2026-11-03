@@ -98,8 +98,9 @@ class TemplateWriterTests {
                     "# Required. Any key unique within this file, used by the Ownership sheet", "Required", "Required",
                     "Optional", "Comma-separated, international format",
                     "Optional. Used to match an existing member on re-import", "Optional",
-                    "EMAIL, TELEGRAM, VIBER or PAPER. The channel needs its contact",
-                    "Needed for the TELEGRAM channel", "Needed for the VIBER channel");
+                    "EMAIL, TELEGRAM, VIBER or PAPER. EMAIL and VIBER need their contact",
+                    "Optional. The member links Telegram through the cooperative's bot",
+                    "Needed for the VIBER channel");
             assertThat(rowTexts(workbook, "Members", 2)).containsExactly(
                     "# example: M-001", "Shevchenko", "Taras", "Hryhorovych", "+380501234567, +380671234567",
                     "taras@example.com", "1 Garden street, Kyiv", "EMAIL", "", "");
@@ -192,7 +193,8 @@ class TemplateWriterTests {
             assertThat(rowTexts(workbook, "Члени", 1)).hasSize(10).allSatisfy(text -> assertThat(text).isNotBlank());
             assertThat(rowTexts(workbook, "Члени", 1).get(0)).contains("«Власність»");
             assertThat(rowTexts(workbook, "Члени", 1).get(7))
-                    .isEqualTo("ЕЛ. ПОШТА, ТЕЛЕГРАМ, ВАЙБЕР або ПАПЕР. Для каналу потрібен його контакт");
+                    .isEqualTo("ЕЛ. ПОШТА, ТЕЛЕГРАМ, ВАЙБЕР або ПАПЕР. Для каналів ЕЛ. ПОШТА і ВАЙБЕР потрібен їхній "
+                            + "контакт");
             assertThat(rowTexts(workbook, "Власність", 1).get(1))
                     .isEqualTo("Обов'язково. Ключ із колонки «Ключ члена» аркуша «Члени»");
         }

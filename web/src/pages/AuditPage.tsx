@@ -234,6 +234,9 @@ function AuditRecord({ entry }: { entry: AuditEntry }) {
   );
 }
 
+/** Secrets of the delivery settings: the log records that they changed, never what they were. */
+const SEALED_DELIVERY_FIELDS: ReadonlySet<string> = new Set(['password', 'botToken']);
+
 function AuditChanges({ entry }: { entry: AuditEntry }) {
   const t = useT();
   const { locale } = useLocale();
@@ -251,7 +254,9 @@ function AuditChanges({ entry }: { entry: AuditEntry }) {
                 : fieldNames[change.field]) ?? change.field}
             :{' '}
           </span>
-          {change.hidden ? (
+          {entry.entityType === 'DELIVERY_SETTINGS' && SEALED_DELIVERY_FIELDS.has(change.field) ? (
+            <span data-testid="audit-secret-changed">{a.secretChanged}</span>
+          ) : change.hidden ? (
             <span data-testid="audit-hidden" className="text-ink-muted italic">
               {a.hiddenValue}
             </span>

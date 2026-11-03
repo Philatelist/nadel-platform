@@ -184,6 +184,16 @@ public interface LedgerReadModel {
     List<PaymentRow> payments(PaymentFilter filter, int limit);
 
     /**
+     * The payments with these ids (feature 017: the payment and reversal messages), each as {@link #payments} lists it:
+     * kind {@code PAYMENT} only, {@code reversed} set when a reversal cancels it, its net allocations now and what is
+     * left of it. An unknown id, a payment of another cooperative (RLS) and the id of a payment reversal row are absent.
+     * Rows come ordered by the day received, then the time booked, then id (within each 500 ids asked).
+     *
+     * @param paymentIds the payments; asked 500 per query
+     */
+    List<PaymentRow> paymentsByIds(Collection<UUID> paymentIds);
+
+    /**
      * The payment group of a payment as a printed cash receipt shows it (feature 016 §2.8): the receipt number, the
      * day received, who entered it, the payer and every part of the group with its plot, amount, reversal and where its
      * money is now ({@link CashReceiptData}). Any part of the group may be asked. A bank payment is answered too (with

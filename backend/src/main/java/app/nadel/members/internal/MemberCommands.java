@@ -38,15 +38,18 @@ class MemberCommands {
     private final List<MemberArchiveGuard> archiveGuards;
     private final MemberAuditPublisher audit;
     private final MemberCrypto crypto;
+    private final TelegramLinkFlags telegram;
 
     MemberCommands(MemberRepository members, RoleGrantReader grants, LastChairmanGuard lastChairman,
-            List<MemberArchiveGuard> archiveGuards, MemberAuditPublisher audit, MemberCrypto crypto) {
+            List<MemberArchiveGuard> archiveGuards, MemberAuditPublisher audit, MemberCrypto crypto,
+            TelegramLinkFlags telegram) {
         this.members = members;
         this.grants = grants;
         this.lastChairman = lastChairman;
         this.archiveGuards = archiveGuards;
         this.audit = audit;
         this.crypto = crypto;
+        this.telegram = telegram;
     }
 
     @Transactional
@@ -174,7 +177,7 @@ class MemberCommands {
     }
 
     private nadel.contract.model.Member card(Member member, OpenedContacts contacts, AccessProfile viewer) {
-        return MemberDtoMapper.toDto(member, contacts, grants.read(member), viewer);
+        return MemberDtoMapper.toDto(member, contacts, grants.read(member), viewer, telegram.linked(member.getId()));
     }
 
     private static MemberData withNotes(MemberData data, String notes) {

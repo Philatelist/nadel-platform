@@ -8,6 +8,9 @@ documents in the repository that are not English-only (`CLAUDE.md`, "Guides").
 | Board guide: part I — working in the system, part II — how the system calculates (rules and worked examples) | the chairman, the treasurer, the electrician | `uk/board-guide.html` | `en/board-guide.html` |
 | Platform owner's manual: components, local run, Keycloak, creating cooperatives, the operator, every screen and button, security, deployment, development, troubleshooting, decision log | the owner | `uk/owner-manual.html` | `en/owner-manual.html` |
 
+A one-page leaflet for members, "Як отримувати рахунки в Telegram" (`uk/telegram-leaflet.html`, Ukrainian only), is
+built to `pdf/telegram-leaflet.uk.pdf` by the same command, without the running footer of the guides.
+
 The PDFs in `pdf/` are built from these sources and committed, so they can be opened on GitHub or sent as files.
 
 ## Building

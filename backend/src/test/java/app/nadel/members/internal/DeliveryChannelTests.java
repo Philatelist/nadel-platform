@@ -9,32 +9,31 @@ class DeliveryChannelTests {
 
     @Test
     void paperNeedsNothing() {
-        assertThat(DeliveryChannel.PAPER.check(null, null, null)).isEmpty();
+        assertThat(DeliveryChannel.PAPER.check(null, null)).isEmpty();
     }
 
     @Test
     void emailNeedsAnEmail() {
-        assertThat(DeliveryChannel.EMAIL.check(null, "tg", "+380671234567"))
+        assertThat(DeliveryChannel.EMAIL.check(null, "+380671234567"))
                 .contains(new FieldProblem("email", "CHANNEL_CONTACT_MISSING"));
-        assertThat(DeliveryChannel.EMAIL.check("a@b.co", null, null)).isEmpty();
+        assertThat(DeliveryChannel.EMAIL.check("a@b.co", null)).isEmpty();
     }
 
+    /** Feature 017: the member links Telegram through the cooperative's bot, so no contact is needed. */
     @Test
-    void telegramNeedsAUsername() {
-        assertThat(DeliveryChannel.TELEGRAM.check("a@b.co", null, "+380671234567"))
-                .contains(new FieldProblem("telegramUsername", "CHANNEL_CONTACT_MISSING"));
-        assertThat(DeliveryChannel.TELEGRAM.check(null, "tg_user", null)).isEmpty();
+    void telegramNeedsNoContact() {
+        assertThat(DeliveryChannel.TELEGRAM.check(null, null)).isEmpty();
     }
 
     @Test
     void viberNeedsAViberPhone() {
-        assertThat(DeliveryChannel.VIBER.check("a@b.co", "tg", null))
+        assertThat(DeliveryChannel.VIBER.check("a@b.co", null))
                 .contains(new FieldProblem("viberPhone", "CHANNEL_CONTACT_MISSING"));
-        assertThat(DeliveryChannel.VIBER.check(null, null, "+380671234567")).isEmpty();
+        assertThat(DeliveryChannel.VIBER.check(null, "+380671234567")).isEmpty();
     }
 
     @Test
     void aBlankContactCountsAsMissing() {
-        assertThat(DeliveryChannel.EMAIL.check("  ", null, null)).isPresent();
+        assertThat(DeliveryChannel.EMAIL.check("  ", null)).isPresent();
     }
 }

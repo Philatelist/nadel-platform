@@ -33,10 +33,14 @@ class InvoicePrintTests extends DocumentsTestSupport {
 
     /**
      * Four plots: Вишнева 2 shared by an e-mail owner and a paper owner, Садова 9 of a paper owner, Садова 10 of the
-     * e-mail owner only, and plot 1 without a street of the paper owner; each charged in the current month.
+     * e-mail owner only, and plot 1 without a street of the paper owner; each charged in the current month. The
+     * cooperative has a mailbox (feature 017), so the e-mail owner gets e-mail and no paper copy; without a bot no copy
+     * has a link QR code.
      */
     @BeforeEach
     void plots() {
+        owner().update("insert into delivery_settings (tenant_id, smtp_host, smtp_port, smtp_from_address) "
+                + "values (?, 'smtp.documents.test', 587, 'board@documents.test')", tenant);
         UUID paper = memberId; // the default channel is PAPER
         UUID email = memberNamed("Іваненко", "Ігор", "Олегович");
         deliveryChannel(email, "EMAIL");

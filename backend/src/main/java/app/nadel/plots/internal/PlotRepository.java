@@ -108,6 +108,17 @@ interface PlotRepository extends JpaRepository<Plot, UUID> {
             nativeQuery = true)
     List<Plot> findChargeableOnStreetInNaturalOrder(@Param("street") String street);
 
+    /**
+     * The distinct streets of the active plots that are not common land, without surrounding spaces, each once
+     * ignoring case (lowered by the database, as {@link #findChargeableOnStreetInNaturalOrder}; of two spellings the
+     * first in code point order, so the one with capitals), in Ukrainian ICU collation order; blank streets left out.
+     */
+    @Query(value = "select s.street from (select distinct on (lower(btrim(p.street))) btrim(p.street) as street "
+            + "from plot p where p.archived_at is null and p.kind <> 'COMMON' and btrim(p.street) <> '' "
+            + "order by lower(btrim(p.street)), btrim(p.street) collate \"C\") s "
+            + "order by s.street collate \"uk-x-icu\", s.street collate \"C\"", nativeQuery = true)
+    List<String> findActiveStreets();
+
     /** The given plots' ids in natural order of the number (the order of the plots list). */
     @Query(value = "select p.id from plot p where p.id in (:ids) order by p.number_sort_key, p.number, p.id",
             nativeQuery = true)

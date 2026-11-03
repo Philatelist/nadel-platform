@@ -4,6 +4,7 @@ import app.nadel.audit.FieldChange;
 import app.nadel.identity.AccessProfile;
 import app.nadel.identity.OwnedPlot;
 import app.nadel.identity.OwnedPlotsSource;
+import app.nadel.ledger.PaymentRecorded;
 import app.nadel.ledger.PaymentSource;
 import app.nadel.ledger.PaymentsChanged;
 import app.nadel.ledger.internal.AllocationPlanner.Line;
@@ -77,7 +78,8 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>
  * A save writes the payment (its own group) and its allocations (origin {@code ENTRY}, by the actor; the automatic
  * ones {@code PREPAYMENT_AUTO}, by the system), publishes the
- * audit entry {@code PAYMENT_RECORDED} with the payer note sealed, and {@link PaymentsChanged} for the plot status. The
+ * audit entry {@code PAYMENT_RECORDED} with the payer note sealed, {@link PaymentsChanged} for the plot status and
+ * {@link PaymentRecorded} with the payment's id (the payment messages of feature 017). The
  * payer note and the bank reference are user content; the note is personal data and is stored sealed
  * ({@link PaymentNoteCipher}). Logs ids and counts only.
  * <p>
@@ -90,8 +92,8 @@ import org.springframework.transaction.annotation.Transactional;
  * part's remainder is placed automatically on its plot. A save locks every plot of the parts {@code FOR SHARE}, then
  * all their ledger locks in one call, books one month, takes one receipt number for a cash group, and writes one
  * payment per part above zero with a shared group, the payer
- * {@code split.payerMemberId} and the note sealed per payment; one {@code PAYMENT_RECORDED} per part and one
- * {@link PaymentsChanged} with every plot.
+ * {@code split.payerMemberId} and the note sealed per payment; one {@code PAYMENT_RECORDED} per part, one
+ * {@link PaymentsChanged} with every plot and one {@link PaymentRecorded} with every payment of the group.
  */
 @Service
 class PaymentService {
@@ -232,7 +234,8 @@ class PaymentService {
     /**
      * Writes the payments of one group under the locks the caller holds: books the month of the received day, takes
      * one receipt number for cash (stored on every payment of the group), writes each payment with its allocations,
-     * publishes one {@code PAYMENT_RECORDED} per payment and one {@link PaymentsChanged} with every plot.
+     * publishes one {@code PAYMENT_RECORDED} per payment, one {@link PaymentsChanged} with every plot and one
+     * {@link PaymentRecorded} with every payment.
      */
     private List<SavedPayment> book(Entry entry, @Nullable UUID payerMemberId, List<Booking> bookings,
             AccessProfile actor, UUID tenantId) {
@@ -278,6 +281,7 @@ class PaymentService {
             plotIds.add(plot.id());
         }
         events.publishEvent(new PaymentsChanged(tenantId, plotIds));
+        events.publishEvent(new PaymentRecorded(tenantId, payments.stream().map(PaymentRecord::getId).toList()));
         // the group id is the id of its first payment (of the only one for a payment of one plot)
         log.debug("Payment {} saved with {} allocations, {} payments in its group", groupId, allocations,
                 payments.size());

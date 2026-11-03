@@ -11,7 +11,7 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * The only place that turns a member into API output, and therefore the only place that decides what a viewer may
- * see. The contacts come opened ({@link MemberCrypto}). {@code notes} is filled only for a viewer with
+ * see. The contacts come opened ({@link MemberCrypto}). {@code telegramLinked} is a flag only ({@link TelegramLinkFlags}). {@code notes} is filled only for a viewer with
  * {@code MEMBERS_VIEW}; otherwise it stays null and the key is absent from the JSON (null properties are not
  * serialised).
  */
@@ -21,7 +21,7 @@ final class MemberDtoMapper {
     }
 
     static nadel.contract.model.Member toDto(Member member, OpenedContacts contacts, List<RoleGrant> roles,
-            AccessProfile viewer) {
+            AccessProfile viewer, boolean telegramLinked) {
         var dto = new nadel.contract.model.Member(
                 member.getId(),
                 member.getLastName(),
@@ -35,6 +35,8 @@ final class MemberDtoMapper {
         dto.setPostalAddress(contacts.postalAddress());
         dto.setTelegramUsername(contacts.telegramUsername());
         dto.setViberPhone(contacts.viberPhone());
+        // only the flag, never the member's Telegram account details (feature 017 §2.2)
+        dto.setTelegramLinked(telegramLinked);
         if (member.getArchivedAt() != null) {
             dto.setArchivedAt(member.getArchivedAt().atOffset(ZoneOffset.UTC));
         }

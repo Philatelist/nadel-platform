@@ -9,7 +9,8 @@ cooperative). The contacts of a member are stored encrypted (feature 014, see "E
 `MemberDirectory` and `MemberRef` in the module root: a read-only lookup for other modules, which must never read the
 member tables. `find(ids)` returns the names and the archived flag of the given members (archived included);
 `idsMatchingName(text)` returns the ids of members whose last, first or middle name contains the text (case-insensitive,
-archived included, literal match, at most 200 ids); `lockActive(ids)` pins members for the caller's transaction with a
+archived included, literal match, at most 200 ids); `activeIds()` returns the ids of the members who are not archived
+(transaction mandatory; the audience «усі члени» of an announcement, feature 017); `lockActive(ids)` pins members for the caller's transaction with a
 shared row lock (`FOR SHARE`, in id order, transaction mandatory) and returns those that exist, archived ones included so
 the caller can refuse them (used by the change of owner, so a member cannot be archived while the change commits).
 `MemberRef.shortName()` is "Last First" without the patronymic. `contacts(ids)` returns `MemberContacts` (names,
@@ -24,7 +25,19 @@ add more lookups here. `deliveryChannels(ids)` (feature 016) returns how each gi
 public enum `DeliveryChannel` (`EMAIL`, `TELEGRAM`, `VIBER`, `PAPER`; the values of `member.delivery_channel`),
 archived members included, unknown ids and other cooperatives' members absent; it runs in the caller's transaction
 (`MANDATORY`, 500 ids per `IN` list). The documents module prints the paper set of a month's invoices with it; feature
-017 will deliver by it.
+017 delivers by it.
+
+`MemberChannels` (feature 017, implemented by `MemberChannelCommands`): `setPreferredChannel(memberId, channel, actor)`
+is the member's own choice of channel in the account («Сповіщення», through `notifications`). The member row is locked
+(`FOR UPDATE`); the rule is the member form's (`DeliveryChannel.check`: `EMAIL` needs the e-mail, `VIBER` a Viber
+phone, otherwise 400 `VALIDATION_FAILED` with `CHANNEL_CONTACT_MISSING`); a change is audited as `MEMBER_UPDATED`
+(field `deliveryChannel`) with the actor as author; the current channel again writes nothing. 404 for a member not of
+the cooperative.
+
+`TelegramLinkStatus` (feature 017) is an SPI implemented by `notifications`: `linkedAmong(memberIds)` returns the
+members whose Telegram is linked to the cooperative's bot. `TelegramLinkFlags` reads it through an `ObjectProvider`
+(no implementation: nobody is linked) and the member card carries only the flag `telegramLinked`, never the member's
+Telegram account details.
 
 `RoleHolders` (feature 016, implemented by `JpaRoleHolders`): `activeHolders(baseRoleCode)` returns the active (not
 archived) members who hold the base role with the code (`CHAIRMAN`, `TREASURER`, `MEMBER`) as `MemberRef`, in name
@@ -90,7 +103,8 @@ has a current ownership). A guard must only read and must take no lock that is o
 - `GET /members/{id}`: a caller always opens their own card; another card needs `MEMBERS_VIEW`, otherwise the answer is
   404 `NOT_FOUND` before any lookup, exactly like a missing id. With `MEMBERS_VIEW` the lookup runs under RLS, so a member
   of another cooperative is 404 too. `MemberDtoMapper` is the only place that shapes a member for output: `notes` is
-  present only for a viewer with `MEMBERS_VIEW`, otherwise the key is absent.
+  present only for a viewer with `MEMBERS_VIEW`, otherwise the key is absent; `telegramLinked` (feature 017) is the
+  flag of `TelegramLinkFlags` on every card.
 
 - Writes (`MemberCommands`, one transaction each, `@PreAuthorize("hasAuthority('PERM_MEMBERS_EDIT')")` on the controller):
   `POST /members` (201 with `Location`), `PUT /members/{id}`, `POST /members/{id}/archive`, `POST /members/{id}/restore`.
@@ -98,7 +112,9 @@ has a current ownership). A guard must only read and must take no lock that is o
   active one are no-ops (the card is returned, no audit event); a `PUT` that changes nothing writes no event either.
   - `MemberData.from` validates and normalises: names trimmed and required (`REQUIRED`), phones through `PhoneNumber`
     (`PHONE_INVALID` on `phones[i]` / `viberPhone`, duplicates removed), e-mail trimmed and lower-case, blank optional
-    fields become null, `DeliveryChannel.check` (`CHANNEL_CONTACT_MISSING` on `email` / `telegramUsername` / `viberPhone`).
+    fields become null, `DeliveryChannel.check` (`CHANNEL_CONTACT_MISSING` on `email` / `viberPhone`; since feature 017
+    `TELEGRAM` needs no contact: the member links Telegram through the cooperative's bot, the username is an optional
+    note; the database rule `member_channel_contact_ck` follows since V29.1).
   - E-mail is unique among active members: a pre-check by `email_bidx` plus a mapping of the unique index
     `member_tenant_email_bidx_uq` (on `(tenant_id, email_bidx)` of active members) give 409 `EMAIL_TAKEN` with
     `errors[{field: "email"}]`. Archived members free their e-mail; restore re-checks with the stored blind index.

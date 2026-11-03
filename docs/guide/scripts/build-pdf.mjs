@@ -50,6 +50,8 @@ try {
         }
       }, text.missing);
       const title = await page.title();
+      // A one-page leaflet (<name>-leaflet.html) has no running footer.
+      const leaflet = file.includes('-leaflet');
       const footer = `<div style="width:100%;font:7.5pt 'IBM Plex Sans',sans-serif;color:#5b6a60;padding:0 18mm;display:flex;justify-content:space-between">
         <span>${title}</span><span>${text.page} <span class="pageNumber"></span> ${text.of} <span class="totalPages"></span></span></div>`;
       const out = join(outDir, `${basename(file, '.html')}.${lang}.pdf`);
@@ -58,7 +60,7 @@ try {
         format: 'A4',
         printBackground: true,
         preferCSSPageSize: true,
-        displayHeaderFooter: true,
+        displayHeaderFooter: !leaflet,
         headerTemplate: '<span></span>',
         footerTemplate: footer,
         tagged: true,

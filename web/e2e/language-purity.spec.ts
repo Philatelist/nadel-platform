@@ -231,6 +231,10 @@ const CHAIRMAN_SCREENS = [
   '/reports/templates',
   // feature 016: the register of debt certificates
   '/documents/certificates',
+  // feature 017: the delivery screen
+  '/deliveries',
+  '/announcements',
+  '/announcements/new',
   '/no-such-screen',
 ];
 

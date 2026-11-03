@@ -88,8 +88,9 @@ class PaymentAppendOnlyTests extends PaymentTestSupport {
             assertTrigger(table, "DELETE", () -> ownerJdbc().update("delete from " + table));
         }
         assertTrigger("allocation", "TRUNCATE", () -> ownerJdbc().execute("truncate allocation"));
-        // payment is referenced by allocation, so it is truncated together with it
-        assertThatThrownBy(() -> ownerJdbc().execute("truncate payment, allocation"))
+        // payment is referenced by allocation and (feature 017) delivery, so it is truncated together with them; the
+        // statement-level trigger of payment refuses it before any table is emptied
+        assertThatThrownBy(() -> ownerJdbc().execute("truncate payment, allocation, delivery"))
                 .isInstanceOf(DataAccessException.class)
                 .hasStackTraceContaining("is append-only: TRUNCATE");
         assertRowsUnchanged();

@@ -24,6 +24,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -55,8 +57,11 @@ import org.springframework.transaction.support.TransactionTemplate;
  * </ul>
  * Idempotent: a second run finds both and writes nothing. A refusal (requisites missing, a running build) or any other
  * failure is logged with its problem code or class only and never stops the application. The log has counts only.
+ * Runs before the other demo runners ({@link Order}): the demo delivery of the notifications module marks the invoices
+ * built here as sent.
  */
 @Component
+@Order(Ordered.LOWEST_PRECEDENCE - 1)
 @ConditionalOnExpression("'${spring.flyway.locations:}'.contains('db/demo') "
         + "and '${spring.flyway.placeholders.demoledger:off}' == 'on'")
 class DemoDocuments implements ApplicationRunner {

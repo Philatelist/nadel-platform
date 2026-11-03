@@ -208,4 +208,16 @@ describe('MonthInvoicesPanel', () => {
     expect(downloadBlob).toHaveBeenLastCalledWith(blob, 'invoices_2026-10_all.pdf');
     expect(monthPrintFileName('2026-10', 'PAPER')).toBe('invoices_2026-10_paper.pdf');
   });
+
+  it('offers "Send invoices" for the month only with INVOICES_ISSUE', async () => {
+    renderPanel();
+    await userEvent.click(await screen.findByRole('button', { name: 'Send invoices for October 2026' }));
+    expect(screen.getByRole('dialog', { name: 'Send invoices for October 2026' })).toBeTruthy();
+  });
+
+  it('hides "Send invoices" without INVOICES_ISSUE', () => {
+    permissions = ['CHARGES_VIEW'];
+    renderPanel();
+    expect(screen.queryByRole('button', { name: /Send invoices/ })).toBeNull();
+  });
 });

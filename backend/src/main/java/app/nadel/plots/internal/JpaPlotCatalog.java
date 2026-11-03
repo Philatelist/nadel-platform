@@ -117,6 +117,12 @@ class JpaPlotCatalog implements PlotCatalog {
         return found.stream().map(JpaPlotCatalog::facts).toList();
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<String> activeStreets() {
+        return plots.findActiveStreets();
+    }
+
     private static PlotFacts facts(Plot plot) {
         return new PlotFacts(plot.getId(), plot.getNumber(), plot.getStreet(), plot.getKind() == PlotKind.COMMON,
                 plot.getArchivedAt() != null, plot.getAreaM2());

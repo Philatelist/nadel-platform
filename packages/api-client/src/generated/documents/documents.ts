@@ -1071,9 +1071,13 @@ export const useBuildMonthInvoices = <TError = BadRequestResponse | Unauthorized
  * One PDF (A4, Ukrainian) with the latest version of each invoice of the month, one invoice per page (an invoice
  * that needs more than one page continues on the next, and the next invoice starts on a new page), in street and
  * plot order (the Ukrainian alphabet of the street, plots without a street last, then the natural order of the
- * plot number). `scope=PAPER` (the default) takes the plots that have at least one current owner who chose
- * paper delivery; `scope=ALL` every latest invoice of the month. A month without such invoices gives one page
- * saying so. The file is not stored; the same invoices give the same bytes. A month that is not listed (before
+ * plot number). `scope=PAPER` (the default) prints one copy per owner who gets the invoice on paper by the
+ * channel rule of `sendMonthInvoices` (paper chosen, Viber, or e-mail or Telegram that cannot be used), each
+ * closed with «Примірник для: {name}» and, when the cooperative has a bot, a small QR code «Отримувати рахунки в
+ * Telegram» with the owner's personal link (feature 017): printing creates these one-time link codes (valid 90
+ * days) for the owners who are not linked yet. `scope=ALL` prints every latest invoice of the month once, without
+ * names or codes. A month without such invoices gives one page saying so. The file is not stored; the same
+ * invoices give the same bytes, except a set with link codes, which has new codes on every print. A month that is not listed (before
  * the first month of the cooperative, after the current one) is 404 `NOT_FOUND`. Requires `INVOICES_ISSUE`.
  * @summary The invoices of a billing month as one PDF for printing
  */

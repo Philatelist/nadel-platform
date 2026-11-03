@@ -4,6 +4,7 @@ import { QueryBoundary } from '../components/QueryBoundary';
 import { MyPlotsPanel } from '../components/ownership/MyPlotsPanel';
 import { MyMetersPanel } from '../components/readings/MyMetersPanel';
 import { MyInvoices } from '../components/invoices/MyInvoices';
+import { NotificationsPanel } from '../components/account/NotificationsPanel';
 import { MyChargesPanel } from '../components/charges/MyChargesPanel';
 import { MyExpectedChargesPanel } from '../components/tariffs/MyExpectedChargesPanel';
 import { MemberDetails } from '../components/MemberDetails';
@@ -64,6 +65,7 @@ export function AccountPage() {
       <MyPlotsPanel />
       <MyMetersPanel />
       <MyInvoices />
+      <NotificationsPanel />
       <MyChargesPanel />
       <MyExpectedChargesPanel />
     </div>

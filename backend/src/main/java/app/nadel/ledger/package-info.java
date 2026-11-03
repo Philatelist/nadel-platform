@@ -11,7 +11,9 @@
  * <p>
  * Public API: the event {@link app.nadel.ledger.ChargesBooked}, published after every booking or reversal so that the
  * plot status can follow the debt, the event {@link app.nadel.ledger.PaymentsChanged}, published after every change of
- * payments or allocations (feature 015), the import facade {@link app.nadel.ledger.OpeningBalanceImport} (the "Opening
+ * payments or allocations (feature 015), the events {@link app.nadel.ledger.PaymentRecorded} and
+ * {@link app.nadel.ledger.PaymentReversed} (ids of payments entered or reversed, for the payment messages of feature
+ * 017), the import facade {@link app.nadel.ledger.OpeningBalanceImport} (the "Opening
  * balances" sheet of the Excel import) and the read facade of the reports {@link app.nadel.ledger.LedgerReadModel}
  * (aggregates in the caller's transaction, no personal data: month totals, {@link app.nadel.ledger.PlotDebts} as
  * of a day, the {@link app.nadel.ledger.CorrectionRow} of every reversal and adjustment of the billing months, the

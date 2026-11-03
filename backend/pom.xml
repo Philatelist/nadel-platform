@@ -24,6 +24,7 @@
         <fastexcel.version>0.20.2</fastexcel.version>
         <pdfbox.version>3.0.8</pdfbox.version>
         <zxing.version>3.5.4</zxing.version>
+        <jobrunr.version>9.0.1</jobrunr.version>
         <!-- Security overrides of versions managed by Spring Boot 4.1.1 (OSV advisories fixed in the patch releases below).
              Remove them once the Spring Boot parent manages these versions or newer. -->
         <tomcat.version>11.0.25</tomcat.version>
@@ -68,6 +69,23 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <!-- Delivery (feature 017): e-mail through each cooperative's own mailbox (Jakarta Mail, Boot-managed) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
+        </dependency>
+        <!-- Already brought by the starter at runtime (Boot-managed version); compile scope only to read the mail
+             server's own reply (SMTPTransport#getLastServerResponse) and its typed refusals -->
+        <dependency>
+            <groupId>org.eclipse.angus</groupId>
+            <artifactId>angus-mail</artifactId>
+        </dependency>
+        <!-- Background jobs (feature 017, ADR 0007): JobRunr with PostgreSQL storage; its tables come from Flyway V30 -->
+        <dependency>
+            <groupId>org.jobrunr</groupId>
+            <artifactId>jobrunr-spring-boot-4-starter</artifactId>
+            <version>${jobrunr.version}</version>
         </dependency>
         <dependency>
             <groupId>org.springframework.modulith</groupId>

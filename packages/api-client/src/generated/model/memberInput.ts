@@ -40,9 +40,12 @@ export interface MemberInput {
   email?: string;
   /** @maxLength 500 */
   postalAddress?: string;
-  /** Preferred invoice channel, `PAPER` when omitted. `EMAIL` requires `email`, `TELEGRAM` requires `telegramUsername`, `VIBER` requires `viberPhone` (otherwise `CHANNEL_CONTACT_MISSING`). */
+  /** Preferred invoice channel, `PAPER` when omitted. `EMAIL` requires `email`, `VIBER` requires `viberPhone` (otherwise `CHANNEL_CONTACT_MISSING`). `TELEGRAM` needs no contact: the member links Telegram through the cooperative's bot (feature 017), `telegramUsername` is an optional note. */
   deliveryChannel?: DeliveryChannel;
-  /** @maxLength 64 */
+  /**
+     * Optional note; not needed for the `TELEGRAM` channel
+     * @maxLength 64
+     */
   telegramUsername?: string;
   /** @maxLength 32 */
   viberPhone?: string;

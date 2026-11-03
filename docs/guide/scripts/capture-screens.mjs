@@ -307,6 +307,57 @@ const SHOTS = [
     path: '/account',
     element: { heading: T('Рахунки', 'Invoices') },
   },
+  // feature 017: delivery by e-mail and Telegram. Read-only: the screens are opened, the preview is requested, nothing is
+  // saved or sent. In the demo the mailbox and the bot are set up (Mailpit and the fake Telegram), member@demo.local is
+  // linked, and the closed month's invoices are already sent.
+  {
+    name: 'delivery-settings',
+    user: 'chairman',
+    path: '/settings',
+    element: { heading: T('Розсилка', 'Delivery') },
+  },
+  {
+    name: 'account-notifications',
+    user: 'member',
+    path: '/account',
+    element: { heading: T('Сповіщення', 'Notifications') },
+  },
+  // The "Send invoices for <month>" dialog of the closed month with its preview (the button shows the month as billingMonthLabel does
+  // "Вересень 2026" in Ukrainian, "September 2026" in English).
+  {
+    name: 'invoices-send',
+    user: 'treasurer',
+    path: `/charges/months/${closedMonth}`,
+    steps: [
+      {
+        click: T(
+          `Надіслати рахунки за ${monthLabel(closedMonth, 'uk')}`,
+          `Send invoices for ${monthLabel(closedMonth, 'en')}`,
+        ),
+      },
+    ],
+    element: { css: 'dialog[open]' },
+  },
+  { name: 'deliveries', user: 'treasurer', path: `/deliveries?month=${closedMonth}` },
+  // The new announcement with a preview of who gets it (nothing is sent).
+  {
+    name: 'announcement-form',
+    user: 'chairman',
+    path: '/announcements/new',
+    steps: [
+      {
+        fill: {
+          label: T('Текст оголошення', 'Announcement text'),
+          value: T(
+            'Збори членів товариства відбудуться в неділю о 12:00 біля правління.',
+            'The general meeting is on Sunday at 12:00 at the board office.',
+          ),
+        },
+      },
+      { click: T('Попередній перегляд', 'Preview') },
+    ],
+  },
+  { name: 'announcements', user: 'chairman', path: '/announcements' },
   { name: 'treasurer-charges', user: 'treasurer', path: `/charges/months/${thisMonth}` },
   {
     name: 'member-charges',
@@ -315,6 +366,42 @@ const SHOTS = [
     element: { css: 'section[aria-labelledby="my-charges"]' },
   },
 ];
+
+/** A billing month ("2026-09") as the app shows it (billingMonthLabel): uk "Вересень 2026", en "September 2026". */
+function monthLabel(month, lang) {
+  const [year, mm] = month.split('-');
+  const names = {
+    uk: [
+      'Січень',
+      'Лютий',
+      'Березень',
+      'Квітень',
+      'Травень',
+      'Червень',
+      'Липень',
+      'Серпень',
+      'Вересень',
+      'Жовтень',
+      'Листопад',
+      'Грудень',
+    ],
+    en: [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ],
+  };
+  return `${names[lang][Number(mm) - 1]} ${year}`;
+}
 
 /** A calendar day in Kyiv as YYYY-MM-DD, shifted by offsetDays. */
 function kyivDay(offsetDays) {
@@ -394,7 +481,8 @@ try {
                 const scope = step.fill.within
                   ? page.getByRole('form', { name: step.fill.within[lang], exact: true })
                   : page;
-                await scope.getByLabel(step.fill.label[lang], { exact: true }).fill(step.fill.value);
+                const value = typeof step.fill.value === 'string' ? step.fill.value : step.fill.value[lang];
+                await scope.getByLabel(step.fill.label[lang], { exact: true }).fill(value);
               } else if (step.link) {
                 await page
                   .getByRole('link', { name: step.link[lang], exact: true })

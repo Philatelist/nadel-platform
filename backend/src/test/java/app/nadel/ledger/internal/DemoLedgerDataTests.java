@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import app.nadel.DemoDay;
 import app.nadel.DemoLedgerData;
 import app.nadel.IntegrationTest;
 import app.nadel.TestTokens;
@@ -57,13 +58,19 @@ import java.util.UUID;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import org.awaitility.core.ConditionTimeoutException;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.Parameter;
+import org.junit.jupiter.params.ParameterizedClass;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -77,7 +84,16 @@ import tools.jackson.databind.json.JsonMapper;
  * calculation and the meter values it read; the plot debts are recomputed by the status refresher; the screens show
  * the feature (months, the queue, the map, accounts). So the SQL and the code cannot drift apart. The block is loaded
  * for each test and removed afterwards (the other tests share a demo cooperative without a ledger).
+ * <p>
+ * The demo is dated from the day it is first loaded, so every test runs once per {@link DemoDay#days() demo day}: the
+ * demo meters and the ledger are loaded as on that day and the application's clock stands at its noon. A normal build
+ * checks today; the CI job "Demo data by day" checks every day of a 31-day month, of February and the 29th of February.
  */
+@ParameterizedClass(name = "on {0}")
+@MethodSource("app.nadel.DemoDay#days")
+// its own clock makes its own context: closed after the class, so its connections do not stay open for the rest
+@DirtiesContext
+@Import(DemoDay.Config.class)
 class DemoLedgerDataTests extends IntegrationTest {
 
     private static final String ELECTRICITY_TARIFF = "ffffffff-0000-0000-0000-000000000003";
@@ -117,9 +133,20 @@ class DemoLedgerDataTests extends IntegrationTest {
 
     private final JdbcTemplate owner = ownerJdbc();
 
+    /** The day the demo is loaded on. */
+    @Parameter
+    private LocalDate day;
+
+    @AfterAll
+    static void putTheDemoMetersBack() {
+        DemoDay.reset(ownerJdbc());
+    }
+
     @BeforeEach
     void loadTheDemoLedger() {
-        DemoLedgerData.restore(owner);
+        // the meters once per day (the context, and with it the schema, is not there before the first test)
+        DemoDay.loadOnce(owner, day);
+        DemoLedgerData.restore(owner, day);
         unlinkDemoMembers();
     }
 
@@ -141,7 +168,8 @@ class DemoLedgerDataTests extends IntegrationTest {
         List<YearMonth> months = owner.queryForList("select to_char(month, 'YYYY-MM') from billing_month "
                 + "where tenant_id = ? order by month", String.class, DEMO_TENANT).stream().map(YearMonth::parse)
                 .toList();
-        assertThat(months).hasSize(2);
+        // the closed month and the open one; in the first five days of a month also the current month, run and open
+        assertThat(months).hasSizeBetween(2, 3).last().isEqualTo(YearMonth.from(day));
 
         Map<String, TariffMonthPlanning.PlannedCharge> planned = inDemo(() -> {
             Snapshot snapshot = book.snapshot();
@@ -166,8 +194,10 @@ class DemoLedgerDataTests extends IntegrationTest {
         for (Map<String, Object> row : owner.queryForList("select c.source_key, c.amount, to_char(b.month, 'YYYY-MM') "
                 + "as month from charge c join billing_month b on b.id = c.billing_month_id "
                 + "join plot p on p.id = c.plot_id where c.tenant_id = ? and p.number = '2' and c.source = 'TARIFF' "
-                + "and c.recalculation_id is null and c.charge_type_id = md5(? || ':CHARGE_TYPE:MEMBERSHIP')::uuid",
-                DEMO_TENANT, DEMO_TENANT.toString())) {
+                + "and c.recalculation_id is null and c.charge_type_id = md5(? || ':CHARGE_TYPE:MEMBERSHIP')::uuid "
+                // the two months the recalculation corrects: the closed one and the earliest open one
+                + "and b.month <= (select min(o.month) from billing_month o where o.tenant_id = c.tenant_id "
+                + "and o.status = 'OPEN')", DEMO_TENANT, DEMO_TENANT.toString())) {
             corrected.put((String) row.get("source_key"), row.get("amount"));
             assertAmount(row, new BigDecimal("30.00"));
             assertAmount(stored.remove((String) row.get("source_key")), new BigDecimal("30.00"));
@@ -197,13 +227,16 @@ class DemoLedgerDataTests extends IntegrationTest {
     }
 
     @Test
-    void theOpenMonthRunHasNothingLeftToCharge() throws Exception {
-        String open = owner.queryForObject("select to_char(month, 'YYYY-MM') from billing_month "
-                + "where tenant_id = ? and status = 'OPEN'", String.class, DEMO_TENANT);
-        JsonNode preview = body(mvc.perform(post("/api/v1/billing-months/" + open + "/run?preview=true")
-                .header(HttpHeaders.AUTHORIZATION, chairman())).andExpect(status().isOk()));
-        assertThat(preview.get("plots").asInt()).isZero();
-        assertThat(preview.get("total").asString()).isEqualTo("0.00");
+    void theOpenMonthRunsHaveNothingLeftToCharge() throws Exception {
+        List<String> open = owner.queryForList("select to_char(month, 'YYYY-MM') from billing_month "
+                + "where tenant_id = ? and status = 'OPEN' order by month", String.class, DEMO_TENANT);
+        assertThat(open).isNotEmpty().last().isEqualTo(YearMonth.from(day).toString());
+        for (String month : open) {
+            JsonNode preview = body(mvc.perform(post("/api/v1/billing-months/" + month + "/run?preview=true")
+                    .header(HttpHeaders.AUTHORIZATION, chairman())).andExpect(status().isOk()));
+            assertThat(preview.get("plots").asInt()).as(month).isZero();
+            assertThat(preview.get("total").asString()).as(month).isEqualTo("0.00");
+        }
     }
 
     // ---- electricity by readings
@@ -454,7 +487,7 @@ class DemoLedgerDataTests extends IntegrationTest {
     }
 
     /**
-     * The status of every demo plot by the rule of the plot map for today (Kyiv), computed in SQL from the cached debt:
+     * The status of every demo plot by the rule of the plot map on the demo day, computed in SQL from the cached debt:
      * grey for common land and a plot without a current owner, green without a debt, red when the debt is above the red
      * amount or its oldest charge is older than the red days, yellow otherwise.
      *
@@ -469,21 +502,21 @@ class DemoLedgerDataTests extends IntegrationTest {
                                 where o.plot_id = p.id and o.valid_to is null) then 'GREY'
                             when s.debt <= 0 then 'GREEN'
                             when s.debt > coalesce(cs.red_amount, 1000.00)
-                                 or ((now() at time zone 'Europe/Kyiv')::date - s.oldest_debt_date)
-                                    > coalesce(cs.red_days, 90) then 'RED'
+                                 or (?::date - s.oldest_debt_date) > coalesce(cs.red_days, 90) then 'RED'
                             else 'YELLOW' end as status
                 from plot p
                 join plot_status s on s.plot_id = p.id
                 left join cooperative_settings cs on cs.tenant_id = p.tenant_id
                 where p.tenant_id = ?""" + (onlyOnMap ? " and p.archived_at is null and p.boundary is not null" : ""),
-                DEMO_TENANT).forEach(row -> statuses.put((String) row.get("number"),
+                day, DEMO_TENANT).forEach(row -> statuses.put((String) row.get("number"),
                 (String) row.get("status")));
         return statuses;
     }
 
     @Test
     void theScreensShowTheFeature() throws Exception {
-        String open = owner.queryForObject("select to_char(month, 'YYYY-MM') from billing_month "
+        // the open month with the latest round of readings: the earliest open one (the current month may follow it)
+        String open = owner.queryForObject("select to_char(min(month), 'YYYY-MM') from billing_month "
                 + "where tenant_id = ? and status = 'OPEN'", String.class, DEMO_TENANT);
         String closed = owner.queryForObject("select to_char(month, 'YYYY-MM') from billing_month "
                 + "where tenant_id = ? and status = 'CLOSED'", String.class, DEMO_TENANT);
@@ -495,11 +528,17 @@ class DemoLedgerDataTests extends IntegrationTest {
         assertThat(months.get(closed).get("status").asString()).isEqualTo("CLOSED");
         assertThat(months.get(open).get("status").asString()).isEqualTo("OPEN");
         assertThat(months.get(open).get("runDone").asBoolean()).isTrue();
-        assertThat(months.get(open).get("totals").valueStream().map(t -> t.get("chargeTypeCode").asString()))
+        JsonNode current = months.get(YearMonth.from(day).toString());
+        assertThat(current.get("status").asString()).isEqualTo("OPEN");
+        assertThat(current.get("runDone").asBoolean()).isTrue();
+        assertThat(current.get("totals").valueStream().map(t -> t.path("chargeTypeCode").asString()))
+                .contains("MEMBERSHIP", "LAND_TAX");
+        assertThat(months.get(open).get("totals").valueStream().map(t -> t.path("chargeTypeCode").asString()))
                 .contains("MEMBERSHIP", "ELECTRICITY", "LAND_TAX", "COMMON_CONSUMERS");
         assertThat(owner.queryForList("select distinct c.source from charge c join billing_month b "
-                + "on b.id = c.billing_month_id where b.tenant_id = ? and b.status = 'OPEN'", String.class,
-                DEMO_TENANT)).contains("TARIFF", "CONSUMPTION", "LOSSES", "COMMON_CONSUMER", "MANUAL_REVERSAL");
+                + "on b.id = c.billing_month_id where b.tenant_id = ? and b.month = ?::date", String.class,
+                DEMO_TENANT, open + "-01")).contains("TARIFF", "CONSUMPTION", "LOSSES", "COMMON_CONSUMER",
+                "MANUAL_REVERSAL");
 
         // "Не нараховано": exactly one item "no tariff for every day" (plot 25), and the unknown quarter of the run
         JsonNode queue = body(mvc.perform(get("/api/v1/not-charged").header(HttpHeaders.AUTHORIZATION, chairman()))
@@ -563,10 +602,14 @@ class DemoLedgerDataTests extends IntegrationTest {
         assertThat(adjustments.get(0).get("reason").asString()).isEqualTo("Виправлено ставку членського внеску");
         assertThat(two.get("charges").valueStream().filter(c -> c.get("kind").asString().equals("REVERSAL"))
                 .map(c -> c.get("amount").asString())).containsExactly("-30.00");
-        // membership of both months at the corrected rate: 30 + 30 - 30 + 25 - 5 = 2 x 25
+        // membership of every month at the corrected rate: 30 + 30 - 30 + 25 - 5 = 2 x 25 for the two corrected
+        // months, plus 25 for a current month run after the correction
+        int monthCount = owner.queryForObject("select count(*) from billing_month where tenant_id = ?", Integer.class,
+                DEMO_TENANT);
         assertThat(owner.queryForObject("select sum(c.amount) from charge c join plot p on p.id = c.plot_id "
                 + "where c.tenant_id = ? and p.number = '2' and c.charge_type_id = md5(? || ':CHARGE_TYPE:MEMBERSHIP')"
-                + "::uuid", BigDecimal.class, DEMO_TENANT, DEMO_TENANT.toString())).isEqualByComparingTo("50.00");
+                + "::uuid", BigDecimal.class, DEMO_TENANT, DEMO_TENANT.toString()))
+                .isEqualByComparingTo(new BigDecimal(25 * monthCount));
         assertThat(two.get("total").asString()).isEqualTo(owner.queryForObject("select s.debt::text from plot_status s "
                 + "join plot p on p.id = s.plot_id where p.tenant_id = ? and p.number = '2'", String.class,
                 DEMO_TENANT));
@@ -660,7 +703,7 @@ class DemoLedgerDataTests extends IntegrationTest {
                 + "else c.amount + coalesce((select sum(j.amount) from charge j where j.adjusts_charge_id = c.id), 0) end",
                 Integer.class, DEMO_TENANT)).isZero();
         assertThat(owner.queryForObject("select count(*) from payment where tenant_id = ? "
-                + "and received_on > (now() at time zone 'Europe/Kyiv')::date", Integer.class, DEMO_TENANT)).isZero();
+                + "and received_on > ?", Integer.class, DEMO_TENANT, day)).isZero();
         // every row is booked in the open month (a payment received in the closed month counts in the earliest open one)
         assertThat(owner.queryForObject("select count(*) from payment p join billing_month b on b.id = p.billing_month_id "
                 + "where p.tenant_id = ? and b.status <> 'OPEN'", Integer.class, DEMO_TENANT)).isZero();

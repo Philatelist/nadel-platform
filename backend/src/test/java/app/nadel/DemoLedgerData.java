@@ -3,6 +3,7 @@ package app.nadel;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.util.UUID;
 import java.util.function.Consumer;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -92,6 +93,16 @@ public final class DemoLedgerData {
      */
     public static void restore(JdbcTemplate owner) {
         String block = block().replace("${demoledger}", "on");
+        asLedgerOwner(owner, sql -> sql.execute(block));
+    }
+
+    /**
+     * Loads the demo ledger as the migration would on {@code day} ({@link DemoDay}): with that day for
+     * {@code CURRENT_DATE} and its noon for {@code now()}. The demo meters must have been loaded on the same day
+     * ({@link DemoDay#load}), since the block reads its anchor back from their readings.
+     */
+    public static void restore(JdbcTemplate owner, LocalDate day) {
+        String block = DemoDay.on(block().replace("${demoledger}", "on"), day);
         asLedgerOwner(owner, sql -> sql.execute(block));
     }
 

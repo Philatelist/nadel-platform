@@ -269,9 +269,10 @@ class MembersAccessAcceptanceTests extends IntegrationTest {
         doPost(chairman(), "/api/v1/members", badPhone)
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errors[0].code").value("PHONE_INVALID"));
-        Map<String, Object> telegram = memberInput("No", "Telegram", null);
-        telegram.put("deliveryChannel", "TELEGRAM");
-        doPost(chairman(), "/api/v1/members", telegram)
+        // feature 017 dropped the Telegram username rule; Viber still needs its phone
+        Map<String, Object> viber = memberInput("No", "Viber", null);
+        viber.put("deliveryChannel", "VIBER");
+        doPost(chairman(), "/api/v1/members", viber)
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errors[0].code").value("CHANNEL_CONTACT_MISSING"));
         assertThat(memberCount()).isEqualTo(before);

@@ -340,8 +340,8 @@ export const getUploadImportUrl = () => {
  *   has a lasting water connection);
  * - member rules, as when a member is entered by hand: `REQUIRED`, `TOO_LONG`, `INVALID` (an e-mail that is
  *   not an address, an unknown `delivery_channel`), `PHONE_INVALID` (`phones` or `viber_phone`),
- *   `CHANNEL_CONTACT_MISSING` (the contact the delivery channel needs is empty: `email`, `telegram_username` or
- *   `viber_phone`);
+ *   `CHANNEL_CONTACT_MISSING` (the contact the delivery channel needs is empty: `email` or `viber_phone`; the
+ *   `TELEGRAM` channel needs no contact, the member links Telegram through the cooperative's bot);
  * - member matching: `MEMBER_KEY_MISSING` (`email`: the row has neither an e-mail nor a phone, so a later import
  *   could not recognise the member), `MEMBER_AMBIGUOUS` (`phones`: the last name, first name and first phone match
  *   two or more members), `EMAIL_TAKEN` (`email`: the e-mail belongs to a member other than the one the name and

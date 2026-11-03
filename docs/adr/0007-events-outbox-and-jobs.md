@@ -26,3 +26,29 @@ The outbox arrived with spec 002 (members and access control), whose first liste
 - **Idempotency:** the audit row id is the event id and the insert is `on conflict (id) do nothing`, so a redelivered event writes one entry.
 - **Batches for bulk changes.** A change that touches thousands of records (the Excel import, ADR 0012) publishes `audit.AuditBatch` events of at most 500 entries instead of one `AuditEvent` per record; the listener writes a batch with one JDBC batch insert in one transaction, still idempotent by entry id and bound to the batch's tenant with `TenantContext.runAs`. One outbox publication and one transaction per record does not scale to thousands.
 - `@EnableAsync` is on `NadelApplication`.
+
+## Implementation notes: JobRunr (feature 017, 2026-10)
+JobRunr arrived with feature 017 (delivery by e-mail and Telegram; ADR 0018), as planned above.
+
+- **`org.jobrunr:jobrunr-spring-boot-4-starter` 9.0.1** (it starts on Spring Boot 4.1 with Jackson 3) on the
+  application's DataSource as `nadel_app`. Its tables come from Flyway (`V30__jobrunr.sql`, the PostgreSQL migrations
+  of exactly that version copied from the jar, owned by the migration role), with `jobrunr.database.skip-create=true`,
+  since `nadel_app` cannot create tables. A JobRunr upgrade brings its new scripts in a new migration. Dashboard off,
+  no usage data sent (`jobrunr.miscellaneous.allow-anonymous-data-usage=false`), the background job server on; the
+  integration tests turn it off and call the job bodies themselves (one test turns it on).
+- **No `tenant_id` and no RLS on the JobRunr tables, deliberately,** for the reason given for `event_publication`: the
+  background job server reads them without a bound cooperative. A job's arguments are identifiers only (a cooperative
+  id and a channel code), never personal data.
+- **How a job binds the cooperative.** The job `DispatchDeliveries(tenantId, channel)` is run by
+  `notifications.internal.DispatchDeliveriesHandler`, which calls the delivery dispatcher; it first binds the argument
+  with `TenantContext.runAs(tenantId, ...)` and only then opens its transactions with a `TransactionTemplate`, so
+  `TenantAwareTransactionManager` sets `app.tenant_id`, as the event listeners do. A job that runs without a cooperative (the delivery sweep, scheduled with `@Scheduled`)
+  finds its cooperatives through a `SECURITY DEFINER` function returning identifiers only (ADR 0018) and enqueues one
+  job per cooperative and channel.
+- **Idempotency.** A job works rows of the delivery register, each sent once by its status and attempt count, under a
+  lease per cooperative and channel (`delivery_lane`); job ids are derived from the lane and the second, so waking a
+  lane twice enqueues one job. JobRunr retries only a crashed run (`jobrunr.jobs.default-number-of-retries=2`); the
+  delivery attempts and their backoff are counted on the delivery rows.
+- **What still does not use JobRunr:** the bot supervisor and the delivery sweep are `@Scheduled` on every instance
+  (they claim database leases); the month's invoice build stays synchronous (ADR 0017). Periodic month closing and bank
+  polling remain future users.

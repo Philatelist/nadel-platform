@@ -86,7 +86,9 @@ class DocumentsAppendOnlyTests extends DocumentTableTestSupport {
     void theOwnerIsRefusedByTheInvoiceTrigger() {
         assertTrigger("invoice", "UPDATE", () -> ownerJdbc().update("update invoice set due = 0"));
         assertTrigger("invoice", "DELETE", () -> ownerJdbc().update("delete from invoice"));
-        assertTrigger("invoice", "TRUNCATE", () -> ownerJdbc().execute("truncate invoice"));
+        // delivery (feature 017) refers to invoice, so a TRUNCATE names both to reach the invoice's trigger, which
+        // refuses the whole statement
+        assertTrigger("invoice", "TRUNCATE", () -> ownerJdbc().execute("truncate invoice, delivery"));
         assertRowsUnchanged();
     }
 

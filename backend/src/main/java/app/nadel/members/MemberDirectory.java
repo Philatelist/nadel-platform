@@ -25,6 +25,13 @@ public interface MemberDirectory {
     List<UUID> idsMatchingName(String text);
 
     /**
+     * The ids of every member of the cooperative who is not archived, in id order: the audience «усі члени» of an
+     * announcement (feature 017). Runs in the caller's transaction ({@code Propagation.MANDATORY}); the caller checks
+     * its own permission.
+     */
+    List<UUID> activeIds();
+
+    /**
      * Pins the given members for the rest of the caller's transaction: takes a shared row lock ({@code FOR SHARE}), so
      * a concurrent archiving of one of them waits until the caller commits (and the other way round). Returns the
      * members that exist in the cooperative, archived ones included (they are flagged in {@link MemberRef#archived()},
