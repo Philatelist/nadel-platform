@@ -1,7 +1,7 @@
 # Pipeline log — 018 cash book, expenses and reconciliation
 
 - Status: running
-- Phase: 2 — committing specs
+- Phase: 3 — Slice 1 backend task
 - Branch: 018-cash-book-expenses-reconciliation (planned) · Base: main @ c7419a6
 - Requirement: docs/features/018-cash-book-expenses-reconciliation.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
@@ -85,3 +85,10 @@
 - AUTO (tech): difference reversals get audit actions COUNT_DIFFERENCE_REVERSED / BANK_DIFFERENCE_REVERSED (FS 2.14 amended); bank difference dated the month's last day (or today); act closing sentence by net balance.
 - tasks.md written: 8 implementation slices + Feature Testing & Regression (testing-expert). Staffing gap: guides task → general-purpose (accepted per pipeline rule; for the final report). `<!-- not-user-reviewed -->` marker removed (Phase 1 stands in for the plan review).
 - The four Playwright specs (FS 2.17 / requirement §12: expense+handover @smoke, cash count, bank reconciliation, member act) are written in Slice 9 by testing-expert.
+
+## Phase 3
+
+- S1 migration task done (postgres-database): V32__treasury.sql (9 tables, guards, column grants, seed_treasury, seed_base_roles redefined, backfill between BACKFILL markers), TreasuryTestSupport, TreasuryTenantIsolationTests, TreasuryGuardsTests, TreasuryBackfillTests, SeedBaseRolesTests updated. RED on guards and backfill. Orchestrator re-run: 35 tests green. booking_month = date (1st of month); movement amounts signed; reversal = same kind, negated, reverses_movement_id + reason. Permission enum left to the backend task (exhaustive switch in PermissionCatalog). Demo wipe issue noted for Slice 8.
+- S1 backend task done (spring-backend): ledger BookingMonths, PaymentMoneyMoved (published in book and reverse), PaymentRef/paymentRefs; treasury module (MoneyAccounts, MovementWriter, AccountBalances, PaymentMovementListener, TreasuryAuditPublisher, TreasuryController); 31 permissions; contract + make gen; README/ADR 0009/glossary. Verify 153 green (orchestrator re-run 153 green); clients green (web 908). RED on 2. Deviations accepted: reversal reason read via paymentRefs (event stays text-free); bank reference returned as documentNumber; plotId only (no plot number); createdByName via audit.ActorNames (existing board pattern); extra fields asOf, accountId/kind/from/to/negative, reversesMovementId; default period current month, page size 100 (max 200); opening validation codes amount INVALID / DATE_IN_FUTURE; DB trigger second write → 500 only if service check bypassed. Unplanned but necessary: test clean-ups across ~20 test supports (seeded money_account/expense_category FK on tenant delete, movements before payments, TRUNCATE probe, Treasurer permission lists in 3 acceptance tests). Shared code touched → whole backend suite in Phase 4.
+- Known until Slice 8: reversing a demo SQL payment in the dev DB returns 500 (no original movement); e2e specs reverse only their own payments. Added to the Slice 8 demo task.
+- S1 web task done (react-frontend): CashbookPage, MoneyAccountCard, MovementsTable, nav, route, auditValue MONEY_ACCOUNT, i18n cashbook.*, api-client index export (hand-maintained file, as in 017). Clients green (orchestrator re-run: web 916). S1 Verify (orchestrator): backend 153 green, clients green.

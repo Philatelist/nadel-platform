@@ -69,6 +69,11 @@ class AllocationConcurrencyTests extends PaymentApiSupport {
         asLedgerOwner(sql -> {
             sql.update("delete from allocation where plot_id = ? and releases_allocation_id is not null", plot);
             sql.update("delete from allocation where plot_id = ?", plot);
+            // the journal movements of feature 018 point at the payments (and a reversal at its movement): first
+            sql.update("delete from account_movement where reverses_movement_id is not null and payment_row_id in "
+                    + "(select id from payment where plot_id = ?)", plot);
+            sql.update("delete from account_movement where payment_row_id in (select id from payment where plot_id = ?)",
+                    plot);
             sql.update("delete from payment where plot_id = ?", plot);
             sql.update("delete from recalculation_line where plot_id = ?", plot);
             sql.update("delete from charge_part where charge_id in (select id from charge where plot_id = ?)", plot);

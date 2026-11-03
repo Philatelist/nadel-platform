@@ -27,6 +27,7 @@ export const en = {
     settings: 'Cooperative settings',
     charges: 'Charges',
     payments: 'Payments',
+    cashbook: 'Cash and bank',
     reports: 'Reports',
     certificates: 'Certificate register',
     deliveries: 'Deliveries',
@@ -187,6 +188,21 @@ export const en = {
     ANNOUNCEMENTS_SEND: {
       name: 'Send announcements',
       description: 'Send announcements to the members by e-mail and Telegram and print them for the rest',
+    },
+    CASHBOOK_VIEW: {
+      name: 'View cash and bank',
+      description:
+        'See the cash and bank accounts, their journals, expenses, cash counts, bank reconciliations and their reports',
+    },
+    CASHBOOK_ENTER: {
+      name: 'Enter cash book entries',
+      description:
+        'Record expenses, handovers of cash to the bank, other income, cash counts and bank statement figures',
+    },
+    CASHBOOK_APPROVE: {
+      name: 'Approve cash book operations',
+      description:
+        'Enter opening balances, book count and bank differences, reverse entries and manage expense and income categories',
     },
   },
   roles: {
@@ -915,6 +931,7 @@ export const en = {
       ANNOUNCEMENT_SENT: 'Announcement sent',
       TELEGRAM_LINKED: 'Telegram linked',
       TELEGRAM_UNLINKED: 'Telegram unlinked',
+      OPENING_BALANCE_SET: 'Opening balance set',
     },
     entityType: {
       MEMBER: 'Member',
@@ -939,6 +956,7 @@ export const en = {
       CERTIFICATE: 'Debt certificate',
       DELIVERY_SETTINGS: 'Delivery settings',
       ANNOUNCEMENT: 'Announcement',
+      MONEY_ACCOUNT: 'Money account',
     },
     output: { PREVIEW: 'On screen', XLSX: 'Excel file' },
     lossesMode: { FIXED_PERCENT: 'Fixed percentage', PROPORTIONAL: 'Proportional' },
@@ -2927,6 +2945,47 @@ export const en = {
       splitInvalid: 'The parts of the payment are not valid',
     },
   },
+  cashbook: {
+    title: 'Cash and bank',
+    account: { CASH: 'Cash', BANK: 'Bank account' },
+    balance: 'Balance on {date}',
+    opening: 'Opening balance: {amount} on {date}',
+    enterOpening: 'Enter the opening balance',
+    negative: {
+      CASH: 'The cash balance is negative — do a cash count',
+      BANK: 'The bank balance is negative',
+    },
+    openingForm: {
+      title: 'Opening balance',
+      text: 'The amount on the account when bookkeeping starts. It can be entered only once.',
+      amount: 'Amount',
+      date: 'As of',
+      amountInvalid: 'Enter an amount, for example 1250.50',
+      save: 'Save the opening balance',
+      saving: 'Saving…',
+    },
+    movements: {
+      title: 'Movements',
+      from: 'From',
+      to: 'To',
+      period: 'Period: {from} – {to}',
+      openingBalance: 'Opening balance of the period',
+      closingBalance: 'Closing balance of the period',
+      empty: 'No movements in this period.',
+      beforeOpening: 'before the opening balance',
+      reversal: 'Reversal',
+      columns: { date: 'Date', kind: 'Type', details: 'Basis', amount: 'Amount', createdBy: 'Entered by' },
+    },
+    kind: {
+      MEMBER_PAYMENT: 'Member payment',
+      HANDOVER_OUT: 'Handover to the bank',
+      HANDOVER_IN: 'Handover to the bank',
+      EXPENSE: 'Expense',
+      OTHER_INCOME: 'Other income',
+      COUNT_DIFFERENCE: 'Cash count difference',
+      BANK_DIFFERENCE: 'Bank difference',
+    },
+  },
   problem: {
     ANNOUNCEMENT_TOO_LONG: 'The announcement is longer than 2000 characters.',
     TELEGRAM_NOT_CONFIGURED: 'The cooperative has no Telegram bot set up.',
@@ -3031,6 +3090,7 @@ export const en = {
     NO_OWN_EMAIL: 'Your member card has no e-mail address, so there is nowhere to send a test letter.',
     SMTP_HOST_NOT_ALLOWED:
       'This mail server cannot be used. Enter the server of a mail service (for example smtp.gmail.com) and the port 25, 465 or 587.',
+    OPENING_BALANCE_ALREADY_SET: 'The opening balance of this account is already entered',
     UNKNOWN: 'Something went wrong. Please try again.',
   },
   map: {

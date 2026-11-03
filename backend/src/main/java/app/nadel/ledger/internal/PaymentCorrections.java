@@ -2,6 +2,7 @@ package app.nadel.ledger.internal;
 
 import app.nadel.audit.FieldChange;
 import app.nadel.identity.AccessProfile;
+import app.nadel.ledger.PaymentMoneyMoved;
 import app.nadel.ledger.PaymentReversed;
 import app.nadel.ledger.PaymentsChanged;
 import app.nadel.ledger.internal.AllocationPlanner.Line;
@@ -19,6 +20,7 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceException;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -59,8 +61,10 @@ import org.springframework.transaction.annotation.Transactional;
  * 409). Allowed on an archived plot. Booked in {@code BillingMonths.openForBooking(received_on)}: the payment's own
  * month while it is open, otherwise the earliest open month. Every live allocation of the payment is released
  * ({@code PAYMENT_REVERSED}) before the reversal row; the other parts of a split group are untouched. The receipt
- * number stays on the payment. Audit {@code PAYMENT_REVERSED}; {@link PaymentReversed} with the reversed payment's
- * id (the reversal messages of feature 017).</li>
+ * number stays on the payment. {@link PaymentMoneyMoved} for the reversal row, dated today (Europe/Kyiv) in
+ * {@code openForBooking(today)} (feature 018: the money leaves the account on the day of the reversal; the treasury
+ * writes the movement in this transaction). Audit {@code PAYMENT_REVERSED}; {@link PaymentReversed} with the reversed
+ * payment's id (the reversal messages of feature 017).</li>
  * <li><b>Reallocate</b>: the payment (404; 409 {@code PAYMENT_ALREADY_REVERSED} for a reversed payment or a reversal
  * row); the plot's state as if every live allocation of the payment were released; the digest
  * ({@link PaymentDigest#reallocation}, 409 {@code PREVIEW_OUTDATED}); the proposal or the caller's lines checked
@@ -149,6 +153,13 @@ class PaymentCorrections {
             }
             throw e;
         }
+        // the money leaves the cash or bank account today, booked in the month today belongs to (taken after the
+        // payment's month: both FOR SHARE, months close in order); the treasury writes it in this transaction
+        LocalDate today = LocalDate.now(clock);
+        BillingMonthRecord movementMonth = billingMonths.openForBooking(tenantId, today);
+        events.publishEvent(new PaymentMoneyMoved(tenantId, List.of(new PaymentMoneyMoved.Line(reversal.getId(),
+                paymentId, true, reversal.getSource(), reversal.getAmount(), today, movementMonth.yearMonth(),
+                reversal.getCreatedBy(), reversal.getCreatedAt()))));
         List<FieldChange> changes = new ArrayList<>();
         changes.add(new FieldChange("amount", null, reversal.getAmount().toString()));
         if (original.getReceiptNumber() != null) {

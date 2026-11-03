@@ -25,5 +25,6 @@ export * from './generated/reports/reports';
 export * from './generated/roles/roles';
 export * from './generated/settings/settings';
 export * from './generated/tariffs/tariffs';
+export * from './generated/treasury/treasury';
 export * from './generated/water/water';
 export * from './generated/model';

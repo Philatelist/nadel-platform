@@ -64,6 +64,12 @@ final class PermissionCatalog {
                     "Issue and annul debt certificates of plots"};
             case ANNOUNCEMENTS_SEND -> new String[] {"Send announcements",
                     "Send announcements to the members by e-mail and Telegram and print them for the rest"};
+            case CASHBOOK_VIEW -> new String[] {"View cash and bank",
+                    "See the cash and bank accounts, their journals, expenses, counts, reconciliations and reports"};
+            case CASHBOOK_ENTER -> new String[] {"Enter cash book entries",
+                    "Record expenses, handovers to the bank, other income, cash counts and bank statements"};
+            case CASHBOOK_APPROVE -> new String[] {"Approve cash book operations",
+                    "Enter opening balances, book count and bank differences, reverse entries, manage categories"};
         };
         return new PermissionInfo(nadel.contract.model.Permission.fromValue(permission.name()), text[0], text[1]);
     }

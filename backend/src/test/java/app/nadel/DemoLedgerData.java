@@ -49,6 +49,7 @@ public final class DemoLedgerData {
      */
     public static void clear(JdbcTemplate owner) {
         asLedgerOwner(owner, sql -> {
+            removePaymentMovements(sql);
             // payments and allocations first: they point at charges and billing months (releases and reversals first)
             sql.update("delete from allocation where tenant_id in (?, ?) and releases_allocation_id is not null",
                     DEMO_TENANT, OTHER_TENANT);
@@ -93,7 +94,10 @@ public final class DemoLedgerData {
      */
     public static void restore(JdbcTemplate owner) {
         String block = block().replace("${demoledger}", "on");
-        asLedgerOwner(owner, sql -> sql.execute(block));
+        asLedgerOwner(owner, sql -> {
+            removePaymentMovements(sql);
+            sql.execute(block);
+        });
     }
 
     /**
@@ -103,7 +107,21 @@ public final class DemoLedgerData {
      */
     public static void restore(JdbcTemplate owner, LocalDate day) {
         String block = DemoDay.on(block().replace("${demoledger}", "on"), day);
-        asLedgerOwner(owner, sql -> sql.execute(block));
+        asLedgerOwner(owner, sql -> {
+            removePaymentMovements(sql);
+            sql.execute(block);
+        });
+    }
+
+    /**
+     * Removes the journal movements (feature 018) of the two cooperatives' payments, which point at the payment rows the
+     * block and {@link #clear} delete: the movements of payments a test entered through the API (reversals first).
+     */
+    private static void removePaymentMovements(JdbcTemplate sql) {
+        sql.update("delete from account_movement where tenant_id in (?, ?) and payment_row_id is not null "
+                + "and reverses_movement_id is not null", DEMO_TENANT, OTHER_TENANT);
+        sql.update("delete from account_movement where tenant_id in (?, ?) and payment_row_id is not null",
+                DEMO_TENANT, OTHER_TENANT);
     }
 
     /**

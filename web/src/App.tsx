@@ -196,6 +196,15 @@ const router = createBrowserRouter([
         ],
       },
       {
+        element: <RequirePermission permission="CASHBOOK_VIEW" />,
+        children: [
+          {
+            path: 'cashbook',
+            lazy: () => import('./pages/CashbookPage').then((m) => ({ Component: m.CashbookPage })),
+          },
+        ],
+      },
+      {
         element: <RequirePermission permission="REPORTS_VIEW" />,
         children: [
           {

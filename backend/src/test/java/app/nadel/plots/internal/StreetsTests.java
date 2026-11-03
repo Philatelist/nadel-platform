@@ -52,6 +52,9 @@ class StreetsTests extends IntegrationTest {
                 "member", "charge_type", "cooperative_settings")) {
             ownerJdbc().update("delete from " + table + " where tenant_id = ?", tenant);
         }
+        // the money accounts and categories seed_base_roles adds (V32, seed_treasury)
+        ownerJdbc().update("delete from money_account where tenant_id = ?", tenant);
+        ownerJdbc().update("delete from expense_category where tenant_id = ?", tenant);
         deleteDataKeys(tenant);
         ownerJdbc().update("delete from tenant where id = ?", tenant);
     }

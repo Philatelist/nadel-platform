@@ -158,6 +158,11 @@ public final class ProblemCodes {
      * removed; feature 017 §2.6); also with the field code {@code TOO_LONG} of {@code text} in {@code errors[]}.
      */
     public static final String ANNOUNCEMENT_TOO_LONG = "ANNOUNCEMENT_TOO_LONG";
+    /**
+     * 409: the opening balance of a money account is entered again; it is entered once and never changed (feature 018
+     * §2.1).
+     */
+    public static final String OPENING_BALANCE_ALREADY_SET = "OPENING_BALANCE_ALREADY_SET";
     /** 409: the plot's prepayment is allocated by hand while it has no prepayment or no open charge. */
     public static final String NOTHING_TO_ALLOCATE = "NOTHING_TO_ALLOCATE";
     /** 409: the charge was reversed before; a charge is reversed at most once. */

@@ -194,6 +194,17 @@ public interface LedgerReadModel {
     List<PaymentRow> paymentsByIds(Collection<UUID> paymentIds);
 
     /**
+     * The payment rows with these ids as the journal lines of the treasury show them (feature 018 §2.2): the payment,
+     * its plot, receipt number or bank reference and, for a payment reversal row, the payment it cancels (with that
+     * payment's receipt number and bank reference) and its reason. Both kinds of row are answered. An unknown id and a
+     * row of another cooperative (RLS) are absent. No personal data.
+     *
+     * @param ledgerRowIds the payment rows (payments or reversals); asked 500 per query
+     * @return the rows found, keyed by row id, in the order of first appearance of the ids
+     */
+    Map<UUID, PaymentRef> paymentRefs(Collection<UUID> ledgerRowIds);
+
+    /**
      * The payment group of a payment as a printed cash receipt shows it (feature 016 §2.8): the receipt number, the
      * day received, who entered it, the payer and every part of the group with its plot, amount, reversal and where its
      * money is now ({@link CashReceiptData}). Any part of the group may be asked. A bank payment is answered too (with

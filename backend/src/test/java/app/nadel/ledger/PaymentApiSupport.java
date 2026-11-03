@@ -40,6 +40,11 @@ abstract class PaymentApiSupport extends LedgerApiSupport {
                 sql.update("delete from allocation where plot_id = any(?::uuid[]) "
                         + "and releases_allocation_id is not null", plots);
                 sql.update("delete from allocation where plot_id = any(?::uuid[])", plots);
+                // the journal movements of feature 018 point at the payments (and a reversal at its movement): first
+                sql.update("delete from account_movement where reverses_movement_id is not null and payment_row_id in "
+                        + "(select id from payment where plot_id = any(?::uuid[]))", plots);
+                sql.update("delete from account_movement where payment_row_id in (select id from payment where plot_id = any(?::uuid[]))",
+                        plots);
                 sql.update("delete from payment where plot_id = any(?::uuid[]) and reverses_payment_id is not null",
                         plots);
                 sql.update("delete from payment where plot_id = any(?::uuid[])", plots);

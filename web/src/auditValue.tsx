@@ -160,6 +160,7 @@ export function auditValue(
     case 'personalData':
       return raw === 'true' ? a.yes : a.no;
     case 'kind':
+      if (entityType === 'MONEY_ACCOUNT') return catalog(t.cashbook.account);
       if (Object.hasOwn(t.billing.notCharged.kind, raw)) return catalog(t.billing.notCharged.kind);
       return catalog(entityType === 'METER' ? t.meters.kind : t.plot.kind);
     case 'resource':
@@ -323,6 +324,7 @@ export function auditRecordLabel(
     return label;
   }
   if (entityType === 'SETTINGS') return t.settings.title;
+  if (entityType === 'MONEY_ACCOUNT') return (t.cashbook.account as Dictionary)[label] ?? label;
   if (entityType === 'BILLING_MONTH') return billingMonthLabel(label, t);
   if (entityType === 'REPORT') return reportTexts(t, label)?.title ?? label;
   if (entityType === 'ROLE') return baseToken(label, t.roles);

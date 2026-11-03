@@ -54,9 +54,11 @@ cooperative that is not reversed, and a reversal never target an adjustment or a
 | `PaymentsChanged(tenantId, plotIds)` | Published inside the transaction of every change of payments or allocations of plots (feature 015: a payment entered, one event with every plot of a split; later slices a reversal, a reallocation, a prepayment allocation by hand or automatically), never empty, at most 500 plots. `PlotStatusRefresher` recomputes the debt and prepayment of those plots. Ids only |
 | `PaymentRecorded(tenantId, paymentIds)` | Published inside the transaction of every payment entry (feature 017 §2.4), next to `PaymentsChanged`: one event per save with every payment written (one for a plot, one per part above zero for a split, each part a payment of its own plot), never empty. `notifications.PaymentMessages` plans the payment messages to the plots' owners. Ids only: no amounts, names or texts in the outbox |
 | `PaymentReversed(tenantId, paymentIds)` | Published inside the transaction of a payment reversal (feature 017 §2.4), next to `PaymentsChanged`, with the id of the reversed payment (kind `PAYMENT`, not its reversal row), never empty. `notifications.PaymentMessages` plans the reversal messages. Ids only |
+| `PaymentMoneyMoved(tenantId, lines)` | Feature 018 (ADR 0019): published inside the transaction that wrote payment rows, after they are flushed: by `PaymentService.book` once per group (a line per payment: `movedOn` = `received_on`, `bookingMonth` = the payment's month) and by `PaymentCorrections.reverse` for the reversal row (`movedOn` = today in Europe/Kyiv, `bookingMonth` = `BillingMonths.openForBooking(today)`, taken after the payment's own month). Each `Line(ledgerRowId, paymentId, reversal, source, amount, movedOn, bookingMonth, createdBy, createdAt)` carries ids, codes, dates and the signed amount only. Its one listener, `treasury.internal.PaymentMovementListener`, is a **plain synchronous `@EventListener`**: the treasury writes the journal movements in the payment's own transaction, nothing reaches `event_publication`, and a failure there rolls the payment back. `PaymentRecorded` and `PaymentReversed` are unchanged |
+| `BookingMonths.bookFor(date)` | Feature 018: the billing month a money entry of another module dated `date` belongs to (`MANDATORY`; `BillingMonths.openForBooking` for the bound cooperative: the month of the day while open, else the earliest open month; leaves it `FOR SHARE`), implemented by `internal.LedgerBookingMonths` |
 | `PaymentSource` (`CASH`, `BANK`) | Where the money of a payment came from (feature 015; column `payment.source`, V27); the bank statement import is a later feature (after 016-018) |
 | `PaymentNotes` | The payer notes of payments for the payments report (feature 015 §6), implemented by `internal.PaymentNotesReader`: `@PreAuthorize(MEMBERS_VIEW)`, `Propagation.MANDATORY`, opened with `PaymentNoteCipher`. The one documented way personal data leaves the ledger for the reports |
-| `LedgerReadModel` (with `MonthTypeTotals`, `MonthGrouping`, `MonthStatus`, `PlotDebts`, `PaymentRow`, `PaymentFilter`, `CorrectionRow`, `CorrectionKind`, `CorrectionSource`, `CorrectionCause`, `ChargedRow`, `ChargedRowKind`, `ChargedSource` (with `TARIFF` for the water rows), `ChargedPart`, `LossesRunNodeRow`, `LossesRunNodeOutcome`, `CommonConsumerRunLineRow`, `CommonConsumerRunLineOutcome`, `RunStatus`, `CashReceiptData`, `InvoiceLedger`) | The read facade of the reports (feature 013), of the documents (feature 016: `cashReceipt`, `invoiceLedgers`, `firstBillingMonth`) and of the payment messages (feature 017: `paymentsByIds`, `debtsAsOf`), implemented by `internal.LedgerReportQueries`; see The read model of the reports |
+| `LedgerReadModel` (with `PaymentRef`, `MonthTypeTotals`, `MonthGrouping`, `MonthStatus`, `PlotDebts`, `PaymentRow`, `PaymentFilter`, `CorrectionRow`, `CorrectionKind`, `CorrectionSource`, `CorrectionCause`, `ChargedRow`, `ChargedRowKind`, `ChargedSource` (with `TARIFF` for the water rows), `ChargedPart`, `LossesRunNodeRow`, `LossesRunNodeOutcome`, `CommonConsumerRunLineRow`, `CommonConsumerRunLineOutcome`, `RunStatus`, `CashReceiptData`, `InvoiceLedger`) | The read facade of the reports (feature 013), of the documents (feature 016: `cashReceipt`, `invoiceLedgers`, `firstBillingMonth`) of the payment messages (feature 017: `paymentsByIds`, `debtsAsOf`) and of the treasury's journal (feature 018: `paymentRefs`, the plot, receipt number, bank reference, kind and reversal reason of payment rows, reversal rows included, with their payment's receipt number and bank reference), implemented by `internal.LedgerReportQueries`; see The read model of the reports |
 
 Everything else is in `internal`.
 
@@ -967,8 +969,10 @@ placed automatically (below); a `digest` that differs from `PaymentDigest.entry`
 payment received in a closed month counts in the earliest open month and keeps its `received_on`), its own group, with
 the next receipt number for cash; then its allocations (origin `ENTRY`, `created_by` the actor; the automatic ones
 `PREPAYMENT_AUTO`, `created_by` null, same `created_at`; the payment is flushed first because inserts are ordered by
-entity), the audit entry (`PAYMENT_RECORDED` unchanged: the automatic lines are ledger rows, not audit entries) and
-`PaymentsChanged`. Logs carry ids and counts only.
+entity), `PaymentMoneyMoved` with a line per payment of the group (feature 018: the treasury writes the journal
+movements in this transaction, so a failure there rolls the payment back), the audit entry (`PAYMENT_RECORDED`
+unchanged: the automatic lines are ledger rows, not audit entries) and `PaymentsChanged`. Logs carry ids and counts
+only.
 
 **Automatic placement of a remainder** (owner decision of 28.10.2026, changes FS 2.4: "with automatic allocation on,
 prepayment never waits while the plot has open debts"). While `settings.CooperativeSettings.autoAllocatePrepayment()`
@@ -1032,8 +1036,9 @@ ledger under it; a preview takes no lock and writes nothing.
   earliest open month (the 011 rule for charge reversals). `AllocationReleaser.releasePayment(..., PAYMENT_REVERSED,
   actor)` writes the releases, then `PaymentRecord.reversalOf` the reversal row (negated amount, same plot, source,
   group and `received_on`, the reason, no receipt number: the original keeps its own). A part of a split group is
-  reversed alone. The released money is gone with the payment (no prepayment). Audit `PAYMENT_REVERSED`;
-  `PaymentsChanged`. The controller answers with the card read after the commit.
+  reversed alone. The released money is gone with the payment (no prepayment). `PaymentMoneyMoved` for the reversal
+  row, dated today in `openForBooking(today)` (the treasury's journal line, in this transaction). Audit
+  `PAYMENT_REVERSED`; `PaymentsChanged`. The controller answers with the card read after the commit.
 - **Reallocate**: the payment (404; 409 `PAYMENT_ALREADY_REVERSED` for a reversal row or a reversed payment); the
   releases `ReleasePlanner.forPayment(..., REALLOCATED)` are planned and the state taken as if they were written
   (`PlotLedgerState.afterReleases`, pure); the digest is `PaymentDigest.reallocation` (the payment, its live
@@ -1082,11 +1087,16 @@ Each of them then publishes `ChargesBooked` for the plots (a recalculation also 
 as a whole), so the released money is placed again by the automatic allocation below when it is on. Paths that only
 add charges (the month run, retries, readings, runs, opening balances and their import) take no plot ledger lock.
 
-**Lock order** (technical considerations 2.4): charging lock (paths that charge) -> network / queue / charge type /
-tariff `FOR SHARE` -> plot `FOR SHARE` (`PlotCatalog.findAndLockShared`) -> **plot ledger locks** (`PlotLedgerLock`:
-`pg_advisory_xact_lock(hashtextextended('ledger.plot:'||tenant||':'||plot, 0))`, all plots of a path in one call in
-sorted order, remembered in a transaction-bound set for `assertHeld`) -> billing month `FOR SHARE` -> the
-`receipt_counter` row. The plot ledger lock stands for "the plot locked `FOR UPDATE` in the ledger" without a row lock
+**Lock order** (technical considerations 2.4; feature 018 technical considerations 2.2): charging lock (paths that
+charge) -> network / queue / charge type / tariff `FOR SHARE` -> plot `FOR SHARE` (`PlotCatalog.findAndLockShared`) ->
+**plot ledger locks** (`PlotLedgerLock`: `pg_advisory_xact_lock(hashtextextended('ledger.plot:'||tenant||':'||plot,
+0))`, all plots of a path in one call in sorted order, remembered in a transaction-bound set for `assertHeld`) ->
+billing month `FOR SHARE` (a payment reversal: the payment's month, then the month of today for its movement; months
+close in order, so two shared month locks never deadlock) -> the `receipt_counter` row -> (feature 018, in
+`PaymentMoneyMoved`'s synchronous listener) the treasury's `money_account` row `FOR UPDATE`, cash before bank -> (a
+later slice) the `bank_reconciliation` row. The treasury's own paths take the billing month `FOR SHARE` through
+`BookingMonths.bookFor` first, then the cash account, then the bank account, then `bank_reconciliation`, so they meet
+the payment paths in the same order. The plot ledger lock stands for "the plot locked `FOR UPDATE` in the ledger" without a row lock
 on the plots module's table (which booking paths hold `FOR SHARE`). Paths that place money on charges or take it back
 lock the plots (payments, reversals and reallocations of payments, manual and automatic allocation of prepayment, and
 the charge paths above); paths that only add charges do not. Writers that meet on a plot wait on its lock and then read

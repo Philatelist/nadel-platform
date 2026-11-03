@@ -29,6 +29,7 @@ export const uk: Messages = {
     settings: 'Налаштування кооперативу',
     charges: 'Нарахування',
     payments: 'Платежі',
+    cashbook: 'Каса і банк',
     reports: 'Звіти',
     certificates: 'Реєстр довідок',
     deliveries: 'Розсилка',
@@ -202,6 +203,21 @@ export const uk: Messages = {
       name: 'Надсилання оголошень',
       description:
         'Надсилати оголошення членам кооперативу електронною поштою й у Telegram і друкувати їх для решти',
+    },
+    CASHBOOK_VIEW: {
+      name: 'Перегляд каси і банку',
+      description:
+        'Бачити касу й банківський рахунок, їхні журнали, витрати, перерахунки каси, звірки з банком і їхні звіти',
+    },
+    CASHBOOK_ENTER: {
+      name: 'Внесення в касову книгу',
+      description:
+        'Вносити витрати, здачу готівки в банк, інший прихід, перерахунки каси й цифри банківської виписки',
+    },
+    CASHBOOK_APPROVE: {
+      name: 'Затвердження касових операцій',
+      description:
+        'Вносити вхідні залишки, оформлювати різниці перерахунку й звірки, сторнувати записи, керувати статтями витрат і доходів',
     },
   },
   roles: {
@@ -931,6 +947,7 @@ export const uk: Messages = {
       ANNOUNCEMENT_SENT: 'Оголошення надіслано',
       TELEGRAM_LINKED: 'Підключено Telegram',
       TELEGRAM_UNLINKED: 'Відключено Telegram',
+      OPENING_BALANCE_SET: 'Вхідний залишок встановлено',
     },
     entityType: {
       MEMBER: 'Член кооперативу',
@@ -955,6 +972,7 @@ export const uk: Messages = {
       CERTIFICATE: 'Довідка',
       DELIVERY_SETTINGS: 'Налаштування розсилки',
       ANNOUNCEMENT: 'Оголошення',
+      MONEY_ACCOUNT: 'Грошовий рахунок',
     },
     output: { PREVIEW: 'На екрані', XLSX: 'Файл Excel' },
     lossesMode: { FIXED_PERCENT: 'Фіксований відсоток', PROPORTIONAL: 'Пропорційно' },
@@ -2953,6 +2971,47 @@ export const uk: Messages = {
       splitInvalid: 'Частини платежу вказано неправильно',
     },
   },
+  cashbook: {
+    title: 'Каса і банк',
+    account: { CASH: 'Каса', BANK: 'Банківський рахунок' },
+    balance: 'Залишок на {date}',
+    opening: 'Вхідний залишок: {amount} на {date}',
+    enterOpening: 'Введіть вхідний залишок',
+    negative: {
+      CASH: 'Залишок каси від’ємний — проведіть перерахунок каси',
+      BANK: 'Залишок банку від’ємний',
+    },
+    openingForm: {
+      title: 'Вхідний залишок',
+      text: 'Сума на рахунку на початок обліку. Її можна внести лише один раз.',
+      amount: 'Сума',
+      date: 'Станом на',
+      amountInvalid: 'Вкажіть суму, наприклад 1250,50',
+      save: 'Зберегти вхідний залишок',
+      saving: 'Збереження…',
+    },
+    movements: {
+      title: 'Рух коштів',
+      from: 'З',
+      to: 'По',
+      period: 'Період: {from} – {to}',
+      openingBalance: 'Залишок на початок',
+      closingBalance: 'Залишок на кінець',
+      empty: 'За цей період руху коштів немає.',
+      beforeOpening: 'до вхідного залишку',
+      reversal: 'Сторнування',
+      columns: { date: 'Дата', kind: 'Вид', details: 'Підстава', amount: 'Сума', createdBy: 'Вніс' },
+    },
+    kind: {
+      MEMBER_PAYMENT: 'Платіж члена',
+      HANDOVER_OUT: 'Здача в банк',
+      HANDOVER_IN: 'Здача в банк',
+      EXPENSE: 'Витрата',
+      OTHER_INCOME: 'Інший прихід',
+      COUNT_DIFFERENCE: 'Різниця перерахунку',
+      BANK_DIFFERENCE: 'Банківська різниця',
+    },
+  },
   problem: {
     ANNOUNCEMENT_TOO_LONG: 'Оголошення довше за 2000 символів.',
     TELEGRAM_NOT_CONFIGURED: 'Бот Telegram у кооперативі не налаштовано.',
@@ -3058,6 +3117,7 @@ export const uk: Messages = {
     NO_OWN_EMAIL: 'У вашій картці немає адреси електронної пошти, тож тестовий лист надіслати нікуди.',
     SMTP_HOST_NOT_ALLOWED:
       'Цей сервер пошти використовувати не можна. Вкажіть сервер поштової служби (наприклад, smtp.gmail.com) і порт 25, 465 або 587.',
+    OPENING_BALANCE_ALREADY_SET: 'Вхідний залишок цього рахунку вже внесено',
     UNKNOWN: 'Щось пішло не так. Спробуйте ще раз.',
   },
   map: {

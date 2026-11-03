@@ -91,6 +91,11 @@ class AllocationReleaserTests extends IntegrationTest {
             sql.execute("SET LOCAL app.ledger_maintenance = 'on'");
             sql.update("delete from allocation where plot_id = ? and releases_allocation_id is not null", plot);
             sql.update("delete from allocation where plot_id = ?", plot);
+            // the journal movements of feature 018 point at the payments (and a reversal at its movement): first
+            sql.update("delete from account_movement where reverses_movement_id is not null and payment_row_id in "
+                    + "(select id from payment where plot_id = ?)", plot);
+            sql.update("delete from account_movement where payment_row_id in (select id from payment where plot_id = ?)",
+                    plot);
             sql.update("delete from payment where plot_id = ?", plot);
             sql.update("delete from charge where plot_id = ? and reverses_charge_id is not null", plot);
             sql.update("delete from charge where plot_id = ?", plot);

@@ -19,6 +19,7 @@ import app.nadel.ledger.MonthGrouping;
 import app.nadel.ledger.MonthStatus;
 import app.nadel.ledger.MonthTypeTotals;
 import app.nadel.ledger.PaymentFilter;
+import app.nadel.ledger.PaymentRef;
 import app.nadel.ledger.PaymentRow;
 import app.nadel.ledger.PaymentSource;
 import app.nadel.ledger.PlotDebts;
@@ -109,6 +110,9 @@ import org.springframework.transaction.annotation.Transactional;
  * {@link #lossesRunsInRange} and {@link #commonConsumerRunsInRange}: the nodes or consumers of the runs overlapping the
  * range as stored, booked and reversed, with the distinct plots that have a regular charge of the run for the node (a
  * part with its {@code node_meter_id}) or the consumer (its calculation's {@code consumerMeterId}).
+ * <p>
+ * {@link #paymentRefs}: the payment rows of the treasury's journal lines, joined to the payment a reversal cancels for
+ * its receipt number and bank reference, 500 ids per {@code IN} list.
  * <p>
  * {@link #cashReceipt}: the payment group of a printed cash receipt, read by {@link CashReceiptQueries}.
  * {@link #invoiceLedgers}: the figures of the invoices of plots for a month by the booking-month rule, read by
@@ -405,6 +409,20 @@ class LedgerReportQueries implements LedgerReadModel {
     private static String ofCharge(String sql) {
         return sql.replaceAll("\\bo\\.(\\w+)", "coalesce(orv.$1, oad.$1, c.$1)");
     }
+
+    /**
+     * The payment rows of the treasury's journal lines: the row, its payment, plot, kind, source, the receipt number
+     * and bank reference (of the payment a reversal cancels) and the reason of a reversal.
+     */
+    private static final String PAYMENT_REFS = """
+            select p.id, coalesce(p.reverses_payment_id, p.id) as payment_id, p.plot_id,
+                   p.kind = 'PAYMENT_REVERSAL' as reversal, p.source,
+                   coalesce(p.receipt_number, o.receipt_number) as receipt_number,
+                   coalesce(p.bank_reference, o.bank_reference) as bank_reference, p.reason
+            from payment p
+            left join payment o on o.id = p.reverses_payment_id
+            where p.id in (:ids)
+            """;
 
     /** The open reading interval items of the queue per meter. */
     private static final String OPEN_INTERVAL_ITEMS = """
@@ -724,6 +742,27 @@ class LedgerReportQueries implements LedgerReadModel {
             rows.forEach(row -> found.add((Object[]) row));
         }
         return found.stream().map(LedgerReportQueries::payment).toList();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Map<UUID, PaymentRef> paymentRefs(Collection<UUID> ledgerRowIds) {
+        List<UUID> ids = ledgerRowIds.stream().map(id -> Objects.requireNonNull(id, "ledgerRowId")).distinct()
+                .toList();
+        Map<UUID, PaymentRef> found = new HashMap<>();
+        for (int from = 0; from < ids.size(); from += CHUNK) {
+            for (Object row : entityManager.createNativeQuery(PAYMENT_REFS)
+                    .setParameter("ids", ids.subList(from, Math.min(ids.size(), from + CHUNK)))
+                    .getResultList()) {
+                Object[] v = (Object[]) row;
+                found.put((UUID) v[0], new PaymentRef((UUID) v[0], (UUID) v[1], (UUID) v[2], (Boolean) v[3],
+                        PaymentSource.valueOf((String) v[4]), v[5] == null ? null : ((Number) v[5]).longValue(),
+                        (String) v[6], (String) v[7]));
+            }
+        }
+        Map<UUID, PaymentRef> refs = new LinkedHashMap<>();
+        ids.stream().filter(found::containsKey).forEach(id -> refs.put(id, found.get(id)));
+        return refs;
     }
 
     private static PaymentRow payment(Object[] v) {
