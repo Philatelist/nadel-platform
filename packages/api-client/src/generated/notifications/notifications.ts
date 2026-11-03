@@ -211,6 +211,14 @@ export const getUpdateDeliverySettingsUrl = () => {
  * `user`, `fromAddress`, `fromName`, `emailRatePerSecond`, `notifyPayments`); a changed secret is listed as the
  * field `password` or `botToken` with neither value, so the history shows only that it changed. Saving the
  * current values writes nothing. 400 `VALIDATION_FAILED` for a value outside its limits.
+ *
+ * The mail server must be one the server may connect to, or the change is refused with 400
+ * `SMTP_HOST_NOT_ALLOWED` and nothing is saved: the port is 25, 465 or 587, and every address the host resolves
+ * to is public (not loopback, link-local with the cloud metadata address 169.254.169.254, private as RFC 1918,
+ * fc00::/7 and fec0::/10, shared 100.64.0.0/10, 0.0.0.0/8, 192.0.0.0/24, multicast or reserved, nor an IPv6
+ * form that carries such an IPv4 address). A host that does not resolve yet may be saved; its letters fail as
+ * `CONNECTION_FAILED`. The local development profile allows every host and port, so the local mail catcher on
+ * `localhost:1025` works.
  * @summary Change the cooperative's mailbox and bot
  */
 export const updateDeliverySettings = async (deliverySettingsUpdate: DeliverySettingsUpdate, options?: Parameters<typeof nadelFetch>[1]): Promise<DeliverySettings> => {
@@ -307,8 +315,13 @@ export const useUpdateDeliverySettings = <TError = BadRequestResponse | Unauthor
  * did not answer in time) and `serverReply` is the server's own refusal when there was one. `serverReply` is
  * text from the mail server, never an error of this application, and is shown as received.
  *
- * 409 `DELIVERY_NOT_CONFIGURED` when the cooperative has no mailbox (`email.configured` false); 409
- * `NO_OWN_EMAIL` when the signed-in member has no e-mail of their own.
+ * `hint` `APP_PASSWORD_REQUIRED`: the server refused the account's own password and wants an app password
+ * (Gmail answers `534-5.7.9 Application-specific password required`); the client explains how to make one.
+ *
+ * The saved host is resolved and checked again before connecting (see `updateDeliverySettings`), and the letter
+ * goes to the checked address: 400 `SMTP_HOST_NOT_ALLOWED` when the mail server is not one the server may
+ * connect to, and nothing is connected. 409 `DELIVERY_NOT_CONFIGURED` when the cooperative has no mailbox
+ * (`email.configured` false); 409 `NO_OWN_EMAIL` when the signed-in member has no e-mail of their own.
  * @summary Send a test letter through the cooperative's mailbox
  */
 export const testDeliveryEmail = async ( options?: Parameters<typeof nadelFetch>[1]): Promise<DeliveryTestEmailResult> => {
@@ -328,7 +341,7 @@ export const testDeliveryEmail = async ( options?: Parameters<typeof nadelFetch>
 
 export const getTestDeliveryEmailMutationKey = () => ['testDeliveryEmail'] as const;
 
-export const getTestDeliveryEmailMutationOptions = <TError = UnauthorizedResponse | ForbiddenResponse | ConflictResponse,
+export const getTestDeliveryEmailMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof testDeliveryEmail>>, TError,void, TContext>, request?: SecondParameter<typeof nadelFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof testDeliveryEmail>>, TError,void, TContext> => {
 
@@ -357,13 +370,13 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type TestDeliveryEmailMutationResult = NonNullable<Awaited<ReturnType<typeof testDeliveryEmail>>>
 
-    export type TestDeliveryEmailMutationError = UnauthorizedResponse | ForbiddenResponse | ConflictResponse
+    export type TestDeliveryEmailMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse
 
 
     /**
  * @summary Send a test letter through the cooperative's mailbox
  */
-export const useTestDeliveryEmail = <TError = UnauthorizedResponse | ForbiddenResponse | ConflictResponse,
+export const useTestDeliveryEmail = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof testDeliveryEmail>>, TError,void, TContext>, request?: SecondParameter<typeof nadelFetch>}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof testDeliveryEmail>>,

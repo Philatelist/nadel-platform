@@ -3,6 +3,7 @@ package app.nadel.notifications.internal.mail;
 import jakarta.mail.AuthenticationFailedException;
 import jakarta.mail.MessagingException;
 import java.io.IOException;
+import java.util.Locale;
 import org.eclipse.angus.mail.smtp.SMTPAddressFailedException;
 import org.eclipse.angus.mail.smtp.SMTPSendFailedException;
 import org.eclipse.angus.mail.smtp.SMTPSenderFailedException;
@@ -21,6 +22,22 @@ import org.jspecify.annotations.Nullable;
 public record MailOutcome(boolean accepted, @Nullable String serverReply, @Nullable MailFailure failure) {
 
     static final int MAX_REPLY = 500;
+
+    static MailOutcome hostNotAllowed() {
+        return new MailOutcome(false, null, MailFailure.SMTP_HOST_NOT_ALLOWED);
+    }
+
+    /**
+     * Whether the server refused because the mailbox needs an app password instead of the account's own one: Gmail
+     * answers {@code 534-5.7.9 Application-specific password required} to a sign-in with the account password.
+     */
+    public boolean appPasswordRequired() {
+        if (accepted || serverReply == null) {
+            return false;
+        }
+        return serverReply.contains("5.7.9")
+                || serverReply.toLowerCase(Locale.ROOT).contains("application-specific password");
+    }
 
     static MailOutcome accepted(@Nullable String serverReply) {
         return new MailOutcome(true, line(serverReply), null);

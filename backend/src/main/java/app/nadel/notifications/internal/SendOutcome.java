@@ -35,6 +35,7 @@ sealed interface SendOutcome {
     String TELEGRAM_BLOCKED = "TELEGRAM_BLOCKED";
     String CHANNEL_NOT_CONFIGURED = "CHANNEL_NOT_CONFIGURED";
     String NO_CONTACT = "NO_CONTACT";
+    String SMTP_HOST_NOT_ALLOWED = "SMTP_HOST_NOT_ALLOWED";
 
     static SendOutcome permanent(String code) {
         return new Failed(code, true);

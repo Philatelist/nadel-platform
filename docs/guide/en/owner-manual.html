@@ -1930,6 +1930,19 @@ END $$;</pre>
           environment variables only. The platform operator does not see the cooperatives' mailboxes and bots.
           Losing the master key means the chairman enters the password and the token again.
         </dd>
+        <dt>The cooperative's mail server: public addresses only</dt>
+        <dd>
+          The chairman types the mail server and its port, and the platform's server opens the connection, so
+          without a limit the test letter could probe the server's own network. Outside the
+          <code>dev</code> profile a mailbox may use only the ports 25, 465 and 587 and a server whose every
+          address is public: not loopback, not link-local (with the cloud metadata address
+          <code>169.254.169.254</code>), not private (RFC 1918, <code>fc00::/7</code>), not shared
+          <code>100.64.0.0/10</code> or otherwise reserved. Otherwise saving and the test letter get 400
+          <code>SMTP_HOST_NOT_ALLOWED</code>, and a delivery fails without retries. The address is checked
+          before every connection, and the connection goes to exactly the checked address (no second DNS
+          lookup). The <code>dev</code> profile turns on <code>nadel.delivery.smtp-private-hosts</code> so
+          that Mailpit on <code>localhost:1025</code> works.
+        </dd>
         <dt>Two functions across cooperatives</dt>
         <dd>
           The bot poller and the minute-by-minute check of the queue must know which cooperatives have a bot
@@ -2307,7 +2320,16 @@ END $$;</pre>
               programs (Ukr.net) not turned on, the app password revoked, or the mailbox blocked by the
               provider for suspicious activity. Create a new app password, save it, send a test letter and
               press "Send again" on the failed rows. There are no automatic retries, because the password does
-              not fit.
+              not fit. For Gmail the screen then shows the app password hint with a link.
+            </td>
+          </tr>
+          <tr>
+            <td>"This mail server is not allowed" (<code>SMTP_HOST_NOT_ALLOWED</code>)</td>
+            <td>
+              The mail server is a local or internal address, or the port is not 25, 465 or 587 (see "The
+              cooperative's mail server: public addresses only"). The chairman enters the server of a mail
+              service, for example <code>smtp.gmail.com</code> and 587. There are no retries. Locally this
+              happens only without the <code>dev</code> profile.
             </td>
           </tr>
           <tr>

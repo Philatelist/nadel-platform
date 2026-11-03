@@ -215,6 +215,37 @@ describe('DeliverySettingsPanel', () => {
     expect(alert).toHaveTextContent('535 5.7.8 Authentication failed');
   });
 
+  it('explains a Gmail app password and keeps the server reply under collapsed details', async () => {
+    const user = userEvent.setup();
+    renderPanel();
+    await user.click(screen.getByRole('button', { name: 'Send a test letter' }));
+    emailCallbacks.onSuccess?.({
+      accepted: false,
+      failureCode: 'SMTP_AUTH_FAILED',
+      hint: 'APP_PASSWORD_REQUIRED',
+      serverReply: '534-5.7.9 Application-specific password required',
+    });
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Gmail requires an app password');
+    expect(alert).toHaveTextContent('Turn on 2-Step Verification');
+    expect(alert).not.toHaveTextContent('Wrong mailbox login or password');
+    expect(screen.getByRole('link', { name: 'Create an app password' })).toHaveAttribute(
+      'href',
+      'https://myaccount.google.com/apppasswords',
+    );
+    const details = alert.querySelector('details');
+    expect(details).not.toBeNull();
+    expect(details).not.toHaveAttribute('open');
+    expect(details).toHaveTextContent('Details');
+    expect(details).toHaveTextContent('534-5.7.9 Application-specific password required');
+  });
+
+  it('shows why a mail server is refused on save', async () => {
+    renderPanel();
+    updateCallbacks.onError?.(new ApiError(400, { code: 'SMTP_HOST_NOT_ALLOWED' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('This mail server cannot be used');
+  });
+
   it('shows the problem of a test letter without an own e-mail', async () => {
     renderPanel();
     emailCallbacks.onError?.(new ApiError(409, { code: 'NO_OWN_EMAIL' }));

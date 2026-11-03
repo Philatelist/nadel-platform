@@ -109,7 +109,15 @@ transaction.
   (`NotificationTexts`, Ukrainian only, ADR 0012). `TestLetters` connects and sends itself, so the answer carries the
   server's own last reply (`serverReply`) and a `failureCode`: `SMTP_AUTH_FAILED` (sign-in refused, with the server's
   reply), `SMTP_REJECTED` (letter refused, with the server's reply when it sent one), `CONNECTION_FAILED` (no
-  connection, timeout, unknown host, TLS failure; no reply). Never a stack trace or a library message.
+  connection, timeout, unknown host, TLS failure; no reply). Never a stack trace or a library message. `hint`
+  `APP_PASSWORD_REQUIRED` when the refusal says `5.7.9` or `Application-specific password` (Gmail), so the screen
+  explains the app password.
+- **Mail server policy** (`mail/SmtpHostPolicy`, ADR 0018): outside the dev profile a mailbox may use only the ports
+  25, 465 and 587 and a host whose every address is public. `PUT` checks it before its transaction
+  (`requireAllowedMailServer`, 400 `SMTP_HOST_NOT_ALLOWED`); `Letters` resolves the host once before every letter and
+  connects to that address (`PinnedSocketFactory`), so the test letter answers 400 `SMTP_HOST_NOT_ALLOWED` and a
+  delivery fails permanently with that code. `nadel.delivery.smtp-private-hosts` (true in the dev profile) allows
+  every host and port, for Mailpit on localhost.
 - **Bot check** (`testDeliveryTelegram`): `getMe` with the saved token (409 `DELIVERY_NOT_CONFIGURED` without one);
   `{ok, botUsername}`, `TOKEN_INVALID` for 401/404, `TELEGRAM_UNAVAILABLE` otherwise.
 

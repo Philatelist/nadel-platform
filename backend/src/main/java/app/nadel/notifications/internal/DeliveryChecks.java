@@ -3,6 +3,7 @@ package app.nadel.notifications.internal;
 import app.nadel.identity.AccessProfile;
 import app.nadel.notifications.internal.DeliverySettingsService.BotToken;
 import app.nadel.notifications.internal.DeliverySettingsService.TestLetter;
+import app.nadel.notifications.internal.mail.MailFailure;
 import app.nadel.notifications.internal.mail.MailOutcome;
 import app.nadel.notifications.internal.mail.TestLetters;
 import app.nadel.notifications.internal.telegram.BotIdentity;
@@ -49,7 +50,10 @@ class DeliveryChecks {
         this.telegram = telegram;
     }
 
-    /** Sends the test letter to the actor's own e-mail; 409 without a mailbox or an own e-mail. */
+    /**
+     * Sends the test letter to the actor's own e-mail; 409 without a mailbox or an own e-mail, 400
+     * {@code SMTP_HOST_NOT_ALLOWED} when the saved mail server is not one a mailbox may use (nothing is connected).
+     */
     MailOutcome testEmail(AccessProfile actor) {
         TestLetter letter = settings.testLetter(actor);
         NotificationTexts texts = NotificationTexts.uk();
@@ -58,6 +62,10 @@ class DeliveryChecks {
                 texts.text("testEmail.body", Map.of("cooperative", letter.cooperativeName())));
         log.info("Test letter of cooperative {}: {}", actor.tenantId(),
                 outcome.accepted() ? "ACCEPTED" : outcome.failure());
+        if (outcome.failure() == MailFailure.SMTP_HOST_NOT_ALLOWED) {
+            throw new ApiProblemException(HttpStatus.BAD_REQUEST, ProblemCodes.SMTP_HOST_NOT_ALLOWED,
+                    "The mail server's host or port is not allowed.");
+        }
         return outcome;
     }
 

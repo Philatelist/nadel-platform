@@ -1236,6 +1236,14 @@ paths:
         `user`, `fromAddress`, `fromName`, `emailRatePerSecond`, `notifyPayments`); a changed secret is listed as the
         field `password` or `botToken` with neither value, so the history shows only that it changed. Saving the
         current values writes nothing. 400 `VALIDATION_FAILED` for a value outside its limits.
+
+        The mail server must be one the server may connect to, or the change is refused with 400
+        `SMTP_HOST_NOT_ALLOWED` and nothing is saved: the port is 25, 465 or 587, and every address the host resolves
+        to is public (not loopback, link-local with the cloud metadata address 169.254.169.254, private as RFC 1918,
+        fc00::/7 and fec0::/10, shared 100.64.0.0/10, 0.0.0.0/8, 192.0.0.0/24, multicast or reserved, nor an IPv6
+        form that carries such an IPv4 address). A host that does not resolve yet may be saved; its letters fail as
+        `CONNECTION_FAILED`. The local development profile allows every host and port, so the local mail catcher on
+        `localhost:1025` works.
       requestBody:
         required: true
         content:
@@ -1271,8 +1279,13 @@ paths:
         did not answer in time) and `serverReply` is the server's own refusal when there was one. `serverReply` is
         text from the mail server, never an error of this application, and is shown as received.
 
-        409 `DELIVERY_NOT_CONFIGURED` when the cooperative has no mailbox (`email.configured` false); 409
-        `NO_OWN_EMAIL` when the signed-in member has no e-mail of their own.
+        `hint` `APP_PASSWORD_REQUIRED`: the server refused the account's own password and wants an app password
+        (Gmail answers `534-5.7.9 Application-specific password required`); the client explains how to make one.
+
+        The saved host is resolved and checked again before connecting (see `updateDeliverySettings`), and the letter
+        goes to the checked address: 400 `SMTP_HOST_NOT_ALLOWED` when the mail server is not one the server may
+        connect to, and nothing is connected. 409 `DELIVERY_NOT_CONFIGURED` when the cooperative has no mailbox
+        (`email.configured` false); 409 `NO_OWN_EMAIL` when the signed-in member has no e-mail of their own.
       responses:
         '200':
           description: What the mail server answered
@@ -1280,6 +1293,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DeliveryTestEmailResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -6221,7 +6236,8 @@ components:
         Malformed request or failed validation (code `VALIDATION_FAILED` or `MALFORMED_REQUEST`); the allocation lines
         of a payment together exceed the payment (code `ALLOCATION_EXCEEDS_PAYMENT`) or a line exceeds what is open on
         its charge (code `ALLOCATION_EXCEEDS_CHARGE`); the parts of a split payment do not add up to the payment (code
-        `SPLIT_TOTAL_MISMATCH`); an announcement's text is longer than 2000 characters (code `ANNOUNCEMENT_TOO_LONG`)
+        `SPLIT_TOTAL_MISMATCH`); an announcement's text is longer than 2000 characters (code `ANNOUNCEMENT_TOO_LONG`); a
+        mailbox names a mail server the server may not connect to (code `SMTP_HOST_NOT_ALLOWED`)
       content:
         application/problem+json:
           schema:
@@ -13068,8 +13084,9 @@ components:
         Why a message was not delivered: `SMTP_REJECTED` the mail server refused the letter, `SMTP_AUTH_FAILED` it
         refused the mailbox's user name or password, `CONNECTION_FAILED` the server could not be reached or did not
         answer in time, `TELEGRAM_BLOCKED` the member blocked the bot, `CHANNEL_NOT_CONFIGURED` the cooperative's
-        mailbox or bot is not set up, `NO_CONTACT` the member has no address for the channel. The test letter
-        (`testDeliveryEmail`) uses only the first three
+        mailbox or bot is not set up, `NO_CONTACT` the member has no address for the channel,
+        `SMTP_HOST_NOT_ALLOWED` the mailbox's mail server is not one the server may connect to (nothing was
+        connected; see `updateDeliverySettings`). The test letter (`testDeliveryEmail`) uses only the first three
       enum:
         [
           SMTP_REJECTED,
@@ -13078,7 +13095,15 @@ components:
           TELEGRAM_BLOCKED,
           CHANNEL_NOT_CONFIGURED,
           NO_CONTACT,
+          SMTP_HOST_NOT_ALLOWED,
         ]
+
+    DeliveryTestEmailHint:
+      type: string
+      description: >-
+        What the mail server's refusal of the test letter suggests: `APP_PASSWORD_REQUIRED` the mailbox needs an app
+        password instead of the account's own password (Gmail: `534-5.7.9 Application-specific password required`)
+      enum: [APP_PASSWORD_REQUIRED]
 
     DeliveryTestEmailResult:
       type: object
@@ -13094,6 +13119,8 @@ components:
             The mail server's last answer as received, absent when there was none (the server could not be reached)
         failureCode:
           $ref: '#/components/schemas/DeliveryFailureCode'
+        hint:
+          $ref: '#/components/schemas/DeliveryTestEmailHint'
 
     DeliveryTestTelegramResult:
       type: object

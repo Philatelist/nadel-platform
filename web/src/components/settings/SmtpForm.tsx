@@ -17,6 +17,8 @@ import { Button, Notice, Select, TextField } from '../ui';
 
 const PORT_RE = /^\d{1,5}$/;
 const SECURITIES = ['STARTTLS', 'SSL'] as const satisfies readonly SmtpSecurity[];
+/** Where a Google account makes an app password (it needs 2-Step Verification on). */
+const APP_PASSWORDS_URL = 'https://myaccount.google.com/apppasswords';
 
 function isSecurity(value: string): value is SmtpSecurity {
   return (SECURITIES as readonly string[]).includes(value);
@@ -168,6 +170,25 @@ function TestLetterResult({ result }: { result: DeliveryTestEmailResult | { erro
     );
   }
   const code: DeliveryFailureCode = result.failureCode ?? 'CONNECTION_FAILED';
+  if (result.hint === 'APP_PASSWORD_REQUIRED') {
+    return (
+      <Notice tone="danger">
+        <p>{e.appPassword}</p>
+        <p className="mt-1">
+          <a className="underline" href={APP_PASSWORDS_URL} target="_blank" rel="noreferrer">
+            {e.appPasswordLink}
+          </a>
+        </p>
+        <p className="mt-1">{e.appPasswordTwoStep}</p>
+        {reply && (
+          <details className="mt-2">
+            <summary className="cursor-pointer">{e.details}</summary>
+            <p className="mt-1 break-words">{reply}</p>
+          </details>
+        )}
+      </Notice>
+    );
+  }
   return (
     <Notice tone="danger">
       {format(e.testRefused, { reason: t.deliveries.reason[code] })}

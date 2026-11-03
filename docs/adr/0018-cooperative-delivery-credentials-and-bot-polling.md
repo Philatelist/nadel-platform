@@ -122,14 +122,20 @@ Questions:
   row: `delivery.kind` has no such kind and a row would need a migration for no gain. One message per (reading,
   decision) on the instance; a crash between the send and the outbox's completion could repeat it.
 
-### The mailbox host is free text
+### The mailbox host is restricted to public mail servers
 
-- The chairman types the SMTP host and port, and the test letter connects to them from the server. An admin with
-  `SETTINGS_MANAGE` can therefore make the server open an SMTP connection to an internal host (a server-side request
-  forgery limited to SMTP and to the cooperative's own chairman, who sees only the server's reply line). Accepted for
-  now: only the cooperative's chairman holds the permission, the connection has 10 s timeouts and the answer carries
-  only a failure code and the server's last reply. A later restriction (refusing private and loopback addresses outside
-  the `dev` profile, or an allow-list of ports) remains possible without a contract change.
+- The chairman types the SMTP host and port, and the test letter connects to them from the server. Without a limit an
+  admin with `SETTINGS_MANAGE` could make the server open a connection to an internal host (a server-side request
+  forgery; on a shared platform another cooperative's chairman could probe the server's network).
+- Decided in the owner review of PR #61: outside the `dev` profile `SmtpHostPolicy` allows only the ports 25, 465 and
+  587 and a host whose every resolved address is public (no loopback, link-local with the metadata address
+  169.254.169.254, private RFC 1918 / fc00::/7 / fec0::/10, shared 100.64.0.0/10, 0.0.0.0/8, 192.0.0.0/24, multicast,
+  reserved, nor an IPv6 form carrying such an IPv4 address). Saving is refused with 400 `SMTP_HOST_NOT_ALLOWED`.
+- Every letter resolves the host once, checks it and connects to that address (`PinnedSocketFactory` as
+  `mail.smtp.socketFactory`, no fallback), so a DNS answer that changes between the check and the connection cannot
+  redirect it; TLS still checks the certificate against the host name. A refused host fails the test letter with 400
+  and a delivery permanently with `SMTP_HOST_NOT_ALLOWED` (V31 adds the code to the delivery check constraint).
+- The `dev` profile sets `nadel.delivery.smtp-private-hosts: true`, so Mailpit on `localhost:1025` works.
 
 ## Consequences
 - A cooperative configures its own channels with no platform operator involved; the operator never sees them (ADR

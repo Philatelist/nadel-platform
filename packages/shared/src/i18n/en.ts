@@ -2477,6 +2477,11 @@ export const en = {
       testAccepted: 'The mail server accepted the test letter.',
       testRefused: 'The test letter was not accepted: {reason}.',
       serverReply: 'Server reply: {reply}',
+      appPassword: 'Gmail requires an app password, not the account’s usual password.',
+      appPasswordLink: 'Create an app password',
+      appPasswordTwoStep:
+        'Turn on 2-Step Verification in the Google account first: without it an app password cannot be created.',
+      details: 'Details',
     },
     telegram: {
       title: 'Telegram bot',
@@ -2599,6 +2604,7 @@ export const en = {
       TELEGRAM_BLOCKED: 'The bot is blocked',
       CHANNEL_NOT_CONFIGURED: 'The channel is not configured',
       NO_CONTACT: 'No contact',
+      SMTP_HOST_NOT_ALLOWED: 'This mail server is not allowed',
     },
   },
   pagination: { label: 'Pages', previous: 'Previous', next: 'Next', pageOf: 'Page {page} of {total}' },
@@ -3023,6 +3029,8 @@ export const en = {
     DELIVERY_NOT_RETRYABLE: 'This delivery cannot be sent again: it is still queued or it is paper.',
     DELIVERY_NOT_CONFIGURED: 'The mailbox is not configured yet. Save the delivery settings first.',
     NO_OWN_EMAIL: 'Your member card has no e-mail address, so there is nowhere to send a test letter.',
+    SMTP_HOST_NOT_ALLOWED:
+      'This mail server cannot be used. Enter the server of a mail service (for example smtp.gmail.com) and the port 25, 465 or 587.',
     UNKNOWN: 'Something went wrong. Please try again.',
   },
   map: {

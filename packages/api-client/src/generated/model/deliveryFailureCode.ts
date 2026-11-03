@@ -11,7 +11,7 @@
  */
 
 /**
- * Why a message was not delivered: `SMTP_REJECTED` the mail server refused the letter, `SMTP_AUTH_FAILED` it refused the mailbox's user name or password, `CONNECTION_FAILED` the server could not be reached or did not answer in time, `TELEGRAM_BLOCKED` the member blocked the bot, `CHANNEL_NOT_CONFIGURED` the cooperative's mailbox or bot is not set up, `NO_CONTACT` the member has no address for the channel. The test letter (`testDeliveryEmail`) uses only the first three
+ * Why a message was not delivered: `SMTP_REJECTED` the mail server refused the letter, `SMTP_AUTH_FAILED` it refused the mailbox's user name or password, `CONNECTION_FAILED` the server could not be reached or did not answer in time, `TELEGRAM_BLOCKED` the member blocked the bot, `CHANNEL_NOT_CONFIGURED` the cooperative's mailbox or bot is not set up, `NO_CONTACT` the member has no address for the channel, `SMTP_HOST_NOT_ALLOWED` the mailbox's mail server is not one the server may connect to (nothing was connected; see `updateDeliverySettings`). The test letter (`testDeliveryEmail`) uses only the first three
  */
 export type DeliveryFailureCode = typeof DeliveryFailureCode[keyof typeof DeliveryFailureCode];
 
@@ -23,4 +23,5 @@ export const DeliveryFailureCode = {
   TELEGRAM_BLOCKED: 'TELEGRAM_BLOCKED',
   CHANNEL_NOT_CONFIGURED: 'CHANNEL_NOT_CONFIGURED',
   NO_CONTACT: 'NO_CONTACT',
+  SMTP_HOST_NOT_ALLOWED: 'SMTP_HOST_NOT_ALLOWED',
 } as const;

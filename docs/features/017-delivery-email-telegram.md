@@ -61,6 +61,14 @@ through `MemberDirectory` and documents through the 016 module's facade.
 **E-mail (SMTP):**
 - host, port, security (`STARTTLS` or `SSL`), user, password, the sender's address and name;
 - «Надіслати тестовий лист» sends to the chairman's own e-mail and shows the SMTP server's answer;
+- when the server refuses the account password and wants an app password (Gmail `534-5.7.9 Application-specific
+  password required`), the screen says «Gmail вимагає пароль застосунку, а не звичайний пароль акаунта» with a link to
+  `https://myaccount.google.com/apppasswords` and a line on turning on two-step verification first; the server's raw
+  reply stays under a collapsed «Деталі» (owner review of PR #61);
+- outside the dev profile the mail server must be public: only the ports 25, 465 and 587 and a host whose addresses are
+  not loopback, link-local (metadata), private or reserved; otherwise 400 `SMTP_HOST_NOT_ALLOWED` on save and on the
+  test letter, and a delivery fails at once with that code. The host is resolved once per letter and the connection
+  goes to the checked address (ADR 0018). The dev profile allows localhost for Mailpit;
 - the guide explains a free mailbox with an app password (Gmail, Ukr.net) and the daily sending limits of such
   mailboxes.
 

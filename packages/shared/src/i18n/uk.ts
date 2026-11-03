@@ -2502,6 +2502,11 @@ export const uk: Messages = {
       testAccepted: 'Тестовий лист прийнято сервером.',
       testRefused: 'Тестовий лист не прийнято: {reason}.',
       serverReply: 'Відповідь сервера: {reply}',
+      appPassword: 'Gmail вимагає пароль застосунку, а не звичайний пароль акаунта.',
+      appPasswordLink: 'Створити пароль застосунку',
+      appPasswordTwoStep:
+        'Спершу ввімкніть двоетапну перевірку в акаунті Google: без неї пароль застосунку створити не можна.',
+      details: 'Деталі',
     },
     telegram: {
       title: 'Бот Telegram',
@@ -2625,6 +2630,7 @@ export const uk: Messages = {
       TELEGRAM_BLOCKED: 'Бот заблоковано',
       CHANNEL_NOT_CONFIGURED: 'Канал не налаштовано',
       NO_CONTACT: 'Немає контакту',
+      SMTP_HOST_NOT_ALLOWED: 'Цей сервер пошти не дозволено',
     },
   },
   pagination: { label: 'Сторінки', previous: 'Назад', next: 'Далі', pageOf: 'Сторінка {page} з {total}' },
@@ -3050,6 +3056,8 @@ export const uk: Messages = {
     DELIVERY_NOT_RETRYABLE: 'Цю розсилку не можна надіслати ще раз: вона ще в черзі або це папір.',
     DELIVERY_NOT_CONFIGURED: 'Пошту ще не налаштовано. Спершу збережіть налаштування розсилки.',
     NO_OWN_EMAIL: 'У вашій картці немає адреси електронної пошти, тож тестовий лист надіслати нікуди.',
+    SMTP_HOST_NOT_ALLOWED:
+      'Цей сервер пошти використовувати не можна. Вкажіть сервер поштової служби (наприклад, smtp.gmail.com) і порт 25, 465 або 587.',
     UNKNOWN: 'Щось пішло не так. Спробуйте ще раз.',
   },
   map: {

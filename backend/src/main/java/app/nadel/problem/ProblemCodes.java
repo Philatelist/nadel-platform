@@ -142,6 +142,11 @@ public final class ProblemCodes {
     public static final String INVOICE_BUILD_RUNNING = "INVOICE_BUILD_RUNNING";
     /** 409: a check of the cooperative's mailbox or bot is asked while it is not set up (feature 017 §2.1). */
     public static final String DELIVERY_NOT_CONFIGURED = "DELIVERY_NOT_CONFIGURED";
+    /**
+     * 400: a mailbox's mail server is not one the server may connect to: a port other than 25, 465 or 587, or a host
+     * that resolves to a loopback, link-local, private or metadata address (feature 017 §2.1, outside the dev profile).
+     */
+    public static final String SMTP_HOST_NOT_ALLOWED = "SMTP_HOST_NOT_ALLOWED";
     /** 409: a test letter is asked by a member who has no e-mail of their own to receive it (feature 017 §2.1). */
     public static final String NO_OWN_EMAIL = "NO_OWN_EMAIL";
     /** 409: a Telegram link is asked while the cooperative has no working bot (feature 017 §2.2). */

@@ -37,6 +37,7 @@ import nadel.contract.model.DeliveryFailureCode;
 import nadel.contract.model.DeliverySettings;
 import nadel.contract.model.DeliverySettingsUpdate;
 import nadel.contract.model.DeliveryTelegramSettings;
+import nadel.contract.model.DeliveryTestEmailHint;
 import nadel.contract.model.DeliveryTestEmailResult;
 import nadel.contract.model.DeliveryTestTelegramResult;
 import nadel.contract.model.MyNotifications;
@@ -183,6 +184,7 @@ class NotificationsController implements NotificationsApi {
                 update.getTelegram() == null ? null : update.getTelegram().getBotToken(),
                 update.getEmailRatePerSecond(),
                 update.getNotifyPayments());
+        service.requireAllowedMailServer(change.email());
         return ResponseEntity.ok(toDto(service.update(change, currentUser.profile())));
     }
 
@@ -193,6 +195,7 @@ class NotificationsController implements NotificationsApi {
         var dto = new DeliveryTestEmailResult(outcome.accepted());
         dto.setServerReply(outcome.serverReply());
         dto.setFailureCode(outcome.failure() == null ? null : DeliveryFailureCode.fromValue(outcome.failure().name()));
+        dto.setHint(outcome.appPasswordRequired() ? DeliveryTestEmailHint.APP_PASSWORD_REQUIRED : null);
         return ResponseEntity.ok(dto);
     }
 

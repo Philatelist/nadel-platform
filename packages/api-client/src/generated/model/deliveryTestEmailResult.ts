@@ -10,6 +10,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { DeliveryFailureCode } from './deliveryFailureCode';
+import type { DeliveryTestEmailHint } from './deliveryTestEmailHint';
 
 /**
  * What the mail server answered to the test letter (`testDeliveryEmail`)
@@ -20,4 +21,5 @@ export interface DeliveryTestEmailResult {
   /** The mail server's last answer as received, absent when there was none (the server could not be reached) */
   serverReply?: string;
   failureCode?: DeliveryFailureCode;
+  hint?: DeliveryTestEmailHint;
 }

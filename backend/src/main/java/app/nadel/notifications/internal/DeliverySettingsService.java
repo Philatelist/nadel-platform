@@ -6,6 +6,7 @@ import app.nadel.audit.FieldChange;
 import app.nadel.identity.AccessProfile;
 import app.nadel.members.MemberContacts;
 import app.nadel.members.MemberDirectory;
+import app.nadel.notifications.internal.mail.SmtpHostPolicy;
 import app.nadel.notifications.internal.mail.SmtpSecurity;
 import app.nadel.notifications.internal.mail.SmtpSettings;
 import app.nadel.privacy.FieldRef;
@@ -104,20 +105,35 @@ class DeliverySettingsService {
     private final TenantDirectory tenants;
     private final ApplicationEventPublisher events;
     private final Clock clock;
+    private final SmtpHostPolicy hosts;
 
     DeliverySettingsService(DeliverySettingsRepository settings, PersonalDataCipher cipher, MemberDirectory members,
-            TenantDirectory tenants, ApplicationEventPublisher events, Clock clock) {
+            TenantDirectory tenants, ApplicationEventPublisher events, Clock clock, SmtpHostPolicy hosts) {
         this.settings = settings;
         this.cipher = cipher;
         this.members = members;
         this.tenants = tenants;
         this.events = events;
         this.clock = clock;
+        this.hosts = hosts;
     }
 
     @Transactional(readOnly = true)
     DeliverySettingsValues values(AccessProfile viewer) {
         return valuesOf(viewer.tenantId());
+    }
+
+    /**
+     * 400 {@code SMTP_HOST_NOT_ALLOWED} when the mailbox of {@code email} names a mail server the server may not
+     * connect to ({@link SmtpHostPolicy}). Looks the host up, so it runs before {@link #update} and outside any
+     * transaction; the letters check the host again when they connect.
+     */
+    void requireAllowedMailServer(@Nullable EmailChange email) {
+        String host = email == null ? null : text(email.host());
+        if (host != null && !hosts.allowsSaving(host, email.port())) {
+            throw new ApiProblemException(HttpStatus.BAD_REQUEST, ProblemCodes.SMTP_HOST_NOT_ALLOWED,
+                    "The mail server's host or port is not allowed.");
+        }
     }
 
     /**

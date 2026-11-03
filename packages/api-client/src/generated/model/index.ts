@@ -92,6 +92,7 @@ export * from './deliveryStatus';
 export * from './deliverySummaryCount';
 export * from './deliveryTelegramSettings';
 export * from './deliveryTelegramSettingsUpdate';
+export * from './deliveryTestEmailHint';
 export * from './deliveryTestEmailResult';
 export * from './deliveryTestTelegramResult';
 export * from './deliveryTestTelegramResultCode';

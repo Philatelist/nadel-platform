@@ -1319,6 +1319,26 @@
           password. The button works with the saved settings: save your changes first.
         </li>
       </ol>
+      <div class="note">
+        <span class="callout-title"
+          >Gmail: "Gmail requires an app password, not the account’s usual password"</span
+        >
+        <p>
+          This message means that the "Password" field holds the usual Gmail password. Gmail accepts only an
+          <strong>app password</strong> from programs. First turn on <strong>2-Step Verification</strong> in
+          the Google account, then create an app password at
+          <code>https://myaccount.google.com/apppasswords</code> (the screen has the link "Create an app
+          password") and paste it into "Password". The Gmail settings: server <code>smtp.gmail.com</code>,
+          port 587, encryption STARTTLS, user - the full mailbox address (for example
+          <code>st.nadiya@gmail.com</code>). The server's reply in English is under "Details" in case support
+          asks for it.
+        </p>
+      </div>
+      <p>
+        The system connects only to mail services on the Internet and only on the ports 25, 465 or 587. An
+        address such as <code>localhost</code> or an internal network address (<code>192.168.…</code>,
+        <code>10.…</code>) is not saved: you see "This mail server cannot be used".
+      </p>
       <p>
         After saving, the password is never shown again: the field says "saved". Leave the field empty to keep
         the saved password. The change history records only that the password was changed, never the value.

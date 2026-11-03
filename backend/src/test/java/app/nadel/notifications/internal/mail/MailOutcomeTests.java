@@ -43,6 +43,23 @@ class MailOutcomeTests {
     }
 
     @Test
+    void gmailsRefusalOfTheAccountPasswordAsksForAnAppPassword() {
+        MailOutcome gmail = MailOutcome.failed(new AuthenticationFailedException("534-5.7.9 Application-specific "
+                + "password required. For more information, go to\r\n534 5.7.9  https://support.google.com/mail/?p=InvalidSecondFactor"));
+        MailOutcome byWords = MailOutcome.failed(new AuthenticationFailedException("534 APPLICATION-SPECIFIC PASSWORD "
+                + "REQUIRED"));
+        MailOutcome wrongPassword = MailOutcome.failed(new AuthenticationFailedException("535 5.7.8 Authentication "
+                + "credentials invalid"));
+
+        assertThat(gmail.appPasswordRequired()).isTrue();
+        assertThat(byWords.appPasswordRequired()).isTrue();
+        assertThat(wrongPassword.appPasswordRequired()).isFalse();
+        assertThat(MailOutcome.accepted("250 2.0.0 OK 5.7.9").appPasswordRequired()).isFalse();
+        assertThat(MailOutcome.failed(new MessagingException("Could not connect",
+                new SocketTimeoutException("Read timed out"))).appPasswordRequired()).isFalse();
+    }
+
+    @Test
     void theReplyIsOneTrimmedLineOfAtMostFiveHundredCharacters() {
         assertThat(MailOutcome.line(null)).isNull();
         assertThat(MailOutcome.line(" \r\n ")).isNull();
