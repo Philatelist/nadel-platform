@@ -13,14 +13,15 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- * The nine treasury tables: cooperatives are isolated (RLS with USING and WITH CHECK, nothing visible without a
+ * The ten treasury tables (nine of V32 and {@code bank_difference} of V34): cooperatives are isolated (RLS with USING and WITH CHECK, nothing visible without a
  * cooperative), every table has the policy and a tenant index, and links never cross cooperatives (composite foreign
  * keys).
  */
 class TreasuryTenantIsolationTests extends TreasuryTestSupport {
 
     private static final List<String> TABLES = List.of("money_account", "account_movement", "handover",
-            "expense_category", "expense", "expense_attachment", "other_income", "cash_count", "bank_reconciliation");
+            "expense_category", "expense", "expense_attachment", "other_income", "cash_count", "bank_reconciliation",
+            "bank_difference");
 
     private UUID expenseB;
     private UUID movementB;
@@ -34,6 +35,7 @@ class TreasuryTenantIsolationTests extends TreasuryTestSupport {
             handover(tenant);
             cashCount(tenant);
             bankReconciliation(tenant, "2033-01-01");
+            bankDifference(tenant);
         }
         expenseB = ownerJdbc().queryForObject("select id from expense where tenant_id = ?", UUID.class, tenantB);
         movementB = ownerJdbc().queryForObject("select movement_id from expense where tenant_id = ?", UUID.class,
@@ -108,7 +110,9 @@ class TreasuryTenantIsolationTests extends TreasuryTestSupport {
                         + "difference) values ('" + tenantB + "', '" + cashB + "', now(), current_date, 1.00, 1.00, 0)",
                 "insert into bank_reconciliation (tenant_id, month, statement_opening, statement_incoming, "
                         + "statement_outgoing, statement_closing) values ('" + tenantB + "', date '2033-02-01', 0, 0, "
-                        + "0, 0)");
+                        + "0, 0)",
+                "insert into bank_difference (tenant_id, reconciliation_id, movement_id, reason) values ('" + tenantB
+                        + "', '" + reconciliationB() + "', '" + movementB + "', 'Fee')");
         assertThat(inserts).hasSize(TABLES.size());
 
         for (String insert : inserts) {
@@ -189,9 +193,22 @@ class TreasuryTenantIsolationTests extends TreasuryTestSupport {
                 + "month, statement_opening, statement_incoming, statement_outgoing, statement_closing, status, "
                 + "reconciled_by, reconciled_at, reopened_movement_id, reopened_at) values ('" + tenantA + "', "
                 + "date '2033-03-01', 0, 0, 0, 0, 'NEEDS_RECHECK', null, null, '" + movementB + "', now())");
+        UUID ownReconciliation = ownerJdbc().queryForObject("select id from bank_reconciliation where tenant_id = ? "
+                + "and month = date '2033-01-01'", UUID.class, tenantA);
+        assertForeignKey("bank_difference_reconciliation_fk", "insert into bank_difference (tenant_id, "
+                + "reconciliation_id, movement_id, reason) values ('" + tenantA + "', '" + reconciliationB() + "', '"
+                + ownMovement + "', 'Fee')");
+        assertForeignKey("bank_difference_movement_fk", "insert into bank_difference (tenant_id, "
+                + "reconciliation_id, movement_id, reason) values ('" + tenantA + "', '" + ownReconciliation + "', '"
+                + movementB + "', 'Fee')");
     }
 
     // ---- helpers
+
+    private UUID reconciliationB() {
+        return ownerJdbc().queryForObject("select id from bank_reconciliation where tenant_id = ? "
+                + "and month = date '2033-01-01'", UUID.class, tenantB);
+    }
 
     private UUID foreignPayment() {
         UUID plot = plot(tenantB);

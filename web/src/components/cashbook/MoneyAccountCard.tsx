@@ -1,5 +1,12 @@
 import { getListMoneyAccountsQueryKey, setOpeningBalance, type MoneyAccount } from '@nadel/api-client';
-import { format, formatDateTime, formatDay, formatSignedMoney, normalizeMoneyInput } from '@nadel/shared';
+import {
+  format,
+  formatDateTime,
+  formatDay,
+  formatMonth,
+  formatSignedMoney,
+  normalizeMoneyInput,
+} from '@nadel/shared';
 import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
@@ -7,8 +14,9 @@ import { useLocale, useT } from '../../i18n';
 import { kyivToday } from '../../kyivToday';
 import { useCan } from '../../me';
 import { problemFieldErrors, problemMessage, type FieldErrors } from '../../problem';
-import { Button, Money, Notice, Panel, TextField } from '../ui';
+import { Badge, Button, Money, Notice, Panel, TextField } from '../ui';
 import { MovementsTable } from './MovementsTable';
+import { STATUS_TONE } from './bankStatusTone';
 
 const ACCOUNTS_KEY = getListMoneyAccountsQueryKey()[0];
 
@@ -141,6 +149,21 @@ export function MoneyAccountCard({ account }: { account: MoneyAccount }) {
               })}
             </Link>
           </Notice>
+        )}
+        {account.months !== undefined && account.months.length > 0 && (
+          <div className="flex flex-col gap-1" data-testid="bank-months">
+            <h3 className="text-lg font-semibold text-ink">{t.cashbook.bank.monthsTitle}</h3>
+            <ul className="flex flex-wrap gap-x-4 gap-y-2">
+              {account.months.map((item) => (
+                <li key={item.month} className="flex items-center gap-2">
+                  <Link to={`/cashbook/bank/${item.month}`} className="text-accent underline">
+                    {formatMonth(item.month, locale)}
+                  </Link>
+                  <Badge tone={STATUS_TONE[item.status]}>{t.cashbook.bank.status[item.status]}</Badge>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
         {account.negative && <Notice tone="danger">{t.cashbook.negative[account.kind]}</Notice>}
         {account.opening === undefined && canApprove && <OpeningBalanceForm account={account} />}

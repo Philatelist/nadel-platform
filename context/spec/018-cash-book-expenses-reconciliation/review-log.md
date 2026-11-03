@@ -22,3 +22,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `bcae29e..cd1e699` | PASS | — | minor: TreasuryController Javadoc wrapping; a missing bank account would give 500 not 409 (accounts are always seeded); `useState` import order in CashbookPage |
+
+## Slice 4 — Cash count, its act and the booked difference
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `cd1e699..d5ec2fc` | PASS | — | minor: over-long Javadoc lines in treasury package-info and TreasuryController; CashCounts:323 future check could note that the clock zone is Kyiv |

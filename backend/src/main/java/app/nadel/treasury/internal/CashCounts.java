@@ -93,12 +93,14 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>
  * <b>Reversing a booked difference line</b> ({@link #reverseMovement}): a blank reason 400; the billing month of today,
  * the account locked (404), the line (404 unless it is a line of that account); 409 {@code MOVEMENT_NOT_REVERSIBLE}
- * unless it is an original {@code COUNT_DIFFERENCE} line (bank differences join with the bank reconciliation); 409
- * {@code ENTRY_ALREADY_REVERSED} (the unique key is the backstop); the reversal of a surplus goes through
- * {@link CashGuard} on today. The reversal (source {@code MOVEMENT}, the reversed line) is dated today; audit
- * {@code COUNT_DIFFERENCE_REVERSED} about the count. The count stays {@code BOOKED}: its difference is booked once
- * ({@code booked_movement_id} is written once), its card shows the reversal, and the next count sees the cash as it
- * is. Logs ids only.
+ * unless it is an original {@code COUNT_DIFFERENCE} or {@code BANK_DIFFERENCE} line; 409
+ * {@code ENTRY_ALREADY_REVERSED} (the unique key is the backstop); the reversal of a cash surplus goes through
+ * {@link CashGuard} on today (a bank difference is never guarded: the bank may go negative). The reversal (source
+ * {@code MOVEMENT}, the reversed line) is dated today; audit {@code COUNT_DIFFERENCE_REVERSED} about the count, or
+ * {@code BANK_DIFFERENCE_REVERSED} about the bank reconciliation of the line's month (the line's source; the
+ * {@link MovementWriter} reopens that today's month when it is reconciled). The count stays {@code BOOKED}: its
+ * difference is booked once ({@code booked_movement_id} is written once), its card shows the reversal, and the next
+ * count sees the cash as it is. Logs ids only.
  */
 @Service
 class CashCounts implements CashCountActs {
@@ -247,14 +249,15 @@ class CashCounts implements CashCountActs {
         AccountRow account = accounts.lockAccount(accountId).orElseThrow(ApiProblemException::notFound);
         MovementFacts line = accounts.movement(movementId).filter(found -> found.accountId().equals(accountId))
                 .orElseThrow(ApiProblemException::notFound);
-        if (line.kind() != MovementKind.COUNT_DIFFERENCE || line.reversesMovementId() != null) {
+        boolean bank = line.kind() == MovementKind.BANK_DIFFERENCE;
+        if ((line.kind() != MovementKind.COUNT_DIFFERENCE && !bank) || line.reversesMovementId() != null) {
             throw new ApiProblemException(HttpStatus.CONFLICT, ProblemCodes.MOVEMENT_NOT_REVERSIBLE,
                     "Only a booked difference line is reversed here.");
         }
         if (line.reversed()) {
             throw EntryChecks.alreadyReversed();
         }
-        if (line.amount().signum() > 0) {
+        if (!bank && line.amount().signum() > 0) {
             Opening opening = EntryChecks.requireOpening(account, today);
             CashGuard.check(opening, accounts.dayTotals(account.id(), opening.date(), EntryChecks.LAST_DAY), today,
                     line.amount().negate());
@@ -270,11 +273,17 @@ class CashCounts implements CashCountActs {
             }
             throw e;
         }
-        CountRow count = counts.card(line.sourceId())
-                .orElseThrow(() -> new IllegalStateException("A count difference line without its count"));
-        audit.countDifferenceReversed(actor, count.id(), count.countedAt(), line.amount(), line.movedOn(), today,
-                reason, now);
-        log.debug("Count difference movement {} reversed by {}", line.id(), reversal);
+        if (bank) {
+            // a bank difference line is dated in its reconciliation's month, and sourced from that month's row
+            audit.bankDifferenceReversed(actor, line.sourceId(), YearMonth.from(line.movedOn()), line.amount(),
+                    line.movedOn(), today, reason, now);
+        } else {
+            CountRow count = counts.card(line.sourceId())
+                    .orElseThrow(() -> new IllegalStateException("A count difference line without its count"));
+            audit.countDifferenceReversed(actor, count.id(), count.countedAt(), line.amount(), line.movedOn(), today,
+                    reason, now);
+        }
+        log.debug("Difference movement {} reversed by {}", line.id(), reversal);
         MovementRow row = accounts.movementLine(reversal).orElseThrow();
         return journalLines.items(List.of(row), account.opening()).getFirst();
     }

@@ -1,4 +1,5 @@
 import {
+  getGetBankReconciliationQueryKey,
   getListCashCountsQueryKey,
   getListExpensesQueryKey,
   getListMoneyAccountsQueryKey,
@@ -9,6 +10,7 @@ const PREFIXES = [
   getListMoneyAccountsQueryKey()[0],
   getListExpensesQueryKey()[0],
   getListCashCountsQueryKey()[0],
+  getGetBankReconciliationQueryKey('')[0].replace(/\/$/, ''),
 ];
 
 /** Accounts, their journals, the cash counts and the expenses change together: refetch all of them. */

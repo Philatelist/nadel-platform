@@ -42,7 +42,7 @@ export interface AccountMovement {
   reversed: boolean;
   /** The line this reversal reverses; only on a reversal */
   reversesMovementId?: string;
-  /** Why the line was reversed (user content); only on a reversal */
+  /** Why the line was reversed (user content), on a reversal; on a booked bank difference (an original `BANK_DIFFERENCE` line) the reason it was booked */
   reason?: string;
   /** The current name of the member who entered the line ("Last First Middle"); absent for the system and an unknown member */
   createdByName?: string;

@@ -5,6 +5,7 @@ import app.nadel.ledger.PaymentMoneyMoved;
 import app.nadel.ledger.PaymentRef;
 import app.nadel.ledger.PaymentSource;
 import app.nadel.money.Money;
+import app.nadel.tenancy.TenantContext;
 import app.nadel.treasury.MoneyAccountKind;
 import app.nadel.treasury.MovementKind;
 import app.nadel.treasury.internal.TreasuryQueries.AccountRow;
@@ -46,19 +47,33 @@ import org.springframework.transaction.annotation.Transactional;
  * {@code ledger.BookingMonths.bookFor} and holds the account row {@code FOR UPDATE} (the treasury lock order), and has
  * checked the entry (opening balance, the no-negative-cash rule). A reversal has the kind and account of the line it
  * reverses, the negated amount, the reason, and the day and month the caller gives (today and its open month).
+ * <p>
+ * <b>Reopening a reconciled bank month</b> (feature 018 §2.7, technical considerations 2.2, 2.5): every movement this
+ * writer inserts — a member payment or its reversal, an expense, other income, a handover line, a bank difference, any
+ * reversal — is checked right after its insert, in the same transaction and after the account lock the caller holds
+ * (the lock order ends: … bank account → {@code bank_reconciliation} row). A bank line counted in the books (dated on or
+ * after the opening date) whose calendar month is {@code RECONCILED} sets that month to {@code NEEDS_RECHECK} with the
+ * line and the time ({@link BankReconciliationQueries#reopen}), and the system's audit entry
+ * {@code BANK_MONTH_REOPENED} is published. A cash line, a month not reconciled (or already {@code NEEDS_RECHECK}: the
+ * first reopening is kept until the month is reconciled again) and a line before the opening date reopen nothing. Being
+ * the one writer, this is the one place the rule lives.
  */
 @Component
 class MovementWriter {
 
     private static final Logger log = LoggerFactory.getLogger(MovementWriter.class);
 
+    /** Answers the id of the inserted movement, or nothing when the row has its movement already. */
     private static final String INSERT_PAYMENT = """
-            insert into account_movement (tenant_id, account_id, kind, amount, moved_on, booking_month, source_type,
-                                          source_id, payment_row_id, reverses_movement_id, reason, created_by,
-                                          created_at)
-            values (:tenant, :account, 'MEMBER_PAYMENT', :amount, :movedOn, :month, 'PAYMENT', :row, :row,
-                    cast(:reverses as uuid), cast(:reason as text), cast(:createdBy as uuid), :createdAt)
-            on conflict (tenant_id, payment_row_id) where payment_row_id is not null do nothing
+            with inserted as (
+                insert into account_movement (tenant_id, account_id, kind, amount, moved_on, booking_month, source_type,
+                                              source_id, payment_row_id, reverses_movement_id, reason, created_by,
+                                              created_at)
+                values (:tenant, :account, 'MEMBER_PAYMENT', :amount, :movedOn, :month, 'PAYMENT', :row, :row,
+                        cast(:reverses as uuid), cast(:reason as text), cast(:createdBy as uuid), :createdAt)
+                on conflict (tenant_id, payment_row_id) where payment_row_id is not null do nothing
+                returning id)
+            select id from inserted
             """;
 
     private static final String INSERT_ENTRY = """
@@ -78,11 +93,16 @@ class MovementWriter {
             """;
 
     private final TreasuryQueries queries;
+    private final BankReconciliationQueries reconciliations;
+    private final TreasuryAuditPublisher audit;
     private final LedgerReadModel ledger;
     private final EntityManager entityManager;
 
-    MovementWriter(TreasuryQueries queries, LedgerReadModel ledger, EntityManager entityManager) {
+    MovementWriter(TreasuryQueries queries, BankReconciliationQueries reconciliations, TreasuryAuditPublisher audit,
+            LedgerReadModel ledger, EntityManager entityManager) {
         this.queries = queries;
+        this.reconciliations = reconciliations;
+        this.audit = audit;
         this.ledger = ledger;
         this.entityManager = entityManager;
     }
@@ -118,7 +138,7 @@ class MovementWriter {
                 reverses = original.id();
                 reason = ref.reason();
             }
-            inserted += entityManager.createNativeQuery(INSERT_PAYMENT)
+            List<?> ids = entityManager.createNativeQuery(INSERT_PAYMENT)
                     .setParameter("tenant", tenantId)
                     .setParameter("account", account)
                     .setParameter("amount", line.amount().value())
@@ -129,7 +149,11 @@ class MovementWriter {
                     .setParameter("reason", reason)
                     .setParameter("createdBy", line.createdBy())
                     .setParameter("createdAt", line.createdAt())
-                    .executeUpdate();
+                    .getResultList();
+            for (Object id : ids) {
+                reopenBankMonth(tenantId, (UUID) id, line.createdAt());
+                inserted++;
+            }
         }
         log.debug("{} payment movements written for {} lines", inserted, lines.size());
         return inserted;
@@ -158,6 +182,7 @@ class MovementWriter {
                 .setParameter("createdBy", createdBy)
                 .setParameter("createdAt", createdAt)
                 .executeUpdate();
+        reopenBankMonth(tenantId, id, createdAt);
         log.debug("Movement {} written", id);
         return id;
     }
@@ -188,8 +213,19 @@ class MovementWriter {
         if (inserted != 1) {
             throw new IllegalStateException("The reversed movement is not visible");
         }
+        reopenBankMonth(TenantContext.currentTenantId()
+                .orElseThrow(() -> new IllegalStateException("No cooperative is bound")), id, createdAt);
         log.debug("Movement {} reversed by {}", originalId, id);
         return id;
+    }
+
+    /** Reopens the reconciled bank month the movement is dated in, if any, with the system's audit entry. */
+    private void reopenBankMonth(UUID tenantId, UUID movementId, Instant at) {
+        for (BankReconciliationQueries.Reopened month : reconciliations.reopen(movementId, at)) {
+            audit.bankMonthReopened(tenantId, month.reconciliationId(), month.month(), movementId, month.kind(),
+                    month.date(), month.amount(), at);
+            log.debug("Bank reconciliation {} reopened by movement {}", month.reconciliationId(), movementId);
+        }
     }
 
     static MoneyAccountKind kindOf(PaymentSource source) {

@@ -9,13 +9,14 @@
  *
  * OpenAPI spec version: 0.1.0
  */
+import type { BankMonth } from './bankMonth';
 import type { CashCountRow } from './cashCountRow';
 import type { Money } from './money';
 import type { MoneyAccountKind } from './moneyAccountKind';
 import type { OpeningBalance } from './openingBalance';
 
 /**
- * One money account of the cooperative and its balance on a day. Only the cash account has `lastCount` (its latest count by `countedAt`, absent before the first) and `unresolvedDifference` (the difference of that last count while it is `UNRESOLVED`: «Неврегульована різниця −20,00 ₴»; absent once it is booked or when it matches; an earlier count's difference is superseded by the later count). Neither depends on `asOf`. Later features add optional fields (the bank months and their reconciliation status).
+ * One money account of the cooperative and its balance on a day. Only the cash account has `lastCount` (its latest count by `countedAt`, absent before the first) and `unresolvedDifference` (the difference of that last count while it is `UNRESOLVED`: «Неврегульована різниця −20,00 ₴»; absent once it is booked or when it matches; an earlier count's difference is superseded by the later count). Neither depends on `asOf`. Only the bank account has `months` (the bank months and their reconciliation status).
  */
 export interface MoneyAccount {
   id: string;
@@ -30,4 +31,6 @@ export interface MoneyAccount {
   negative: boolean;
   lastCount?: CashCountRow;
   unresolvedDifference?: Money;
+  /** The reconciliation status of the bank months, newest first, at most 12 (the newest ones), from the month of the opening date to the month of `asOf`: every month that has bank lines dated on or after the opening date or a reconciliation, and always the month of `asOf`. A month without a reconciliation is `NOT_RECONCILED`. The statuses are the current ones whatever `asOf`. Empty for `CASH` and for a bank account without an opening balance. */
+  months?: BankMonth[];
 }

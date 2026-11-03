@@ -3,10 +3,10 @@
 The cooperative's own money (feature 018, «Каса і банк»): the **cash account** («Каса», the cash the treasurer
 holds) and the **bank account** («Банківський рахунок»), their **opening balances**, the **journal** of every move of
 money and the **balance** of an account on any day. Members' debts never change here: the module only shows where the
-money they paid went. Draft: slices 1 to 3 of the feature (accounts, opening balances, member payments in the journal;
+money they paid went. Draft: slices 1 to 5 of the feature (accounts, opening balances, member payments in the journal;
 expenses with receipt files, categories, the no-negative-cash rule; handovers to the bank and other income; cash
-counts with their act and the booked difference); bank reconciliations, the reports and the reconciliation act come
-with later slices.
+counts with their act and the booked difference; the monthly bank reconciliation); the reports and the reconciliation
+act come with later slices.
 The money rules are `docs/domain/money-rules.md` §14 (written with the feature); the decisions are ADR 0019.
 
 Tables (`V32__treasury.sql`, all under RLS `tenant_isolation`, an index leading with `tenant_id`, `UNIQUE (tenant_id,
@@ -22,7 +22,8 @@ id)` and composite foreign keys on `(tenant_id, x_id)`):
 | `handover` | Cash taken to the bank: `amount` (> 0), `handed_on`, `document_number` (the deposit slip, required), `out_movement_id` (the cash line) and `in_movement_id` (the bank line); a reversal is a second row with `reverses_handover_id`, `reason`, the original's document number and its own two reversing movements, dated the day of the reversal | append-only; written by `Handovers` (`HandoverQueries`) |
 | `other_income` | Income not from members: account, income category, `amount` (> 0), `received_on`, `description_enc` (sealed), `movement_id`; a reversal is a second row with `reverses_other_income_id`, `reason` and the category, without a description | append-only; written by `OtherIncomes` (`OtherIncomeQueries`) |
 | `cash_count` | A count of the cash: `counted_at`, `counted_on` (its Kyiv day), `counted_amount` (≥ 0), the `book_balance` computed when it was saved, `difference` (= counted − book), `explanation` (required for a difference; user content in the clear), `booked_movement_id` and `booking_reason` (V33) once the difference is booked | `nadel_app` may update only `booked_movement_id` and `booking_reason` (column grants), and `cash_count_guard` lets that happen once, in one update; written by `CashCounts` (`CashCountQueries`) |
-| `bank_reconciliation` | Created by V32 with its guard; no writer yet (a later slice) | see V32 |
+| `bank_reconciliation` | One row per calendar month (`month` = its first day), created when the statement is first entered: `statement_opening/incoming/outgoing/closing` (they add up: CHECK), `status` `NOT_RECONCILED`/`RECONCILED`/`NEEDS_RECHECK`, `reconciled_by/at`, `reopened_movement_id/at` (the last line that reopened it) | `nadel_app` may update only the statement, status, reconciled and reopened columns (column grants); `bank_reconciliation_guard` allows `NOT_RECONCILED → RECONCILED → NEEDS_RECHECK → RECONCILED` and no statement change while `RECONCILED`; written by `BankReconciliations` and, for the reopening, `MovementWriter` (`BankReconciliationQueries`) |
+| `bank_difference` (V34) | The reason of a booked bank difference line: `reconciliation_id`, `movement_id` (unique), `reason` (1–500 characters) | append-only; written by `BankReconciliations` |
 
 V32 also backfilled one movement per payment row that existed when the feature was installed (the one sanctioned
 migration-time read of `payment`, between the `BACKFILL BEGIN`/`END` markers): a payment on its `received_on` in its
@@ -34,6 +35,7 @@ billing month, a reversal on the Kyiv day it was made in `greatest(its month, th
 |---|---|
 | `MoneyAccountKind` (`CASH`, `BANK`) | The two accounts |
 | `MovementKind` (`MEMBER_PAYMENT`, `EXPENSE`, `OTHER_INCOME`, `HANDOVER_OUT`, `HANDOVER_IN`, `COUNT_DIFFERENCE`, `BANK_DIFFERENCE`) | What moved the money of a journal line; a reversal has the kind of the line it reverses |
+| `BankMonthStatus` (`NOT_RECONCILED`, `RECONCILED`, `NEEDS_RECHECK`) | The reconciliation status of a bank month (for the bank movements report of a later slice) |
 | `CashCountActs.act(countId)` → `CashCountAct` (with `Status`, `Booking`, `Reversal`) | The figures of a count for its act (`documents`): moment, day, book, counted, difference, explanation, booking and its reversal; `MANDATORY`, no permission check of its own (the caller checks `CASHBOOK_VIEW`); empty for an unknown count |
 
 Everything else is in `internal`.
@@ -42,7 +44,7 @@ Everything else is in `internal`.
 
 | Endpoint | Operation | Who |
 |---|---|---|
-| `GET /money-accounts?asOf` | `listMoneyAccounts`: both accounts, cash first: id, kind, the bank's IBAN from the requisites (`settings.CooperativeSettings`), `opening {amount, date}`, `balance` on `asOf` (absent without an opening balance), `negative`, `asOf` (default today in Europe/Kyiv; a later day is 400 `asOf` `INVALID`). Later slices add optional fields (last count, unresolved difference, months) | `CASHBOOK_VIEW` |
+| `GET /money-accounts?asOf` | `listMoneyAccounts`: both accounts, cash first: id, kind, the bank's IBAN from the requisites (`settings.CooperativeSettings`), `opening {amount, date}`, `balance` on `asOf` (absent without an opening balance), `negative`, `asOf` (default today in Europe/Kyiv; a later day is 400 `asOf` `INVALID`); the cash its `lastCount` and `unresolvedDifference`; the bank its `months` (see "Bank reconciliation") | `CASHBOOK_VIEW` |
 | `POST /money-accounts/{id}/opening-balance` | `setOpeningBalance` `{amount, date}`: once (409 `OPENING_BALANCE_ALREADY_SET`); `amount` 0.00 or more with at most 12 integer digits (400 `amount` `INVALID`), `date` not after today (400 `date` `DATE_IN_FUTURE`); 404 `NOT_FOUND`. Audit `OPENING_BALANCE_SET`. Answers the account with today's balance | `CASHBOOK_APPROVE` |
 | `GET /money-accounts/{id}/movements?from&to&page&size` | `listAccountMovements`: the lines dated `from..to` (default the current month up to today; `from` after `to` is 400 `from` `INVALID`), oldest first (date, time entered, id), with `openingBalance` (end of `from − 1`) and `closingBalance` (end of `to`) over the whole period, `negative` (closing below 0.00). Each line: date, kind, amount, `bookingMonth`, `beforeOpening`, `source {type, id}`, `reversed`, `reversesMovementId`/`reason` (a reversal), `createdByName` (the author's current name through `audit.ActorNames`, as the payment card shows it to the board), `createdAt`; a member payment line adds `plotId` and `receiptNumber` (cash) or `documentNumber` (the bank reference) through `LedgerReadModel.paymentRefs`; a handover line adds `documentNumber` (the deposit slip), an expense or other income line `categoryId` (a reversal line its entry's). 404 `NOT_FOUND` | `CASHBOOK_VIEW` |
 
@@ -59,7 +61,11 @@ Everything else is in `internal`.
 | `GET /cash-counts?page&size` | `listCashCounts`: newest first (moment of the count, time saved, id) | `CASHBOOK_VIEW` |
 | `GET /cash-counts/{id}` | `getCashCount`: the card with the lines since the previous count and the booking | `CASHBOOK_VIEW` |
 | `POST /cash-counts/{id}/book-difference` `{reason}` | `bookCashCountDifference`: 200 with the card, now `BOOKED` | `CASHBOOK_APPROVE` |
-| `POST /money-accounts/{id}/movements/{movementId}/reverse` `{reason}` | `reverseAccountMovement`: reverses a booked count difference line; 200 with the reversal line | `CASHBOOK_APPROVE` |
+| `POST /money-accounts/{id}/movements/{movementId}/reverse` `{reason}` | `reverseAccountMovement`: reverses a booked count or bank difference line; 200 with the reversal line | `CASHBOOK_APPROVE` |
+| `GET /bank-reconciliations/{month}` | `getBankReconciliation`: see "Bank reconciliation" below | `CASHBOOK_VIEW` |
+| `PUT /bank-reconciliations/{month}` `{opening, incoming, outgoing, closing}` | `enterBankStatement`: 200 with the reconciliation | `CASHBOOK_ENTER` |
+| `POST /bank-reconciliations/{month}/book-difference` `{amount, reason}` | `bookBankDifference`: 200 with the reconciliation | `CASHBOOK_APPROVE` |
+| `POST /bank-reconciliations/{month}/confirm` | `confirmBankReconciliation`: «Звірено»; 200 with the reconciliation | `CASHBOOK_ENTER` |
 | `GET /expense-categories?kind&includeArchived` | `listExpenseCategories` (kind default `EXPENSE`), by `sortOrder` | `CASHBOOK_VIEW` |
 | `POST /expense-categories`, `PUT /expense-categories/{id}`, `PUT /expense-categories/order` | add, rename/archive (`archived: false` offers it again), reorder the non-archived of a kind (a list that is not exactly them is 400 `ids` `INVALID`) | `CASHBOOK_APPROVE` |
 
@@ -182,11 +188,65 @@ reversals (V33).
 
 **Reversing a booked difference line** (`POST /money-accounts/{id}/movements/{movementId}/reverse`): reason required;
 `bookFor(today)`, the account locked (404), the line of that account (404); 409 `MOVEMENT_NOT_REVERSIBLE` unless it is
-an original `COUNT_DIFFERENCE` line (expenses, handovers and other income have their own reverse endpoints, payments are
-reversed in 015; `BANK_DIFFERENCE` joins with the bank reconciliation); 409 `ENTRY_ALREADY_REVERSED`; the reversal of a
-surplus goes through `CashGuard` on today. The reversal (source `MOVEMENT`, the reversed line) is dated today;
-`COUNT_DIFFERENCE_REVERSED` about the count. The count stays `BOOKED` (`booked_movement_id` is written once): its card
-and act show the reversal, and the next count sees the cash as it is.
+an original `COUNT_DIFFERENCE` or `BANK_DIFFERENCE` line (expenses, handovers and other income have their own reverse
+endpoints, payments are reversed in 015); 409 `ENTRY_ALREADY_REVERSED`; the reversal of a cash surplus goes through
+`CashGuard` on today (a bank difference is never guarded). The reversal (source `MOVEMENT`, the reversed line) is dated
+today; `COUNT_DIFFERENCE_REVERSED` about the count, or `BANK_DIFFERENCE_REVERSED` about the reconciliation of the
+line's month (its source). The count stays `BOOKED` (`booked_movement_id` is written once): its card and act show the
+reversal, and the next count sees the cash as it is.
+
+## Bank reconciliation (`BankReconciliations`)
+
+A month is a **calendar month by the date of the lines** (`moved_on`), not the billing month; path `{month}` =
+`YYYY-MM`. Every request checks, in order: the month (not after the current month in Europe/Kyiv, else 400 `month`
+`INVALID`); its fields; on a write the bank account `FOR UPDATE`; 409 `OPENING_BALANCE_MISSING` without the bank's
+opening balance; 400 `BEFORE_OPENING_BALANCE` (`errors[{field: month}]`) for a month that ends before the opening date.
+
+**The books** (`BankComparison`, pure, over `BankReconciliationQueries.flows`: the bank lines per day grouped by sign
+and by whether they are reversals): `opening` the balance at the start of the 1st (for the month of the opening date:
+the opening amount), `incoming` and `outgoing` the month's receipts and spendings from the opening date on, **both
+positive** (as a statement shows them), `closing` = opening + incoming − outgoing. A reversal counts against the
+direction of the line it reverses (the reversal of a receipt lowers `incoming`, of a spending `outgoing`), so a
+mistaken entry and its reversal in one month cancel out; lines before the opening date count in nothing. The
+differences are statement − books per figure; `balanced` when there is a statement and all four are 0.00. `GET` also
+lists the month's bank lines (`JournalLines`, at most 1000, with `movementsTotal`), the last reopening (the line's id,
+kind, date, amount and when) and who reconciled it.
+
+**The statement** (`StatementRules`, pure): `incoming`, `outgoing` ≥ 0, every figure at most 12 integer digits (400
+`INVALID`), and opening + incoming − outgoing = closing (400 `STATEMENT_INCONSISTENT`, field `closing`). The first
+statement creates the month's row (`NOT_RECONCILED`); later ones replace the figures while `NOT_RECONCILED` or
+`NEEDS_RECHECK`; a `RECONCILED` month is 409 `BANK_MONTH_RECONCILED`. Audit `BANK_STATEMENT_ENTERED`.
+
+**A bank difference** («Банківська різниця», `CASHBOOK_APPROVE`): a signed amount ≠ 0.00 (`amount` `INVALID`) and a
+reason (`REQUIRED`); `bookFor(date)` first (lock order), with date = the month's last day or today when earlier; 409
+`BANK_STATEMENT_MISSING` before the statement, `BANK_MONTH_RECONCILED` for a reconciled month. A `BANK_DIFFERENCE` line
+on the bank (source `BANK_RECONCILIATION`, the month's row), its reason in `bank_difference` (V34:
+`account_movement.reason` is only for reversals) and shown as the line's `reason`. The bank is never guarded. Audit
+`BANK_DIFFERENCE_BOOKED`.
+
+**«Звірено»** (`confirm`, `CASHBOOK_ENTER`): under the bank lock the books are computed again; 409
+`BANK_MONTH_NOT_BALANCED` without a statement or with a difference, `BANK_MONTH_RECONCILED` when already reconciled;
+`NOT_RECONCILED` or `NEEDS_RECHECK` → `RECONCILED` with `reconciled_by/at`. Audit `BANK_MONTH_RECONCILED`.
+
+**Reopening** (in `MovementWriter`, the one writer, so it covers every writer: member payments through
+`PaymentMovementListener`, expenses, other income, handovers, bank differences and every reversal): right after a
+movement is inserted, `BankReconciliationQueries.reopen` sets the `RECONCILED` month of a bank line dated on or after
+the opening date to `NEEDS_RECHECK` with `reopened_movement_id/at`, and the system's audit entry `BANK_MONTH_REOPENED`
+(subject `system:treasury`, no member) is published with the line. A month already `NEEDS_RECHECK` keeps its first
+reopening until it is reconciled again; the reopening stays on the row after that (the status tells whether it is
+current). Because every bank writer and `confirm` hold the bank account lock, a line can never slip in between the
+books `confirm` reads and its commit.
+
+**The bank card's months** (`GET /money-accounts`, `months`): newest first, at most 12, from the month of the opening
+date to the month of `asOf`: the months with a reconciliation, the months with bank lines from the opening date on, and
+always the month of `asOf`; a month without a row is `NOT_RECONCILED`. Empty for the cash and without an opening
+balance.
+
+**A known limit of the four-figure rule.** A wrong line in a past month that is reversed today lowers today's month,
+not the past one, so that past month's `incoming`/`outgoing` stay off (its closing difference can be booked away, the
+other two cannot); and a booked bank difference adds to `incoming` or `outgoing` as well as to `closing`. Such a month
+balances only if the statement figures match. Whether «Звірено» should need only the closing difference to be 0.00 is
+open with the owner.
 
 ## Categories (`Categories`)
 
@@ -232,7 +292,7 @@ recorded whether or not the account has an opening balance, and a payment revers
 ## Lock order
 
 Payment paths: … billing month `FOR SHARE` → `receipt_counter` → `money_account` `FOR UPDATE` (cash, then bank) →
-`bank_reconciliation` (a later slice). Treasury paths: billing month `FOR SHARE` (`ledger.BookingMonths.bookFor`) → the
+`bank_reconciliation` (a bank line in a reconciled month). Treasury paths: billing month `FOR SHARE` (`ledger.BookingMonths.bookFor`) → the
 cash account → the bank account → `bank_reconciliation`. See the ledger README.
 
 ## Audit
@@ -247,7 +307,11 @@ moved category), `_ARCHIVED` (`archived` old/new). Every action is a value of th
 (`TreasuryAuditActionsTests`). Entity type `CASH_COUNT` (entity id the count, label the moment of the count as an ISO
 instant): `CASH_COUNTED` (`countedAt`, `counted`, `bookBalance`, `difference`, `explanation` when given),
 `COUNT_DIFFERENCE_BOOKED` (`amount` signed, `date` the count's day, `reason`), `COUNT_DIFFERENCE_REVERSED` (`amount`,
-`date`, `reversedOn`, `reason`).
+`date`, `reversedOn`, `reason`). Entity type `BANK_RECONCILIATION` (entity id the month's row, label `YYYY-MM`):
+`BANK_STATEMENT_ENTERED` (`opening`, `incoming`, `outgoing`, `closing`; old values when replaced),
+`BANK_DIFFERENCE_BOOKED` (`amount` signed, `date`, `reason`), `BANK_DIFFERENCE_REVERSED` (`amount`, `date`,
+`reversedOn`, `reason`), `BANK_MONTH_RECONCILED` (`status` old/new and the four figures), `BANK_MONTH_REOPENED` by the
+system (`status` old/new, `movement`, `kind`, `date`, `amount`).
 
 ## Dependencies
 
@@ -260,9 +324,9 @@ act); it never depends on `documents`.
 ## Permissions
 
 `CASHBOOK_VIEW` (chairman, treasurer): accounts, journals, expenses and their files, categories. `CASHBOOK_ENTER`
-(chairman, treasurer): expenses, handovers, other income, cash counts (later: statements). `CASHBOOK_APPROVE`
-(chairman): opening balances, reversals, categories, booking a count difference and reversing its line (later: bank
-differences). The act of a count needs `CASHBOOK_VIEW`. Custom roles can hold any of them.
+(chairman, treasurer): expenses, handovers, other income, cash counts, bank statements and «Звірено».
+`CASHBOOK_APPROVE` (chairman): opening balances, reversals, categories, booking a count or bank difference and
+reversing its line. The bank reconciliation of a month needs `CASHBOOK_VIEW`. The act of a count needs `CASHBOOK_VIEW`. Custom roles can hold any of them.
 
 ## Tests
 
@@ -284,4 +348,11 @@ reused files, list filters, no plaintext in `expense`, `audit_entry`, `event_pub
 required on a save only, the save recomputes the book balance after a preview, a saved count keeps its book balance
 after a back-dated entry and the next count lists it, surplus booked and its line reversed once, shortage refused by the
 cash rule, refusals, list order), `CashCountActTests` (the PDF text: balances, difference, result, booking, signers),
-`CashCountsAccessTests`, `CashBookExamplesTests` row 6, `TreasuryGuardsTests` (the V33 booking reason).
+`CashCountsAccessTests`, `CashBookExamplesTests` row 6, `TreasuryGuardsTests` (the V33 booking reason). Slice 5:
+`StatementRulesTests` (FS 2.17 #9, field rules), `BankComparisonTests` (books of the opening month and later months,
+reversals against their original, opening inside a month, differences, `balanced`), `BankReconciliationTests` (FS 2.17
+#7 and #8 end to end — #8 through a real bank payment entered later with an earlier date —, a cash line and a line of
+another month reopen nothing, bank difference booked, listed with its reason and reversed today, a reversal reopens the
+reconciled current month, the status machine, not balanced, month and opening refusals, the bank card's months),
+`BankReconciliationsAccessTests`, `CashBookExamplesTests` rows 7–9, `TreasuryTenantIsolationTests` and
+`TreasuryGuardsTests` (`bank_difference`, V34).

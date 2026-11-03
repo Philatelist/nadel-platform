@@ -11,6 +11,9 @@ import java.util.UUID;
 import nadel.contract.api.TreasuryApi;
 import nadel.contract.model.AccountMovement;
 import nadel.contract.model.AccountMovementPage;
+import nadel.contract.model.BankDifferenceInput;
+import nadel.contract.model.BankReconciliation;
+import nadel.contract.model.BankStatementInput;
 import nadel.contract.model.CashCount;
 import nadel.contract.model.CashCountBookingRequest;
 import nadel.contract.model.CashCountInput;
@@ -43,11 +46,12 @@ import org.springframework.web.multipart.MultipartFile;
 
 /**
  * The endpoints of tag {@code treasury} (feature 018 §2.13, technical considerations 2.10): reads (accounts, journals,
- * expenses and their files, categories, cash counts) need {@code CASHBOOK_VIEW}; entries (an expense, a handover,
- * other income, a cash count and its preview) {@code CASHBOOK_ENTER}; the opening balance, reversals (also of a booked
- * difference line), booking a count's difference and the categories' changes {@code CASHBOOK_APPROVE}. Permissions, never role names; a
- * member and the platform operator (who hold none of them) are 403. The work is done by {@link MoneyAccounts},
- * {@link Expenses}, {@link Handovers}, {@link OtherIncomes}, {@link Categories} and {@link CashCounts}.
+ * expenses and their files, categories, cash counts, bank reconciliations) need {@code CASHBOOK_VIEW}; entries (an
+ * expense, a handover, other income, a cash count and its preview, a bank statement, «Звірено») {@code CASHBOOK_ENTER};
+ * the opening balance, reversals (also of a booked count or bank difference line), booking a count's or a bank
+ * difference and the categories' changes {@code CASHBOOK_APPROVE}. Permissions, never role names; a member and the
+ * platform operator (who hold none of them) are 403. The work is done by {@link MoneyAccounts}, {@link Expenses},
+ * {@link Handovers}, {@link OtherIncomes}, {@link Categories}, {@link CashCounts} and {@link BankReconciliations}.
  */
 @RestController
 @RequestMapping("/api/v1")
@@ -60,9 +64,11 @@ class TreasuryController implements TreasuryApi {
     private final OtherIncomes otherIncomes;
     private final Categories categories;
     private final CashCounts cashCounts;
+    private final BankReconciliations bankReconciliations;
 
     TreasuryController(CurrentUser currentUser, MoneyAccounts accounts, Expenses expenses, Handovers handovers,
-            OtherIncomes otherIncomes, Categories categories, CashCounts cashCounts) {
+            OtherIncomes otherIncomes, Categories categories, CashCounts cashCounts,
+            BankReconciliations bankReconciliations) {
         this.currentUser = currentUser;
         this.accounts = accounts;
         this.expenses = expenses;
@@ -70,6 +76,31 @@ class TreasuryController implements TreasuryApi {
         this.otherIncomes = otherIncomes;
         this.categories = categories;
         this.cashCounts = cashCounts;
+        this.bankReconciliations = bankReconciliations;
+    }
+
+    @Override
+    @PreAuthorize("hasAuthority('PERM_CASHBOOK_VIEW')")
+    public ResponseEntity<BankReconciliation> getBankReconciliation(String month) {
+        return ResponseEntity.ok(bankReconciliations.get(month));
+    }
+
+    @Override
+    @PreAuthorize("hasAuthority('PERM_CASHBOOK_ENTER')")
+    public ResponseEntity<BankReconciliation> enterBankStatement(String month, BankStatementInput request) {
+        return ResponseEntity.ok(bankReconciliations.enterStatement(month, request, currentUser.profile()));
+    }
+
+    @Override
+    @PreAuthorize("hasAuthority('PERM_CASHBOOK_APPROVE')")
+    public ResponseEntity<BankReconciliation> bookBankDifference(String month, BankDifferenceInput request) {
+        return ResponseEntity.ok(bankReconciliations.bookDifference(month, request, currentUser.profile()));
+    }
+
+    @Override
+    @PreAuthorize("hasAuthority('PERM_CASHBOOK_ENTER')")
+    public ResponseEntity<BankReconciliation> confirmBankReconciliation(String month) {
+        return ResponseEntity.ok(bankReconciliations.confirm(month, currentUser.profile()));
     }
 
     @Override

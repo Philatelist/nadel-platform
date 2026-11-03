@@ -1,6 +1,7 @@
 import type { AuditEntityType } from '@nadel/api-client';
 import {
   format,
+  formatDateTime,
   formatDay,
   formatMonth,
   formatMoney,
@@ -159,8 +160,11 @@ export function auditValue(
     case 'active':
     case 'personalData':
       return raw === 'true' ? a.yes : a.no;
+    case 'account':
+      return catalog(t.cashbook.account);
     case 'kind':
       if (entityType === 'MONEY_ACCOUNT') return catalog(t.cashbook.account);
+      if (Object.hasOwn(t.cashbook.kind, raw)) return catalog(t.cashbook.kind);
       if (Object.hasOwn(t.billing.notCharged.kind, raw)) return catalog(t.billing.notCharged.kind);
       return catalog(entityType === 'METER' ? t.meters.kind : t.plot.kind);
     case 'resource':
@@ -184,6 +188,8 @@ export function auditValue(
     case 'memberPlotStatusVisibility':
       return t.settings.visibility[raw as keyof Messages['settings']['visibility']]?.label ?? raw;
     case 'status':
+      if (entityType === 'BANK_RECONCILIATION') return catalog(t.cashbook.bank.status);
+      if (entityType === 'CASH_COUNT') return catalog(a.countStatus);
       return entityType === 'BILLING_MONTH' ? catalog(t.billing.status) : user(raw);
     case 'lossesMode':
       return catalog(a.lossesMode);
@@ -204,11 +210,21 @@ export function auditValue(
     case 'to':
     case 'until':
     case 'date':
+    case 'reversedOn':
       return ISO_DAY.test(raw) ? formatDay(raw, locale) : raw;
     case 'amount':
+    case 'counted':
+    case 'bookBalance':
+    case 'difference':
+    case 'opening':
+    case 'incoming':
+    case 'outgoing':
+    case 'closing':
     case 'redAmount':
     case 'total':
       return isMoney(raw) ? formatMoney(raw, locale) : raw;
+    case 'countedAt':
+      return Number.isNaN(Date.parse(raw)) ? raw : formatDateTime(raw, locale);
     case 'billingMonth':
     case 'month':
       return /^\d{4}-\d{2}$/.test(raw) ? formatMonth(raw, locale) : raw;

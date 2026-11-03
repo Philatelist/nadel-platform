@@ -62,11 +62,13 @@ class TreasuryQueries {
     /**
      * A page of an account's journal, oldest first, each line with whether a reversal points at it, the document
      * number of a handover line and the category of an expense or other income line (a reversal line's entry row
-     * carries the same values).
+     * carries the same values); the reason is a reversal's, or the booking reason of a bank difference line
+     * ({@code bank_difference}, V34).
      */
     private static final String MOVEMENT_LINES = """
             select m.id, m.kind, m.amount, m.moved_on, m.booking_month, m.source_type, m.source_id, m.payment_row_id,
-                   m.reverses_movement_id, m.reason, m.created_by, m.created_at, r.id is not null as reversed,
+                   m.reverses_movement_id, coalesce(m.reason, bd.reason), m.created_by, m.created_at,
+                   r.id is not null as reversed,
                    h.document_number, coalesce(e.category_id, o.category_id)
             from account_movement m
             left join account_movement r on r.tenant_id = m.tenant_id and r.reverses_movement_id = m.id
@@ -74,6 +76,8 @@ class TreasuryQueries {
             left join expense e on m.source_type = 'EXPENSE' and e.tenant_id = m.tenant_id and e.id = m.source_id
             left join other_income o on m.source_type = 'OTHER_INCOME' and o.tenant_id = m.tenant_id
                                         and o.id = m.source_id
+            left join bank_difference bd on m.kind = 'BANK_DIFFERENCE' and bd.tenant_id = m.tenant_id
+                                            and bd.movement_id = m.id
             """;
 
     private static final String OLDEST_FIRST = " order by m.moved_on, m.created_at, m.id";

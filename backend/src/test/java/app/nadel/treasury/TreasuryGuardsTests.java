@@ -12,7 +12,7 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- * The guards of the treasury tables: the five append-only tables (privilege for nadel_app, trigger for the owner), the
+ * The guards of the treasury tables: the six append-only tables (privilege for nadel_app, trigger for the owner), the
  * write-once opening balance, the movement reversal rule, the booked-once count difference, the status machine of the
  * bank reconciliation and the column grants of the categories.
  */
@@ -20,6 +20,8 @@ class TreasuryGuardsTests extends TreasuryTestSupport {
 
     private static final String PRIVILEGE = "42501";
     private static final String CHECK = "23514";
+    private static final List<String> APPEND_ONLY = List.of("account_movement", "handover", "expense",
+            "expense_attachment", "other_income", "bank_difference");
 
     private UUID cash;
     private UUID bank;
@@ -35,13 +37,14 @@ class TreasuryGuardsTests extends TreasuryTestSupport {
         attachment(tenantA, expense, 1);
         otherIncome(tenantA);
         handover(tenantA);
+        bankDifference(tenantA);
     }
 
     // ---- append-only
 
     @Test
     void theApplicationRoleCannotUpdateDeleteOrTruncateTheAppendOnlyTables() {
-        for (String table : List.of("account_movement", "handover", "expense", "expense_attachment", "other_income")) {
+        for (String table : APPEND_ONLY) {
             assertState(PRIVILEGE, table, sql -> sql.update("update " + table + " set tenant_id = tenant_id"));
             assertState(PRIVILEGE, table, sql -> sql.update("delete from " + table));
             assertState(PRIVILEGE, table, sql -> {
@@ -63,7 +66,7 @@ class TreasuryGuardsTests extends TreasuryTestSupport {
 
     @Test
     void theOwnerIsRefusedByTheTriggerOnEveryAppendOnlyTable() {
-        for (String table : List.of("account_movement", "handover", "expense", "expense_attachment", "other_income")) {
+        for (String table : APPEND_ONLY) {
             assertThatThrownBy(() -> ownerJdbc().update("update " + table + " set tenant_id = tenant_id"))
                     .as(table).hasStackTraceContaining("append-only");
             assertThatThrownBy(() -> ownerJdbc().update("delete from " + table))
@@ -115,6 +118,22 @@ class TreasuryGuardsTests extends TreasuryTestSupport {
         assertThatThrownBy(() -> reversalOf(tenantA, movement))
                 .satisfies(e -> assertThat(sqlState(e)).isEqualTo("23505"))
                 .hasMessageContaining("account_movement_reversed_once_uq");
+    }
+
+    @Test
+    void aBookedBankDifferenceLineHasOneReasonThatIsNotBlank() {
+        UUID line = ownerJdbc().queryForObject("select movement_id from bank_difference where tenant_id = ?",
+                UUID.class, tenantA);
+        UUID reconciliation = ownerJdbc().queryForObject("select reconciliation_id from bank_difference "
+                + "where tenant_id = ?", UUID.class, tenantA);
+        UUID other = movement(tenantA, bank, "BANK_DIFFERENCE", "3.00", "2033-06-30", "2033-06-01");
+
+        assertThatThrownBy(() -> ownerJdbc().update("insert into bank_difference (tenant_id, reconciliation_id, "
+                + "movement_id, reason) values (?, ?, ?, 'Again')", tenantA, reconciliation, line))
+                .satisfies(e -> assertThat(sqlState(e)).isEqualTo("23505"))
+                .hasMessageContaining("bank_difference_movement_uq");
+        assertCheck("bank_difference_reason_ck", "insert into bank_difference (tenant_id, reconciliation_id, "
+                + "movement_id, reason) values ('" + tenantA + "', '" + reconciliation + "', '" + other + "', '  ')");
     }
 
     @Test

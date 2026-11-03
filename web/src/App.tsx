@@ -229,6 +229,11 @@ const router = createBrowserRouter([
             lazy: () => import('./pages/CashCountPage').then((m) => ({ Component: m.CashCountPage })),
           },
           {
+            path: 'cashbook/bank/:month',
+            lazy: () =>
+              import('./pages/BankReconciliationPage').then((m) => ({ Component: m.BankReconciliationPage })),
+          },
+          {
             path: 'cashbook/expenses/:id',
             lazy: () => import('./pages/ExpenseCardPage').then((m) => ({ Component: m.ExpenseCardPage })),
           },

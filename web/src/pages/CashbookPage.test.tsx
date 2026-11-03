@@ -110,6 +110,30 @@ describe('CashbookPage', () => {
     expect(screen.queryByTestId('balance-BANK')).not.toBeInTheDocument();
   });
 
+  it('lists the bank months with their statuses and links to the reconciliation', () => {
+    useListMoneyAccounts.mockReturnValue(
+      queryResult([
+        cash,
+        {
+          ...bank,
+          balance: '10.00',
+          opening: { amount: '10.00', date: '2026-09-01' },
+          months: [
+            { month: '2026-11', status: 'NOT_RECONCILED' },
+            { month: '2026-10', status: 'NEEDS_RECHECK' },
+            { month: '2026-09', status: 'RECONCILED' },
+          ],
+        },
+      ]),
+    );
+    renderPage();
+    const list = within(screen.getByTestId('bank-months'));
+    expect(list.getByRole('link', { name: '10.2026' })).toHaveAttribute('href', '/cashbook/bank/2026-10');
+    expect(list.getByText('Не звірено')).toBeInTheDocument();
+    expect(list.getByText('Потребує повторної звірки')).toBeInTheDocument();
+    expect(list.getByText('Звірено')).toBeInTheDocument();
+  });
+
   it('warns only for the account whose balance is negative', () => {
     renderPage();
     expect(screen.getByText('Залишок каси від’ємний — проведіть перерахунок каси')).toBeInTheDocument();

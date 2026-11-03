@@ -190,6 +190,23 @@ public final class ProblemCodes {
      */
     public static final String MOVEMENT_NOT_REVERSIBLE = "MOVEMENT_NOT_REVERSIBLE";
     /**
+     * 400: the four figures of a bank statement do not agree (opening + incoming − outgoing ≠ closing, feature 018
+     * §2.7); also the code of the field {@code closing} in {@code errors[]}.
+     */
+    public static final String STATEMENT_INCONSISTENT = "STATEMENT_INCONSISTENT";
+    /**
+     * 409: a bank month is marked reconciled without its statement or while a difference between the statement and
+     * the books is not 0.00 (feature 018 §2.7).
+     */
+    public static final String BANK_MONTH_NOT_BALANCED = "BANK_MONTH_NOT_BALANCED";
+    /**
+     * 409: a reconciled bank month gets its statement entered again, is marked reconciled again or gets a bank
+     * difference (feature 018 §2.7); it leaves that status only when a bank line dated in it is added.
+     */
+    public static final String BANK_MONTH_RECONCILED = "BANK_MONTH_RECONCILED";
+    /** 409: a bank difference is booked for a month whose statement is not entered (feature 018 §2.7). */
+    public static final String BANK_STATEMENT_MISSING = "BANK_STATEMENT_MISSING";
+    /**
      * 409: another expense or income category of the same list has the name, ignoring case (feature 018 §2.9); also
      * the code of the field {@code name} in {@code errors[]}.
      */

@@ -6,8 +6,11 @@ import app.nadel.money.Money;
 import app.nadel.treasury.CashCountAct;
 import app.nadel.treasury.internal.AccountBalances.DayTotal;
 import app.nadel.treasury.internal.AccountBalances.Opening;
+import app.nadel.treasury.internal.BankComparison.Flow;
 import app.nadel.treasury.internal.CashGuard.Shortfall;
+import app.nadel.treasury.internal.StatementRules.Figures;
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -21,6 +24,7 @@ class CashBookExamplesTests {
 
     private static final Opening CASH = new Opening(money("1000.00"), day("2026-10-01"));
     private static final Opening BANK = new Opening(money("20000.00"), day("2026-10-01"));
+    private static final YearMonth OCTOBER = YearMonth.of(2026, 10);
 
     @Test
     void row1ACashPaymentOf500On5OctoberMakesTheCash1500() {
@@ -96,6 +100,53 @@ class CashBookExamplesTests {
         assertThat(AccountBalances.balanceAt(CASH, booked, day("2026-10-10"))).isEqualTo(money("180.00"));
         assertThat(CashCountFigures.status(figures.difference(), true)).isEqualTo(CashCountAct.Status.BOOKED);
         assertThat(CashCountFigures.status(money("0.00"), false)).isEqualTo(CashCountAct.Status.MATCHES);
+    }
+
+    @Test
+    void row7TheOctoberStatementDiffersByTheBankFee150UntilTheExpenseIsEnteredThenEveryDifferenceIs0() {
+        Figures statement = new Figures(money("20000.00"), money("3000.00"), money("150.00"), money("22850.00"));
+        List<Flow> books = new ArrayList<>(bankOctober());
+
+        Figures before = BankComparison.books(BANK, OCTOBER, books);
+        assertThat(before).isEqualTo(
+                new Figures(money("20000.00"), money("3000.00"), money("0.00"), money("23000.00")));
+        Figures differences = BankComparison.differences(statement, before);
+        assertThat(differences.outgoing()).isEqualTo(money("150.00"));
+        assertThat(differences.closing()).isEqualTo(money("-150.00"));
+        assertThat(BankComparison.balanced(differences)).as("«Звірено» cannot be pressed").isFalse();
+
+        // the treasurer enters the bank expense of 150,00 «Банківські комісії» in October
+        books.add(new Flow(day("2026-10-31"), false, money("-150.00")));
+        assertThat(BankComparison.balanced(BankComparison.differences(statement,
+                BankComparison.books(BANK, OCTOBER, books)))).isTrue();
+    }
+
+    @Test
+    void row8ABankPaymentDated20OctoberEnteredOn3NovemberChangesTheReconciledOctoberBooks() {
+        Figures statement = new Figures(money("20000.00"), money("3000.00"), money("150.00"), money("22850.00"));
+        List<Flow> books = new ArrayList<>(bankOctober());
+        books.add(new Flow(day("2026-10-31"), false, money("-150.00")));
+        assertThat(BankComparison.balanced(BankComparison.differences(statement,
+                BankComparison.books(BANK, OCTOBER, books)))).isTrue();
+
+        // the late line is dated in October, so October's books (and their agreement) change: «Потребує повторної
+        // звірки» (the status change itself is MovementWriter's, see BankReconciliationTests)
+        books.add(new Flow(day("2026-10-20"), false, money("400.00")));
+        Figures after = BankComparison.books(BANK, OCTOBER, books);
+        assertThat(after.incoming()).isEqualTo(money("3400.00"));
+        assertThat(BankComparison.balanced(BankComparison.differences(statement, after))).isFalse();
+    }
+
+    @Test
+    void row9AStatementOf100Plus50Minus20Closing200IsRefused() {
+        assertThat(StatementRules.consistent(new Figures(money("100.00"), money("50.00"), money("20.00"),
+                money("200.00")))).isFalse();
+    }
+
+    /** The bank flows of October after rows 1 to 6: the handover of 1 000,00 and member bank payments of 2 000,00. */
+    private static List<Flow> bankOctober() {
+        return List.of(new Flow(day("2026-10-07"), false, money("1000.00")),
+                new Flow(day("2026-10-15"), false, money("2000.00")));
     }
 
     /** The cash day totals after the events of rows 1 to {@code row}. */

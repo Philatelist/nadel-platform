@@ -43,6 +43,7 @@ abstract class TreasuryApiSupport extends TreasuryTestSupport {
     static final String HANDOVERS = "/api/v1/handovers";
     static final String OTHER_INCOME = "/api/v1/other-income";
     static final String COUNTS = "/api/v1/cash-counts";
+    static final String RECONCILIATIONS = "/api/v1/bank-reconciliations";
 
     @Autowired
     MockMvc mvc;
@@ -340,6 +341,27 @@ abstract class TreasuryApiSupport extends TreasuryTestSupport {
 
     ResultActions countAct(String bearer, UUID count) throws Exception {
         return send(bearer, get(COUNTS + "/" + count + "/act.pdf"), null);
+    }
+
+    // ---- bank reconciliations
+
+    ResultActions reconciliation(String bearer, Object month) throws Exception {
+        return send(bearer, get(RECONCILIATIONS + "/" + month), null);
+    }
+
+    ResultActions enterStatement(String bearer, Object month, String opening, String incoming, String outgoing,
+            String closing) throws Exception {
+        return send(bearer, put(RECONCILIATIONS + "/" + month), Map.of("opening", opening, "incoming", incoming,
+                "outgoing", outgoing, "closing", closing));
+    }
+
+    ResultActions bookBankDifference(String bearer, Object month, String amount, String reason) throws Exception {
+        return send(bearer, post(RECONCILIATIONS + "/" + month + "/book-difference"),
+                Map.of("amount", amount, "reason", reason));
+    }
+
+    ResultActions confirmMonth(String bearer, Object month) throws Exception {
+        return send(bearer, post(RECONCILIATIONS + "/" + month + "/confirm"), null);
     }
 
     /** The lines of the account's journal from {@code from} to today. */

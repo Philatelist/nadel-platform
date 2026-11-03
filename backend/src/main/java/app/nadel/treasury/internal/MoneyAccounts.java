@@ -48,7 +48,8 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>
  * The cash account also shows its last count ({@link CashCountQueries#latest}: the newest by the moment of the count)
  * and, while that count is {@code UNRESOLVED}, its difference as the unresolved difference; an earlier count's
- * difference is superseded by a later count (the later count already sees the cash as it is).
+ * difference is superseded by a later count (the later count already sees the cash as it is). The bank account shows
+ * the reconciliation status of its months ({@link BankReconciliations#months}).
  */
 @Service
 class MoneyAccounts {
@@ -67,6 +68,7 @@ class MoneyAccounts {
     private final TreasuryQueries queries;
     private final JournalLines journalLines;
     private final CashCountQueries counts;
+    private final BankReconciliations reconciliations;
     private final CooperativeSettings settings;
     private final ActorNames actorNames;
     private final TreasuryAuditPublisher audit;
@@ -74,11 +76,12 @@ class MoneyAccounts {
     private final Clock clock;
 
     MoneyAccounts(TreasuryQueries queries, JournalLines journalLines, CashCountQueries counts,
-            CooperativeSettings settings, ActorNames actorNames, TreasuryAuditPublisher audit,
-            EntityManager entityManager, Clock clock) {
+            BankReconciliations reconciliations, CooperativeSettings settings, ActorNames actorNames,
+            TreasuryAuditPublisher audit, EntityManager entityManager, Clock clock) {
         this.queries = queries;
         this.journalLines = journalLines;
         this.counts = counts;
+        this.reconciliations = reconciliations;
         this.settings = settings;
         this.actorNames = actorNames;
         this.audit = audit;
@@ -170,6 +173,7 @@ class MoneyAccounts {
                 nadel.contract.model.MoneyAccountKind.fromValue(account.kind().name()), day, false);
         if (account.kind() == MoneyAccountKind.BANK) {
             view.setIban(iban);
+            view.setMonths(reconciliations.months(account, day));
         }
         Opening opening = account.opening();
         if (opening != null) {

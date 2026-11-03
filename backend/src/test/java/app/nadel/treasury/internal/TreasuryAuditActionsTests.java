@@ -22,7 +22,9 @@ class TreasuryAuditActionsTests {
                 .contains("OPENING_BALANCE_SET", "EXPENSE_RECORDED", "EXPENSE_REVERSED", "CASHBOOK_CATEGORY_ADDED",
                         "CASHBOOK_CATEGORY_RENAMED", "CASHBOOK_CATEGORY_REORDERED", "CASHBOOK_CATEGORY_ARCHIVED",
                         "HANDOVER_RECORDED", "HANDOVER_REVERSED", "OTHER_INCOME_RECORDED", "OTHER_INCOME_REVERSED",
-                        "CASH_COUNTED", "COUNT_DIFFERENCE_BOOKED", "COUNT_DIFFERENCE_REVERSED");
+                        "CASH_COUNTED", "COUNT_DIFFERENCE_BOOKED", "COUNT_DIFFERENCE_REVERSED",
+                        "BANK_STATEMENT_ENTERED", "BANK_DIFFERENCE_BOOKED", "BANK_DIFFERENCE_REVERSED",
+                        "BANK_MONTH_RECONCILED", "BANK_MONTH_REOPENED");
     }
 
     @Test
@@ -37,5 +39,7 @@ class TreasuryAuditActionsTests {
                 .isEqualTo(AuditEntityType.OTHER_INCOME);
         assertThat(AuditEntityType.fromValue(TreasuryAuditPublisher.CASH_COUNT))
                 .isEqualTo(AuditEntityType.CASH_COUNT);
+        assertThat(AuditEntityType.fromValue(TreasuryAuditPublisher.BANK_RECONCILIATION))
+                .isEqualTo(AuditEntityType.BANK_RECONCILIATION);
     }
 }

@@ -72,6 +72,7 @@ abstract class TreasuryTestSupport extends IntegrationTest {
             // a listener that failed stays incomplete; the cleanup goes on
         }
         asNadelOwner(true, sql -> {
+            sql.update("delete from bank_difference where tenant_id = ?", tenant);
             sql.update("delete from bank_reconciliation where tenant_id = ?", tenant);
             sql.update("delete from cash_count where tenant_id = ?", tenant);
             sql.update("delete from expense_attachment where tenant_id = ?", tenant);
@@ -203,6 +204,17 @@ abstract class TreasuryTestSupport extends IntegrationTest {
         ownerJdbc().update("insert into bank_reconciliation (id, tenant_id, month, statement_opening, "
                 + "statement_incoming, statement_outgoing, statement_closing) values (?, ?, date '" + month
                 + "', 100.00, 50.00, 20.00, 130.00)", id, tenant);
+        return id;
+    }
+
+    /** A bank difference of −7.00 booked on 30.06.2033 with its reconciliation of June 2033 and its reason. */
+    UUID bankDifference(UUID tenant) {
+        UUID reconciliation = bankReconciliation(tenant, "2033-06-01");
+        UUID movement = movement(tenant, account(tenant, "BANK"), "BANK_DIFFERENCE", "-7.00", "2033-06-30",
+                "2033-06-01");
+        UUID id = UUID.randomUUID();
+        ownerJdbc().update("insert into bank_difference (id, tenant_id, reconciliation_id, movement_id, reason) "
+                + "values (?, ?, ?, ?, 'Bank fee')", id, tenant, reconciliation, movement);
         return id;
     }
 

@@ -32,6 +32,9 @@ import type {
   AccountMovement,
   AccountMovementPage,
   BadRequestResponse,
+  BankDifferenceInput,
+  BankReconciliation,
+  BankStatementInput,
   CashCount,
   CashCountBookingRequest,
   CashCountInput,
@@ -440,22 +443,24 @@ export const getReverseAccountMovementUrl = (id: string,
 }
 
 /**
- * Reverses a booked count difference («Надлишок» or «Нестача» of a cash count, kind `COUNT_DIFFERENCE`) with a
- * reason (feature 018 §2.8): a new journal line of the opposite amount on the same account, of the same kind,
- * dated today (Europe/Kyiv) in today's open billing month, with `source {type: MOVEMENT, id: <the reversed
- * line>}`; the reversed line stays, marked `reversed`. Expenses, handovers and other income are reversed through
- * their own endpoints and member payments on the payments screen: any other line, and a reversal line itself,
- * is 409 `MOVEMENT_NOT_REVERSIBLE` (bank differences join with the bank reconciliation).
+ * Reverses a booked count difference («Надлишок» or «Нестача» of a cash count, kind `COUNT_DIFFERENCE`) or a
+ * booked bank difference («Банківська різниця», kind `BANK_DIFFERENCE`) with a reason (feature 018 §2.8): a new
+ * journal line of the opposite amount on the same account, of the same kind, dated today (Europe/Kyiv) in
+ * today's open billing month, with `source {type: MOVEMENT, id: <the reversed line>}`; the reversed line stays,
+ * marked `reversed`. Expenses, handovers and other income are reversed through their own endpoints and member
+ * payments on the payments screen: any other line, and a reversal line itself, is 409
+ * `MOVEMENT_NOT_REVERSIBLE`.
  *
  * The reversal of a surplus takes money out of the cash: 409 `CASH_INSUFFICIENT` with `balance` and `date` when
  * it would make the cash balance negative today or on a later day; the reversal of a shortage gives the money
- * back and is never refused for the balance. A line is reversed once: 409 `ENTRY_ALREADY_REVERSED` (also when two
+ * back and is never refused for the balance. The reversal of a bank difference is never refused for the balance
+ * (the bank may go negative); dated today, it sets a reconciled current month back to `NEEDS_RECHECK`. A line is reversed once: 409 `ENTRY_ALREADY_REVERSED` (also when two
  * reversals arrive at once). A missing or blank reason is 400 `VALIDATION_FAILED` with `errors[{field: reason,
  * code: REQUIRED}]`. The count stays booked (its difference is booked once) and its card shows the reversal; the
  * cash book differs from the counted cash again until the next count. Written to the audit log as
- * `COUNT_DIFFERENCE_REVERSED` (about the count). 404 `NOT_FOUND` for an unknown account, a line of another
+ * `COUNT_DIFFERENCE_REVERSED` (about the count) or `BANK_DIFFERENCE_REVERSED` (about the bank reconciliation). 404 `NOT_FOUND` for an unknown account, a line of another
  * account and anything of another cooperative. Requires `CASHBOOK_APPROVE`.
- * @summary Reverse a booked difference line of the journal
+ * @summary Reverse a booked count or bank difference line of the journal
  */
 export const reverseAccountMovement = async (id: string,
     movementId: string,
@@ -523,7 +528,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type ReverseAccountMovementMutationVariables = {id: string;movementId: string;data: EntryReversal}
 
     /**
- * @summary Reverse a booked difference line of the journal
+ * @summary Reverse a booked count or bank difference line of the journal
  */
 export const useReverseAccountMovement = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reverseAccountMovement>>, TError,ReverseAccountMovementMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
@@ -1911,6 +1916,410 @@ export const useBookCashCountDifference = <TError = BadRequestResponse | Unautho
         TContext
       > => {
       return useMutation(getBookCashCountDifferenceMutationOptions(options), queryClient);
+    }
+    export const getGetBankReconciliationUrl = (month: string,) => {
+
+
+
+
+  return `/api/v1/bank-reconciliations/${month}`
+}
+
+/**
+ * «Звірка з банком» (feature 018 §2.7): the month's status, the four figures of the bank statement as entered
+ * (absent until entered), the same four figures from the books, their differences (statement − books, absent
+ * without a statement), whether every difference is 0.00 (`balanced`: «Звірено» can be pressed), the bank
+ * journal lines dated in the month, the latest reopening and who confirmed it. Every amount comes from the
+ * server; the client never computes them. A month is a calendar month by the date of the lines (not the billing
+ * month).
+ *
+ * The books (`books`): `opening` is the bank balance at the start of the month's first day (for the month that
+ * contains the bank's opening date: the opening amount, the balance at the start of the opening date);
+ * `incoming` the sum of the month's receipts and `outgoing` the sum of its spendings, **both as positive
+ * figures, as a bank statement shows them**; `closing` the balance at the end of the month's last day
+ * (`opening + incoming − outgoing`). A reversal counts against the line it reverses: the reversal of a receipt
+ * lowers `incoming`, the reversal of a spending lowers `outgoing`, so a mistaken entry and its reversal cancel
+ * out. Lines dated before the opening date count in nothing (they are listed with `beforeOpening: true`).
+ *
+ * `movements`: the bank journal lines dated in the month, oldest first, at most 1000 (`movementsTotal` has how
+ * many there are). The month of today is a month like any other: its books run to the end of its last day,
+ * which is today's balance (no line is dated after today).
+ *
+ * The month (`YYYY-MM`) after the current one (Europe/Kyiv) is 400 `VALIDATION_FAILED` with `errors[{field:
+ * month, code: INVALID}]`; a month that ends before the bank's opening date is 400 `BEFORE_OPENING_BALANCE` with
+ * `errors[{field: month, code: BEFORE_OPENING_BALANCE}]`; without the bank's opening balance 409
+ * `OPENING_BALANCE_MISSING`. Requires `CASHBOOK_VIEW`.
+ * @summary The bank reconciliation of a calendar month
+ */
+export const getBankReconciliation = async (month: string, options?: Parameters<typeof nadelFetch>[1]): Promise<BankReconciliation> => {
+
+  return nadelFetch<BankReconciliation>(getGetBankReconciliationUrl(month),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetBankReconciliationQueryKey = (month: string,) => {
+    return [
+    `/api/v1/bank-reconciliations/${month}`
+    ] as const;
+    }
+
+
+export const getGetBankReconciliationQueryOptions = <TData = Awaited<ReturnType<typeof getBankReconciliation>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse>(month: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getBankReconciliation>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetBankReconciliationQueryKey(month);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getBankReconciliation>>> = ({ signal }) => getBankReconciliation(month, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: month !== null && month !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getBankReconciliation>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetBankReconciliationQueryResult = NonNullable<Awaited<ReturnType<typeof getBankReconciliation>>>
+export type GetBankReconciliationQueryError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse
+
+
+export function useGetBankReconciliation<TData = Awaited<ReturnType<typeof getBankReconciliation>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse>(
+ month: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getBankReconciliation>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getBankReconciliation>>,
+          TError,
+          Awaited<ReturnType<typeof getBankReconciliation>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetBankReconciliation<TData = Awaited<ReturnType<typeof getBankReconciliation>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse>(
+ month: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getBankReconciliation>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getBankReconciliation>>,
+          TError,
+          Awaited<ReturnType<typeof getBankReconciliation>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetBankReconciliation<TData = Awaited<ReturnType<typeof getBankReconciliation>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse>(
+ month: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getBankReconciliation>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary The bank reconciliation of a calendar month
+ */
+
+export function useGetBankReconciliation<TData = Awaited<ReturnType<typeof getBankReconciliation>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse>(
+ month: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getBankReconciliation>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetBankReconciliationQueryOptions(month,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export const getEnterBankStatementUrl = (month: string,) => {
+
+
+
+
+  return `/api/v1/bank-reconciliations/${month}`
+}
+
+/**
+ * Stores the statement figures of the month (feature 018 §2.7), replacing figures entered before, and answers
+ * the reconciliation as `GET` does. `incoming` and `outgoing` are positive figures as the statement shows them
+ * (0.00 or more); `opening` and `closing` may be below 0.00 (an overdraft). Each has at most 12 integer digits,
+ * else 400 `VALIDATION_FAILED` with `errors[{field: <figure>, code: INVALID}]`. The figures must agree:
+ * `opening + incoming − outgoing = closing`, else 400 `STATEMENT_INCONSISTENT` with `errors[{field: closing,
+ * code: STATEMENT_INCONSISTENT}]` («Цифри виписки не сходяться: 100,00 + 50,00 − 20,00 ≠ 200,00»; the client
+ * shows the four figures it sent). Nothing is stored then.
+ *
+ * Allowed while the month is `NOT_RECONCILED` or `NEEDS_RECHECK` (the status does not change); a `RECONCILED`
+ * month keeps its statement: 409 `BANK_MONTH_RECONCILED`. The month, opening balance and future checks are those
+ * of `GET`. Written to the audit log as `BANK_STATEMENT_ENTERED`. Requires `CASHBOOK_ENTER`.
+ * @summary Enter the four figures of the month's bank statement
+ */
+export const enterBankStatement = async (month: string,
+    bankStatementInput: BankStatementInput, options?: Parameters<typeof nadelFetch>[1]): Promise<BankReconciliation> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return nadelFetch<BankReconciliation>(getEnterBankStatementUrl(month),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(bankStatementInput)
+  }
+);}
+
+
+
+
+
+export const getEnterBankStatementMutationKey = () => ['enterBankStatement'] as const;
+
+export const getEnterBankStatementMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof enterBankStatement>>, TError,EnterBankStatementMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof enterBankStatement>>, TError,EnterBankStatementMutationVariables, TContext> => {
+
+const mutationKey = getEnterBankStatementMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof enterBankStatement>>, EnterBankStatementMutationVariables> = (props) => {
+          const {month,data} = props ?? {};
+
+          return  enterBankStatement(month,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type EnterBankStatementMutationResult = NonNullable<Awaited<ReturnType<typeof enterBankStatement>>>
+    export type EnterBankStatementMutationBody = BankStatementInput
+    export type EnterBankStatementMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse
+    export type EnterBankStatementMutationVariables = {month: string;data: BankStatementInput}
+
+    /**
+ * @summary Enter the four figures of the month's bank statement
+ */
+export const useEnterBankStatement = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof enterBankStatement>>, TError,EnterBankStatementMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof enterBankStatement>>,
+        TError,
+        EnterBankStatementMutationVariables,
+        TContext
+      > => {
+      return useMutation(getEnterBankStatementMutationOptions(options), queryClient);
+    }
+    export const getBookBankDifferenceUrl = (month: string,) => {
+
+
+
+
+  return `/api/v1/bank-reconciliations/${month}/book-difference`
+}
+
+/**
+ * «Банківська різниця» (feature 018 §2.7): a journal line of kind `BANK_DIFFERENCE` on the bank account with the
+ * signed `amount` (positive: money in, negative: money out; booking the `closing` difference makes it 0.00) and
+ * the reason, dated the month's last day, or today when that is earlier (the current month), in that day's
+ * billing month or, when it is closed, the earliest open month (`source {type: BANK_RECONCILIATION, id: <the
+ * reconciliation>}`; the line's `reason` is the reason given). The bank may go negative. Answers the
+ * reconciliation as `GET` does.
+ *
+ * Needs the month's statement: 409 `BANK_STATEMENT_MISSING` before it is entered. A `RECONCILED` month: 409
+ * `BANK_MONTH_RECONCILED`. An `amount` of 0.00 or with more than 12 integer digits: 400 `VALIDATION_FAILED` with
+ * `errors[{field: amount, code: INVALID}]`; a missing or blank reason `errors[{field: reason, code:
+ * REQUIRED}]`. The month, opening balance and future checks are those of `GET`. A booked line is corrected by
+ * reversing it (`POST /money-accounts/{id}/movements/{movementId}/reverse`). Written to the audit log as
+ * `BANK_DIFFERENCE_BOOKED`. Requires `CASHBOOK_APPROVE`.
+ * @summary Book a bank difference no entry explains
+ */
+export const bookBankDifference = async (month: string,
+    bankDifferenceInput: BankDifferenceInput, options?: Parameters<typeof nadelFetch>[1]): Promise<BankReconciliation> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return nadelFetch<BankReconciliation>(getBookBankDifferenceUrl(month),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(bankDifferenceInput)
+  }
+);}
+
+
+
+
+
+export const getBookBankDifferenceMutationKey = () => ['bookBankDifference'] as const;
+
+export const getBookBankDifferenceMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof bookBankDifference>>, TError,BookBankDifferenceMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof bookBankDifference>>, TError,BookBankDifferenceMutationVariables, TContext> => {
+
+const mutationKey = getBookBankDifferenceMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof bookBankDifference>>, BookBankDifferenceMutationVariables> = (props) => {
+          const {month,data} = props ?? {};
+
+          return  bookBankDifference(month,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type BookBankDifferenceMutationResult = NonNullable<Awaited<ReturnType<typeof bookBankDifference>>>
+    export type BookBankDifferenceMutationBody = BankDifferenceInput
+    export type BookBankDifferenceMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse
+    export type BookBankDifferenceMutationVariables = {month: string;data: BankDifferenceInput}
+
+    /**
+ * @summary Book a bank difference no entry explains
+ */
+export const useBookBankDifference = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof bookBankDifference>>, TError,BookBankDifferenceMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof bookBankDifference>>,
+        TError,
+        BookBankDifferenceMutationVariables,
+        TContext
+      > => {
+      return useMutation(getBookBankDifferenceMutationOptions(options), queryClient);
+    }
+    export const getConfirmBankReconciliationUrl = (month: string,) => {
+
+
+
+
+  return `/api/v1/bank-reconciliations/${month}/confirm`
+}
+
+/**
+ * Marks the month `RECONCILED` (feature 018 §2.7) from `NOT_RECONCILED` or `NEEDS_RECHECK`, with who did it and
+ * when, after the server computes the books again: the statement must be entered and every difference 0.00, else
+ * 409 `BANK_MONTH_NOT_BALANCED`. A month already `RECONCILED`: 409 `BANK_MONTH_RECONCILED`. Once reconciled, any
+ * bank line later dated in the month (a payment, an expense, other income, a handover, a bank difference or a
+ * reversal, whoever enters it) sets it back to `NEEDS_RECHECK` («Потребує повторної звірки») with that line and
+ * the time (`reopened`), written to the audit log as `BANK_MONTH_REOPENED` by the system. The month, opening
+ * balance and future checks are those of `GET`. Written to the audit log as `BANK_MONTH_RECONCILED`. Requires
+ * `CASHBOOK_ENTER`.
+ * @summary Mark the month reconciled («Звірено»)
+ */
+export const confirmBankReconciliation = async (month: string, options?: Parameters<typeof nadelFetch>[1]): Promise<BankReconciliation> => {
+
+  return nadelFetch<BankReconciliation>(getConfirmBankReconciliationUrl(month),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getConfirmBankReconciliationMutationKey = () => ['confirmBankReconciliation'] as const;
+
+export const getConfirmBankReconciliationMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmBankReconciliation>>, TError,ConfirmBankReconciliationMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof confirmBankReconciliation>>, TError,ConfirmBankReconciliationMutationVariables, TContext> => {
+
+const mutationKey = getConfirmBankReconciliationMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof confirmBankReconciliation>>, ConfirmBankReconciliationMutationVariables> = (props) => {
+          const {month} = props ?? {};
+
+          return  confirmBankReconciliation(month,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ConfirmBankReconciliationMutationResult = NonNullable<Awaited<ReturnType<typeof confirmBankReconciliation>>>
+
+    export type ConfirmBankReconciliationMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse
+    export type ConfirmBankReconciliationMutationVariables = {month: string}
+
+    /**
+ * @summary Mark the month reconciled («Звірено»)
+ */
+export const useConfirmBankReconciliation = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmBankReconciliation>>, TError,ConfirmBankReconciliationMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof confirmBankReconciliation>>,
+        TError,
+        ConfirmBankReconciliationMutationVariables,
+        TContext
+      > => {
+      return useMutation(getConfirmBankReconciliationMutationOptions(options), queryClient);
     }
     export const getListExpenseCategoriesUrl = (params?: ListExpenseCategoriesParams,) => {
   const normalizedParams = new URLSearchParams();

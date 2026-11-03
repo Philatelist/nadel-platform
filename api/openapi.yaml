@@ -5842,22 +5842,24 @@ paths:
     post:
       tags: [treasury]
       operationId: reverseAccountMovement
-      summary: Reverse a booked difference line of the journal
+      summary: Reverse a booked count or bank difference line of the journal
       description: |
-        Reverses a booked count difference («Надлишок» or «Нестача» of a cash count, kind `COUNT_DIFFERENCE`) with a
-        reason (feature 018 §2.8): a new journal line of the opposite amount on the same account, of the same kind,
-        dated today (Europe/Kyiv) in today's open billing month, with `source {type: MOVEMENT, id: <the reversed
-        line>}`; the reversed line stays, marked `reversed`. Expenses, handovers and other income are reversed through
-        their own endpoints and member payments on the payments screen: any other line, and a reversal line itself,
-        is 409 `MOVEMENT_NOT_REVERSIBLE` (bank differences join with the bank reconciliation).
+        Reverses a booked count difference («Надлишок» or «Нестача» of a cash count, kind `COUNT_DIFFERENCE`) or a
+        booked bank difference («Банківська різниця», kind `BANK_DIFFERENCE`) with a reason (feature 018 §2.8): a new
+        journal line of the opposite amount on the same account, of the same kind, dated today (Europe/Kyiv) in
+        today's open billing month, with `source {type: MOVEMENT, id: <the reversed line>}`; the reversed line stays,
+        marked `reversed`. Expenses, handovers and other income are reversed through their own endpoints and member
+        payments on the payments screen: any other line, and a reversal line itself, is 409
+        `MOVEMENT_NOT_REVERSIBLE`.
 
         The reversal of a surplus takes money out of the cash: 409 `CASH_INSUFFICIENT` with `balance` and `date` when
         it would make the cash balance negative today or on a later day; the reversal of a shortage gives the money
-        back and is never refused for the balance. A line is reversed once: 409 `ENTRY_ALREADY_REVERSED` (also when two
+        back and is never refused for the balance. The reversal of a bank difference is never refused for the balance
+        (the bank may go negative); dated today, it sets a reconciled current month back to `NEEDS_RECHECK`. A line is reversed once: 409 `ENTRY_ALREADY_REVERSED` (also when two
         reversals arrive at once). A missing or blank reason is 400 `VALIDATION_FAILED` with `errors[{field: reason,
         code: REQUIRED}]`. The count stays booked (its difference is booked once) and its card shows the reversal; the
         cash book differs from the counted cash again until the next count. Written to the audit log as
-        `COUNT_DIFFERENCE_REVERSED` (about the count). 404 `NOT_FOUND` for an unknown account, a line of another
+        `COUNT_DIFFERENCE_REVERSED` (about the count) or `BANK_DIFFERENCE_REVERSED` (about the bank reconciliation). 404 `NOT_FOUND` for an unknown account, a line of another
         account and anything of another cooperative. Requires `CASHBOOK_APPROVE`.
       parameters:
         - name: id
@@ -6521,6 +6523,167 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /bank-reconciliations/{month}:
+    get:
+      tags: [treasury]
+      operationId: getBankReconciliation
+      summary: The bank reconciliation of a calendar month
+      description: |
+        «Звірка з банком» (feature 018 §2.7): the month's status, the four figures of the bank statement as entered
+        (absent until entered), the same four figures from the books, their differences (statement − books, absent
+        without a statement), whether every difference is 0.00 (`balanced`: «Звірено» can be pressed), the bank
+        journal lines dated in the month, the latest reopening and who confirmed it. Every amount comes from the
+        server; the client never computes them. A month is a calendar month by the date of the lines (not the billing
+        month).
+
+        The books (`books`): `opening` is the bank balance at the start of the month's first day (for the month that
+        contains the bank's opening date: the opening amount, the balance at the start of the opening date);
+        `incoming` the sum of the month's receipts and `outgoing` the sum of its spendings, **both as positive
+        figures, as a bank statement shows them**; `closing` the balance at the end of the month's last day
+        (`opening + incoming − outgoing`). A reversal counts against the line it reverses: the reversal of a receipt
+        lowers `incoming`, the reversal of a spending lowers `outgoing`, so a mistaken entry and its reversal cancel
+        out. Lines dated before the opening date count in nothing (they are listed with `beforeOpening: true`).
+
+        `movements`: the bank journal lines dated in the month, oldest first, at most 1000 (`movementsTotal` has how
+        many there are). The month of today is a month like any other: its books run to the end of its last day,
+        which is today's balance (no line is dated after today).
+
+        The month (`YYYY-MM`) after the current one (Europe/Kyiv) is 400 `VALIDATION_FAILED` with `errors[{field:
+        month, code: INVALID}]`; a month that ends before the bank's opening date is 400 `BEFORE_OPENING_BALANCE` with
+        `errors[{field: month, code: BEFORE_OPENING_BALANCE}]`; without the bank's opening balance 409
+        `OPENING_BALANCE_MISSING`. Requires `CASHBOOK_VIEW`.
+      parameters:
+        - $ref: '#/components/parameters/BankMonth'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankReconciliation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    put:
+      tags: [treasury]
+      operationId: enterBankStatement
+      summary: Enter the four figures of the month's bank statement
+      description: |
+        Stores the statement figures of the month (feature 018 §2.7), replacing figures entered before, and answers
+        the reconciliation as `GET` does. `incoming` and `outgoing` are positive figures as the statement shows them
+        (0.00 or more); `opening` and `closing` may be below 0.00 (an overdraft). Each has at most 12 integer digits,
+        else 400 `VALIDATION_FAILED` with `errors[{field: <figure>, code: INVALID}]`. The figures must agree:
+        `opening + incoming − outgoing = closing`, else 400 `STATEMENT_INCONSISTENT` with `errors[{field: closing,
+        code: STATEMENT_INCONSISTENT}]` («Цифри виписки не сходяться: 100,00 + 50,00 − 20,00 ≠ 200,00»; the client
+        shows the four figures it sent). Nothing is stored then.
+
+        Allowed while the month is `NOT_RECONCILED` or `NEEDS_RECHECK` (the status does not change); a `RECONCILED`
+        month keeps its statement: 409 `BANK_MONTH_RECONCILED`. The month, opening balance and future checks are those
+        of `GET`. Written to the audit log as `BANK_STATEMENT_ENTERED`. Requires `CASHBOOK_ENTER`.
+      parameters:
+        - $ref: '#/components/parameters/BankMonth'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BankStatementInput'
+      responses:
+        '200':
+          description: The reconciliation with the statement entered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankReconciliation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /bank-reconciliations/{month}/book-difference:
+    post:
+      tags: [treasury]
+      operationId: bookBankDifference
+      summary: Book a bank difference no entry explains
+      description: |
+        «Банківська різниця» (feature 018 §2.7): a journal line of kind `BANK_DIFFERENCE` on the bank account with the
+        signed `amount` (positive: money in, negative: money out; booking the `closing` difference makes it 0.00) and
+        the reason, dated the month's last day, or today when that is earlier (the current month), in that day's
+        billing month or, when it is closed, the earliest open month (`source {type: BANK_RECONCILIATION, id: <the
+        reconciliation>}`; the line's `reason` is the reason given). The bank may go negative. Answers the
+        reconciliation as `GET` does.
+
+        Needs the month's statement: 409 `BANK_STATEMENT_MISSING` before it is entered. A `RECONCILED` month: 409
+        `BANK_MONTH_RECONCILED`. An `amount` of 0.00 or with more than 12 integer digits: 400 `VALIDATION_FAILED` with
+        `errors[{field: amount, code: INVALID}]`; a missing or blank reason `errors[{field: reason, code:
+        REQUIRED}]`. The month, opening balance and future checks are those of `GET`. A booked line is corrected by
+        reversing it (`POST /money-accounts/{id}/movements/{movementId}/reverse`). Written to the audit log as
+        `BANK_DIFFERENCE_BOOKED`. Requires `CASHBOOK_APPROVE`.
+      parameters:
+        - $ref: '#/components/parameters/BankMonth'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BankDifferenceInput'
+      responses:
+        '200':
+          description: The reconciliation with the difference booked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankReconciliation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /bank-reconciliations/{month}/confirm:
+    post:
+      tags: [treasury]
+      operationId: confirmBankReconciliation
+      summary: Mark the month reconciled («Звірено»)
+      description: |
+        Marks the month `RECONCILED` (feature 018 §2.7) from `NOT_RECONCILED` or `NEEDS_RECHECK`, with who did it and
+        when, after the server computes the books again: the statement must be entered and every difference 0.00, else
+        409 `BANK_MONTH_NOT_BALANCED`. A month already `RECONCILED`: 409 `BANK_MONTH_RECONCILED`. Once reconciled, any
+        bank line later dated in the month (a payment, an expense, other income, a handover, a bank difference or a
+        reversal, whoever enters it) sets it back to `NEEDS_RECHECK` («Потребує повторної звірки») with that line and
+        the time (`reopened`), written to the audit log as `BANK_MONTH_REOPENED` by the system. The month, opening
+        balance and future checks are those of `GET`. Written to the audit log as `BANK_MONTH_RECONCILED`. Requires
+        `CASHBOOK_ENTER`.
+      parameters:
+        - $ref: '#/components/parameters/BankMonth'
+      responses:
+        '200':
+          description: The reconciliation, now `RECONCILED`
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankReconciliation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '409':
           $ref: '#/components/responses/Conflict'
 
@@ -7264,7 +7427,9 @@ components:
         its charge (code `ALLOCATION_EXCEEDS_CHARGE`); the parts of a split payment do not add up to the payment (code
         `SPLIT_TOTAL_MISMATCH`); an announcement's text is longer than 2000 characters (code `ANNOUNCEMENT_TOO_LONG`); a
         mailbox names a mail server the server may not connect to (code `SMTP_HOST_NOT_ALLOWED`); a cash book entry is
-        dated before the account's opening date (code `BEFORE_OPENING_BALANCE`, with `errors[{field: date}]`); more
+        dated before the account's opening date (code `BEFORE_OPENING_BALANCE`, with `errors[{field: date}]`, or
+        `errors[{field: month}]` for a bank month that ends before it); the four figures of a bank statement do not
+        agree (code `STATEMENT_INCONSISTENT`, with `errors[{field: closing}]`); more
         than five files come with an expense (code `TOO_MANY`, with `errors[{field: files}]`) or a file is not a JPEG,
         PNG or PDF by its content (code `FILE_TYPE_NOT_ALLOWED`, with `errors[{field: files[i]}]`)
       content:
@@ -7405,7 +7570,11 @@ components:
         `ENTRY_ALREADY_REVERSED`), or an expense or income category name is taken (code `CATEGORY_NAME_TAKEN`, with
         `errors[{field: name}]`), or the difference of a cash count is booked again (code `DIFFERENCE_ALREADY_BOOKED`)
         or a count without a difference is booked (code `NO_DIFFERENCE`), or a journal line that is not a booked
-        difference, or a reversal line, is reversed directly (code `MOVEMENT_NOT_REVERSIBLE`)
+        difference, or a reversal line, is reversed directly (code `MOVEMENT_NOT_REVERSIBLE`), or a bank month is
+        marked reconciled without its statement or with a difference (code `BANK_MONTH_NOT_BALANCED`), the statement
+        of a reconciled bank month is entered again, a reconciled month is marked reconciled again or gets a bank
+        difference (code `BANK_MONTH_RECONCILED`), or a bank difference is booked before the month's statement is
+        entered (code `BANK_STATEMENT_MISSING`)
       content:
         application/problem+json:
           schema:
@@ -7471,6 +7640,14 @@ components:
             $ref: '#/components/schemas/Problem'
 
   parameters:
+    BankMonth:
+      name: month
+      in: path
+      required: true
+      description: The calendar month of the bank reconciliation, `YYYY-MM`; not after the current month (Europe/Kyiv)
+      schema:
+        type: string
+        pattern: '^\d{4}-(0[1-9]|1[0-2])$'
     ExpenseIdPath:
       name: id
       in: path
@@ -8189,6 +8366,11 @@ components:
         - CASH_COUNTED
         - COUNT_DIFFERENCE_BOOKED
         - COUNT_DIFFERENCE_REVERSED
+        - BANK_STATEMENT_ENTERED
+        - BANK_DIFFERENCE_BOOKED
+        - BANK_DIFFERENCE_REVERSED
+        - BANK_MONTH_RECONCILED
+        - BANK_MONTH_REOPENED
 
     AuditEntityType:
       type: string
@@ -8257,7 +8439,16 @@ components:
         the count (ISO instant); `CASH_COUNTED` has `countedAt`, `counted`, `bookBalance`, `difference` (two decimals)
         and `explanation` (user content, when given); `COUNT_DIFFERENCE_BOOKED` has `amount` (the booked line, signed),
         `date` (the count's day) and `reason`; `COUNT_DIFFERENCE_REVERSED` has `amount` (the reversed line), `date`,
-        `reversedOn` and `reason` (new values only). A `CASHBOOK_CATEGORY`
+        `reversedOn` and `reason` (new values only). A `BANK_RECONCILIATION` entry (`BANK_STATEMENT_ENTERED`,
+        `BANK_DIFFERENCE_BOOKED`, `BANK_DIFFERENCE_REVERSED`, `BANK_MONTH_RECONCILED`, `BANK_MONTH_REOPENED`) is about
+        the bank reconciliation of a month: its `entityId` is the reconciliation and its label the month (`YYYY-MM`);
+        `BANK_STATEMENT_ENTERED` has `opening`, `incoming`, `outgoing` and `closing` (two decimals; old values when
+        figures entered before are replaced); `BANK_DIFFERENCE_BOOKED` has `amount` (the booked line, signed), `date`
+        (the line's day) and `reason`; `BANK_DIFFERENCE_REVERSED` has `amount` (the reversed line), `date`,
+        `reversedOn` and `reason`; `BANK_MONTH_RECONCILED` has `status` (old and new) and the four statement figures
+        (new values); `BANK_MONTH_REOPENED` is written by the system (no acting member) and has `status` (old and new)
+        and the line that reopened the month: `movement` (its id), `kind`, `date` and `amount` (new values). A
+        `CASHBOOK_CATEGORY`
         entry (`CASHBOOK_CATEGORY_ADDED`, `_RENAMED`, `_REORDERED`, `_ARCHIVED`) is about an expense or income
         category: its `entityId` is the category and its label `base:<CODE>` for a seeded category never renamed,
         otherwise its name; its fields are `kind` and `name` (added), `name` (renamed, old and new, `base:<CODE>`
@@ -8292,6 +8483,7 @@ components:
           HANDOVER,
           OTHER_INCOME,
           CASH_COUNT,
+          BANK_RECONCILIATION,
         ]
 
     AuditFieldChange:
@@ -11193,8 +11385,8 @@ components:
         One money account of the cooperative and its balance on a day. Only the cash account has `lastCount` (its
         latest count by `countedAt`, absent before the first) and `unresolvedDifference` (the difference of that last
         count while it is `UNRESOLVED`: «Неврегульована різниця −20,00 ₴»; absent once it is booked or when it
-        matches; an earlier count's difference is superseded by the later count). Neither depends on `asOf`. Later
-        features add optional fields (the bank months and their reconciliation status).
+        matches; an earlier count's difference is superseded by the later count). Neither depends on `asOf`. Only the
+        bank account has `months` (the bank months and their reconciliation status).
       required: [id, kind, asOf, negative]
       properties:
         id:
@@ -11220,6 +11412,151 @@ components:
           $ref: '#/components/schemas/CashCountRow'
         unresolvedDifference:
           $ref: '#/components/schemas/Money'
+        months:
+          type: array
+          description: >-
+            The reconciliation status of the bank months, newest first, at most 12 (the newest ones), from the month
+            of the opening date to the month of `asOf`: every month that has bank lines dated on or after the opening
+            date or a reconciliation, and always the month of `asOf`. A month without a reconciliation is
+            `NOT_RECONCILED`. The statuses are the current ones whatever `asOf`. Empty for `CASH` and for a bank
+            account without an opening balance.
+          items:
+            $ref: '#/components/schemas/BankMonth'
+
+    BankMonthStatus:
+      type: string
+      description: >-
+        The reconciliation status of a bank month: `NOT_RECONCILED` «Не звірено» (also before a statement is entered),
+        `RECONCILED` «Звірено», `NEEDS_RECHECK` «Потребує повторної звірки» (a bank line dated in the month was added
+        after it was reconciled)
+      enum: [NOT_RECONCILED, RECONCILED, NEEDS_RECHECK]
+
+    BankMonth:
+      type: object
+      description: A bank month and its reconciliation status
+      required: [month, status]
+      properties:
+        month:
+          type: string
+          pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+          description: The calendar month, `YYYY-MM`
+        status:
+          $ref: '#/components/schemas/BankMonthStatus'
+
+    BankFigures:
+      type: object
+      description: >-
+        The four figures of a bank month: the balance at the start of the month, the sum of receipts and the sum of
+        spendings (both positive, as a bank statement shows them), the balance at the end of the month. As
+        differences (statement − books) each figure is signed.
+      required: [opening, incoming, outgoing, closing]
+      properties:
+        opening:
+          $ref: '#/components/schemas/Money'
+        incoming:
+          $ref: '#/components/schemas/Money'
+        outgoing:
+          $ref: '#/components/schemas/Money'
+        closing:
+          $ref: '#/components/schemas/Money'
+
+    BankStatementInput:
+      type: object
+      description: >-
+        The four figures of the month's bank statement: `incoming` and `outgoing` 0.00 or more, `opening` and
+        `closing` may be below 0.00; `opening + incoming − outgoing` must equal `closing`
+      required: [opening, incoming, outgoing, closing]
+      properties:
+        opening:
+          $ref: '#/components/schemas/Money'
+        incoming:
+          $ref: '#/components/schemas/Money'
+        outgoing:
+          $ref: '#/components/schemas/Money'
+        closing:
+          $ref: '#/components/schemas/Money'
+
+    BankDifferenceInput:
+      type: object
+      description: A bank difference to book for the month
+      required: [amount, reason]
+      properties:
+        amount:
+          $ref: '#/components/schemas/Money'
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+          description: User content, stored as typed; surrounding whitespace is trimmed
+
+    BankReopening:
+      type: object
+      description: >-
+        The bank line that last set a reconciled month back to `NEEDS_RECHECK`, and when («Потребує повторної звірки»:
+        what was added and when). Present once the month was reopened; it stays after the month is reconciled again
+        (the status tells whether it is the current state) and is replaced by the next reopening.
+      required: [movementId, kind, date, amount, at]
+      properties:
+        movementId:
+          type: string
+          format: uuid
+        kind:
+          $ref: '#/components/schemas/MovementKind'
+        date:
+          type: string
+          format: date
+          description: The day of the line, in the month
+        amount:
+          $ref: '#/components/schemas/Money'
+        at:
+          type: string
+          format: date-time
+          description: When the line was entered and the month reopened
+
+    BankReconciliation:
+      type: object
+      description: The bank reconciliation of a calendar month
+      required: [month, accountId, status, books, balanced, movements, movementsTotal]
+      properties:
+        month:
+          type: string
+          pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+          description: The calendar month, `YYYY-MM`
+        accountId:
+          type: string
+          format: uuid
+          description: The bank account
+        status:
+          $ref: '#/components/schemas/BankMonthStatus'
+        statement:
+          $ref: '#/components/schemas/BankFigures'
+        books:
+          $ref: '#/components/schemas/BankFigures'
+        differences:
+          $ref: '#/components/schemas/BankFigures'
+        balanced:
+          type: boolean
+          description: The statement is entered and every difference is 0.00
+        movements:
+          type: array
+          description: The bank journal lines dated in the month, oldest first, at most 1000
+          items:
+            $ref: '#/components/schemas/AccountMovement'
+        movementsTotal:
+          type: integer
+          format: int64
+          description: How many bank lines are dated in the month (more than listed when above 1000)
+        reopened:
+          $ref: '#/components/schemas/BankReopening'
+        reconciledByName:
+          type: string
+          description: >-
+            The current name of the member who last marked the month «Звірено»; absent before and for an unknown
+            member
+        reconciledAt:
+          type: string
+          format: date-time
+          description: When the month was last marked «Звірено»; absent before
 
     MovementSource:
       type: object
@@ -11284,7 +11621,9 @@ components:
           description: The line this reversal reverses; only on a reversal
         reason:
           type: string
-          description: Why the line was reversed (user content); only on a reversal
+          description: >-
+            Why the line was reversed (user content), on a reversal; on a booked bank difference (an original
+            `BANK_DIFFERENCE` line) the reason it was booked
         createdByName:
           type: string
           description: >-
