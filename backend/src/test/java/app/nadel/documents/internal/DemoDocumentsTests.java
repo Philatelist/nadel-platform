@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.awaitility.Awaitility.await;
 
+import app.nadel.DemoDay;
 import app.nadel.DemoLedgerData;
 import app.nadel.IntegrationTest;
 import app.nadel.ledger.LedgerReadModel;
@@ -17,12 +18,18 @@ import java.time.YearMonth;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.Parameter;
+import org.junit.jupiter.params.ParameterizedClass;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
+import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.transaction.PlatformTransactionManager;
 
 /**
@@ -31,13 +38,29 @@ import org.springframework.transaction.PlatformTransactionManager;
  * member's plots 7 and 15 get one at 0,00) and one certificate of plot 9 as of the
  * month's last day in the demo chairman's name; a second run writes nothing, so the rows stay the same. The runner is
  * not registered in the tests (the demo ledger placeholder is off), so it is built here from the module's beans.
+ * Like {@code DemoLedgerDataTests}, every test runs once per {@link DemoDay#days() demo day}, with the demo loaded as
+ * on that day and the application's clock at its noon.
  */
+@ParameterizedClass(name = "on {0}")
+@MethodSource("app.nadel.DemoDay#days")
+// its own clock makes its own context: closed after the class, so its connections do not stay open for the rest
+@DirtiesContext
+@Import(DemoDay.Config.class)
 class DemoDocumentsTests extends IntegrationTest {
 
     /** The demo chairman of {@code R__demo_data.sql}. */
     private static final UUID DEMO_CHAIRMAN = UUID.fromString("aaaaaaaa-0000-0000-0000-000000000001");
 
     private final JdbcTemplate owner = ownerJdbc();
+
+    /** The day the demo is loaded on. */
+    @Parameter
+    private LocalDate day;
+
+    @AfterAll
+    static void putTheDemoMetersBack() {
+        DemoDay.reset(ownerJdbc());
+    }
 
     @Autowired
     private ApplicationContext context;
@@ -76,7 +99,9 @@ class DemoDocumentsTests extends IntegrationTest {
 
     @BeforeEach
     void loadTheDemoLedger() {
-        DemoLedgerData.restore(owner);
+        // the meters once per day (the context, and with it the schema, is not there before the first test)
+        DemoDay.loadOnce(owner, day);
+        DemoLedgerData.restore(owner, day);
     }
 
     @AfterEach

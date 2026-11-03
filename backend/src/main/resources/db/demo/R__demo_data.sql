@@ -646,11 +646,14 @@ DROP TABLE pg_temp.demo_anchor;
 -- always holds the runs and the electricity of that round) and "the closed month" the one before it (on the first
 -- load, October and September 2026):
 --  - the closed month: its month run (membership and land tax), the electricity charges of the readings taken in it,
---    plot 12's opening balance of 1 500,00 (membership, "Борг за 2025 рік") on its first day; closed by the chairman;
+--    the opening balances on its first day (membership, "Борг за 2025 рік": plot 12's 1 500,00 and 2 100,00 of eight
+--    plots that pay nothing, red on any day); closed by the chairman;
 --  - the open month: its month run, the electricity charges of its readings, one proportional losses run and one
 --    common consumers run over the latest round of readings (the 19th to the 5th day before the anchor), and one
 --    reversal (plot 14's membership of the open month, "Помилкове нарахування"). Nothing is charged before the closed
 --    month;
+--  - in the first five days of a month the open month is the month before, and the current month is open as well
+--    (the application always has it open) with its month run and the readings taken in it;
 --  - the losses run books quarter А (losses of about 6.5 %, shared by consumption) and lists quarter Б with a warning:
 --    plot 20's meter has no reading after 75 days ago, so quarter Б's value is unknown and is queued ("Не нараховано");
 --  - the common consumers run: the well pump among the plots connected to it (by plot-days) and the street lighting
@@ -693,8 +696,10 @@ DECLARE
     anchor       date;
     open_month   date;
     closed_month date;
+    current_month date;
     open_id      uuid;
     closed_id    uuid;
+    current_id   uuid;
     run_from     date;
     run_to       date;
     run_month    uuid;
@@ -759,9 +764,11 @@ BEGIN
     anchor := coalesce((SELECT r.taken_on + 75 FROM meter_reading r
                         WHERE r.id = md5('demo-reading:' || md5('demo-meter:' || demo || ':20:ELECTRICITY')::uuid
                                          || ':75')::uuid), CURRENT_DATE);
-    -- the month of the latest round of readings (run_to), so a load in the first days of a month still shows the runs
+    -- the month of the latest round of readings (run_to), so a load in the first days of a month still shows the runs;
+    -- the anchor's own month is open too (the current month always is), with its month run
     open_month := date_trunc('month', anchor - 5)::date;
     closed_month := (open_month - interval '1 month')::date;
+    current_month := date_trunc('month', anchor)::date;
     run_from := anchor - 19;
     run_to := anchor - 5;
 
@@ -822,14 +829,21 @@ BEGIN
     INSERT INTO common_consumer_billing (tenant_id, consumer_meter_id, split)
     SELECT demo, lighting, 'EQUAL_PER_PLOT' WHERE EXISTS (SELECT 1 FROM meter m WHERE m.id = lighting);
 
-    -- The two months: the closed one and the open one, both run.
+    -- The months: the closed one and the open one, both run; in the first five days of a month also the current one,
+    -- open and run (the open month is then the month before it, which still holds the latest round of readings).
     closed_id := md5('demo-billing-month:' || demo || ':' || closed_month)::uuid;
     open_id := md5('demo-billing-month:' || demo || ':' || open_month)::uuid;
+    current_id := md5('demo-billing-month:' || demo || ':' || current_month)::uuid;
     INSERT INTO billing_month (id, tenant_id, month, status, run_at, closed_at, closed_by, created_at) VALUES
         (closed_id, demo, closed_month, 'CLOSED', least(closed_month + 1 + time '09:30', now()),
          least(open_month + 3 + time '18:00', now()), chairman, least(closed_month + 1 + time '09:30', now())),
         (open_id, demo, open_month, 'OPEN', least(open_month + 1 + time '09:30', now()), NULL, NULL,
          least(open_month + 1 + time '09:30', now()));
+    IF current_month > open_month THEN
+        INSERT INTO billing_month (id, tenant_id, month, status, run_at, closed_at, closed_by, created_at) VALUES
+            (current_id, demo, current_month, 'OPEN', least(current_month + time '09:30', now()), NULL, NULL,
+             least(current_month + time '09:30', now()));
+    END IF;
 
     -- The month runs: every chargeable plot (active, not common land) times every tariff of an active charge type
     -- with a recurring basis, or a one-time fee due in the month; a tariff charged by readings is left to them. The
@@ -844,9 +858,11 @@ BEGIN
                 WHEN scale(trim_scale(x.units)) < 2 THEN round(x.units, 2)::text
                 ELSE trim_scale(x.units)::text END AS quantity
     FROM (
-        -- plot 2's membership was booked at 60 per sotka (the rate the recalculation below corrects to 50)
+        -- plot 2's membership of the closed and the open month was booked at 60 per sotka (the rate the recalculation
+        -- below corrects to 50); a current month run after the correction charges 50
         SELECT p.id AS plot_id, t.charge_type_id, t.id AS tariff_id, v.id AS version_id, v.basis, v.frequency,
-               CASE WHEN p.number = '2' AND t.id = memb_tariff THEN 60.0000 ELSE v.rate END AS rate,
+               CASE WHEN p.number = '2' AND t.id = memb_tariff AND mo.month <= open_month THEN 60.0000
+                    ELSE v.rate END AS rate,
                mo.month, mo.billing_month_id,
                CASE WHEN v.basis = 'PER_AREA_SOTKA' THEN p.area_m2 / 100 ELSE 1 END AS units,
                CASE v.frequency WHEN 'MONTHLY' THEN 12 WHEN 'QUARTERLY' THEN 4 ELSE 1 END AS factor,
@@ -854,7 +870,8 @@ BEGIN
                CASE WHEN v.basis = 'FIXED_ONE_TIME' THEN v.due_date
                     ELSE (mo.month + interval '1 month' - interval '1 day')::date END AS service_to
         FROM plot p
-        CROSS JOIN (VALUES (closed_month, closed_id), (open_month, open_id)) AS mo(month, billing_month_id)
+        CROSS JOIN (SELECT DISTINCT * FROM (VALUES (closed_month, closed_id), (open_month, open_id),
+                                               (current_month, current_id)) AS m(month, billing_month_id)) AS mo
         JOIN tariff t ON t.tenant_id = p.tenant_id
         JOIN charge_type c ON c.id = t.charge_type_id AND c.active AND c.archived_at IS NULL
         JOIN tariff_version v ON v.tariff_id = t.id
@@ -928,7 +945,8 @@ BEGIN
 
     INSERT INTO charge (id, tenant_id, plot_id, charge_type_id, billing_month_id, kind, source, amount, service_from,
                         service_to, accrued_on, calculation, source_key, tariff_id, meter_id, created_at)
-    SELECT i.id, demo, i.plot_id, electricity, CASE WHEN i.to_on < open_month THEN closed_id ELSE open_id END,
+    SELECT i.id, demo, i.plot_id, electricity,
+           CASE WHEN i.to_on < open_month THEN closed_id WHEN i.to_on >= current_month THEN current_id ELSE open_id END,
            'REGULAR', 'CONSUMPTION', i.amount, i.from_on + 1, i.to_on, i.to_on,
            jsonb_build_object('amount', i.amount::text,
                'parts', jsonb_build_array(jsonb_build_object('tariffVersionId', el_version, 'basis', 'PER_KWH',
@@ -1169,14 +1187,17 @@ BEGIN
     SELECT demo, e.meter_id, e.day, cc_run
     FROM demo_end e WHERE e.meter_id IN (lighting, well);
 
-    -- Plot 12's opening balance on the first day of the closed month.
+    -- The opening balances on the first day of the closed month: plot 12's 1 500,00, and 2 100,00 (above the red
+    -- amount, so these plots are red on any day) for eight plots that pay nothing in the demo.
     INSERT INTO charge (tenant_id, plot_id, charge_type_id, billing_month_id, kind, source, amount, service_from,
                         service_to, accrued_on, calculation, reason, created_by, created_at)
-    SELECT demo, p.id, membership, closed_id, 'OPENING', 'OPENING', 1500.00, closed_month, closed_month, closed_month,
-           jsonb_build_object('amount', '1500.00', 'parts', '[]'::jsonb, 'readings', '[]'::jsonb), 'Борг за 2025 рік',
-           chairman, least(closed_month + time '10:00', now())
+    SELECT demo, p.id, membership, closed_id, 'OPENING', 'OPENING', o.amount, closed_month, closed_month, closed_month,
+           jsonb_build_object('amount', o.amount::text, 'parts', '[]'::jsonb, 'readings', '[]'::jsonb),
+           'Борг за 2025 рік', chairman, least(closed_month + time '10:00', now())
     FROM plot p
-    WHERE p.tenant_id = demo AND p.number = '12' AND p.archived_at IS NULL;
+    JOIN (VALUES ('12', 1500.00), ('1', 2100.00), ('11', 2100.00), ('13', 2100.00), ('16', 2100.00), ('17', 2100.00),
+                 ('18', 2100.00), ('22', 2100.00), ('23', 2100.00)) AS o(number, amount) ON o.number = p.number
+    WHERE p.tenant_id = demo AND p.archived_at IS NULL;
 
     -- Plot 14's membership of the open month, reversed.
     INSERT INTO charge (tenant_id, plot_id, charge_type_id, billing_month_id, kind, source, amount, service_from,
@@ -1268,15 +1289,16 @@ BEGIN
     -- id as text; a charge's open amount is the charge plus its adjustments minus its allocations; only REGULAR and
     -- OPENING charges that are not reversed). One payment per plot, entered after every charge was booked, always in the
     -- open month: a payment received in a closed month counts in the earliest open month (BillingCalendar.bookingMonth),
-    -- which is the open month for any received day of the two demo months. Plot 1 is never paid. The cases:
+    -- which is the open month for any received day of the demo months. Plot 1 is never paid. The cases:
     --  - paid in full: plots 7 (cash, part of the split), 8 (bank), 10, 14, 21 (cash);
     --  - paid in part: plots 2, 4, 15, 19 (cash, received in the closed month), 5, 6, 9 (bank, payment orders);
     --  - a prepayment: plot 20 pays 300,00 more than it owes, so it ends with the prepayment and no open charge (a state
     --    automatic allocation leaves alone);
     --  - one cash payment split over plots 7 and 15 of the demo member (one group, one receipt number on both parts);
-    --  - one reversed payment: plot 3 paid 1 000,00 in cash and the chairman reversed it (its allocation is released
+    --  - one reversed payment: plot 3 paid in cash and the chairman reversed it (its allocation is released
     --    first, then the PAYMENT_REVERSAL row; the plot owes what it did before).
-    -- Amounts "in part" are fixed, capped at 90 % of the debt so a plot always keeps something open.
+    -- A payment "in part" leaves a fixed remainder open, at most half of what the plot owes after the closed month: the
+    -- closed month is paid off and the plot stays yellow (a small debt, none of it old) whatever the months charge.
     SELECT coalesce(max(created_at), now()) INTO charges_at FROM charge WHERE tenant_id = demo;
     pay_base := least(anchor, CURRENT_DATE);
 
@@ -1287,8 +1309,8 @@ BEGIN
     WITH type_pos AS (
         SELECT t.id, row_number() OVER (ORDER BY t.position, t.id) AS pos FROM charge_type t WHERE t.tenant_id = demo
     ), live AS (
-        SELECT c.id, c.plot_id, c.accrued_on, tp.pos, coalesce(c.service_from, c.accrued_on) AS service_start,
-               c.created_at,
+        SELECT c.id, c.plot_id, c.billing_month_id, c.accrued_on, tp.pos,
+               coalesce(c.service_from, c.accrued_on) AS service_start, c.created_at,
                c.amount + coalesce((SELECT sum(a.amount) FROM charge a
                                     WHERE a.tenant_id = demo AND a.adjusts_charge_id = c.id), 0) AS open_amount
         FROM charge c JOIN type_pos tp ON tp.id = c.charge_type_id
@@ -1303,7 +1325,8 @@ BEGIN
     WHERE l.open_amount > 0;
 
     -- The payments: k is the order of entry; mode FULL pays what the plot owes, PLUS pays that and amount_arg more,
-    -- PART pays amount_arg (at most 90 % of the debt); days_ago counts back from today (null: the closed month).
+    -- PART pays all but amount_arg (at most half of what is owed after the closed month); days_ago counts back from
+    -- today (null: the closed month).
     DROP TABLE IF EXISTS pg_temp.demo_payment;
     CREATE TEMP TABLE demo_payment AS
     SELECT x.*,
@@ -1314,27 +1337,29 @@ BEGIN
         SELECT s.k, s.group_k, s.plot_number, s.source, s.reference, s.reversed, s.payer, p.id AS plot_id,
                o.total_open,
                CASE s.mode WHEN 'FULL' THEN o.total_open WHEN 'PLUS' THEN o.total_open + s.amount_arg
-                           ELSE least(s.amount_arg, round(o.total_open * 0.9, 2)) END AS amount,
+                           ELSE o.total_open - least(s.amount_arg, round(o.later_open * 0.5, 2)) END AS amount,
                least(CURRENT_DATE, CASE WHEN s.days_ago IS NULL THEN closed_month + 20
                                         ELSE greatest(pay_base - s.days_ago, open_month) END) AS received_on
         FROM (VALUES
             (1,  1,  '10',  'CASH', 'FULL', 0::numeric,   NULL::text,        18,   false, NULL::uuid),
             (2,  2,  '8',   'BANK', 'FULL', 0,            'ПД-2026-0407',    17,   false, NULL),
-            (3,  3,  '2',   'CASH', 'PART', 800.00,       NULL,              15,   false, NULL),
-            (4,  4,  '4',   'CASH', 'PART', 1200.00,      NULL,              14,   false, NULL),
-            (5,  5,  '5',   'BANK', 'PART', 1000.00,      'ПД-2026-0411',    13,   false, NULL),
+            (3,  3,  '2',   'CASH', 'PART', 150.00,       NULL,              15,   false, NULL),
+            (4,  4,  '4',   'CASH', 'PART', 300.00,       NULL,              14,   false, NULL),
+            (5,  5,  '5',   'BANK', 'PART', 250.00,       'ПД-2026-0411',    13,   false, NULL),
             (6,  6,  '14',  'CASH', 'FULL', 0,            NULL,              12,   false, NULL),
-            (7,  7,  '9',   'BANK', 'PART', 1500.00,      'ПД-2026-0415',    10,   false, NULL),
-            (8,  8,  '19',  'CASH', 'PART', 1000.00,      NULL,              NULL, false, NULL),
+            (7,  7,  '9',   'BANK', 'PART', 400.00,       'ПД-2026-0415',    10,   false, NULL),
+            (8,  8,  '19',  'CASH', 'PART', 200.00,       NULL,              NULL, false, NULL),
             (9,  9,  '21',  'CASH', 'FULL', 0,            NULL,              8,    false, NULL),
             (10, 10, '7',   'CASH', 'FULL', 0,            NULL,              6,    false, demo_member),
-            (11, 10, '15',  'CASH', 'PART', 1000.00,      NULL,              6,    false, demo_member),
-            (12, 12, '3',   'CASH', 'PART', 1000.00,      NULL,              5,    true,  NULL),
+            (11, 10, '15',  'CASH', 'PART', 100.00,       NULL,              6,    false, demo_member),
+            (12, 12, '3',   'CASH', 'PART', 350.00,       NULL,              5,    true,  NULL),
             (13, 13, '20',  'CASH', 'PLUS', 300.00,       NULL,              4,    false, NULL),
-            (14, 14, '6',   'BANK', 'PART', 1200.00,      'ПД-2026-0422',    3,    false, NULL)
+            (14, 14, '6',   'BANK', 'PART', 500.00,       'ПД-2026-0422',    3,    false, NULL)
         ) AS s(k, group_k, plot_number, source, mode, amount_arg, reference, days_ago, reversed, payer)
         JOIN plot p ON p.tenant_id = demo AND p.number = s.plot_number AND p.archived_at IS NULL
-        CROSS JOIN LATERAL (SELECT coalesce(sum(o.open_amount), 0) AS total_open
+        CROSS JOIN LATERAL (SELECT coalesce(sum(o.open_amount), 0) AS total_open,
+                                   coalesce(sum(o.open_amount) FILTER (WHERE o.billing_month_id <> closed_id), 0)
+                                       AS later_open
                             FROM demo_open o WHERE o.plot_id = p.id) o
     ) x;
 

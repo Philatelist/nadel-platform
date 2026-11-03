@@ -1234,14 +1234,19 @@ Every action is a constant of `LedgerAuditPublisher.Action` and must also be a v
 
 The repeatable demo script `db/demo/R__demo_data.sql` has a block `-- BEGIN demo ledger` ... `-- END demo ledger`: one
 PL/pgSQL `DO` block that books the demo cooperative's ledger as the application would have booked it. Its dates follow
-the demo meters (the anchor is read back from plot 20's stored reading, as in the meters block): the anchor's month is
-open, the month before it closed (September and October 2026 on the first load).
+the demo meters (the anchor is read back from plot 20's stored reading, as in the meters block): the open month is the
+month of the latest round of readings (5 days before the anchor) and the month before it is closed (September and
+October 2026 on the first load). In the first five days of a month that round still lies in the month before, so the
+open month is the month before and the anchor's own month is open too, with its month run and its readings: the
+application always has the current month open.
 
 - **Settings:** losses mode `PROPORTIONAL`, the common consumers split `CONNECTED_PLOTS` by default and `EQUAL_PER_PLOT`
   for the street lighting, the red threshold 2 000,00 or 90 days (so the map shows red and yellow plots).
 - **Months:** the closed month with its month run (membership and land tax; 59 charges on the first load), its
-  reading charges and plot 12's opening balance of 1 500,00 ("Борг за 2025 рік", membership, its first day), closed by
-  the chairman; the open month with its month run and its reading charges. Nothing is charged before the closed month.
+  reading charges and the opening balances on its first day ("Борг за 2025 рік", membership: plot 12's 1 500,00 and
+  2 100,00 of plots 1, 11, 13, 16, 17, 18, 22 and 23, which pay nothing and so are red on any day), closed by the
+  chairman; the open month with its month run and its reading charges; in the first five days of a month the current
+  month as well. Nothing is charged before the closed month.
 - **Electricity by readings:** one `CONSUMPTION` charge per interval of a plot meter that ends in the closed month or
   later (keys, parts, readings and value uses as `IntervalCharging` writes them). Plot 25's meter (installed
   15.12.2025, before the first electricity tariff version) has one interval that cannot be charged: the open
@@ -1262,6 +1267,10 @@ open, the month before it closed (September and October 2026 on the first load).
   month (its service period and debt date kept), the open month's 30,00 is reversed (source `RECALCULATION`) and 25,00
   charged again under the `#r` key; two `recalculation_line` rows (`ADJUST`, `REVERSE_AND_RECHARGE`). The cleanup
   removes the lines, the recalculations and the adjustments first.
+- **Payments** (feature 015): one per plot, booked in the open month. Paid in full: plots 7, 8, 10, 14, 21; a
+  prepayment: plot 20; in part: plots 2, 4, 5, 6, 9, 15, 19, each leaving a fixed remainder (at most half of what the
+  plot owes after the closed month), so the closed month is paid off and the plot stays yellow whatever the months
+  charge; plot 3's payment is reversed; plots 7 and 15 of the demo member share one split cash payment.
 - **The plot status cache:** every plot's debt and oldest debt date, and the colour as the refresher would record it.
 
 So "Не нараховано" shows two items: exactly one "Немає тарифу на всі дні" (plot 25) and quarter Б's unknown value.
@@ -1280,6 +1289,12 @@ with the ledger's own planning code (`TariffMonthPlanning`, `ReadingChargePlanni
 `LossesPlanning`, `CommonConsumerPlanning`) and compares amounts, parts, the stored calculation, value uses, run rows
 and queue items; republishes `ChargesBooked` and checks the status refresher records the same debts; and checks the
 screens (months, the queue, the map, accounts) and that the block is re-runnable.
+
+The demo is dated from the day it is first loaded, so `DemoLedgerDataTests` and `DemoDocumentsTests` run once per
+`DemoDay`: the demo meters and the ledger are loaded with that day in place of `CURRENT_DATE` and its noon in place of
+`now()`, and the application's `Clock` stands at the same noon. A normal build checks today; the CI job "Demo data by
+day" (`-Dnadel.demo.days=all`) checks every day of January 2027 (the turn of a year, the December one-off fee) and of
+February 2027 and 29.02.2028.
 
 ## Dependencies
 

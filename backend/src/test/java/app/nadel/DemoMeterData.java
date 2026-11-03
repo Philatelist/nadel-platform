@@ -3,6 +3,7 @@ package app.nadel;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 
@@ -38,6 +39,11 @@ public final class DemoMeterData {
     /** Puts the demo meters back after {@link #clear}; idempotent. */
     public static void restore(JdbcTemplate owner) {
         owner.execute(block());
+    }
+
+    /** Puts the demo meters back after {@link #clear} as the migration would load them on {@code day} ({@link DemoDay}). */
+    public static void restore(JdbcTemplate owner, LocalDate day) {
+        owner.execute(DemoDay.on(block(), day));
     }
 
     private static String block() {
