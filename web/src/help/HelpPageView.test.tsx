@@ -64,6 +64,8 @@ beforeEach(() => {
   };
 });
 
+beforeEach(() => window.localStorage.setItem('nadel.locale', 'uk'));
+
 describe('HelpPageView', () => {
   it('renders the page with a sticky list of its headings', () => {
     render('/help/sample');

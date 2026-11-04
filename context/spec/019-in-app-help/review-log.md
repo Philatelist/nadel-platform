@@ -67,3 +67,9 @@
 |---|---|---|---|---|
 | 1 | `7dbb8be..90d32b6` | MAJOR_ISSUES | M1 `meter-card` worked example ends with figures (65/66 kWh) not derivable from the demo meters | minor (sent along as a safety fix): `tariff-recalculation-step`/`reading-recalculation-step` click «Зберегти» — read-only only if the edited version/reading is in use. Other minor: hand-typed interface names in 3 places; "38 лічильників" unverified; `[!important]` boxes under «Хто бачить» in `tariff-form` |
 | 2 | + `f031138` | PASS | M1 resolved; save-click shots confirmed read-only on demo data | minor: awkward YAML comment wording in `meter-card` |
+
+## Slice 10 — close-out (migration map, HTML guide retired, docs, backend test repointed)
+
+| Round | Commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `c8c1199` + deletions in `f031138` | PASS | — | every old heading mapped once; 8 "added in close-out" rows verified in uk+en; 43 new `{{ui:}}` keys resolve; test intent kept. minor: owner manual points to `infra/stand/` files that are not tracked in the repository (owner decision) |

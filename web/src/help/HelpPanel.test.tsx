@@ -56,6 +56,8 @@ beforeEach(() => {
   };
 });
 
+beforeEach(() => window.localStorage.setItem('nadel.locale', 'uk'));
+
 describe('HelpPanel', () => {
   it('opens the page of the current screen and keeps the screen behind it', async () => {
     render('/payments');

@@ -7,7 +7,10 @@ import { Layout } from './Layout';
 
 let me: Me;
 
-vi.mock('../me', () => ({ useMe: () => me }));
+vi.mock('../me', () => ({ useMe: () => me, useOptionalMe: () => me }));
+vi.mock('../help/useHelpBundle', () => ({
+  useHelpBundle: () => ({ data: undefined, error: null, isPending: true, isError: false, refetch: vi.fn() }),
+}));
 vi.mock('react-oidc-context', () => ({ useAuth: () => ({ signoutRedirect: vi.fn() }) }));
 
 function meWith(permissions: Permission[]): Me {

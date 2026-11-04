@@ -1,7 +1,8 @@
-import { screen } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { HelpBundle } from '../../help/types';
-import { renderWithApp } from '../test/render';
+import { I18nProvider } from '../i18n';
+import { ThemeProvider } from '../themeContext';
 import { PublicHelpApp } from './PublicHelpApp';
 
 const bundle: HelpBundle = {
@@ -33,6 +34,8 @@ vi.mock('react-oidc-context', () => ({
   useAuth: () => ({ isAuthenticated: false, isLoading: true, signinRedirect: vi.fn() }),
 }));
 
+beforeEach(() => window.localStorage.setItem('nadel.locale', 'uk'));
+
 describe('PublicHelpApp', () => {
   afterEach(() => vi.unstubAllGlobals());
 
@@ -40,7 +43,14 @@ describe('PublicHelpApp', () => {
     const fetchSpy = vi.fn();
     vi.stubGlobal('fetch', fetchSpy);
     window.history.replaceState({}, '', '/help');
-    renderWithApp(<PublicHelpApp />, { route: '/help' });
+    // PublicHelpApp owns its router, so it is rendered without the MemoryRouter of renderWithApp.
+    render(
+      <I18nProvider>
+        <ThemeProvider>
+          <PublicHelpApp />
+        </ThemeProvider>
+      </I18nProvider>,
+    );
     expect(await screen.findByRole('link', { name: 'Тестова сторінка' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Увійти' })).toBeInTheDocument();
     expect(fetchSpy).not.toHaveBeenCalled();
