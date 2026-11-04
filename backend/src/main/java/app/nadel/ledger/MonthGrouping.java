@@ -11,9 +11,10 @@ public enum MonthGrouping {
     BILLING_MONTH,
 
     /**
-     * By the month of the first service day of a row ({@code charge.service_from}). An adjustment and a reversal keep
-     * the service period of the charge they correct, so an adjustment booked in March for a January charge counts in
-     * January. Months have no status in this grouping.
+     * The rows booked in the billing months asked, as {@link #BILLING_MONTH} selects them, grouped by the month of the
+     * first service day of a row ({@code charge.service_from}), which may be before the first month asked. An
+     * adjustment and a reversal keep the service period of the charge they correct, so an adjustment booked in March
+     * for a January charge counts in January. Months have no status in this grouping.
      */
     SERVICE_MONTH
 }

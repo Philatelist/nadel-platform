@@ -68,7 +68,8 @@ import org.springframework.transaction.annotation.Transactional;
  * ({@code ChargeRepository.totalsPerMonthAndType}: every row booked in the month, of every kind, {@code SUM(amount)}),
  * so the effective total of a month and type is the screen's figure cent for cent; the split by kind uses
  * {@code FILTER} clauses over the same rows, and the paid amount a lateral sum of the allocations of each row counted
- * as of the day ({@code allocation_charge_idx}). The service month grouping takes the month of {@code service_from}.
+ * as of the day ({@code allocation_charge_idx}). The service month grouping takes the same rows (booked in the billing
+ * months asked) and groups them by the month of {@code service_from}, so both groupings add up to the same totals.
  * <p>
  * {@link #debtsAsOf}: {@code DebtCalculator}'s rule after payments in SQL over the charges dated on or before the day
  * and their allocations counted as of the day, one row per plot and charge type (charged, paid and the oldest unpaid
@@ -163,9 +164,12 @@ class LedgerReportQueries implements LedgerReadModel {
     private static final String BY_BILLING_MONTH = MONTH_TOTALS.formatted("bm.month", "bm.status",
             "join billing_month bm on bm.id = c.billing_month_id", "bm.month");
 
-    /** By the month of the first service day; no status. */
+    /**
+     * The same rows as {@link #BY_BILLING_MONTH} (booked in the billing months asked), grouped by the month of the
+     * first service day; no status.
+     */
     private static final String BY_SERVICE_MONTH = MONTH_TOTALS.formatted("c.service_from",
-            "cast(null as text)", "", "c.service_from");
+            "cast(null as text)", "join billing_month bm on bm.id = c.billing_month_id", "bm.month");
 
     /** Values per {@code IN} list. */
     private static final int CHUNK = 500;
@@ -606,12 +610,11 @@ class LedgerReportQueries implements LedgerReadModel {
         if (plotIds != null && plotIds.isEmpty()) {
             return List.of();
         }
-        boolean byBillingMonth = grouping == MonthGrouping.BILLING_MONTH;
-        // a billing month is stored as its first day; a service month covers every day of the month
-        LocalDate to = byBillingMonth ? toMonth.atDay(1) : toMonth.atEndOfMonth();
-        List<?> rows = entityManager.createNativeQuery(byBillingMonth ? BY_BILLING_MONTH : BY_SERVICE_MONTH)
+        // both groupings select the rows booked in the billing months asked; a billing month is stored as its first day
+        List<?> rows = entityManager.createNativeQuery(grouping == MonthGrouping.BILLING_MONTH ? BY_BILLING_MONTH
+                : BY_SERVICE_MONTH)
                 .setParameter("from", fromMonth.atDay(1))
-                .setParameter("to", to)
+                .setParameter("to", toMonth.atDay(1))
                 .setParameter("allTypes", chargeTypeIds.isEmpty())
                 .setParameter("typeIds", orNone(chargeTypeIds))
                 .setParameter("allPlots", plotIds == null)

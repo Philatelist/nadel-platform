@@ -481,14 +481,16 @@ gives no rows). Reads `ledger.LedgerReadModel.monthTotals` twice, as of today (K
   equals the billing months screen); a `SUBTOTAL` row after each month (no type, no plot count: a plot can have several
   types) and the totals `all`. The effective total of a month equals the billing months screen cent for cent (same
   predicate).
-- Sheet `byServicePeriod` ("За період послуг" / "By service period"): the same columns without `status`, grouped by the
-  month of `service_from` over the same months, so an adjustment booked in March for January is under January; the
-  header note `SERVICE_PERIOD_SHEET` says so. A charge whose service starts before the range (an electricity interval
-  from the previous month) is outside this sheet.
+- Sheet `byServicePeriod` ("За період послуг" / "By service period"): the same columns without `status`, and exactly
+  the charges of `byBillingMonth` (every row booked in the billing months asked, with the allocations to them) grouped
+  by the month of `service_from`, so an adjustment booked in March for January is under January and an electricity
+  interval that started in an earlier month is under that month, even before the first month asked; the header note
+  `SERVICE_PERIOD_SHEET` says so. Its totals equal those of `byBillingMonth` in every column, `paid` included.
 
 Tests: `ChargesByMonthReportTests` (worked ledger in a cooperative of its own, `ReportsTestSupport`: reconciliation with
 `GET /billing-months` for every month, also with payments and their paid column, reversal, later-month adjustment on
-both sheets, street and charge type filters, defaults, the list, the workbook in both languages, route precedence, filter errors, the cap, the audit entries),
+both sheets, the service sheet regrouping exactly the charges of the months asked with the same totals, street and
+charge type filters, defaults, the list, the workbook in both languages, route precedence, filter errors, the cap, the audit entries),
 `ReportsAccessTests` (401/403 matrix on the demo cooperative), unit tests `ReportFiltersTests`, `ReportCatalogTests`,
 `ReportRunnerTests` (preview of 200 of 250 rows, file with all, no audit on a write failure, the cap or bad filters),
 `XlsxReportWriterTests`, `ReportLanguageTests`, `ReportTextsTests`.

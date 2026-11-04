@@ -36,8 +36,9 @@ public interface LedgerReadModel {
      * {@link MonthGrouping#BILLING_MONTH} the months are the billing months from {@code fromMonth} to {@code toMonth}
      * and the effective total of a month and type is exactly the total the billing months screen shows for it (the same
      * predicate: every row booked in the month, of every kind, summed with its sign). With
-     * {@link MonthGrouping#SERVICE_MONTH} the months are those of each row's first service day ({@code service_from}),
-     * from the first day of {@code fromMonth} to the last day of {@code toMonth}.
+     * {@link MonthGrouping#SERVICE_MONTH} the same rows (booked in the billing months from {@code fromMonth} to
+     * {@code toMonth}) are grouped by the month of each row's first service day ({@code service_from}), which may lie
+     * before {@code fromMonth}; both groupings add up to the same totals in every column.
      * <p>
      * {@link MonthTypeTotals#paid} is the net allocations to the charges of the group whose value date is on or before
      * {@code asOf}; {@code effective} does not depend on {@code asOf}.

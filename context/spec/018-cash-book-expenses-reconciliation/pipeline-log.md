@@ -1,7 +1,7 @@
 # Pipeline log — 018 cash book, expenses and reconciliation
 
-- Status: finished
-- Phase: 6 — review run (done, after the reopen and viewer changes)
+- Status: running
+- Phase: 5 — charges-by-month fix pushed, waiting for checks
 - Branch: 018-cash-book-expenses-reconciliation (planned) · Base: main @ c7419a6
 - Requirement: docs/features/018-cash-book-expenses-reconciliation.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
@@ -231,3 +231,8 @@
 - Probe of the owner's real photos (IMG_0402.jpg 4032x3024, no EXIF Orientation stored): old and new viewer render in Chromium, WebKit desktop and iPhone; decode ok; cause not reproduced. Real gap found: the image data is fetched only when its thumbnail scrolls into view, so → to a file whose thumbnail has not loaded shows the toolbar only (matches «Фото 2 з 2»). Fix requested: the viewer fetches its own image (shared cache) with loading/error states and prefetch of neighbours; component test with a never-intersecting thumbnail.
 - Viewer follow-up (react-frontend): the viewer already fetched its own file; added a loading state («Завантаження…»), an error state with «Завантажити», and prefetch of neighbours; component tests (never-intersecting thumbnails, failed fetch; RED). Server keeps EXIF Orientation (JpegMetadataStripperTests.theOrientationIsKeptInAMinimalExifSegmentRightAfterJfif); IMG_0402.jpg had none. Orchestrator: clients green (web 983), prettier clean, make guide rebuilt PDFs. Root cause of the owner's empty viewer not reproduced in Chromium/WebKit with generated or real photos; the layout fix + loading/error states cover the plausible causes.
 - Reopen + viewer changes pushed (6ca68e0); checks run 41870709690: 6 of 6 green. Review run restarted on the PR branch: web http://localhost:5173. Stop: `kill 43925 43946 44089 44228`, infra `make down`.
+
+## Owner bug: charges-by-month second sheet (feature 013), found on PR #66 (2026-11-04)
+
+- «За період послуг» filters by service month instead of regrouping the first sheet's charges (Oct 2026: 36 178,59 vs 17 252,21; only 10.2026 rows). Expected per 013 §3.1: same charges as sheet 1 grouped by service_from month (08, 09, 10), equal «Усього» in every column incl. «Сплачено». Fix + test with a cross-month interval and a later adjustment; guide wording if needed; push, green CI; no .github, no merge. Sent to spring-backend.
+- Fix (spring-backend): cause LedgerReportQueries BY_SERVICE_MONTH (no join to billing_month; WHERE c.service_from between :from and :to; monthTotals to = end of month) applied the selected billing months to service dates. Fix: same join/filter as sheet 1 (bm.month between :from and :to), grouping by service_from; paid from the same allocations. New ChargesByMonthReportTests.theServiceSheetRegroupsExactlyTheChargesOfTheBillingMonthsAskedAndHasTheSameTotals (rows 08/09/10, equal totals in all six columns; RED reproduces the owner's symptom); LedgerReadModelTests rewritten; tests that encoded the old behaviour updated (listed in the report). Demo Oct 2026 check (read-only): 08 11431.57, 09 7494.81 and -5.00, 10 17252.21 and -410.00, total 36178.59. READMEs updated; guides and notes already said "the same charges". Orchestrator re-run: 582 green.

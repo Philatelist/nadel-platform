@@ -426,10 +426,11 @@ Methods:
   `opening`, `reversals` (negative) and `adjustments` (either sign), and `effective` = `SUM(amount)` of every row
   (money rules 5.4: charges plus adjustments minus reversals). `BILLING_MONTH` groups by `charge.billing_month_id`
   with the predicate of the billing months screen (`ChargeRepository.totalsPerMonthAndType`), so `effective` of a
-  month and type is the screen's total cent for cent; `SERVICE_MONTH` groups by the month of `service_from` over the
-  days from the first of `fromMonth` to the last of `toMonth` (an adjustment or a reversal keeps the service period of
-  its charge, so an adjustment booked in March for January counts in January; a reading interval that starts in the
-  previous month counts there). `chargeTypeIds` empty = every type; `plotIds` `null` = every plot (a street resolved by
+  month and type is the screen's total cent for cent; `SERVICE_MONTH` takes the same rows (booked in the billing months
+  `fromMonth`..`toMonth`) and groups them by the month of `service_from`, so both groupings have the same totals in
+  every column (an adjustment or a reversal keeps the service period of its charge, so an adjustment booked in March
+  for January counts in January; a reading interval that starts in the previous month counts there, before
+  `fromMonth`). `chargeTypeIds` empty = every type; `plotIds` `null` = every plot (a street resolved by
   the caller), empty = no rows. Rows by month, then type id; `toMonth` before `fromMonth` is an
   `IllegalArgumentException`. Test: `LedgerReadModelTests` (a worked ledger with a reversal, an opening balance and
   later-month adjustments in both groupings, reconciliation with `GET /billing-months` for every listed month, the

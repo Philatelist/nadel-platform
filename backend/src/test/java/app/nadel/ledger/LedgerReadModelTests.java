@@ -36,9 +36,9 @@ import tools.jackson.databind.JsonNode;
  *                         membership -5.00 each (booked in March, service periods of January and February)
  * </pre>
  * By billing month: January membership 60.00 + 1500.00 = 1560.00 and electricity 52.50, February 60.00 - 30.00 = 30.00,
- * March 50.00 - 10.00 = 40.00, together 1682.50. By service month the adjustments move to January and February
- * (1555.00 and 25.00), March is 50.00 and the electricity goes to December 2024. The billing months screen must show
- * the same totals for every month, cent for cent.
+ * March 50.00 - 10.00 = 40.00, together 1682.50. By service month the same rows of the billing months asked are
+ * regrouped: the adjustments move to January and February (1555.00 and 25.00), March is 50.00 and the electricity goes
+ * to December 2024. The billing months screen must show the same totals for every month, cent for cent.
  */
 class LedgerReadModelTests extends FreshCooperativeSupport {
 
@@ -154,11 +154,28 @@ class LedgerReadModelTests extends FreshCooperativeSupport {
     }
 
     @Test
-    void byServiceMonthARowWhoseServiceStartsBeforeTheRangeIsLeftOut() {
-        List<MonthTypeTotals> rows = totals(tenant, JAN, MAR, Set.of(), null, MonthGrouping.SERVICE_MONTH);
+    void byServiceMonthTheRowsAreThoseBookedInTheBillingMonthsAskedWhateverTheMonthOfTheirService() {
+        // January's electricity of 16.12.2024 is booked in January: it is under December, outside the months asked
+        List<MonthTypeTotals> january = totals(tenant, JAN, JAN, Set.of(), null, MonthGrouping.SERVICE_MONTH);
+        assertThat(january).extracting(this::line).containsExactlyInAnyOrder(
+                "2024-12 - ELECTRICITY plots=1 regular=52.50 opening=0.00 reversals=0.00 adjustments=0.00 "
+                        + "effective=52.50",
+                "2025-01 - MEMBERSHIP plots=2 regular=60.00 opening=1500.00 reversals=0.00 adjustments=0.00 "
+                        + "effective=1560.00");
+        assertThat(sum(january)).isEqualTo(Money.parse("1612.50"));
 
-        assertThat(rows).extracting(MonthTypeTotals::chargeTypeId).containsOnly(membership);
-        assertThat(sum(rows)).isEqualTo(Money.parse("1630.00"));
+        // the adjustments booked in March go to the months they are for; February's own charges stay out
+        List<MonthTypeTotals> march = totals(tenant, MAR, MAR, Set.of(), null, MonthGrouping.SERVICE_MONTH);
+        assertThat(march).extracting(this::line).containsExactlyInAnyOrder(
+                "2025-01 - MEMBERSHIP plots=1 regular=0.00 opening=0.00 reversals=0.00 adjustments=-5.00 "
+                        + "effective=-5.00",
+                "2025-02 - MEMBERSHIP plots=1 regular=0.00 opening=0.00 reversals=0.00 adjustments=-5.00 "
+                        + "effective=-5.00",
+                "2025-03 - MEMBERSHIP plots=2 regular=50.00 opening=0.00 reversals=0.00 adjustments=0.00 "
+                        + "effective=50.00");
+        // the same total as March by billing month
+        assertThat(sum(march)).isEqualTo(sum(totals(tenant, MAR, MAR, Set.of(), null, MonthGrouping.BILLING_MONTH)))
+                .isEqualTo(Money.parse("40.00"));
     }
 
     // ---- reconciliation with the billing months screen
