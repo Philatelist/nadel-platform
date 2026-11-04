@@ -71,3 +71,4 @@
 - Slice 10 close-out — committed below (with the backend test repointed to the help pages; not run, deferred).
 - Slice 10 close-out review round 1: PASS. All slice reviews PASS → Slice 11 (Feature Testing & Regression) starts; baseline suite running on main in a worktree.
 - Verify: first test run — help unit tests 8 failures + Layout.test 18 failures, all test-setup bugs (jsdom locale en-US, nested router, missing `useOptionalMe` mock); fixed by react-frontend, committed below. helpContent fails only on MISSING_SHOT (screenshots pending). Shared tests 130/130.
+- Verify fix: help virtual module failed under `vite dev` (directory passed to addWatchFile) — fixed, committed below.

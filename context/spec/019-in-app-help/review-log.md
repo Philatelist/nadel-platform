@@ -73,3 +73,9 @@
 | Round | Commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `c8c1199` + deletions in `f031138` | PASS | — | every old heading mapped once; 8 "added in close-out" rows verified in uk+en; 43 new `{{ui:}}` keys resolve; test intent kept. minor: owner manual points to `infra/stand/` files that are not tracked in the repository (owner decision) |
+
+## Fix — unit test setup (verify)
+
+| Round | Commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `e05be47` | PASS | — | real test-setup bugs, no assertion weakened. minor: duplicate beforeEach; no Layout test of the «?» placement |

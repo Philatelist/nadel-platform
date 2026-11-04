@@ -93,7 +93,8 @@ export function helpPlugin(options: HelpPluginOptions = {}): Plugin {
         if (isBuild && process.env.HELP_CHECK !== 'warn') this.error(message);
         else this.warn(message);
       }
-      this.addWatchFile(helpDir);
+      // Dev watches the folder in configureServer; Vite would treat a watched directory here as an import.
+      if (isBuild) this.addWatchFile(helpDir);
       return `export default ${JSON.stringify(result.bundles[locale])};`;
     },
     configResolved(config) {
