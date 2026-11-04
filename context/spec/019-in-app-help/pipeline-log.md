@@ -55,3 +55,5 @@
 - Slice 5 — committed below — tests not run (deferred); typecheck, lint green; `vite build` now fails on help issues by default (60 issues while content and screenshots are incomplete; `HELP_CHECK=warn` downgrades). Route/menu coverage is checked by the vitest real-content test only (the Vite plugin cannot load `App.tsx` in Node).
 - Slice 5 — `9aed130` — review round 1: PASS. Slices 8 and 9 content writers started in parallel (own migration-map-s8/s9 files).
 - Slice 6 — committed below — not run against an app (deferred); `node --check` ok; `build-pdf.mjs` built all PDFs from partial content (PDFs restored, not committed). The old SHOTS array is removed (no owner-manual shots exist); content writers use `git show main:docs/guide/scripts/capture-screens.mjs` as the shot source.
+- Slice 6 — `7d356a9` — review round 1: PASS.
+- Slice 7 — committed below — 11 pages uk+en, no BAD_FRONT_MATTER/UNKNOWN_UI_KEY/MISSING_SECTION per writer (HELP_CHECK=warn build).

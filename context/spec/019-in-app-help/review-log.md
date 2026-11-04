@@ -35,3 +35,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `dc7c798..9aed130` | PASS | — | static review; route/menu coverage only in vitest judged sufficient (CI runs `pnpm -r test`). minor: no test for `DUPLICATE_ID`; `UNKNOWN_LINK` accepts a link to a page that exists only in the other language (flagged by `MISSING_TRANSLATION`); build needs `pnpm gen:api` first |
+
+## Slice 6 — Screenshots and the board guide PDF from the help
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `9aed130..7d356a9` | PASS | — | static review. minor: old `board-guide.html` still present (Slice 10 removes); refusal message prints the cooperative name; TOC without page numbers; a page with no shots is skipped silently. Read-only depends on front-matter `click` steps never pressing a save button — check in content slices |
