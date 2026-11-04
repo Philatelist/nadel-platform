@@ -1,5 +1,6 @@
 import { createBrowserRouter, RouterProvider, type RouteObject } from 'react-router';
 import { useAuth } from 'react-oidc-context';
+import { PublicHelpApp } from './help/PublicHelpApp';
 import { RequirePermission } from './components/RequirePermission';
 import { HomeRedirect } from './components/HomeRedirect';
 import { Layout } from './components/Layout';
@@ -355,6 +356,11 @@ export function App() {
   const auth = useAuth();
   const t = useT();
 
+  const { pathname } = window.location;
+  // the help is public: no wait for the sign-in check and no sign-in screen
+  if (!auth.isAuthenticated && (pathname === '/help' || pathname.startsWith('/help/'))) {
+    return <PublicHelpApp />;
+  }
   if (auth.isLoading) {
     return <div className="grid h-full place-items-center text-ink-muted">{t.auth.signingIn}</div>;
   }

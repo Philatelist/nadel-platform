@@ -48,3 +48,6 @@
 - Slice 3 — committed below — tests not run (deferred); typecheck, lint, format, build green per builder.
 - Slice 3 — `a5dd1c3` — review round 1: MAJOR_ISSUES (M1 typo test); fix sent to the builder.
 - Slice 4 infra task done (Caddy `NADEL_NOINDEX` matcher, `try_files {path}/index.html`, compose, README; `caddy validate` → Valid configuration). `infra/stand/.env.example` was NOT updated: the permission settings deny the agent access to it — left for the owner (line to add in the final report).
+- Slice 3 review round 2: PASS.
+- Slice 4 — committed below — tests not run (deferred); typecheck, lint, build green per builder; built shell `dist/help/payments-enter/index.html` carries title, description, canonical, og:*, robots index.
+- NOTE: `infra/stand/` is not tracked — it is excluded locally in `.git/info/exclude`. The stand changes (Caddyfile `NADEL_NOINDEX` matcher, `try_files`, compose, README) exist only in the owner's working copy and are not part of the branch. `web/.env.example` and `infra/stand/.env.example` are denied to agents by the permission settings; `VITE_SITE_URL` is documented in `web/README.md` instead. Both left for the owner.

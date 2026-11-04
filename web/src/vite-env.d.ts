@@ -3,4 +3,6 @@
 interface ImportMetaEnv {
   readonly VITE_OIDC_AUTHORITY?: string;
   readonly VITE_OIDC_CLIENT_ID?: string;
+  /** Public origin of the site (canonical and preview-image addresses of the help); default http://localhost:5173. */
+  readonly VITE_SITE_URL?: string;
 }

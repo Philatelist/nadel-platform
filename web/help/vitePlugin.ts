@@ -1,7 +1,9 @@
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runnerImport, type Plugin } from 'vite';
 import type { CompileResult } from './compile.ts';
+import { buildHelpShells } from './shells.ts';
 
 // This file is bundled by Vite when it loads vite.config.ts and then run by plain Node, which cannot load the workspace
 // TypeScript (`@nadel/shared` exports `src/index.ts`). So it holds no value import of the compiler or the catalogs:
@@ -26,11 +28,23 @@ export async function compileHelpFrom(helpDir: string): Promise<CompileResult> {
   return module.compileHelp(helpDir);
 }
 
+function existsIndex(dir: string): boolean {
+  try {
+    readFileSync(resolve(dir, 'index.html'));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Virtual modules `virtual:help/uk` and `virtual:help/en`: the compiled help of one language each. */
 export function helpPlugin(options: HelpPluginOptions = {}): Plugin {
   const helpDir = options.helpDir ?? defaultHelpDir;
   let compiled: Promise<CompileResult> | null = null;
   const compile = (): Promise<CompileResult> => (compiled ??= compileHelpFrom(helpDir));
+
+  let outDir = '';
+  let siteUrl = '';
 
   const isSource = (file: string): boolean =>
     file.startsWith(helpDir + sep) || file.startsWith(catalogsDir + sep) || file.startsWith(here + sep);
@@ -54,6 +68,32 @@ export function helpPlugin(options: HelpPluginOptions = {}): Plugin {
       }
       this.addWatchFile(helpDir);
       return `export default ${JSON.stringify(result.bundles[locale])};`;
+    },
+    configResolved(config) {
+      outDir = resolve(config.root, config.build.outDir);
+      siteUrl = String(config.env.VITE_SITE_URL ?? 'http://localhost:5173').replace(/\/+$/, '');
+    },
+    // Static shells of the public help (uk only): /help and /help/<id> carry their own head tags for crawlers.
+    async closeBundle() {
+      if (!outDir || !existsIndex(outDir)) return;
+      const result = await compile();
+      const { module } = await runnerImport<typeof import('../../packages/shared/src/i18n/index.ts')>(
+        resolve(catalogsDir, 'index.ts'),
+        { configFile: false },
+      );
+      const uk = module.messages('uk');
+      const shells = buildHelpShells({
+        template: readFileSync(resolve(outDir, 'index.html'), 'utf8'),
+        pages: result.bundles.uk.pages,
+        siteUrl,
+        contents: { title: uk.help.title, description: uk.help.contents },
+        lang: 'uk',
+      });
+      for (const { file, html } of shells) {
+        const target = resolve(outDir, file);
+        mkdirSync(dirname(target), { recursive: true });
+        writeFileSync(target, html);
+      }
     },
     configureServer(server) {
       server.watcher.add(helpDir);

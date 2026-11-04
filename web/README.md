@@ -46,7 +46,7 @@ follow the permissions in `/me` (`useCan`, `RequirePermission`); hiding is a con
 
 ## Configuration
 
-`web/.env` (see [web/.env.example](.env.example)): `VITE_OIDC_AUTHORITY`, `VITE_OIDC_CLIENT_ID`.
+`web/.env` (see [web/.env.example](.env.example)): `VITE_OIDC_AUTHORITY`, `VITE_OIDC_CLIENT_ID`; `VITE_SITE_URL` (public origin for the canonical and preview-image addresses of the public help, build time; default `http://localhost:5173`).
 
 UI text comes only from `@nadel/shared` i18n catalogs; API calls only through `@nadel/api-client`.
 
