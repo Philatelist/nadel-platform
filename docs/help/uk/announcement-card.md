@@ -13,7 +13,6 @@ shots:
   - name: announcement-card
     user: chairman
     path: /announcements
-    open: { css: 'main a[href^="/announcements/"]:not([href$="/new"])' }
 ---
 
 ## Для чого цей екран

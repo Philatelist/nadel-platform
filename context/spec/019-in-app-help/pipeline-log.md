@@ -78,3 +78,4 @@
 - Verify finding: public help language follows the stored choice, else the browser language (app-wide rule). AUTO: spec assumption amended to match the existing app behaviour instead of forcing Ukrainian.
 - Local env: the running dev DB (not started by the pipeline) has the demo role «Електрик» with extra permissions (REPORTS_VIEW, AUDIT_VIEW) left by earlier runs; the electrician e2e fails there on its precondition. Not reset (not the pipeline's environment).
 - Slice 11 task 1 committed below (`web/e2e/help.spec.ts`, chairman now expects every page).
+- Verify: screenshots captured from the running demo app — 70 per language in `web/public/help/img/`; capture fix (`/api/v1/me` in the demo guard) and `announcement-card` shot reduced to the list screen (the demo has no announcements and creating one would send it). `helpContent.test.ts` passes.

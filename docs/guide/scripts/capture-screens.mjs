@@ -4,7 +4,7 @@
 // in the Ukrainian interface, the English page's list in the English one. Output: web/public/help/img/<lang>/<name>.png.
 // Read-only: it only opens pages, previews and dialogs, it never saves anything.
 // Strict: a shot that cannot be taken is reported as `<page id>: <shot>: <reason>` and the exit code is 1. No placeholder.
-// Demo guard: before any shot it signs in as the chairman and reads GET /api/me; unless the cooperative is the demo
+// Demo guard: before any shot it signs in as the chairman and reads GET /api/v1/me; unless the cooperative is the demo
 // cooperative of backend/src/main/resources/db/demo/R__demo_data.sql, it takes nothing and exits with 1.
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -60,12 +60,12 @@ async function setLocale(context, lang) {
   }, lang);
 }
 
-/** Reads GET /api/me while the chairman signs in; exits when the cooperative is not the demo one. */
+/** Reads GET /api/v1/me while the chairman signs in; exits when the cooperative is not the demo one. */
 async function guardDemo(browser) {
   const context = await newContext(browser, 'en', false);
   try {
     const page = await context.newPage();
-    const me = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/me' && r.ok(), { timeout: 30000 });
+    const me = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/v1/me' && r.ok(), { timeout: 30000 });
     await signIn(page, 'chairman');
     const body = await (await me).json();
     if (body?.tenant?.id !== DEMO_TENANT_ID) {
