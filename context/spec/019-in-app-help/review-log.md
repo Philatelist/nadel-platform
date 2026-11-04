@@ -29,3 +29,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `59e3d86..dc7c798` | PASS | — | static review. minor: `returnPathOf` allows `/\host` (not exploitable today, value is the app's own path); public help flashes for a signed-in user while OIDC loads; `useHelpMeta` restore when previous is null; `existsIndex` reads the whole file |
+
+## Slice 5 — The completeness check
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `dc7c798..9aed130` | PASS | — | static review; route/menu coverage only in vitest judged sufficient (CI runs `pnpm -r test`). minor: no test for `DUPLICATE_ID`; `UNKNOWN_LINK` accepts a link to a page that exists only in the other language (flagged by `MISSING_TRANSLATION`); build needs `pnpm gen:api` first |

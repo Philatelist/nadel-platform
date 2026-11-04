@@ -8,7 +8,7 @@ COMPOSE := docker compose -f infra/docker-compose.yml
 # process, never exported by Make and never referenced by docker compose.
 LOAD_ENV := set -a; . infra/.env; set +a
 
-.PHONY: help install up down infra backend web mobile dev gen test check lint format format-check clean e2e-install e2e guide-shots guide
+.PHONY: help install up down infra backend web mobile dev gen test check lint format format-check clean e2e-install e2e help-shots guide-shots guide
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
@@ -109,8 +109,12 @@ clean: ## Remove build outputs
 	cd backend && ./mvnw -q clean
 	rm -rf web/dist
 
-guide-shots: ## Screenshots for the guides from the running app (start it with `make up` first)
+help-shots: ## Screenshots of one help page from the running demo app: make help-shots ID=payments-enter
+	@test -n "$(ID)" || { echo "Usage: make help-shots ID=<help page id>   (the file name in docs/help/uk without .md; start the demo with \`make up\`)"; exit 1; }
+	node docs/guide/scripts/capture-screens.mjs --page $(ID)
+
+guide-shots: ## Screenshots of all help pages (web/public/help/img) from the running demo app (start it with `make up` first)
 	node docs/guide/scripts/capture-screens.mjs
 
-guide: ## Build the guide PDFs (docs/guide/pdf) from docs/guide/uk and docs/guide/en
+guide: ## Build the guide PDFs (docs/guide/pdf): the board guide from docs/help, the owner manual and the leaflet from docs/guide
 	node docs/guide/scripts/build-pdf.mjs
