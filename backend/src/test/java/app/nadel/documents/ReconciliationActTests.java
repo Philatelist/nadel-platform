@@ -24,8 +24,9 @@ import org.springframework.transaction.support.TransactionTemplate;
  * today. From the first day of the previous month to today the act shows the requisites, the plot and its owner, the
  * period, the balances at both ends, the lines with «Нараховано» and «Сплачено», the turnover, «заборгованість …
  * становить 180,00 ₴» and the signature blocks; an overpayment and a settled plot give the other two sentences; the
- * same period gives the same bytes; without a treasurer the cooperative's line is empty; the period, common land and
- * the requisites are checked; the facade draws the same file.
+ * same period gives the same bytes; a start before the plot's first ledger day gives the act from that day; without a
+ * treasurer the cooperative's line is empty; the period, common land and the requisites are checked; the facade draws
+ * the same file.
  */
 class ReconciliationActTests extends DocumentsTestSupport {
 
@@ -152,10 +153,29 @@ class ReconciliationActTests extends DocumentsTestSupport {
     }
 
     @Test
-    void thePeriodMustLieBetweenTheFirstLedgerDayAndToday() throws Exception {
+    void aStartBeforeThePlotsFirstLedgerDayGivesTheActFromThatDay() throws Exception {
+        LocalDate newYear = LocalDate.of(first.getYear(), 1, 1).minusYears(1);
+        ResultActions call = act(chairman, nine, newYear, today()).andExpect(status().isOk());
+        assertThat(call.andReturn().getResponse().getHeader("Content-Disposition")).contains(
+                "reconciliation_act_plot-9_" + first + "_" + today() + ".pdf");
+        byte[] early = call.andReturn().getResponse().getContentAsByteArray();
+
+        assertThat(flat(text(early))).contains("за період з " + day(first) + " по " + day(today()),
+                "Сальдо на початок періоду (станом на " + day(first.minusDays(1)) + "): заборгованість 0,00 ₴",
+                "Нарахування: Членський внесок, " + month(first)).doesNotContain(day(newYear));
+        // the same act as asked from the first day, and the same bytes for the same request
+        assertThat(early).isEqualTo(pdf(nine, first, today())).isEqualTo(pdf(nine, newYear, today()));
+        byte[] fromFacade = TenantContext.runAs(tenant, () -> tx.execute(status ->
+                facade.reconciliationActPdf(nine, newYear, today())));
+        assertThat(fromFacade).isEqualTo(early);
+    }
+
+    @Test
+    void thePeriodMustNotEndAfterTodayNorStartAfterItsEndAndThePlotNeedsALedger() throws Exception {
         invalid(act(chairman, nine, first, today().plusDays(1)), "to");
-        invalid(act(chairman, nine, first.minusDays(1), today()), "from");
         invalid(act(chairman, nine, today(), today().minusDays(1)), "from");
+        // a period that ends before the plot's first ledger day covers nothing
+        invalid(act(chairman, nine, first.minusDays(10), first.minusDays(1)), "from");
         invalid(act(chairman, plot("10", "Садова"), today(), today()), "from");
         act(chairman, nine, first, first).andExpect(status().isOk());
         send(chairman, get(ACT.formatted(nine)).param("from", first.toString()), null)

@@ -12,7 +12,7 @@
 
 export type GetPlotReconciliationActPdfParams = {
 /**
- * The first day of the period, inclusive
+ * The first day of the period, inclusive; a day before the plot's first ledger day means that day
  */
 from: string;
 /**

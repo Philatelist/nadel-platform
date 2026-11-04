@@ -46,3 +46,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `6439480..a070e08` | PASS | — | minor: OPENING/DAY/CLOSING rows count against the 20 000-row cap (worth a README sentence); TemplateValues:103 over-long Javadoc; the «Витрати» total skips reversed expenses, so it can differ from income-expense when an expense and its reversal fall in different periods (per spec, documented) |
+
+## Slice 8 — Demo data, documentation and guides
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `a070e08..74c731d` | PASS | — | minor: Ukrainian demo literals rely on UTF-8 sources; ADR 0019 title is long; CI demo-days list needs DemoTreasuryTests (owner, .github) |

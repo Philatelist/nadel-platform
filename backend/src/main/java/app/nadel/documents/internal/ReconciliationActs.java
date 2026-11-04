@@ -52,9 +52,12 @@ import org.springframework.transaction.annotation.Transactional;
  * {@code PLOT_NOT_FOUND} for an unknown plot, one of another cooperative, and, for a caller without
  * {@code CHARGES_VIEW}, any plot they do not own now (as the plot account); 409 {@code PLOT_COMMON_LAND} for common
  * land (as a debt certificate; an archived plot gets its act, its history stays); 400 {@code VALIDATION_FAILED} with
- * {@code to INVALID} for a last day after today (Kyiv) and {@code from INVALID} for a first day after the last one,
- * before the plot's first ledger day ({@link LedgerReadModel#firstDebtDate}) or for a plot without any ledger row; 409
- * {@code REQUISITES_MISSING} as for invoices. Owners' and the treasurer's names are personal data: never logged.
+ * {@code to INVALID} for a last day after today (Kyiv) and {@code from INVALID} for a first day after the last one or
+ * for a plot without any ledger row; 409 {@code REQUISITES_MISSING} as for invoices. A first day before the plot's
+ * first ledger day ({@link LedgerReadModel#firstDebtDate}) is moved to that day, and the act shows the period it
+ * covers (functional spec 2.10 as amended in Slice 9): an act asked for from 1 January of a plot whose ledger starts in
+ * March starts in March; when the whole period lies before that day ({@code to} before it) it is {@code from INVALID}.
+ * Owners' and the treasurer's names are personal data: never logged.
  */
 @Service
 class ReconciliationActs {
@@ -116,22 +119,27 @@ class ReconciliationActs {
             throw new ApiProblemException(HttpStatus.CONFLICT, ProblemCodes.PLOT_COMMON_LAND,
                     "Common land gets no reconciliation act.");
         }
-        validatePeriod(plotId, from, to);
+        LocalDate start = periodStart(plotId, from, to);
         ReceiptContent.Requisites requisites = requisites();
-        PlotStatement statement = ledger.plotStatement(plotId, from, to);
+        PlotStatement statement = ledger.plotStatement(plotId, start, to);
         ReconciliationActLayout.Content content = new ReconciliationActLayout.Content(requisites, plot.number(),
-                plot.street(), owners(plotId), from, to, balance(from.minusDays(1), statement.opening()),
+                plot.street(), owners(plotId), start, to, balance(start.minusDays(1), statement.opening()),
                 lines(statement), statement.charged(), statement.paid(), balance(to, statement.closing()),
                 treasurer());
-        return new ActFile(fileName(plot.number(), from, to), ReconciliationActLayout.render(content));
+        return new ActFile(fileName(plot.number(), start, to), ReconciliationActLayout.render(content));
     }
 
-    /** {@code first ≤ from ≤ to ≤ today} (Kyiv), else 400 with the field at fault. */
-    private void validatePeriod(UUID plotId, LocalDate from, LocalDate to) {
+    /**
+     * The first day of the act: {@code from}, or the plot's first ledger day when {@code from} is before it. 400 with
+     * {@code to INVALID} for a last day after today (Kyiv) and {@code from INVALID} for a first day after the last one,
+     * a plot without any ledger row, or a last day before the plot's first ledger day.
+     */
+    private LocalDate periodStart(UUID plotId, LocalDate from, LocalDate to) {
         LocalDate today = DocumentFormat.dayOf(clock.instant());
         List<FieldProblem> problems = new ArrayList<>(2);
         Optional<LocalDate> first = ledger.firstDebtDate(plotId);
-        if (from.isAfter(to) || first.isEmpty() || from.isBefore(first.get())) {
+        LocalDate start = first.isPresent() && from.isBefore(first.get()) ? first.get() : from;
+        if (first.isEmpty() || start.isAfter(to)) {
             problems.add(new FieldProblem("from", ProblemCodes.INVALID));
         }
         if (to.isAfter(today)) {
@@ -141,6 +149,7 @@ class ReconciliationActs {
             throw new ApiProblemException(HttpStatus.BAD_REQUEST, ProblemCodes.VALIDATION_FAILED,
                     "The request is not valid.", problems);
         }
+        return start;
     }
 
     /** The lines of the statement, named: the charge type and the service period, or the payment and its number. */

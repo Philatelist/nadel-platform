@@ -94,8 +94,10 @@ for an unknown plot, another cooperative's and, without `CHARGES_VIEW`, any plot
 (`identity.OwnedPlotsSource`, as the plot account), before anything else is looked at; 409 `PLOT_COMMON_LAND` for
 common land (as a certificate; an **archived plot gets its act**: its history stays, although the plot balances report
 no longer lists it); 400 `VALIDATION_FAILED` with `to INVALID` for a last day after today (Kyiv) and `from INVALID` for
-a first day after the last one, before `LedgerReadModel.firstDebtDate` (the earliest charge, opening balance or
-payment of the plot) or for a plot without any ledger row; 409 `REQUISITES_MISSING` as for invoices. Then it reads
+a first day after the last one or for a plot without any ledger row; 409 `REQUISITES_MISSING` as for invoices. A first
+day before `LedgerReadModel.firstDebtDate` (the earliest charge, opening balance or payment of the plot) is moved to
+that day (the web form starts on 1 January; FS 2.10 as amended in Slice 9), and the period line, the opening balance
+and the file name show the period the act covers; a period that ends before that day is `from INVALID`. Then it reads
 `LedgerReadModel.plotStatement` (opening `debtsAsOf(from − 1)`, closing `debtsAsOf(to)`, every charge and payment row
 of the period by the `debtsAsOf` dating), the current owners (`plots.PlotOwners`, `members.MemberDirectory`, «Last
 First Middle»), the charge type names (the Ukrainian default of a seeded, not renamed type, as on receipts and
@@ -491,7 +493,8 @@ hryvnia sign U+20B4. SHA-256: Regular `975dcda37d80f038dcd143c22e33ca2d97a0cc5a9
 - `ReconciliationActTests` (Testcontainers, feature 018): the requisites, plot, owner, period, both balances, the lines
   by date with a reversed payment, the turnover and the debt sentence; the overpayment and «відсутня» sentences and a
   later period starting with the balance before it; the same bytes twice and from the facade; no treasurer; the period
-  (`to` after today, `from` before the first day or after `to`, a plot without rows, a missing parameter); common land
+  (`to` after today, `from` after `to`, a plot without rows, a period ending before the first day, a missing
+  parameter); a start before the plot's first day gives the act from that day, byte-identical to asking for it; common land
   409, an archived plot's act, missing requisites 409.
 - `ReconciliationActAccessTests` (Testcontainers): the chairman, the treasurer and a `CHARGES_VIEW` custom role for any
   plot; a member for their own plot; another member's plot, an unknown id, a plot owned in the past and a role without

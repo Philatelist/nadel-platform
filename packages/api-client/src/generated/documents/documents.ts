@@ -311,16 +311,18 @@ export const getGetPlotReconciliationActPdfUrl = (id: string,
  * становить …» (or «переплата … становить …», or «заборгованість відсутня») by the net balance (the debt minus
  * the prepayment), and the signature blocks «Від кооперативу» (the name of the first active holder of the
  * treasurer base role, or an empty line without one) and «Член кооперативу». The balances at both ends are those
- * of the plot balances report (`LedgerReadModel.debtsAsOf`, every charge type) on the day before `from` and on
- * `to`: a charge counts on its debt date (a reversal and an adjustment on the date of the charge they correct), a
+ * of the plot balances report (`LedgerReadModel.debtsAsOf`, every charge type) on the day before the period's
+ * first day and on `to`: a charge counts on its debt date (a reversal and an adjustment on the date of the charge they correct), a
  * payment on the day it was received (a payment reversal on the day of the payment it reverses). Made on request
  * and not stored; not written to the audit log; the same plot and period give the same bytes as long as the
  * ledger of the plot does not change.
  *
- * The period must satisfy `first ≤ from ≤ to ≤ today` (Europe/Kyiv), where `first` is the earliest day in the
- * plot's ledger (its first charge or opening balance, or an earlier payment); otherwise 400 `VALIDATION_FAILED`
- * with `errors[{field: from, code: INVALID}]` (`from` after `to` or before `first`, or a plot without any ledger
- * row) or `errors[{field: to, code: INVALID}]` (`to` after today). 409 `PLOT_COMMON_LAND` for common land (an
+ * The period runs from `from` to `to`, both inclusive, `to` not after today (Europe/Kyiv). A `from` before
+ * `first`, the earliest day in the plot's ledger (its first charge or opening balance, or an earlier payment), is
+ * moved to `first`, and the act (its period line, opening balance and file name) shows the period it covers.
+ * Otherwise 400 `VALIDATION_FAILED` with `errors[{field: from, code: INVALID}]` (`from` after `to`, `to` before
+ * `first`, or a plot without any ledger row) or `errors[{field: to, code: INVALID}]` (`to` after today). 409
+ * `PLOT_COMMON_LAND` for common land (an
  * archived plot gets its act: its history stays). 409 `REQUISITES_MISSING` with `missing` (`IBAN`, `EDRPOU`) as
  * for invoices.
  *

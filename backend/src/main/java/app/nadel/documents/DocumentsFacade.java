@@ -72,7 +72,8 @@ public interface DocumentsFacade {
      * The reconciliation act of the plot for the period (feature 018 §2.10), drawn now from the ledger and not stored:
      * the same build as {@code GET /plots/{id}/reconciliation-act.pdf} after its access check, with the same answers
      * ({@code ApiProblemException} 404 {@code PLOT_NOT_FOUND}, 409 {@code PLOT_COMMON_LAND}, 400
-     * {@code VALIDATION_FAILED} for a period outside {@code first ≤ from ≤ to ≤ today}, 409 {@code REQUISITES_MISSING}).
+     * {@code VALIDATION_FAILED} for {@code from} after {@code to}, {@code to} after today or a plot without ledger rows,
+     * 409 {@code REQUISITES_MISSING}); a {@code from} before the plot's first ledger day starts the act on that day.
      * The same plot and period give the same bytes while the plot's ledger stays the same. Not audited.
      */
     byte[] reconciliationActPdf(UUID plotId, LocalDate from, LocalDate to);

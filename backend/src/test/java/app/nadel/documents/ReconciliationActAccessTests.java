@@ -63,8 +63,10 @@ class ReconciliationActAccessTests extends DocumentsTestSupport {
     }
 
     @Test
-    void aMemberGetsTheActOfTheirOwnPlot() throws Exception {
+    void aMemberGetsTheActOfTheirOwnPlotAlsoFromADayBeforeItsFirstCharge() throws Exception {
         assertThat(pdfText(member, own)).contains("Ділянка № 9, Садова", "Власники: " + MEMBER_NAME);
+        // the web form starts on 1 January: the act starts on the plot's first ledger day
+        act(member, own, LocalDate.of(first.getYear(), 1, 1).minusYears(1), today()).andExpect(status().isOk());
     }
 
     @Test

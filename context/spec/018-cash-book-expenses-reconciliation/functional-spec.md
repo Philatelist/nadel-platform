@@ -306,8 +306,9 @@ For a plot and a period the act is a PDF in Ukrainian with:
   treasurer), and «Член кооперативу».
 
 The act is built when it is requested and is not kept; the same plot and period always give the same act. The balances
-at both ends equal the plot balances report on those days. The period can start no earlier than the plot's first
-charge and end no later than today; a wrong period shows «Невірний період».
+at both ends equal the plot balances report on those days. A period that starts before the plot's first charge
+or payment starts on that first day (the act shows the actual period); a period that ends after today, or starts after
+it ends, shows «Невірний період».
 
 The board builds it from the plot card («Акт звірки», with a period). A member downloads it in their account for each
 of their own plots; another plot's act is not available to them. The act can be sent like any document of 017.
@@ -520,3 +521,7 @@ Decided by the pipeline (no blocking questions; recommended answers taken, see `
 ## Change Log
 
 _Dated amendments made after the spec was first written. Leave empty until the first amendment._
+
+- 2026-11-04 — Slice 9 acceptance testing (GAP on FS 2.10) — a reconciliation act period that starts before the plot's
+  first charge or payment now starts on that first day instead of being refused, because the form's default start
+  (1 January) made the first download fail for most plots.
