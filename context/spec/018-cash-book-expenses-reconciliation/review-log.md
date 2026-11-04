@@ -52,3 +52,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `a070e08..74c731d` | PASS | — | minor: Ukrainian demo literals rely on UTF-8 sources; ADR 0019 title is long; CI demo-days list needs DemoTreasuryTests (owner, .github) |
+
+## Slice 9 — Feature Testing & Regression (+ act period GAP fix)
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `74c731d..d3e77d8` | MAJOR_ISSUES | M1 acceptance-coverage.md cites a renamed act test (row 2.10 #4) and old names in 2.10 #2 | minor: cash-count e2e fixed wait up to ~61 s when the demo count falls in the same minute; bank-reconciliation e2e depends on demo state and spec order (fine on a fresh DB); reconciliation-act e2e `earliestStart` probe now redundant after the clamp |
