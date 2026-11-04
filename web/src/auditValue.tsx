@@ -185,6 +185,16 @@ export function auditValue(
       return entityType === 'TARIFF' ? catalog(t.tariffs.basis) : user(raw);
     case 'deliveryChannel':
       return catalog(t.channel);
+    case 'channels':
+      return raw
+        .split(', ')
+        .map((code) => t.channel[code as keyof Messages['channel']] ?? code)
+        .join(', ');
+    case 'audience':
+      return catalog({
+        ALL: t.announcements.form.audienceAll,
+        STREETS: t.announcements.form.audienceStreets,
+      });
     case 'memberPlotStatusVisibility':
       return t.settings.visibility[raw as keyof Messages['settings']['visibility']]?.label ?? raw;
     case 'status':
@@ -211,6 +221,7 @@ export function auditValue(
     case 'until':
     case 'date':
     case 'reversedOn':
+    case 'receivedOn':
       return ISO_DAY.test(raw) ? formatDay(raw, locale) : raw;
     case 'amount':
     case 'counted':
@@ -222,6 +233,7 @@ export function auditValue(
     case 'closing':
     case 'redAmount':
     case 'total':
+    case 'due':
       return isMoney(raw) ? formatMoney(raw, locale) : raw;
     case 'countedAt':
       return Number.isNaN(Date.parse(raw)) ? raw : formatDateTime(raw, locale);

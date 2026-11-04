@@ -111,12 +111,11 @@ export function CertificatesPage() {
           {r.status === 'ANNULLED' && (
             <>
               {r.annulledAt !== undefined && (
-                <span className="text-sm text-ink-muted">
-                  {format(c.annulledBy, {
-                    name: r.annulledByName ?? '—',
-                    when: formatDateTime(r.annulledAt, locale),
-                  })}
-                </span>
+                <AnnulledBy
+                  template={c.annulledBy}
+                  name={r.annulledByName}
+                  when={formatDateTime(r.annulledAt, locale)}
+                />
               )}
               {r.annulReason !== undefined && (
                 <span className="text-sm text-ink-muted">
@@ -212,5 +211,17 @@ export function CertificatesPage() {
         />
       )}
     </div>
+  );
+}
+
+/** «Annulled by {name}, {when}»: the person's name is user content, shown as stored in either language. */
+function AnnulledBy({ template, name, when }: { template: string; name?: string; when: string }) {
+  const [before = '', after = ''] = template.split('{name}');
+  return (
+    <span className="text-sm text-ink-muted">
+      {format(before, { when })}
+      {name === undefined ? '—' : <UserContent>{name}</UserContent>}
+      {format(after, { when })}
+    </span>
   );
 }
