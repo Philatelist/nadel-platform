@@ -1,7 +1,7 @@
 # Pipeline log — 018 cash book, expenses and reconciliation
 
 - Status: running
-- Phase: 3 — Slice 1 backend task
+- Phase: 4 — verify and full suite
 - Branch: 018-cash-book-expenses-reconciliation (planned) · Base: main @ c7419a6
 - Requirement: docs/features/018-cash-book-expenses-reconciliation.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
@@ -156,3 +156,7 @@
 - Slice 9 commit d3e77d8; review round 1 started (74c731d..d3e77d8). Full suite (make check) started in the background in parallel.
 - Slice 9 review round 1: MAJOR_ISSUES (M1 stale test names in acceptance-coverage.md) → review fix sent to testing-expert.
 - Slice 9 review fix round 1 (testing-expert): acceptance-coverage.md 2.10 rows use the renamed act tests; every Class.method reference re-checked against the sources.
+- Slice 9 review fix commit 30c24e5; review round 2 started.
+- Slice 9 review round 2: PASS (M1 resolved). Every slice review PASS. Phase 4: waiting for make check.
+- Phase 4 full suite (make check on 30c24e5): gen, format, lint green; backend 4178 tests, 1 failure (not in the baseline): MembersAccessAcceptanceTests.noTaxPassportOrBirthDataExistsInTheContractOrOnTheCard — the contract now mentions payroll_taxes/taxes_fees in the expense category systemCode description. Stopped before coverage and client tests. Regression fix attempt 1 → spring-backend (reword the description; no test change, no code rename).
+- Regression fix attempt 1 (spring-backend): ExpenseCategory schema description no longer lists the seeded codes (TAXES_FEES matched the test's tax pattern); gen (doc comment only); MembersAccessAcceptanceTests 13 green.

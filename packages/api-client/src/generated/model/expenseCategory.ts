@@ -12,7 +12,7 @@
 import type { ExpenseCategoryKind } from './expenseCategoryKind';
 
 /**
- * An expense or income category. A seeded category has a `systemCode` (expense: `ELECTRICITY_SUPPLIER`, `WATER`, `PAYROLL_TAXES`, `NETWORK_REPAIR`, `MATERIALS`, `WASTE`, `BANK_FEES`, `TAXES_FEES`, `OFFICE_COMMS`, `OTHER`; income: `BANK_INTEREST`, `GRANTS`, `SALES`, `OTHER`) and no `name` until it is renamed (the client shows the name of its code); a category added by the cooperative has a `name` and no `systemCode`
+ * An expense or income category. A category seeded for every cooperative has a `systemCode` and no `name` until it is renamed (the client shows the name of its code from the i18n catalogs); a category added by the cooperative has a `name` and no `systemCode`
  */
 export interface ExpenseCategory {
   id: string;
