@@ -86,3 +86,10 @@
 - Product docs: suggested follow-ups only (no `/awos:architecture` run; `context/product/architecture.md` already mentions the help).
 - Phase 5: pushed `019-in-app-help`, opened PR #68 (`feat(help): in-app help per screen, per role and public`). CI run 41898629237: backend, clients, demo data by day, e2e (smoke), Semgrep, security — all green on the first round; no CI fixes needed.
 - Phase 6: review run not started — ports in use by a stack the pipeline did not start (not stopped).
+
+## Owner review of PR #68 (NOTES.local.md, items 1, 2 and Finish)
+
+- Item 1 (member's menu and way home) and item 2 (non-modal «?» panel) implemented: `0dde5a4` (code, help content, owner manual, spec change logs of 006/007/019), fix review PASS; e2e updated `2b04da1` (help.spec 22/22 locally); screenshots and PDFs retaken `0c9caee`.
+- A Prettier run reformatted ~120 help pages although `*.md` is in `.prettierignore`; the formatting-only changes were reverted before commit.
+- Full suite once: `make check` green (backend 4184, coverage met; clients 1059+130+56+9).
+- Still red in the full e2e set locally, outside the smoke set and outside this change: `acceptance.spec.ts:233,349` (expects 25 permissions, there are 31), `acceptance.spec.ts:151` (leftover local member without a role), `acceptance.spec.ts:507` (not investigated), `language-purity.spec.ts:353` (Latin "PDF" in «Завантажити PDF» on the account).
