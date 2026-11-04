@@ -38,6 +38,31 @@ describe('ExpenseForm', () => {
     window.localStorage.setItem('nadel.locale', 'uk');
     createExpense.mockReset();
     heicToJpeg.mockReset();
+    let counter = 0;
+    URL.createObjectURL = vi.fn(() => `blob:test/${++counter}`);
+    URL.revokeObjectURL = vi.fn();
+  });
+
+  it('shows the HEIC hint under the attachment buttons', () => {
+    renderForm();
+    expect(screen.getByText('Фото HEIC з iPhone приймаються в Safari.')).toBeInTheDocument();
+  });
+
+  it('shows thumbnails of added files and removes one', async () => {
+    const user = userEvent.setup();
+    renderForm();
+    await user.upload(screen.getByTestId('file-input'), [
+      new File(['p'], 'a.png', { type: 'image/png' }),
+      new File(['%PDF'], 'b.pdf', { type: 'application/pdf' }),
+    ]);
+    expect(await screen.findByRole('img', { name: 'a.png' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Відкрити PDF: b.pdf' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'a.png' }));
+    expect(await screen.findByRole('dialog', { hidden: true })).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    await user.click(screen.getByRole('button', { name: 'Прибрати: a.png' }));
+    expect(screen.queryByRole('img', { name: 'a.png' })).not.toBeInTheDocument();
+    expect(screen.getByText('b.pdf')).toBeInTheDocument();
   });
 
   it('checks the amount before calling the server', async () => {
@@ -79,7 +104,9 @@ describe('ExpenseForm', () => {
     renderForm();
     await user.upload(screen.getByTestId('file-input'), new File(['h'], 'IMG.heic', { type: 'image/heic' }));
     expect(
-      await screen.findByText('Не вдалося перетворити фото HEIC. Збережіть його як JPEG і додайте ще раз.'),
+      await screen.findByText(
+        'Цей браузер не відкриває фото HEIC з iPhone. Додайте фото через Safari або увімкніть на iPhone: Налаштування → Камера → Формати → «Найсумісніший» (фото будуть у JPEG).',
+      ),
     ).toBeInTheDocument();
   });
 

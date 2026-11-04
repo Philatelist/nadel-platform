@@ -55,8 +55,20 @@ function renderCard() {
   );
 }
 
+const withFiles = {
+  ...expense,
+  attachments: [
+    { n: 1, fileName: 'chek.pdf', contentType: 'application/pdf', sizeBytes: 2048 },
+    { n: 2, fileName: 'one.png', contentType: 'image/png', sizeBytes: 1024 },
+    { n: 3, fileName: 'two.jpg', contentType: 'image/jpeg', sizeBytes: 1024 },
+  ],
+};
+
 describe('ExpenseCardPage', () => {
   beforeEach(() => {
+    let counter = 0;
+    URL.createObjectURL = vi.fn(() => `blob:test/${++counter}`);
+    URL.revokeObjectURL = vi.fn();
     window.localStorage.setItem('nadel.locale', 'uk');
     permissions = ['CASHBOOK_VIEW'];
     useGetExpense.mockReset().mockReturnValue(queryResult(expense));
@@ -98,5 +110,55 @@ describe('ExpenseCardPage', () => {
     await user.click(screen.getByRole('button', { name: 'Сторнувати' }));
     expect(await screen.findByText('prefilled from e1')).toBeInTheDocument();
     expect(reverseExpense).toHaveBeenCalledWith('e1', { reason: 'Помилка суми' });
+  });
+
+  it('shows thumbnails for images and a tile for a PDF, opens the viewer and moves with arrows', async () => {
+    useGetExpense.mockReturnValue(queryResult(withFiles));
+    downloadExpenseAttachment.mockImplementation((_id: string, n: number) =>
+      Promise.resolve(new Blob([`f${n}`])),
+    );
+    const user = userEvent.setup();
+    renderCard();
+    expect(await screen.findByRole('img', { name: 'one.png' })).toBeInTheDocument();
+    expect(await screen.findByRole('img', { name: 'two.jpg' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Відкрити PDF: chek.pdf' })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'one.png' }));
+    const dialog = await screen.findByRole('dialog', { hidden: true });
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+    expect(dialog).toHaveAccessibleName('Перегляд фото one.png');
+    expect(screen.getByText('Фото 1 з 2')).toBeInTheDocument();
+    await user.keyboard('{ArrowRight}');
+    expect(await screen.findByText('Фото 2 з 2')).toBeInTheDocument();
+    await user.keyboard('{ArrowLeft}');
+    expect(await screen.findByText('Фото 1 з 2')).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog', { hidden: true })).not.toBeInTheDocument());
+  });
+
+  it('closes the viewer with its button', async () => {
+    useGetExpense.mockReturnValue(queryResult(withFiles));
+    downloadExpenseAttachment.mockResolvedValue(new Blob(['x']));
+    const user = userEvent.setup();
+    renderCard();
+    await user.click(await screen.findByRole('button', { name: 'two.jpg' }));
+    await user.click(await screen.findByRole('button', { name: 'Закрити' }));
+    expect(screen.queryByRole('dialog', { hidden: true })).not.toBeInTheDocument();
+  });
+
+  it('opens a PDF in a new tab from a blob URL', async () => {
+    useGetExpense.mockReturnValue(queryResult(withFiles));
+    downloadExpenseAttachment.mockResolvedValue(new Blob(['%PDF']));
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    const user = userEvent.setup();
+    renderCard();
+    await user.click(screen.getByRole('button', { name: 'Відкрити PDF: chek.pdf' }));
+    await waitFor(() =>
+      expect(open).toHaveBeenCalledWith(expect.stringMatching(/^blob:/), '_blank', 'noopener'),
+    );
+    const blob = (URL.createObjectURL as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[0] as Blob;
+    expect(blob.type).toBe('application/pdf');
+    open.mockRestore();
   });
 });

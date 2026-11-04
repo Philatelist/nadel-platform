@@ -2022,11 +2022,13 @@ END $$;</pre>
           changed), not on disk. At most 5 files of 5 MB per expense; the type is checked by content (JPEG,
           PNG, PDF), not by name; location (GPS) and camera data are removed from photos. A file can be
           downloaded only by someone who has "View cash and bank" in their own cooperative. HEIC files from an
-          iPhone are converted to JPEG only by the phone or browser (the server does not convert HEIC); if
-          that fails the user sees "This HEIC photo could not be converted. Save it as JPEG and add it again."
-          The counterparty and the purpose of an expense are personal data: stored protected, visible in the
-          audit log only with "View members". Attachments make the database and its backups grow: plan the
-          space (see chapter 10).
+          iPhone are converted to JPEG only by the phone or browser (the server does not convert HEIC); if the
+          browser cannot open HEIC the user sees "This browser cannot open HEIC photos from an iPhone. Add the
+          photo in Safari, or on the iPhone turn on Settings → Camera → Formats → "Most Compatible" (photos
+          will be JPEG)." Thumbnails on the form and the expense card are made in the browser from the stored
+          file (no extra images on the server). The counterparty and the purpose of an expense are personal
+          data: stored protected, visible in the audit log only with "View members". Attachments make the
+          database and its backups grow: plan the space (see chapter 10).
         </dd>
         <dt>Report templates are data</dt>
         <dd>
@@ -2537,9 +2539,10 @@ END $$;</pre>
             <td>A photo is not attached to an expense</td>
             <td>
               The file is over 5 MB, it is the sixth file, or it is not JPEG/PNG/PDF by content. A HEIC photo
-              that the phone or browser could not convert is not attached: the form says "This HEIC photo
-              could not be converted. Save it as JPEG and add it again." A request over 27 MB is rejected by a
-              proxy or the server.
+              that the browser cannot open is not attached: the form says "This browser cannot open HEIC
+              photos from an iPhone. Add the photo in Safari, or on the iPhone turn on Settings → Camera →
+              Formats → "Most Compatible" (photos will be JPEG)." A request over 27 MB is rejected by a proxy
+              or the server.
             </td>
           </tr>
           <tr>

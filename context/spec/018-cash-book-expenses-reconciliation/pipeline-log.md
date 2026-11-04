@@ -1,7 +1,7 @@
 # Pipeline log — 018 cash book, expenses and reconciliation
 
-- Status: finished
-- Phase: 6 — review run (done, after owner review changes)
+- Status: running
+- Phase: 5 — findings 4–5 pushed, waiting for checks
 - Branch: 018-cash-book-expenses-reconciliation (planned) · Base: main @ c7419a6
 - Requirement: docs/features/018-cash-book-expenses-reconciliation.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
@@ -208,3 +208,11 @@
 - Owner review changes pushed (850e8cb); PR #66 body updated; checks run 41851564632: 6 of 6 green (Backend, Clients, Demo data by day, End-to-end, SAST, Security). No CI fixes.
 - Review run restarted on the PR branch (web http://localhost:5173, API :8080). Stop: `kill 84692 84717 84861 85028`, infra `make down`.
 - Left for the owner: review and merge; ci.yml demo-days list; CLAUDE.md NADEL_DB_PORT line; decide whether back-dated lines reopen later reconciled months; manual phone-camera check.
+
+## Owner review findings 4–5 (2026-11-04)
+
+- (4) HEIC failure text: uk «Цей браузер не відкриває фото HEIC з iPhone. Додайте фото через Safari або увімкніть на iPhone: Налаштування → Камера → Формати → «Найсумісніший» (фото будуть у JPEG).», en the same meaning; under the attachment buttons: HEIC from an iPhone is accepted in Safari. (5) Thumbnails (~160 px, correct orientation) for images and a file icon for PDFs on the expense card; click: image viewer on the page (Esc, arrows) or PDF in a new tab; keep «Завантажити»; same on the form before saving with remove; thumbnails built in the browser from the stored file. Then affected tests, push, green CI, restart the review run, tell the owner what to re-check. No .github, no merge.
+- FS 2.3 amended (+3 criteria, Change Log).
+- Findings 4–5 guides done (general-purpose): board guide ch. 16 attachments (new HEIC message + Safari hint, previews item), owner manual attachments (new message, thumbnails made in the browser) and troubleshooting row; uk/en identical; prettier clean.
+- Findings 4–5 web done (react-frontend): AttachmentPreview (thumbnails 160 px from the stored file via the authenticated download, cached; native <dialog> viewer with Esc/arrows/buttons; PDF tile opens a blob URL in a new tab), card keeps «Завантажити», form previews with «Прибрати», HEIC message + Safari hint; tests (+RED on Esc). Orchestrator: clients green (web 981), prettier clean, uk hint text checked. Review run stopped for the e2e run of cashbook-expense-handover + smoke (testing-expert).
+- e2e (testing-expert): cashbook-expense-handover 2 passed, smoke 21 passed. Review run restarted; guide shots: the expense-card shot first picked an expense the owner had entered while testing (real phone photo IMG_0402.jpg) — not committed; capture-screens.mjs gained a rowText filter so the shot opens the demo expense «Будмаркет «Демо»»; shots re-captured (all), make guide built 5 PDFs; orchestrator checked img/uk/expense-card.png (demo receipt thumbnail). FS 2.3 new criteria ticked (vitest card/form/HEIC + e2e + screenshot).

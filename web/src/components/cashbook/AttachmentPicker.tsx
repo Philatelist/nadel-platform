@@ -1,8 +1,8 @@
 import { useRef, useState } from 'react';
 import { useT } from '../../i18n';
 import { heicToJpeg, isHeicFile } from '../../lib/heicToJpeg';
-import { UserContent } from '../UserContent';
 import { Button, Notice } from '../ui';
+import { AttachmentPreviews, type PreviewFile } from './AttachmentPreview';
 
 export const MAX_FILES = 5;
 export const MAX_FILE_BYTES = 5 * 1024 * 1024;
@@ -13,6 +13,7 @@ export interface ReusedFile {
   expenseId: string;
   n: number;
   fileName: string;
+  contentType?: string;
 }
 
 /**
@@ -78,10 +79,25 @@ export function AttachmentPicker({
   }
 
   const shown = error ?? serverError;
+  const previews: PreviewFile[] = [
+    ...reused.map((file) => ({
+      key: `r${file.expenseId}-${file.n}`,
+      fileName: file.fileName,
+      contentType: file.contentType ?? '',
+      stored: { expenseId: file.expenseId, n: file.n },
+    })),
+    ...files.map((file, index) => ({
+      key: `f${index}-${file.name}-${file.size}`,
+      fileName: file.name,
+      contentType: file.type,
+      local: file,
+    })),
+  ];
   return (
     <div className="flex flex-col gap-2">
       <span className="text-[15px] font-medium">{t.expenses.form.attachments}</span>
       <p className="text-sm text-ink-muted">{a.hint}</p>
+      <p className="text-sm text-ink-muted">{a.heicHint}</p>
       <div className="flex flex-wrap gap-2">
         <Button variant="secondary" onClick={() => fileInput.current?.click()} disabled={converting}>
           {a.pick}
@@ -110,25 +126,20 @@ export function AttachmentPicker({
       </div>
       {converting && <p className="text-sm text-ink-muted">{a.converting}</p>}
       {shown && <Notice tone="danger">{shown}</Notice>}
-      <ul className="flex flex-col gap-1">
-        {reused.map((file, index) => (
-          <li key={`r${file.n}`} className="flex flex-wrap items-center gap-3">
-            <UserContent>{file.fileName}</UserContent>
-            <span className="text-sm text-ink-muted">({a.reused})</span>
-            <Button variant="secondary" onClick={() => onRemoveReused(index)}>
-              {a.remove}
-            </Button>
-          </li>
-        ))}
-        {files.map((file, index) => (
-          <li key={`${file.name}-${index}`} className="flex flex-wrap items-center gap-3">
-            <UserContent>{file.name}</UserContent>
-            <Button variant="secondary" onClick={() => onRemoveFile(index)}>
-              {a.remove}
-            </Button>
-          </li>
-        ))}
-      </ul>
+      <AttachmentPreviews
+        files={previews}
+        actions={(file, index) => (
+          <Button
+            variant="secondary"
+            aria-label={`${a.remove}: ${file.fileName}`}
+            onClick={() =>
+              index < reused.length ? onRemoveReused(index) : onRemoveFile(index - reused.length)
+            }
+          >
+            {a.remove}
+          </Button>
+        )}
+      />
     </div>
   );
 }

@@ -3441,7 +3441,17 @@ export const uk: Messages = {
       tooLarge: 'Файл завеликий. Максимум 5 МБ.',
       tooMany: 'Не більше 5 файлів.',
       typeNotAllowed: 'Дозволені лише фото (JPEG, PNG) і PDF.',
-      heicFailed: 'Не вдалося перетворити фото HEIC. Збережіть його як JPEG і додайте ще раз.',
+      heicFailed:
+        'Цей браузер не відкриває фото HEIC з iPhone. Додайте фото через Safari або увімкніть на iPhone: Налаштування → Камера → Формати → «Найсумісніший» (фото будуть у JPEG).',
+      heicHint: 'Фото HEIC з iPhone приймаються в Safari.',
+      openPdf: 'Відкрити PDF',
+      viewer: {
+        label: 'Перегляд фото {name}',
+        close: 'Закрити',
+        previous: 'Попереднє фото',
+        next: 'Наступне фото',
+        position: 'Фото {n} з {total}',
+      },
       list: 'Файли',
       none: 'Файлів немає.',
       download: 'Завантажити',

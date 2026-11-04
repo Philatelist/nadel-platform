@@ -3416,7 +3416,17 @@ export const en = {
       tooLarge: 'The file is too large. Maximum 5 MB.',
       tooMany: 'No more than 5 files.',
       typeNotAllowed: 'Only photos (JPEG, PNG) and PDF are allowed.',
-      heicFailed: 'This HEIC photo could not be converted. Save it as JPEG and add it again.',
+      heicFailed:
+        'This browser cannot open HEIC photos from an iPhone. Add the photo in Safari, or on the iPhone turn on Settings → Camera → Formats → "Most Compatible" (photos will be JPEG).',
+      heicHint: 'HEIC photos from an iPhone are accepted in Safari.',
+      openPdf: 'Open PDF',
+      viewer: {
+        label: 'Photo viewer: {name}',
+        close: 'Close',
+        previous: 'Previous photo',
+        next: 'Next photo',
+        position: 'Photo {n} of {total}',
+      },
       list: 'Files',
       none: 'No files.',
       download: 'Download',

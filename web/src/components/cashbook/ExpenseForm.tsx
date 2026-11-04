@@ -48,7 +48,13 @@ export function ExpenseForm({
   const [documentDate, setDocumentDate] = useState(prefill?.documentDate ?? '');
   const [files, setFiles] = useState<File[]>([]);
   const [reused, setReused] = useState<ReusedFile[]>(
-    () => prefill?.attachments.map((a) => ({ expenseId: prefill.id, n: a.n, fileName: a.fileName })) ?? [],
+    () =>
+      prefill?.attachments.map((a) => ({
+        expenseId: prefill.id,
+        n: a.n,
+        fileName: a.fileName,
+        contentType: a.contentType,
+      })) ?? [],
   );
   const [submitted, setSubmitted] = useState(false);
   const [serverErrors, setServerErrors] = useState<FieldErrors>({});

@@ -151,8 +151,15 @@ Error messages:
 - a file that is not a JPEG, PNG or PDF (by content): «Дозволені лише фото (JPEG, PNG) і PDF.»;
 - amount 0,00 or less: «Сума має бути більшою за 0,00.»;
 - a date after today: «Дата не може бути пізнішою за сьогодні.»;
-- a HEIC photo the device or browser cannot turn into JPEG: «Не вдалося перетворити фото HEIC. Збережіть його як JPEG
-  і додайте ще раз.»
+- a HEIC photo the browser cannot open: «Цей браузер не відкриває фото HEIC з iPhone. Додайте фото через Safari або
+  увімкніть на iPhone: Налаштування → Камера → Формати → «Найсумісніший» (фото будуть у JPEG).»
+
+Under the attachment buttons the form says that HEIC photos from an iPhone are accepted in Safari.
+
+**Previews.** On the expense card and on the expense form (after a file is added, before saving), each photo is shown as
+a thumbnail about 160 px wide in its correct orientation, and each PDF as a file icon with its name. A click on a photo
+opens it full size in a viewer on the page (Esc closes it, the arrow keys move between the expense's files); a click on
+a PDF opens it in a new tab. The card keeps «Завантажити» for every file; the form has a remove button on each file.
 
 An expense is never edited. The expense card offers «Сторнувати і внести заново»: it reverses the expense with a reason
 and opens the form with the old values filled in (attachments included), ready to be corrected and saved as a new
@@ -163,7 +170,14 @@ reversed, with filters by period, account and category.
 
 - **Acceptance Criteria:**
   - [x] When the treasurer records a cash expense of 300,00 ₴ «Матеріали» on 06.10 with a photo of the receipt, then the
-        expense appears in the list, the cash balance goes down by 300,00 ₴, and the card shows the photo.
+        expense appears in the list, the cash balance goes down by 300,00 ₴, and the card shows the photo as a thumbnail.
+  - [x] Given an expense with two photos and a PDF, when the treasurer clicks the first thumbnail, then the photo opens
+        full size on the page, the right arrow shows the second photo, Esc closes the viewer, and a click on the PDF
+        icon opens the PDF in a new tab.
+  - [x] When the treasurer adds a photo on the expense form, then its thumbnail appears before saving, and the remove
+        button takes it off the list.
+  - [x] Given a browser that cannot open HEIC photos, when the treasurer adds a HEIC photo from an iPhone, then they see
+        «Цей браузер не відкриває фото HEIC з iPhone. …» with the Safari and iPhone setting advice.
   - [x] Given a photo with a GPS position was attached, when it is downloaded from the expense card, then the downloaded
         file contains no GPS position and no camera data.
   - [x] When the treasurer attaches a 6 MB file, then they see «Файл завеликий. Максимум 5 МБ.»
@@ -510,7 +524,8 @@ Decided by the pipeline (no blocking questions; recommended answers taken, see `
 5. **No negative cash** applies to cash expenses, handovers, reversals of cash income and booked shortages, on the date
    and every later day; only member payment reversals are exempt (warning).
 6. **HEIC photos** are turned into JPEG on the user's device before upload; only JPEG, PNG and PDF are accepted. Where
-   the browser cannot convert a HEIC photo, the user is asked for a JPEG (owner decision, 2026-11-04).
+   the browser cannot open a HEIC photo, the user is told to use Safari or switch the iPhone camera to «Найсумісніший»
+   (owner decisions, 2026-11-04).
 7. **Other income has its own category list**, seeded «Відсотки банку», «Гранти та пожертви», «Продаж матеріалів»,
    «Інше», managed like expense categories.
 8. **The four cash book reports need only the right to view the cash book**, so an audit committee role works without
@@ -530,6 +545,10 @@ Decided by the pipeline (no blocking questions; recommended answers taken, see `
 ## Change Log
 
 _Dated amendments made after the spec was first written. Leave empty until the first amendment._
+
+- 2026-11-04 — owner review of PR #66, findings 4 and 5 — (4) the HEIC failure message points to Safari and the iPhone
+  setting «Найсумісніший», and the form says HEIC is accepted in Safari (FS 2.3); (5) photo thumbnails with a viewer
+  and PDF icons on the expense card and on the form before saving, with remove on the form (FS 2.3, three new criteria).
 
 - 2026-11-04 — owner decisions on PR #66 — (1) «Звірено» needs only the closing difference to be 0,00; differences in the
   total in or total out are a warning with a short explanation and do not block (FS 2.7); (2) HEIC stays browser-only; on

@@ -371,7 +371,11 @@ const SHOTS = [
     name: 'expense-card',
     user: 'chairman',
     path: '/cashbook/expenses',
-    open: { css: 'main a[href^="/cashbook/expenses/"]:not([href$="/new"])', withFiles: true },
+    open: {
+      css: 'main a[href^="/cashbook/expenses/"]:not([href$="/new"])',
+      withFiles: true,
+      rowText: 'Будмаркет',
+    },
   },
   {
     name: 'cash-count',
@@ -505,10 +509,13 @@ try {
             if (shot.open) {
               let link = page.locator(shot.open.css);
               // A table row without files (the last cell is 0) is skipped: the expense card shot needs a photo.
+              // `rowText` keeps only the table rows that contain this text (the demo record, not data entered while
+              // trying the app on the same database).
               if (shot.open.withFiles)
                 link = page
                   .locator('main tbody tr')
                   .filter({ hasNot: page.locator('td:last-child', { hasText: /^\s*0\s*$/ }) })
+                  .filter(shot.open.rowText ? { hasText: shot.open.rowText } : {})
                   .locator(shot.open.css.replace(/^main /, ''));
               if (shot.open.text)
                 link = link.filter({
