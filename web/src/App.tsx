@@ -5,6 +5,8 @@ import { HomeRedirect } from './components/HomeRedirect';
 import { Layout } from './components/Layout';
 import { SignIn } from './components/SignIn';
 import { MeProvider } from './me';
+import { HelpIndexPage } from './help/HelpIndexPage';
+import { HelpPageView } from './help/HelpPageView';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { useT } from './i18n';
 
@@ -339,6 +341,8 @@ const router = createBrowserRouter([
         path: 'members/:id',
         lazy: () => import('./pages/MemberPage').then((m) => ({ Component: m.MemberPage })),
       },
+      { path: 'help', element: <HelpIndexPage /> },
+      { path: 'help/:id', element: <HelpPageView /> },
       { path: '*', element: <NotFoundPage /> },
     ],
   },

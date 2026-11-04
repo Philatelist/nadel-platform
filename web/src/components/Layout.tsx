@@ -81,7 +81,6 @@ export function Layout() {
   const items = NAV_ITEMS.filter(
     (item) => (!item.permission || me.permissions.includes(item.permission)) && (item.visible?.(me) ?? true),
   );
-  const hasMenu = items.length > 0;
 
   useEffect(() => {
     if (!open) return;
@@ -119,50 +118,52 @@ export function Layout() {
             </span>
           </div>
           <LocaleSwitch />
-          <div className={hasMenu ? 'hidden md:flex' : 'flex'}>
+          <div className="hidden md:flex">
             <ThemeSwitch />
           </div>
           <Button variant="secondary" onClick={() => void auth.signoutRedirect()}>
             {t.auth.signOut}
           </Button>
         </div>
-        {hasMenu && (
-          <Button
-            ref={menuButton}
-            variant="secondary"
-            className="order-2 md:hidden"
-            aria-expanded={open}
-            aria-controls="app-menu"
-            onClick={() => setOpen((value) => !value)}
-          >
-            {t.nav.menu}
-          </Button>
-        )}
+        <Button
+          ref={menuButton}
+          variant="secondary"
+          className="order-2 md:hidden"
+          aria-expanded={open}
+          aria-controls="app-menu"
+          onClick={() => setOpen((value) => !value)}
+        >
+          {t.nav.menu}
+        </Button>
       </header>
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-        {hasMenu && (
-          <aside
-            id="app-menu"
-            className={`${open ? 'block' : 'hidden'} border-b border-line bg-surface p-3 md:block md:w-60 md:shrink-0 md:border-b-0 md:border-r`}
-          >
-            <div className="mb-2 md:hidden">
-              <ThemeSwitch />
-            </div>
-            <nav aria-label={t.nav.main} className="flex flex-col gap-1">
-              {items.map((item) => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  end={item.to === '/readings'}
-                  className={itemClass}
-                  onClick={() => setOpen(false)}
-                >
-                  {t.nav[item.label]}
-                </NavLink>
-              ))}
-            </nav>
-          </aside>
-        )}
+        <aside
+          id="app-menu"
+          className={`${open ? 'block' : 'hidden'} border-b border-line bg-surface p-3 md:block md:w-60 md:shrink-0 md:border-b-0 md:border-r`}
+        >
+          <div className="mb-2 md:hidden">
+            <ThemeSwitch />
+          </div>
+          <nav aria-label={t.nav.main} className="flex flex-col gap-1">
+            {items.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.to === '/readings'}
+                className={itemClass}
+                onClick={() => setOpen(false)}
+              >
+                {t.nav[item.label]}
+              </NavLink>
+            ))}
+          </nav>
+          {/* The help is for every signed-in user, so it sits apart from the permission-driven list. */}
+          <div className={`${items.length > 0 ? 'mt-2 border-t border-line pt-2' : ''}`}>
+            <NavLink to="/help" className={itemClass} onClick={() => setOpen(false)}>
+              {t.help.title}
+            </NavLink>
+          </div>
+        </aside>
         <main className="min-w-0 flex-1 overflow-auto px-4 py-6 md:px-7">
           <div className="mx-auto max-w-[1060px]">
             <Outlet />
