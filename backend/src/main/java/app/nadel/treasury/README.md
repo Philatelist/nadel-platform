@@ -16,7 +16,7 @@ decisions are ADR 0019.
 |---|---|
 | `TreasuryController` | The endpoints of tag `treasury`; permissions checked here (`@PreAuthorize`), the services trust their caller |
 | `MoneyAccounts` | The accounts with balances, the opening balance, the journal of a period |
-| `MovementWriter` | The **only writer** of `account_movement`: entries, reversals, member payment lines; reopens a reconciled bank month after every insert |
+| `MovementWriter` | The **only writer** of `account_movement`: entries, reversals, member payment lines; reopens the reconciled bank month of the line and every later reconciled month after every insert |
 | `PaymentMovementListener` | Plain synchronous `@EventListener` of `ledger.PaymentMoneyMoved` (ADR 0019) |
 | `Expenses`, `ExpenseQueries`, `AttachmentUploads`, `FileSniffer`, `JpegMetadataStripper`, `PngMetadataStripper`, `ExpensePartConverter`, `ExpenseAttachmentRecord`/`Content` (+ repositories) | Expenses and their receipt files |
 | `Handovers`, `HandoverQueries` | Handovers to the bank |
@@ -260,12 +260,15 @@ on the bank (source `BANK_RECONCILIATION`, the month's row), its reason in `bank
 
 **Reopening** (in `MovementWriter`, the one writer, so it covers every writer: member payments through
 `PaymentMovementListener`, expenses, other income, handovers, bank differences and every reversal): right after a
-movement is inserted, `BankReconciliationQueries.reopen` sets the `RECONCILED` month of a bank line dated on or after
-the opening date to `NEEDS_RECHECK` with `reopened_movement_id/at`, and the system's audit entry `BANK_MONTH_REOPENED`
-(subject `system:treasury`, no member) is published with the line. A month already `NEEDS_RECHECK` keeps its first
-reopening until it is reconciled again; the reopening stays on the row after that (the status tells whether it is
-current). Because every bank writer and `confirm` hold the bank account lock, a line can never slip in between the
-books `confirm` reads and its commit.
+movement is inserted, `BankReconciliationQueries.reopen` sets the month of a bank line dated on or after the opening
+date, and every later month (their opening balances change with the line), to `NEEDS_RECHECK` when it is `RECONCILED`,
+each with the same `reopened_movement_id/at`, and the system's audit entry `BANK_MONTH_REOPENED` (subject
+`system:treasury`, no member) is published with the line for each reopened month. The rows are locked in month order
+(`for update` of the ordered `RECONCILED` rows, then the update), after the bank account lock, in the writer's
+transaction. A month `NOT_RECONCILED` stays as it is; a month already `NEEDS_RECHECK` keeps its first reopening until
+it is reconciled again; the reopening stays on the row after that (the status tells whether it is current). Because
+every bank writer and `confirm` hold the bank account lock, a line can never slip in between the books `confirm` reads
+and its commit.
 
 **The bank card's months** (`GET /money-accounts`, `months`): newest first, at most 12, from the month of the opening
 date to the month of `asOf`: the months with a reconciliation, the months with bank lines from the opening date on, and
@@ -291,12 +294,12 @@ current one): each month then shows `incoming` and `outgoing` off by the same am
 and can be confirmed (`TreasuryAcceptanceTests`). A booked bank difference counts in `incoming` or `outgoing` as well
 as in `closing`.
 
-**Known limit: later reconciled months are not reopened.** A line dated in month M (a back-dated entry, a bank
-difference of M) shifts the books' opening and closing of every later month by its amount, but only M is reopened
-(FS 2.7 reopens the month of the line). A later month already «Звірено» stays «Звірено» in the month list and refuses a
-new statement or confirmation (`BANK_MONTH_RECONCILED`), but its `GET` shows the shift: an opening and a closing
-difference of the line's amount, `balanced` false (`BankReconciliationTests`). It is checked again once something dated
-in it reopens it. Whether a line should reopen the later reconciled months too stays a question for the owner.
+**Later reconciled months are reopened too** (owner decision on PR #66, FS 2.7). A line dated in month M (a back-dated
+entry, a bank difference of M) shifts the books' opening and closing of every later month by its amount, so M and
+every later `RECONCILED` month go to `NEEDS_RECHECK`, each naming the line, each with its own `BANK_MONTH_REOPENED`
+entry; a later month `NOT_RECONCILED` (also one between two reconciled months) is not touched, and a later month
+already `NEEDS_RECHECK` keeps its first line (`BankReconciliationTests`). A line dated in the current month reopens
+only that month, as no month comes after it.
 
 The web shows the reopening notice only while the month is `NEEDS_RECHECK` (`BankReconciliationPage`): `reopened`
 stays on a month that was reconciled again.
@@ -430,10 +433,11 @@ cash rule, refusals, list order), `CashCountActTests` (the PDF text: balances, d
 `StatementRulesTests` (FS 2.17 #9, field rules), `BankComparisonTests` (books of the opening month and later months,
 reversals against their original, opening inside a month, differences, `balanced` on the closing difference only),
 `BankReconciliationTests` (FS 2.17 #7 and #8 end to end — #8 through a real bank payment entered later with an earlier
-date —, a cash line and a line of another month reopen nothing, bank difference booked, listed with its reason and
+date —, a cash line and a line of a later month reopen nothing, bank difference booked, listed with its reason and
 reversed today, a reversal reopens the reconciled current month, the status machine, not balanced, a month confirmed
-with in and out each off by the same amount, a later reconciled month showing the shift of an earlier line, month and
-opening refusals, the bank card's months), `TreasuryAcceptanceTests` (also the two-month story of a line the bank books
+with in and out each off by the same amount, a back-dated line reopening its month and every later reconciled month
+while a month not reconciled stays and a month already reopened keeps its first line, month and opening refusals, the
+bank card's months), `TreasuryAcceptanceTests` (also the two-month story of a line the bank books
 in the next month), `BankReconciliationsAccessTests`, `CashBookExamplesTests` rows 7–9, `TreasuryTenantIsolationTests`
 and `TreasuryGuardsTests` (`bank_difference`, V34). Slice 7: `IncomeExpenseCalculatorTests` (FS 2.17 #12 identity), the
 report tests `CashBookReportTests`, `BankMovementsReportTests`, `ExpensesReportTests`, `IncomeExpenseReportTests`,

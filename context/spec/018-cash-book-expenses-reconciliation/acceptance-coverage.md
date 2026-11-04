@@ -1,6 +1,6 @@
 # Acceptance coverage: 018 Cash book, expenses and reconciliation
 
-Every acceptance criterion of `functional-spec.md` (2.1 to 2.16, 62 criteria, and the 12 worked examples of 2.17) mapped
+Every acceptance criterion of `functional-spec.md` (2.1 to 2.16, 63 criteria, and the 12 worked examples of 2.17) mapped
 to the tests that check it. Criteria are numbered `#n` in the order of the spec.
 
 - `ACC` = `backend/src/test/java/app/nadel/treasury/TreasuryAcceptanceTests` (Slice 9, integration: the public HTTP API,
@@ -56,8 +56,9 @@ to the tests that check it. Criteria are numbered `#n` in the order of the spec.
 | 2.7 #2 | Statement 20 000/3 000/150/22 850: «out» and closing differ, «Звірено» disabled | T `BankReconciliationTests.example7…`; TI `BankComparisonTests`; V `BankReconciliationPage.test` (disabled while unbalanced); ACC story; E2E BANK |
 | 2.7 #3 | Bank expense 150,00 «Банківські комісії»: differences 0,00, month can be reconciled | T `BankReconciliationTests.example7…`, CBX row 7; ACC story (to `RECONCILED`) |
 | 2.7 #4 | Bank payment dated 20.10 entered later: «Потребує повторної звірки» | T `BankReconciliationTests.example8…`, `aCashLineAndALineOfAnotherMonthDoNotReopen…`; CBX row 8; V `BankReconciliationPage.test` (shows what reopened); ACC story; E2E BANK (payment dated in the month, status on the bank card and the page) |
-| 2.7 #5 | Chairman books a bank difference with a reason: in the journal, closing difference 0,00 | T `BankReconciliationTests.theChairmanBooksABankDifference…`; V `BankReconciliationPage.test`; E2E BANK (chairman books, treasurer then marks «Reconciled») |
-| 2.7 #6 | Closing difference 0,00 while the total in and out each differ: a warning, and «Звірено» can be pressed (owner decision on PR #66) | T `BankReconciliationTests.aMonthWhoseClosingAgreesIsReconciled…`, `confirmIsRefusedWithoutAStatementAndWhileTheClosingDifferenceIsNot0`; TI `BankComparisonTests.incomingOutgoingAndOpeningDifferencesDoNotBlock…`; ACC closing (a line the bank books in the next month, both months reconciled); the on-screen warning: the web tests (`BankReconciliationPage.test`) |
+| 2.7 #5 | September and October «Звірено», a bank line dated 15.09 entered later: both «Потребує повторної звірки», each naming that line (owner decision on PR #66) | T `BankReconciliationTests.aBankLineDatedInAReconciledMonthReopensItAndEveryLaterReconciledMonthEachNamingThatLine` (both months, the same line, two audit entries; a line of the later month reopens only it; a month not reconciled stays; a month already reopened keeps its first line), `aMonthNotReconciledBetweenTwoReconciledMonthsIsLeftAsItIsWhileTheLaterOneIsReopened` |
+| 2.7 #6 | Chairman books a bank difference with a reason: in the journal, closing difference 0,00 | T `BankReconciliationTests.theChairmanBooksABankDifference…`; V `BankReconciliationPage.test`; E2E BANK (chairman books, treasurer then marks «Reconciled») |
+| 2.7 #7 | Closing difference 0,00 while the total in and out each differ: a warning, and «Звірено» can be pressed (owner decision on PR #66) | T `BankReconciliationTests.aMonthWhoseClosingAgreesIsReconciled…`, `confirmIsRefusedWithoutAStatementAndWhileTheClosingDifferenceIsNot0`; TI `BankComparisonTests.incomingOutgoingAndOpeningDifferencesDoNotBlock…`; ACC closing (a line the bank books in the next month, both months reconciled); the on-screen warning: the web tests (`BankReconciliationPage.test`) |
 | 2.8 #1 | Reversal without a reason: «Вкажіть причину» | T `ExpensesTests.aReversedExpense…`, `HandoversTests.theReversalRestores…`, `OtherIncomesTests`; V `ExpenseCardPage.test`; ACC story |
 | 2.8 #2 | Already reversed: no «Сторнувати» | V `ExpenseCardPage.test` (hides the reverse button on a reversed expense); T `ExpensesTests` (`ENTRY_ALREADY_REVERSED`); ACC story (409) |
 | 2.9 #1 | Rename «Інше»: old expenses show the new name | T `CategoriesTests.aRenamedCategoryShowsItsNewNameOnOldExpensesToo`; V `ExpenseCategoriesPanel.test` |

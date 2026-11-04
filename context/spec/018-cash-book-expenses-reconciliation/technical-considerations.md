@@ -53,11 +53,12 @@ records the decisions below.
   `@ApplicationModuleListener` (guard test). This is the one exception to "cross-module side effects via the outbox":
   the movement is the same money fact as the payment.
 - The listener locks the account row `FOR UPDATE`, inserts the movement with `ON CONFLICT (tenant_id, payment_row_id)
-  DO NOTHING`, and for a bank line in a `RECONCILED` month sets `NEEDS_RECHECK` and publishes the system audit
-  `BANK_MONTH_REOPENED`. No cash check (member payments are exempt).
+  DO NOTHING`, and for a bank line sets its month and every later month that is `RECONCILED` to `NEEDS_RECHECK` (their
+  opening balances change; owner decision on PR #66), each naming the line, and publishes the system audit
+  `BANK_MONTH_REOPENED` for each. No cash check (member payments are exempt).
 - **Lock order** (added to the ledger README): payment path … billing month `FOR SHARE` → `receipt_counter` → money
-  account `FOR UPDATE` → `bank_reconciliation` row. Treasury paths: billing month `FOR SHARE` (via `BookingMonths`)
-  → cash account → bank account → `bank_reconciliation`.
+  account `FOR UPDATE` → `bank_reconciliation` rows (in month order). Treasury paths: billing month `FOR SHARE` (via
+  `BookingMonths`) → cash account → bank account → `bank_reconciliation` rows (in month order).
 
 ### 2.3 New public ledger API
 

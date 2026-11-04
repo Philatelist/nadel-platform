@@ -1119,7 +1119,8 @@ charge) -> network / queue / charge type / tariff `FOR SHARE` -> plot `FOR SHARE
 billing month `FOR SHARE` (a payment reversal: the payment's month, then the month of today for its movement; months
 close in order, so two shared month locks never deadlock) -> the `receipt_counter` row -> (feature 018, in
 `PaymentMoneyMoved`'s synchronous listener) the treasury's `money_account` row `FOR UPDATE`, cash before bank -> (a
-bank line dated in a reconciled month) the `bank_reconciliation` row, updated to `NEEDS_RECHECK`. The treasury's own paths take the billing month `FOR SHARE` through
+bank line) the `bank_reconciliation` rows of its month and every later reconciled month, locked in month order and
+updated to `NEEDS_RECHECK`. The treasury's own paths take the billing month `FOR SHARE` through
 `BookingMonths.bookFor` first, then the cash account, then the bank account, then `bank_reconciliation`, so they meet
 the payment paths in the same order. The plot ledger lock stands for "the plot locked `FOR UPDATE` in the ledger" without a row lock
 on the plots module's table (which booking paths hold `FOR SHARE`). Paths that place money on charges or take it back

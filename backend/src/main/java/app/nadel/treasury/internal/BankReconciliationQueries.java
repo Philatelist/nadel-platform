@@ -24,7 +24,8 @@ import org.springframework.transaction.annotation.Transactional;
  * month: parameterised native queries in the caller's transaction ({@code Propagation.MANDATORY}), under RLS. Writes
  * touch only the columns granted to {@code nadel_app}; the guard trigger {@code bank_reconciliation_guard} enforces the
  * status machine. Every writer holds the bank account row {@code FOR UPDATE} first (the treasury lock order: … bank
- * account → {@code bank_reconciliation} row), so the writes of one cooperative's months run one after the other.
+ * account → {@code bank_reconciliation} rows, several of them in month order), so the writes of one cooperative's
+ * months run one after the other.
  */
 @Component
 class BankReconciliationQueries {
@@ -56,24 +57,36 @@ class BankReconciliationQueries {
             """;
 
     /**
-     * Sets the reconciled month a bank movement is dated in back to {@code NEEDS_RECHECK} with the movement and the
-     * time, and answers what it reopened (nothing when the movement is not a bank line counted in a reconciled month:
-     * on the cash, dated before the opening date, or in a month that is not {@code RECONCILED}).
+     * Sets the reconciled month a bank movement is dated in, and every later reconciled month (their opening balances
+     * change with the line), back to {@code NEEDS_RECHECK} with the movement and the time, and answers what it
+     * reopened, month by month. Nothing when the movement is not a bank line counted in the books (on the cash, or
+     * dated before the opening date); a month {@code NOT_RECONCILED} or already {@code NEEDS_RECHECK} (it keeps its
+     * first reopening) is left as it is. The rows are locked in month order ({@code target}) before the update, so two
+     * writers never lock the same rows in a different order (the caller holds the bank account row first anyway).
      */
     private static final String REOPEN = """
-            with reopened as (
-                update bank_reconciliation r
-                set status = 'NEEDS_RECHECK', reopened_movement_id = m.id, reopened_at = :at
+            with line as (
+                select m.id, m.tenant_id, m.kind, m.amount, m.moved_on
                 from account_movement m
                 join money_account a on a.tenant_id = m.tenant_id and a.id = m.account_id
                 where m.id = :movement
                   and a.kind = 'BANK'
-                  and m.moved_on >= a.opening_date
-                  and r.tenant_id = m.tenant_id
-                  and r.month = date_trunc('month', m.moved_on)::date
+                  and m.moved_on >= a.opening_date),
+            target as materialized (
+                select r.id
+                from bank_reconciliation r
+                join line on r.tenant_id = line.tenant_id
+                where r.month >= date_trunc('month', line.moved_on)::date
                   and r.status = 'RECONCILED'
-                returning r.id, r.month, m.kind, m.amount, m.moved_on)
-            select id, month, kind, amount, moved_on from reopened
+                order by r.month
+                for update of r),
+            reopened as (
+                update bank_reconciliation r
+                set status = 'NEEDS_RECHECK', reopened_movement_id = line.id, reopened_at = :at
+                from target, line
+                where r.id = target.id
+                returning r.id, r.month, line.kind, line.amount, line.moved_on)
+            select id, month, kind, amount, moved_on from reopened order by month
             """;
 
     /**
@@ -178,7 +191,10 @@ class BankReconciliationQueries {
                 .executeUpdate();
     }
 
-    /** Reopens the reconciled month the movement is dated in, if any (see {@link #REOPEN}). */
+    /**
+     * Reopens the reconciled month the movement is dated in and every later reconciled month, oldest first (see
+     * {@link #REOPEN}).
+     */
     @Transactional(propagation = Propagation.MANDATORY)
     List<Reopened> reopen(UUID movementId, Instant at) {
         List<?> rows = entityManager.createNativeQuery(REOPEN)

@@ -7,7 +7,15 @@
 // amounts carry a few kopiykas that differ per run so that the new journal lines are found by their amount.
 import { expect, test, type Page } from '@playwright/test';
 import { api, expectCreated, kyivDay } from './support/api';
-import { accountCards, amountDigits, cents, digitsOf, RECEIPT_PNG, signedInPage } from './support/cashbook';
+import {
+  accountCards,
+  amountDigits,
+  cents,
+  digitsOf,
+  RECEIPT_PNG,
+  RECEIPT_WIDTH,
+  signedInPage,
+} from './support/cashbook';
 
 const main = (page: Page) => page.getByRole('main');
 
@@ -52,6 +60,21 @@ test.describe('cash book: expense with a photo and a handover', () => {
       await expect(treasurer).toHaveURL(/\/cashbook\/expenses\/[0-9a-f-]{36}$/);
       await expect(main(treasurer).getByText('receipt-e2e.png')).toBeVisible();
       await expect(main(treasurer).getByRole('button', { name: 'Download', exact: true })).toBeVisible();
+      // the thumbnail opens the viewer with the whole image, not just its toolbar; Escape closes it
+      await main(treasurer).getByRole('button', { name: 'receipt-e2e.png', exact: true }).click();
+      const viewer = treasurer.getByRole('dialog');
+      const shown = viewer.getByRole('img', { name: 'receipt-e2e.png' });
+      await expect(shown).toBeVisible();
+      await expect
+        .poll(async () => shown.evaluate((img: HTMLImageElement) => img.naturalWidth))
+        .toBe(RECEIPT_WIDTH);
+      const box = await shown.boundingBox();
+      // not a collapsed box: the image fills the viewer (a 120x80 file is scaled up to fit the viewport)
+      const viewport = treasurer.viewportSize();
+      expect(box?.width ?? 0).toBeGreaterThan((viewport?.width ?? 0) / 2);
+      expect(box?.height ?? 0).toBeGreaterThan((viewport?.height ?? 0) / 3);
+      await treasurer.keyboard.press('Escape');
+      await expect(viewer).toHaveCount(0);
       // the treasurer has no right to approve: no reversal on the card
       await expect(main(treasurer).getByRole('button', { name: 'Reverse and record again' })).toHaveCount(0);
 

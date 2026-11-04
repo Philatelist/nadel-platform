@@ -11,7 +11,7 @@
  */
 
 /**
- * The reconciliation status of a bank month: `NOT_RECONCILED` «Не звірено» (also before a statement is entered), `RECONCILED` «Звірено», `NEEDS_RECHECK` «Потребує повторної звірки» (a bank line dated in the month was added after it was reconciled)
+ * The reconciliation status of a bank month: `NOT_RECONCILED` «Не звірено» (also before a statement is entered), `RECONCILED` «Звірено», `NEEDS_RECHECK` «Потребує повторної звірки» (a bank line dated in the month, or in an earlier month, was added after it was reconciled)
  */
 export type BankMonthStatus = typeof BankMonthStatus[keyof typeof BankMonthStatus];
 

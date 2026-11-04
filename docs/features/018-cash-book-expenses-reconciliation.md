@@ -167,7 +167,9 @@ old values filled in.
 - When the closing difference is 0.00, the treasurer marks the month **«Звірено»** (owner decision on PR #66). A
   difference in the total in or the total out alone does not block it: the screen shows a warning with a short
   explanation (a mistaken line reversed in a later month, a line the bank books in another month). A movement booked
-  later with a date in a reconciled month reopens it, back to «Потребує повторної звірки», and the screen shows why.
+  later with a date in a reconciled month reopens it, back to «Потребує повторної звірки», and the screen shows why;
+  every later reconciled month is reopened with the same line, as its opening balance changes (owner decision on
+  PR #66).
 - The bank statement import (later in the roadmap) will fill these figures and match lines automatically. This feature
   keeps the data shape it will need: per-month statement figures and a reconciliation status.
 

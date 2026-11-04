@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Route, Routes, useLocation } from 'react-router';
@@ -129,6 +129,14 @@ describe('ExpenseCardPage', () => {
     expect(dialog).toHaveAttribute('aria-modal', 'true');
     expect(dialog).toHaveAccessibleName('Перегляд фото one.png');
     expect(screen.getByText('Фото 1 з 2')).toBeInTheDocument();
+    // the viewer image is the full file, in a stage that gives it the whole viewer below the toolbar
+    const shown = await within(dialog).findByRole('img', { name: 'one.png' });
+    expect(shown.getAttribute('src')).toMatch(/^blob:/);
+    expect(shown).toHaveClass('absolute', 'inset-0', 'h-full', 'w-full', 'object-contain');
+    expect(shown).not.toHaveClass('hidden', 'h-0', 'w-0', 'invisible');
+    expect(shown.parentElement).toHaveAttribute('data-testid', 'viewer-stage');
+    expect(shown.parentElement).toHaveClass('relative', 'min-h-0');
+    expect(dialog).toHaveClass('fixed', 'inset-0', 'h-dvh', 'w-dvw');
     await user.keyboard('{ArrowRight}');
     expect(await screen.findByText('Фото 2 з 2')).toBeInTheDocument();
     await user.keyboard('{ArrowLeft}');
@@ -160,5 +168,50 @@ describe('ExpenseCardPage', () => {
     const blob = (URL.createObjectURL as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[0] as Blob;
     expect(blob.type).toBe('application/pdf');
     open.mockRestore();
+  });
+
+  it('loads the file the viewer shows itself, even when no thumbnail ever scrolled into view', async () => {
+    class NeverVisible {
+      observe() {}
+      disconnect() {}
+      unobserve() {}
+    }
+    vi.stubGlobal('IntersectionObserver', NeverVisible);
+    useGetExpense.mockReturnValue(queryResult(withFiles));
+    let release: (blob: Blob) => void = () => {};
+    downloadExpenseAttachment.mockImplementation((_id: string, n: number) =>
+      n === 3 ? new Promise<Blob>((resolve) => (release = resolve)) : Promise.resolve(new Blob([`f${n}`])),
+    );
+    try {
+      const user = userEvent.setup();
+      renderCard();
+      // no thumbnail has an image: nothing was fetched for them
+      expect(screen.queryByRole('img')).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'one.png' }));
+      const dialog = await screen.findByRole('dialog', { hidden: true });
+      expect(await within(dialog).findByRole('img', { name: 'one.png' })).toHaveAttribute(
+        'src',
+        expect.stringMatching(/^blob:/),
+      );
+      await user.keyboard('{ArrowRight}');
+      expect(await within(dialog).findByRole('status')).toHaveTextContent('Завантаження…');
+      expect(within(dialog).queryByRole('img')).not.toBeInTheDocument();
+      release(new Blob(['two']));
+      const second = await within(dialog).findByRole('img', { name: 'two.jpg' });
+      expect(second.getAttribute('src')).toMatch(/^blob:/);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('offers the download when the viewer cannot load the file', async () => {
+    useGetExpense.mockReturnValue(queryResult(withFiles));
+    downloadExpenseAttachment.mockRejectedValue(new Error('boom'));
+    const user = userEvent.setup();
+    renderCard();
+    await user.click(await screen.findByRole('button', { name: 'one.png' }));
+    const dialog = await screen.findByRole('dialog', { hidden: true });
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Не вдалося завантажити файл.');
+    expect(within(dialog).getByRole('button', { name: 'Завантажити' })).toBeInTheDocument();
   });
 });

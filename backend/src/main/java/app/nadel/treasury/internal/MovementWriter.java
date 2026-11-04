@@ -51,12 +51,13 @@ import org.springframework.transaction.annotation.Transactional;
  * <b>Reopening a reconciled bank month</b> (feature 018 §2.7, technical considerations 2.2, 2.5): every movement this
  * writer inserts — a member payment or its reversal, an expense, other income, a handover line, a bank difference, any
  * reversal — is checked right after its insert, in the same transaction and after the account lock the caller holds
- * (the lock order ends: … bank account → {@code bank_reconciliation} row). A bank line counted in the books (dated on or
- * after the opening date) whose calendar month is {@code RECONCILED} sets that month to {@code NEEDS_RECHECK} with the
- * line and the time ({@link BankReconciliationQueries#reopen}), and the system's audit entry
- * {@code BANK_MONTH_REOPENED} is published. A cash line, a month not reconciled (or already {@code NEEDS_RECHECK}: the
- * first reopening is kept until the month is reconciled again) and a line before the opening date reopen nothing. Being
- * the one writer, this is the one place the rule lives.
+ * (the lock order ends: … bank account → {@code bank_reconciliation} rows, locked in month order). A bank line counted
+ * in the books (dated on or after the opening date) sets its calendar month and every later month that is
+ * {@code RECONCILED} (their opening balances change with it) to {@code NEEDS_RECHECK}, each with the line and the time
+ * ({@link BankReconciliationQueries#reopen}), and the system's audit entry {@code BANK_MONTH_REOPENED} is published for
+ * each reopened month. A cash line, a month not reconciled, a month already {@code NEEDS_RECHECK} (the first reopening
+ * is kept until the month is reconciled again) and a line before the opening date reopen nothing. Being the one
+ * writer, this is the one place the rule lives.
  */
 @Component
 class MovementWriter {
@@ -219,7 +220,10 @@ class MovementWriter {
         return id;
     }
 
-    /** Reopens the reconciled bank month the movement is dated in, if any, with the system's audit entry. */
+    /**
+     * Reopens the reconciled bank month the movement is dated in and every later reconciled month, each with the
+     * system's audit entry.
+     */
     private void reopenBankMonth(UUID tenantId, UUID movementId, Instant at) {
         for (BankReconciliationQueries.Reopened month : reconciliations.reopen(movementId, at)) {
             audit.bankMonthReopened(tenantId, month.reconciliationId(), month.month(), movementId, month.kind(),

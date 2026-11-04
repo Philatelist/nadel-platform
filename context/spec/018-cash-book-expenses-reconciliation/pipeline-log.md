@@ -1,7 +1,7 @@
 # Pipeline log — 018 cash book, expenses and reconciliation
 
-- Status: finished
-- Phase: 6 — review run (done, after findings 4–5)
+- Status: running
+- Phase: 5 — reopen later months + viewer fix pushed, waiting for checks
 - Branch: 018-cash-book-expenses-reconciliation (planned) · Base: main @ c7419a6
 - Requirement: docs/features/018-cash-book-expenses-reconciliation.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
@@ -218,3 +218,15 @@
 - e2e (testing-expert): cashbook-expense-handover 2 passed, smoke 21 passed. Review run restarted; guide shots: the expense-card shot first picked an expense the owner had entered while testing (real phone photo IMG_0402.jpg) — not committed; capture-screens.mjs gained a rowText filter so the shot opens the demo expense «Будмаркет «Демо»»; shots re-captured (all), make guide built 5 PDFs; orchestrator checked img/uk/expense-card.png (demo receipt thumbnail). FS 2.3 new criteria ticked (vitest card/form/HEIC + e2e + screenshot).
 - Findings 4–5 pushed (a7c4428); PR body updated; checks run 41858313283: 6 of 6 green. No CI fixes.
 - Review run on the PR branch: web http://localhost:5173 (200). Stop: `kill 1159 1180 1322 1489`, infra `make down`.
+
+## Owner decision: back-dated lines reopen later months (2026-11-04)
+
+- A back-dated bank movement reopens its own month and every later «Звірено» month (opening balances change); each reopened month shows the notice with the same movement. Test with two reconciled months and a line dated in the first. Affected tests, push, green CI; no .github, no merge.
+- FS 2.7 amended (+1 criterion, Change Log).
+- Guides (general-purpose): board guide uk/en ch. 16 (reopen box, known limits), part II example 27 and limits box; owner manual troubleshooting row — later «Звірено» months reopen with the same line, check from the earliest. Prettier clean.
+- Owner bug on PR #66: the attachment viewer opens with only its toolbar, no image (thumbnails fine). Expected: full image fits the viewport below the toolbar, correct orientation, dark backdrop, desktop Safari/Chrome/Edge and phone; find the cause, fix, component test + e2e step asserting a visible image with non-zero size. Sent to the react-frontend agent that built the viewer.
+- Viewer fix (react-frontend): not reproducible in headless Chromium (image rendered in old and new layouts); plausible cause: the old layout sized the image only by content inside a flex-1 min-h-0 overflow-auto wrapper of an auto-height dialog (a zero-height wrapper clips the image). Fix: full-screen dialog (fixed inset-0 h-dvh w-dvw, grid rows auto/minmax(0,1fr), black backdrop), explicit stage, image absolute inset-0 object-contain. Component test + e2e step (visible, naturalWidth 120, box > half/third of the viewport, Esc closes); e2e receipt now a 120x80 PNG built in code; RED on both. Clients green (web 981); the spec passed on the running dev app (it added test expenses to the dev demo data). Asked to confirm the cause in WebKit (Safari engine).
+- Reopen-later-months done (spring-backend): REOPEN SQL reopens the line month and every later RECONCILED month (rows locked in month order), one BANK_MONTH_REOPENED per month; tests (two new, characterization test removed, RED); README, money-rules, openapi descriptions (+gen), ledger README lock order, TC, docs/features/018, acceptance-coverage (63). Orchestrator re-run below; FS criterion ticked.
+- Viewer: WebKit (desktop and iPhone profiles) does not reproduce the empty viewer with the old layout either; fix verified in WebKit (image fills the viewer; spec 2 passed in webkit). Cause still unproven → probing the owner's own expenses with real iPhone photos (old vs new component, Chromium and WebKit, decode errors, EXIF orientation).
+- Probe of the owner's real photos (IMG_0402.jpg 4032x3024, no EXIF Orientation stored): old and new viewer render in Chromium, WebKit desktop and iPhone; decode ok; cause not reproduced. Real gap found: the image data is fetched only when its thumbnail scrolls into view, so → to a file whose thumbnail has not loaded shows the toolbar only (matches «Фото 2 з 2»). Fix requested: the viewer fetches its own image (shared cache) with loading/error states and prefetch of neighbours; component test with a never-intersecting thumbnail.
+- Viewer follow-up (react-frontend): the viewer already fetched its own file; added a loading state («Завантаження…»), an error state with «Завантажити», and prefetch of neighbours; component tests (never-intersecting thumbnails, failed fetch; RED). Server keeps EXIF Orientation (JpegMetadataStripperTests.theOrientationIsKeptInAMinimalExifSegmentRightAfterJfif); IMG_0402.jpg had none. Orchestrator: clients green (web 983), prettier clean, make guide rebuilt PDFs. Root cause of the owner's empty viewer not reproduced in Chromium/WebKit with generated or real photos; the layout fix + loading/error states cover the plausible causes.

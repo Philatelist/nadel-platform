@@ -3446,6 +3446,8 @@ export const uk: Messages = {
       heicHint: 'Фото HEIC з iPhone приймаються в Safari.',
       openPdf: 'Відкрити PDF',
       viewer: {
+        loading: 'Завантаження…',
+        failed: 'Не вдалося завантажити файл.',
         label: 'Перегляд фото {name}',
         close: 'Закрити',
         previous: 'Попереднє фото',

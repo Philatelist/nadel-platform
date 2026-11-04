@@ -2514,9 +2514,9 @@ END $$;</pre>
               After "Reconciled", a bank line dated in that month appeared (a payment, an expense, an other
               income or a difference entered later). The screen says "Reconcile this month again: {kind} of
               {date} for {amount} was entered on {at}."; the audit log has a "month reopened" entry. Check the
-              statement and press "Reconciled" again. If the line was back-dated, check the later months too:
-              they stay "Reconciled", and the next check of such a month shows the shift of its opening
-              balance.
+              statement and press "Reconciled" again. Every later month that was "Reconciled" is reopened the
+              same way (its opening balance changed), with the same line in the notice: check them one by one,
+              starting with the earliest.
             </td>
           </tr>
           <tr>

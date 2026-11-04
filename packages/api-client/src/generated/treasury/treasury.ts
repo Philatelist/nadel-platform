@@ -2257,8 +2257,10 @@ export const useBookBankDifference = <TError = BadRequestResponse | Unauthorized
  * block. A month already `RECONCILED`: 409 `BANK_MONTH_RECONCILED`. Once reconciled, any bank line later dated
  * in the month (a payment, an expense, other income, a handover, a bank difference or a reversal, whoever enters
  * it) sets it back to `NEEDS_RECHECK` («Потребує повторної звірки») with that line and the time (`reopened`),
- * written to the audit log as `BANK_MONTH_REOPENED` by the system. The month, opening balance and future checks
- * are those of `GET`. Written to the audit log as `BANK_MONTH_RECONCILED`. Requires `CASHBOOK_ENTER`.
+ * written to the audit log as `BANK_MONTH_REOPENED` by the system; so does a bank line dated in an earlier month,
+ * which changes the month's opening balance (every later `RECONCILED` month is reopened with the same line, each
+ * with its own audit entry; a month `NEEDS_RECHECK` keeps its first line). The month, opening balance and future
+ * checks are those of `GET`. Written to the audit log as `BANK_MONTH_RECONCILED`. Requires `CASHBOOK_ENTER`.
  * @summary Mark the month reconciled («Звірено»)
  */
 export const confirmBankReconciliation = async (month: string, options?: Parameters<typeof nadelFetch>[1]): Promise<BankReconciliation> => {

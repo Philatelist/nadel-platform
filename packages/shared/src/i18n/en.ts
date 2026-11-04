@@ -3421,6 +3421,8 @@ export const en = {
       heicHint: 'HEIC photos from an iPhone are accepted in Safari.',
       openPdf: 'Open PDF',
       viewer: {
+        loading: 'Loading…',
+        failed: 'The file could not be loaded.',
         label: 'Photo viewer: {name}',
         close: 'Close',
         previous: 'Previous photo',

@@ -266,7 +266,8 @@ When the closing difference is 0,00, the treasurer marks the month «Звіре�
 out does not block it: the screen shows it as a warning with a short explanation (for example, a mistaken line reversed
 in a later month, or a line the bank shows in a different month), so the treasurer can still check it. If a bank line
 dated in a reconciled month is added later (for example a bank payment entered on 03.11 with the date 20.10), the month
-goes back to «Потребує повторної звірки», and the screen says what was added and when: «Місяць потрібно звірити знову:
+goes back to «Потребує повторної звірки», and so does every later month that is «Звірено», because their opening
+balances change. Each reopened month says what was added and when (the same line): «Місяць потрібно звірити знову:
 04.11.2026, 10:15 внесено платіж члена від 20.10.2026 на 500,00 ₴.» The month list on the bank card shows each month's
 status: «Не звірено», «Звірено», «Потребує повторної звірки».
 
@@ -280,6 +281,8 @@ status: «Не звірено», «Звірено», «Потребує повт
         then every difference is 0,00 and the treasurer can mark October «Звірено».
   - [x] Given October is «Звірено», when a bank payment dated 20.10 is entered on 03.11, then October shows «Потребує
         повторної звірки» with the reason.
+  - [x] Given September and October are both «Звірено», when a bank line dated 15.09 is entered later, then both
+        September and October show «Потребує повторної звірки», each with the notice naming that line.
   - [x] Given a difference no entry explains, when the chairman books a bank difference with a reason, then it appears
         in the bank journal and the closing difference becomes 0,00.
   - [x] Given the closing difference is 0,00 but the total in and the total out each differ (a line the statement shows
@@ -545,6 +548,10 @@ Decided by the pipeline (no blocking questions; recommended answers taken, see `
 ## Change Log
 
 _Dated amendments made after the spec was first written. Leave empty until the first amendment._
+
+- 2026-11-04 — owner decision on PR #66 — a back-dated bank line reopens its own month and every later «Звірено»
+  month (their opening balances change); each reopened month shows the notice with the same line (FS 2.7, one new
+  criterion).
 
 - 2026-11-04 — owner review of PR #66, findings 4 and 5 — (4) the HEIC failure message points to Safari and the iPhone
   setting «Найсумісніший», and the form says HEIC is accepted in Safari (FS 2.3); (5) photo thumbnails with a viewer

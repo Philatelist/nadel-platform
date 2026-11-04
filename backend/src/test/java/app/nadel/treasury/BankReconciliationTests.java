@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.time.LocalDate;
 import java.time.YearMonth;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -16,10 +17,11 @@ import tools.jackson.databind.JsonNode;
  * The monthly bank reconciliation (feature 018 §2.7, §2.11, §2.14; worked examples 2.17 #7 and #8): the server
  * computes the books of a calendar month and the differences from the statement; «Звірено» needs the closing
  * difference 0.00 (an incoming or outgoing difference alone is only a warning on the screen); a bank difference no entry
- * explains is booked by the chairman; a bank line entered later with a date in a
- * reconciled month (a payment through the payments screen, an expense, a reversal) sets the month back to «Потребує
+ * explains is booked by the chairman; a bank line entered later with a date in a reconciled month (a payment through
+ * the payments screen, an expense, a reversal) sets that month and every later reconciled month back to «Потребує
  * повторної звірки» with that line; the bank card lists the months with their status. The examples run in the
- * previous month (its 1st is the opening date of both accounts), so a later entry with an earlier date is real.
+ * previous month (its 1st is the opening date of both accounts), so a later entry with an earlier date is real; the
+ * later-months examples use the second cooperative, its bank opened three months ago.
  */
 class BankReconciliationTests extends TreasuryApiSupport {
 
@@ -301,24 +303,102 @@ class BankReconciliationTests extends TreasuryApiSupport {
                 reconciliationId(month))).isEqualTo("RECONCILED");
     }
 
+    /**
+     * Owner decision on PR #66 (FS 2.7): a back-dated bank line reopens its own month and every later «Звірено» month,
+     * whose opening balance it changes; each reopened month names the same line and gets its own audit entry. A month
+     * not reconciled is left as it is, and a month already «Потребує повторної звірки» keeps its first reopening.
+     */
     @Test
-    void aLineDatedInAnEarlierMonthLeavesALaterReconciledMonthReconciledWithTheShiftAsItsClosingDifference()
-            throws Exception {
-        YearMonth current = YearMonth.from(today());
-        enterStatement(treasurer, current, "20000.00", "0.00", "0.00", "20000.00").andExpect(status().isOk());
-        confirmMonth(treasurer, current).andExpect(status().isOk());
+    void aBankLineDatedInAReconciledMonthReopensItAndEveryLaterReconciledMonthEachNamingThatLine() throws Exception {
+        String treasurerB = bankOpenedThreeMonthsAgo();
+        YearMonth first = YearMonth.from(today()).minusMonths(3);
+        YearMonth second = first.plusMonths(1);
+        YearMonth third = second.plusMonths(1);
+        reconcile(treasurerB, first, "20000.00", "0.00", "0.00", "20000.00");
+        reconcile(treasurerB, second, "20000.00", "0.00", "0.00", "20000.00");
+        enterStatement(treasurerB, third, "20000.00", "0.00", "0.00", "20000.00").andExpect(status().isOk());
 
-        // a bank fee dated in the previous month, entered today: only that month is the month of the line
-        recordExpense(treasurer, expense("BANK", opened.plusDays(9), "15.00",
-                category(tenantA, "EXPENSE", "BANK_FEES")));
+        // a bank fee dated the 10th of the first month, entered today
+        UUID firstLine = bankFee(treasurerB, first.atDay(10), "15.00");
 
-        JsonNode later = body(reconciliation(treasurer, current).andExpect(status().isOk()));
-        assertThat(later.get("status").asString()).as("not reopened").isEqualTo("RECONCILED");
-        assertFigures(later.get("books"), "19985.00", "0.00", "0.00", "19985.00");
-        assertFigures(later.get("differences"), "15.00", "0.00", "0.00", "15.00");
-        assertThat(later.get("balanced").asBoolean()).isFalse();
-        confirmMonth(treasurer, current).andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("BANK_MONTH_RECONCILED"));
+        JsonNode firstView = body(reconciliation(treasurerB, first).andExpect(status().isOk()));
+        JsonNode secondView = body(reconciliation(treasurerB, second).andExpect(status().isOk()));
+        for (JsonNode reopened : List.of(firstView, secondView)) {
+            assertThat(reopened.get("status").asString()).isEqualTo("NEEDS_RECHECK");
+            assertThat(reopened.get("reopened").get("movementId").asString()).isEqualTo(firstLine.toString());
+            assertThat(reopened.get("reopened").get("kind").asString()).isEqualTo("EXPENSE");
+            assertThat(reopened.get("reopened").get("date").asString()).isEqualTo(first.atDay(10).toString());
+            assertThat(reopened.get("reopened").get("amount").asString()).isEqualTo("-15.00");
+        }
+        assertFigures(secondView.get("books"), "19985.00", "0.00", "0.00", "19985.00");
+        assertFigures(secondView.get("differences"), "15.00", "0.00", "0.00", "15.00");
+        JsonNode thirdView = body(reconciliation(treasurerB, third).andExpect(status().isOk()));
+        assertThat(thirdView.get("status").asString()).as("not reconciled: left as it is").isEqualTo("NOT_RECONCILED");
+        assertThat(thirdView.has("reopened")).isFalse();
+        assertThat(bankMonths(treasurerB)).containsEntry(first.toString(), "NEEDS_RECHECK")
+                .containsEntry(second.toString(), "NEEDS_RECHECK")
+                .containsEntry(third.toString(), "NOT_RECONCILED");
+
+        UUID firstId = reconciliationId(tenantB, first);
+        UUID secondId = reconciliationId(tenantB, second);
+        for (UUID id : List.of(firstId, secondId)) {
+            Map<String, Object> entry = awaitAudit(id, "BANK_MONTH_REOPENED", 1).getFirst();
+            assertThat(entry.get("actor_member_id")).as("written by the system").isNull();
+            assertThat((String) entry.get("changes")).contains("\"movement\"", firstLine.toString(),
+                    first.atDay(10).toString(), "-15.00", "NEEDS_RECHECK");
+        }
+        assertThat(reopenedAudits(tenantB)).isEqualTo(2);
+
+        // both reconciled again; a line dated in the second month reopens that month only
+        reconcile(treasurerB, first, "20000.00", "0.00", "15.00", "19985.00");
+        reconcile(treasurerB, second, "19985.00", "0.00", "0.00", "19985.00");
+        UUID secondLine = bankFee(treasurerB, second.atDay(5), "10.00");
+
+        assertThat(body(reconciliation(treasurerB, first)).get("status").asString()).isEqualTo("RECONCILED");
+        JsonNode secondAgain = body(reconciliation(treasurerB, second));
+        assertThat(secondAgain.get("status").asString()).isEqualTo("NEEDS_RECHECK");
+        assertThat(secondAgain.get("reopened").get("movementId").asString()).isEqualTo(secondLine.toString());
+        awaitAudit(secondId, "BANK_MONTH_REOPENED", 2);
+
+        // another line dated in the first month reopens it; the second, already reopened, keeps its first line
+        UUID anotherFirstLine = bankFee(treasurerB, first.atDay(20), "5.00");
+
+        JsonNode firstAgain = body(reconciliation(treasurerB, first));
+        assertThat(firstAgain.get("status").asString()).isEqualTo("NEEDS_RECHECK");
+        assertThat(firstAgain.get("reopened").get("movementId").asString()).isEqualTo(anotherFirstLine.toString());
+        JsonNode secondKept = body(reconciliation(treasurerB, second));
+        assertThat(secondKept.get("status").asString()).isEqualTo("NEEDS_RECHECK");
+        assertThat(secondKept.get("reopened").get("movementId").asString()).as("the first reopening is kept")
+                .isEqualTo(secondLine.toString());
+        assertThat(body(reconciliation(treasurerB, third)).get("status").asString()).isEqualTo("NOT_RECONCILED");
+        awaitAudit(firstId, "BANK_MONTH_REOPENED", 2);
+        assertThat(reopenedAudits(tenantB)).as("each of the two months twice").isEqualTo(4);
+        assertThat(ownerJdbc().queryForObject("select count(*) from bank_reconciliation where tenant_id = ? "
+                + "and month = ? and reopened_movement_id is null", Integer.class, tenantB, third.atDay(1)))
+                .isEqualTo(1);
+    }
+
+    @Test
+    void aMonthNotReconciledBetweenTwoReconciledMonthsIsLeftAsItIsWhileTheLaterOneIsReopened() throws Exception {
+        String treasurerB = bankOpenedThreeMonthsAgo();
+        YearMonth first = YearMonth.from(today()).minusMonths(3);
+        YearMonth between = first.plusMonths(1);
+        YearMonth third = between.plusMonths(1);
+        reconcile(treasurerB, first, "20000.00", "0.00", "0.00", "20000.00");
+        enterStatement(treasurerB, between, "20000.00", "0.00", "0.00", "20000.00").andExpect(status().isOk());
+        reconcile(treasurerB, third, "20000.00", "0.00", "0.00", "20000.00");
+
+        UUID line = bankFee(treasurerB, first.atDay(3), "15.00");
+
+        assertThat(bankMonths(treasurerB)).containsEntry(first.toString(), "NEEDS_RECHECK")
+                .containsEntry(between.toString(), "NOT_RECONCILED")
+                .containsEntry(third.toString(), "NEEDS_RECHECK");
+        assertThat(body(reconciliation(treasurerB, third)).get("reopened").get("movementId").asString())
+                .isEqualTo(line.toString());
+        assertThat(body(reconciliation(treasurerB, between)).has("reopened")).isFalse();
+        awaitAudit(reconciliationId(tenantB, first), "BANK_MONTH_REOPENED", 1);
+        awaitAudit(reconciliationId(tenantB, third), "BANK_MONTH_REOPENED", 1);
+        assertThat(reopenedAudits(tenantB)).isEqualTo(2);
     }
 
     @Test
@@ -383,15 +463,52 @@ class BankReconciliationTests extends TreasuryApiSupport {
 
     /** The months of the bank card, newest first, with their status. */
     private Map<String, String> bankMonths() throws Exception {
+        return bankMonths(treasurer);
+    }
+
+    private Map<String, String> bankMonths(String bearer) throws Exception {
         Map<String, String> months = new java.util.LinkedHashMap<>();
-        for (JsonNode m : accountOf(body(accounts(treasurer)), "BANK").get("months")) {
+        for (JsonNode m : accountOf(body(accounts(bearer)), "BANK").get("months")) {
             months.put(m.get("month").asString(), m.get("status").asString());
         }
         return months;
     }
 
     private UUID reconciliationId(YearMonth month) {
+        return reconciliationId(tenantA, month);
+    }
+
+    private UUID reconciliationId(UUID tenant, YearMonth month) {
         return ownerJdbc().queryForObject("select id from bank_reconciliation where tenant_id = ? and month = ?",
-                UUID.class, tenantA, month.atDay(1));
+                UUID.class, tenant, month.atDay(1));
+    }
+
+    /**
+     * The second cooperative with its bank opened at 20 000,00 on the 1st three months ago, so three whole months
+     * come before the current one; returns its treasurer's token.
+     */
+    private String bankOpenedThreeMonthsAgo() throws Exception {
+        String chairmanB = person(tenantB, "CHAIRMAN");
+        setOpening(chairmanB, account(tenantB, "BANK"), "20000.00", YearMonth.from(today()).minusMonths(3).atDay(1))
+                .andExpect(status().isOk());
+        return person(tenantB, "TREASURER");
+    }
+
+    private void reconcile(String bearer, YearMonth month, String opening, String incoming, String outgoing,
+            String closing) throws Exception {
+        enterStatement(bearer, month, opening, incoming, outgoing, closing).andExpect(status().isOk());
+        confirmMonth(bearer, month).andExpect(status().isOk()).andExpect(jsonPath("$.status").value("RECONCILED"));
+    }
+
+    /** A bank fee of the second cooperative dated {@code date}; returns its journal line. */
+    private UUID bankFee(String bearer, LocalDate date, String amount) throws Exception {
+        UUID expense = recordExpense(bearer, expense("BANK", date, amount, category(tenantB, "EXPENSE", "BANK_FEES")));
+        return ownerJdbc().queryForObject("select id from account_movement where tenant_id = ? and source_id = ?",
+                UUID.class, tenantB, expense);
+    }
+
+    private int reopenedAudits(UUID tenant) {
+        return ownerJdbc().queryForObject("select count(*) from audit_entry where tenant_id = ? "
+                + "and action = 'BANK_MONTH_REOPENED'", Integer.class, tenant);
     }
 }

@@ -52,7 +52,8 @@ import org.springframework.stereotype.Component;
  *       {@code amount} (the reversed line), {@code date}, {@code reversedOn} and {@code reason};
  *       {@code BANK_MONTH_RECONCILED} with {@code status} (old and new) and the four statement figures;
  *       {@code BANK_MONTH_REOPENED} by the system ({@link #SYSTEM}: no member) with {@code status} (old and new) and
- *       the line that reopened the month: {@code movement} (its id), {@code kind}, {@code date}, {@code amount}.</li>
+ *       the line that reopened the month: {@code movement} (its id), {@code kind}, {@code date}, {@code amount}; a
+ *       line dated in an earlier month writes one entry for each later month it reopens.</li>
  *   <li>{@code CASHBOOK_CATEGORY} (entity the category, label {@code base:<CODE>} for a seeded category never renamed,
  *       otherwise its name): {@code CASHBOOK_CATEGORY_ADDED} ({@code kind}, {@code name}),
  *       {@code CASHBOOK_CATEGORY_RENAMED} ({@code name} old and new), {@code CASHBOOK_CATEGORY_REORDERED}
@@ -222,7 +223,10 @@ class TreasuryAuditPublisher {
                 reconciliationId, month, changes, at);
     }
 
-    /** A reconciled month set back to {@code NEEDS_RECHECK} by a bank line dated in it; recorded by the system. */
+    /**
+     * A reconciled month set back to {@code NEEDS_RECHECK} by a bank line dated in it or in an earlier month (one
+     * entry per reopened month); recorded by the system.
+     */
     void bankMonthReopened(UUID tenantId, UUID reconciliationId, YearMonth month, UUID movementId, MovementKind kind,
             LocalDate date, Money amount, Instant at) {
         publishBank(new Actor(null, SYSTEM, ""), Action.BANK_MONTH_REOPENED, tenantId, reconciliationId, month, List.of(

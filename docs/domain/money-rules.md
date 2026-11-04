@@ -919,7 +919,8 @@ the missing entry (a payment, an expense, an other income) or by a bank differen
 month's last day, or today if earlier). «Звірено» needs a statement and **the closing difference 0.00** (owner decision
 on PR #66). A difference in the opening, `in` or `out` while the closing agrees does not block: the screen shows it as a
 warning with a short explanation. A bank line dated in a reconciled month added later (payments included) puts that
-month back to «Потребує повторної звірки» with the line and the time.
+month back to «Потребує повторної звірки» with the line and the time, and so does every later month that is «Звірено»
+(see below).
 
 Why `in` and `out` can differ while the closing agrees: a line moves between two months while the money is the same.
 
@@ -934,10 +935,12 @@ The earlier month of such a pair closes when the chairman books a bank differenc
 is the current one. Both months then show `in` and `out` off by the same amount, a closing difference of 0.00, and can
 be marked «Звірено».
 
-Known limit (open with the owner): a line dated in month M changes the opening and closing of every later month by its
-amount, but only month M is reopened. A later month already «Звірено» keeps its status, and its comparison now shows the
-shift as an opening and a closing difference until something dated in it reopens it. The owner may prefer that a line
-reopen the later reconciled months too.
+Later months (owner decision on PR #66): a bank line dated in month M changes the opening and closing of every later
+month by its amount, so it reopens M and every later month that is «Звірено»: each goes back to «Потребує повторної
+звірки» naming the same line and time, with its own audit entry. A later month «Не звірено» stays as it is, and a month
+already «Потребує повторної звірки» keeps the line that reopened it first. Only lines dated on or after the bank's
+opening date count. Example: September and October «Звірено»; a bank fee dated 15.09 entered on 04.11 reopens both,
+each with the reopen notice naming that fee; a line dated 20.10 would reopen only October.
 
 **Reconciliation act** («Акт звірки», a PDF per plot and period) follows the **ledger's dates**, not the cash book's:
 the opening balance is the plot's balance (2) at the end of the day before the period, the closing balance at the end of

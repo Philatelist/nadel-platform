@@ -205,7 +205,7 @@ class TreasuryAcceptanceTests extends TreasuryReportsSupport {
     }
 
     /**
-     * FS 2.7 #6 (owner decision on PR #66): «Звірено» needs only the closing difference to be 0,00. A member's bank
+     * FS 2.7 #7 (owner decision on PR #66): «Звірено» needs only the closing difference to be 0,00. A member's bank
      * payment entered on the month's last day that the bank books on the 1st of the next month: the chairman books a
      * bank difference in the first month and reverses it in the next; each month then closes with its incoming and
      * outgoing off by the same amount (a warning on the screen, not a block), while a closing difference still blocks.

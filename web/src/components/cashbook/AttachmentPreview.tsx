@@ -1,7 +1,8 @@
 import { downloadExpenseAttachment } from '@nadel/api-client';
 import { format } from '@nadel/shared';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { usePdfAction } from '../../hooks/usePdfAction';
 import { useT } from '../../i18n';
 import { UserContent } from '../UserContent';
 import { Button } from '../ui';
@@ -37,19 +38,28 @@ function useNearViewport(ref: React.RefObject<Element | null>): boolean {
   return near;
 }
 
-/** The bytes of a file: the local File itself or the stored file, fetched once and cached. */
-function usePreviewBlob(file: PreviewFile, enabled: boolean): Blob | undefined {
-  const stored = file.stored;
-  const query = useQuery({
-    queryKey: ['expense-attachment-blob', stored?.expenseId, stored?.n],
+function blobQuery(stored: { expenseId: string; n: number } | undefined) {
+  return {
+    queryKey: ['expense-attachment-blob', stored?.expenseId, stored?.n] as const,
     queryFn: () => downloadExpenseAttachment(stored?.expenseId ?? '', stored?.n ?? 0),
-    enabled: enabled && stored !== undefined && file.local === undefined,
     staleTime: Infinity,
     gcTime: 5 * 60_000,
     retry: false,
     refetchOnWindowFocus: false,
+  };
+}
+
+/**
+ * The bytes of a file: the local File itself or the stored file, fetched once and cached under one key, so a
+ * thumbnail and the viewer share it. `enabled` only says whether the caller wants it now.
+ */
+function usePreviewBlob(file: PreviewFile, enabled: boolean): { blob: Blob | undefined; failed: boolean } {
+  const stored = file.stored;
+  const query = useQuery({
+    ...blobQuery(stored),
+    enabled: enabled && stored !== undefined && file.local === undefined,
   });
-  return file.local ?? query.data;
+  return { blob: file.local ?? query.data, failed: query.isError };
 }
 
 /** An object URL for a blob, revoked when the blob changes or the component unmounts. */
@@ -87,8 +97,16 @@ export function ImageViewer({
   const t = useT();
   const v = t.expenses.attachments.viewer;
   const current = images[index];
-  const blob = usePreviewBlob(current ?? { key: '', fileName: '', contentType: '' }, true);
+  // The viewer asks for the file it shows itself, whether or not its thumbnail has scrolled into view.
+  const { blob, failed } = usePreviewBlob(current ?? { key: '', fileName: '', contentType: '' }, true);
   const url = useObjectUrl(blob);
+  const queryClient = useQueryClient();
+  const download = usePdfAction();
+  useEffect(() => {
+    for (const neighbour of [images[index - 1], images[index + 1]]) {
+      if (neighbour?.stored && !neighbour.local) void queryClient.prefetchQuery(blobQuery(neighbour.stored));
+    }
+  }, [images, index, queryClient]);
   const dialog = useRef<HTMLDialogElement | null>(null);
   const move = (delta: number) => {
     const next = index + delta;
@@ -121,7 +139,7 @@ export function ImageViewer({
         e.preventDefault();
         onClose();
       }}
-      className="m-auto flex max-h-[95vh] w-[95vw] max-w-5xl flex-col gap-3 rounded-panel border border-line bg-surface p-4 text-ink backdrop:bg-ink/70"
+      className="fixed inset-0 m-0 grid h-dvh max-h-none w-dvw max-w-none grid-cols-1 grid-rows-[auto_minmax(0,1fr)] gap-3 overflow-hidden border-0 bg-black p-3 text-white backdrop:bg-black"
     >
       <div className="flex flex-wrap items-center gap-2">
         <span className="min-w-0 flex-1 break-all font-medium">
@@ -144,9 +162,29 @@ export function ImageViewer({
           {v.close}
         </Button>
       </div>
-      <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto">
-        {url !== undefined && (
-          <img src={url} alt={current.fileName} className="max-h-[80vh] max-w-full object-contain" />
+      <div data-testid="viewer-stage" className="relative min-h-0 min-w-0">
+        {url !== undefined ? (
+          <img src={url} alt={current.fileName} className="absolute inset-0 h-full w-full object-contain" />
+        ) : failed ? (
+          <div role="alert" className="flex h-full flex-col items-center justify-center gap-3">
+            <p>{v.failed}</p>
+            <Button
+              variant="secondary"
+              disabled={download.pending}
+              onClick={() =>
+                void download.run(
+                  () => downloadExpenseAttachment(current.stored?.expenseId ?? '', current.stored?.n ?? 0),
+                  current.fileName,
+                )
+              }
+            >
+              {t.expenses.attachments.download}
+            </Button>
+          </div>
+        ) : (
+          <p role="status" className="flex h-full items-center justify-center">
+            {v.loading}
+          </p>
         )}
       </div>
     </dialog>
@@ -164,7 +202,7 @@ function Thumbnail({ file, onOpen }: { file: PreviewFile; onOpen: () => void }) 
   const holder = useRef<HTMLDivElement>(null);
   const near = useNearViewport(holder);
   const image = isImage(file);
-  const blob = usePreviewBlob(file, near && image);
+  const { blob } = usePreviewBlob(file, near && image);
   const url = useObjectUrl(image ? blob : undefined);
   return (
     <div ref={holder}>
