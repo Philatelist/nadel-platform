@@ -79,3 +79,4 @@
 - Local env: the running dev DB (not started by the pipeline) has the demo role «Електрик» with extra permissions (REPORTS_VIEW, AUDIT_VIEW) left by earlier runs; the electrician e2e fails there on its precondition. Not reset (not the pipeline's environment).
 - Slice 11 task 1 committed below (`web/e2e/help.spec.ts`, chairman now expects every page).
 - Verify: screenshots captured from the running demo app — 70 per language in `web/public/help/img/`; capture fix (`/api/v1/me` in the demo guard) and `announcement-card` shot reduced to the list screen (the demo has no announcements and creating one would send it). `helpContent.test.ts` passes.
+- Verify: `make guide` built board-guide uk (~141 pages, 70 images) and en (~142 pages), owner manual uk/en and leaflet; no warnings. Layout not visually inspected (no PDF renderer available).
