@@ -1,12 +1,12 @@
 # Pipeline log — 018 cash book, expenses and reconciliation
 
-- Status: running
-- Phase: 5 — publish
+- Status: finished
+- Phase: 6 — review run (done)
 - Branch: 018-cash-book-expenses-reconciliation (planned) · Base: main @ c7419a6
 - Requirement: docs/features/018-cash-book-expenses-reconciliation.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
-- Publish: pr+checks · PR: — · Checks: —
-- Review run: on (not started)
+- Publish: pr+checks · PR: https://github.com/Philatelist/nadel-platform/pull/66 · Checks: green (run 41837691400)
+- Review run: running at http://localhost:5173 (PIDs in scratchpad/review-run.pids)
 
 ## Project facts
 
@@ -177,3 +177,20 @@
 - Decided automatically: every `AUTO:` entry above (Phase 1, tech, licence, the «Звірено» rule, the act-period clamp).
 - Owner follow-ups: (1) .github/workflows/ci.yml demo-days job: add DemoTreasuryTests to `-Dtest`; (2) Makefile `e2e` hard-codes NADEL_DB_URL localhost — with the local Homebrew Postgres on 5432 it fails (stop it with `brew services stop postgresql`, or make the target honour an override); (3) decide: «Звірено» on all four differences vs closing only (known limit with past-month reversals); (4) decide: accept an LGPL HEIC library for Chrome/Android; (5) product check of the reopen notice wording «Після звірки додано рядок: …»; (6) optionally raise coverage.minimum later.
 - Staffing gap: guides ran under general-purpose (no guides specialist). Suggested: `/awos:hire cover 018-cash-book-expenses-reconciliation: need image metadata handling (JPEG/PNG), bilingual HTML guides`.
+- Phase 5: pushed 018-cash-book-expenses-reconciliation (37c1ffa); PR #66 opened (feat(treasury): cash book, expenses and reconciliation). Waiting for checks.
+- Checks on PR #66: all green on the first run (run 41837691400): Backend, Clients, Demo data by day, End-to-end (Playwright), SAST (Semgrep), Security. No CI fixes, no re-runs.
+
+## Final report addendum (Phase 5)
+
+- PR #66 "feat(treasury): cash book, expenses and reconciliation": https://github.com/Philatelist/nadel-platform/pull/66
+- Checks: run 41837691400 — 6 of 6 green. No CI fixes needed.
+- Left for the owner: review and merge; the follow-ups listed in the PR (ci.yml demo-days list, local Homebrew Postgres on 5432, the «Звірено» rule, the HEIC licence, the reopen notice wording, the manual phone-camera check).
+
+## Review run (Phase 6)
+
+- The PR branch (018-cash-book-expenses-reconciliation @ 37c1ffa + this log) runs locally via `make up` with `NADEL_DB_URL=jdbc:postgresql://192.168.99.150:5432/nadel` (the Homebrew Postgres on 127.0.0.1:5432 shadows the Docker database; env override only, no config edited). Smoke check: web 200, backend health UP.
+- URLs: web http://localhost:5173, API http://localhost:8080, Keycloak http://localhost:8180, Mailpit http://localhost:8025.
+- Users (password `nadel`): chairman@demo.local (everything), treasurer@demo.local (view + enter), member@demo.local (own act only).
+- Try this: chairman → «Каса і банк» (cash and bank cards, journal, last count with the booked 20,00 shortage, bank months: previous «Звірено», current with a 35,00 difference) → «Витрати» (the materials expense with a receipt photo, «Сторнувати і внести заново») → «Перерахунок каси» (live book balance and difference) → bank month (book the 35,00 fee or enter it as an expense, then «Звірено») → «Звіти» (four new reports) → plot card «Акт звірки»; treasurer: no «Оформити різницю»/reversals; member: «Акт звірки» on own plots, no «Каса і банк».
+- Logs: scratchpad/review-run.log. Stop: `kill 51472 51570 51712 51854` (scratchpad/review-run.pids), infra `make down`.
+- Reminder: this is the PR branch, not main.
