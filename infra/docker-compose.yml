@@ -5,7 +5,7 @@ name: nadel
 services:
   postgres:
     # Override with NADEL_POSTGIS_IMAGE (an arm64 build on Apple Silicon, see infra/README.md)
-    image: ${NADEL_POSTGIS_IMAGE:-postgis/postgis:17-3.5}
+    image: ${NADEL_POSTGIS_IMAGE:-postgis/postgis:18-3.6}
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
