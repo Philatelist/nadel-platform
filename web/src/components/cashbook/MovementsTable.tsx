@@ -3,6 +3,7 @@ import {
   reverseAccountMovement,
   reverseOtherIncome,
   useListAccountMovements,
+  useListExpenseCategories,
   type AccountMovement,
 } from '@nadel/api-client';
 import { format, formatDay } from '@nadel/shared';
@@ -15,6 +16,7 @@ import { Pagination } from '../Pagination';
 import { QueryBoundary } from '../QueryBoundary';
 import { UserContent } from '../UserContent';
 import { Badge, Button, DataTable, Money, TextField, type Column } from '../ui';
+import { CategoryName } from './CategoryName';
 import { invalidateCashbook } from './cashbookInvalidation';
 import { ReasonDialog } from './ReasonDialog';
 
@@ -36,6 +38,10 @@ export function MovementsTable({ accountId }: { accountId: string }) {
     { from: from || undefined, to: to || undefined, page, size: PAGE_SIZE },
     { query: { placeholderData: keepPreviousData } },
   );
+
+  // archived categories too: an old line keeps its category name
+  const categories = useListExpenseCategories({ includeArchived: true });
+  const categoryById = new Map((categories.data ?? []).map((category) => [category.id, category]));
 
   const columns: Column<AccountMovement>[] = [
     { key: 'date', header: m.columns.date, cell: (row) => formatDay(row.date, locale) },
@@ -71,6 +77,11 @@ export function MovementsTable({ accountId }: { accountId: string }) {
               ) : (
                 <UserContent>{row.documentNumber ?? ''}</UserContent>
               )}
+            </span>
+          )}
+          {row.categoryId !== undefined && categoryById.has(row.categoryId) && (
+            <span>
+              <CategoryName category={categoryById.get(row.categoryId)!} />
             </span>
           )}
           {row.reason !== undefined && (

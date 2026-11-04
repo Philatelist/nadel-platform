@@ -97,6 +97,9 @@ describe('CashbookPage', () => {
     setOpeningBalance.mockReset();
     useListMoneyAccounts.mockReset();
     useListMoneyAccounts.mockReturnValue(queryResult([cash, bank]));
+    useListExpenseCategories.mockReturnValue(
+      queryResult([{ id: 'c1', kind: 'INCOME', systemCode: 'BANK_INTEREST', archived: false }]),
+    );
     useListAccountMovements.mockReset();
     useListAccountMovements.mockReturnValue(page([movement({})]));
   });
@@ -200,6 +203,31 @@ describe('CashbookPage', () => {
     await waitFor(() => expect(setOpeningBalance).toHaveBeenCalledTimes(1));
     expect(setOpeningBalance.mock.calls[0]?.[0]).toBe('a-bank');
     expect(setOpeningBalance.mock.calls[0]?.[1]).toMatchObject({ amount: '1500.50' });
+  });
+
+  it('formats the opening amount like the balance', () => {
+    renderPage();
+    const text = plain(screen.getByText(/^Вхідний залишок: /).textContent);
+    expect(text).toBe(plain(`Вхідний залишок: ${formatMoney('500.00', 'uk')} на 01.10.2026`));
+  });
+
+  it('shows the category name of an income line in the basis column', () => {
+    useListAccountMovements.mockReturnValue(
+      page([
+        movement({
+          id: 'm9',
+          kind: 'OTHER_INCOME',
+          amount: '40.00',
+          categoryId: 'c1',
+          source: { type: 'OTHER_INCOME', id: 'oi1' },
+          receiptNumber: undefined,
+          plotId: undefined,
+        }),
+      ]),
+    );
+    renderPage();
+    const table = screen.getAllByRole('table')[0] as HTMLElement;
+    expect(within(table).getByText('Відсотки банку')).toBeInTheDocument();
   });
 
   it('shows journal amounts as the server sent them, kinds by name, and marks lines before the opening', () => {

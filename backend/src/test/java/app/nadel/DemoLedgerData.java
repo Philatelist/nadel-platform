@@ -49,7 +49,7 @@ public final class DemoLedgerData {
      */
     public static void clear(JdbcTemplate owner) {
         asLedgerOwner(owner, sql -> {
-            removePaymentMovements(sql);
+            removeCashBooks(sql);
             // payments and allocations first: they point at charges and billing months (releases and reversals first)
             sql.update("delete from allocation where tenant_id in (?, ?) and releases_allocation_id is not null",
                     DEMO_TENANT, OTHER_TENANT);
@@ -94,10 +94,7 @@ public final class DemoLedgerData {
      */
     public static void restore(JdbcTemplate owner) {
         String block = block().replace("${demoledger}", "on");
-        asLedgerOwner(owner, sql -> {
-            removePaymentMovements(sql);
-            sql.execute(block);
-        });
+        asLedgerOwner(owner, sql -> sql.execute(block));
     }
 
     /**
@@ -107,21 +104,31 @@ public final class DemoLedgerData {
      */
     public static void restore(JdbcTemplate owner, LocalDate day) {
         String block = DemoDay.on(block().replace("${demoledger}", "on"), day);
-        asLedgerOwner(owner, sql -> {
-            removePaymentMovements(sql);
-            sql.execute(block);
-        });
+        asLedgerOwner(owner, sql -> sql.execute(block));
     }
 
     /**
-     * Removes the journal movements (feature 018) of the two cooperatives' payments, which point at the payment rows the
-     * block and {@link #clear} delete: the movements of payments a test entered through the API (reversals first).
+     * Removes the cash books (feature 018) of the two cooperatives, which point at the payment rows {@link #clear}
+     * deletes: what a test or {@code DemoTreasury} entered (files, expenses, other income, handovers, booked bank
+     * differences, counts, reconciliations; reversals first), every journal movement and the accounts with their
+     * opening balances, which are seeded again without one ({@code seed_treasury}), as the demo ledger block does for
+     * the demo cooperative. The categories stay.
      */
-    private static void removePaymentMovements(JdbcTemplate sql) {
-        sql.update("delete from account_movement where tenant_id in (?, ?) and payment_row_id is not null "
-                + "and reverses_movement_id is not null", DEMO_TENANT, OTHER_TENANT);
-        sql.update("delete from account_movement where tenant_id in (?, ?) and payment_row_id is not null",
+    private static void removeCashBooks(JdbcTemplate sql) {
+        sql.update("delete from expense_attachment where tenant_id in (?, ?)", DEMO_TENANT, OTHER_TENANT);
+        for (String table : new String[] {"expense", "other_income", "handover"}) {
+            sql.update("delete from " + table + " where tenant_id in (?, ?) and reason is not null", DEMO_TENANT,
+                    OTHER_TENANT);
+            sql.update("delete from " + table + " where tenant_id in (?, ?)", DEMO_TENANT, OTHER_TENANT);
+        }
+        for (String table : new String[] {"bank_difference", "cash_count", "bank_reconciliation"}) {
+            sql.update("delete from " + table + " where tenant_id in (?, ?)", DEMO_TENANT, OTHER_TENANT);
+        }
+        sql.update("delete from account_movement where tenant_id in (?, ?) and reverses_movement_id is not null",
                 DEMO_TENANT, OTHER_TENANT);
+        sql.update("delete from account_movement where tenant_id in (?, ?)", DEMO_TENANT, OTHER_TENANT);
+        sql.update("delete from money_account where tenant_id in (?, ?)", DEMO_TENANT, OTHER_TENANT);
+        sql.queryForList("select seed_treasury(id) from tenant where id in (?, ?)", DEMO_TENANT, OTHER_TENANT);
     }
 
     /**

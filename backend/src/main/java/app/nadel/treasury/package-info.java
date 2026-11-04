@@ -4,7 +4,8 @@
  * balance of an account on a day (never stored: the opening amount plus the movements dated from the opening date),
  * expenses with their receipt files ({@code expense}, {@code expense_attachment}) and the expense and income categories
  * ({@code expense_category}), handovers ({@code handover}), other income ({@code other_income}) and cash counts
- * ({@code cash_count}); {@code bank_reconciliation} gets its writer in a later slice. Every table is under RLS {@code tenant_isolation}.
+ * ({@code cash_count}), the monthly bank reconciliation ({@code bank_reconciliation}, {@code bank_difference}). Every
+ * table is under RLS {@code tenant_isolation}.
  * <p>
  * Public API: the codes {@link app.nadel.treasury.MoneyAccountKind}, {@link app.nadel.treasury.MovementKind} and
  * {@link app.nadel.treasury.BankMonthStatus}, {@link app.nadel.treasury.CashCountActs} with
@@ -19,13 +20,15 @@
  * expenses ({@code Expenses}, {@code ExpenseQueries}, the no-negative-cash rule {@code CashGuard}, the attachment checks
  * {@code AttachmentUploads}, {@code FileSniffer}, {@code JpegMetadataStripper}, {@code PngMetadataStripper}), the
  * categories ({@code Categories}), the cash counts ({@code CashCounts}, {@code CashCountQueries}, the pure
- * {@code CashCountFigures}), the contract form of journal lines ({@code JournalLines}), the sealing of personal texts ({@code TreasuryCipher}) and the audit publisher
- * ({@code TreasuryAuditPublisher}).
+ * {@code CashCountFigures}), the bank reconciliation ({@code BankReconciliations}), the reports' facade
+ * ({@code TreasuryReports}), the contract form of journal lines ({@code JournalLines}), the sealing of personal texts
+ * ({@code TreasuryCipher}), the audit publisher ({@code TreasuryAuditPublisher}) and the demo cash book runner
+ * ({@code DemoTreasury}, dev profile only).
  * <p>
  * Depends on {@code ledger} ({@code PaymentMoneyMoved}, {@code PaymentSource}, {@code LedgerReadModel#paymentRefs},
  * {@code BookingMonths}), {@code settings} ({@code CooperativeSettings}: the IBAN), {@code audit} ({@code AuditEvent},
  * {@code ActorNames}: who entered a line), {@code privacy} ({@code PersonalDataCipher}), {@code identity}
- * ({@code CurrentUser}, {@code AccessProfile}), {@code tenancy}
+ * ({@code CurrentUser}, {@code AccessProfile}), {@code members} ({@code RoleHolders}, the demo runner), {@code tenancy}
  * ({@code TenantContext}), {@code problem} and {@code money}; it never reads another module's tables. No module depends
  * on it except {@code documents} (the cash count act) and {@code reports} (the cash book reports); it never depends on
  * either.

@@ -40,3 +40,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `8513268..6439480` | PASS | — | minor: a plot with no ledger rows always gets 400 from INVALID (the form shows «Невірний період»); plotStatement calls debtsAsOf twice (fine for one plot). Reviewer did not run the web checks (orchestrator ran them before the commit: web 958 green) |
+
+## Slice 7 — Reports: cash book, bank movements, income and expense, expenses
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `6439480..a070e08` | PASS | — | minor: OPENING/DAY/CLOSING rows count against the 20 000-row cap (worth a README sentence); TemplateValues:103 over-long Javadoc; the «Витрати» total skips reversed expenses, so it can differ from income-expense when an expense and its reversal fall in different periods (per spec, documented) |

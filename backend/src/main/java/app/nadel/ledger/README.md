@@ -1311,8 +1311,12 @@ application always has the current month open.
 So "Не нараховано" shows two items: exactly one "Немає тарифу на всі дні" (plot 25) and quarter Б's unknown value.
 Re-runnable: the block first deletes the demo cooperative's delivery rows and other feature 017 rows (`delivery`
 points at invoices and payments; `notifications.internal.DemoNotifications` writes them again on the next start), then
-every ledger row of the demo cooperative (as `nadel_owner` with `app.ledger_maintenance = 'on'`), its water
-connections and common consumer settings, then books everything again; a
+the demo cooperative's cash book (feature 018: a payment's journal line points at its payment row with `ON DELETE
+RESTRICT`, so it goes first, with everything that points at a movement and the two accounts, which are seeded again
+without opening balances; `treasury.internal.DemoTreasury` enters the rest on the next start), then every ledger row of
+the demo cooperative (as `nadel_owner` with `app.ledger_maintenance = 'on'`), its water connections and common consumer
+settings, then books everything again, the payments' journal lines included (the V32 backfill statements, limited to
+the demo cooperative: the treasury listener does not run for rows the block inserts); a
 change made to the demo ledger by hand is lost on a re-run. It assumes one version per demo tariff and real readings
 at both ends of the runs (it raises an exception otherwise).
 
@@ -1325,11 +1329,14 @@ with the ledger's own planning code (`TariffMonthPlanning`, `ReadingChargePlanni
 and queue items; republishes `ChargesBooked` and checks the status refresher records the same debts; and checks the
 screens (months, the queue, the map, accounts) and that the block is re-runnable.
 
-The demo is dated from the day it is first loaded, so `DemoLedgerDataTests` and `DemoDocumentsTests` run once per
+The demo is dated from the day it is first loaded, so `DemoLedgerDataTests`, `DemoDocumentsTests` and
+`treasury.internal.DemoTreasuryTests` run once per
 `DemoDay`: the demo meters and the ledger are loaded with that day in place of `CURRENT_DATE` and its noon in place of
 `now()`, and the application's `Clock` stands at the same noon. A normal build checks today; the CI job "Demo data by
 day" (`-Dnadel.demo.days=all`) checks every day of January 2027 (the turn of a year, the December one-off fee) and of
-February 2027 and 29.02.2028.
+February 2027 and 29.02.2028 for `DemoLedgerDataTests` and `DemoDocumentsTests` (its `-Dtest` list does not name
+`DemoTreasuryTests` yet; that is a change to `.github/workflows/ci.yml` for the repository owner; the same command with
+`-Dtest=DemoTreasuryTests` passes on every one of those days).
 
 ## Dependencies
 

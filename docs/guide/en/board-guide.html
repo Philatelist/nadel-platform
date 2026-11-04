@@ -18,11 +18,12 @@
         <dd>Chairman, treasurer, electrician, other board members</dd>
         <dt>System state</dt>
         <dd>
-          Phases 1–4 (payments, documents, delivery by e-mail and Telegram): part I — working in the system,
-          part II — how the system calculates
+          Phases 1–4 (payments, documents, delivery by e-mail and Telegram) and cash and bank (expenses, cash
+          count, bank reconciliation, report for the general meeting, reconciliation act): part I — working in
+          the system, part II — how the system calculates
         </dd>
         <dt>Edition</dt>
-        <dd>29 October 2026</dd>
+        <dd>4 November 2026</dd>
       </dl>
     </div>
 
@@ -49,6 +50,10 @@
         <li>
           <a href="#delivery">Delivery: e-mail, Telegram and the bot</a><span class="tag done">works</span>
         </li>
+        <li><a href="#cashbook">Cash and bank</a><span class="tag done">works</span></li>
+        <li>
+          <a href="#meeting-report">Report for the general meeting</a><span class="tag done">works</span>
+        </li>
         <li class="toc-part"><a href="#part-2">Part II. How the system calculates</a></li>
         <li><a href="#r-principles">Core principles</a><span class="tag done">works</span></li>
         <li><a href="#r-tariffs">Tariffs and the expected amount</a><span class="tag done">works</span></li>
@@ -65,6 +70,11 @@
         <li><a href="#r-invoices">Invoice numbers</a><span class="tag done">works</span></li>
         <li>
           <a href="#r-delivery">Which channel, and how sending is retried</a
+          ><span class="tag done">works</span>
+        </li>
+        <li><a href="#r-cashbook">Cash, bank and reconciliation</a><span class="tag done">works</span></li>
+        <li>
+          <a href="#r-meeting">Income and expenses, and the reconciliation act</a
           ><span class="tag done">works</span>
         </li>
         <li><a href="#next">What comes next</a><span class="tag planned">planned</span></li>
@@ -308,6 +318,27 @@
             <td>Reverse payments</td>
             <td>Reverse a payment with a reason (the chairman only by default)</td>
           </tr>
+          <tr>
+            <td>View cash and bank</td>
+            <td>
+              See cash and bank, journals, expenses with files, counts, reconciliations and the four cash book
+              reports
+            </td>
+          </tr>
+          <tr>
+            <td>Enter cash book entries</td>
+            <td>
+              Record expenses, handovers to the bank, other income, cash counts, statement figures,
+              "Reconciled"
+            </td>
+          </tr>
+          <tr>
+            <td>Approve cash book operations</td>
+            <td>
+              Enter opening balances, book differences, reverse cash book entries, manage expense and income
+              categories (the chairman only by default)
+            </td>
+          </tr>
         </tbody>
       </table>
     </section>
@@ -373,8 +404,8 @@
         </tbody>
       </table>
       <p class="muted small">
-        The colour follows the debt after payments: a charge that has been paid is not a debt (chapters 20 and
-        25).
+        The colour follows the debt after payments: a charge that has been paid is not a debt (chapters 22 and
+        27).
       </p>
 
       <h3>The plot card</h3>
@@ -388,6 +419,10 @@
         had an owner can be deleted. A plot with a lasting water connection (or an active meter) cannot be
         archived or turned into common land: the system refuses and asks to end the connection on the plot
         card first.
+      </p>
+      <p>
+        The <strong>"Reconciliation act"</strong> tab of the plot card (for those who have "View charges")
+        builds a PDF reconciliation act for the chosen period - see chapter 17.
       </p>
     </section>
 
@@ -452,15 +487,20 @@
       </p>
       <h3>Meter tree</h3>
       <p>The meter tree is opened from here too — see chapter 9.</p>
+      <h3>Expense and income categories</h3>
+      <p>
+        The "Expense and income categories" panel (for those who have "Approve cash book operations") holds
+        the lists of categories for the expenses and other income of the cash. More in chapter 16.
+      </p>
       <h3>Charging settings</h3>
       <p>
         Below the colour choice: the red status threshold, how losses are charged, the split of common
-        consumers and the water supply of plots. They are described in chapters 20–22.
+        consumers and the water supply of plots. They are described in chapters 22–24.
       </p>
       <h3>Requisites</h3>
       <p>
         The "Requisites" block: official name, legal address, bank, IBAN; the EDRPOU code is read-only. Report
-        templates use them — see chapter 24.
+        templates use them — see chapter 26.
       </p>
     </section>
 
@@ -513,7 +553,7 @@
       <h2><span class="num">8</span> Tariffs</h2>
       <p>
         Here the chairman describes what the cooperative charges for and how much. The charges themselves come
-        later (chapter 20), but every plot card already shows what the plot will be charged.
+        later (chapter 22), but every plot card already shows what the plot will be charged.
       </p>
       <figure>
         <img src="../img/en/tariffs.png" alt="Tariffs" />
@@ -738,7 +778,7 @@
       <h3>Corrections</h3>
       <p>
         On the meter card every reading can be corrected or deleted <strong>while no charge uses it</strong>.
-        Once charged, a correction will go through recalculation (chapter 23).
+        Once charged, a correction will go through recalculation (chapter 25).
       </p>
     </section>
 
@@ -788,7 +828,7 @@
       <h3>My charges</h3>
       <p>
         For each of their plots the member sees the debt per charge type and every charge with its
-        calculation, read-only. See chapter 20. The payments of the plot are there too: date, receipt or bank
+        calculation, read-only. See chapter 22. The payments of the plot are there too: date, receipt or bank
         document number, amount and what it paid, reversed payments with a mark, the prepayment and the debt
         after payments. A member sees neither who entered a payment nor the note about the payer, and never
         the payments of other plots.
@@ -797,6 +837,12 @@
         <img src="../img/en/member-charges.png" alt="My charges" />
         <figcaption>"My charges" in the member account</figcaption>
       </figure>
+      <h3>Reconciliation act</h3>
+      <p>
+        Next to each of their own plots there is a <strong>"Reconciliation act"</strong> button: enter a
+        period and download a PDF that shows the charges, the payments and the debt or prepayment at the start
+        and at the end of the period (chapter 17). The act of another plot is not available.
+      </p>
     </section>
 
     <section class="chapter" id="payments">
@@ -872,7 +918,7 @@
         As soon as the plot and the amount are known, the form shows the <strong>proposal</strong>: a table of
         the plot's unpaid charges (charge, period, open amount, "Allocate") and a "Prepayment" line - what is
         left over the debts. The system pays the oldest debt first; for debts of the same day, in the order of
-        the cooperative's charge types. Examples are in chapter 25.
+        the cooperative's charge types. Examples are in chapter 27.
       </p>
       <ul>
         <li>
@@ -918,7 +964,7 @@
         lists the payer's current plots with their debts and proposes the parts
         <strong>in proportion to the debts</strong>. Kopecks that do not divide go to the plots with the
         largest remainders (a tie goes to the plot listed first); an amount above the whole debt goes to the
-        first plot as prepayment. Examples are in chapter 25.
+        first plot as prepayment. Examples are in chapter 27.
       </p>
       <ul>
         <li>
@@ -972,6 +1018,16 @@
         plot can still be reversed.
       </p>
 
+      <div class="note">
+        <span class="callout-title">Payments and the cash</span>
+        <p>
+          A saved payment becomes a line of the cash journal (cash) or the bank journal (a bank payment) by
+          itself, and reversing it adds a line of the opposite amount dated on the day of the reversal. A
+          payment can be reversed even if the cash becomes negative because of it: then the cash card asks for
+          a cash count (chapter 16).
+        </p>
+      </div>
+
       <h3>Prepayment: automatic and by hand</h3>
       <p>
         A plot's <strong>prepayment</strong> is the money paid for it that is not placed on any charge. It is
@@ -1013,7 +1069,7 @@
       <p>
         "Charges → Months" has a <strong>"Received"</strong> column next to "Charged". The "Plot balances",
         "Debtors" and "Charges by month" reports take payments into account, and the new
-        <strong>"Payments"</strong> report lists every payment with totals per source (chapter 24).
+        <strong>"Payments"</strong> report lists every payment with totals per source (chapter 26).
       </p>
       <h3>What a member sees</h3>
       <p>
@@ -1149,7 +1205,7 @@
       </p>
       <p>
         An invoice for a month that is not closed yet says "as of" a date. How the numbers are formed is in
-        chapter 26.
+        chapter 28.
       </p>
 
       <h3>The QR code and how to check it with a phone</h3>
@@ -1483,7 +1539,7 @@
       <p>
         <strong>Co-owners.</strong> The invoice of a plot goes to each of its current owners through their own
         channel. A member who owns several plots gets one message per plot, each with its own PDF. Examples
-        are in chapter 27.
+        are in chapter 29.
       </p>
 
       <h3>Sending the month's invoices</h3>
@@ -1729,6 +1785,422 @@
       </div>
     </section>
 
+    <section class="chapter" id="cashbook">
+      <h2><span class="num">16</span> Cash and bank <span class="tag done">works</span></h2>
+      <p class="lead">
+        The system knows not only what members owe and pay, but also where that money is - in the treasurer's
+        cash box or on the bank account - and what it was spent on. The "Cash and bank" menu is seen by those
+        who have "View cash and bank" (the chairman and the treasurer); entries are made by those who have
+        "Enter cash book entries" (the treasurer and the chairman); opening balances, differences, reversals
+        and expense categories belong to whoever has "Approve cash book operations" (the chairman). This part
+        does not change members' debts: it shows where their money went.
+      </p>
+
+      <h3>Two accounts and the opening balance</h3>
+      <p>
+        A cooperative has exactly two accounts: <strong>"Cash"</strong> (the cash the treasurer holds) and
+        <strong>"Bank account"</strong> (the IBAN from the requisites is shown under its name). A second cash
+        box or a second bank account is not possible.
+      </p>
+      <figure>
+        <img src="../img/en/cashbook.png" alt="Cash and bank" />
+        <figcaption>
+          "Cash and bank": two cards with balances, entry buttons, bank reconciliation months
+        </figcaption>
+      </figure>
+      <div class="two-col">
+        <figure class="phone">
+          <img src="../img/en/cashbook-phone.png" alt="Cash and bank on a phone" />
+          <figcaption>On a phone</figcaption>
+        </figure>
+      </div>
+      <ul>
+        <li>
+          While an account has no <strong>opening balance</strong>, its card says "Enter the opening balance"
+          instead of an amount. The chairman enters it once: an amount and an "As of" date - the balance at
+          the start of that day. After it is saved it cannot be changed; a mistake is corrected by a cash
+          count (cash) or a bank difference (bank). A treasurer without the approval right sees the prompt but
+          no button.
+        </li>
+        <li>
+          Until the opening balance exists, expenses, handovers, other income, counts and reconciliations for
+          that account are refused with "Enter the opening balance of the account first." Member payments are
+          still recorded; payments dated before the opening balance stay in the journal marked "before the
+          opening balance" and are not counted in the balance.
+        </li>
+        <li>
+          <strong>The balance on a day</strong> is the opening balance plus every receipt and minus every
+          spending from the opening date up to and including that day. A reversed entry and its reversal both
+          stay in the journal.
+        </li>
+      </ul>
+
+      <h3>What the screen shows</h3>
+      <ul>
+        <li>
+          <strong>The cash card</strong>: today's balance, the last count (date and result) and an "Unresolved
+          difference" if there is one; if the cash went negative - "The cash balance is negative - do a cash
+          count".
+        </li>
+        <li>
+          <strong>The bank card</strong>: today's balance, the warning "The bank balance is negative" (an
+          overdraft is the bank's business, the system only warns) and the months with their reconciliation
+          status: "Not reconciled", "Reconciled", "Needs a new check".
+        </li>
+        <li>
+          The buttons <strong>"Expense"</strong>, <strong>"Hand over to the bank"</strong>,
+          <strong>"Other income"</strong> and <strong>"Cash count"</strong> are for those who have "Enter cash
+          book entries"; without it only the balances are shown.
+        </li>
+        <li>
+          Each card opens the account <strong>journal</strong> for a period ("From", "To"): the balance at the
+          start, every line (date, kind, basis, amount, who entered it), the balance at the end.
+        </li>
+      </ul>
+
+      <h3>Daily work</h3>
+      <h4>Expense</h4>
+      <p>
+        "Expense" opens the form (there is also the "All expenses" list with the filters "From", "To",
+        "Account", "Category"). An expense is never edited: a mistake is corrected by a reversal.
+      </p>
+      <figure>
+        <img src="../img/en/expense-form.png" alt="Expense form" />
+        <figcaption>New expense: account, amount, category, paid to, receipt files</figcaption>
+      </figure>
+      <table>
+        <thead>
+          <tr>
+            <th>Field</th>
+            <th>What to enter</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Account</td>
+            <td>"Cash" or "Bank account"</td>
+          </tr>
+          <tr>
+            <td>Expense date</td>
+            <td>Not later than today</td>
+          </tr>
+          <tr>
+            <td>Amount</td>
+            <td>Above 0.00</td>
+          </tr>
+          <tr>
+            <td>Expense category</td>
+            <td>Required, from the cooperative's list of categories (see below)</td>
+          </tr>
+          <tr>
+            <td>Paid to, Purpose</td>
+            <td>
+              Optional, up to 200 and up to 500 characters. The counterparty may be a private person, so this
+              is personal data: it is stored protected, shown to those who have "View cash and bank", and in
+              the audit log only to those who see members' personal data (others see "hidden")
+            </td>
+          </tr>
+          <tr>
+            <td>Document number, Document date</td>
+            <td>Optional: the number and date of the supplier's invoice or receipt</td>
+          </tr>
+          <tr>
+            <td>Receipt or invoice</td>
+            <td>0 to 5 files: a photo (JPEG, PNG) or a PDF, each up to 5 MB</td>
+          </tr>
+        </tbody>
+      </table>
+      <ul>
+        <li>
+          The file type is checked by its content, not by its name: a text file renamed to
+          <code>receipt.jpg</code> is refused ("Only photos (JPEG, PNG) and PDF are allowed."). Other
+          messages: "The file is too large. Maximum 5 MB." and "No more than 5 files."
+        </li>
+        <li>
+          Location (GPS) and camera data are <strong>removed</strong> from photos when they are uploaded, so a
+          file downloaded from the card carries none.
+        </li>
+        <li>
+          On a phone there is a <strong>"Take a photo"</strong> button: the picture is attached to the
+          expense. A HEIC photo from an iPhone is converted to JPEG by the phone itself ("Converting the
+          photo…"). If you pick a HEIC file on a computer in Chrome, the form shows the file type message:
+          save the file as JPEG or attach the photo from the phone.
+        </li>
+        <li>A cash expense that the cash cannot cover is refused (the rule is in chapter 30).</li>
+      </ul>
+      <figure>
+        <img src="../img/en/expense-card.png" alt="Expense card with a photo of the receipt" />
+        <figcaption>Expense card: files, document, billing month, who entered it</figcaption>
+      </figure>
+      <p>
+        The <strong>expense card</strong> shows every field, the files (those who have "View cash and bank"
+        can download them) and the billing month. The chairman sees the
+        <strong>"Reverse and record again"</strong>
+        button: it asks for a reason (up to 500 characters, otherwise "Enter the reason for the reversal."),
+        marks the expense "Reversed", restores the money to the balance and opens the form of a new expense
+        with the same values and files - correct it and save. A reversed expense is not reversed twice.
+      </p>
+
+      <h4>Hand over to the bank</h4>
+      <p>
+        "Hand over to the bank": a date, an amount above 0.00 and the
+        <strong>number of the bank's slip</strong> for the cash deposit (for example "KV-123"). The cash
+        journal gets a spending, the bank journal a receipt of the same date and amount. A handover that would
+        make the cash negative is refused.
+      </p>
+      <h4>Other income</h4>
+      <p>
+        "Other income" is money not from members: bank interest, a grant, a sale of scrap. Enter the account,
+        the date, the amount, the income category and a description (up to 500 characters).
+      </p>
+
+      <h4>Reversing entries</h4>
+      <p>
+        The chairman can reverse an expense, a handover, an other income and a booked difference - the
+        <strong>"Reverse"</strong> button in a journal line, with a required reason. A reversal is a new line
+        of the opposite amount dated on the day you reverse; the entry itself stays, marked "Reversed". An
+        entry is reversed once.
+        <strong>Member payments are reversed only on the "Payments" screen</strong> (chapter 13); their
+        reversal appears in the cash journal by itself. Reversing a cash income that would make the cash
+        negative is refused.
+      </p>
+      <div class="note">
+        <span class="callout-title">A closed month</span>
+        <p>
+          A line dated in a closed billing month keeps its date but belongs to the earliest open billing
+          month, like payments. Reports by day use the date, reports by billing month use the month it belongs
+          to.
+        </p>
+      </div>
+
+      <h3>Cash count</h3>
+      <p>
+        From time to time the treasurer counts the cash and compares it with the book. "Cash count" shows the
+        <strong>book balance</strong> at that time and at once the <strong>difference</strong> (counted minus
+        book), and below it the cash movements since the previous count, so it is easy to see what could be
+        missing.
+      </p>
+      <figure>
+        <img src="../img/en/cash-count.png" alt="Cash count" />
+        <figcaption>Cash count: book balance, difference, explanation, act</figcaption>
+      </figure>
+      <ul>
+        <li>A difference of 0.00 - the count is saved as <strong>"Matches"</strong>.</li>
+        <li>
+          Any other difference needs an <strong>explanation</strong> ("Explain the difference."). Until the
+          chairman books it, the cash card and the screen show "Unresolved difference −20.00".
+        </li>
+        <li>
+          The chairman presses <strong>"Book the difference"</strong> and gives a reason: the cash journal
+          gets a "Surplus" (receipt) or a "Shortage" (spending) line. A difference is booked once; a shortage
+          that would make the cash negative on a later day is refused.
+        </li>
+        <li>
+          A saved count <strong>keeps the book balance it showed</strong>: a line entered later for an earlier
+          date does not change it.
+        </li>
+        <li>
+          Every count has a PDF <strong>"Cash count act"</strong>: the cooperative's name, the date and time,
+          the book balance, the counted balance, the difference (with its explanation and, once booked, how it
+          was settled), and signature lines for the treasurer and the chairman. The act is always in
+          Ukrainian.
+        </li>
+      </ul>
+
+      <h3>End of the month: bank reconciliation</h3>
+      <p>
+        On the bank card press a month. The treasurer enters four figures from the bank statement:
+        <strong>the opening balance, the total in, the total out and the closing balance</strong>. They must
+        agree: opening + in − out = closing. Otherwise the system says: "The statement figures do not agree:
+        100.00 + 50.00 − 20.00 ≠ 200.00".
+      </p>
+      <figure>
+        <img src="../img/en/bank-reconciliation.png" alt="Bank reconciliation" />
+        <figcaption>Bank reconciliation of a month: statement, books, differences, bank movements</figcaption>
+      </figure>
+      <ol>
+        <li>
+          Next to the statement figures the screen shows the same four figures
+          <strong>from the books</strong> and the <strong>difference</strong> of each. Below, all bank lines
+          of the month, so it is easier to find what is missing.
+        </li>
+        <li>
+          If an entry is missing (the bank charged a fee and you have no record of it), enter it: a payment,
+          an expense or an other income. The comparison updates by itself.
+        </li>
+        <li>
+          If no entry explains a difference, the chairman books a <strong>"Bank difference"</strong> for the
+          month: an amount (negative - money out) and a reason. The line goes into the bank journal and can be
+          reversed.
+        </li>
+        <li>
+          When all four differences are 0.00 the treasurer presses <strong>"Reconciled"</strong>. The button
+          works only then. A reconciled month cannot be changed.
+        </li>
+      </ol>
+      <div class="warn">
+        <span class="callout-title">A reconciled month can be reopened</span>
+        <p>
+          If a bank line dated in a reconciled month appears later (for example a bank payment dated 20
+          October is entered on 3 November), the month goes to "Needs a new check" and the screen says what
+          was added and when. Check the month and press "Reconciled" again; the audit log keeps the line that
+          reopened it.
+        </p>
+      </div>
+      <div class="warn">
+        <span class="callout-title">Known limits</span>
+        <ul>
+          <li>
+            "Reconciled" needs all four differences at 0.00. So a mistake of a past month that you reverse
+            <em>today</em> cannot be reconciled for that month: the reversal is dated today and falls into the
+            current one. That difference stays until it is closed by a "Bank difference" for the month.
+          </li>
+          <li>
+            A back-dated line changes the opening balance of every later month. Months that are already
+            "Reconciled" stay so (the system reopens only the month the line is dated in), so after such a
+            line the board should check the later months themselves and, if needed, enter a correction.
+          </li>
+        </ul>
+      </div>
+
+      <h3>Expense and income categories</h3>
+      <p>
+        "Settings → Expense and income categories" (seen by those who have "Approve cash book operations").
+        Each cooperative has two lists: <strong>expense categories</strong> ("Electricity to the supplier",
+        "Water", "Payroll and taxes", "Network repair", "Materials", "Waste removal", "Bank fees", "Taxes and
+        fees", "Stationery and communication", "Other") and <strong>income categories</strong> ("Bank
+        interest", "Grants and donations", "Sale of materials", "Other").
+      </p>
+      <figure>
+        <img src="../img/en/settings-expense-categories.png" alt="Expense and income categories" />
+        <figcaption>Expense and income categories in the settings</figcaption>
+      </figure>
+      <ul>
+        <li>
+          "Add a category", "Rename" (the new name shows on old expenses too), "Up" / "Down", "Archive" and
+          "Restore". An archived category is not offered in a new entry but stays on old ones. A category is
+          never deleted. A list cannot hold two categories with the same name: "This category already exists."
+        </li>
+      </ul>
+
+      <h3>Who can do what</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Permission</th>
+            <th>What it gives</th>
+            <th>Who has it by default</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>View cash and bank</td>
+            <td>Accounts, journals, expenses with files, counts, reconciliations, the four reports</td>
+            <td>Chairman, treasurer</td>
+          </tr>
+          <tr>
+            <td>Enter cash book entries</td>
+            <td>Expenses, handovers, other income, counts, statement figures, "Reconciled"</td>
+            <td>Treasurer, chairman</td>
+          </tr>
+          <tr>
+            <td>Approve cash book operations</td>
+            <td>Opening balances, booking differences, reversals, expense and income categories</td>
+            <td>Chairman only</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>
+        A member has no "Cash and bank" in the menu, and a direct address shows a message that they have no
+        access. Each of the three permissions can be given to your own role (chapter 3).
+      </p>
+      <div class="note">
+        <span class="callout-title">Audit log</span>
+        <p>
+          The audit log records the opening balance, entering and reversing expenses, handovers and other
+          income, cash counts and booking their differences, statement figures, bank differences, "Reconciled"
+          and reopening of a month (by the system, with the line that reopened it), and adding, renaming,
+          moving and archiving categories. The counterparty and the purpose appear there only to those who see
+          members' personal data.
+        </p>
+      </div>
+    </section>
+
+    <section class="chapter" id="meeting-report">
+      <h2><span class="num">17</span> Report for the general meeting <span class="tag done">works</span></h2>
+      <p class="lead">
+        In spring the board prepares the report of income and expenses for the year. It no longer has to be
+        put together by hand from a pile of receipts: everything entered into the cash and the bank is
+        collected into reports on the "Reports" screen.
+      </p>
+      <h3>Four cash book reports</h3>
+      <dl class="terms">
+        <dt>Cash book</dt>
+        <dd>
+          A period; for every day the opening balance, each line (time, kind, receipt or document number,
+          counterparty, receipt or spending) and the closing balance; the totals of the period. The closing
+          balance of every day equals the cash balance of that day on "Cash and bank".
+        </dd>
+        <dt>Bank movements</dt>
+        <dd>The same for the bank account, with the reconciliation status of each month.</dd>
+        <dt>Income and expense</dt>
+        <dd>
+          The report for the general meeting for a period. <em>Income</em>: member payments by charge type,
+          "Prepayments" (the part of payments not allocated to any charge), reversals of earlier payments as a
+          separate negative line, other income by category. <em>Expenses</em> by category. Booked count and
+          bank differences as their own line. <em>The result</em> = income − expenses + differences, and it
+          equals the change of cash plus bank over the period. Also the cash and bank balances at the start
+          and at the end. The rules are in chapter 31.
+        </dd>
+        <dt>Expenses</dt>
+        <dd>
+          The expense list with the filters "Period", "Category", "Account". On screen each expense links to
+          its files.
+        </dd>
+      </dl>
+      <p>
+        The reports are opened and downloaded to Excel like all reports (chapter 26). "Income and expense" can
+        also be filled into the board's own template. These four reports need only
+        <strong>"View cash and bank"</strong>, without "View reports": your own role, for example "Audit
+        committee", with just this permission sees exactly these four reports and no other.
+      </p>
+
+      <h3>Reconciliation act with a member</h3>
+      <p>
+        The <strong>reconciliation act</strong> is a PDF in Ukrainian for a plot and a period: the
+        cooperative's requisites, the plot and its current owners, the period, the balance at the start (debt,
+        prepayment or none), every charge, adjustment, reversal and payment by date (columns "Charged" and
+        "Paid"), the turnover totals, the balance at the end and the sentence "According to the cooperative's
+        records the debt as of 31.10.2026 is …" (or "the prepayment is …", or "there is no debt"), and two
+        signature blocks: "From the cooperative" (with the treasurer's name, or an empty line if there is no
+        treasurer) and "Member of the cooperative".
+      </p>
+      <figure>
+        <img src="../img/en/plot-reconciliation-act.png" alt="The Reconciliation act tab of a plot card" />
+        <figcaption>The "Reconciliation act" tab on the plot card</figcaption>
+      </figure>
+      <ul>
+        <li>
+          <strong>The board</strong> (permission "View charges") builds the act on the "Reconciliation act"
+          tab of the plot card: the fields "From" and "To", then "Download the reconciliation act".
+        </li>
+        <li>
+          <strong>A member</strong> sees a "Reconciliation act" button next to each of their own plots in "My
+          account"; another plot's act is not available to them ("not found").
+        </li>
+        <li>
+          A period cannot start before the plot's first charge or end after today: otherwise "Invalid period".
+          Without the cooperative's requisites the act is not built - the same message as for invoices. The
+          act is not stored: it is built when requested, and the same period always gives the same act. It can
+          be sent like other documents (chapter 15).
+        </li>
+      </ul>
+      <figure>
+        <img src="../img/en/account-reconciliation-act.png" alt="Reconciliation act in the member account" />
+        <figcaption>"Reconciliation act" in the member's account</figcaption>
+      </figure>
+    </section>
+
     <section class="part" id="part-2">
       <div class="part-label">Part II</div>
       <h2>How the system calculates</h2>
@@ -1739,7 +2211,7 @@
     </section>
 
     <section class="chapter" id="r-principles">
-      <h2><span class="num">16</span> Core principles</h2>
+      <h2><span class="num">18</span> Core principles</h2>
       <dl class="terms">
         <dt>Only the server counts money</dt>
         <dd>
@@ -1765,7 +2237,7 @@
         <dd>
           A report only selects, groups and adds up amounts already booked under these same rules, so every
           amount in a report can be reconciled to the kopeck with a plot account or the month screen (chapter
-          23).
+          25).
         </dd>
         <dt>Audit log</dt>
         <dd>Every board action is recorded with old and new values.</dd>
@@ -1787,7 +2259,7 @@
     </section>
 
     <section class="chapter" id="r-tariffs">
-      <h2><span class="num">17</span> Tariffs and the expected amount</h2>
+      <h2><span class="num">19</span> Tariffs and the expected amount</h2>
       <p>
         A charge type (membership fee, electricity, land tax, water, special-purpose fees) has one or more
         tariffs. A tariff has <strong>versions</strong>: each applies from its date until the day before the
@@ -1859,13 +2331,13 @@ one-time fee    the whole rate in the month of its due date, 0.00 in other month
       <h3>Correcting a version</h3>
       <p>
         A version can be corrected or deleted <strong>while no charge uses it</strong>. After that a
-        correction goes through recalculation (chapter 23): charges already issued to people never change
+        correction goes through recalculation (chapter 25): charges already issued to people never change
         silently.
       </p>
     </section>
 
     <section class="chapter" id="r-meters">
-      <h2><span class="num">18</span> Meters and the tree</h2>
+      <h2><span class="num">20</span> Meters and the tree</h2>
       <p>
         A meter measures one resource: electricity (kWh) or water (m³). Meter values are not money: up to
         three decimals.
@@ -1947,7 +2419,7 @@ one-time fee    the whole rate in the month of its due date, 0.00 in other month
     </section>
 
     <section class="chapter" id="r-readings">
-      <h2><span class="num">19</span> Readings and consumption</h2>
+      <h2><span class="num">21</span> Readings and consumption</h2>
       <p>
         <strong>A reading is a meter's value on a date</strong>, not "the reading for a month". The
         electrician comes when they can: after a few days or after a few months. The person enters the date;
@@ -2069,7 +2541,7 @@ one-time fee    the whole rate in the month of its due date, 0.00 in other month
     </section>
 
     <section class="chapter" id="r-charges">
-      <h2><span class="num">20</span> Charges and closing months <span class="tag done">works</span></h2>
+      <h2><span class="num">22</span> Charges and closing months <span class="tag done">works</span></h2>
       <p>
         A charge is an entry in the plot's account: charge type, amount, month, the days it pays for (service
         period) and how the amount was obtained (rates, units, kWh, the readings and tariff versions used).
@@ -2100,12 +2572,12 @@ one-time fee    the whole rate in the month of its due date, 0.00 in other month
             <td>Network losses</td>
             <td>
               Depending on the chairman's setting: a percentage on every electricity charge, or a board run
-              for a range (chapter 21).
+              for a range (chapter 23).
             </td>
           </tr>
           <tr>
             <td>Common consumers</td>
-            <td>A separate board run for a range, a separate line in the account (chapter 21).</td>
+            <td>A separate board run for a range, a separate line in the account (chapter 23).</td>
           </tr>
           <tr>
             <td>Opening balance</td>
@@ -2166,7 +2638,7 @@ plot debt              = Σ debts per charge type
 prepayment             = Σ payments (net of reversals) − Σ allocated</pre>
       <p>
         A payment pays specific charges, so the debt is what is still unpaid. How a payment is allocated and
-        what happens when a charge is reversed is in chapter 25.
+        what happens when a charge is reversed is in chapter 27.
       </p>
 
       <h3>On the screen: "Charges"</h3>
@@ -2309,7 +2781,7 @@ prepayment             = Σ payments (net of reversals) − Σ allocated</pre>
 
     <section class="chapter" id="r-losses">
       <h2>
-        <span class="num">21</span> Network losses and common consumers
+        <span class="num">23</span> Network losses and common consumers
         <span class="tag done">works</span>
       </h2>
       <h3>Losses: two modes, the chairman chooses</h3>
@@ -2432,7 +2904,7 @@ prepayment             = Σ payments (net of reversals) − Σ allocated</pre>
     </section>
 
     <section class="chapter" id="r-water">
-      <h2><span class="num">22</span> Water and connections <span class="tag done">works</span></h2>
+      <h2><span class="num">24</span> Water and connections <span class="tag done">works</span></h2>
       <p>
         Water works like electricity:
         <strong>a plot not connected to the well pays nothing for water</strong>.
@@ -2498,7 +2970,7 @@ prepayment             = Σ payments (net of reversals) − Σ allocated</pre>
 
     <section class="chapter" id="r-recalc">
       <h2>
-        <span class="num">23</span> Corrections and recalculation
+        <span class="num">25</span> Corrections and recalculation
         <span class="tag done">works</span>
       </h2>
       <p>A back-dated tariff version, a correction of a used version or of a used reading — one mechanism:</p>
@@ -2634,7 +3106,7 @@ prepayment             = Σ payments (net of reversals) − Σ allocated</pre>
     </section>
 
     <section class="chapter" id="r-reports">
-      <h2><span class="num">24</span> Reports and templates <span class="tag done">works</span></h2>
+      <h2><span class="num">26</span> Reports and templates <span class="tag done">works</span></h2>
       <p>
         Reports put into one table what the system already knows: charges, payments, debts, electricity,
         water, corrections. Every report is shown on screen and can be downloaded as an Excel file. Besides
@@ -2645,7 +3117,7 @@ prepayment             = Σ payments (net of reversals) − Σ allocated</pre>
         <span class="callout-title">Reports introduce no new rules</span>
         <p>
           A report calculates nothing "its own way": it only selects, groups and adds up the amounts already
-          booked under the rules of chapters 16-23 and 25. So any amount in a report can be reconciled to the
+          booked under the rules of chapters 18-25 and 27. So any amount in a report can be reconciled to the
           kopeck with a plot account or the billing months screen. Amounts in reports are always
           <strong>effective</strong>
           amounts: charges plus adjustments minus reversals.
@@ -2684,6 +3156,14 @@ prepayment             = Σ payments (net of reversals) − Σ allocated</pre>
             <td>Upload, replace, download and archive templates</td>
             <td>Manage report templates</td>
             <td>Chairman only</td>
+          </tr>
+          <tr>
+            <td>
+              The four cash book reports: "Cash book", "Bank movements", "Income and expense", "Expenses"
+              (only this permission is needed, not "View reports")
+            </td>
+            <td>View cash and bank</td>
+            <td>Chairman, treasurer</td>
           </tr>
         </tbody>
       </table>
@@ -2821,7 +3301,7 @@ prepayment             = Σ payments (net of reversals) − Σ allocated</pre>
       <div class="warn">
         <span class="callout-title">The same pump share in two reports</span>
         <p>
-          The electricity of a well pump is split among its plots as a common-consumer row (chapter 22). That
+          The electricity of a well pump is split among its plots as a common-consumer row (chapter 24). That
           row is on the "Charged" sheet of the electricity report <em>and</em> in the "Well pump share" column
           of the "Water" report. It is the same amount seen from two sides: do not add the two reports
           together.
@@ -2831,6 +3311,13 @@ prepayment             = Σ payments (net of reversals) − Σ allocated</pre>
         Reports are easy to open from other screens: on a billing month the "Report" link opens "Charges by
         month" for exactly that month, and a plot account has a link to the balances report for that plot's
         street.
+      </p>
+
+      <h3>Four cash book reports</h3>
+      <p>
+        Besides the eight reports, the "Reports" screen has "Cash book", "Bank movements", "Income and
+        expense" and "Expenses". They work the same way (filters, preview, Excel), but need only the "View
+        cash and bank" permission. They are described in chapter 17, the rules in chapter 31.
       </p>
 
       <h3>Templates: your own Excel form</h3>
@@ -3026,7 +3513,7 @@ prepayment             = Σ payments (net of reversals) − Σ allocated</pre>
     </section>
 
     <section class="chapter" id="r-payments">
-      <h2><span class="num">25</span> Payments and allocation <span class="tag done">works</span></h2>
+      <h2><span class="num">27</span> Payments and allocation <span class="tag done">works</span></h2>
       <p>
         A payment is a row in the ledger that erases nothing: a mistake is corrected by a reversal, and the
         allocation to charges changes only by new rows. How to work with the screens is chapter 13; here are
@@ -3166,7 +3653,7 @@ prepayment             = Σ payments (net of reversals) − Σ allocated</pre>
     </section>
 
     <section class="chapter" id="r-invoices">
-      <h2><span class="num">26</span> Invoice numbers <span class="tag done">works</span></h2>
+      <h2><span class="num">28</span> Invoice numbers <span class="tag done">works</span></h2>
       <p>
         An invoice does not recalculate anything: it reads the same ledger as the plot account and the
         reports, and arranges it by billing month. How to work with the screens is chapter 14; here are the
@@ -3252,7 +3739,7 @@ prepayment             = Σ payments (net of reversals) − Σ allocated</pre>
 
     <section class="chapter" id="r-delivery">
       <h2>
-        <span class="num">27</span> Which channel, and how sending is retried
+        <span class="num">29</span> Which channel, and how sending is retried
         <span class="tag done">works</span>
       </h2>
       <p>
@@ -3387,8 +3874,206 @@ prepayment             = Σ payments (net of reversals) − Σ allocated</pre>
       </p>
     </section>
 
+    <section class="chapter" id="r-cashbook">
+      <h2><span class="num">30</span> Cash, bank and reconciliation <span class="tag done">works</span></h2>
+      <p>
+        The cash and the bank are kept as a <strong>journal of lines</strong> that erase nothing: a line is
+        neither edited nor deleted, a mistake is corrected by a reversal. How to work with the screens is
+        chapter 16; here are the rules and examples. The server calculates all amounts.
+      </p>
+      <dl class="terms">
+        <dt>The balance on a day</dt>
+        <dd>
+          The opening balance plus every receipt and minus every spending from the opening date up to and
+          including that day. The opening balance is the balance <em>at the start</em> of its date; it is
+          entered once. An entry other than a member payment dated before the opening balance is refused.
+        </dd>
+        <dt>Member payments in the journal</dt>
+        <dd>
+          A payment of chapter 13 becomes a line by itself: a cash payment in the cash, a bank payment in the
+          bank. Reversing a payment adds a line of the opposite amount dated on
+          <em>the day of the reversal</em>. The member's debt view (the account, the reconciliation act) keeps
+          the dating of chapter 27. When the feature is first installed, every payment already entered and
+          every reversal of a payment gets its line exactly once.
+        </dd>
+        <dt>Cash never goes negative</dt>
+        <dd>
+          A cash expense, a handover, the reversal of a cash income and a booked shortage are refused if they
+          would make the cash negative <em>on their date or on any later day</em>. The message names the
+          balance: "Not enough cash in the till: balance 200.00 on 07.10.2026". A wrong balance is fixed by a
+          cash count, not by going negative. Two entries saved at the same moment can never together push the
+          cash below zero.
+        </dd>
+        <dt>The only exception</dt>
+        <dd>
+          Reversing a <em>cash member payment</em>: the money is already gone, so the reversal is allowed. If
+          the cash is negative because of it, the card says "The cash balance is negative - do a cash count".
+        </dd>
+        <dt>The bank may be negative</dt>
+        <dd>
+          An overdraft is the bank's business: the screen warns "The bank balance is negative" but does not
+          refuse.
+        </dd>
+        <dt>Closed months</dt>
+        <dd>
+          A line dated in a closed billing month keeps its date and falls into the earliest open month.
+          Reports by day use the date, reports by billing month use the month it belongs to.
+        </dd>
+        <dt>Cash count</dt>
+        <dd>
+          Difference = counted − book. Zero - "Matches". Otherwise an explanation is required, and the
+          difference hangs as "Unresolved" until the chairman books it as a "Surplus" or a "Shortage". A saved
+          count keeps the book balance it showed.
+        </dd>
+        <dt>Bank reconciliation</dt>
+        <dd>
+          The statement figures must agree: opening + in − out = closing. Four pairs of figures are compared:
+          the opening balance, the total in, the total out and the closing balance (from the books: the bank
+          balance at the start of the month, the sum of receipts, the sum of spendings, the balance at the end
+          of the last day). "Reconciled" is available only when <strong>all four</strong> differences are
+          0.00. Months are calendar months by the date of the line. Any bank line dated in a reconciled month
+          (a payment too) sends it to "Needs a new check".
+        </dd>
+      </dl>
+
+      <h3>Worked examples</h3>
+      <p>Cash opening balance on 01.10.2026 is 1,000.00, the bank's is 20,000.00.</p>
+      <div class="example">
+        <span class="callout-title">Example 21. Cash balance by day</span>
+        <p>
+          05.10 a cash payment of 500.00 - cash 1,500.00. 06.10 a cash expense of 300.00 "Materials" - cash
+          1,200.00. 07.10 a handover of 1,000.00 to the bank - cash 200.00, bank 21,000.00.
+        </p>
+      </div>
+      <div class="example">
+        <span class="callout-title">Example 22. Not enough cash</span>
+        <p>
+          Then on 07.10 the treasurer enters a cash expense of 250.00. The cash is 200.00, so the entry is
+          refused: "Not enough cash in the till: balance 200.00 on 07.10.2026".
+        </p>
+      </div>
+      <div class="example">
+        <span class="callout-title">Example 23. A back-dated entry</span>
+        <p>
+          On 08.10 the treasurer enters an expense of 400.00 dated 06.10. On 06.10 there was 1,200.00 and
+          after it there would be 800.00 - fine. But 07.10 after the handover would be 200.00 − 400.00 =
+          −200.00, so the entry is refused and the message names that day and its balance.
+        </p>
+      </div>
+      <div class="example">
+        <span class="callout-title">Example 24. Reversing a cash payment</span>
+        <p>
+          On 12.10 the chairman reverses the cash payment of 500.00 from 05.10 when the cash holds only
+          200.00. The cash journal gets a line of −500.00 dated 12.10; the cash becomes −300.00. The reversal
+          is allowed (the money is already given out), and the cash card asks for a cash count.
+        </p>
+      </div>
+      <div class="example">
+        <span class="callout-title">Example 25. A shortage found at a count</span>
+        <p>
+          On 10.10 the book says 200.00, the treasurer counted 180.00: the difference is −20.00, an
+          explanation is required, "Unresolved difference −20.00". The chairman books a "Shortage" of −20.00:
+          the cash is 180.00 and no difference hangs.
+        </p>
+      </div>
+      <div class="example">
+        <span class="callout-title">Example 26. October reconciliation: a bank fee</span>
+        <p>
+          The statement: opening 20,000.00, in 3,000.00, out 150.00, closing 22,850.00 (20,000.00 + 3,000.00 −
+          150.00 = 22,850.00, the figures agree). The books: in 3,000.00 (2,000.00 member bank payments plus
+          the 1,000.00 handover), out 0.00. The "out" differs by 150.00 (and the closing balance too). It is a
+          bank fee nobody entered: the treasurer enters an expense of 150.00 "Bank fees" in October, all
+          differences become 0.00 and October can be marked "Reconciled".
+        </p>
+      </div>
+      <div class="example">
+        <span class="callout-title">Example 27. A reconciled month is reopened</span>
+        <p>
+          October is "Reconciled". On 03.11 a bank payment dated 20.10 is entered. October goes to "Needs a
+          new check" and the screen says what was added and when.
+        </p>
+      </div>
+      <div class="example">
+        <span class="callout-title">Example 28. The statement figures do not agree</span>
+        <p>
+          Opening 100.00, in 50.00, out 20.00, closing 200.00. 100.00 + 50.00 − 20.00 = 130.00, not 200.00:
+          the statement is not saved - "The statement figures do not agree: 100.00 + 50.00 − 20.00 ≠ 200.00".
+        </p>
+      </div>
+      <div class="example">
+        <span class="callout-title">Example 29. A closed month</span>
+        <p>
+          September is closed. On 3 October the treasurer enters an expense dated 30.09: the journal keeps the
+          date 30.09 and the billing month is October.
+        </p>
+      </div>
+      <div class="warn">
+        <span class="callout-title">Limits of reconciliation</span>
+        <p>
+          "Reconciled" needs zero in all four differences. A mistake made in a past month and reversed today
+          cannot be accounted for in that month: the reversal is dated today. A back-dated entry changes the
+          opening balance of all later months, and those already "Reconciled" stay so: after such an entry the
+          board should check the later months and, if needed, enter a correction.
+        </p>
+      </div>
+    </section>
+
+    <section class="chapter" id="r-meeting">
+      <h2>
+        <span class="num">31</span> Income and expenses, and the reconciliation act
+        <span class="tag done">works</span>
+      </h2>
+      <p>How to work with the report and the act is chapter 17; here is what exactly they calculate.</p>
+      <dl class="terms">
+        <dt>Member payments in "Income and expense"</dt>
+        <dd>
+          The payments received in the period are taken by charge type -
+          <em>as the payments are allocated at the end of the period</em>. The part not allocated to any
+          charge is the line "Prepayments". Reversals made in the period of payments received earlier are a
+          separate negative line.
+        </dd>
+        <dt>The identity</dt>
+        <dd>
+          <strong>Income − expenses + differences = the change of (cash + bank) over the period.</strong> A
+          handover of cash to the bank is neither income nor expense: it is a move between two accounts and
+          cancels out.
+        </dd>
+        <dt>The reconciliation act</dt>
+        <dd>
+          The act reads the same ledger as the plot account, so the balances at the start and the end of the
+          period equal the balances in the "Plot balances" report on those days. Every charge, adjustment,
+          reversal and payment stands by date in the columns "Charged" and "Paid". The period runs from the
+          plot's first charge up to today.
+        </dd>
+      </dl>
+      <div class="example">
+        <span class="callout-title">Example 30. Reconciliation act, plot 9, 01.09-31.10</span>
+        <p>
+          The balance on 31.08: a debt of 200.00. September is charged 300.00, October 250.00; on 15.10 a
+          payment of 300.00 is entered. Turnover: charged 550.00, paid 300.00. The balance on 31.10: 200.00 +
+          550.00 − 300.00 = 450.00, and the "Plot balances" report shows the same debt on 31.10. The act ends
+          with "According to the cooperative's records the debt as of 31.10.2026 is 450.00".
+        </p>
+      </div>
+      <div class="example">
+        <span class="callout-title">Example 31. Income and expenses for October</span>
+        <p>
+          Cash 1,000.00 and bank 20,000.00 on 01.10. During October: member cash payments of 500.00 and bank
+          payments of 2,000.00 (2,500.00 together - 1,800.00 of it membership fee, 500.00 electricity, 200.00
+          prepayments); bank interest 35.00; a cash expense of 300.00 and a bank fee of 150.00; a shortage of
+          −20.00; a handover of 1,000.00 from cash to the bank. Income 2,500.00 + 35.00 = 2,535.00; expenses
+          300.00 + 150.00 = 450.00; differences −20.00. The result: 2,535.00 − 450.00 − 20.00 = 2,065.00. The
+          change of cash: 1,000.00 + 500.00 − 300.00 − 1,000.00 − 20.00 = 180.00, that is −820.00 for the
+          month. The change of the bank: 20,000.00 + 2,000.00 + 1,000.00 + 35.00 − 150.00 = 22,885.00, that is
+          +2,885.00. Together −820.00 + 2,885.00 = 2,065.00 - equal to the result. If a payment of 100.00 from
+          September were reversed in October, the income would get a line of −100.00 and both the result and
+          the change would fall by the same amount.
+        </p>
+      </div>
+    </section>
+
     <section class="chapter" id="next">
-      <h2><span class="num">26</span> What comes next <span class="tag planned">planned</span></h2>
+      <h2><span class="num">32</span> What comes next <span class="tag planned">planned</span></h2>
       <table>
         <thead>
           <tr>
@@ -3398,10 +4083,11 @@ prepayment             = Σ payments (net of reversals) − Σ allocated</pre>
         </thead>
         <tbody>
           <tr>
-            <td><strong>Bank and cash book</strong></td>
+            <td><strong>Bank statement import</strong></td>
             <td>
-              The cash book, handing cash over to the bank and reconciliation; later, bank statement import
-              with matching payments to plots.
+              The cash book, handing cash over to the bank, bank reconciliation and the reconciliation act
+              already work (chapters 16-17); later - importing the bank statement with automatic matching of
+              payments to plots.
             </td>
           </tr>
           <tr>

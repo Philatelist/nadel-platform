@@ -2,6 +2,7 @@ import { getListMoneyAccountsQueryKey, setOpeningBalance, type MoneyAccount } fr
 import {
   format,
   formatDateTime,
+  formatMoney,
   formatDay,
   formatMonth,
   formatSignedMoney,
@@ -117,7 +118,7 @@ export function MoneyAccountCard({ account }: { account: MoneyAccount }) {
             {account.opening !== undefined && (
               <p className="text-[15px] text-ink-muted">
                 {format(t.cashbook.opening, {
-                  amount: account.opening.amount,
+                  amount: formatMoney(account.opening.amount, locale),
                   date: formatDay(account.opening.date, locale),
                 })}
               </p>

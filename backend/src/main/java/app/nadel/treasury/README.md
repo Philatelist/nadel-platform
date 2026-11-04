@@ -3,11 +3,39 @@
 The cooperative's own money (feature 018, «Каса і банк»): the **cash account** («Каса», the cash the treasurer
 holds) and the **bank account** («Банківський рахунок»), their **opening balances**, the **journal** of every move of
 money and the **balance** of an account on any day. Members' debts never change here: the module only shows where the
-money they paid went. Draft: slices 1 to 5 of the feature (accounts, opening balances, member payments in the journal;
-expenses with receipt files, categories, the no-negative-cash rule; handovers to the bank and other income; cash
-counts with their act and the booked difference; the monthly bank reconciliation; the read facade of the four cash
-book reports, slice 7); the reconciliation act lives in `documents`.
-The money rules are `docs/domain/money-rules.md` §14 (written with the feature); the decisions are ADR 0019.
+money they paid went. It covers the accounts and their opening balances, member payments in the journal, expenses
+with receipt files and their categories, the no-negative-cash rule, handovers to the bank, other income, cash counts
+with the booked difference (their act is drawn by `documents`), the monthly bank reconciliation, the read facade of
+the four cash book reports (drawn by `reports`) and the demo cash book. The reconciliation act with a member lives in
+`documents` (it reads the ledger, not the cash book). The money rules are `docs/domain/money-rules.md` §14; the
+decisions are ADR 0019.
+
+## Module map
+
+| Class (`internal` unless public) | Role |
+|---|---|
+| `TreasuryController` | The endpoints of tag `treasury`; permissions checked here (`@PreAuthorize`), the services trust their caller |
+| `MoneyAccounts` | The accounts with balances, the opening balance, the journal of a period |
+| `MovementWriter` | The **only writer** of `account_movement`: entries, reversals, member payment lines; reopens a reconciled bank month after every insert |
+| `PaymentMovementListener` | Plain synchronous `@EventListener` of `ledger.PaymentMoneyMoved` (ADR 0019) |
+| `Expenses`, `ExpenseQueries`, `AttachmentUploads`, `FileSniffer`, `JpegMetadataStripper`, `PngMetadataStripper`, `ExpensePartConverter`, `ExpenseAttachmentRecord`/`Content` (+ repositories) | Expenses and their receipt files |
+| `Handovers`, `HandoverQueries` | Handovers to the bank |
+| `OtherIncomes`, `OtherIncomeQueries` | Income not from members |
+| `Categories` | Expense and income categories |
+| `CashCounts`, `CashCountQueries`, `CashCountFigures` (pure) | Cash counts, booking and reversing a difference line; implements the public `CashCountActs` |
+| `BankReconciliations`, `BankReconciliationQueries`, `StatementRules` (pure), `BankComparison` (pure) | The monthly bank reconciliation and the bank card's months |
+| `TreasuryReports`, `TreasuryReportQueries`, `IncomeExpenseCalculator` (pure) | Implements the public `TreasuryReadModel` |
+| `AccountBalances`, `CashGuard` (pure), `EntryChecks`, `TreasuryQueries`, `JournalLines` | Balances, the no-negative-cash rule, the shared entry checks, the account reads and locks, the contract form of journal lines |
+| `TreasuryCipher` | Seals and opens counterparties and descriptions (`privacy.PersonalDataCipher`) |
+| `TreasuryAuditPublisher` | Every audit event of the module, in the changing transaction |
+| `DemoTreasury` | The demo cash book runner (dev profile only), see "Demo data" |
+
+## Events
+
+- **Consumed:** `ledger.PaymentMoneyMoved` only, synchronously, in the payment's transaction (see "Member payments in the
+  journal"). Nothing of the treasury listens on the outbox.
+- **Published:** only `audit.AuditEvent`s (through the outbox, as every module's audit). The treasury publishes no
+  domain event of its own: no other module reacts to a cash book entry.
 
 Tables (`V32__treasury.sql`, all under RLS `tenant_isolation`, an index leading with `tenant_id`, `UNIQUE (tenant_id,
 id)` and composite foreign keys on `(tenant_id, x_id)`):
@@ -35,7 +63,7 @@ billing month, a reversal on the Kyiv day it was made in `greatest(its month, th
 |---|---|
 | `MoneyAccountKind` (`CASH`, `BANK`) | The two accounts |
 | `MovementKind` (`MEMBER_PAYMENT`, `EXPENSE`, `OTHER_INCOME`, `HANDOVER_OUT`, `HANDOVER_IN`, `COUNT_DIFFERENCE`, `BANK_DIFFERENCE`) | What moved the money of a journal line; a reversal has the kind of the line it reverses |
-| `BankMonthStatus` (`NOT_RECONCILED`, `RECONCILED`, `NEEDS_RECHECK`) | The reconciliation status of a bank month (for the bank movements report of a later slice) |
+| `BankMonthStatus` (`NOT_RECONCILED`, `RECONCILED`, `NEEDS_RECHECK`) | The reconciliation status of a bank month (the bank movements report's `months` sheet) |
 | `CashCountActs.act(countId)` → `CashCountAct` (with `Status`, `Booking`, `Reversal`) | The figures of a count for its act (`documents`): moment, day, book, counted, difference, explanation, booking and its reversal; `MANDATORY`, no permission check of its own (the caller checks `CASHBOOK_VIEW`); empty for an unknown count |
 | `TreasuryReadModel` (`cashBook`, `bankMovements` → `AccountBook` with `CashBookDay`, `MovementLine`, `BankMonth`; `expenses` → `ExpenseLine`; `incomeExpense` → `IncomeExpense`; `categories` → `CategoryRef`) | The four cash book reports of `reports` (feature 018 §2.12): `MANDATORY` and `@PreAuthorize` `CASHBOOK_VIEW` on every method (the lines carry expenses' counterparties, opened). Implemented by `internal.TreasuryReports` over `TreasuryReportQueries`; the income and expense by the pure `IncomeExpenseCalculator` with `ledger.LedgerReadModel.paymentSplits` as of the end of the period's last day (Kyiv). A book needs its account's opening balance and a period from its date (409 `OPENING_BALANCE_MISSING`, 400 `BEFORE_OPENING_BALANCE` on `from`); the income and expense needs both. See the reports README, "The cash book reports" |
 
@@ -75,8 +103,8 @@ category is 404 (RLS).
 
 ## The no-negative-cash rule (`CashGuard`, pure)
 
-An entry that takes money out of the cash dated *t* (a cash expense, a handover, the reversal of a cash other income;
-later: shortages) is refused with 409 `CASH_INSUFFICIENT` when the lowest balance from *t* on (the running balance at the end of
+An entry that takes money out of the cash dated *t* (a cash expense, a handover, the reversal of a cash other income
+or of a booked surplus, a booked shortage) is refused with 409 `CASH_INSUFFICIENT` when the lowest balance from *t* on (the running balance at the end of
 *t* and of every later movement day) plus the entry is below 0.00; the problem carries that lowest balance (`balance`,
 before the entry) and the earliest day it is reached (`date`). So a back-dated entry is refused when a later day would
 go negative although its own day stays positive (FS 2.17 #5). The caller locks the cash account `FOR UPDATE` (after
@@ -243,11 +271,21 @@ date to the month of `asOf`: the months with a reconciliation, the months with b
 always the month of `asOf`; a month without a row is `NOT_RECONCILED`. Empty for the cash and without an opening
 balance.
 
-**A known limit of the four-figure rule.** A wrong line in a past month that is reversed today lowers today's month,
-not the past one, so that past month's `incoming`/`outgoing` stay off (its closing difference can be booked away, the
-other two cannot); and a booked bank difference adds to `incoming` or `outgoing` as well as to `closing`. Such a month
-balances only if the statement figures match. Whether «Звірено» should need only the closing difference to be 0.00 is
-open with the owner.
+**Known limits of the four-figure rule** (money rules §14; open with the owner).
+
+- A wrong line in a past month that is reversed today lowers today's month, not the past one, so that past month's
+  `incoming`/`outgoing` stay off (its closing difference can be booked away, the other two cannot); and a booked bank
+  difference adds to `incoming` or `outgoing` as well as to `closing`. Such a month balances only if the statement
+  figures match.
+- A line dated in month M (a back-dated entry, a bank difference of M) shifts the books' opening and closing of every
+  later month, but only M is reopened (FS 2.7 reopens the month of the line): a later month that is already «Звірено»
+  stays «Звірено» although its books no longer equal its statement. The month list shows it as reconciled until
+  something dated in that month reopens it.
+- Whether «Звірено» should need only the closing difference to be 0.00, and whether a line should reopen the later
+  reconciled months too, are the owner's questions for the PR.
+
+The web shows the reopening notice only while the month is `NEEDS_RECHECK` (`BankReconciliationPage`): `reopened`
+stays on a month that was reconciled again.
 
 ## Categories (`Categories`)
 
@@ -293,8 +331,33 @@ recorded whether or not the account has an opening balance, and a payment revers
 ## Lock order
 
 Payment paths: … billing month `FOR SHARE` → `receipt_counter` → `money_account` `FOR UPDATE` (cash, then bank) →
-`bank_reconciliation` (a bank line in a reconciled month). Treasury paths: billing month `FOR SHARE` (`ledger.BookingMonths.bookFor`) → the
-cash account → the bank account → `bank_reconciliation`. See the ledger README.
+`bank_reconciliation` (a bank line in a reconciled month). Treasury paths: billing month `FOR SHARE`
+(`ledger.BookingMonths.bookFor`) → the cash account → the bank account → `bank_reconciliation`. Every account lock is
+taken before the movements are read (READ COMMITTED), so a balance check and the insert it allows see the same journal.
+The two orders agree, so a payment and a treasury entry never deadlock. See the ledger README.
+
+## Demo data
+
+The demo ledger block of `R__demo_data.sql` removes the demo cooperative's cash book whenever it runs (as
+`nadel_owner` with `app.ledger_maintenance`, in foreign key order: files, expenses, other income and handovers with
+their reversals first, `bank_difference`, `cash_count`, `bank_reconciliation`, the movements with reversals first, the
+two accounts), seeds the accounts again (`seed_treasury`, so the opening balances are gone) and, after its payments,
+writes their journal lines with the V32 backfill statements (`BACKFILL BEGIN`/`END`) limited to the demo cooperative.
+So every demo payment and the reversal of plot 3's payment have exactly one line, and a demo payment can be reversed.
+The categories stay (a chairman's renames are kept).
+
+`DemoTreasury` (an `ApplicationRunner`, registered only with the `db/demo` location and `demoledger` on, like
+`DemoDocuments`, ordered after it) enters the rest on the next start, under `TenantContext.runAs` for the demo
+cooperative, in one transaction, through the services (so sealing, guards and audit are real) as the demo chairman
+(the first active `CHAIRMAN` holder, subject `system:treasury`). With M the current month and P the month before (days
+capped at today): opening balances of 9 000.00 (cash) and 48 200.00 (bank) on the 1st of the demo ledger's first month
+or of P when that is earlier; handovers of 3 000.00 on P's 25th and 2 000.00 on M's 4th; four expenses in M
+(electricity 12 480.00 from the bank, materials 860.00 from the cash with the bundled receipt photo
+`resources/demo/treasury-receipt.jpg`, waste removal 1 200.00 and office supplies 145.50 from the cash); a cash count
+now with a shortage of 20.00, booked by the chairman; P's statement equal to its books and «Звірено»; M's statement
+with a bank fee of 35.00 nobody entered, so «out» and closing differ. It skips when the cash account already has an
+opening balance (idempotent) or there is no chairman; a failure rolls everything back and is logged with its code or
+class only.
 
 ## Audit
 
@@ -316,10 +379,10 @@ system (`status` old/new, `movement`, `kind`, `date`, `amount`).
 
 ## Dependencies
 
-`ledger` (`PaymentMoneyMoved`, `PaymentSource`, `LedgerReadModel#paymentRefs`, `#paymentSplits`, `BookingMonths`), `settings`
-(`CooperativeSettings`: the IBAN), `audit` (`AuditEvent`, `ActorNames`, `FieldChange`), `privacy`
-(`PersonalDataCipher`, `FieldRef`), `identity` (`CurrentUser`, `AccessProfile`), `tenancy` (`TenantContext`),
-`problem`, `money`. It never reads another module's tables. `documents` depends on it (`CashCountActs`, the cash count
+`ledger` (`PaymentMoneyMoved`, `PaymentSource`, `LedgerReadModel#paymentRefs`, `#paymentSplits`, `#firstBillingMonth`,
+`BookingMonths`), `settings` (`CooperativeSettings`: the IBAN), `audit` (`AuditEvent`, `ActorNames`, `FieldChange`),
+`privacy` (`PersonalDataCipher`, `FieldRef`), `identity` (`CurrentUser`, `AccessProfile`), `members` (`RoleHolders`:
+the demo runner's chairman), `tenancy` (`TenantContext`), `problem`, `money`. It never reads another module's tables. `documents` depends on it (`CashCountActs`, the cash count
 act) and `reports` (`TreasuryReadModel`, the cash book reports); it never depends on either.
 
 ## Permissions
@@ -358,4 +421,8 @@ reconciled current month, the status machine, not balanced, month and opening re
 `BankReconciliationsAccessTests`, `CashBookExamplesTests` rows 7–9, `TreasuryTenantIsolationTests` and
 `TreasuryGuardsTests` (`bank_difference`, V34). Slice 7: `IncomeExpenseCalculatorTests` (FS 2.17 #12 identity), the
 report tests `CashBookReportTests`, `BankMovementsReportTests`, `ExpensesReportTests`, `IncomeExpenseReportTests`,
-`TreasuryReportsAccessTests`.
+`TreasuryReportsAccessTests`. Slice 8: `DemoTreasuryTests` (once per `DemoDay`: every demo payment row has one line, a
+demo payment is reversed through the API, the runner's content and a second run writing nothing, the demo block
+running again over a full cash book and the runner entering it again, the example 12 identity on the demo data for P
+and M against the journal sum), `DemoLedgerDataTests` (the block's re-run keeps the journal lines; `clear` removes
+them).

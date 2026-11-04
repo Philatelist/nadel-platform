@@ -99,8 +99,30 @@
     `SETTINGS_MANAGE` (channels), `INVOICES_ISSUE` (sending invoices, the delivery screen) and `ANNOUNCEMENTS_SEND`
     (Chairman). Delivery jobs run on JobRunr; the bot is polled with `getUpdates` under a lease. Details in
     `backend/src/main/java/app/nadel/notifications/README.md`.
-  - Modules: `documents` (in code since feature 016) and `notifications` (in code since feature 017); payments live in
-    `ledger` since feature 015.
+  - `treasury` (feature 018, ADR 0019; tables `money_account`, `account_movement`, `expense_category`, `expense`,
+    `expense_attachment`, `other_income`, `handover`, `cash_count`, `bank_reconciliation` in V32 and `bank_difference`
+    in V34, all under RLS `tenant_isolation`; the journal, expenses, files, other income, handovers and bank
+    differences are append-only like the ledger): the cooperative's own money, «Каса і банк». Two accounts (cash and
+    bank) with an opening balance written once, the journal of every move of money (member payments, handovers,
+    expenses with receipt files, other income, count and bank differences, reversals), balances computed from it, the
+    no-negative-cash rule under a lock of the cash account, expense and income categories, cash counts, the monthly
+    bank reconciliation and the read facade of the four cash book reports (`TreasuryReadModel`, `CASHBOOK_VIEW`).
+    Receipt files live in the database (5 × 5 MiB per expense, `STORAGE EXTERNAL`), their Exif/XMP/GPS and PNG text
+    chunks stripped with the JDK only; HEIC is turned into JPEG in the browser. **Member payment movements are written
+    by a synchronous in-transaction listener**: `ledger` publishes `PaymentMoneyMoved` inside the payment's
+    transaction and `treasury`'s plain `@EventListener` writes the line in it (never through the outbox, so a payment
+    and its line commit together or not at all) — the one exception to "cross-module side effects through the outbox"
+    (ADR 0007), guarded by tests. Lock order: billing month `FOR SHARE` → (payments: `receipt_counter`) → cash account
+    → bank account → `bank_reconciliation`. Public API: `MoneyAccountKind`, `MovementKind`, `BankMonthStatus`,
+    `CashCountActs` (read by `documents` for the cash count act) and `TreasuryReadModel` (read by `reports`).
+    Dependencies: `treasury` -> `ledger` (`PaymentMoneyMoved`, `BookingMonths`, `LedgerReadModel`), `settings`
+    (the IBAN), `privacy` (counterparties and descriptions sealed), `audit`, `identity`, `members` (the demo runner's
+    chairman), `tenancy`, `problem`, `money`; `documents` and `reports` depend on it, it depends on neither.
+    Permissions `CASHBOOK_VIEW`, `CASHBOOK_ENTER` (Chairman, Treasurer) and `CASHBOOK_APPROVE` (Chairman). Endpoints:
+    tag `treasury`; the cash count act and the reconciliation act PDFs are tag `documents`. Details in
+    `backend/src/main/java/app/nadel/treasury/README.md`.
+  - Modules: `documents` (in code since feature 016), `notifications` (in code since feature 017) and `treasury` (in
+    code since feature 018); payments live in `ledger` since feature 015.
   - The `plots` module keeps plots as records from phase 1; polygon import, coordinate conversion and the map view arrive in roadmap phase 6. `plot.boundary` is nullable, and every feature before phase 6 must work for plots without a polygon.
 - **Security:** Spring Security as an OAuth2 JWT resource server **[in code]**.
   - Starter: `spring-boot-starter-security-oauth2-resource-server` (the Boot 4 name). The issuer URI is in `application.yml`.
@@ -157,7 +179,10 @@
   - Demo data is a repeatable script, `db/demo/R__demo_data.sql`, loaded only in the dev profile. Its block `demo ledger`
     (feature 011) books the demo cooperative's ledger again on every run, as `nadel_owner` with the owner-only bypass
     of the ledger triggers, and runs only while the Flyway placeholder `demoledger` is `on` (the dev profile sets it;
-    integration tests turn it off and load the block on purpose, `DemoLedgerData`).
+    integration tests turn it off and load the block on purpose, `DemoLedgerData`). Since feature 018 the block also
+    removes the demo cash book (in foreign key order, before the payments) and writes the journal lines of its payments
+    with the V32 backfill statements; the demo runners of the application add what needs the Java cipher on the next
+    start (`DemoDocuments`, `DemoNotifications`, `DemoTreasury`).
 - **Multi-tenancy:** shared schema with `tenant_id` and Row Level Security **[in code]**. See ADR 0002.
   - Every tenant table has `tenant_id uuid not null`, RLS enabled, a `tenant_isolation` policy (`tenant_id = current_tenant_id()`) and an index on `tenant_id`.
   - Two database roles (`infra/postgres/init/01-roles.sql`):
@@ -183,7 +208,7 @@
   - The product gets its own ADR. MinIO stopped publishing community images.
   - Candidates: Garage, SeaweedFS, or managed S3 from the hosting provider.
   - The backend should use only the S3 API, so the product can be swapped later.
-- **Event outbox:** the Spring Modulith Event Publication Registry (`spring-modulith-starter-jpa`) **[in code, since spec 002]**. Domain events are stored in the same transaction as the change that raised them and redelivered until their listeners finish; outstanding ones are resubmitted at startup, completed ones are deleted. All cross-module side effects (notifications, recalculations, status cache refresh) go through it. See ADR 0007.
+- **Event outbox:** the Spring Modulith Event Publication Registry (`spring-modulith-starter-jpa`) **[in code, since spec 002]**. Domain events are stored in the same transaction as the change that raised them and redelivered until their listeners finish; outstanding ones are resubmitted at startup, completed ones are deleted. All cross-module side effects (notifications, recalculations, status cache refresh) go through it. See ADR 0007. The one exception (feature 018, ADR 0019): a member payment's journal line is written by a synchronous `@EventListener` of `treasury` inside the payment's transaction, so the event `PaymentMoneyMoved` never reaches the registry.
   - The table `event_publication` (`V3__audit_and_event_publication.sql`) is the one table without `tenant_id` and RLS: startup resubmission runs without a tenant. Listeners bind the event's `tenantId` with `TenantContext.runAs` before opening their transaction (ADR 0007 implementation notes).
 - **Background jobs:** JobRunr 9.0.1 (`org.jobrunr:jobrunr-spring-boot-4-starter`) with PostgreSQL storage **[in code, since feature 017]**. Its tables come from Flyway (`V30__jobrunr.sql`, `jobrunr.database.skip-create=true`; no `tenant_id` and no RLS, like `event_publication`: a job's arguments are a cooperative id and a channel); dashboard off. It runs the delivery workers (`DispatchDeliveries(tenantId, channel)`, which binds the cooperative with `TenantContext.runAs`); the delivery attempts and their backoff live on the delivery rows, JobRunr only wakes and retries a crashed run. It is not the event outbox. See ADR 0007 and ADR 0018. Features 011 and 016 need none (the month's invoices are built while the treasurer waits, in one transaction): month, losses and common consumer runs are started by the board and run synchronously in the request transaction; charges of readings are event listeners.
 - **Cash receipts:** a cash payment carries a receipt number from a per-cooperative counter **[planned, phase 3]**. The counter row is locked in the same transaction as the payment insert, so numbers are sequential, never reused and never changed; a reversed cash payment keeps its receipt number in history.

@@ -783,7 +783,9 @@ expense's, for a reversal its original's: opened from the sealed column, persona
 Totals `all`: `receipt` and `spending` summed over the journal lines (the `DAY` rows repeat them and are not counted).
 The balances are `AccountBalances` over the account's day totals from the opening date, so every `DAY` closing equals
 the balance «Каса і банк» shows for that day (`CashBookReportTests`, `BankMovementsReportTests`). The facade reads at
-most `rowLimit` lines; a longer period is 422 `REPORT_TOO_LARGE`.
+most `rowLimit` lines; a longer period is 422 `REPORT_TOO_LARGE`. The runner's cap (20 000 rows a sheet) counts the
+rows of the sheet, so the `OPENING`, `DAY` and `CLOSING` rows count against it too: a long period can be refused as
+too large although it has fewer than 20 000 journal lines (one `DAY` row per day with lines, plus two).
 
 `bank-movements` adds sheet `months`: every calendar month from the month of `from` to the month of `to`, oldest first,
 `month` (`MONTH`) and `reconciliation` (`CODE`, `cashbook.bank.status`; a month without a reconciliation row is
@@ -819,7 +821,10 @@ Filters: period, `account` (default both), expense categories (default all). She
 (a reversed one listed once and marked) oldest first: `date`, `account`, `category`, `counterparty` (personal data:
 `personalData = true`), `document`, `documentDate`, `amount`, `reversed`, `attachments` (the number of receipt files);
 each row carries its `expenseId` in the preview, so the screen links `GET /expenses/{id}/attachments/{n}`. Totals `all`:
-the amounts of the expenses that are not reversed.
+the amounts of the expenses that are not reversed. A reversed expense is left out of the total whenever it was
+reversed, so the total can differ from the expenses of `income-expense` for the same period when an expense and its
+reversal fall in different periods (`income-expense` counts the expense in its period and the reversal in the period
+of the reversal).
 
 Tests: `IncomeExpenseCalculatorTests` (unit: the identity on a worked October with a payment received and reversed in
 the month, a reversal of a September payment before the opening date, a payment reversed in November, an expense and its
