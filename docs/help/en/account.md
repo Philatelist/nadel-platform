@@ -12,7 +12,7 @@ shots:
   - name: plot-card-member
     user: member
     path: /account
-    open: { css: 'main a[href^="/plots/"]', text: '7' }
+    open: { css: 'main a[href^="/plots/"]', text: 'Plot 7' }
   - name: account-page
     user: member
     path: /account
