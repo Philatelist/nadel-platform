@@ -1,12 +1,12 @@
 # Pipeline log — 019-in-app-help
 
-- Status: running
-- Phase: 2 — specs
+- Status: finished
+- Phase: done
 - Branch: 019-in-app-help · Base: main @ aacd2a4
 - Requirement: document `docs/features/019-in-app-help.md`
 - Autonomy: minimal (.claude/feature-pipeline.yml)
-- Publish: pr+checks · PR: — · Checks: —
-- Review run: on (pending)
+- Publish: pr+checks · PR: https://github.com/Philatelist/nadel-platform/pull/68 · Checks: green (run 41898629237)
+- Review run: not started: the ports it needs (5173, 8080, 8180, 5432) are held by a local stack the pipeline did not start; that stack already serves this branch's web code from the working tree
 
 ## Project facts
 
@@ -84,3 +84,5 @@
 - Full suite: `make check` green (backend 4184 tests, coverage met; clients 166+8+2+1 files, 1044+130+56+9 tests); baseline had 0 failures → no regressions.
 - e2e: `help.spec.ts` 14/15 passed against the local dev stack (electrician: local DB precondition). Smoke set: 13/22 passed; the 9 failures are HTTP 500 from the locally running backend on writes such as `POST /plots` (that backend was not started by the pipeline, runs `main` backend code — this branch changes no backend code); not attributable to the feature; CI's smoke job on a clean stack is the gate.
 - Product docs: suggested follow-ups only (no `/awos:architecture` run; `context/product/architecture.md` already mentions the help).
+- Phase 5: pushed `019-in-app-help`, opened PR #68 (`feat(help): in-app help per screen, per role and public`). CI run 41898629237: backend, clients, demo data by day, e2e (smoke), Semgrep, security — all green on the first round; no CI fixes needed.
+- Phase 6: review run not started — ports in use by a stack the pipeline did not start (not stopped).
