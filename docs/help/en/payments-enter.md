@@ -67,7 +67,9 @@ The {{ui:payments.form.save}} button records the payment. A payment is never del
 
 - For cash the screen shows "{{ui:payments.saved.title}}" and the receipt number, for example "Receipt № 42", and the {{ui:payments.saved.another}} button. For a bank payment it shows the saved payment.
 - Receipt numbers run through the whole cooperative, with no gaps and no repeats, even when two treasurers enter cash at the same time. The receipt is internal; it is not a fiscal receipt.
+- The {{ui:receipts.print}} button downloads the receipt PDF (cash only). It is also on the payment card. A bank payment has no receipt.
 - The {{ui:payments.saved.openCard}} button opens the payment card.
+- If payment notifications are on in the settings, the plot owners who get messages in Telegram or by e-mail learn about the payment and the remaining debt. More on the [Delivery](help:deliveries) page.
 
 ### Error messages
 
@@ -95,6 +97,8 @@ A plot has two debts: the membership fee for January 600.00 and electricity for 
 4. Press {{ui:payments.form.save}}. The screen shows the receipt number.
 
 Afterwards the electricity balance is 150.00, and this is the whole debt of the plot. Had the payment been 1,000.00, both debts would be paid in full and 150.00 would remain as a prepayment: the plot is green even though a prepayment exists.
+
+The same screen on demo plot 9: open its card, press {{ui:payments.enter}}, enter the amount 100.00. All hundred hryvnias go to the oldest charge if it is more than 100.00; in the table "{{ui:payments.proposal.caption}}" the charge row has 100.00 and "{{ui:payments.proposal.prepayment}}" is 0.00. If you enter more than the whole debt of the plot, the excess becomes a prepayment.
 
 ## Screenshots
 

@@ -59,3 +59,4 @@
 - Slice 7 — committed below — 11 pages uk+en, no BAD_FRONT_MATTER/UNKNOWN_UI_KEY/MISSING_SECTION per writer (HELP_CHECK=warn build).
 - Slice 7 — `a753b52` — review round 1: PASS.
 - Slice 10 content part — committed below (19 pages uk+en: how-* topics, account, member topics; no check issues except missing shot files per writer). The HTML board guide removal and doc updates of Slice 10 follow after Slices 8–9 (writers still read the old HTML). AUTO: Slice 10 split into two commits for that reason.
+- Slice 9 — committed below — 17 pages uk+en, only MISSING_SHOT per writer. Writer lists old sections 14/15/17 parts it did not place (invoices, member Telegram, reconciliation act) — to be verified in the Slice 10 completion step.
