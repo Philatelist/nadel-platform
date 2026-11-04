@@ -29,15 +29,19 @@ export async function loadHelp() {
   const viteDir = packageDir('vite');
   if (!viteDir) throw new Error('vite is not installed: run `make install`');
   const manifest = JSON.parse(readFileSync(join(viteDir, 'package.json'), 'utf8'));
-  const entry = typeof manifest.exports['.'] === 'string' ? manifest.exports['.'] : manifest.exports['.'].import;
+  const entry =
+    typeof manifest.exports['.'] === 'string' ? manifest.exports['.'] : manifest.exports['.'].import;
   const entryFile = typeof entry === 'string' ? entry : entry.default;
   const { runnerImport } = await import(pathToFileURL(join(viteDir, entryFile)).href);
   const { module } = await runnerImport(join(repoDir, 'web', 'help', 'vitePlugin.ts'), { configFile: false });
   const result = await module.compileHelpFrom(helpDir, helpImgDir);
   // The labels of the help (section names, the «Важливо» title) come from the same catalogs as the application.
-  const { module: i18n } = await runnerImport(join(repoDir, 'packages', 'shared', 'src', 'i18n', 'index.ts'), {
-    configFile: false,
-  });
+  const { module: i18n } = await runnerImport(
+    join(repoDir, 'packages', 'shared', 'src', 'i18n', 'index.ts'),
+    {
+      configFile: false,
+    },
+  );
   const labels = { uk: i18n.messages('uk').help, en: i18n.messages('en').help };
   return { pages: result.pages, issues: result.issues, labels };
 }

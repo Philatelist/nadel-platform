@@ -65,7 +65,9 @@ async function guardDemo(browser) {
   const context = await newContext(browser, 'en', false);
   try {
     const page = await context.newPage();
-    const me = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/v1/me' && r.ok(), { timeout: 30000 });
+    const me = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/v1/me' && r.ok(), {
+      timeout: 30000,
+    });
     await signIn(page, 'chairman');
     const body = await (await me).json();
     if (body?.tenant?.id !== DEMO_TENANT_ID) {
@@ -184,7 +186,9 @@ try {
           await signIn(page, user);
         } catch (error) {
           for (const { pageId, shot } of group)
-            failed.push(`${pageId}: ${shot.name}: sign-in as ${user} failed (${error.message.split('\n')[0]})`);
+            failed.push(
+              `${pageId}: ${shot.name}: sign-in as ${user} failed (${error.message.split('\n')[0]})`,
+            );
           await context.close();
           continue;
         }

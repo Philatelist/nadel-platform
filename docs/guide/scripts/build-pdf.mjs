@@ -47,7 +47,11 @@ const escapeHtml = (text) =>
 function guideVersion() {
   const git = (...args) => {
     try {
-      return execFileSync('git', args, { cwd: repoDir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+      return execFileSync('git', args, {
+        cwd: repoDir,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      }).trim();
     } catch {
       return '';
     }
@@ -58,7 +62,9 @@ function guideVersion() {
 const HEADING = { h2: 'h3', h3: 'h4', h4: 'h5' };
 
 function plainText(nodes) {
-  return nodes.map((n) => (n.type === 'text' ? n.text : 'children' in n ? plainText(n.children) : '')).join('');
+  return nodes
+    .map((n) => (n.type === 'text' ? n.text : 'children' in n ? plainText(n.children) : ''))
+    .join('');
 }
 
 /** Renders the compiled node tree of a help page to static HTML. Everything from the page is escaped. */
