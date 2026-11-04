@@ -6905,13 +6905,17 @@ paths:
         is (`key`, `type`), which query parameters of `getReport` and `downloadReport` it fills (`params`), whether
         it must be given, the values it starts with (`defaults`) and, for a period, whether it means billing months,
         service days, reading dates or the days payments were received (`basis`). A report that needs a permission the
-        caller lacks is not listed: `debtors` also needs `MEMBERS_VIEW`, `payments` also needs `PAYMENTS_VIEW`. A cooperative that has booked nothing still gets every report it may run.
+        caller lacks is not listed: `debtors` also needs `MEMBERS_VIEW`, `payments` also needs `PAYMENTS_VIEW`, and the
+        four cash book reports (`cash-book`, `bank-movements`, `income-expense`, `expenses`) need `CASHBOOK_VIEW`
+        instead of `REPORTS_VIEW`, so a role with `CASHBOOK_VIEW` alone (an audit committee) sees exactly those four and
+        a role with `REPORTS_VIEW` alone none of them. A cooperative that has booked nothing still gets every report it
+        may run.
 
         The server returns codes only: the name and description of a report and the label of a filter come from the
         client's catalogs by the report code and the filter key, in the user's language. Defaults that depend on the
         day (today, the previous calendar month, the current year) are worked out in Europe/Kyiv when the list is
         read; the defaults of `debtors` (`minDebt`, `olderThanDays`) are the cooperative's current red amount and red
-        days. Requires `REPORTS_VIEW`; the platform operator has no cooperative data: 403.
+        days. Requires `REPORTS_VIEW` or `CASHBOOK_VIEW`; the platform operator has no cooperative data: 403.
       responses:
         '200':
           description: OK
@@ -6965,9 +6969,18 @@ paths:
 
         Every run is written to the audit log (`REPORT_GENERATED`, entity type `REPORT`, `output` `PREVIEW`) with the
         filters as ids, codes and dates, the row count and whether the report holds personal data, never its contents.
-        Requires `REPORTS_VIEW`; `debtors` also needs `MEMBERS_VIEW`, `payments` also needs `PAYMENTS_VIEW` (403
-        `PERMISSION_DENIED` otherwise); the payer note column of `payments` is there only for a caller with
-        `MEMBERS_VIEW`. An unknown code is 400 `MALFORMED_REQUEST`; a code of `ReportCode` this server does not produce
+        Requires `REPORTS_VIEW` or `CASHBOOK_VIEW`. Every report but the four cash book reports needs `REPORTS_VIEW`;
+        `debtors` also needs `MEMBERS_VIEW`, `payments` also needs `PAYMENTS_VIEW`; `cash-book`, `bank-movements`,
+        `income-expense` and `expenses` need `CASHBOOK_VIEW` (403 `PERMISSION_DENIED` otherwise); the payer note column
+        of `payments` is there only for a caller with `MEMBERS_VIEW`.
+
+        The cash book reports (feature 018): `account` left out means both accounts; `expenseCategoryIds` left out
+        means every expense category (an id that is not an expense category of the cooperative is `NOT_FOUND` on
+        `expenseCategoryIds[i]`). `cash-book`, `bank-movements` and `income-expense` need the opening balance of their
+        account (`income-expense`: both): 409 `OPENING_BALANCE_MISSING` without it, and 400 `BEFORE_OPENING_BALANCE`
+        with `errors[{field: from, code: BEFORE_OPENING_BALANCE}]` when `from` is before its opening date (a balance is
+        known only from the opening date on). Their counterparty columns are shown to every caller who may run them
+        (`CASHBOOK_VIEW`). An unknown code is 400 `MALFORMED_REQUEST`; a code of `ReportCode` this server does not produce
         yet is 404 `NOT_FOUND`.
       parameters:
         - $ref: '#/components/parameters/ReportCodePath'
@@ -6987,6 +7000,8 @@ paths:
         - $ref: '#/components/parameters/ReportWaterSource'
         - $ref: '#/components/parameters/ReportCorrectionKinds'
         - $ref: '#/components/parameters/ReportSource'
+        - $ref: '#/components/parameters/ReportAccount'
+        - $ref: '#/components/parameters/ReportExpenseCategoryIds'
       responses:
         '200':
           description: OK
@@ -7000,6 +7015,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/ReportConflict'
         '422':
           $ref: '#/components/responses/ReportTooLarge'
 
@@ -7045,6 +7062,8 @@ paths:
         - $ref: '#/components/parameters/ReportWaterSource'
         - $ref: '#/components/parameters/ReportCorrectionKinds'
         - $ref: '#/components/parameters/ReportSource'
+        - $ref: '#/components/parameters/ReportAccount'
+        - $ref: '#/components/parameters/ReportExpenseCategoryIds'
         - name: lang
           in: query
           required: false
@@ -7068,6 +7087,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/ReportConflict'
         '422':
           $ref: '#/components/responses/ReportTooLarge'
 
@@ -7393,8 +7414,12 @@ paths:
         `REPORT_TEMPLATE`, entity id the template, label its name) with the fields `template` (the id), `version`,
         `filters` (`from`, `to`), `rows` (the rows written for row sets), `personalData` (`false`) and `output`
         (`XLSX`), never the contents. Requires `REPORTS_VIEW`; a template that uses a payment field (`totals.paid.<type>`,
-        `totals.prepayment` or the row set `payments`) also needs `PAYMENTS_VIEW` (403 `PERMISSION_DENIED`, nothing
-        written to the audit log); the platform operator has no cooperative data: 403.
+        `totals.prepayment` or the row set `payments`) also needs `PAYMENTS_VIEW`, and one that uses a cash book field
+        (`totals.cashbook.*` or the row set `incomeExpense`) also needs `CASHBOOK_VIEW` (403 `PERMISSION_DENIED`,
+        nothing written to the audit log); the platform operator has no cooperative data: 403. The cash book fields are
+        the income and expense report of the period: without both opening balances they are 409
+        `OPENING_BALANCE_MISSING`, and a period that starts before an opening date is 400 `BEFORE_OPENING_BALANCE`
+        (`errors[{field: from}]`).
       parameters:
         - $ref: '#/components/parameters/ReportTemplateIdPath'
       requestBody:
@@ -7438,7 +7463,9 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
-          description: The template is archived and can no longer be generated from (code `TEMPLATE_ARCHIVED`)
+          description: >-
+            The template is archived and can no longer be generated from (code `TEMPLATE_ARCHIVED`), or it uses a cash
+            book field and an opening balance is missing (code `OPENING_BALANCE_MISSING`)
           content:
             application/problem+json:
               schema:
@@ -7676,6 +7703,17 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/Problem'
+    ReportConflict:
+      description: >-
+        A cash book report (`cash-book`, `bank-movements`, `income-expense`) needs the opening balance of its account
+        (`income-expense`: of both accounts) and there is none yet (code `OPENING_BALANCE_MISSING`)
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Problem'
     ReportTooLarge:
       description: >-
         The report would have more than 20 000 rows in a sheet (code `REPORT_TOO_LARGE`); the client asks the user to
@@ -7884,6 +7922,24 @@ components:
       description: Only payments of this source (`CASH` or `BANK`); left out means both (filter type `SOURCE`)
       schema:
         $ref: '#/components/schemas/PaymentSource'
+    ReportAccount:
+      name: account
+      in: query
+      required: false
+      description: Only entries of this money account (`CASH` or `BANK`); left out means both (filter type `ACCOUNT`)
+      schema:
+        $ref: '#/components/schemas/MoneyAccountKind'
+    ReportExpenseCategoryIds:
+      name: expenseCategoryIds
+      in: query
+      required: false
+      description: Expense categories to include; left out means all (filter type `EXPENSE_CATEGORIES`)
+      schema:
+        type: array
+        maxItems: 100
+        items:
+          type: string
+          format: uuid
 
   schemas:
     Money:
@@ -14676,7 +14732,13 @@ components:
         `missing-readings`: active meters without an approved reading in a range. `land-tax`: the expected and the
         charged land tax per plot for a year. `corrections`: every reversal and adjustment booked in a range of
         billing months. `payments`: the payments of a range of billing months or of days, one row per payment, with
-        totals per source (also needs `PAYMENTS_VIEW`; the payer note only with `MEMBERS_VIEW`).
+        totals per source (also needs `PAYMENTS_VIEW`; the payer note only with `MEMBERS_VIEW`). The four cash book
+        reports need `CASHBOOK_VIEW` and not `REPORTS_VIEW` (feature 018): `cash-book`: the cash journal of a period,
+        per day the opening balance, each line and the closing balance; `bank-movements`: the same for the bank account,
+        with the reconciliation status of each month; `income-expense`: income and expense of a period for the general
+        meeting (member payments by charge type, advances, reversals of earlier payments, other income and expenses by
+        category, booked differences, the result and the cash and bank balances at both ends); `expenses`: the expense
+        list of a period by account and category, each with its number of receipt files.
       enum:
         - charges-by-month
         - plot-balances
@@ -14687,6 +14749,10 @@ components:
         - land-tax
         - corrections
         - payments
+        - cash-book
+        - bank-movements
+        - income-expense
+        - expenses
 
     ReportFilterType:
       type: string
@@ -14696,7 +14762,8 @@ components:
         (`minDebt`). `INT`: a whole number (`olderThanDays`). `CHARGE_TYPES`: charge types `chargeTypeIds`, several.
         `STREET`: one street `street`. `STATUS`: status colours `statuses`, several. `RESOURCE`: `resource`.
         `METER_KIND`: meter kinds `meterKinds`, several. `WATER_SOURCE`: the kind of water source `waterSource`.
-        `CORRECTION_KIND`: `correctionKinds`, several. `SOURCE`: the source of a payment `source`.
+        `CORRECTION_KIND`: `correctionKinds`, several. `SOURCE`: the source of a payment `source`. `ACCOUNT`: one money
+        account `account` (`CASH` or `BANK`). `EXPENSE_CATEGORIES`: expense categories `expenseCategoryIds`, several.
       enum:
         - MONTH_RANGE
         - DATE_RANGE
@@ -14712,6 +14779,8 @@ components:
         - WATER_SOURCE
         - CORRECTION_KIND
         - SOURCE
+        - ACCOUNT
+        - EXPENSE_CATEGORIES
 
     ReportFilterParam:
       type: string
@@ -14733,6 +14802,8 @@ components:
         - waterSource
         - correctionKinds
         - source
+        - account
+        - expenseCategoryIds
 
     ReportPeriodBasis:
       type: string
@@ -14740,7 +14811,8 @@ components:
         What the period of a report means; the filter label says so. `BILLING_MONTHS`: the billing months the entries
         were booked in. `SERVICE_DAYS`: the days a service was provided (the service period of a charge).
         `READING_DATES`: the dates of meter readings. `PAYMENT_DATES`: the days payments were received.
-      enum: [BILLING_MONTHS, SERVICE_DAYS, READING_DATES, PAYMENT_DATES]
+        `MOVEMENT_DATES`: the dates of the cash and bank journal lines and entries (feature 018).
+      enum: [BILLING_MONTHS, SERVICE_DAYS, READING_DATES, PAYMENT_DATES, MOVEMENT_DATES]
 
     ReportCorrectionKind:
       type: string
@@ -14818,7 +14890,23 @@ components:
         `DATE`: an ISO day. `MONTH`: a month `YYYY-MM`. `BOOLEAN`: `true` or `false`. `DECIMAL`: an exact number that
         is not money, with at most four decimals, never rounded, for example a tariff rate (`"35.0000"`) or an area in
         m² (`"600.00"`) or in sotkas (`"6.1235"`); shown with its significant decimals, at least two.
-      enum: [TEXT, CODE, CHARGE_TYPE, MONEY, QUANTITY, PERCENT, INTEGER, DATE, MONTH, BOOLEAN, DECIMAL]
+        `EXPENSE_CATEGORY`: the id of one of the report's `expenseCategories` (a seeded category never renamed is
+        named by the client from its `systemCode`, otherwise by its `name` as entered).
+      enum:
+        [
+          TEXT,
+          CODE,
+          CHARGE_TYPE,
+          MONEY,
+          QUANTITY,
+          PERCENT,
+          INTEGER,
+          DATE,
+          MONTH,
+          BOOLEAN,
+          DECIMAL,
+          EXPENSE_CATEGORY,
+        ]
 
     ReportColumn:
       type: object
@@ -14883,6 +14971,12 @@ components:
           description: One cell per column, in the order of the columns
           items:
             $ref: '#/components/schemas/ReportCell'
+        expenseId:
+          type: string
+          format: uuid
+          description: >-
+            Only in the `expenses` report: the expense of the row, so the screen links its receipt files
+            (`GET /expenses/{id}/attachments/{n}`, `n` from 1 to the row's `attachments`); not written to the file
 
     ReportTotal:
       type: object
@@ -14995,6 +15089,14 @@ components:
             `chargeTypeId` name one of them by id
           items:
             $ref: '#/components/schemas/ChargeTypeRef'
+        expenseCategories:
+          type: array
+          description: >-
+            The expense and income categories the report refers to (expense categories first, each kind in its
+            configured order): an `EXPENSE_CATEGORY` cell and the `expenseCategoryIds` filter name one of them by id.
+            Empty for the reports without categories
+          items:
+            $ref: '#/components/schemas/ExpenseCategory'
         sheets:
           type: array
           minItems: 1
@@ -15147,8 +15249,9 @@ components:
         The rows a template row repeats over. `PLOTS`: the active plots with their balances and land tax. `MONTHS`:
         the billing months with charges. `METERS`: the nodes of the electricity meter tree. `WATER`: the plots
         connected to water, one row per plot and source. `PAYMENTS`: the payments received in the period, one row per
-        payment, without the payer and the payer note (needs `PAYMENTS_VIEW`)
-      enum: [PLOTS, MONTHS, METERS, WATER, PAYMENTS]
+        payment, without the payer and the payer note (needs `PAYMENTS_VIEW`). `INCOME_EXPENSE`: the lines of the
+        income and expense report for the period (section, name, amount; needs `CASHBOOK_VIEW`)
+      enum: [PLOTS, MONTHS, METERS, WATER, PAYMENTS, INCOME_EXPENSE]
 
     ReportTemplateField:
       type: object

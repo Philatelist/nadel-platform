@@ -5,8 +5,8 @@ holds) and the **bank account** («Банківський рахунок»), the
 money and the **balance** of an account on any day. Members' debts never change here: the module only shows where the
 money they paid went. Draft: slices 1 to 5 of the feature (accounts, opening balances, member payments in the journal;
 expenses with receipt files, categories, the no-negative-cash rule; handovers to the bank and other income; cash
-counts with their act and the booked difference; the monthly bank reconciliation); the reports and the reconciliation
-act come with later slices.
+counts with their act and the booked difference; the monthly bank reconciliation; the read facade of the four cash
+book reports, slice 7); the reconciliation act lives in `documents`.
 The money rules are `docs/domain/money-rules.md` §14 (written with the feature); the decisions are ADR 0019.
 
 Tables (`V32__treasury.sql`, all under RLS `tenant_isolation`, an index leading with `tenant_id`, `UNIQUE (tenant_id,
@@ -37,6 +37,7 @@ billing month, a reversal on the Kyiv day it was made in `greatest(its month, th
 | `MovementKind` (`MEMBER_PAYMENT`, `EXPENSE`, `OTHER_INCOME`, `HANDOVER_OUT`, `HANDOVER_IN`, `COUNT_DIFFERENCE`, `BANK_DIFFERENCE`) | What moved the money of a journal line; a reversal has the kind of the line it reverses |
 | `BankMonthStatus` (`NOT_RECONCILED`, `RECONCILED`, `NEEDS_RECHECK`) | The reconciliation status of a bank month (for the bank movements report of a later slice) |
 | `CashCountActs.act(countId)` → `CashCountAct` (with `Status`, `Booking`, `Reversal`) | The figures of a count for its act (`documents`): moment, day, book, counted, difference, explanation, booking and its reversal; `MANDATORY`, no permission check of its own (the caller checks `CASHBOOK_VIEW`); empty for an unknown count |
+| `TreasuryReadModel` (`cashBook`, `bankMovements` → `AccountBook` with `CashBookDay`, `MovementLine`, `BankMonth`; `expenses` → `ExpenseLine`; `incomeExpense` → `IncomeExpense`; `categories` → `CategoryRef`) | The four cash book reports of `reports` (feature 018 §2.12): `MANDATORY` and `@PreAuthorize` `CASHBOOK_VIEW` on every method (the lines carry expenses' counterparties, opened). Implemented by `internal.TreasuryReports` over `TreasuryReportQueries`; the income and expense by the pure `IncomeExpenseCalculator` with `ledger.LedgerReadModel.paymentSplits` as of the end of the period's last day (Kyiv). A book needs its account's opening balance and a period from its date (409 `OPENING_BALANCE_MISSING`, 400 `BEFORE_OPENING_BALANCE` on `from`); the income and expense needs both. See the reports README, "The cash book reports" |
 
 Everything else is in `internal`.
 
@@ -315,11 +316,11 @@ system (`status` old/new, `movement`, `kind`, `date`, `amount`).
 
 ## Dependencies
 
-`ledger` (`PaymentMoneyMoved`, `PaymentSource`, `LedgerReadModel#paymentRefs`, `BookingMonths`), `settings`
+`ledger` (`PaymentMoneyMoved`, `PaymentSource`, `LedgerReadModel#paymentRefs`, `#paymentSplits`, `BookingMonths`), `settings`
 (`CooperativeSettings`: the IBAN), `audit` (`AuditEvent`, `ActorNames`, `FieldChange`), `privacy`
 (`PersonalDataCipher`, `FieldRef`), `identity` (`CurrentUser`, `AccessProfile`), `tenancy` (`TenantContext`),
 `problem`, `money`. It never reads another module's tables. `documents` depends on it (`CashCountActs`, the cash count
-act); it never depends on `documents`.
+act) and `reports` (`TreasuryReadModel`, the cash book reports); it never depends on either.
 
 ## Permissions
 
@@ -355,4 +356,6 @@ reversals against their original, opening inside a month, differences, `balanced
 another month reopen nothing, bank difference booked, listed with its reason and reversed today, a reversal reopens the
 reconciled current month, the status machine, not balanced, month and opening refusals, the bank card's months),
 `BankReconciliationsAccessTests`, `CashBookExamplesTests` rows 7–9, `TreasuryTenantIsolationTests` and
-`TreasuryGuardsTests` (`bank_difference`, V34).
+`TreasuryGuardsTests` (`bank_difference`, V34). Slice 7: `IncomeExpenseCalculatorTests` (FS 2.17 #12 identity), the
+report tests `CashBookReportTests`, `BankMovementsReportTests`, `ExpensesReportTests`, `IncomeExpenseReportTests`,
+`TreasuryReportsAccessTests`.

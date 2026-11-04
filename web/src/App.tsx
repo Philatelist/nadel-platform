@@ -240,7 +240,7 @@ const router = createBrowserRouter([
         ],
       },
       {
-        element: <RequirePermission permission="REPORTS_VIEW" />,
+        element: <RequirePermission permission={['REPORTS_VIEW', 'CASHBOOK_VIEW']} any />,
         children: [
           {
             path: 'reports',

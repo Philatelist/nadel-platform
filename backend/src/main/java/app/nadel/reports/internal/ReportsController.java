@@ -7,6 +7,7 @@ import java.util.UUID;
 import nadel.contract.api.ReportsApi;
 import nadel.contract.model.MeterKind;
 import nadel.contract.model.MeterResource;
+import nadel.contract.model.MoneyAccountKind;
 import nadel.contract.model.PaymentSource;
 import nadel.contract.model.PlotStatus;
 import nadel.contract.model.ReportCode;
@@ -26,8 +27,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Endpoints of the built-in reports. Every one needs {@code REPORTS_VIEW}; a report that needs more (the debtors also
- * {@code MEMBERS_VIEW}, the payments also {@code PAYMENTS_VIEW}) is not listed and is 403 ({@link ReportCatalog}). The
+ * Endpoints of the built-in reports. Every one needs {@code REPORTS_VIEW} or {@code CASHBOOK_VIEW}; which reports a
+ * caller may run is the catalog's per-definition rule ({@link ReportCatalog}): every report but the four cash book
+ * reports needs {@code REPORTS_VIEW} (the debtors also {@code MEMBERS_VIEW}, the payments also {@code PAYMENTS_VIEW}),
+ * the cash book reports need {@code CASHBOOK_VIEW}; one the caller may not run is not listed and is 403. The
  * platform operator holds no cooperative permission and is refused with 403. A code of the contract without a
  * definition yet is 404. {@code /reports/{code}.xlsx} is matched before {@code /reports/{code}}: its pattern is the
  * more specific one.
@@ -48,36 +51,40 @@ class ReportsController implements ReportsApi {
     }
 
     @Override
-    @PreAuthorize("hasAuthority('PERM_REPORTS_VIEW')")
+    @PreAuthorize("hasAnyAuthority('PERM_REPORTS_VIEW', 'PERM_CASHBOOK_VIEW')")
     public ResponseEntity<List<ReportInfo>> listReports() {
         return ResponseEntity.ok(runner.list());
     }
 
     @Override
-    @PreAuthorize("hasAuthority('PERM_REPORTS_VIEW')")
+    @PreAuthorize("hasAnyAuthority('PERM_REPORTS_VIEW', 'PERM_CASHBOOK_VIEW')")
     public ResponseEntity<ReportPreview> getReport(ReportCode code, @Nullable String fromMonth,
             @Nullable String toMonth, @Nullable LocalDate from, @Nullable LocalDate to, @Nullable LocalDate asOf,
             @Nullable Integer year, @Nullable List<UUID> chargeTypeIds, @Nullable String street,
             @Nullable List<PlotStatus> statuses, @Nullable String minDebt, @Nullable Integer olderThanDays,
             @Nullable MeterResource resource, @Nullable List<MeterKind> meterKinds,
             @Nullable WaterSourceKind waterSource, @Nullable List<ReportCorrectionKind> correctionKinds,
-            @Nullable PaymentSource source) {
+            @Nullable PaymentSource source, @Nullable MoneyAccountKind account,
+            @Nullable List<UUID> expenseCategoryIds) {
         RawFilters raw = new RawFilters(fromMonth, toMonth, from, to, asOf, year, chargeTypeIds, street, statuses,
-                minDebt, olderThanDays, resource, meterKinds, waterSource, correctionKinds, source);
+                minDebt, olderThanDays, resource, meterKinds, waterSource, correctionKinds, source, account,
+                expenseCategoryIds);
         return ResponseEntity.ok(runner.preview(code, raw));
     }
 
     @Override
-    @PreAuthorize("hasAuthority('PERM_REPORTS_VIEW')")
+    @PreAuthorize("hasAnyAuthority('PERM_REPORTS_VIEW', 'PERM_CASHBOOK_VIEW')")
     public ResponseEntity<Resource> downloadReport(ReportCode code, @Nullable String fromMonth,
             @Nullable String toMonth, @Nullable LocalDate from, @Nullable LocalDate to, @Nullable LocalDate asOf,
             @Nullable Integer year, @Nullable List<UUID> chargeTypeIds, @Nullable String street,
             @Nullable List<PlotStatus> statuses, @Nullable String minDebt, @Nullable Integer olderThanDays,
             @Nullable MeterResource resource, @Nullable List<MeterKind> meterKinds,
             @Nullable WaterSourceKind waterSource, @Nullable List<ReportCorrectionKind> correctionKinds,
-            @Nullable PaymentSource source, @Nullable String lang) {
+            @Nullable PaymentSource source, @Nullable MoneyAccountKind account,
+            @Nullable List<UUID> expenseCategoryIds, @Nullable String lang) {
         RawFilters raw = new RawFilters(fromMonth, toMonth, from, to, asOf, year, chargeTypeIds, street, statuses,
-                minDebt, olderThanDays, resource, meterKinds, waterSource, correctionKinds, source);
+                minDebt, olderThanDays, resource, meterKinds, waterSource, correctionKinds, source, account,
+                expenseCategoryIds);
         ReportLanguage language = ReportLanguage.resolve(lang, request.getHeader(HttpHeaders.ACCEPT_LANGUAGE));
         ReportFile file = runner.file(code, raw, language);
         return ResponseEntity.ok()

@@ -21,6 +21,7 @@ import app.nadel.ledger.MonthTypeTotals;
 import app.nadel.ledger.PaymentFilter;
 import app.nadel.ledger.PaymentRef;
 import app.nadel.ledger.PaymentRow;
+import app.nadel.ledger.PaymentSplit;
 import app.nadel.ledger.PaymentSource;
 import app.nadel.ledger.PlotDebts;
 import app.nadel.ledger.PlotStatement;
@@ -117,7 +118,9 @@ import org.springframework.transaction.annotation.Transactional;
  * part with its {@code node_meter_id}) or the consumer (its calculation's {@code consumerMeterId}).
  * <p>
  * {@link #paymentRefs}: the payment rows of the treasury's journal lines, joined to the payment a reversal cancels for
- * its receipt number and bank reference, 500 ids per {@code IN} list.
+ * its receipt number and bank reference, 500 ids per {@code IN} list. {@link #paymentSplits}: the payments' net
+ * allocations per charge type (through the allocated charge) of the allocation rows created by the cut-off
+ * ({@code allocation_payment_idx}), 500 ids per {@code IN} list; the unallocated part is the amount minus their sum.
  * <p>
  * {@link #cashReceipt}: the payment group of a printed cash receipt, read by {@link CashReceiptQueries}.
  * {@link #invoiceLedgers}: the figures of the invoices of plots for a month by the booking-month rule, read by
@@ -278,6 +281,22 @@ class LedgerReportQueries implements LedgerReadModel {
               and (:allPlots = true or p.plot_id in (:plotIds))
             order by p.received_on, p.created_at, p.id
             limit :limit
+            """;
+
+    /**
+     * The payments (never a reversal row) with the given ids and their net allocations per charge type of the
+     * allocation rows created up to the later of {@code :recordedBy} and the payment's own {@code created_at} (a
+     * payment without such a row has one line with a null charge type).
+     */
+    private static final String PAYMENT_SPLITS = """
+            select p.id, p.amount, c.charge_type_id, sum(a.amount)
+            from payment p
+            left join allocation a on a.payment_id = p.id
+                                  and a.created_at <= greatest(cast(:recordedBy as timestamptz), p.created_at)
+            left join charge c on c.id = a.charge_id
+            where p.kind = 'PAYMENT'
+              and p.id in (:ids)
+            group by p.id, p.amount, c.charge_type_id
             """;
 
     /** The payments (never a reversal row) with the given ids, as {@link #PAYMENTS} reads them. */
@@ -847,6 +866,40 @@ class LedgerReportQueries implements LedgerReadModel {
         Map<UUID, PaymentRef> refs = new LinkedHashMap<>();
         ids.stream().filter(found::containsKey).forEach(id -> refs.put(id, found.get(id)));
         return refs;
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Map<UUID, PaymentSplit> paymentSplits(Collection<UUID> paymentIds, Instant recordedBy) {
+        Objects.requireNonNull(recordedBy, "recordedBy");
+        List<UUID> ids = paymentIds.stream().map(id -> Objects.requireNonNull(id, "paymentId")).distinct().toList();
+        Map<UUID, Money> amounts = new HashMap<>();
+        Map<UUID, Map<UUID, Money>> byType = new HashMap<>();
+        for (int from = 0; from < ids.size(); from += CHUNK) {
+            for (Object row : entityManager.createNativeQuery(PAYMENT_SPLITS)
+                    .setParameter("ids", ids.subList(from, Math.min(ids.size(), from + CHUNK)))
+                    .setParameter("recordedBy", recordedBy)
+                    .getResultList()) {
+                Object[] v = (Object[]) row;
+                UUID paymentId = (UUID) v[0];
+                amounts.put(paymentId, money(v[1]));
+                Map<UUID, Money> types = byType.computeIfAbsent(paymentId, id -> new LinkedHashMap<>());
+                if (v[2] != null && money(v[3]).signum() != 0) {
+                    types.merge((UUID) v[2], money(v[3]), Money::plus);
+                }
+            }
+        }
+        Map<UUID, PaymentSplit> splits = new LinkedHashMap<>();
+        for (UUID id : ids) {
+            Money amount = amounts.get(id);
+            if (amount == null) {
+                continue;
+            }
+            Map<UUID, Money> types = byType.getOrDefault(id, Map.of());
+            Money allocated = types.values().stream().reduce(Money.ZERO, Money::plus);
+            splits.put(id, new PaymentSplit(id, amount, types, amount.minus(allocated)));
+        }
+        return splits;
     }
 
     private static PaymentRow payment(Object[] v) {

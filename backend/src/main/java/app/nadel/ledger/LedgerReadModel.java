@@ -230,6 +230,22 @@ public interface LedgerReadModel {
     Map<UUID, PaymentRef> paymentRefs(Collection<UUID> ledgerRowIds);
 
     /**
+     * How these payments were placed on the charges at a moment (feature 018 §2.12, technical considerations 2.3: the
+     * income and expense report splits the member payments of a period by charge type as they stood at the period's
+     * end): per payment the net allocations by charge type of the allocation rows (allocations and releases) created up
+     * to {@code max(recordedBy, the payment's created_at)}, and the unallocated part, the amount minus their sum. The
+     * cut-off keeps the picture of a period fixed when releases or allocations are written later (a reversal of the
+     * payment, a later charge reversal, an automatic allocation of prepayment); the payment's own moment keeps the
+     * allocations written with a payment entered after {@code recordedBy}. An unknown id, a payment of another
+     * cooperative (RLS) and the id of a payment reversal row are absent.
+     *
+     * @param paymentIds the payments; asked 500 per query
+     * @param recordedBy the moment the allocations are taken as of (inclusive)
+     * @return the payments found, keyed by payment id, in the order of first appearance of the ids
+     */
+    Map<UUID, PaymentSplit> paymentSplits(Collection<UUID> paymentIds, Instant recordedBy);
+
+    /**
      * The payment group of a payment as a printed cash receipt shows it (feature 016 §2.8): the receipt number, the
      * day received, who entered it, the payer and every part of the group with its plot, amount, reversal and where its
      * money is now ({@link CashReceiptData}). Any part of the group may be asked. A bank payment is answered too (with

@@ -2,6 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { messages } from '@nadel/shared';
+import { reportTexts } from './reportTexts';
 
 /** Reads a Java .properties file (UTF-8) into key/text pairs: comments skipped, `\uXXXX`, `\n`, `\t` and `\\` resolved. */
 function readProperties(name: string): Map<string, string> {
@@ -50,5 +51,22 @@ describe('report bundles', () => {
     expect([...readProperties('messages_uk.properties').keys()].sort()).toEqual(
       [...readProperties('messages_en.properties').keys()].sort(),
     );
+  });
+});
+
+describe.each(['uk', 'en'] as const)('cash book reports in the %s catalog', (lang) => {
+  const catalog = messages(lang);
+
+  it.each(['cash-book', 'bank-movements', 'income-expense', 'expenses'])('names %s', (code) => {
+    const texts = reportTexts(catalog, code);
+    expect(texts?.title).toBeTruthy();
+    expect(texts?.description).toBeTruthy();
+  });
+
+  it('has labels for the account and expense category filters', () => {
+    expect(catalog.reports.filters.params.account).toBeTruthy();
+    expect(catalog.reports.filters.params.expenseCategoryIds).toBeTruthy();
+    expect(Object.keys(catalog.reports.filters.options.account)).toEqual(['CASH', 'BANK']);
+    expect(catalog.reports.basis.MOVEMENT_DATES).toBeTruthy();
   });
 });

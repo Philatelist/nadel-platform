@@ -9,9 +9,11 @@
  *
  * OpenAPI spec version: 0.1.0
  */
+import type { ReportAccountParameter } from './reportAccountParameter';
 import type { ReportAsOfParameter } from './reportAsOfParameter';
 import type { ReportChargeTypeIdsParameter } from './reportChargeTypeIdsParameter';
 import type { ReportCorrectionKindsParameter } from './reportCorrectionKindsParameter';
+import type { ReportExpenseCategoryIdsParameter } from './reportExpenseCategoryIdsParameter';
 import type { ReportFromMonthParameter } from './reportFromMonthParameter';
 import type { ReportFromParameter } from './reportFromParameter';
 import type { ReportMeterKindsParameter } from './reportMeterKindsParameter';
@@ -103,4 +105,13 @@ correctionKinds?: ReportCorrectionKindsParameter;
  * Where the money of a payment came from: `CASH` taken at the cooperative's cash desk (the payment carries a receipt number), `BANK` a bank transfer entered by hand (no receipt number, an optional bank document number)
  */
 source?: ReportSourceParameter;
+/**
+ * `CASH` the cash the treasurer holds («Каса»), `BANK` the cooperative's bank account
+ */
+account?: ReportAccountParameter;
+/**
+ * Expense categories to include; left out means all (filter type `EXPENSE_CATEGORIES`)
+ * @maxItems 100
+ */
+expenseCategoryIds?: ReportExpenseCategoryIdsParameter;
 };

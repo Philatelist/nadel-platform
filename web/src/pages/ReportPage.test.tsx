@@ -25,6 +25,7 @@ vi.mock('@nadel/api-client', async (importOriginal) => ({
   useListReports: () => queryResult(reports),
   useListChargeTypes: () => queryResult([electricity]),
   useListBillingMonths: () => queryResult([]),
+  useListExpenseCategories: () => queryResult([]),
   useGetReport: (...args: unknown[]) => {
     getReportHook(...args);
     return report;

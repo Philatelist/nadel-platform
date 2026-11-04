@@ -1967,6 +1967,16 @@ export const uk: Messages = {
       generatedAt: 'Дата й час створення файлу',
       generatedBy: 'Ім’я того, хто створив файл',
       totals: {
+        cashbook: {
+          cashStart: 'Залишок каси на початок періоду',
+          cashEnd: 'Залишок каси на кінець періоду',
+          bankStart: 'Залишок банку на початок періоду',
+          bankEnd: 'Залишок банку на кінець періоду',
+          income: 'Доходи за період: платежі членів, аванси, сторнування попередніх платежів та інші доходи',
+          expenses: 'Витрати за період за всіма статтями',
+          differences: 'Оформлені різниці перерахунку каси та звірки з банком',
+          result: 'Результат: доходи − витрати + різниці (зміна залишків каси і банку)',
+        },
         landTax: {
           expected: 'Земельний податок, очікуваний за рік періоду (звіт «Земельний податок»)',
           charged: 'Земельний податок, нарахований за рік періоду (звіт «Земельний податок»)',
@@ -1988,6 +1998,11 @@ export const uk: Messages = {
         },
       },
       rows: {
+        incomeExpense: {
+          section: 'Розділ звіту «Доходи та витрати»',
+          name: 'Назва рядка: вид нарахування, стаття або різниця',
+          amount: 'Сума рядка',
+        },
         plots: {
           number: 'Номер ділянки',
           street: 'Вулиця',
@@ -2187,10 +2202,13 @@ export const uk: Messages = {
       SERVICE_DAYS: 'Період рахується за днями послуг.',
       READING_DATES: 'Період рахується за датами показів.',
       PAYMENT_DATES: 'Період рахується за днями надходження платежів.',
+      MOVEMENT_DATES: 'Період рахується за датами рухів коштів.',
     },
     errors: {
       REPORT_TOO_LARGE: 'У звіті понад 20 000 рядків на аркуші. Звузьте фільтри й спробуйте ще раз.',
       REPORT_FILTER_INVALID: 'Фільтри не підходять до цього звіту. Перевірте їх і спробуйте ще раз.',
+      OPENING_BALANCE_MISSING: 'Спочатку внесіть початковий залишок рахунку.',
+      BEFORE_OPENING_BALANCE: 'Початок періоду раніше за дату початкового залишку рахунку.',
     },
     file: {
       filters: 'Фільтри',
@@ -2204,8 +2222,10 @@ export const uk: Messages = {
         SERVICE_DAYS: 'Дні послуг',
         READING_DATES: 'Дати показів',
         PAYMENT_DATES: 'Дні надходження',
+        MOVEMENT_DATES: 'Дати рухів коштів',
       },
       chargeTypes: 'Види нарахувань',
+      expenseCategories: 'Категорії витрат',
       street: 'Вулиця',
       params: {
         fromMonth: 'З місяця',
@@ -2222,6 +2242,8 @@ export const uk: Messages = {
         waterSource: 'Джерело води',
         correctionKinds: 'Види виправлень',
         source: 'Джерело',
+        account: 'Рахунок',
+        expenseCategoryIds: 'Категорії витрат',
       },
       options: {
         statuses: {
@@ -2248,16 +2270,31 @@ export const uk: Messages = {
           CASH: 'Готівка',
           BANK: 'Банк',
         },
+        account: {
+          CASH: 'Каса',
+          BANK: 'Банківський рахунок',
+        },
         correctionKinds: {
           REVERSAL: 'Сторно',
           ADJUSTMENT: 'Коригування',
         },
       },
     },
+    accountBook: {
+      lines: {
+        OPENING: 'Залишок на початок періоду',
+        DAY: 'Разом за день',
+        CLOSING: 'Залишок на кінець періоду',
+      },
+    },
     rows: {
       SUBTOTAL: 'Разом',
     },
     totals: {
+      income: 'Доходи',
+      expenses: 'Витрати',
+      differences: 'Різниці',
+      result: 'Результат',
       all: 'Усього',
       CONSUMPTION: 'Споживання ділянок',
       LOSSES: 'Нараховані втрати',
@@ -2348,6 +2385,100 @@ export const uk: Messages = {
         total: 'Борг усього',
         oldestUnpaid: 'Найстаріше неоплачене',
         daysOverdue: 'Днів прострочення',
+      },
+    },
+    'cash-book': {
+      title: 'Касова книга',
+      description: 'Каса за період: за кожен день залишок на початок, усі рядки й залишок на кінець.',
+      sheets: {
+        main: 'Касова книга',
+      },
+      columns: {
+        date: 'Дата',
+        line: 'Рядок',
+        time: 'Час',
+        kind: 'Вид',
+        reversal: 'Сторнування',
+        document: 'Квитанція / документ',
+        plot: 'Ділянка',
+        counterparty: 'Контрагент',
+        category: 'Стаття',
+        opening: 'Залишок на початок',
+        receipt: 'Прихід',
+        spending: 'Видаток',
+        closing: 'Залишок на кінець',
+      },
+    },
+    'bank-movements': {
+      title: 'Рух коштів по банку',
+      description:
+        'Банківський рахунок за період: за кожен день залишок на початок, рухи й залишок на кінець, зі станом звірки кожного місяця.',
+      sheets: {
+        main: 'Рух коштів',
+        months: 'Звірка за місяцями',
+      },
+      columns: {
+        date: 'Дата',
+        line: 'Рядок',
+        time: 'Час',
+        kind: 'Вид',
+        reversal: 'Сторнування',
+        document: 'Квитанція / документ',
+        plot: 'Ділянка',
+        counterparty: 'Контрагент',
+        category: 'Стаття',
+        opening: 'Залишок на початок',
+        receipt: 'Надходження',
+        spending: 'Списання',
+        closing: 'Залишок на кінець',
+        month: 'Місяць',
+        reconciliation: 'Стан звірки',
+      },
+    },
+    'income-expense': {
+      title: 'Доходи та витрати',
+      description:
+        'Надходження й витрати за період для загальних зборів: платежі членів за видами нарахувань, інші доходи й витрати за категоріями, результат і залишки каси та банку.',
+      sheets: {
+        main: 'Доходи та витрати',
+        balances: 'Залишки',
+      },
+      columns: {
+        section: 'Розділ',
+        chargeType: 'Вид нарахування',
+        category: 'Стаття',
+        difference: 'Різниця',
+        amount: 'Сума',
+        account: 'Рахунок',
+        start: 'На початок періоду',
+        end: 'На кінець періоду',
+        change: 'Зміна',
+      },
+      sections: {
+        MEMBER_BY_TYPE: 'Платежі членів',
+        ADVANCES: 'Аванси',
+        PAYMENT_REVERSALS: 'Сторнування платежів попередніх періодів',
+        OTHER_INCOME: 'Інші доходи',
+        EXPENSE: 'Витрати',
+        DIFFERENCES: 'Різниці',
+      },
+    },
+    expenses: {
+      title: 'Витрати',
+      description: 'Список витрат за період за рахунком і категорією, з кількістю файлів квитанцій.',
+      sheets: {
+        main: 'Витрати',
+      },
+      columns: {
+        date: 'Дата',
+        account: 'Рахунок',
+        category: 'Стаття',
+        counterparty: 'Контрагент',
+        document: 'Документ',
+        documentDate: 'Дата документа',
+        amount: 'Сума',
+        reversed: 'Сторновано',
+        attachments: 'Файлів',
       },
     },
     payments: {

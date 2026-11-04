@@ -1,8 +1,14 @@
 import { useState } from 'react';
-import { useListChargeTypes, type ReportFilterParam, type ReportInfo } from '@nadel/api-client';
+import {
+  useListChargeTypes,
+  useListExpenseCategories,
+  type ReportFilterParam,
+  type ReportInfo,
+} from '@nadel/api-client';
 import type { Messages } from '@nadel/shared';
 import { BillingMonthSelect } from '../charges/BillingMonthSelect';
 import { chargeTypeName } from '../../chargeTypeName';
+import { categoryLabel } from '../cashbook/CategoryName';
 import { useT } from '../../i18n';
 import { useCan } from '../../me';
 import { PARAM_CONTROLS, reportParams, type FilterValues } from '../../reportFilters';
@@ -16,6 +22,7 @@ interface Option {
 function paramLabel(t: Messages, param: ReportFilterParam): string {
   if (param === 'chargeTypeIds') return t.reports.filters.chargeTypes;
   if (param === 'street') return t.reports.filters.street;
+  if (param === 'expenseCategoryIds') return t.reports.filters.expenseCategories;
   return t.reports.filters.params[param];
 }
 
@@ -41,6 +48,11 @@ export function ReportFilterForm({
   const [draft, setDraft] = useState<FilterValues>(initial);
   const canListChargeTypes = useCan('TARIFFS_VIEW');
   const chargeTypes = useListChargeTypes({ query: { enabled: canListChargeTypes } });
+  const takesCategories = report.filters.some((filter) => filter.params.includes('expenseCategoryIds'));
+  const expenseCategories = useListExpenseCategories(
+    { kind: 'EXPENSE' },
+    { query: { enabled: takesCategories } },
+  );
 
   const set = (param: ReportFilterParam, list: string[]) =>
     setDraft((current) => ({ ...current, [param]: list }));
@@ -49,6 +61,12 @@ export function ReportFilterForm({
   const optionsOf = (param: ReportFilterParam): Option[] => {
     if (param === 'chargeTypeIds') {
       return (chargeTypes.data ?? []).map((type) => ({ value: type.id, label: chargeTypeName(type, t) }));
+    }
+    if (param === 'expenseCategoryIds') {
+      return (expenseCategories.data ?? []).map((category) => ({
+        value: category.id,
+        label: categoryLabel(t, category),
+      }));
     }
     const control = PARAM_CONTROLS[param];
     const labels = optionLabels(t, param);

@@ -14,7 +14,8 @@ enum TemplateRowSet {
     MONTHS("months"),
     METERS("meters"),
     WATER("water"),
-    PAYMENTS("payments");
+    PAYMENTS("payments"),
+    INCOME_EXPENSE("incomeExpense");
 
     /** The prefix every placeholder of a row set starts with. */
     static final String PREFIX = "rows.";

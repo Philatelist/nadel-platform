@@ -34,3 +34,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `d5ec2fc..8513268` | PASS | — | minor: a line dated in month M shifts the opening of later reconciled months, which stay «Звірено» (FS reopens only the month of the line; same family as the past-month reversal limit — add to the treasury README note for the owner); `reopened` stays on a re-reconciled month — the UI must show it only for NEEDS_RECHECK |
+
+## Slice 6 — Reconciliation act for the board and the member
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `8513268..6439480` | PASS | — | minor: a plot with no ledger rows always gets 400 from INVALID (the form shows «Невірний період»); plotStatement calls debtsAsOf twice (fine for one plot). Reviewer did not run the web checks (orchestrator ran them before the commit: web 958 green) |

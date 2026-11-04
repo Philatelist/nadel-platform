@@ -95,6 +95,15 @@ describe('Layout', () => {
     expect(hrefs()).toEqual(['/plots', '/charges', '/documents/certificates']);
   });
 
+  it('shows Reports with CASHBOOK_VIEW alone', () => {
+    me = meWith(['CASHBOOK_VIEW']);
+    renderWithApp(<Layout />);
+    const links = Array.from(screen.getByRole('navigation', { name: 'Main menu' }).querySelectorAll('a')).map(
+      (a) => a.getAttribute('href'),
+    );
+    expect(links).toContain('/reports');
+  });
+
   it('shows Cooperative settings last, only with SETTINGS_MANAGE', () => {
     me = meWith(['MEMBERS_VIEW', 'SETTINGS_MANAGE']);
     const { unmount } = renderWithApp(<Layout />);

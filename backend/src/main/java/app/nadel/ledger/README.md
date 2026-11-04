@@ -59,7 +59,7 @@ cooperative that is not reversed, and a reversal never target an adjustment or a
 | `PaymentSource` (`CASH`, `BANK`) | Where the money of a payment came from (feature 015; column `payment.source`, V27); the bank statement import is a later feature (after 016-018) |
 | `PaymentNotes` | The payer notes of payments for the payments report (feature 015 §6), implemented by `internal.PaymentNotesReader`: `@PreAuthorize(MEMBERS_VIEW)`, `Propagation.MANDATORY`, opened with `PaymentNoteCipher`. The one documented way personal data leaves the ledger for the reports |
 | `LedgerReadModel` (with `PaymentRef`, `MonthTypeTotals`, `MonthGrouping`, `MonthStatus`, `PlotDebts`, `PaymentRow`, `PaymentFilter`, `CorrectionRow`, `CorrectionKind`, `CorrectionSource`, `CorrectionCause`, `ChargedRow`, `ChargedRowKind`, `ChargedSource` (with `TARIFF` for the water rows), `ChargedPart`, `LossesRunNodeRow`, `LossesRunNodeOutcome`, `CommonConsumerRunLineRow`, `CommonConsumerRunLineOutcome`, `RunStatus`, `CashReceiptData`, `InvoiceLedger`) | The read facade of the reports (feature 013), of the documents (feature 016: `cashReceipt`, `invoiceLedgers`, `firstBillingMonth`) of the payment messages (feature 017: `paymentsByIds`, `debtsAsOf`), of the reconciliation act (feature 018:
-`plotStatement` with `PlotStatement`, `firstDebtDate`) and of the treasury's journal (feature 018: `paymentRefs`, the plot, receipt number, bank reference, kind and reversal reason of payment rows, reversal rows included, with their payment's receipt number and bank reference), implemented by `internal.LedgerReportQueries`; see The read model of the reports |
+`plotStatement` with `PlotStatement`, `firstDebtDate`) and of the treasury's journal (feature 018: `paymentRefs`, the plot, receipt number, bank reference, kind and reversal reason of payment rows, reversal rows included, with their payment's receipt number and bank reference; `paymentSplits` with `PaymentSplit`, the allocations of payments by charge type at a moment), implemented by `internal.LedgerReportQueries`; see The read model of the reports |
 
 Everything else is in `internal`.
 
@@ -469,6 +469,15 @@ Methods:
   under another cooperative. Test: `PlotStatementTests` (an opening balance, charges of three types, an adjustment, a
   charge reversal, a split payment, a bank payment reversed today, a prepayment; six periods against `debtsAsOf`, the
   lines by date, the plot balances report on both ends, the first day, the caller's transaction).
+- `paymentSplits(paymentIds, recordedBy)` (the income and expense report, feature 018 §2.12, technical considerations
+  2.3): per payment (`PAYMENT` rows only; unknown ids, reversal rows and other cooperatives are absent) a `PaymentSplit`:
+  the net allocations by charge type (through the allocated charge) of the allocation rows, allocations and releases,
+  created up to `max(recordedBy, payment.created_at)`, and `unallocated` = amount − their sum (the advance). The
+  treasury passes the end of the period's last day in Europe/Kyiv, so a period's picture stays fixed when a later
+  reversal releases the allocations or a later run allocates prepayment; a payment entered after the cut-off keeps the
+  allocations written with it. 500 ids per `IN` list (`allocation_payment_idx`). Test:
+  `treasury.IncomeExpenseReportTests` (allocations through the payments API, a payment reversed after the period split as
+  it stood at the period's end).
 - `corrections(fromMonth, toMonth, chargeTypeIds, kinds, limit)` (corrections, 013 §3.8): one `CorrectionRow` per
   `REVERSAL` or `ADJUSTMENT` row booked in the billing months from–to (`kinds` empty = both, `chargeTypeIds` empty =
   every type), joined to the charge it corrects (`reverses_charge_id` or `adjusts_charge_id`: `originalChargeId`, its

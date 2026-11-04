@@ -11,7 +11,7 @@
  */
 
 /**
- * A built-in report. `charges-by-month`: what was charged per billing month and charge type and what is paid on it, with a second sheet by service period. `plot-balances`: charged, paid, debt and prepayment of every active plot per charge type on a day, without names. `debtors`: the plots over the red amount or older than the red days, with the owners' names and contacts (also needs `MEMBERS_VIEW`). `electricity-tree`: electricity from the substation down to the plots, with a consumption sheet and a charged sheet. `water`: water use and water charges of the connected plots. `missing-readings`: active meters without an approved reading in a range. `land-tax`: the expected and the charged land tax per plot for a year. `corrections`: every reversal and adjustment booked in a range of billing months. `payments`: the payments of a range of billing months or of days, one row per payment, with totals per source (also needs `PAYMENTS_VIEW`; the payer note only with `MEMBERS_VIEW`).
+ * A built-in report. `charges-by-month`: what was charged per billing month and charge type and what is paid on it, with a second sheet by service period. `plot-balances`: charged, paid, debt and prepayment of every active plot per charge type on a day, without names. `debtors`: the plots over the red amount or older than the red days, with the owners' names and contacts (also needs `MEMBERS_VIEW`). `electricity-tree`: electricity from the substation down to the plots, with a consumption sheet and a charged sheet. `water`: water use and water charges of the connected plots. `missing-readings`: active meters without an approved reading in a range. `land-tax`: the expected and the charged land tax per plot for a year. `corrections`: every reversal and adjustment booked in a range of billing months. `payments`: the payments of a range of billing months or of days, one row per payment, with totals per source (also needs `PAYMENTS_VIEW`; the payer note only with `MEMBERS_VIEW`). The four cash book reports need `CASHBOOK_VIEW` and not `REPORTS_VIEW` (feature 018): `cash-book`: the cash journal of a period, per day the opening balance, each line and the closing balance; `bank-movements`: the same for the bank account, with the reconciliation status of each month; `income-expense`: income and expense of a period for the general meeting (member payments by charge type, advances, reversals of earlier payments, other income and expenses by category, booked differences, the result and the cash and bank balances at both ends); `expenses`: the expense list of a period by account and category, each with its number of receipt files.
  */
 export type ReportCode = typeof ReportCode[keyof typeof ReportCode];
 
@@ -26,4 +26,8 @@ export const ReportCode = {
   'land-tax': 'land-tax',
   corrections: 'corrections',
   payments: 'payments',
+  'cash-book': 'cash-book',
+  'bank-movements': 'bank-movements',
+  'income-expense': 'income-expense',
+  expenses: 'expenses',
 } as const;

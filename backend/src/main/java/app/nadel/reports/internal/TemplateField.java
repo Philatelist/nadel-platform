@@ -28,7 +28,9 @@ import org.jspecify.annotations.Nullable;
  * <p>
  * Every placeholder needs {@code REPORTS_VIEW} ({@link #BASE_PERMISSION}); the payment fields ({@code
  * totals.paid.<type>}, {@code totals.prepayment} and the row set {@code payments}) also need {@code PAYMENTS_VIEW}
- * ({@link #permission()}): filling a template that uses one is refused without it ({@link TemplateValues}).
+ * and the cash book fields ({@code totals.cashbook.*} and the row set {@code incomeExpense}) also need
+ * {@code CASHBOOK_VIEW} ({@link #permission()}): filling a template that uses one is refused without it
+ * ({@link TemplateValues}).
  * <p>
  * What each value means for a period is {@link TemplateValues}; the order of the constants is the order of the catalog.
  */
@@ -59,6 +61,24 @@ enum TemplateField {
     TOTALS_DEBT("totals.debt", ReportTemplateFieldType.MONEY, null, "45210.50"),
     TOTALS_PLOTS_COUNT("totals.plots.count", ReportTemplateFieldType.INT, null, "60"),
     TOTALS_PLOTS_AREA_SOTKA("totals.plots.areaSotka", ReportTemplateFieldType.NUMBER, null, "360.5000"),
+
+    // ---- totals of the cash book: the income and expense report of the period (feature 018, CASHBOOK_VIEW)
+    TOTALS_CASHBOOK_CASH_START("totals.cashbook.cashStart", ReportTemplateFieldType.MONEY, null, "1000.00", false,
+            Permission.CASHBOOK_VIEW),
+    TOTALS_CASHBOOK_CASH_END("totals.cashbook.cashEnd", ReportTemplateFieldType.MONEY, null, "180.00", false,
+            Permission.CASHBOOK_VIEW),
+    TOTALS_CASHBOOK_BANK_START("totals.cashbook.bankStart", ReportTemplateFieldType.MONEY, null, "20000.00", false,
+            Permission.CASHBOOK_VIEW),
+    TOTALS_CASHBOOK_BANK_END("totals.cashbook.bankEnd", ReportTemplateFieldType.MONEY, null, "22850.00", false,
+            Permission.CASHBOOK_VIEW),
+    TOTALS_CASHBOOK_INCOME("totals.cashbook.income", ReportTemplateFieldType.MONEY, null, "2500.00", false,
+            Permission.CASHBOOK_VIEW),
+    TOTALS_CASHBOOK_EXPENSES("totals.cashbook.expenses", ReportTemplateFieldType.MONEY, null, "450.00", false,
+            Permission.CASHBOOK_VIEW),
+    TOTALS_CASHBOOK_DIFFERENCES("totals.cashbook.differences", ReportTemplateFieldType.MONEY, null, "-20.00", false,
+            Permission.CASHBOOK_VIEW),
+    TOTALS_CASHBOOK_RESULT("totals.cashbook.result", ReportTemplateFieldType.MONEY, null, "2030.00", false,
+            Permission.CASHBOOK_VIEW),
 
     // ---- row set plots: plot balances as of the end of the period, joined with the land tax of its year
     PLOTS_NUMBER("rows.plots.number", ReportTemplateFieldType.TEXT, TemplateRowSet.PLOTS, "12"),
@@ -132,7 +152,15 @@ enum TemplateField {
     PAYMENTS_PREPAYMENT("rows.payments.prepayment", ReportTemplateFieldType.MONEY, TemplateRowSet.PAYMENTS, "0.00",
             false, Permission.PAYMENTS_VIEW),
     PAYMENTS_REVERSED("rows.payments.reversed", ReportTemplateFieldType.TEXT, TemplateRowSet.PAYMENTS, null, false,
-            Permission.PAYMENTS_VIEW);
+            Permission.PAYMENTS_VIEW),
+
+    // ---- row set incomeExpense: the lines of the income and expense report (feature 018, CASHBOOK_VIEW)
+    INCOME_EXPENSE_SECTION("rows.incomeExpense.section", ReportTemplateFieldType.TEXT, TemplateRowSet.INCOME_EXPENSE,
+            null, false, Permission.CASHBOOK_VIEW),
+    INCOME_EXPENSE_NAME("rows.incomeExpense.name", ReportTemplateFieldType.TEXT, TemplateRowSet.INCOME_EXPENSE, null,
+            false, Permission.CASHBOOK_VIEW),
+    INCOME_EXPENSE_AMOUNT("rows.incomeExpense.amount", ReportTemplateFieldType.MONEY, TemplateRowSet.INCOME_EXPENSE,
+            "1250.50", false, Permission.CASHBOOK_VIEW);
 
     /** What a key may look like (ADR 0015): the text between {@code ${} and {@code }}. */
     static final Pattern KEY = Pattern.compile("[A-Za-z][A-Za-z0-9_.\\-]*");
@@ -175,7 +203,7 @@ enum TemplateField {
 
     /**
      * The permission the placeholder needs besides {@link #BASE_PERMISSION}: {@code PAYMENTS_VIEW} for a payment
-     * field, {@link #BASE_PERMISSION} itself otherwise.
+     * field, {@code CASHBOOK_VIEW} for a cash book field, {@link #BASE_PERMISSION} itself otherwise.
      */
     Permission permission() {
         return permission;

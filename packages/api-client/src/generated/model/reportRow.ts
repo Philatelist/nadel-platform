@@ -21,4 +21,6 @@ export interface ReportRow {
   level: number;
   /** One cell per column, in the order of the columns */
   cells: ReportCell[];
+  /** Only in the `expenses` report: the expense of the row, so the screen links its receipt files (`GET /expenses/{id}/attachments/{n}`, `n` from 1 to the row's `attachments`); not written to the file */
+  expenseId?: string;
 }

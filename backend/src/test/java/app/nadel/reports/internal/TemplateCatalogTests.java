@@ -79,8 +79,13 @@ class TemplateCatalogTests extends ReportsTestSupport {
             String key = entry.get("key").asString();
             boolean payment = key.startsWith("totals.paid.") || key.equals("totals.prepayment")
                     || key.startsWith("rows.payments.");
+            // the cash book fields (feature 018) need CASHBOOK_VIEW besides REPORTS_VIEW
+            boolean cashBook = key.startsWith("totals.cashbook.") || key.startsWith("rows.incomeExpense.");
             assertThat(entry.get("permission").asString()).as(key)
-                    .isEqualTo(payment ? "PAYMENTS_VIEW" : "REPORTS_VIEW");
+                    .isEqualTo(payment ? "PAYMENTS_VIEW" : cashBook ? "CASHBOOK_VIEW" : "REPORTS_VIEW");
+            if (key.startsWith("rows.incomeExpense.")) {
+                assertThat(entry.get("rowSet").asString()).isEqualTo("INCOME_EXPENSE");
+            }
             if (key.startsWith("rows.payments.")) {
                 assertThat(entry.get("rowSet").asString()).isEqualTo("PAYMENTS");
             }

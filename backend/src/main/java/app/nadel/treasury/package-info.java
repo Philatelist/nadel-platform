@@ -6,9 +6,11 @@
  * ({@code expense_category}), handovers ({@code handover}), other income ({@code other_income}) and cash counts
  * ({@code cash_count}); {@code bank_reconciliation} gets its writer in a later slice. Every table is under RLS {@code tenant_isolation}.
  * <p>
- * Public API: the codes {@link app.nadel.treasury.MoneyAccountKind} and {@link app.nadel.treasury.MovementKind}, and
- * {@link app.nadel.treasury.CashCountActs} with {@link app.nadel.treasury.CashCountAct} (the figures of a cash count for
- * its act in {@code documents}).
+ * Public API: the codes {@link app.nadel.treasury.MoneyAccountKind}, {@link app.nadel.treasury.MovementKind} and
+ * {@link app.nadel.treasury.BankMonthStatus}, {@link app.nadel.treasury.CashCountActs} with
+ * {@link app.nadel.treasury.CashCountAct} (the figures of a cash count for its act in {@code documents}) and
+ * {@link app.nadel.treasury.TreasuryReadModel} with its records (the four cash book reports in {@code reports},
+ * {@code CASHBOOK_VIEW}).
  * Everything else is internal: the endpoints of tag {@code treasury} ({@code TreasuryController}), the accounts service
  * ({@code MoneyAccounts}: the list with balances, the opening balance, the journal of a period), the sole writer of the
  * journal ({@code MovementWriter}), the reads ({@code TreasuryQueries}), the pure balance rule ({@code AccountBalances}),
@@ -25,7 +27,8 @@
  * {@code ActorNames}: who entered a line), {@code privacy} ({@code PersonalDataCipher}), {@code identity}
  * ({@code CurrentUser}, {@code AccessProfile}), {@code tenancy}
  * ({@code TenantContext}), {@code problem} and {@code money}; it never reads another module's tables. No module depends
- * on it except {@code documents} (the cash count act); it never depends on {@code documents}.
+ * on it except {@code documents} (the cash count act) and {@code reports} (the cash book reports); it never depends on
+ * either.
  */
 @org.springframework.modulith.ApplicationModule(displayName = "Treasury (cash and bank)")
 package app.nadel.treasury;

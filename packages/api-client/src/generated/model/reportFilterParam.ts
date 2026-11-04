@@ -33,4 +33,6 @@ export const ReportFilterParam = {
   waterSource: 'waterSource',
   correctionKinds: 'correctionKinds',
   source: 'source',
+  account: 'account',
+  expenseCategoryIds: 'expenseCategoryIds',
 } as const;

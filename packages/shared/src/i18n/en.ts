@@ -1943,6 +1943,17 @@ export const en = {
       generatedAt: 'Date and time the file was made',
       generatedBy: 'Name of the person who made the file',
       totals: {
+        cashbook: {
+          cashStart: 'Cash balance at the start of the period',
+          cashEnd: 'Cash balance at the end of the period',
+          bankStart: 'Bank balance at the start of the period',
+          bankEnd: 'Bank balance at the end of the period',
+          income:
+            'Income of the period: member payments, advances, reversals of earlier payments and other income',
+          expenses: 'Expenses of the period in every category',
+          differences: 'Booked differences of cash counts and bank reconciliations',
+          result: 'Result: income − expenses + differences (the change of the cash and bank balances)',
+        },
         landTax: {
           expected: 'Land tax expected for the year of the period (land tax report)',
           charged: 'Land tax charged for the year of the period (land tax report)',
@@ -1964,6 +1975,11 @@ export const en = {
         },
       },
       rows: {
+        incomeExpense: {
+          section: 'Section of the income and expense report',
+          name: 'Name of the line: charge type, category or difference',
+          amount: 'Amount of the line',
+        },
         plots: {
           number: 'Plot number',
           street: 'Street',
@@ -2162,10 +2178,13 @@ export const en = {
       SERVICE_DAYS: 'The period is counted in service days.',
       READING_DATES: 'The period is counted by reading dates.',
       PAYMENT_DATES: 'The period is counted by the days payments were received.',
+      MOVEMENT_DATES: 'The period is counted by the dates of money movements.',
     },
     errors: {
       REPORT_TOO_LARGE: 'The report has more than 20 000 rows on a sheet. Narrow the filters and try again.',
       REPORT_FILTER_INVALID: 'The filters do not fit this report. Check them and try again.',
+      OPENING_BALANCE_MISSING: 'Enter the opening balance of the account first.',
+      BEFORE_OPENING_BALANCE: 'The period starts before the opening balance date of the account.',
     },
     file: {
       filters: 'Filters',
@@ -2179,8 +2198,10 @@ export const en = {
         SERVICE_DAYS: 'Service days',
         READING_DATES: 'Reading dates',
         PAYMENT_DATES: 'Days received',
+        MOVEMENT_DATES: 'Movement dates',
       },
       chargeTypes: 'Charge types',
+      expenseCategories: 'Expense categories',
       street: 'Street',
       params: {
         fromMonth: 'From month',
@@ -2197,6 +2218,8 @@ export const en = {
         waterSource: 'Water source',
         correctionKinds: 'Kinds of correction',
         source: 'Source',
+        account: 'Account',
+        expenseCategoryIds: 'Expense categories',
       },
       options: {
         statuses: {
@@ -2223,16 +2246,31 @@ export const en = {
           CASH: 'Cash',
           BANK: 'Bank',
         },
+        account: {
+          CASH: 'Cash',
+          BANK: 'Bank account',
+        },
         correctionKinds: {
           REVERSAL: 'Reversal',
           ADJUSTMENT: 'Adjustment',
         },
       },
     },
+    accountBook: {
+      lines: {
+        OPENING: 'Balance at the start of the period',
+        DAY: 'Total of the day',
+        CLOSING: 'Balance at the end of the period',
+      },
+    },
     rows: {
       SUBTOTAL: 'Subtotal',
     },
     totals: {
+      income: 'Income',
+      expenses: 'Expenses',
+      differences: 'Differences',
+      result: 'Result',
       all: 'Total',
       CONSUMPTION: 'Consumption of plots',
       LOSSES: 'Losses charged',
@@ -2323,6 +2361,100 @@ export const en = {
         total: 'Total debt',
         oldestUnpaid: 'Oldest unpaid charge',
         daysOverdue: 'Days overdue',
+      },
+    },
+    'cash-book': {
+      title: 'Cash book',
+      description: 'The cash for a period: per day the opening balance, every line and the closing balance.',
+      sheets: {
+        main: 'Cash book',
+      },
+      columns: {
+        date: 'Date',
+        line: 'Line',
+        time: 'Time',
+        kind: 'Kind',
+        reversal: 'Reversal',
+        document: 'Receipt / document',
+        plot: 'Plot',
+        counterparty: 'Counterparty',
+        category: 'Category',
+        opening: 'Opening balance',
+        receipt: 'Receipt',
+        spending: 'Spending',
+        closing: 'Closing balance',
+      },
+    },
+    'bank-movements': {
+      title: 'Bank movements',
+      description:
+        'The bank account for a period: per day the opening balance, the movements and the closing balance, with the reconciliation status of each month.',
+      sheets: {
+        main: 'Movements',
+        months: 'Reconciliation by month',
+      },
+      columns: {
+        date: 'Date',
+        line: 'Line',
+        time: 'Time',
+        kind: 'Kind',
+        reversal: 'Reversal',
+        document: 'Receipt / document',
+        plot: 'Plot',
+        counterparty: 'Counterparty',
+        category: 'Category',
+        opening: 'Opening balance',
+        receipt: 'Incoming',
+        spending: 'Outgoing',
+        closing: 'Closing balance',
+        month: 'Month',
+        reconciliation: 'Reconciliation',
+      },
+    },
+    'income-expense': {
+      title: 'Income and expense',
+      description:
+        'Income and expense of a period for the general meeting: member payments by charge type, other income and expenses by category, the result and the cash and bank balances.',
+      sheets: {
+        main: 'Income and expense',
+        balances: 'Balances',
+      },
+      columns: {
+        section: 'Section',
+        chargeType: 'Charge type',
+        category: 'Category',
+        difference: 'Difference',
+        amount: 'Amount',
+        account: 'Account',
+        start: 'At the start of the period',
+        end: 'At the end of the period',
+        change: 'Change',
+      },
+      sections: {
+        MEMBER_BY_TYPE: 'Member payments',
+        ADVANCES: 'Advances',
+        PAYMENT_REVERSALS: 'Reversals of payments of earlier periods',
+        OTHER_INCOME: 'Other income',
+        EXPENSE: 'Expenses',
+        DIFFERENCES: 'Differences',
+      },
+    },
+    expenses: {
+      title: 'Expenses',
+      description: 'The expenses of a period by account and category, with the number of receipt files.',
+      sheets: {
+        main: 'Expenses',
+      },
+      columns: {
+        date: 'Date',
+        account: 'Account',
+        category: 'Category',
+        counterparty: 'Counterparty',
+        document: 'Document',
+        documentDate: 'Document date',
+        amount: 'Amount',
+        reversed: 'Reversed',
+        attachments: 'Files',
       },
     },
     payments: {
