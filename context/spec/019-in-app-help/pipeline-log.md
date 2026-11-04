@@ -103,3 +103,8 @@
   - `acceptance.spec.ts` member creation to archive: red on main and branch (Telegram needs no username since feature 017) → the Telegram case removed.
   - `language-purity.spec.ts`: red on main and branch ("PDF", "SMTP", "STARTTLS", "SSL", "@BotFather", "/newbot", the bot name, the saved token tail in uk; the certificate number «Д-2026-1» in en) → allowlist PDF/SMTP/STARTTLS/SSL, patterns for Telegram handles/commands and secret tails, and the certificate number marked `data-code` on the register.
 - Locally on the branch: those specs green, `help.spec.ts` + `meters.spec.ts` + electrician acceptance 28/28, smoke 22/22; clients typecheck, lint, 1061 web unit tests green.
+- CI full e2e (run 41932555678, label `full-e2e`): 185/189; the 4 red, all from earlier features, fixed:
+  - `charges.spec.ts` treasurer: the month shows the invoice buttons (INVOICES_ISSUE) → asserts exactly those two, no charge action.
+  - `payments.spec.ts` reallocation: the line hint is «More than the remaining ₴500.00» now → updated.
+  - `language-purity` uk: raw `receivedOn` in the audit log → 10 audit field codes of payments, invoices and announcements had no label; labels added in both catalogs, `audience`/`channels` values and `receivedOn`/`due` formatted.
+  - `language-purity` en: the annulling person's name on the certificate register was not marked as user content → fixed.
